@@ -28,31 +28,41 @@ namespace NINA.Polaris.Services.Studio;
 /// runs to completion in a background job and produces one FITS.
 ///
 /// Pipeline per job:
-///   1. Load all inputs; detect stars in each.
-///   2. Pick the reference frame (frame with the most detected stars
-///     , that's the most robust target for affine fitting).
-///   3. For every other frame: match its star list against the
-///      reference's, compute the affine transform, resample the pixels
-///      into the reference's coordinate system. Frames whose transform
-///      fits below a star-match threshold are skipped (the job still
-///      reports them in the dropped count).
-///   4. Stack the aligned buffers via the chosen IntegrationMethod
-///      from ST-3 (Mean / Median / SigmaClippedMean).
+///   1. <b>Detect</b>: read each input once, detect its stars, then drop
+///      the pixels. Only the star lists (small) are retained, so this
+///      phase holds ~one frame in RAM at a time.
+///   2. Pick the reference frame (most detected stars — the most robust
+///      target for affine fitting).
+///   3. <b>Align + spill</b>: re-read each frame, match it to the
+///      reference, resample onto the reference grid, and write the
+///      aligned plane(s) to a temp file on disk. Frames whose transform
+///      fits below the star-match threshold are dropped (still counted).
+///   4. <b>Integrate (tiled)</b>: stream the spilled aligned planes back
+///      in horizontal strips and reduce per-pixel across frames via the
+///      chosen IntegrationMethod (Mean / Median / SigmaClippedMean).
 ///   5. Write {rig}/integrated/{target}/{filter}/master_light_*.fits
 ///      with NCOMBINE / EXPTOTAL / INTMETH / REJECT custom keywords.
-///   6. Trigger a library rescan so the master shows up in the
-///      browser.
+///   6. Trigger a library rescan so the master shows up in the browser.
 ///
-/// Memory model: same as ST-3 master integration, every input
-/// (post-alignment) sits in RAM at once. For typical session sizes
-/// (20-30 × 20 MP) that's ~1 GB peak; tiled / streaming integration is
-/// tracked as a follow-up if anyone tries 100+ huge frames.
+/// Memory model: the old implementation kept every aligned frame in RAM
+/// for the per-pixel integration — O(N · W · H), tripled for OSC (debayer
+/// to 3 planes), which pushed a 4 GB Pi past its limit on a 20-30 × 24 MP
+/// OSC stack (~4 GB). Now the aligned frames are spilled to disk and the
+/// integration streams them one strip at a time, so peak RAM is ~one
+/// frame during alignment plus one tile (≈ N · tileRows · W) during
+/// integration — flat regardless of frame count or sensor size. The cost
+/// is N× a frame of temp disk and a second read of each input.
 /// </summary>
 public class BatchStackingService {
     private readonly FrameLibraryService _library;
     private readonly ProfileService _profile;
     private readonly ILogger<BatchStackingService> _logger;
     private readonly ConcurrentDictionary<string, IntegrationProgress> _jobs = new();
+
+    // Tiled-integration RAM budget for the spilled aligned planes (same
+    // reasoning as MasterFrameService). One plane is integrated at a time,
+    // holding ~this many bytes of strip data across all N frames.
+    private const long StripBudgetBytes = 96L * 1024 * 1024;
 
     public BatchStackingService(FrameLibraryService library, ProfileService profile,
                                 ILogger<BatchStackingService> logger) {
@@ -87,11 +97,12 @@ public class BatchStackingService {
         => _jobs.TryGetValue(jobId, out var p) ? p : null;
 
     private void RunJob(string jobId, IReadOnlyList<string> framePaths, IntegrationMethod method) {
+        string? tempDir = null;
         try {
-            // ---- Phase 1: load + detect stars ----------------------
+            // ---- Phase 1: detect stars (no pixels retained) ----------
             _jobs[jobId] = _jobs[jobId] with { Stage = "loading", Done = 0 };
             var detector = new StarDetector();
-            var loaded = new List<(BaseImageData Img, List<DetectedStar> Stars, string Name)>(framePaths.Count);
+            var frames = new List<(string Path, List<DetectedStar> Stars, double Exposure, string Name)>(framePaths.Count);
             int? width = null, height = null;
             int bitDepth = 16;
             string target = "", filter = "";
@@ -109,8 +120,8 @@ public class BatchStackingService {
                     continue;
                 }
                 var frameName = Path.GetFileName(path);
-                using var fs = File.OpenRead(path);
-                var img = FITSReader.Read(fs);
+                BaseImageData img;
+                using (var fs = File.OpenRead(path)) img = FITSReader.Read(fs);
                 if (width == null) {
                     width = img.Properties.Width;
                     height = img.Properties.Height;
@@ -132,187 +143,200 @@ public class BatchStackingService {
                     starSrc = BayerDebayer.ToLuminance(ch);
                 }
                 var stars = detector.Detect(starSrc, img.Properties.Width, img.Properties.Height);
-                loaded.Add((img, stars, frameName));
+                frames.Add((path, stars, img.MetaData.Exposure.ExposureTime, frameName));
+                // img + starSrc fall out of scope here; nothing pins the pixel
+                // buffers, so peak stays ~one frame through this phase.
                 _jobs[jobId] = _jobs[jobId] with { Done = i + 1 };
             }
 
-            if (loaded.Count < 2)
+            if (frames.Count < 2)
                 throw new InvalidOperationException("Need at least 2 valid frames to integrate.");
 
-            // ---- Phase 2: pick reference, align everything ---------
-            // Reference = frame with the most detected stars. That
-            // gives StarMatcher the largest catalogue to match against
-            // and produces the most robust transforms.
-            // Reset Done for the next phase but leave Total untouched
-            // so the overall job's "done / total" headline stays
-            // anchored on the input frame count for the whole run.
+            // ---- Phase 2: pick reference, align + spill to disk -------
+            // Reference = frame with the most detected stars (largest
+            // catalogue for StarMatcher, most robust transforms). Reset Done
+            // for this phase but leave Total on the input frame count so the
+            // headline "done / total" stays anchored across the whole run.
             _jobs[jobId] = _jobs[jobId] with { Stage = "aligning", Done = 0 };
             var refIdx = 0;
-            for (int i = 1; i < loaded.Count; i++) {
-                if (loaded[i].Stars.Count > loaded[refIdx].Stars.Count) refIdx = i;
-            }
-            var refStars = loaded[refIdx].Stars;
-            // CCALB-0a: capture the reference frame's WCS (if it was
-            // plate-solved upstream) so we can stamp the output master
-            // with the same coordinates. Without this, the integrated
-            // master loses pointing info and PCC cannot match catalog
-            // stars without re-solving.
-            var refWcs = loaded[refIdx].Img.Properties.Wcs;
+            for (int i = 1; i < frames.Count; i++)
+                if (frames[i].Stars.Count > frames[refIdx].Stars.Count) refIdx = i;
+            var refStars = frames[refIdx].Stars;
             _logger.LogInformation("Integration job {Job}: reference frame {File} ({N} stars)",
-                jobId, loaded[refIdx].Name, refStars.Count);
+                jobId, frames[refIdx].Name, refStars.Count);
 
             int W = width!.Value;
             int H = height!.Value;
+            int planeSize = W * H;
+            int nPlanes = pattern == NINA.Core.Enum.BayerPatternEnum.None ? 1 : 3;
+
+            tempDir = Path.Combine(Path.GetTempPath(), $"polaris_stack_{jobId}");
+            Directory.CreateDirectory(tempDir);
+            // Reused full-plane byte buffer for the spill writes.
+            var spillBytes = new byte[(long)planeSize * 2];
+
+            var spilledPaths = new List<string[]>(frames.Count);   // [keptFrame][plane] -> temp path
+            var keptNames = new List<string>(frames.Count);
+            double totalExposure = 0;
+            int dropped = 0;
+            // CCALB-0a: the reference frame's WCS (if plate-solved upstream).
+            // Non-reference frames are resampled onto the reference's grid, so
+            // the reference's WCS is correct for the integrated master.
+            WcsInfo? refWcs = null;
+
             // Debayer a raw buffer into colour planes (R,G,B) for OSC, or
-            // wrap the mono buffer as a single plane. Stacking then runs
-            // per-plane so colour is preserved and the resample interpolates
-            // within a channel instead of across the CFA mosaic.
+            // wrap the mono buffer as a single plane. Stacking runs per-plane
+            // so colour is preserved and the resample interpolates within a
+            // channel instead of across the CFA mosaic.
             ushort[][] PlanesOf(ushort[] data) {
                 if (pattern == NINA.Core.Enum.BayerPatternEnum.None) return new[] { data };
                 var ch = BayerDebayer.Bilinear(data, W, H, pattern);
                 return new[] { ch.R, ch.G, ch.B };
             }
-            var aligned = new List<ushort[][]>(loaded.Count);
-            var keptNames = new List<string>(loaded.Count);
-            double totalExposure = 0;
-            int dropped = 0;
 
-            for (int i = 0; i < loaded.Count; i++) {
+            // Spill one frame's aligned plane(s) to temp raw files (host-order
+            // ushort, no header — same process reads them back). Returns the
+            // per-plane paths.
+            void Spill(int keptIndex, ushort[][] planes) {
+                var paths = new string[planes.Length];
+                for (int p = 0; p < planes.Length; p++) {
+                    paths[p] = Path.Combine(tempDir!, $"f{keptIndex}_p{p}.raw");
+                    int n = planes[p].Length * 2;
+                    Buffer.BlockCopy(planes[p], 0, spillBytes, 0, n);
+                    using var fs = File.Create(paths[p]);
+                    fs.Write(spillBytes, 0, n);
+                }
+                spilledPaths.Add(paths);
+            }
+
+            for (int i = 0; i < frames.Count; i++) {
+                BaseImageData img;
+                using (var fs = File.OpenRead(frames[i].Path)) img = FITSReader.Read(fs);
+
                 if (i == refIdx) {
                     // Reference goes in untouched (debayered, not resampled).
-                    aligned.Add(PlanesOf(loaded[i].Img.Data));
-                    keptNames.Add(loaded[i].Name);
-                    totalExposure += loaded[i].Img.MetaData.Exposure.ExposureTime;
+                    refWcs = img.Properties.Wcs;
+                    Spill(spilledPaths.Count, PlanesOf(img.Data));
+                    keptNames.Add(frames[i].Name);
+                    totalExposure += frames[i].Exposure;
                 } else {
-                    var transform = StarMatcher.Match(refStars, loaded[i].Stars);
+                    var transform = StarMatcher.Match(refStars, frames[i].Stars);
                     if (transform == null) {
-                        _logger.LogWarning("Drop frame {File}: alignment failed", loaded[i].Name);
+                        _logger.LogWarning("Drop frame {File}: alignment failed", frames[i].Name);
                         dropped++;
                     } else {
-                        // Pre-resample alignment-quality probe: project
-                        // every current-frame star through the transform
-                        // and find its nearest reference star. Median
-                        // residual >1px means the transform smears the
-                        // master and ASTAP will fail to match quads
-                        // even though raw star counts look healthy.
-                        var residual = MedianAlignmentResidualPx(
-                            refStars, loaded[i].Stars, transform);
+                        // Pre-resample alignment-quality probe: project every
+                        // current-frame star through the transform and find
+                        // its nearest reference star. Median residual >2px
+                        // means the transform smears the master and ASTAP will
+                        // fail to match quads even with healthy star counts.
+                        var residual = MedianAlignmentResidualPx(refStars, frames[i].Stars, transform);
                         if (residual > 2.0) {
                             _logger.LogWarning(
                                 "Frame {File}: alignment residual median {Residual:F2}px " +
                                 "exceeds 2px (transform: M00={M00:F3} M01={M01:F3} " +
                                 "M10={M10:F3} M11={M11:F3} Tx={Tx:F1} Ty={Ty:F1}); " +
                                 "expect smearing in the integrated master.",
-                                loaded[i].Name, residual,
+                                frames[i].Name, residual,
                                 transform.M00, transform.M01, transform.M10, transform.M11,
                                 transform.Tx, transform.Ty);
                         } else {
                             _logger.LogDebug(
                                 "Frame {File}: aligned, residual median {Residual:F2}px " +
                                 "(Tx={Tx:F1}, Ty={Ty:F1})",
-                                loaded[i].Name, residual, transform.Tx, transform.Ty);
+                                frames[i].Name, residual, transform.Tx, transform.Ty);
                         }
 
                         // Resample EACH colour plane with the same transform
                         // (the transform came from luminance star matching).
-                        var srcPlanes = PlanesOf(loaded[i].Img.Data);
+                        var srcPlanes = PlanesOf(img.Data);
                         var resampled = new ushort[srcPlanes.Length][];
                         for (int p = 0; p < srcPlanes.Length; p++)
                             resampled[p] = ImageResampler.ApplyTransform(srcPlanes[p], W, H, transform);
-                        aligned.Add(resampled);
-                        keptNames.Add(loaded[i].Name);
-                        totalExposure += loaded[i].Img.MetaData.Exposure.ExposureTime;
+                        Spill(spilledPaths.Count, resampled);
+                        keptNames.Add(frames[i].Name);
+                        totalExposure += frames[i].Exposure;
                     }
                 }
-                // PERF/mem: release this frame's original pixel buffer now
-                // that it has been resampled into `aligned`. (The reference
-                // frame's buffer is owned by aligned[] via the Add above, so
-                // nulling the slot here can't collect it.) Without this the
-                // originals (N frames) and the aligned copies (up to N) are
-                // alive simultaneously through Phase 2 — a ~2N peak. Freeing
-                // each original as we go holds peak at ~N frames, which is
-                // the difference between completing and OOM-ing a large
-                // batch on a 4 GB Pi. Median / SigmaClip still need all N
-                // aligned frames in RAM for Phase 3 (per-pixel across
-                // frames); true streaming/tiling stays a follow-up.
-                loaded[i] = (null!, null!, loaded[i].Name);
                 _jobs[jobId] = _jobs[jobId] with { Done = i + 1, Dropped = dropped };
             }
 
-            if (aligned.Count < 2)
+            if (spilledPaths.Count < 2)
                 throw new InvalidOperationException(
-                    $"Only {aligned.Count} frame(s) survived alignment. Need ≥2.");
+                    $"Only {spilledPaths.Count} frame(s) survived alignment. Need ≥2.");
 
-            // Free the un-aligned copies, they're no longer needed
-            // and the aligned[] array now owns the working pixels.
-            loaded.Clear();
-
-            // ---- Phase 3: per-pixel integration --------------------
-            // Don't fold this phase's row counter into Done / Total —
-            // the previous implementation set Total = H (image
-            // height) here, which made "done / total" briefly read as
-            // "row 2841 of 3672 image rows" while the headline number
-            // really wants to stay "X of N frames". Track row
-            // progress on IntegrationPercent instead so the UI can
-            // surface it as a sub-bar without overwriting the frame
-            // counters. Done bumps to aligned.Count up front so the
-            // headline reads "N frames" through this phase.
+            // ---- Phase 3: tiled per-pixel integration from spills -----
+            // Stream the spilled aligned planes back in horizontal strips,
+            // one plane at a time, and reduce across frames per pixel. Peak
+            // RAM is N · tileRows · W (one tile of every frame), not the
+            // whole N · W · H · nPlanes the old in-memory path needed.
             _jobs[jobId] = _jobs[jobId] with {
                 Stage = "integrating",
-                Done = aligned.Count,
+                Done = spilledPaths.Count,
                 IntegrationPercent = 0,
             };
-            int N = aligned.Count;
-            // 1 plane for mono, 3 (R,G,B) for OSC. Integrate each plane
-            // independently across all frames; the output is plane-sequential
-            // (R then G then B), the FITS RGB-cube convention.
-            int nPlanes = aligned.Count > 0 ? aligned[0].Length : 1;
-            int planeSize = W * H;
-            var output = new ushort[planeSize * nPlanes];
-            var stacks = aligned.ToArray();
+            int N = spilledPaths.Count;
+            var output = new ushort[(long)planeSize * nPlanes];
+            int tileRows = (int)Math.Clamp(
+                StripBudgetBytes / Math.Max(1, (long)N * W * 4), 1, H);
+            var strips = new ushort[N][];
+            for (int k = 0; k < N; k++) strips[k] = new ushort[(long)tileRows * W];
+            var stripBytes = new byte[(long)tileRows * W * 2];
 
             int rowsDone = 0;
             int lastReportedPct = 0;
             int totalRows = nPlanes * H;
             for (int pl = 0; pl < nPlanes; pl++) {
-                int plane = pl;
-                int planeOff = plane * planeSize;
-                Parallel.For(0, H, () => new ushort[N], (y, _, scratch) => {
-                    int rowOff = y * W;
-                    for (int x = 0; x < W; x++) {
-                        int idx = rowOff + x;
-                        int valid = 0;
-                        // Skip pixels whose value is 0, ImageResampler
-                        // marks off-canvas regions as 0 after the affine
-                        // shift, and rolling them into the average drags
-                        // the master down at the edges.
-                        for (int k = 0; k < N; k++) {
-                            var v = stacks[k][plane][idx];
-                            if (v > 0) { scratch[valid++] = v; }
-                        }
-                        int outIdx = planeOff + idx;
-                        if (valid == 0) {
-                            output[outIdx] = 0;
-                        } else {
-                            var slice = ((ReadOnlySpan<ushort>)scratch)[..valid];
-                            output[outIdx] = method switch {
-                                IntegrationMethod.Mean   => IntegrationMath.Mean(slice),
-                                IntegrationMethod.Median => IntegrationMath.Median(slice),
-                                IntegrationMethod.SigmaClippedMean
-                                                         => IntegrationMath.SigmaClippedMean(slice),
-                                _                        => IntegrationMath.Mean(slice)
-                            };
-                        }
+                int planeOff = pl * planeSize;
+                var fsArr = new FileStream[N];
+                try {
+                    for (int k = 0; k < N; k++)
+                        fsArr[k] = File.OpenRead(spilledPaths[k][pl]);
+
+                    for (int tileStart = 0; tileStart < H; tileStart += tileRows) {
+                        int rows = Math.Min(tileRows, H - tileStart);
+                        for (int k = 0; k < N; k++)
+                            ReadRawStrip(fsArr[k], tileStart, rows, W, stripBytes, strips[k]);
+
+                        int baseOff = tileStart * W;
+                        Parallel.For(0, rows, () => new ushort[N], (ly, _, scratch) => {
+                            int localOff = ly * W;
+                            int outRowOff = planeOff + baseOff + localOff;
+                            for (int x = 0; x < W; x++) {
+                                int sidx = localOff + x;
+                                int valid = 0;
+                                // Skip pixels whose value is 0 — ImageResampler
+                                // marks off-canvas regions as 0 after the affine
+                                // shift, and averaging them in drags the edges.
+                                for (int k = 0; k < N; k++) {
+                                    var v = strips[k][sidx];
+                                    if (v > 0) scratch[valid++] = v;
+                                }
+                                if (valid == 0) {
+                                    output[outRowOff + x] = 0;
+                                } else {
+                                    var slice = ((ReadOnlySpan<ushort>)scratch)[..valid];
+                                    output[outRowOff + x] = method switch {
+                                        IntegrationMethod.Mean   => IntegrationMath.Mean(slice),
+                                        IntegrationMethod.Median => IntegrationMath.Median(slice),
+                                        IntegrationMethod.SigmaClippedMean
+                                                                 => IntegrationMath.SigmaClippedMean(slice),
+                                        _                        => IntegrationMath.Mean(slice)
+                                    };
+                                }
+                            }
+                            var done = System.Threading.Interlocked.Increment(ref rowsDone);
+                            int pct = (int)(done * 100L / totalRows);
+                            if (pct != lastReportedPct) {
+                                lastReportedPct = pct;
+                                _jobs[jobId] = _jobs[jobId] with { IntegrationPercent = pct };
+                            }
+                            return scratch;
+                        }, _ => { });
                     }
-                    var done = System.Threading.Interlocked.Increment(ref rowsDone);
-                    // Throttle the status writeback to whole percent ticks.
-                    int pct = (int)(done * 100L / totalRows);
-                    if (pct != lastReportedPct) {
-                        lastReportedPct = pct;
-                        _jobs[jobId] = _jobs[jobId] with { IntegrationPercent = pct };
-                    }
-                    return scratch;
-                }, _ => { });
+                } finally {
+                    for (int k = 0; k < N; k++) fsArr[k]?.Dispose();
+                }
             }
             _jobs[jobId] = _jobs[jobId] with { IntegrationPercent = 100 };
 
@@ -341,20 +365,14 @@ public class BatchStackingService {
                 Channels = nPlanes,
                 BayerPattern = NINA.Core.Enum.BayerPatternEnum.None,
                 IsBayered = false,
-                // CCALB-0a: carry WCS forward so the master is plate-
-                // solved already from PCC's perspective. Non-reference
-                // frames get resampled onto the reference's grid, so
-                // the reference's WCS is correct for the output.
                 Wcs = refWcs,
             };
-            // Reuse the metadata from the original first input we kept
-            // (target name + camera + observer survive); flag as
-            // MASTERLIGHT and stamp the integration metadata via
-            // custom keywords. Build a synthetic exposure that records
-            // the *total* time so downstream tools display "X hours".
+            // Flag as MASTERLIGHT and stamp the integration metadata via
+            // custom keywords. Build a synthetic exposure that records the
+            // *total* time so downstream tools display "X hours".
             var meta = new ImageMetaData {
                 CreationTime = DateTime.UtcNow,
-                Camera   = aligned.Count > 0 ? new ImageMetaData.CameraInfo()    : new ImageMetaData.CameraInfo(),
+                Camera   = new ImageMetaData.CameraInfo(),
                 Telescope = new ImageMetaData.TelescopeInfo(),
                 Observer = new ImageMetaData.ObserverInfo(),
                 Target   = new ImageMetaData.TargetInfo { Name = target },
@@ -396,7 +414,31 @@ public class BatchStackingService {
                 Stage = "error",
                 Error = ex.Message
             };
+        } finally {
+            // Best-effort cleanup of the spilled aligned-frame temp files.
+            if (tempDir != null && Directory.Exists(tempDir)) {
+                try { Directory.Delete(tempDir, recursive: true); }
+                catch (Exception ex) { _logger.LogDebug(ex, "Temp cleanup failed for {Dir}", tempDir); }
+            }
         }
+    }
+
+    /// <summary>Read <paramref name="rows"/> rows starting at
+    /// <paramref name="startRow"/> from a raw host-order ushort spill file
+    /// into <paramref name="dest"/>. <paramref name="byteScratch"/> must be
+    /// at least <c>rows * w * 2</c> bytes.</summary>
+    private static void ReadRawStrip(FileStream fs, int startRow, int rows, int w,
+                                     byte[] byteScratch, ushort[] dest) {
+        long byteOffset = (long)startRow * w * 2;
+        fs.Seek(byteOffset, SeekOrigin.Begin);
+        int n = rows * w * 2;
+        int total = 0;
+        while (total < n) {
+            int r = fs.Read(byteScratch, total, n - total);
+            if (r == 0) throw new EndOfStreamException("Spilled frame truncated.");
+            total += r;
+        }
+        Buffer.BlockCopy(byteScratch, 0, dest, 0, n);
     }
 
     /// <summary>
