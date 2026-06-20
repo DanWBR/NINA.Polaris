@@ -95,7 +95,7 @@ if ($Docker) {
     # "starnet_generator.pb not found".
     $inner = "set -ex && " +
         "pip install --no-cache-dir 'tensorflow==1.15.*' 'numpy==1.18.5' 'protobuf==3.19.6' 'onnx==1.10.2' 'tf2onnx==1.9.3' && " +
-        "python export.py && " +
+        "python -c 'import export; export.export()' && " +
         "ls -la starnet_generator.pb && " +
         "python -m tf2onnx.convert --graphdef starnet_generator.pb --inputs $InputName --outputs $OutputName --opset $Opset --output model.onnx && " +
         "mkdir -p '/out/$Version' && " +
@@ -161,7 +161,8 @@ Step "Freezing the generator graph (export.py)"
 $pb = Join-Path $StarnetDir "starnet_generator.pb"
 Push-Location $StarnetDir
 try {
-    & $venvPy "export.py"
+    # export.py only DEFINES export(); it never calls it. Invoke explicitly.
+    & $venvPy -c "import export; export.export()"
     if ($LASTEXITCODE -ne 0) { Fail "export.py failed." }
 } finally { Pop-Location }
 if (-not (Test-Path $pb)) { Fail "Expected $pb was not produced by export.py." }
