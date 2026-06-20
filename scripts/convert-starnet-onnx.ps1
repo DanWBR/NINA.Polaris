@@ -89,18 +89,18 @@ if ($Docker) {
     New-Item -ItemType Directory -Force -Path $ModelsDir | Out-Null
     $modelsAbs = (Resolve-Path $ModelsDir).Path
 
-    # Single shell script run inside the container (sh-compatible).
-    $inner = @"
-set -e
-pip install --no-cache-dir 'tensorflow==1.15.*' 'numpy==1.18.5' 'protobuf==3.19.6' 'onnx==1.10.2' 'tf2onnx==1.9.3'
-python export.py
-python -m tf2onnx.convert --graphdef starnet_generator.pb --inputs $InputName --outputs $OutputName --opset $Opset --output model.onnx
-mkdir -p "/out/$Version"
-cp model.onnx "/out/$Version/model.onnx"
-echo "container: wrote /out/$Version/model.onnx"
-"@
-    # Normalise CRLF -> LF so /bin/sh inside the container is happy.
-    $inner = $inner -replace "`r`n", "`n"
+    # Single-line && chain (no newlines/set-e -- avoids CRLF + errexit
+    # fragility): each step must succeed before the next runs, so a failure
+    # stops here and surfaces its real error instead of cascading into
+    # "starnet_generator.pb not found".
+    $inner = "set -ex && " +
+        "pip install --no-cache-dir 'tensorflow==1.15.*' 'numpy==1.18.5' 'protobuf==3.19.6' 'onnx==1.10.2' 'tf2onnx==1.9.3' && " +
+        "python export.py && " +
+        "ls -la starnet_generator.pb && " +
+        "python -m tf2onnx.convert --graphdef starnet_generator.pb --inputs $InputName --outputs $OutputName --opset $Opset --output model.onnx && " +
+        "mkdir -p '/out/$Version' && " +
+        "cp model.onnx '/out/$Version/model.onnx' && " +
+        "echo container-wrote-/out/$Version/model.onnx"
 
     & docker run --rm `
         -v "${starAbs}:/work" `
