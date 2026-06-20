@@ -1,0 +1,142 @@
+<#
+.SYNOPSIS
+    Convert the DanWBR/starnet TensorFlow-1 checkpoint to ONNX for Polaris.
+
+.DESCRIPTION
+    Orchestrates the one-time, offline SN-1 conversion on Windows:
+      1. creates a Python 3.7 venv (TF 1.15 only supports 3.7),
+      2. installs a pinned, known-good TF1 + tf2onnx stack,
+      3. runs the fork's export.py  -> starnet_generator.pb,
+      4. runs tf2onnx              -> model.onnx (fixed 256x256x3, RGB),
+      5. copies model.onnx into Polaris' bundled models tree.
+
+    The model facts (input X:0 [None,256,256,3], output
+    generator/g_deconv7/Sub:0, [0,1] in/out, tile 256) are documented in
+    scripts/convert-starnet-onnx.md. Weights are CC BY-NC-SA 4.0
+    (NonCommercial) -- attribute when bundling.
+
+.PARAMETER StarnetDir
+    Path to the DanWBR/starnet checkout (has model.ckpt.*, export.py, gen_sub.txt).
+
+.PARAMETER Version
+    Version folder under starnet-ai-models (default 1.0.0).
+
+.PARAMETER Python
+    A Python 3.7 launcher/exe. Default tries the py launcher: "py -3.7".
+
+.PARAMETER SkipInstall
+    Reuse an existing venv without re-running pip (faster on re-runs).
+
+.EXAMPLE
+    pwsh -File scripts/convert-starnet-onnx.ps1
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File scripts\convert-starnet-onnx.ps1 -StarnetDir D:\src\starnet
+#>
+[CmdletBinding()]
+param(
+    [string]$StarnetDir = "C:\Users\danie\source\repos\DanWBR\starnet",
+    [string]$Version    = "1.0.0",
+    [string]$ModelsDir  = (Join-Path $PSScriptRoot "..\src\NINA.Polaris\wwwroot\graxpert\models\starnet-ai-models"),
+    [string]$Python     = "",
+    [string]$InputName  = "X:0",
+    [string]$OutputName = "generator/g_deconv7/Sub:0",
+    [int]   $Opset      = 13,
+    [switch]$SkipInstall
+)
+
+$ErrorActionPreference = "Stop"
+function Step($m) { Write-Host "`n==== $m ====" -ForegroundColor Cyan }
+function Fail($m) { Write-Error $m; exit 1 }
+
+# --- validate inputs --------------------------------------------------------
+Step "Checking the StarNet checkout"
+if (-not (Test-Path $StarnetDir))                       { Fail "StarnetDir not found: $StarnetDir" }
+if (-not (Test-Path (Join-Path $StarnetDir "export.py"))) { Fail "export.py not found in $StarnetDir" }
+if (-not (Test-Path (Join-Path $StarnetDir "model.ckpt.index"))) {
+    Fail "model.ckpt.* not found in $StarnetDir (download the weights first; see wherearemyweights.txt)"
+}
+Write-Host "  OK: $StarnetDir"
+
+# --- locate / create the venv ----------------------------------------------
+$venv   = Join-Path $StarnetDir ".onnxvenv"
+$venvPy = Join-Path $venv "Scripts\python.exe"
+
+if (-not (Test-Path $venvPy)) {
+    Step "Creating Python 3.7 venv at $venv"
+    if ($Python -ne "") {
+        & $Python -m venv $venv
+    } else {
+        # py launcher; TF 1.15 needs CPython 3.7
+        & py -3.7 -m venv $venv
+    }
+    if (-not (Test-Path $venvPy)) {
+        Fail "venv creation failed. Install CPython 3.7 (TF 1.15 requirement) or pass -Python <path to python3.7.exe>."
+    }
+} else {
+    Write-Host "  Reusing existing venv: $venv"
+}
+
+# --- install the pinned TF1 + tf2onnx stack --------------------------------
+if (-not $SkipInstall) {
+    Step "Installing TF1 + tf2onnx (pinned; adjust here if pip resolves a conflict)"
+    & $venvPy -m pip install --upgrade "pip<24" "setuptools<66" "wheel"
+    # tensorflow 1.15 needs old numpy/protobuf; tf2onnx 1.9.x still supports tf1.
+    & $venvPy -m pip install `
+        "tensorflow==1.15.0" `
+        "numpy==1.18.5" `
+        "protobuf==3.19.6" `
+        "onnx==1.10.2" `
+        "tf2onnx==1.9.3" `
+        "onnxruntime" `
+        "Pillow" "tifffile"
+    if ($LASTEXITCODE -ne 0) { Fail "pip install failed -- tweak the pins in this script and re-run with -SkipInstall off." }
+} else {
+    Write-Host "  -SkipInstall: using whatever is already in the venv"
+}
+
+# --- freeze the generator subgraph (export.py runs from the repo) -----------
+Step "Freezing the generator graph (export.py)"
+$pb = Join-Path $StarnetDir "starnet_generator.pb"
+Push-Location $StarnetDir
+try {
+    & $venvPy "export.py"
+    if ($LASTEXITCODE -ne 0) { Fail "export.py failed." }
+} finally { Pop-Location }
+if (-not (Test-Path $pb)) { Fail "Expected $pb was not produced by export.py." }
+Write-Host "  OK: $pb"
+
+# --- GraphDef -> ONNX -------------------------------------------------------
+Step "Converting to ONNX (tf2onnx)"
+$onnx = Join-Path $StarnetDir "model.onnx"
+& $venvPy -m tf2onnx.convert `
+    --graphdef $pb `
+    --inputs   $InputName `
+    --outputs  $OutputName `
+    --opset    $Opset `
+    --output   $onnx
+if ($LASTEXITCODE -ne 0) { Fail "tf2onnx conversion failed." }
+if (-not (Test-Path $onnx)) { Fail "tf2onnx did not produce $onnx." }
+Write-Host "  OK: $onnx"
+
+# --- copy into the Polaris bundled models tree ------------------------------
+Step "Installing into Polaris"
+$dest = Join-Path $ModelsDir $Version
+New-Item -ItemType Directory -Force -Path $dest | Out-Null
+$destFile = Join-Path $dest "model.onnx"
+Copy-Item $onnx $destFile -Force
+$sizeMB = [math]::Round((Get-Item $destFile).Length / 1048576.0, 1)
+Write-Host "  Copied -> $destFile ($sizeMB MB)" -ForegroundColor Green
+
+Step "Done"
+Write-Host @"
+StarNet ONNX is in place:
+  $destFile
+
+Next:
+  1. Start Polaris, then POST /api/onnx/rescan and check GET /api/onnx/manifest
+     for the 'starnet' family / $Version entry.
+  2. Sanity-check against the fork's rgb_test5.tif_starless.tif (see the .md).
+  3. Weights are CC BY-NC-SA 4.0 (NonCommercial) -- add attribution to
+     3rd-party-licenses.txt + the in-app About list before bundling.
+  4. Tell Claude 'model is in place' to wire SN-2 (StarRemovalPipeline) + SN-3.
+"@ -ForegroundColor Green
