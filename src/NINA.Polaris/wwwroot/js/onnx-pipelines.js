@@ -1630,34 +1630,28 @@
                 if (v > thr) mask[i] = 1;
             }
 
-            // Radii (in work-scale px): stronger → wider coverage + fill window.
+            // Radii (in work-scale px): stronger → wider coverage.
             const dilateR = Math.max(2, Math.round(3 + strength * 12));   // 3..15
             const featherR = Math.max(1, dilateR >> 1);
-            const blurR = dilateR * 3;
 
             const dil = this._dilate(mask, sw, sh, dilateR);
             const alphaS = this._boxBlurF(dil, sw, sh, featherR);          // 0..1 feathered
 
-            // Background estimate from pixels OUTSIDE the dilated star regions.
+            // Hole weight: 1 outside the dilated star regions, 0 inside (the
+            // pixels to fill). The background estimate must come from the
+            // valid pixels only.
             const valid = new Float32Array(sPlane);
             for (let i = 0; i < sPlane; i++) valid[i] = dil[i] ? 0 : 1;
-            const satC = this._sat(valid, sw, sh);
 
             const out = new Uint16Array(starless.length);
             const alphaFull = this._upsample(alphaS, sw, sh, width, height);
             for (let c = 0; c < chans; c++) {
                 if (opts.shouldAbort && opts.shouldAbort()) throw new Error('aborted by user');
-                const vv = new Float32Array(sPlane);
-                for (let i = 0; i < sPlane; i++) vv[i] = sStarless[c][i] * valid[i];
-                const satV = this._sat(vv, sw, sh);
-                const estS = new Float32Array(sPlane);
-                for (let y = 0; y < sh; y++) {
-                    for (let x = 0; x < sw; x++) {
-                        const i = y * sw + x;
-                        const sC = this._satWin(satC, sw, sh, x, y, blurR);
-                        estS[i] = sC > 0 ? this._satWin(satV, sw, sh, x, y, blurR) / sC : sStarless[c][i];
-                    }
-                }
+                // Smooth hole-fill via pull-push (image pyramid) — fills the
+                // masked star/halo regions with a gradient from the
+                // surrounding background, with NO blocky plateaus (which a
+                // single box-average window leaves behind).
+                const estS = this._pullPush(sStarless[c], valid, sw, sh);
                 const estFull = this._upsample(estS, sw, sh, width, height);
                 const off = c * planeLen;
                 for (let i = 0; i < planeLen; i++) {
@@ -1669,6 +1663,54 @@
                 await _yieldToBrowser();
             }
             return out;
+        }
+
+        // Pull-push pyramid inpainting. Given per-pixel values + a 0..1 weight
+        // (0 = hole to fill), returns a buffer where holes are filled by a
+        // smooth multi-scale interpolation of the surrounding weighted data.
+        // Pull: build a pyramid, weighted-averaging 2×2 blocks (confidence
+        // accumulates). Push: from the coarsest level down, blend each level's
+        // own data over the upsampled coarser fill by its confidence. O(N),
+        // and produces gradients instead of the box-average's flat patches.
+        _pullPush(value, weight, w, h) {
+            const vs = [value], ws = [weight], dims = [[w, h]];
+            let cw = w, ch = h;
+            while (cw > 1 || ch > 1) {
+                const nw = Math.max(1, cw >> 1), nh = Math.max(1, ch >> 1);
+                const pv = vs[vs.length - 1], pw = ws[ws.length - 1];
+                const nv = new Float32Array(nw * nh), nwt = new Float32Array(nw * nh);
+                for (let y = 0; y < nh; y++) {
+                    for (let x = 0; x < nw; x++) {
+                        let swt = 0, sv = 0;
+                        for (let dy = 0; dy < 2; dy++) {
+                            const sy = Math.min(ch - 1, y * 2 + dy);
+                            for (let dx = 0; dx < 2; dx++) {
+                                const sx = Math.min(cw - 1, x * 2 + dx);
+                                const idx = sy * cw + sx, wt = pw[idx];
+                                swt += wt; sv += wt * pv[idx];
+                            }
+                        }
+                        const i = y * nw + x;
+                        if (swt > 0) nv[i] = sv / swt;
+                        nwt[i] = swt < 1 ? swt : 1;   // confidence, clamped
+                    }
+                }
+                vs.push(nv); ws.push(nwt); dims.push([nw, nh]);
+                cw = nw; ch = nh;
+            }
+            let F = vs[vs.length - 1].slice();
+            for (let l = vs.length - 2; l >= 0; l--) {
+                const [lw, lh] = dims[l], [pw, ph] = dims[l + 1];
+                const up = this._upsample(F, pw, ph, lw, lh);
+                const v = vs[l], wt = ws[l];
+                const nf = new Float32Array(lw * lh);
+                for (let i = 0; i < nf.length; i++) {
+                    let a = wt[i]; a = a < 0 ? 0 : (a > 1 ? 1 : a);
+                    nf[i] = a * v[i] + (1 - a) * up[i];
+                }
+                F = nf;
+            }
+            return F;
         }
 
         // Box-average a plane region into a sw×sh Float32 buffer.
