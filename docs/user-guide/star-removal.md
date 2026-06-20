@@ -92,57 +92,58 @@ that has the file system Polaris serves from:
    button appears in the FILES toolbar once the `starnet` family shows up
    in `GET /api/onnx/manifest`.
 
-### Downloading models on-device (bucket)
+### Downloading models on-device
 
 Converting models needs a build machine with Docker; devices and OS images
 that ship Polaris **without** the bundled models (or phones/tablets) can pull
-ready-made `.onnx` files from a hosted bucket instead.
+ready-made `.onnx` files straight from the app instead.
 
-1. In **Settings → AI inference (ONNX) → Download models**, paste the
-   **Bucket URL** (e.g. a public Supabase Storage bucket) and click
-   **Refresh catalog**.
-2. The table lists every model offered by the bucket; click **⬇ Download**
-   next to one. It streams onto this device's writable models directory, is
-   **SHA-256 verified**, and the registry rescans automatically — no browser
-   restart needed.
+1. Go to **Settings → AI inference (ONNX) → Download models** and click
+   **Refresh catalog**. By default this lists the models hosted in the public
+   **N.I.N.A. Polaris model repository** on SourceForge — no configuration
+   needed (the app ships a bundled `models-index.json`).
+2. Click **⬇ Download** next to a model. It streams onto this device's
+   writable models directory and the registry rescans automatically — no
+   browser restart needed. A progress bar tracks the transfer.
 
-**Bucket layout.** The base URL must serve a `models-index.json` plus the
-GraXpert/Polaris directory layout:
+The downloaded file lands under the writable target dir resolved from your
+profile `OnnxModelsPath` → `/home/polaris/models` (Linux) → the bundled
+`wwwroot/graxpert/models` folder.
 
-```
-{baseUrl}/models-index.json
-{baseUrl}/nox-color-ai-models/1.0.0/model.onnx
-{baseUrl}/nox-gray-ai-models/1.0.0/model.onnx
-{baseUrl}/starrem2k13-ai-models/1.0.0/model.onnx
-...
-```
+#### Using a custom bucket instead
 
-`models-index.json` is a JSON array, one entry per downloadable model:
+Expand **Advanced — use a custom model bucket** to point at your own host
+(e.g. a Supabase / S3 bucket). The base URL must serve a `models-index.json`
+plus the directory layout `{base}/{family}-ai-models/{version}/model.onnx`.
+
+`models-index.json` is a JSON array, one entry per downloadable model
+(this is the same format as the bundled
+`src/NINA.Polaris/wwwroot/graxpert/models-index.json`):
 
 ```json
 [
   {
     "dir": "nox-color-ai-models",
     "version": "1.0.0",
-    "bytes": 109212345,
-    "sha256": "<lowercase hex SHA-256 of model.onnx>",
+    "bytes": 109241715,
     "label": "nox colour (FP16)",
-    "url": "(optional absolute override; defaults to {baseUrl}/{dir}/{version}/model.onnx)"
+    "sha256": "(optional, lowercase hex of model.onnx)",
+    "url": "(optional absolute override; e.g. a SourceForge download link)"
   }
 ]
 ```
 
 - `dir` is the on-disk family directory (the `{family}-ai-models` form).
+- `url` is optional; when present it overrides the
+  `{base}/{dir}/{version}/model.onnx` convention. The bundled catalogue uses
+  this to point each entry at its SourceForge mirror-redirect download URL.
 - `sha256` is optional but recommended; when present the download is rejected
-  on mismatch. Compute it with `sha256sum model.onnx` (or
-  `Get-FileHash model.onnx -Algorithm SHA256`).
-- The endpoints behind this UI are `GET /api/onnx/catalog`,
-  `POST /api/onnx/download` `{dir, version}`, and
+  on mismatch (`Get-FileHash model.onnx -Algorithm SHA256`). When absent, a
+  size sanity-check against `bytes` guards against a mirror returning an
+  error page.
+- Endpoints behind this UI: `GET /api/onnx/catalog`,
+  `POST /api/onnx/download` `{dir, version}`,
   `GET /api/onnx/download-status`. One download runs at a time.
-
-The downloaded file lands under the writable target dir resolved from your
-profile `OnnxModelsPath` → `/home/polaris/models` (Linux) → the bundled
-`wwwroot/graxpert/models` folder.
 
 ## Using it
 

@@ -11768,31 +11768,40 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          x-init="modelDlLoad()">
                         <h4 style="margin:0 0 4px 0; font-size:13px">Download models</h4>
                         <p class="hint" style="margin-top:0">
-                            Pull star-removal / GraXpert models from a hosted
-                            bucket onto this device. Useful for OS images and
-                            phones/tablets that don't ship the large model files.
-                            Downloads land in your writable models directory and
-                            are SHA-256 verified, no browser cache needed.
-                        </p>
-                        <label>Bucket URL
-                            <input type="text" class="input-md"
-                                   style="width:100%; max-width:560px"
-                                   x-model="settings.onnxModelsBucketUrl"
-                                   @change="(async () => { await saveSettingsToServer(); await modelDlLoad(); })()"
-                                   placeholder="e.g. https://xxxx.supabase.co/storage/v1/object/public/models">
-                        </label>
-                        <p class="hint">
-                            Base URL serving <code>models-index.json</code> plus
-                            <code>{family}-ai-models/{version}/model.onnx</code>.
+                            Pull star-removal / GraXpert models onto this device
+                            from the public N.I.N.A. Polaris model repository.
+                            Useful for OS images and phones/tablets that don't
+                            ship the large model files. Downloads land in your
+                            writable models directory and the registry rescans
+                            automatically — no browser cache needed.
                         </p>
 
                         <div class="control-row actions" style="margin-top:6px">
                             <button class="btn btn-sm" @click="modelDlLoad()"
-                                    :disabled="modelDl.loading || !settings.onnxModelsBucketUrl">
+                                    :disabled="modelDl.loading">
                                 <span x-show="!modelDl.loading">⟳ Refresh catalog</span>
                                 <span x-show="modelDl.loading">Loading…</span>
                             </button>
                         </div>
+
+                        <details style="margin-top:10px">
+                            <summary style="cursor:pointer; font-size:11px; color:var(--text-muted)">
+                                Advanced — use a custom model bucket instead
+                            </summary>
+                            <label style="margin-top:6px; display:block">Bucket URL
+                                <input type="text" class="input-md"
+                                       style="width:100%; max-width:560px"
+                                       x-model="settings.onnxModelsBucketUrl"
+                                       @change="(async () => { await saveSettingsToServer(); await modelDlLoad(); })()"
+                                       placeholder="e.g. https://xxxx.supabase.co/storage/v1/object/public/models">
+                            </label>
+                            <p class="hint">
+                                Overrides the default repository. Base URL must
+                                serve <code>models-index.json</code> plus
+                                <code>{family}-ai-models/{version}/model.onnx</code>.
+                                Leave blank to use the bundled catalogue.
+                            </p>
+                        </details>
 
                         <p class="hint" x-show="modelDl.error"
                            style="color:var(--accent-warn,#f59e0b)"

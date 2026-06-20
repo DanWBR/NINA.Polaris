@@ -48,18 +48,42 @@ public sealed class ModelDownloadService {
 
     public DownloadState Status => _state;
 
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(BaseUrl);
+    /// <summary>Configured when a custom bucket URL is set OR the app ships a
+    /// bundled <c>models-index.json</c> (the default, pointing at the public
+    /// SourceForge model files). Either way the downloader has a catalogue.</summary>
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(BaseUrl) || File.Exists(BundledIndexPath);
 
     private string BaseUrl => (_profile.Active?.OnnxModelsBucketUrl ?? "").Trim().TrimEnd('/');
 
-    /// <summary>Fetch the remote index and merge each entry with whether it is
-    /// already installed locally. Throws if no bucket is configured.</summary>
+    /// <summary>The bundled catalogue beside the bundled models dir, i.e.
+    /// <c>wwwroot/graxpert/models-index.json</c>.</summary>
+    private string BundledIndexPath =>
+        Path.Combine(Path.GetDirectoryName(_registry.BundledModelsPath) ?? "", "models-index.json");
+
+    /// <summary>Load the catalogue index. When a custom bucket URL is set it is
+    /// fetched from <c>{base}/models-index.json</c>; otherwise the bundled
+    /// <c>models-index.json</c> is read from disk. Entries carry an absolute
+    /// <c>url</c> for hosts (like SourceForge) that don't expose a flat
+    /// <c>{base}/{dir}/{version}/model.onnx</c> path.</summary>
+    private async Task<List<IndexEntry>> LoadIndexAsync(CancellationToken ct) {
+        string json;
+        if (!string.IsNullOrWhiteSpace(BaseUrl)) {
+            var client = _http.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(30);
+            json = await client.GetStringAsync($"{BaseUrl}/models-index.json", ct);
+        } else if (File.Exists(BundledIndexPath)) {
+            json = await File.ReadAllTextAsync(BundledIndexPath, ct);
+        } else {
+            throw new InvalidOperationException("No model catalogue available.");
+        }
+        return JsonSerializer.Deserialize<List<IndexEntry>>(json, JsonOpts) ?? new();
+    }
+
+    /// <summary>Load the index and merge each entry with whether it is already
+    /// installed locally. Throws if no catalogue is available.</summary>
     public async Task<IReadOnlyList<CatalogEntry>> GetCatalogAsync(CancellationToken ct = default) {
-        if (!IsConfigured) throw new InvalidOperationException("No model bucket URL configured.");
-        var client = _http.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(30);
-        var json = await client.GetStringAsync($"{BaseUrl}/models-index.json", ct);
-        var entries = JsonSerializer.Deserialize<List<IndexEntry>>(json, JsonOpts) ?? new();
+        if (!IsConfigured) throw new InvalidOperationException("No model catalogue available.");
+        var entries = await LoadIndexAsync(ct);
         return entries
             .Where(e => !string.IsNullOrWhiteSpace(e.Dir) && !string.IsNullOrWhiteSpace(e.Version))
             .Select(e => new CatalogEntry(
@@ -71,7 +95,7 @@ public sealed class ModelDownloadService {
     /// <summary>Start a download in the background. Returns false if one is
     /// already running. Progress is in <see cref="Status"/>.</summary>
     public bool TryStart(string dir, string version) {
-        if (!IsConfigured) throw new InvalidOperationException("No model bucket URL configured.");
+        if (!IsConfigured) throw new InvalidOperationException("No model catalogue available.");
         if (!_gate.Wait(0)) return false;   // already downloading
         _state = new DownloadState(dir, version, 0, 0, "downloading", null);
         _ = Task.Run(async () => {
@@ -86,10 +110,7 @@ public sealed class ModelDownloadService {
 
     private async Task DownloadAsync(string dir, string version, CancellationToken ct) {
         // Resolve the index entry (for the URL override + sha256 + size).
-        var idxClient = _http.CreateClient();
-        idxClient.Timeout = TimeSpan.FromSeconds(30);
-        var idxJson = await idxClient.GetStringAsync($"{BaseUrl}/models-index.json", ct);
-        var entries = JsonSerializer.Deserialize<List<IndexEntry>>(idxJson, JsonOpts) ?? new();
+        var entries = await LoadIndexAsync(ct);
         var entry = entries.FirstOrDefault(e =>
             string.Equals(e.Dir, dir, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(e.Version, version, StringComparison.OrdinalIgnoreCase))
@@ -119,6 +140,17 @@ public sealed class ModelDownloadService {
                 await dst.WriteAsync(buf.AsMemory(0, n), ct);
                 got += n;
                 _state = _state with { ReceivedBytes = got };
+            }
+
+            // Sanity guard for mirror hosts (e.g. SourceForge) that 302 to a
+            // mirror and can occasionally hand back a small HTML interstitial
+            // instead of the file. With no sha256 to verify, reject a download
+            // that came back far smaller than the catalogue's expected size.
+            if (entry.Bytes > 0 && got < entry.Bytes / 2) {
+                File.Delete(tmp);
+                throw new InvalidOperationException(
+                    $"Downloaded {got:N0} bytes but expected ~{entry.Bytes:N0} " +
+                    "(mirror may have returned an error page). Try again.");
             }
         }
 

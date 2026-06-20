@@ -1,0 +1,65 @@
+[
+  {
+    "dir": "nox-color-ai-models",
+    "version": "1.0.0",
+    "bytes": 109241715,
+    "label": "nox colour (StarNet-like, MIT) - star removal, FP16",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-color-ai-models/1.0.0/model.onnx"
+  },
+  {
+    "dir": "nox-gray-ai-models",
+    "version": "1.0.0",
+    "bytes": 109229542,
+    "label": "nox gray (StarNet-like, MIT) - star removal, FP16",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-gray-ai-models/1.0.0/model.onnx"
+  },
+  {
+    "dir": "starrem2k13-ai-models",
+    "version": "1.0.0",
+    "bytes": 62268180,
+    "label": "starrem2k13 (U-Net, MIT) - star removal, FP16",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starrem2k13-ai-models/1.0.0/model.onnx"
+  },
+  {
+    "dir": "starnet-ai-models",
+    "version": "1.0.0",
+    "bytes": 108871968,
+    "label": "StarNet++ (NonCommercial) - star removal, FP16",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starnet-ai-models/1.0.0/model.onnx"
+  },
+  {
+    "dir": "bge-ai-models",
+    "version": "1.0.1",
+    "bytes": 217663463,
+    "label": "GraXpert Background Extraction (NonCommercial)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/bge-ai-models/1.0.1/model.onnx"
+  },
+  {
+    "dir": "denoise-ai-models",
+    "version": "2.0.0",
+    "bytes": 297030254,
+    "label": "GraXpert Denoise v2 (NonCommercial)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/denoise-ai-models/2.0.0/model.onnx"
+  },
+  {
+    "dir": "denoise-ai-models",
+    "version": "3.0.2",
+    "bytes": 477703971,
+    "label": "GraXpert Denoise v3 (NonCommercial)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/denoise-ai-models/3.0.2/model.onnx"
+  },
+  {
+    "dir": "deconvolution-stars-ai-models",
+    "version": "1.0.0",
+    "bytes": 279252211,
+    "label": "GraXpert Deconvolution - Stars (NonCommercial)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-stars-ai-models/1.0.0/model.onnx"
+  },
+  {
+    "dir": "deconvolution-object-ai-models",
+    "version": "1.0.1",
+    "bytes": 279252211,
+    "label": "GraXpert Deconvolution - Objects (NonCommercial)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-object-ai-models/1.0.1/model.onnx"
+  }
+]
