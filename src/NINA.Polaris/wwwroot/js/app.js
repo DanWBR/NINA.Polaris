@@ -2400,13 +2400,17 @@ function ninaApp() {
                 autoStretch: true,   // stretch into the model's trained domain
                 stretchTarget: 0.15, // autostretch target background (lower = stronger)
                 passes: 1,           // 2 = second pass cleans bright-star halos
-                reduceHalos: true,   // mask-guided cleanup of residual halos
-                haloStrength: 0.8    // 0..1: default tuned for starrem2k13 (bundled)
+                reduceHalos: false,  // mask-guided cleanup of residual halos
+                haloStrength: 0.5    // 0..1: coverage radius + fill window
             },
-            // Recommended halo-cleanup strength per model: starrem2k13 leaves
-            // wider rings than StarNet/nox, so it wants more coverage by default.
+            // Recommended halo cleanup per model: nox (true StarNet-like) leaves
+            // essentially no rings → off by default; starrem2k13 leaves wide
+            // rings → on at 0.8; StarNet → on at 0.5.
             _haloDefault(model) {
                 return model === 'starrem2k13' ? 0.8 : 0.5;
+            },
+            _reduceHalosDefault(model) {
+                return model !== 'nox';
             }
         },
         crop: {
@@ -22624,12 +22628,16 @@ function ninaApp() {
             const avail = this.starRemovalModels();
             if (avail.length && !avail.some(m => m.value === this.starRemoval.options.model))
                 this.starRemoval.options.model = avail[0].value;
-            this.starRemoval.options.haloStrength = this.starRemoval._haloDefault(this.starRemoval.options.model);
-            this.starRemoval.options.open = true;
+            const o = this.starRemoval.options;
+            o.haloStrength = this.starRemoval._haloDefault(o.model);
+            o.reduceHalos = this.starRemoval._reduceHalosDefault(o.model);
+            o.open = true;
         },
-        // Switch the recommended halo-cleanup default when the model changes.
+        // Switch the recommended halo-cleanup defaults when the model changes.
         starRemovalModelChanged() {
-            this.starRemoval.options.haloStrength = this.starRemoval._haloDefault(this.starRemoval.options.model);
+            const o = this.starRemoval.options;
+            o.haloStrength = this.starRemoval._haloDefault(o.model);
+            o.reduceHalos = this.starRemoval._reduceHalosDefault(o.model);
         },
         starRemovalCloseOptions() { this.starRemoval.options.open = false; },
         // Confirm the options modal → run with the chosen settings.
