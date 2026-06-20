@@ -114,6 +114,36 @@ public static class ImageBlend {
         return stars;
     }
 
+    /// <summary>
+    /// Stage-A neutral base: per-channel GraXpert auto-stretch of a linear,
+    /// plane-sequential buffer back to a 16-bit display-referred buffer. Each
+    /// channel gets its own black/mid/white so an OSC's R/G/B backgrounds line
+    /// up (white balance), giving a colour-neutral base. The Image Blend tool
+    /// runs this first, then applies the user's linked black/mid/white (the
+    /// per-image sliders) on top via <see cref="Combine"/> — so adjusting the
+    /// sliders brightens/clips uniformly without re-introducing the raw OSC
+    /// colour cast. Mirrors the editor's two-stage stretch.
+    /// </summary>
+    public static ushort[] NeutralizePerChannel(ushort[] data, int channels, int planeSize, int bitDepth) {
+        if (data == null) throw new ArgumentNullException(nameof(data));
+        int chans = channels == 3 ? 3 : 1;
+        var outp = new ushort[data.Length];
+        for (int c = 0; c < chans; c++) {
+            int off = c * planeSize;
+            int n = Math.Min(planeSize, data.Length - off);
+            if (n <= 0) break;
+            var plane = new ushort[n];
+            Array.Copy(data, off, plane, 0, n);
+            var p = AutoStretch.ComputeAutoStretchParams(plane, n, 1, bitDepth);
+            var f = AutoStretch.ApplyManualFloat(plane, p.Black, p.Mid, p.White, bitDepth);
+            for (int i = 0; i < n; i++) {
+                float v = f[i] < 0f ? 0f : (f[i] > 1f ? 1f : f[i]);
+                outp[off + i] = (ushort)(v * 65535f + 0.5f);
+            }
+        }
+        return outp;
+    }
+
     public static Mode ParseMode(string? s) => (s ?? "screen").Trim().ToLowerInvariant() switch {
         "add"     => Mode.Add,
         "lighten" => Mode.Lighten,

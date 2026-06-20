@@ -62,8 +62,13 @@ public class ImageBlendService : IDisposable {
     public (HistogramData? Base, HistogramData? Blend) GetHistograms(string sessionId) {
         if (!_sessions.TryGetValue(sessionId, out var s)) return (null, null);
         s.LastTouch = DateTime.UtcNow;
-        return (ComputeHistogram(s.Base.Data, s.Width, s.Height, s.Channels),
-                ComputeHistogram(s.Blend.Data, s.Width, s.Height, s.Channels));
+        // Histograms of the NEUTRAL base (Stage A) so the per-layer handles sit
+        // on the same display-space data the sliders adjust (Stage B).
+        int plane = s.Width * s.Height;
+        var baseN = ImageBlend.NeutralizePerChannel(s.Base.Data, s.Channels, plane, s.Base.Properties.BitDepth);
+        var blendN = ImageBlend.NeutralizePerChannel(s.Blend.Data, s.Channels, plane, s.Blend.Properties.BitDepth);
+        return (ComputeHistogram(baseN, s.Width, s.Height, s.Channels),
+                ComputeHistogram(blendN, s.Width, s.Height, s.Channels));
     }
 
     /// <summary>256-bin per-channel histogram + stats from a decimated sample
@@ -169,12 +174,18 @@ public class ImageBlendService : IDisposable {
         var (basePrev, pw, ph) = Decimate(s.Base.Data, s.Width, s.Height, s.Channels, step);
         var (blendPrev, _, _) = Decimate(s.Blend.Data, s.Width, s.Height, s.Channels, step);
 
+        // Stage A: per-channel neutral base (white-balances the OSC cast). The
+        // user's sliders (Stage B) then adjust the neutral 16-bit base, so
+        // moving them doesn't reintroduce a colour cast.
+        int plane = pw * ph;
+        var baseN = ImageBlend.NeutralizePerChannel(basePrev, s.Channels, plane, s.Base.Properties.BitDepth);
+        var blendN = ImageBlend.NeutralizePerChannel(blendPrev, s.Channels, plane, s.Blend.Properties.BitDepth);
+
         var blended = ImageBlend.Combine(
-            basePrev, blendPrev,
+            baseN, blendN,
             new ImageBlend.StretchSpec(p.BaseBlack, p.BaseMid, p.BaseWhite),
             new ImageBlend.StretchSpec(p.BlendBlack, p.BlendMid, p.BlendWhite),
-            ImageBlend.ParseMode(p.Mode), p.Opacity,
-            s.Base.Properties.BitDepth, s.Blend.Properties.BitDepth);
+            ImageBlend.ParseMode(p.Mode), p.Opacity, 16, 16);
 
         return EncodeJpeg(blended, pw, ph, s.Channels, quality);
     }
@@ -183,12 +194,14 @@ public class ImageBlendService : IDisposable {
         if (!_sessions.TryGetValue(sessionId, out var s)) return null;
         s.LastTouch = DateTime.UtcNow;
 
+        int plane = s.Width * s.Height;
+        var baseN = ImageBlend.NeutralizePerChannel(s.Base.Data, s.Channels, plane, s.Base.Properties.BitDepth);
+        var blendN = ImageBlend.NeutralizePerChannel(s.Blend.Data, s.Channels, plane, s.Blend.Properties.BitDepth);
         var blended = ImageBlend.Combine(
-            s.Base.Data, s.Blend.Data,
+            baseN, blendN,
             new ImageBlend.StretchSpec(p.BaseBlack, p.BaseMid, p.BaseWhite),
             new ImageBlend.StretchSpec(p.BlendBlack, p.BlendMid, p.BlendWhite),
-            ImageBlend.ParseMode(p.Mode), p.Opacity,
-            s.Base.Properties.BitDepth, s.Blend.Properties.BitDepth);
+            ImageBlend.ParseMode(p.Mode), p.Opacity, 16, 16);
 
         // Output is always full-range 16-bit; carry the base image's metadata
         // (WCS, target, etc.) onto the blended result.
