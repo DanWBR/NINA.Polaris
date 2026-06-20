@@ -35,11 +35,25 @@
     "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/bge-ai-models/1.0.1/model.onnx"
   },
   {
+    "dir": "bge-ai-models",
+    "version": "1.0.1-fp16",
+    "bytes": 108842113,
+    "label": "GraXpert Background Extraction (NonCommercial, FP16 - iOS)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/bge-ai-models/1.0.1-fp16/model.onnx"
+  },
+  {
     "dir": "denoise-ai-models",
     "version": "2.0.0",
     "bytes": 297030254,
     "label": "GraXpert Denoise v2 (NonCommercial)",
     "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/denoise-ai-models/2.0.0/model.onnx"
+  },
+  {
+    "dir": "denoise-ai-models",
+    "version": "2.0.0-fp16",
+    "bytes": 148577279,
+    "label": "GraXpert Denoise v2 (NonCommercial, FP16 - iOS)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/denoise-ai-models/2.0.0-fp16/model.onnx"
   },
   {
     "dir": "denoise-ai-models",
@@ -49,6 +63,13 @@
     "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/denoise-ai-models/3.0.2/model.onnx"
   },
   {
+    "dir": "denoise-ai-models",
+    "version": "3.0.2-fp16",
+    "bytes": 239257488,
+    "label": "GraXpert Denoise v3 (NonCommercial, FP16 - iOS)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/denoise-ai-models/3.0.2-fp16/model.onnx"
+  },
+  {
     "dir": "deconvolution-stars-ai-models",
     "version": "1.0.0",
     "bytes": 279252211,
@@ -56,10 +77,24 @@
     "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-stars-ai-models/1.0.0/model.onnx"
   },
   {
+    "dir": "deconvolution-stars-ai-models",
+    "version": "1.0.0-fp16",
+    "bytes": 140384795,
+    "label": "GraXpert Deconvolution - Stars (NonCommercial, FP16 - iOS)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-stars-ai-models/1.0.0-fp16/model.onnx"
+  },
+  {
     "dir": "deconvolution-object-ai-models",
     "version": "1.0.1",
     "bytes": 279252211,
     "label": "GraXpert Deconvolution - Objects (NonCommercial)",
     "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-object-ai-models/1.0.1/model.onnx"
+  },
+  {
+    "dir": "deconvolution-object-ai-models",
+    "version": "1.0.1-fp16",
+    "bytes": 140384795,
+    "label": "GraXpert Deconvolution - Objects (NonCommercial, FP16 - iOS)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-object-ai-models/1.0.1-fp16/model.onnx"
   }
 ]
