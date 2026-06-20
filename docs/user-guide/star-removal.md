@@ -48,12 +48,14 @@ serves from:
    image in 256×256 tiles; on a WebGPU-capable browser this is seconds,
    on plain WASM it can take up to a minute for a large master.
 4. When it finishes, two siblings are written next to the source —
-   `{name}_starless.fits` and `{name}_stars.fits` — and the
-   **[Image Blend](image-blend.md)** tool opens automatically, pre-filled
-   with the starless as the **base** and the stars as the **blend**.
-5. Stretch each layer to taste (the stars layer usually wants a gentler
-   midtone lift than the starless), keep the mode on **Screen**, then
-   **Create new image** to write the recombined result.
+   `{name}_starless.fits` and `{name}_stars.fits` — and the **before/after
+   comparator** opens with the **original on the left and the starless
+   result on the right** (drag the divider to compare).
+5. Recombine when you're ready: open **[Image Blend](image-blend.md)** from
+   FILES (select `{name}_starless` then `{name}_stars`, or the original
+   plus `{name}_stars`), stretch each layer to taste — the stars layer
+   usually wants a gentler midtone lift than the starless — keep the mode
+   on **Screen**, then **Create new image** to write the recombined result.
 
 The stars-only image is auto-derived as `clamp(original − starless, 0)`,
 so it contains exactly what the network removed — no separate star mask

@@ -22304,10 +22304,11 @@ function ninaApp() {
             await this.starRemovalRun(sel[0]);
         },
         // Run StarNet on one file: fetch pixels → StarRemovalPipeline →
-        // save {stem}_starless.fits + {stem}_stars.fits → open Image Blend
-        // pre-filled (starless = base, stars = blend). Mirrors the GraXpert
-        // browser runner but bespoke because it writes TWO outputs and
-        // chains into the blend tool.
+        // save {stem}_starless.fits + {stem}_stars.fits → open the
+        // before/after comparator (original vs starless). The user does the
+        // recombine manually afterwards via ✨ Image Blend (original +
+        // _stars, or _starless + _stars). Mirrors the GraXpert browser
+        // runner but bespoke because it writes TWO outputs.
         async starRemovalRun(path) {
             if (typeof OnnxRegistry === 'undefined' || !OnnxRegistry.StarRemovalPipeline) {
                 this.toast('AI runtime not loaded', 'error'); return;
@@ -22350,9 +22351,16 @@ function ninaApp() {
                 this.toast('Stars removed → ' + (starlessPath ? starlessPath.split(/[\\/]/).pop() : '_starless')
                     + ' + ' + (starsPath ? starsPath.split(/[\\/]/).pop() : '_stars'), 'success');
                 try { this.filesReload(); } catch { /* non-fatal */ }
-                // Chain straight into Image Blend: base = starless, blend = stars.
-                if (starlessPath && starsPath) {
-                    await this.blendOpen(starlessPath, starsPath);
+                // Open the before/after comparator: original (left) vs the
+                // starless result (right). The blend back is left for the
+                // user to do manually later via ✨ Image Blend.
+                if (starlessPath) {
+                    const labelFor = p => p.split(/[\\/]+/).pop();
+                    this.graxpertOpenCompare([{
+                        src: path,
+                        out: starlessPath,
+                        label: labelFor(path) + '  ↔  ' + labelFor(starlessPath),
+                    }], 0, 'compare');
                 }
             } catch (e) {
                 const msg = (e && e.message) || String(e);
