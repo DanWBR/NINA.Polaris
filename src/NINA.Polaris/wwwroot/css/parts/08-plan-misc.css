@@ -753,3 +753,22 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     color: var(--text-secondary);
 }
 .guide-bc input[type="range"] { width: 84px; }
+
+/* SN-6: Image Blend modal — preview + two stretch panels side by side. */
+.blend-layout { display:flex; gap:16px; align-items:flex-start; margin-top:8px; flex-wrap:wrap; }
+.blend-preview { flex:1 1 480px; min-width:320px; background:#000; border:1px solid var(--border);
+    border-radius:8px; min-height:320px; display:flex; align-items:center; justify-content:center;
+    overflow:hidden; }
+.blend-preview img { max-width:100%; max-height:70vh; display:block; }
+.blend-preview-empty { color:var(--text-secondary); font-size:13px; }
+.blend-controls { flex:0 0 320px; display:flex; flex-direction:column; gap:12px; }
+.blend-group { border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+.blend-group-title { font-weight:600; font-size:12px; color:var(--accent);
+    text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; }
+.blend-row { display:flex; align-items:center; gap:8px; margin:6px 0; font-size:12.5px; }
+.blend-row > span { flex:0 0 78px; color:var(--text-secondary); }
+.blend-row input[type="range"] { flex:1; min-width:0; }
+.blend-row select.input-sm { flex:1; }
+.blend-row output { flex:0 0 46px; text-align:right; font-variant-numeric:tabular-nums;
+    color:var(--text-primary); }
+.blend-group .btn.btn-sm { margin-top:4px; margin-right:6px; }

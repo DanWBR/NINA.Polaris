@@ -1034,6 +1034,7 @@ app.MapSystemEndpoints();
 app.MapImageEndpoints();
 app.MapStudioEndpoints();
 app.MapEditorEndpoints();
+app.MapBlendEndpoints();
 app.MapOnnxEndpoints();
 app.MapFilesEndpoints();
 app.MapCacheEndpoints();

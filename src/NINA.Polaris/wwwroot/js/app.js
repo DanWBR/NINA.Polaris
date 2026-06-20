@@ -2357,6 +2357,20 @@ function ninaApp() {
                      '{GAIN}', '{DATE-OBS}', '{n:03}'],
         },
 
+        // SN-6: Image Blend tool (recombine starless + stars with independent
+        // per-image MTF stretch + Screen/Add/Lighten blend + opacity). The
+        // server holds a load-once session; we re-render a preview JPEG on each
+        // slider drag (debounced) and write a 16-bit FITS on "Create new image".
+        blend: {
+            open: false, sessionId: null,
+            basePath: '', blendPath: '',
+            width: 0, height: 0, channels: 1,
+            base:  { black: 0.0, mid: 0.5, white: 1.0 },
+            blend: { black: 0.0, mid: 0.5, white: 1.0 },
+            mode: 'screen', opacity: 1.0,
+            previewUrl: '', busy: false, error: '',
+            _timer: null
+        },
         crop: {
             open: false,
             sourcePath: '',     // single file path being cropped
@@ -22144,6 +22158,128 @@ function ninaApp() {
             } catch (e) {
                 this.batchRename.error = 'Rename failed: ' + (e.message || e);
                 this.batchRename.busy = false;
+            }
+        },
+
+        // ----- SN-6: Image Blend tool ---------------------------------
+        // Open from a FILES selection of exactly two files: first = base
+        // (starless), second = blend (stars). Loads a server session then
+        // shows a live preview.
+        async blendOpenForSelection() {
+            const sel = (this.files.selectedPaths || []).slice(0, 2);
+            if (sel.length !== 2) { this.toast('Select exactly two files (base then blend)', 'warn'); return; }
+            await this.blendOpen(sel[0], sel[1]);
+        },
+        async blendOpen(basePath, blendPath) {
+            this.blend.open = true;
+            this.blend.error = '';
+            this.blend.previewUrl = '';
+            this.blend.sessionId = null;
+            this.blend.basePath = basePath;
+            this.blend.blendPath = blendPath;
+            this.blend.base  = { black: 0.0, mid: 0.5, white: 1.0 };
+            this.blend.blend = { black: 0.0, mid: 0.5, white: 1.0 };
+            this.blend.mode = 'screen';
+            this.blend.opacity = 1.0;
+            this.blend.busy = true;
+            try {
+                const r = await this.apiFetch('/api/blend/load', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ basePath, blendPath })
+                });
+                if (!r.ok) {
+                    const e = await r.json().catch(() => ({}));
+                    this.blend.error = e.error || 'Failed to load image pair.';
+                    this.blend.busy = false;
+                    return;
+                }
+                const info = await r.json();
+                this.blend.sessionId = info.sessionId;
+                this.blend.width = info.width;
+                this.blend.height = info.height;
+                this.blend.channels = info.channels;
+                this.blend.busy = false;
+                await this.blendPreview();
+            } catch (e) {
+                this.blend.error = 'Load failed: ' + e.message;
+                this.blend.busy = false;
+            }
+        },
+        blendSet(panel, key, val) {
+            const v = parseFloat(val);
+            if (panel === null) this.blend.opacity = v;
+            else this.blend[panel][key] = v;
+            this.blendSchedulePreview();
+        },
+        blendSchedulePreview() {
+            if (this.blend._timer) clearTimeout(this.blend._timer);
+            // Debounce so a slider drag doesn't fire a render per pixel.
+            this.blend._timer = setTimeout(() => this.blendPreview(), 180);
+        },
+        _blendBody(extra) {
+            return JSON.stringify(Object.assign({
+                sessionId: this.blend.sessionId,
+                baseBlack: this.blend.base.black, baseMid: this.blend.base.mid, baseWhite: this.blend.base.white,
+                blendBlack: this.blend.blend.black, blendMid: this.blend.blend.mid, blendWhite: this.blend.blend.white,
+                mode: this.blend.mode, opacity: this.blend.opacity
+            }, extra || {}));
+        },
+        async blendPreview() {
+            if (!this.blend.sessionId) return;
+            try {
+                const r = await this.apiFetch('/api/blend/preview', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: this._blendBody({ maxDim: 1400, quality: 85 })
+                });
+                if (!r.ok) return;
+                const blob = await r.blob();
+                if (this.blend.previewUrl) URL.revokeObjectURL(this.blend.previewUrl);
+                this.blend.previewUrl = URL.createObjectURL(blob);
+            } catch (e) { /* transient — keep last preview */ }
+        },
+        // Sensible non-linear starting points (true per-image stats would need
+        // a histogram pass; these match typical DSO defaults). Base (starless)
+        // gets a stronger shadow lift than the stars layer.
+        blendAutoStretch(panel) {
+            if (panel === 'base') this.blend.base = { black: 0.0, mid: 0.15, white: 1.0 };
+            else this.blend.blend = { black: 0.0, mid: 0.35, white: 1.0 };
+            this.blendSchedulePreview();
+        },
+        blendResetPanel(panel) {
+            this.blend[panel] = { black: 0.0, mid: 0.5, white: 1.0 };
+            this.blendSchedulePreview();
+        },
+        async blendRender() {
+            if (!this.blend.sessionId) return;
+            this.blend.busy = true;
+            this.blend.error = '';
+            try {
+                const r = await this.apiFetch('/api/blend/render', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: this._blendBody()
+                });
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok) { this.blend.error = j.error || 'Render failed.'; this.blend.busy = false; return; }
+                this.toast('Image blended → ' + (j.path ? j.path.split(/[\\/]/).pop() : 'saved'), 'success');
+                this.blend.busy = false;
+                this.blendClose();
+                try { this.filesReload(); } catch { /* non-fatal */ }
+            } catch (e) {
+                this.blend.error = 'Render failed: ' + e.message;
+                this.blend.busy = false;
+            }
+        },
+        blendClose() {
+            if (this.blend._timer) { clearTimeout(this.blend._timer); this.blend._timer = null; }
+            if (this.blend.previewUrl) { URL.revokeObjectURL(this.blend.previewUrl); this.blend.previewUrl = ''; }
+            const sid = this.blend.sessionId;
+            this.blend.open = false;
+            this.blend.sessionId = null;
+            if (sid) {
+                this.apiFetch('/api/blend/release', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId: sid })
+                }).catch(() => {});
             }
         },
 

@@ -42,17 +42,17 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260619-guidealert">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260619-guidealert">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260619-guidealert">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260619-guidealert">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260619-guidealert">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260619-guidealert">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260619-guidealert">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260619-guidealert">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260620-imageblend">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260620-imageblend">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260620-imageblend">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260620-imageblend">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-imageblend">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-imageblend">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-imageblend">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260620-imageblend">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
-    <link rel="stylesheet" href="/css/night-mode.css?v=20260619-guidealert">
+    <link rel="stylesheet" href="/css/night-mode.css?v=20260620-imageblend">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -9247,6 +9247,20 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             aria-label="Compare">
                         <span class="files-icon">↔</span>
                     </button>
+                    <!-- IMAGE BLEND — recombine two images (e.g. a stretched
+                         starless + the stars-only image) with independent
+                         per-image blackpoint/midtones/highlights + a Screen
+                         blend + opacity. The in-app ImageBlend tool; the
+                         finishing step of the starless workflow. Select the
+                         starless first (base), then the stars image (blend). -->
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 2
+                                       || filesSelectionHasDir()"
+                            @click="blendOpenForSelection()"
+                            title="Image Blend: recombine two images (e.g. starless + stars) with independent stretch + Screen blend"
+                            aria-label="Image Blend">
+                        <span class="files-icon">✨</span>
+                    </button>
                     <!-- Open the selected file in the Lightroom-style editor.
                          Disabled unless exactly one file is selected, the
                          editor opens one frame at a time. Supported types
@@ -13474,6 +13488,104 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- IMAGE BLEND modal — recombine two images (e.g. starless + stars)
+         with independent per-image MTF stretch + Screen blend + opacity.
+         In-app equivalent of PixInsight's ImageBlend; finishing step of the
+         starless workflow. -->
+    <div class="siril-modal" x-show="blend.open" x-cloak
+         @keydown.escape.window="blendClose()">
+        <div class="siril-modal-frame" style="max-width:1100px;width:96vw">
+            <h2 style="font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px">
+                ✨ Image Blend
+            </h2>
+            <p class="hint">
+                Independently stretch the <strong>Base</strong> (starless) and
+                <strong>Blend</strong> (stars) images, then recombine them. With
+                the Screen mode the stars are added back on top of the processed
+                nebulosity. The originals stay untouched — Polaris writes a new
+                <code><span x-text="'&lt;base&gt;_blend.fits'"></span></code>.
+            </p>
+
+            <div class="blend-layout">
+                <!-- live preview -->
+                <div class="blend-preview">
+                    <img x-show="blend.previewUrl" :src="blend.previewUrl"
+                         alt="Blend preview" draggable="false">
+                    <div class="blend-preview-empty" x-show="!blend.previewUrl">
+                        <span x-text="blend.busy ? 'Rendering…' : 'Loading…'"></span>
+                    </div>
+                </div>
+
+                <!-- controls -->
+                <div class="blend-controls">
+                    <template x-for="panel in [
+                        { key:'base',  label:'Base (starless)' },
+                        { key:'blend', label:'Blend (stars)' }]" :key="panel.key">
+                        <div class="blend-group">
+                            <div class="blend-group-title" x-text="panel.label"></div>
+                            <label class="blend-row">
+                                <span>Blackpoint</span>
+                                <input type="range" min="0" max="1" step="0.001"
+                                       :value="blend[panel.key].black"
+                                       @input="blendSet(panel.key,'black',$event.target.value)">
+                                <output x-text="blend[panel.key].black.toFixed(3)"></output>
+                            </label>
+                            <label class="blend-row">
+                                <span>Midtones</span>
+                                <input type="range" min="0.001" max="0.999" step="0.001"
+                                       :value="blend[panel.key].mid"
+                                       @input="blendSet(panel.key,'mid',$event.target.value)">
+                                <output x-text="blend[panel.key].mid.toFixed(3)"></output>
+                            </label>
+                            <label class="blend-row">
+                                <span>Highlights</span>
+                                <input type="range" min="0" max="1" step="0.001"
+                                       :value="blend[panel.key].white"
+                                       @input="blendSet(panel.key,'white',$event.target.value)">
+                                <output x-text="blend[panel.key].white.toFixed(3)"></output>
+                            </label>
+                            <button class="btn btn-sm" @click="blendAutoStretch(panel.key)"
+                                    title="Auto-stretch this image">Auto</button>
+                            <button class="btn btn-sm" @click="blendResetPanel(panel.key)"
+                                    title="Reset to linear">Reset</button>
+                        </div>
+                    </template>
+
+                    <div class="blend-group">
+                        <div class="blend-group-title">Blend</div>
+                        <label class="blend-row">
+                            <span>Mode</span>
+                            <select class="input-sm" x-model="blend.mode" @change="blendSchedulePreview()">
+                                <option value="screen">Screen</option>
+                                <option value="add">Add</option>
+                                <option value="lighten">Lighten</option>
+                            </select>
+                        </label>
+                        <label class="blend-row">
+                            <span>Opacity</span>
+                            <input type="range" min="0" max="1" step="0.01"
+                                   :value="blend.opacity"
+                                   @input="blendSet(null,'opacity',$event.target.value)">
+                            <output x-text="blend.opacity.toFixed(2)"></output>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <p class="hint" x-show="blend.error" style="color:var(--danger)"
+               x-text="blend.error"></p>
+
+            <div class="siril-modal-actions">
+                <button class="btn" @click="blendClose()" :disabled="blend.busy">Cancel</button>
+                <button class="btn btn-primary" @click="blendRender()"
+                        :disabled="blend.busy || !blend.sessionId">
+                    <span x-show="!blend.busy">Create new image</span>
+                    <span x-show="blend.busy">Working…</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- BATCH RENAME modal: rename the selected FITS files from their
          header fields via a token template, with a live old→new preview
          (dry-run) before applying. Mirrors the crop modal chrome. -->
@@ -14670,7 +14782,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260619-guidealert"></script>
+    <script src="/js/app.js?v=20260620-imageblend"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
