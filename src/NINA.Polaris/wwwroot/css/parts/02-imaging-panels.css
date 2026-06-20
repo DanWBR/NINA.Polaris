@@ -1230,6 +1230,11 @@ select.input-sm {
        shortest dropdown labels ("All types" overflows). Bump the
        width 50% so the chevron + the longest option text both fit. */
     width: 90px;
+    /* The 220px cap on .input-sm exists to stop NUMERIC inputs from
+       blowing out a row; dropdowns are different — their option text
+       varies and a hard cap truncates it. Let selects grow to fill
+       whatever width their (flex) container gives them instead. */
+    max-width: none;
 }
 
 /* Any select.input-sm wrapped in a <label> stretches to fill the
