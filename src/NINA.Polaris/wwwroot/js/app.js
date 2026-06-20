@@ -2371,6 +2371,13 @@ function ninaApp() {
             previewUrl: '', busy: false, error: '',
             _timer: null
         },
+        // SN-3: StarNet++ star removal (ONNX, runs in the browser like
+        // GraXpert). Drives a small progress overlay; on success it
+        // auto-opens the Image Blend tool pre-filled with the starless
+        // (base) + stars (blend) so the user can stretch each separately.
+        starRemoval: {
+            busy: false, phase: '', progress: 0, error: ''
+        },
         crop: {
             open: false,
             sourcePath: '',     // single file path being cropped
@@ -22280,6 +22287,79 @@ function ninaApp() {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sessionId: sid })
                 }).catch(() => {});
+            }
+        },
+
+        // ----- SN-3: StarNet++ star removal --------------------------
+        // True when a 'starnet' family model is registered, so the FILES
+        // "Remove stars" button only shows once the converted model is
+        // installed (scripts/convert-starnet-onnx.ps1 → starnet-ai-models).
+        onnxStarnetAvailable() {
+            const models = this.onnx?.manifest?.models || [];
+            return models.some(m => m.family === 'starnet');
+        },
+        async starRemovalRunForSelection() {
+            const sel = (this.files.selectedPaths || []).filter(Boolean);
+            if (sel.length !== 1) { this.toast('Select exactly one image', 'warn'); return; }
+            await this.starRemovalRun(sel[0]);
+        },
+        // Run StarNet on one file: fetch pixels → StarRemovalPipeline →
+        // save {stem}_starless.fits + {stem}_stars.fits → open Image Blend
+        // pre-filled (starless = base, stars = blend). Mirrors the GraXpert
+        // browser runner but bespoke because it writes TWO outputs and
+        // chains into the blend tool.
+        async starRemovalRun(path) {
+            if (typeof OnnxRegistry === 'undefined' || !OnnxRegistry.StarRemovalPipeline) {
+                this.toast('AI runtime not loaded', 'error'); return;
+            }
+            // CC BY-NC-SA 4.0 (NonCommercial) gate — same consent the
+            // GraXpert ONNX ops use; StarNet weights are NC too.
+            const ok = await this._ensureOnnxLicenseAccepted();
+            if (!ok) { this.toast('Star removal cancelled (licence not accepted)', 'warn'); return; }
+
+            const stem = (path.split(/[\\/]+/).pop() || path);
+            this.starRemoval.busy = true;
+            this.starRemoval.error = '';
+            this.starRemoval.progress = 0;
+            this.starRemoval.phase = 'fetching pixels';
+            try {
+                const src = await this._onnxFetchSourcePixels(path);
+                if (!src) { throw new Error('could not decode ' + stem); }
+
+                this.starRemoval.phase = 'removing stars';
+                const pipeline = new OnnxRegistry.StarRemovalPipeline();
+                const result = await pipeline.run(src.pixels, src.width, src.height, {
+                    channels: src.channels,
+                    useGpu: !!this.graxpert?.modalUseGpu,
+                    onProgress: (phase, frac) => {
+                        this.starRemoval.phase = phase
+                            + (frac != null ? ' ' + Math.round(frac * 100) + '%' : '');
+                        if (frac != null) this.starRemoval.progress = frac;
+                    }
+                });
+
+                this.starRemoval.phase = 'saving starless';
+                const starlessPath = await this._onnxSaveResult(
+                    path, '_starless', result.starless, result.width, result.height, result.channels);
+                this.starRemoval.phase = 'saving stars';
+                const starsPath = await this._onnxSaveResult(
+                    path, '_stars', result.stars, result.width, result.height, result.channels);
+
+                this.starRemoval.busy = false;
+                this.starRemoval.phase = 'done';
+                this.toast('Stars removed → ' + (starlessPath ? starlessPath.split(/[\\/]/).pop() : '_starless')
+                    + ' + ' + (starsPath ? starsPath.split(/[\\/]/).pop() : '_stars'), 'success');
+                try { this.filesReload(); } catch { /* non-fatal */ }
+                // Chain straight into Image Blend: base = starless, blend = stars.
+                if (starlessPath && starsPath) {
+                    await this.blendOpen(starlessPath, starsPath);
+                }
+            } catch (e) {
+                const msg = (e && e.message) || String(e);
+                this.starRemoval.error = msg;
+                this.starRemoval.phase = 'failed: ' + msg;
+                this.starRemoval.busy = false;
+                this.toast('Star removal failed: ' + msg, 'error', 6000);
             }
         },
 

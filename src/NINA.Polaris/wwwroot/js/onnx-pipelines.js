@@ -1505,6 +1505,149 @@
         }
     }
 
+    // ───────────────────────────────────────────────────────────────
+    // SN-2: Star removal (StarNet v1, github.com/DanWBR/starnet fork).
+    // Tiled, window 256, stride configurable (default 128 → 64-px
+    // context margin per edge), keep the inner stride×stride of each
+    // tile — the same tiling shape as DenoisePipeline. Faithful to the
+    // fork's transform.py contract:
+    //   • input  [1,256,256,3] NHWC, pixels normalized to [0,1]
+    //     (NOTE: NO ×2−1 — the TF1 transform.py feeds [0,1] directly;
+    //      the in-graph batch-norm runs training=True, i.e. per-tile
+    //      batch statistics, so no external median/MAD normalize)
+    //   • output [1,256,256,3], residual = input − ReLU(decoder),
+    //     clamped to [0,1] → the starless image
+    //   • mono → replicate the single plane to all 3 channels, average
+    //     the 3 output channels back to mono.
+    // Emits BOTH the starless image and the auto-derived stars-only
+    // image = clamp(original − starless, 0), so the caller can feed the
+    // Image Blend tool (starless = base, stars = blend) and stretch each
+    // independently. Edge-clamp padding (vs the fork's wrap pad) differs
+    // only at the outermost border, same simplification DenoisePipeline
+    // already ships with.
+    //
+    // The weights are CC BY-NC-SA 4.0 (NonCommercial) — Copyright (c)
+    // Nikita Misiura (nekitmm). Attribution lives in 3rd-party-licenses.
+    // ───────────────────────────────────────────────────────────────
+
+    class StarRemovalPipeline {
+        async run(pixels, width, height, opts = {}) {
+            const channels = opts && opts.channels === 3 ? 3 : 1;
+            const family = 'starnet';
+            const version = opts.version || '1.0.0';
+            const TILE = 256;
+            const STRIDE = Math.max(32, Math.min(256, opts.stride || 128));
+            const MARGIN = (TILE - STRIDE) / 2;
+            const planeLen = width * height;
+            const INV = 1 / 65535;
+
+            if (opts.onProgress) opts.onProgress('preparing', null);
+            await _yieldToBrowser();
+
+            const session = await loadSession(family, version, opts.onProgress, opts.useGpu);
+            const ort = await loadOrtWeb();
+            const inputName = session.inputNames[0];   // "X:0"
+            const outputName = session.outputNames[0]; // "generator/g_deconv7/Sub:0"
+
+            const itw = Math.ceil(width / STRIDE);
+            const ith = Math.ceil(height / STRIDE);
+            const padW = itw * STRIDE + 2 * MARGIN;
+            const padH = ith * STRIDE + 2 * MARGIN;
+            const offsetX = (padW - width) / 2 | 0;
+            const offsetY = (padH - height) / 2 | 0;
+
+            // Edge-clamp read from raw pixels (px,py are PADDED coords),
+            // normalize to [0,1]. No median/MAD — StarNet wants raw [0,1].
+            function paddedRead(chan, px, py) {
+                let x = px - offsetX, y = py - offsetY;
+                if (x < 0) x = 0; else if (x >= width) x = width - 1;
+                if (y < 0) y = 0; else if (y >= height) y = height - 1;
+                return pixels[chan * planeLen + y * width + x] * INV;
+            }
+
+            const starless = new Uint16Array(pixels.length);
+            const tensorData = new Float32Array(TILE * TILE * 3);
+            const totalTiles = itw * ith;
+            let processed = 0;
+            let firstTileMs = null;
+            const t0 = performance.now();
+
+            for (let ty = 0; ty < ith; ty++) {
+                for (let tx = 0; tx < itw; tx++) {
+                    const sx = tx * STRIDE, sy = ty * STRIDE;
+                    for (let y = 0; y < TILE; y++) {
+                        const py = sy + y;
+                        for (let x = 0; x < TILE; x++) {
+                            const b = (y * TILE + x) * 3;
+                            if (channels === 3) {
+                                tensorData[b]     = paddedRead(0, sx + x, py);
+                                tensorData[b + 1] = paddedRead(1, sx + x, py);
+                                tensorData[b + 2] = paddedRead(2, sx + x, py);
+                            } else {
+                                const v = paddedRead(0, sx + x, py);
+                                tensorData[b] = v; tensorData[b + 1] = v; tensorData[b + 2] = v;
+                            }
+                        }
+                    }
+                    const inputTensor = new ort.Tensor('float32', tensorData, [1, TILE, TILE, 3]);
+                    const tileT0 = performance.now();
+                    const result = await session.run({ [inputName]: inputTensor });
+                    if (firstTileMs == null) {
+                        firstTileMs = performance.now() - tileT0;
+                        console.log('[StarNet] first tile inference: '
+                            + firstTileMs.toFixed(1) + ' ms · backend='
+                            + (window.OnnxRegistry?.__lastBackend || '?')
+                            + ' · totalTiles=' + totalTiles
+                            + ' · ETA=' + (firstTileMs * totalTiles / 1000).toFixed(1) + 's');
+                    }
+                    const outData = result[outputName].data;
+
+                    for (let y = 0; y < STRIDE; y++) {
+                        const padY = sy + MARGIN + y, rawY = padY - offsetY;
+                        if (rawY < 0 || rawY >= height) continue;
+                        const tileRow = (MARGIN + y) * TILE + MARGIN;
+                        const rawRow = rawY * width;
+                        for (let x = 0; x < STRIDE; x++) {
+                            const padX = sx + MARGIN + x, rawX = padX - offsetX;
+                            if (rawX < 0 || rawX >= width) continue;
+                            const i3 = (tileRow + x) * 3;
+                            if (channels === 3) {
+                                for (let c = 0; c < 3; c++) {
+                                    let v = outData[i3 + c];
+                                    v = v < 0 ? 0 : (v > 1 ? 1 : v);
+                                    starless[c * planeLen + rawRow + rawX] = (v * 65535 + 0.5) | 0;
+                                }
+                            } else {
+                                let v = (outData[i3] + outData[i3 + 1] + outData[i3 + 2]) / 3;
+                                v = v < 0 ? 0 : (v > 1 ? 1 : v);
+                                starless[rawRow + rawX] = (v * 65535 + 0.5) | 0;
+                            }
+                        }
+                    }
+                    processed++;
+                    if (opts.onProgress) opts.onProgress('tiles', processed / totalTiles);
+                }
+            }
+            const inferenceMs = performance.now() - t0;
+
+            // Auto-derive the stars-only image = clamp(original − starless, 0).
+            // Same buffer layout as the source (plane-sequential for RGB).
+            const stars = new Uint16Array(pixels.length);
+            for (let i = 0; i < pixels.length; i++) {
+                const d = pixels[i] - starless[i];
+                stars[i] = d > 0 ? d : 0;
+            }
+
+            return {
+                pixels: starless,   // default result = the starless image
+                starless,
+                stars,
+                width, height, channels,
+                stats: { totalTiles, inferenceMs, version, stride: STRIDE },
+            };
+        }
+    }
+
     // ─── Public API ─────────────────────────────────────────────────
     window.OnnxRegistry = {
         loadOrtWeb,
@@ -1520,5 +1663,6 @@
         BgePipeline,
         DenoisePipeline,
         DeconPipeline,
+        StarRemovalPipeline,
     };
 })();

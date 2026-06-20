@@ -42,17 +42,17 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260620-imageblend">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260620-imageblend">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260620-imageblend">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260620-imageblend">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-imageblend">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-imageblend">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-imageblend">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260620-imageblend">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260620-starnet">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260620-starnet">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260620-starnet">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260620-starnet">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-starnet">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-starnet">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-starnet">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260620-starnet">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
-    <link rel="stylesheet" href="/css/night-mode.css?v=20260620-imageblend">
+    <link rel="stylesheet" href="/css/night-mode.css?v=20260620-starnet">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -9247,6 +9247,23 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             aria-label="Compare">
                         <span class="files-icon">↔</span>
                     </button>
+                    <!-- REMOVE STARS — StarNet++ (ONNX) star removal, runs in
+                         the browser like GraXpert. Writes {stem}_starless +
+                         {stem}_stars siblings, then auto-opens Image Blend
+                         pre-filled (starless = base, stars = blend) so you can
+                         stretch each independently and screen-blend. One file
+                         at a time. Only shown once the converted starnet model
+                         is installed (scripts/convert-starnet-onnx.ps1). -->
+                    <button class="btn btn-sm btn-icon"
+                            x-show="onnxStarnetAvailable()"
+                            :disabled="files.selectedPaths.length !== 1
+                                       || filesSelectedDir() != null
+                                       || starRemoval.busy"
+                            @click="starRemovalRunForSelection()"
+                            title="Remove stars (StarNet++): writes _starless + _stars, then opens Image Blend"
+                            aria-label="Remove stars">
+                        <span class="files-icon" x-text="starRemoval.busy ? '⏳' : '🌠'"></span>
+                    </button>
                     <!-- IMAGE BLEND — recombine two images (e.g. a stretched
                          starless + the stars-only image) with independent
                          per-image blackpoint/midtones/highlights + a Screen
@@ -13488,6 +13505,28 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- SN-3: Star removal progress overlay. Small centered card shown
+         while StarNet runs in the browser (can take from seconds on a
+         GPU to a minute on WASM). On success the flow auto-opens the
+         Image Blend modal, so there's no OK button. -->
+    <div class="modal-overlay" x-show="starRemoval.busy" x-cloak style="z-index: 1200;">
+        <div class="modal" style="max-width: 420px; text-align: center;">
+            <div class="modal-header"><h3>🌠 Removing stars</h3></div>
+            <div class="modal-body">
+                <p class="muted" x-text="starRemoval.phase || 'working…'"></p>
+                <div class="progress" style="margin-top: 0.75rem;">
+                    <div class="progress-bar"
+                         :style="'width:' + Math.round((starRemoval.progress || 0) * 100) + '%'"></div>
+                </div>
+                <p class="muted" style="margin-top: 0.5rem; font-size: 0.85em;">
+                    StarNet++ runs locally in your browser. The result opens in
+                    Image Blend so you can stretch the starless and stars layers
+                    separately, then screen-blend.
+                </p>
+            </div>
+        </div>
+    </div>
+
     <!-- IMAGE BLEND modal — recombine two images (e.g. starless + stars)
          with independent per-image MTF stretch + Screen blend + opacity.
          In-app equivalent of PixInsight's ImageBlend; finishing step of the
@@ -14782,7 +14821,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260620-imageblend"></script>
+    <script src="/js/app.js?v=20260620-starnet"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
