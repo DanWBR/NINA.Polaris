@@ -816,6 +816,10 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     border:2px solid var(--bg-primary,#0d1117); cursor:pointer; }
 .blend-row input[type="range"]::-moz-range-thumb { width:20px; height:20px; border-radius:50%;
     background:var(--accent); border:2px solid var(--bg-primary,#0d1117); cursor:pointer; }
+/* app.js wraps every range in .range-with-controls ([-] slider [+]); it only
+   inherits INLINE flex, and our blend sliders size via CSS, so the wrapper
+   collapses to the steppers. Make it grow to fill the row. */
+.blend-row .range-with-controls { flex:1 1 auto; min-width:0; }
 
 @media (max-width: 820px) {
     .blend-body { flex-direction:column; }
