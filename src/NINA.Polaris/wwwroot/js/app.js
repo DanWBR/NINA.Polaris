@@ -2396,7 +2396,7 @@ function ninaApp() {
             // Options modal shown before running.
             options: {
                 open: false, path: '',
-                model: 'starrem2k13', // chosen model family (default = bundled MIT)
+                model: 'nox',        // chosen model (default = nox, StarNet-like MIT)
                 autoStretch: true,   // stretch into the model's trained domain
                 stretchTarget: 0.15, // autostretch target background (lower = stronger)
                 passes: 1,           // 2 = second pass cleans bright-star halos
@@ -2404,7 +2404,7 @@ function ninaApp() {
                 haloStrength: 0.8    // 0..1: default tuned for starrem2k13 (bundled)
             },
             // Recommended halo-cleanup strength per model: starrem2k13 leaves
-            // wider rings than StarNet, so it wants more coverage by default.
+            // wider rings than StarNet/nox, so it wants more coverage by default.
             _haloDefault(model) {
                 return model === 'starrem2k13' ? 0.8 : 0.5;
             }
@@ -22601,6 +22601,9 @@ function ninaApp() {
             const models = this.onnx?.manifest?.models || [];
             const fams = new Set(models.map(m => m.family));
             const out = [];
+            // nox (StarNet-like, MIT) — needs the colour and/or gray model.
+            if (fams.has('nox-color') || fams.has('nox-gray'))
+                out.push({ value: 'nox', label: 'nox (StarNet-like · MIT)' });
             if (fams.has('starrem2k13'))
                 out.push({ value: 'starrem2k13', label: 'starrem2k13 (U-Net · MIT)' });
             if (fams.has('starnet'))

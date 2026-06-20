@@ -1802,25 +1802,42 @@
 
         async _pass(pixels, width, height, opts = {}) {
             const channels = opts && opts.channels === 3 ? 3 : 1;
-            // Model profile. 'starnet' (default): 256² tiles, RGB fed together
-            // as a 3-channel NHWC tensor, [0,1] normalization. 'starrem2k13'
-            // (MIT-licensed pix2pix-style U-Net, ~31M params): 512² tiles, ONE
-            // channel per inference (so RGB = 3 runs), input args_0 [1,512,512]
-            // → output [1,512,512,1] (relu). Trained with 8-bit /512
-            // normalization → feed stretched·(255/512), read output·(512/255).
-            const isRem = opts.model === 'starrem2k13';
-            const family = isRem ? 'starrem2k13' : 'starnet';
+            // Model profile (opts.model):
+            //  'starnet'     — 256² tiles, RGB fed together as a 3ch NHWC
+            //                  tensor, [0,1] normalization.
+            //  'starrem2k13' — pix2pix U-Net (~31M); 512² tiles, ONE channel
+            //                  per inference, input [1,512,512] (3D) → [1,512,512,1]
+            //                  (relu); 8-bit /512 norm (feed ·255/512, read ·512/255).
+            //  'nox'         — StarNet-like (~54M, LayerNorm + GAN); 512² tiles,
+            //                  NATIVE color (3ch model) or gray (1ch model)
+            //                  chosen by channel count; subtractive output in the
+            //                  [-1,1] domain (feed 2x−1, read (y+1)/2).
+            const model = opts.model || 'starnet';
+            const isRem = model === 'starrem2k13';
+            const isNox = model === 'nox';
             const version = opts.version || '1.0.0';
-            const TILE = isRem ? 512 : 256;
+            const family = isNox ? (channels === 3 ? 'nox-color' : 'nox-gray')
+                         : isRem ? 'starrem2k13' : 'starnet';
+            const TILE = (isRem || isNox) ? 512 : 256;
             // starnet default stride 96 → 80-px context margin per edge (more
             // overlap than 128/64), which softens residuals around bright
             // stars (~1.8× tile count). Caller can pass opts.stride (32..256).
-            // starrem2k13 uses 448/32 (same overlap pattern as the decon path).
-            const STRIDE = isRem ? 448 : Math.max(32, Math.min(256, opts.stride || 96));
+            // starrem2k13: 448/32. nox: 256/128 (heavy 54M model, keep tile
+            // count sane while preserving overlap for seamless stitching).
+            const STRIDE = isNox ? 256
+                         : isRem ? 448
+                         : Math.max(32, Math.min(256, opts.stride || 96));
             const MARGIN = (TILE - STRIDE) / 2;
-            const LAYOUT = isRem ? 'single' : 'nhwc3';
-            const IN_SCALE = isRem ? (255 / 512) : 1;   // model input normalization
-            const OUT_SCALE = isRem ? (512 / 255) : 1;  // inverse on the output
+            // Tensor layout: 'nhwc3' = [1,T,T,3]; 'single' = [1,T,T] (3D);
+            // 'single4' = [1,T,T,1] (nox gray).
+            const LAYOUT = isNox ? (channels === 3 ? 'nhwc3' : 'single4')
+                         : isRem ? 'single' : 'nhwc3';
+            // Affine model normalization: modelIn = IN_A·stretched + IN_B;
+            // stretched_out = OUT_A·modelOut + OUT_B.
+            const IN_A = isNox ? 2 : isRem ? (255 / 512) : 1;
+            const IN_B = isNox ? -1 : 0;
+            const OUT_A = isNox ? 0.5 : isRem ? (512 / 255) : 1;
+            const OUT_B = isNox ? 0.5 : 0;
             const planeLen = width * height;
             const INV = 1 / 65535;
 
@@ -1915,7 +1932,7 @@
                     for (let x = 0; x < STRIDE; x++) {
                         const padX = sx + MARGIN + x, rawX = padX - offsetX;
                         if (rawX < 0 || rawX >= width) continue;
-                        const v = unstretchVal(read(MARGIN + x, MARGIN + y) * OUT_SCALE, oc);
+                        const v = unstretchVal(read(MARGIN + x, MARGIN + y) * OUT_A + OUT_B, oc);
                         starless[destPlane + rawRow + rawX] = (v * 65535 + 0.5) | 0;
                     }
                 }
@@ -1934,11 +1951,11 @@
                             for (let x = 0; x < TILE; x++) {
                                 const b = (y * TILE + x) * 3;
                                 if (channels === 3) {
-                                    tensorData[b]     = stretchVal(paddedRead(0, sx + x, py), 0) * IN_SCALE;
-                                    tensorData[b + 1] = stretchVal(paddedRead(1, sx + x, py), 1) * IN_SCALE;
-                                    tensorData[b + 2] = stretchVal(paddedRead(2, sx + x, py), 2) * IN_SCALE;
+                                    tensorData[b]     = stretchVal(paddedRead(0, sx + x, py), 0) * IN_A + IN_B;
+                                    tensorData[b + 1] = stretchVal(paddedRead(1, sx + x, py), 1) * IN_A + IN_B;
+                                    tensorData[b + 2] = stretchVal(paddedRead(2, sx + x, py), 2) * IN_A + IN_B;
                                 } else {
-                                    const v = stretchVal(paddedRead(0, sx + x, py), 0) * IN_SCALE;
+                                    const v = stretchVal(paddedRead(0, sx + x, py), 0) * IN_A + IN_B;
                                     tensorData[b] = v; tensorData[b + 1] = v; tensorData[b + 2] = v;
                                 }
                             }
@@ -1982,13 +1999,13 @@
                             for (let y = 0; y < TILE; y++) {
                                 const py = sy + y, rowBase = y * TILE;
                                 for (let x = 0; x < TILE; x++)
-                                    tensorData[rowBase + x] = stretchVal(paddedRead(srcC, sx + x, py), srcC) * IN_SCALE;
+                                    tensorData[rowBase + x] = stretchVal(paddedRead(srcC, sx + x, py), srcC) * IN_A + IN_B;
                             }
-                            // Real ONNX I/O (tf2onnx export): input args_0 is
-                            // [1,H,W] (3D, no channel dim); output final_output
-                            // is [1,H,W,1]. Output is row-major so reading
-                            // ty*TILE+tx works regardless of the trailing 1.
-                            const inputTensor = new ort.Tensor('float32', tensorData, [1, TILE, TILE]);
+                            // Input dims depend on the model: starrem2k13 is
+                            // [1,H,W] (3D); nox-gray is [1,H,W,1] (4D). Output is
+                            // row-major either way, so ty*TILE+tx reads it fine.
+                            const inputTensor = new ort.Tensor('float32', tensorData,
+                                LAYOUT === 'single4' ? [1, TILE, TILE, 1] : [1, TILE, TILE]);
                             const tileT0 = performance.now();
                             const result = await session.run({ [inputName]: inputTensor });
                             if (firstTileMs == null) {

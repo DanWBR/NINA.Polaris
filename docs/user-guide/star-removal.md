@@ -16,15 +16,16 @@ Two pieces:
 
 ## Choosing a model
 
-Polaris supports two star-removal models. When both are installed the
-**Remove stars** dialog shows a **Model** dropdown:
+Polaris supports several star-removal models. When more than one is installed
+the **Remove stars** dialog shows a **Model** dropdown:
 
-- **starrem2k13** (pix2pix-style U-Net, ~31M params) — **MIT-licensed** (code
-  *and* weights), so it can be bundled by default with no commercial
-  restriction. ~124 MB, 512² tiles, processed per channel. (Uses the model
-  from the pinned commit `0398ce05`, not the repo main branch's tiny U2NETP,
-  which removes stars poorly.)
-- **StarNet++** (v1) — generally higher-quality removal, but the weights are
+- **nox** (StarNet-like, ~54M params) — **MIT-licensed** (code *and* weights),
+  the recommended default. Native colour model (one inference per tile) plus a
+  gray model; ~218 MB each. StarNet-grade quality with a permissive licence.
+- **starrem2k13** (pix2pix-style U-Net, ~31M params) — **MIT-licensed**, ~124 MB,
+  512² tiles processed per channel. (Uses the model from the pinned commit
+  `0398ce05`, not the repo main branch's tiny U2NETP, which removes stars poorly.)
+- **StarNet++** (v1) — high-quality removal, but the weights are
   **CC BY-NC-SA (NonCommercial)**, so it is opt-in and you install it yourself.
 
 Both run as ONNX in your browser through the same pipeline (auto-stretch into
@@ -32,7 +33,21 @@ the trained domain, optional 2nd pass, and the mask-guided halo cleanup).
 
 ## One-time setup: install a model
 
-### starrem2k13 (recommended, MIT)
+### nox (recommended, MIT)
+
+Download `generator_color.h5` + `generator_gray.h5` from the
+[nox releases](https://github.com/charvey2718/nox/releases), then:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\convert-nox-onnx.ps1 `
+    -WeightsDir C:\path\to\nox\v1.0
+```
+
+Writes `model.onnx` into `nox-color-ai-models/1.0.0/` and
+`nox-gray-ai-models/1.0.0/`. See
+[`scripts/convert-nox-onnx.md`](../../scripts/convert-nox-onnx.md).
+
+### starrem2k13 (MIT)
 
 Install it once on the machine Polaris serves from. Download the trained
 weights (a TF checkpoint: `checkpoint` + `weights.index` + `weights.data-*`)
@@ -143,6 +158,11 @@ the original.
   the **✨ Image Blend** button.
 
 ## Licensing
+
+**nox** is **MIT** — code and trained weights — Copyright © 2023 Christopher
+Harvey, <https://github.com/charvey2718/nox> (architecture derives from StarNet
+ideas by Nikita Misiura, used under MIT). Notice ships beside each model as
+`nox-{color,gray}-ai-models/1.0.0/LICENSE.txt`.
 
 **starrem2k13** is **MIT** — both the code and the trained weights — Copyright
 © code2k13 (Ashish Patel), <https://github.com/code2k13/starrem2k13>. MIT
