@@ -290,6 +290,16 @@ A Lightroom-style finishing editor for your master image.
   the source file; the original is never overwritten.
 - **AI section** — run GraXpert BGE / Denoise / Deconvolution from inside the
   editor (see AI inference below) with a before/after slider.
+- **Star removal** — split a master into starless and stars-only images with an
+  in-browser AI model (nox or starrem2k13, both MIT, or the opt-in StarNet++),
+  launched from the FILES toolbar. Optional mask-guided halo reduction cleans the
+  rings and halos around bright stars. Writes `_starless` and `_stars` FITS and
+  opens a before/after comparator. → [star-removal.md](user-guide/star-removal.md)
+- **Image Blend** — recombine two same-size images with an independent
+  blackpoint/midtones/highlights stretch per layer, a blend mode (Screen / Add /
+  Lighten), and opacity. The PixInsight ImageBlend-style finish for putting
+  stretched stars back onto a separately-stretched nebula; live preview, full-res
+  16-bit `_blend` FITS output. → [image-blend.md](user-guide/image-blend.md)
 - **Export** to JPEG / PNG / TIFF with quality and resize options.
 - **Auto-stretch** ported from GraXpert (15% background, 3-sigma) as the
   default display stretch.
@@ -303,6 +313,14 @@ cloud calls. → [onnx-inference.md](user-guide/onnx-inference.md)
 
 - **Background Extraction (BGE)**, **Denoise** (v2 + v3), and
   **Deconvolution** (stars / objects) models.
+- **Star-removal models** — nox and starrem2k13 (both MIT, bundled) plus the
+  opt-in StarNet++ (NonCommercial). All are FP16-quantized so they run in the
+  browser on phones and tablets via WebGPU, or on WASM.
+  → [star-removal.md](user-guide/star-removal.md)
+- **On-device model downloader** — pull ready-made `.onnx` models onto the device
+  from the bundled SourceForge catalogue or a custom bucket, with SHA-256
+  verification and no Docker or Python on the host (Settings → AI inference →
+  Download models).
 - **In-browser inference** — onnxruntime-web uses the client device's GPU
   (WebGPU) or WASM SIMD; the server just hosts the `.onnx` files.
   → [client-side-compute.md](user-guide/client-side-compute.md)

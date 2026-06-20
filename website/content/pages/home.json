@@ -68,6 +68,12 @@
       "image": "/assets/screenshots/studio.jpg"
     },
     {
+      "icon": "🌠",
+      "title": "Star removal and recompositing",
+      "body": "Split a master into starless and stars-only layers with an in-browser AI model (nox, starrem2k13, or StarNet++), stretch each one on its own, then recombine them with Image Blend (Screen, Add, or Lighten). The process-the-stars-separately workflow, no PixInsight needed.",
+      "image": "/assets/screenshots/star-removal.jpg"
+    },
+    {
       "icon": "⚡",
       "title": "GPU & NPU acceleration",
       "body": "OpenCL-backed GPU acceleration for the heavy image-processing paths like debayer, stretch, and stacking, with a transparent CPU fallback when no GPU is present. On top of that, AI background extraction, deconvolution, and denoise run via GraXpert right in the browser, using the client device's GPU, or the server's NPU (for example the Orange Pi 5 Pro).",

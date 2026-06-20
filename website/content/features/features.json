@@ -163,6 +163,8 @@
         { "label": "Slider-based adjustments", "text": "grouped into Light, Color, Effects, and Detail, with an auto-tune button for a sensible starting point." },
         { "label": "Non-destructive", "text": "edits are stored in a sidecar .edit.json next to the source file; the original is never overwritten." },
         { "label": "AI section", "text": "run GraXpert BGE, Denoise, and Deconvolution from inside the editor with a before/after slider." },
+        { "label": "Star removal", "text": "split a master into starless and stars-only images with an in-browser AI model (nox or starrem2k13, both MIT, or the opt-in StarNet++), launched from the FILES toolbar. Optional halo reduction cleans the rings and halos around bright stars. Writes _starless and _stars FITS and opens a before/after comparator." },
+        { "label": "Image Blend", "text": "recombine two same-size images with an independent blackpoint/midtones/highlights stretch per layer, a blend mode (Screen, Add, or Lighten), and opacity. The PixInsight ImageBlend-style finish for putting stretched stars back onto a separately-stretched nebula, with a live preview and full-resolution 16-bit _blend FITS output." },
         { "label": "Export", "text": "to JPEG, PNG, or TIFF with quality and resize options." },
         { "label": "Auto-stretch", "text": "ported from GraXpert (15% background, 3-sigma) as the default display stretch." }
       ]
@@ -172,6 +174,8 @@
       "intro": "GraXpert's AI models run on whatever hardware is fastest, with no per-frame cloud calls.",
       "items": [
         { "label": "Models", "text": "Background Extraction (BGE), Denoise (v2 and v3), and Deconvolution (stars and objects)." },
+        { "label": "Star-removal models", "text": "nox and starrem2k13 (both MIT, bundled) plus the opt-in StarNet++ (NonCommercial). All are FP16-quantized so they run in the browser on phones and tablets via WebGPU, or on WASM." },
+        { "label": "On-device model downloader", "text": "pull ready-made .onnx models onto the device from the bundled SourceForge catalogue or your own bucket, with SHA-256 verification and no Docker or Python on the host (Settings, AI inference, Download models)." },
         { "label": "In-browser inference", "text": "onnxruntime-web uses the client device's GPU (WebGPU) or WASM SIMD; the server just hosts the .onnx files." },
         { "label": "Server-side CLI fallback", "text": "GraXpert on the host, when you prefer the host to do it." },
         { "label": "NPU acceleration", "text": "on Rockchip RK3588 boards the models run on the NPU for a large speed-up." },
