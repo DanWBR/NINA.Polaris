@@ -145,7 +145,10 @@
       { "image": "/assets/screenshots/plan-editor.jpg", "caption": "Per-target scheduling with a draggable elevation window" },
       { "image": "/assets/screenshots/guide-graph.jpg", "caption": "Live guiding graph with RA and Dec error tracking" },
       { "image": "/assets/screenshots/calibration.jpg", "caption": "Guiding calibration review with the full mount calibration report" },
-      { "image": "/assets/screenshots/gs-live.jpg", "caption": "Annotated live view: deep-sky objects labelled over the integrated stack" }
+      { "image": "/assets/screenshots/gs-live.jpg", "caption": "Annotated live view: deep-sky objects labelled over the integrated stack" },
+      { "image": "/assets/screenshots/star-removal.jpg", "caption": "Star removal: before and after, with the stars stripped into a separate layer" },
+      { "image": "/assets/screenshots/remove-stars-dialog.jpg", "caption": "Remove stars: pick a model, set precision, and tune halo cleanup" },
+      { "image": "/assets/screenshots/image-blend.jpg", "caption": "Image Blend: recombine starless and stars with an independent stretch per layer" }
     ]
   }
 }
