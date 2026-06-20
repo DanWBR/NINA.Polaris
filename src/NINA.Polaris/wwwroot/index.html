@@ -42,17 +42,17 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260620-starnet5">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260620-starnet5">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260620-starnet5">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260620-starnet5">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-starnet5">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-starnet5">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-starnet5">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260620-starnet5">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260620-starnet6">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260620-starnet6">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260620-starnet6">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260620-starnet6">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-starnet6">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-starnet6">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-starnet6">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260620-starnet6">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
-    <link rel="stylesheet" href="/css/night-mode.css?v=20260620-starnet5">
+    <link rel="stylesheet" href="/css/night-mode.css?v=20260620-starnet6">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -13506,6 +13506,52 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- SN-3: Star removal OPTIONS modal — shown before running so the user
+         can tune the autostretch and choose a 2nd pass. Re-openable from the
+         comparator's "Try again" button to retry with different settings. -->
+    <div class="siril-modal" x-show="starRemoval.options.open" x-cloak
+         @click.self="starRemovalCloseOptions()"
+         @keydown.escape.window="starRemovalCloseOptions()">
+        <div class="siril-modal-frame" style="max-width:460px;width:92vw">
+            <h2 style="font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px">
+                🌠 Remove stars
+            </h2>
+            <p class="hint" x-text="'Source: ' + (starRemoval.options.path
+                ? starRemoval.options.path.split(/[\\/]/).pop() : '')"></p>
+
+            <label class="blend-row" style="margin-top:10px">
+                <span style="flex:0 0 150px">Auto-stretch</span>
+                <input type="checkbox" x-model="starRemoval.options.autoStretch">
+                <span class="hint" style="flex:1">Stretch into StarNet's trained domain (needed for linear stacks)</span>
+            </label>
+
+            <label class="blend-row" x-show="starRemoval.options.autoStretch">
+                <span style="flex:0 0 150px">Stretch strength</span>
+                <input type="range" min="0.05" max="0.35" step="0.01"
+                       x-model.number="starRemoval.options.stretchTarget">
+                <output x-text="Number(starRemoval.options.stretchTarget).toFixed(2)"></output>
+            </label>
+            <p class="hint" x-show="starRemoval.options.autoStretch" style="margin-top:-4px">
+                Lower = stronger stretch (more aggressive star removal, risk of
+                halos). 0.15 is the default; raise toward 0.25 if bright-star
+                halos appear, lower toward 0.10 for faint targets.
+            </p>
+
+            <label class="blend-row">
+                <span style="flex:0 0 150px">Passes</span>
+                <select class="input-sm" x-model.number="starRemoval.options.passes" style="flex:1">
+                    <option :value="1">1 — fast</option>
+                    <option :value="2">2 — cleans bright-star halos (~2× slower)</option>
+                </select>
+            </label>
+
+            <div class="siril-modal-actions">
+                <button class="btn" @click="starRemovalCloseOptions()">Cancel</button>
+                <button class="btn btn-primary" @click="starRemovalConfirm()">Remove stars</button>
+            </div>
+        </div>
+    </div>
+
     <!-- SN-3: Star removal progress modal. Proper siril-modal card (not a
          loose overlay) shown while StarNet runs in the browser, can take
          from seconds on a GPU to a minute on WASM. On success the flow
@@ -13540,7 +13586,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          In-app equivalent of PixInsight's ImageBlend; finishing step of the
          starless workflow. -->
     <div class="siril-modal blend-modal" x-show="blend.open" x-cloak
-         @keydown.escape.window="blendClose()">
+         @keydown.escape.window="blendClose()"
+         @keydown.window="blendKey($event)">
         <div class="blend-frame">
             <!-- header -->
             <div class="blend-header">
@@ -13950,6 +13997,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 title="Next file">→</button>
                     </span>
                 </template>
+                <button class="btn btn-sm" x-show="graxpertCompare.starRetryPath"
+                        @click="starRemovalRetryFromCompare()"
+                        title="Re-run star removal with different settings">↻ Try again</button>
                 <button class="btn btn-sm" @click="graxpertCloseCompare()">Close</button>
             </div>
             <!-- Image stage. Two <img> stacked; the OUT one is the
@@ -14859,7 +14909,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260620-starnet5"></script>
+    <script src="/js/app.js?v=20260620-starnet6"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

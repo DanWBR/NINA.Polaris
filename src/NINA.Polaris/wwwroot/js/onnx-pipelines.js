@@ -1533,7 +1533,43 @@
     // ───────────────────────────────────────────────────────────────
 
     class StarRemovalPipeline {
+        // Run 1..N passes. A 2nd pass feeds the starless back through the
+        // net, which cleans up residual halos around bright stars the first
+        // pass leaves behind. Each pass recomputes its own autostretch from
+        // its input. stars = clamp(original − final starless, 0).
         async run(pixels, width, height, opts = {}) {
+            const channels = opts && opts.channels === 3 ? 3 : 1;
+            const passes = Math.max(1, Math.min(3, opts.passes || 1));
+            let cur = pixels;
+            let lastStats = null;
+            for (let p = 0; p < passes; p++) {
+                const passOpts = Object.assign({}, opts);
+                if (opts.onProgress) {
+                    passOpts.onProgress = (phase, frac) => {
+                        const overall = (frac == null) ? null
+                            : Math.min(1, (p + frac) / passes);
+                        const label = passes > 1 ? ('pass ' + (p + 1) + '/' + passes + ' · ' + phase) : phase;
+                        opts.onProgress(label, overall);
+                    };
+                }
+                const r = await this._pass(cur, width, height, passOpts);
+                cur = r.starless;
+                lastStats = r.stats;
+            }
+            const starless = cur;
+            const stars = new Uint16Array(pixels.length);
+            for (let i = 0; i < pixels.length; i++) {
+                const d = pixels[i] - starless[i];
+                stars[i] = d > 0 ? d : 0;
+            }
+            return {
+                pixels: starless, starless, stars,
+                width, height, channels,
+                stats: Object.assign({}, lastStats, { passes }),
+            };
+        }
+
+        async _pass(pixels, width, height, opts = {}) {
             const channels = opts && opts.channels === 3 ? 3 : 1;
             const family = 'starnet';
             const version = opts.version || '1.0.0';
@@ -1597,7 +1633,8 @@
                     const sh = Math.max(0, st.median - 3.0 * st.mad);
                     const denom = Math.max(1e-6, 1 - sh);
                     const xMed = Math.max(0, Math.min(1, (st.median - sh) / denom));
-                    let m = mtf(xMed, 0.15);          // target background 15%
+                    const target = Math.min(0.6, Math.max(0.02, opts.stretchTarget || 0.15));
+                    let m = mtf(xMed, target);        // target background (default 15%)
                     m = Math.min(0.999, Math.max(0.001, m));
                     shA[c] = sh; sclA[c] = 1 / denom; midA[c] = m;
                 }
@@ -1684,20 +1721,9 @@
                 }
             }
             const inferenceMs = performance.now() - t0;
-
-            // Auto-derive the stars-only image = clamp(original − starless, 0).
-            // Same buffer layout as the source (plane-sequential for RGB).
-            const stars = new Uint16Array(pixels.length);
-            for (let i = 0; i < pixels.length; i++) {
-                const d = pixels[i] - starless[i];
-                stars[i] = d > 0 ? d : 0;
-            }
-
+            // run() derives stars + the public return shape across passes.
             return {
-                pixels: starless,   // default result = the starless image
                 starless,
-                stars,
-                width, height, channels,
                 stats: { totalTiles, inferenceMs, version, stride: STRIDE },
             };
         }

@@ -2381,7 +2381,15 @@ function ninaApp() {
         // auto-opens the Image Blend tool pre-filled with the starless
         // (base) + stars (blend) so the user can stretch each separately.
         starRemoval: {
-            busy: false, phase: '', progress: 0, error: ''
+            busy: false, phase: '', progress: 0, error: '',
+            lastSource: '',   // last image run, for "retry" from the comparator
+            // Options modal shown before running.
+            options: {
+                open: false, path: '',
+                autoStretch: true,   // stretch into StarNet's trained domain
+                stretchTarget: 0.15, // autostretch target background (lower = stronger)
+                passes: 1            // 2 = second pass cleans bright-star halos
+            }
         },
         crop: {
             open: false,
@@ -2516,6 +2524,9 @@ function ninaApp() {
             // opens the comparator via the FILES "Compare" button
             // (no op context, mode='compare' rules instead).
             op: null,
+            // SN: when set, the comparator shows a "Try again" button that
+            // re-opens star-removal options for this source path.
+            starRetryPath: null,
         },
 
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
@@ -22347,6 +22358,22 @@ function ninaApp() {
             this.blend.view.panY = d.py + (e.clientY - d.y);
         },
         blendPanEnd() { this.blend._drag = null; },
+        // Keyboard shortcuts while the blend modal is open: F=fit, 1=100%,
+        // +/-=zoom, 0=fit. Ignored when typing in an input/select.
+        blendKey(e) {
+            if (!this.blend.open) return;
+            const t = e.target;
+            if (t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName)) return;
+            switch (e.key) {
+                case 'f': case 'F': this.blendFit(); break;
+                case '1': this.blendActual(); break;
+                case '0': this.blendFit(); break;
+                case '+': case '=': this.blendZoomBy(1.25); break;
+                case '-': case '_': this.blendZoomBy(1 / 1.25); break;
+                default: return;
+            }
+            e.preventDefault();
+        },
         blendResizeStart(e) {
             e.preventDefault();
             const startX = e.clientX, startW = this.blend.panelW;
@@ -22371,10 +22398,28 @@ function ninaApp() {
             const models = this.onnx?.manifest?.models || [];
             return models.some(m => m.family === 'starnet');
         },
-        async starRemovalRunForSelection() {
+        starRemovalRunForSelection() {
             const sel = (this.files.selectedPaths || []).filter(Boolean);
             if (sel.length !== 1) { this.toast('Select exactly one image', 'warn'); return; }
-            await this.starRemovalRun(sel[0]);
+            this.starRemovalOpenOptions(sel[0]);
+        },
+        // Open the options modal (autostretch + passes) before running. Also
+        // the re-entry point from the comparator's "Try again" button.
+        starRemovalOpenOptions(path) {
+            this.starRemoval.options.path = path;
+            this.starRemoval.options.open = true;
+        },
+        starRemovalCloseOptions() { this.starRemoval.options.open = false; },
+        // Confirm the options modal → run with the chosen settings.
+        async starRemovalConfirm() {
+            const o = this.starRemoval.options;
+            const path = o.path;
+            o.open = false;
+            await this.starRemovalRun(path, {
+                autoStretch: o.autoStretch,
+                stretchTarget: Number(o.stretchTarget) || 0.15,
+                passes: Number(o.passes) || 1
+            });
         },
         // Run StarNet on one file: fetch pixels → StarRemovalPipeline →
         // save {stem}_starless.fits + {stem}_stars.fits → open the
@@ -22382,10 +22427,11 @@ function ninaApp() {
         // recombine manually afterwards via ✨ Image Blend (original +
         // _stars, or _starless + _stars). Mirrors the GraXpert browser
         // runner but bespoke because it writes TWO outputs.
-        async starRemovalRun(path) {
+        async starRemovalRun(path, opts = {}) {
             if (typeof OnnxRegistry === 'undefined' || !OnnxRegistry.StarRemovalPipeline) {
                 this.toast('AI runtime not loaded', 'error'); return;
             }
+            this.starRemoval.lastSource = path;   // for "Try again" from compare
             // CC BY-NC-SA 4.0 (NonCommercial) gate — same consent the
             // GraXpert ONNX ops use; StarNet weights are NC too.
             const ok = await this._ensureOnnxLicenseAccepted();
@@ -22405,6 +22451,9 @@ function ninaApp() {
                 const result = await pipeline.run(src.pixels, src.width, src.height, {
                     channels: src.channels,
                     useGpu: !!this.graxpert?.modalUseGpu,
+                    autoStretch: opts.autoStretch !== false,
+                    stretchTarget: opts.stretchTarget || 0.15,
+                    passes: opts.passes || 1,
                     onProgress: (phase, frac) => {
                         this.starRemoval.phase = phase
                             + (frac != null ? ' ' + Math.round(frac * 100) + '%' : '');
@@ -22434,6 +22483,9 @@ function ninaApp() {
                         out: starlessPath,
                         label: labelFor(path) + '  ↔  ' + labelFor(starlessPath),
                     }], 0, 'compare');
+                    // Lets the comparator show a "Try again" button that
+                    // re-opens the star-removal options for this source.
+                    this.graxpertCompare.starRetryPath = path;
                 }
             } catch (e) {
                 const msg = (e && e.message) || String(e);
@@ -23589,7 +23641,18 @@ function ninaApp() {
             // "GraXpert Denoise Comparison". null in compare-mode
             // (no op context, see graxpertCompareTitle).
             this.graxpertCompare.op = op || null;
+            // Default: not a star-removal compare. starRemovalRun sets this
+            // after opening so the "Try again" (re-run StarNet) button shows.
+            this.graxpertCompare.starRetryPath = null;
             this.graxpertCompare.open = true;
+        },
+        // Re-open star-removal options for the source shown in the comparator,
+        // so the user can tweak settings and run again when a result isn't good.
+        starRemovalRetryFromCompare() {
+            const p = this.graxpertCompare.starRetryPath;
+            if (!p) return;
+            this.graxpertCompare.open = false;
+            this.starRemovalOpenOptions(p);
         },
 
         // GX-12r: header title resolver for the comparator. Maps the
