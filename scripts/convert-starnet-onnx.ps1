@@ -41,7 +41,9 @@ param(
     [string]$InputName  = "X:0",
     [string]$OutputName = "generator/g_deconv7/Sub:0",
     [int]   $Opset      = 13,
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    [switch]$Docker,
+    [string]$Image      = "python:3.7-slim"
 )
 
 $ErrorActionPreference = "Stop"
@@ -69,6 +71,49 @@ if (-not (Test-Path (Join-Path $StarnetDir "model.ckpt.index"))) {
 }
 Write-Host "  OK: $StarnetDir"
 
+# --- Docker path (no local Python 3.7 needed) ------------------------------
+# Runs the whole convert inside a throwaway python:3.7-slim container. The
+# StarNet checkout is mounted at /work and the models tree at /out, so the
+# resulting model.onnx lands directly in the Polaris bundle.
+if ($Docker) {
+    Step "Converting via Docker ($Image)"
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+        Fail "docker not found on PATH. Install Docker Desktop, or drop -Docker and use a local Python 3.7."
+    }
+    $starAbs   = (Resolve-Path $StarnetDir).Path
+    New-Item -ItemType Directory -Force -Path $ModelsDir | Out-Null
+    $modelsAbs = (Resolve-Path $ModelsDir).Path
+
+    # Single shell script run inside the container (sh-compatible).
+    $inner = @"
+set -e
+pip install --no-cache-dir 'tensorflow==1.15.*' 'numpy==1.18.5' 'protobuf==3.19.6' 'onnx==1.10.2' 'tf2onnx==1.9.3'
+python export.py
+python -m tf2onnx.convert --graphdef starnet_generator.pb --inputs $InputName --outputs $OutputName --opset $Opset --output model.onnx
+mkdir -p "/out/$Version"
+cp model.onnx "/out/$Version/model.onnx"
+echo "container: wrote /out/$Version/model.onnx"
+"@
+    # Normalise CRLF -> LF so /bin/sh inside the container is happy.
+    $inner = $inner -replace "`r`n", "`n"
+
+    & docker run --rm `
+        -v "${starAbs}:/work" `
+        -v "${modelsAbs}:/out" `
+        -w /work `
+        $Image `
+        sh -c $inner
+    if ($LASTEXITCODE -ne 0) { Fail "Docker conversion failed (exit $LASTEXITCODE)." }
+
+    $destFile = Join-Path (Join-Path $ModelsDir $Version) "model.onnx"
+    if (-not (Test-Path $destFile)) { Fail "Expected $destFile not produced." }
+    $sizeMB = [math]::Round((Get-Item $destFile).Length / 1048576.0, 1)
+    Write-Host "`nDone. StarNet ONNX in place:" -ForegroundColor Green
+    Write-Host "  $destFile ($sizeMB MB)" -ForegroundColor Green
+    Write-Host "Next: start Polaris, POST /api/onnx/rescan, check GET /api/onnx/manifest for 'starnet'/$Version." -ForegroundColor Green
+    exit 0
+}
+
 # --- locate / create the venv ----------------------------------------------
 $venv   = Join-Path $StarnetDir ".onnxvenv"
 $venvPy = Join-Path $venv "Scripts\python.exe"
@@ -82,7 +127,7 @@ if (-not (Test-Path $venvPy)) {
         & py -3.7 -m venv $venv
     }
     if (-not (Test-Path $venvPy)) {
-        Fail "venv creation failed. Install CPython 3.7 (TF 1.15 requirement) or pass -Python <path to python3.7.exe>."
+        Fail "venv creation failed: no CPython 3.7 (TF 1.15 requires 3.7). Easiest fix: re-run with -Docker (uses python:3.7-slim, no local Python). Or install CPython 3.7 / pass -Python <path to python3.7.exe>."
     }
 } else {
     Write-Host "  Reusing existing venv: $venv"

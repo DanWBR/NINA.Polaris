@@ -24,6 +24,16 @@ Source: `model.py` (`generator`), `export.py`, `transform.py`.
 | Tiling at inference | stride `S` (≤256), `offset=(256−S)/2`; run each 256² tile, keep the centre `S×S` at `[offset:offset+S]`. Edge padding = reflect/wrap of image borders (see `transform.py`). |
 | License             | code MIT; **weights CC BY-NC-SA 4.0 (NonCommercial)** — attribute + NC notice. |
 
+## Easiest: one command via Docker (no local Python 3.7 needed)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\convert-starnet-onnx.ps1 -Docker
+```
+Runs the whole conversion inside a throwaway `python:3.7-slim` container
+(StarNet checkout mounted at `/work`, the models tree at `/out`) and drops
+`model.onnx` straight into `starnet-ai-models/<version>/`. Requires Docker
+Desktop. The manual steps below are the no-Docker equivalent.
+
 ## Steps
 
 Run from inside the `DanWBR/starnet` checkout (has `model.ckpt.*`, `model.py`,
