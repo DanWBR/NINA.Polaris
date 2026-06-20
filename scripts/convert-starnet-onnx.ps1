@@ -36,7 +36,7 @@
 param(
     [string]$StarnetDir = "C:\Users\danie\source\repos\DanWBR\starnet",
     [string]$Version    = "1.0.0",
-    [string]$ModelsDir  = (Join-Path $PSScriptRoot "..\src\NINA.Polaris\wwwroot\graxpert\models\starnet-ai-models"),
+    [string]$ModelsDir  = "",
     [string]$Python     = "",
     [string]$InputName  = "X:0",
     [string]$OutputName = "generator/g_deconv7/Sub:0",
@@ -47,6 +47,18 @@ param(
 $ErrorActionPreference = "Stop"
 function Step($m) { Write-Host "`n==== $m ====" -ForegroundColor Cyan }
 function Fail($m) { Write-Error $m; exit 1 }
+
+# Resolve the default models dir relative to this script. Done in the body
+# (not the param default) because $PSScriptRoot is empty when the script is
+# dot-sourced or pasted into the console.
+if ([string]::IsNullOrWhiteSpace($ModelsDir)) {
+    $scriptDir = $PSScriptRoot
+    if ([string]::IsNullOrWhiteSpace($scriptDir) -and $PSCommandPath) {
+        $scriptDir = Split-Path -Parent $PSCommandPath
+    }
+    if ([string]::IsNullOrWhiteSpace($scriptDir)) { $scriptDir = (Get-Location).Path }
+    $ModelsDir = Join-Path $scriptDir "..\src\NINA.Polaris\wwwroot\graxpert\models\starnet-ai-models"
+}
 
 # --- validate inputs --------------------------------------------------------
 Step "Checking the StarNet checkout"
