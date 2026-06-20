@@ -56,6 +56,22 @@ public static class FilesEndpoints {
 
         g.MapGet("/roots", (FileBrowserService svc) => Results.Ok(svc.ListRoots()));
 
+        // Effective Studio root: the configured ImageOutputDir if it still
+        // exists, otherwise a safe fallback (the user's home directory). Lets
+        // the FILES / STUDIO tabs land somewhere valid when the configured
+        // root was deleted, on a now-unmounted drive, or never created.
+        g.MapGet("/studio-root", (FileBrowserService svc, ProfileService profiles) => {
+            var configured = profiles.Active?.ImageOutputDir ?? "";
+            var effective = svc.ResolveStudioRoot(configured);
+            var exists = !string.IsNullOrWhiteSpace(configured) && Directory.Exists(configured);
+            return Results.Ok(new {
+                configured,
+                effective,
+                exists,
+                fellBack = !exists && !string.IsNullOrWhiteSpace(effective)
+            });
+        });
+
         g.MapGet("/list", (FileBrowserService svc,
                            NINA.Polaris.Services.Studio.FrameLibraryService lib,
                            string path, bool? hidden, bool? withMeta) => {

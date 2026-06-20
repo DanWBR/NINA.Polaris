@@ -11763,18 +11763,34 @@ function ninaApp() {
                 this.files.roots = [];
                 this.files.error = 'Failed to enumerate roots: ' + (e.message || '');
             }
+            // The effective Studio root: the configured ImageOutputDir if it
+            // still exists, else the server's home-directory fallback. So a
+            // stale / deleted / unmounted root lands somewhere valid instead
+            // of erroring the FILES tab.
+            let effectiveRoot = this.settings.imageOutputDir || '';
+            try {
+                const sr = await this.apiGet('/api/files/studio-root');
+                if (sr && sr.effective) effectiveRoot = sr.effective;
+            } catch { /* fall back to settings below */ }
+            // Try, in order, the remembered cwd, the effective root, then the
+            // first platform root — using the first that actually lists. The
+            // remembered cwd can itself be a now-missing path.
             const remembered = localStorage.getItem('filesCwd');
-            const target = remembered
-                || this.settings.imageOutputDir
-                || (this.files.roots[0]?.name ?? '');
-            if (target) await this.filesCd(target);
+            const candidates = [remembered, effectiveRoot, this.files.roots[0]?.name]
+                .filter(Boolean);
+            for (const c of candidates) {
+                if (await this.filesCd(c, { silent: true })) break;
+            }
         },
 
         // Navigate. Always clears selection because shift-click anchors
         // and per-row checkboxes assume the displayed list matches the
         // selection set.
-        async filesCd(path) {
-            if (!path) return;
+        // Returns true on success, false on failure. Pass { silent:true } to
+        // suppress the error toast (used when probing candidate roots at init,
+        // where a missing path is expected and the next candidate is tried).
+        async filesCd(path, opts = {}) {
+            if (!path) return false;
             this.files.loading = true;
             this.files.error = '';
             try {
@@ -11787,10 +11803,12 @@ function ninaApp() {
                 this.files.selectedPaths = [];
                 this._filesLastShiftIndex = -1;
                 localStorage.setItem('filesCwd', this.files.cwd);
+                return true;
             } catch (e) {
                 this.files.entries = [];
                 this.files.error = e.message || 'List failed';
-                this.toast(this.files.error, 'error');
+                if (!opts.silent) this.toast(this.files.error, 'error');
+                return false;
             } finally {
                 this.files.loading = false;
             }

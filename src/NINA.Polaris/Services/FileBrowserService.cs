@@ -115,6 +115,22 @@ public class FileBrowserService {
         return unix;
     }
 
+    /// <summary>
+    /// Resolve the effective Studio root. Returns <paramref name="configured"/>
+    /// (the profile's ImageOutputDir) when it points at an existing directory;
+    /// otherwise falls back to the user's home directory, and as a last resort
+    /// the first available platform root. Never throws — callers use this so a
+    /// stale / deleted Studio root doesn't error the FILES + STUDIO tabs.
+    /// </summary>
+    public string ResolveStudioRoot(string? configured) {
+        if (!string.IsNullOrWhiteSpace(configured) && Directory.Exists(configured))
+            return configured;
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrEmpty(home) && Directory.Exists(home)) return home;
+        var roots = ListRoots();
+        return roots.Count > 0 ? roots[0].Name : (home ?? "");
+    }
+
     private static void AddIfExists(List<DriveInfoDto> bag, string path, string display) {
         if (!Directory.Exists(path)) return;
         long? total = null, free = null;
