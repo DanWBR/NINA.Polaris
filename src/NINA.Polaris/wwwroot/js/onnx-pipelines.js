@@ -1538,7 +1538,11 @@
             const family = 'starnet';
             const version = opts.version || '1.0.0';
             const TILE = 256;
-            const STRIDE = Math.max(32, Math.min(256, opts.stride || 128));
+            // Default stride 96 → 80-px context margin per edge (more
+            // overlap than the 128/64 default), which softens residuals
+            // around bright stars at ~1.8× the tile count. Caller can pass
+            // opts.stride (32..256) to trade speed for quality.
+            const STRIDE = Math.max(32, Math.min(256, opts.stride || 96));
             const MARGIN = (TILE - STRIDE) / 2;
             const planeLen = width * height;
             const INV = 1 / 65535;
