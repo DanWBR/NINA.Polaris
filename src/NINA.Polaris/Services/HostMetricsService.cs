@@ -272,8 +272,16 @@ public class HostMetricsService : BackgroundService {
     /// </summary>
     internal static (long freeBytes, long totalBytes, string mountName) TryGetDiskInfo(string? capturePath) {
         try {
-            if (string.IsNullOrWhiteSpace(capturePath)) {
-                capturePath = Environment.CurrentDirectory;
+            // Mirror the FILES/STUDIO root resolution (FileBrowserService
+            // .ResolveStudioRoot): when the configured capture dir is unset or
+            // doesn't exist, the FILES tab lands in the user's home directory,
+            // so the disk gauge must report THAT partition (the FILES home),
+            // not the app/root filesystem (Environment.CurrentDirectory).
+            if (string.IsNullOrWhiteSpace(capturePath)
+                || !Directory.Exists(Path.GetFullPath(capturePath))) {
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                capturePath = (!string.IsNullOrEmpty(home) && Directory.Exists(home))
+                    ? home : Environment.CurrentDirectory;
             }
             var full = Path.GetFullPath(capturePath);
             DriveInfo? best = null;

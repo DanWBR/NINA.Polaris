@@ -317,6 +317,11 @@ public class LiveStackTriggersService : IDisposable {
 
         _isExecuting = true;
         _executingKind = "dither";
+        // A real dither is starting (guider IS guiding now), so any stale
+        // "Dither skipped: ..." notice from a previous frame no longer applies
+        // — clear it so the message disappears once dithering resumes normally.
+        if (_lastError != null && _lastError.StartsWith("Dither skipped", StringComparison.Ordinal))
+            _lastError = null;
         Notify();
 
         // Wait for SettleDone before the next frame integrates, exactly like the

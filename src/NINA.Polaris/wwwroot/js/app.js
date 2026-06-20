@@ -5145,7 +5145,16 @@ function ninaApp() {
                 const j = await r.json();
                 this.deviceFriendlyName = j.friendlyName || '';
                 this.deviceMdnsName = j.mdnsName || '';
+                this._applyDeviceTitle();
             } catch (_) { /* non-fatal */ }
+        },
+        // Reflect the device name in the browser tab title (and the Android
+        // manager-app tab) so multiple Polaris hosts are distinguishable.
+        _applyDeviceTitle() {
+            try {
+                const n = (this.deviceFriendlyName || this.deviceMdnsName || '').trim();
+                document.title = n ? (n + ' · Polaris') : 'N.I.N.A. Polaris';
+            } catch (_) { /* SSR/no-DOM guard */ }
         },
         async saveDeviceName() {
             try {
@@ -5158,6 +5167,7 @@ function ninaApp() {
                 const j = await r.json();
                 this.deviceFriendlyName = j.friendlyName || '';
                 this.deviceMdnsName = j.mdnsName || '';
+                this._applyDeviceTitle();
                 this.toast('Device name saved', 'ok');
             } catch (e) {
                 this.toast('Could not save device name: ' + e.message, 'error');
