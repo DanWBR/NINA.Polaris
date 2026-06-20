@@ -780,14 +780,12 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     transform-origin:center center; will-change:transform; max-width:none; max-height:none; }
 .blend-viewer-empty { position:absolute; inset:0; display:flex; align-items:center;
     justify-content:center; color:var(--text-secondary); font-size:13px; }
+/* Floating pill at the bottom-centre of the viewer; buttons use the app's
+   standard .btn .btn-sm style (same as the editor's zoom control). */
 .blend-zoom-ctl { position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
     display:flex; align-items:center; gap:6px; background:rgba(0,0,0,.6);
     border:1px solid var(--border); border-radius:8px; padding:5px 8px; z-index:2; }
-.blend-zoom-ctl button { background:var(--bg-secondary,#1b2330); color:var(--text-primary);
-    border:1px solid var(--border); border-radius:6px; min-width:30px; height:28px;
-    padding:0 8px; cursor:pointer; font-size:13px; }
-.blend-zoom-ctl button:hover { border-color:var(--accent); }
-.blend-zoom-ctl span { min-width:52px; text-align:center; font-variant-numeric:tabular-nums; font-size:12.5px; }
+.blend-zoom-ctl .btn { font-variant-numeric:tabular-nums; }
 
 /* Draggable divider */
 .blend-resizer { flex:0 0 6px; cursor:col-resize; background:var(--border); }
