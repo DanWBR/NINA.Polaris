@@ -289,6 +289,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Sky.ApassCatalog>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Sky.DsoCatalog>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameOperationsService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Editor.ImageEditService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Editor.ImageBlendService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Editor.EditSidecarStore>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.OnnxModelRegistry>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.OnnxFileService>();

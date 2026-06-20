@@ -167,6 +167,38 @@ public static class AutoStretch {
     }
 
     /// <summary>
+    /// Float variant of <see cref="ApplyManual"/> for producing a real
+    /// (non-display) stretched image rather than an 8-bit preview: applies
+    /// the same black/mid/white MTF but returns a normalised [0,1] float per
+    /// pixel, preserving full precision. Operates over the whole input array
+    /// (mono buffer or a single RGB plane slice), so the caller controls
+    /// plane layout. Used by ImageBlendService so the saved FITS isn't
+    /// crushed to 8 bits.
+    /// </summary>
+    public static float[] ApplyManualFloat(ushort[] data,
+                                           double black, double mid, double white,
+                                           int bitDepth = 16) {
+        var result = new float[data.Length];
+        if (data.Length == 0) return result;
+
+        black = Math.Clamp(black, 0.0, 1.0);
+        white = Math.Clamp(white, 0.0, 1.0);
+        if (white <= black) white = Math.Min(1.0, black + 1e-6);
+        mid = Math.Clamp(mid, 0.001, 0.999);
+
+        double maxVal = (1 << bitDepth) - 1;
+        double invRange = 1.0 / (white - black);
+        Parallel.ForEach(Partitioner.Create(0, data.Length), range => {
+            for (int i = range.Item1; i < range.Item2; i++) {
+                double normalized = data[i] / maxVal;
+                double clipped = Math.Clamp((normalized - black) * invRange, 0, 1);
+                result[i] = (float)MTF(clipped, mid);
+            }
+        });
+        return result;
+    }
+
+    /// <summary>
     /// Compute the auto-stretch parameters (black/mid/white, all normalised
     /// 0..1) without applying them. Used by the STUDIO viewer to seed
     /// sliders with sensible defaults before the user starts tweaking.
