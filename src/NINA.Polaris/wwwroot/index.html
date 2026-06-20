@@ -1742,6 +1742,7 @@
                          √N) when stacking is active; fall back to the
                          single-frame SNR from the most recent capture. -->
                     <span>SNR: <strong x-text="(liveStackStatus?.cumulativeSnr > 0 ? liveStackStatus?.cumulativeSnr.toFixed(1) : (stats.snr || '--'))">--</strong></span>
+                    <span x-show="stats.width > 0">Res: <strong x-text="stats.width + '×' + stats.height">--</strong></span>
                     <span x-show="filterWheel.connected" class="text-ok" x-text="filterWheel.currentFilter"></span>
                     <span>Frames: <strong x-text="sessionCaptures"></strong></span>
                     <!-- Live-stacking elapsed integration time (replaces the
@@ -3023,6 +3024,7 @@
                     <span>Mean: <strong x-text="preview.lastStats?.mean?.toFixed?.(0) ?? '--'"></strong></span>
                     <span>Median: <strong x-text="preview.lastStats?.median?.toFixed?.(0) ?? '--'"></strong></span>
                     <span>SNR: <strong x-text="preview.lastStats?.snr?.toFixed?.(1) ?? '--'"></strong></span>
+                    <span x-show="stats.width > 0">Res: <strong x-text="stats.width + '×' + stats.height">--</strong></span>
                     <span class="text-ok" x-show="preview.saveToDisk">💾 saving</span>
                     <span x-show="preview.lastSnapAt" class="text-muted"
                           x-text="'last: ' + (preview.lastSnapAt
@@ -15141,7 +15143,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260620-field1"></script>
+    <script src="/js/app.js?v=20260620-field2"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

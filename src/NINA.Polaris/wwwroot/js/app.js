@@ -93,7 +93,7 @@ function ninaApp() {
         _shutterLongPressed: false,
         _shutterArmTimer: null,    // animates the arming ring at 60ms cadence
         _shutterArmStartedAt: 0,
-        stats: { starCount: '--', hfr: null, mean: null, snr: null },
+        stats: { starCount: '--', hfr: null, mean: null, snr: null, width: 0, height: 0 },
         currentTime: '--:--:--',
         // Battery of the CLIENT device (tablet/phone/laptop showing the
         // UI), via the browser Battery Status API. supported stays false
@@ -7538,6 +7538,9 @@ function ninaApp() {
             const headerLen = dv.getInt32(0, true); // little-endian
             const width = dv.getInt32(4, true);
             const height = dv.getInt32(8, true);
+            // Surface the true frame resolution in the stats row (preview /
+            // live / autorun all stream raw frames through here).
+            if (width > 0 && height > 0) { this.stats.width = width; this.stats.height = height; }
             const bitDepth = dv.getInt32(12, true);
             const bayerPattern = dv.getInt32(16, true);
             const uncompressedSize = dv.getInt32(20, true);
@@ -16907,6 +16910,9 @@ function ninaApp() {
                     this.stats.hfr = data.stats.hfr?.toFixed(2);
                     this.stats.mean = data.stats.mean?.toFixed(0);
                     this.stats.snr = data.stats.snr?.toFixed(1);
+                }
+                if (data.width > 0 && data.height > 0) {
+                    this.stats.width = data.width; this.stats.height = data.height;
                 }
                 this.imageHistory.unshift({
                     id: 'h-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
