@@ -1804,9 +1804,10 @@
             const channels = opts && opts.channels === 3 ? 3 : 1;
             // Model profile. 'starnet' (default): 256² tiles, RGB fed together
             // as a 3-channel NHWC tensor, [0,1] normalization. 'starrem2k13'
-            // (U2NETP, MIT-licensed): 512² tiles, ONE channel per inference
-            // (so RGB = 3 runs), and the net's /382 8-bit normalization →
-            // feed stretched·(255/382), read output·(382/255).
+            // (MIT-licensed pix2pix-style U-Net, ~31M params): 512² tiles, ONE
+            // channel per inference (so RGB = 3 runs), input args_0 [1,512,512]
+            // → output [1,512,512,1] (relu). Trained with 8-bit /512
+            // normalization → feed stretched·(255/512), read output·(512/255).
             const isRem = opts.model === 'starrem2k13';
             const family = isRem ? 'starrem2k13' : 'starnet';
             const version = opts.version || '1.0.0';
@@ -1818,8 +1819,8 @@
             const STRIDE = isRem ? 448 : Math.max(32, Math.min(256, opts.stride || 96));
             const MARGIN = (TILE - STRIDE) / 2;
             const LAYOUT = isRem ? 'single' : 'nhwc3';
-            const IN_SCALE = isRem ? (255 / 382) : 1;   // model input normalization
-            const OUT_SCALE = isRem ? (382 / 255) : 1;  // inverse on the output
+            const IN_SCALE = isRem ? (255 / 512) : 1;   // model input normalization
+            const OUT_SCALE = isRem ? (512 / 255) : 1;  // inverse on the output
             const planeLen = width * height;
             const INV = 1 / 65535;
 

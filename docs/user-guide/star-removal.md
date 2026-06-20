@@ -19,9 +19,11 @@ Two pieces:
 Polaris supports two star-removal models. When both are installed the
 **Remove stars** dialog shows a **Model** dropdown:
 
-- **starrem2k13** (U2NETP) — **MIT-licensed** (code *and* weights), so it can
-  be bundled by default with no commercial restriction. The recommended
-  default. ~100 MB, 512² tiles, processed per channel.
+- **starrem2k13** (pix2pix-style U-Net, ~31M params) — **MIT-licensed** (code
+  *and* weights), so it can be bundled by default with no commercial
+  restriction. ~124 MB, 512² tiles, processed per channel. (Uses the model
+  from the pinned commit `0398ce05`, not the repo main branch's tiny U2NETP,
+  which removes stars poorly.)
 - **StarNet++** (v1) — generally higher-quality removal, but the weights are
   **CC BY-NC-SA (NonCommercial)**, so it is opt-in and you install it yourself.
 
@@ -32,11 +34,14 @@ the trained domain, optional 2nd pass, and the mask-guided halo cleanup).
 
 ### starrem2k13 (recommended, MIT)
 
-Install it once on the machine Polaris serves from. The upstream repo ships a
-prebuilt `weights/model.onnx`, so the script just copies it (no Docker needed):
+Install it once on the machine Polaris serves from. Download the trained
+weights (a TF checkpoint: `checkpoint` + `weights.index` + `weights.data-*`)
+from the project's GitHub Releases, then run the converter (it fetches the
+right `model.py`, loads the checkpoint, and exports ONNX in Docker):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\convert-starrem2k13-onnx.ps1
+powershell -ExecutionPolicy Bypass -File scripts\convert-starrem2k13-onnx.ps1 `
+    -WeightsDir C:\path\to\weights
 ```
 
 It writes `model.onnx` into

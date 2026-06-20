@@ -22597,7 +22597,7 @@ function ninaApp() {
             const fams = new Set(models.map(m => m.family));
             const out = [];
             if (fams.has('starrem2k13'))
-                out.push({ value: 'starrem2k13', label: 'starrem2k13 (U2NETP · MIT)' });
+                out.push({ value: 'starrem2k13', label: 'starrem2k13 (U-Net · MIT)' });
             if (fams.has('starnet'))
                 out.push({ value: 'starnet', label: 'StarNet++ (NonCommercial)' });
             return out;
