@@ -780,6 +780,11 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     transform-origin:center center; will-change:transform; max-width:none; max-height:none; }
 .blend-viewer-empty { position:absolute; inset:0; display:flex; align-items:center;
     justify-content:center; color:var(--text-secondary); font-size:13px; }
+/* RGB histogram of the blended preview, pinned bottom-left of the viewer. */
+.blend-hist { position:absolute; left:14px; bottom:14px; z-index:2;
+    width:260px; height:72px; background:rgba(0,0,0,.55);
+    border:1px solid var(--border); border-radius:8px; padding:0; }
+
 /* Floating pill at the bottom-centre of the viewer; buttons use the app's
    standard .btn .btn-sm style (same as the editor's zoom control). */
 .blend-zoom-ctl { position:absolute; left:50%; bottom:14px; transform:translateX(-50%);

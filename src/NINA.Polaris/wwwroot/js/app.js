@@ -2374,7 +2374,9 @@ function ninaApp() {
             view: { zoom: 1, panX: 0, panY: 0 },
             panelW: 360,
             _drag: null,
-            _viewInit: false
+            _viewInit: false,
+            histOpen: true,   // RGB histogram overlay of the blended preview
+            _histOff: null
         },
         // SN-3: StarNet++ star removal (ONNX, runs in the browser like
         // GraXpert). Drives a small progress overlay; on success it
@@ -22316,6 +22318,59 @@ function ninaApp() {
             // Fit only on the FIRST preview of a session; later slider-driven
             // re-renders keep the user's current zoom/pan.
             if (!this.blend._viewInit) { this.blendFit(); this.blend._viewInit = true; }
+            this.blendDrawHistogram();
+        },
+        blendToggleHistogram() {
+            this.blend.histOpen = !this.blend.histOpen;
+            if (this.blend.histOpen) this.$nextTick(() => this.blendDrawHistogram());
+        },
+        // RGB histogram of the blended PREVIEW (i.e. what's on screen, after
+        // each layer's stretch + the blend). For linear frames this is the
+        // tool to judge the recombine: you want the stars not slammed to pure
+        // white (spike piled at 255) and the nebula filling the low-mids,
+        // rather than everything crushed into the shadows.
+        blendDrawHistogram() {
+            if (!this.blend.histOpen) return;
+            const img = this.$refs.blendImg, cv = this.$refs.blendHist;
+            if (!img || !cv || !img.naturalWidth) return;
+            // Decimate the preview into an offscreen canvas to read pixels.
+            const sw = 360;
+            const sh = Math.max(1, Math.round(sw * img.naturalHeight / img.naturalWidth));
+            let off = this.blend._histOff;
+            if (!off) { off = this.blend._histOff = document.createElement('canvas'); }
+            off.width = sw; off.height = sh;
+            const octx = off.getContext('2d', { willReadFrequently: true });
+            let data;
+            try {
+                octx.drawImage(img, 0, 0, sw, sh);
+                data = octx.getImageData(0, 0, sw, sh).data;
+            } catch (e) { return; }   // tainted/decoding — skip silently
+            const R = new Float32Array(256), G = new Float32Array(256), B = new Float32Array(256);
+            for (let i = 0; i < data.length; i += 4) { R[data[i]]++; G[data[i + 1]]++; B[data[i + 2]]++; }
+            // Scale to the tallest bin, ignoring the pure-black/white spikes
+            // (0 and 255) so faint mid-tone structure stays visible.
+            let mx = 1;
+            for (let i = 1; i < 255; i++) {
+                if (R[i] > mx) mx = R[i]; if (G[i] > mx) mx = G[i]; if (B[i] > mx) mx = B[i];
+            }
+            const W = cv.width, H = cv.height;
+            const ctx = cv.getContext('2d');
+            ctx.clearRect(0, 0, W, H);
+            const drawCh = (arr, color) => {
+                ctx.fillStyle = color;
+                ctx.beginPath(); ctx.moveTo(0, H);
+                for (let x = 0; x < W; x++) {
+                    const bin = Math.min(255, (x / W * 256) | 0);
+                    const v = Math.min(1, arr[bin] / mx);
+                    ctx.lineTo(x, H - v * H);
+                }
+                ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+            };
+            ctx.globalCompositeOperation = 'lighter';   // channels add (mono → grey/white)
+            drawCh(R, 'rgba(255,64,64,0.55)');
+            drawCh(G, 'rgba(64,224,64,0.50)');
+            drawCh(B, 'rgba(96,128,255,0.60)');
+            ctx.globalCompositeOperation = 'source-over';
         },
         blendFit() {
             const vp = this.$refs.blendViewer, img = this.$refs.blendImg;
