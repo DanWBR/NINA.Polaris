@@ -763,9 +763,12 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 }
 .blend-header { display:flex; align-items:center; gap:10px;
     padding:10px 14px; border-bottom:1px solid var(--border); flex:0 0 auto; }
-.blend-header h2 { font-size:17px; font-weight:600; display:flex; align-items:center; gap:8px; margin:0; }
+/* Match the app's modal-title convention (18px/600) used by every other
+   siril-modal h2, and the standard 12px secondary text for the filenames.
+   Font FAMILY is inherited from --font-body (the font picker) app-wide. */
+.blend-header h2 { font-size:18px; font-weight:600; display:flex; align-items:center; gap:8px; margin:0; }
 .blend-header .blend-spacer { flex:1; }
-.blend-header .blend-name { color:var(--text-secondary); font-size:12.5px; }
+.blend-header .blend-name { color:var(--text-secondary); font-size:12px; }
 
 .blend-body { flex:1 1 auto; display:flex; min-height:0; }
 
