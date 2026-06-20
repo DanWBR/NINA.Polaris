@@ -71,7 +71,8 @@ post-processing suite with in-browser AI. Highlights:
 
 ## Documentation
 
-The full documentation lives in [`docs/`](docs/):
+The full documentation lives in [`docs/`](docs/README.md) — that index
+organizes every page by area. The essentials:
 
 - **[User Guide](docs/user-guide/README.md)** — start here. Install →
   first night → end-to-end workflow, plus a reference page per sidebar tab.
