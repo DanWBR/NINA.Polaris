@@ -1543,6 +1543,7 @@
             let cur = pixels;
             let lastStats = null;
             for (let p = 0; p < passes; p++) {
+                if (opts.shouldAbort && opts.shouldAbort()) throw new Error('aborted by user');
                 const passOpts = Object.assign({}, opts);
                 if (opts.onProgress) {
                     passOpts.onProgress = (phase, frac) => {
@@ -1665,6 +1666,7 @@
 
             for (let ty = 0; ty < ith; ty++) {
                 for (let tx = 0; tx < itw; tx++) {
+                    if (opts.shouldAbort && opts.shouldAbort()) throw new Error('aborted by user');
                     const sx = tx * STRIDE, sy = ty * STRIDE;
                     for (let y = 0; y < TILE; y++) {
                         const py = sy + y;

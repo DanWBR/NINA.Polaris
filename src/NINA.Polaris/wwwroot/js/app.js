@@ -2387,6 +2387,11 @@ function ninaApp() {
         // (base) + stars (blend) so the user can stretch each separately.
         starRemoval: {
             busy: false, phase: '', progress: 0, error: '',
+            // Set by starRemovalAbort() to signal the in-browser pipeline to
+            // bail at its next tile/pass checkpoint (mirrors GraXpert's
+            // browserAbortRequested — a WebGPU shader can't be hard-killed
+            // mid-tile, so we stop launching new tiles).
+            aborting: false,
             lastSource: '',   // last image run, for "retry" from the comparator
             // Options modal shown before running.
             options: {
@@ -22596,12 +22601,14 @@ function ninaApp() {
 
             const stem = (path.split(/[\\/]+/).pop() || path);
             this.starRemoval.busy = true;
+            this.starRemoval.aborting = false;
             this.starRemoval.error = '';
             this.starRemoval.progress = 0;
             this.starRemoval.phase = 'fetching pixels';
             try {
                 const src = await this._onnxFetchSourcePixels(path);
                 if (!src) { throw new Error('could not decode ' + stem); }
+                if (this.starRemoval.aborting) throw new Error('aborted');
 
                 this.starRemoval.phase = 'removing stars';
                 const pipeline = new OnnxRegistry.StarRemovalPipeline();
@@ -22611,6 +22618,9 @@ function ninaApp() {
                     autoStretch: opts.autoStretch !== false,
                     stretchTarget: opts.stretchTarget || 0.15,
                     passes: opts.passes || 1,
+                    // Checked between tiles/passes by the pipeline; lets the
+                    // modal's Cancel button stop a long run.
+                    shouldAbort: () => this.starRemoval.aborting,
                     onProgress: (phase, frac) => {
                         this.starRemoval.phase = phase
                             + (frac != null ? ' ' + Math.round(frac * 100) + '%' : '');
@@ -22646,11 +22656,29 @@ function ninaApp() {
                 }
             } catch (e) {
                 const msg = (e && e.message) || String(e);
-                this.starRemoval.error = msg;
-                this.starRemoval.phase = 'failed: ' + msg;
+                const wasAbort = this.starRemoval.aborting || /abort/i.test(msg);
                 this.starRemoval.busy = false;
-                this.toast('Star removal failed: ' + msg, 'error', 6000);
+                this.starRemoval.aborting = false;
+                if (wasAbort) {
+                    this.starRemoval.error = '';
+                    this.starRemoval.phase = 'cancelled';
+                    this.toast('Star removal cancelled', 'warn');
+                } else {
+                    this.starRemoval.error = msg;
+                    this.starRemoval.phase = 'failed: ' + msg;
+                    this.toast('Star removal failed: ' + msg, 'error', 6000);
+                }
             }
+        },
+
+        // Cancel an in-flight star-removal run. The in-browser pipeline can't
+        // hard-kill a WebGPU shader mid-tile, so we flip a flag the pipeline
+        // checks between tiles/passes and bails at the next checkpoint.
+        starRemovalAbort() {
+            if (!this.starRemoval.busy || this.starRemoval.aborting) return;
+            this.starRemoval.aborting = true;
+            this.starRemoval.phase = 'aborting… (finishing current tile)';
+            this.toast('Star removal abort requested', 'info');
         },
 
         cropOpenForFile(path) {
