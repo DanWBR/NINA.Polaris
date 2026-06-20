@@ -754,23 +754,10 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 }
 .guide-bc input[type="range"] { width: 84px; }
 
-/* SN-6: Image Blend — full-screen, Lightroom-style zoomable viewer +
-   resizable side panel with large sliders. */
-.blend-frame {
-    position:fixed; inset:0; width:100vw; height:100vh; z-index:1;
-    display:flex; flex-direction:column;
-    background:var(--bg-primary, #0d1117);
-}
-.blend-header { display:flex; align-items:center; gap:10px;
-    padding:10px 14px; border-bottom:1px solid var(--border); flex:0 0 auto; }
-/* Match the app's modal-title convention (18px/600) used by every other
-   siril-modal h2, and the standard 12px secondary text for the filenames.
-   Font FAMILY is inherited from --font-body (the font picker) app-wide. */
-.blend-header h2 { font-size:18px; font-weight:600; display:flex; align-items:center; gap:8px; margin:0; }
-.blend-header .blend-spacer { flex:1; }
-.blend-header .blend-name { color:var(--text-secondary); font-size:12px; }
-
-.blend-body { flex:1 1 auto; display:flex; min-height:0; }
+/* SN-6: Image Blend — hosted in the FILES editor's modal chrome
+   (.files-editor-modal/-panel). The blend-body is the editor-workspace
+   equivalent: zoomable viewer + resizable side panel with large sliders. */
+.blend-body { flex:1 1 auto; display:flex; min-height:0; margin-top:8px; }
 
 /* Zoom/pan viewer */
 .blend-viewer { flex:1 1 auto; position:relative; overflow:hidden; background:#000;
