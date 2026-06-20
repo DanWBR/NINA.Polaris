@@ -28,10 +28,8 @@ namespace NINA.Image.Editor;
 ///
 /// Auto mode reuses the GraXpert auto-stretch (15% bg, 3σ) PER CHANNEL, which
 /// also acts as a rough white balance on OSC data (the historical load-time
-/// behaviour). Manual mode applies the user's linked black/mid/white but keeps
-/// each channel anchored to its own auto black point (relative to green), so
-/// the per-channel white balance is preserved and dragging the handles doesn't
-/// introduce a colour cast.
+/// behaviour). Manual mode applies one linked black/mid/white MTF across all
+/// channels, which is what the draggable black/white handles drive.
 /// </summary>
 public static class EditorStretch {
     /// <summary>
@@ -52,22 +50,9 @@ public static class EditorStretch {
                 gs = AutoStretch.Apply(g, width, height, bitDepth);
                 bs = AutoStretch.Apply(b, width, height, bitDepth);
             } else {
-                // Linked manual stretch that PRESERVES the per-channel white
-                // balance. A single black/mid/white applied identically to R,
-                // G, B reveals the raw OSC colour cast (the R/G/B backgrounds
-                // sit at different levels), so adjusting the handles visibly
-                // shifts colour. Instead, anchor each channel's black to its
-                // own auto black point relative to green: at the seed point
-                // (handles come from green) each channel uses its own auto
-                // black — identical to the Auto/neutral view, so there's no
-                // colour jump — and as the user drags the linked handles all
-                // three move together, keeping the background neutral.
-                double gB = AutoStretch.ComputeAutoStretchParams(g, width, height, bitDepth).Black;
-                double rOff = AutoStretch.ComputeAutoStretchParams(r, width, height, bitDepth).Black - gB;
-                double bOff = AutoStretch.ComputeAutoStretchParams(b, width, height, bitDepth).Black - gB;
-                rs = AutoStretch.ApplyManual(r, width, height, sp!.Black + rOff, sp.Mid, sp.White, bitDepth);
+                rs = AutoStretch.ApplyManual(r, width, height, sp!.Black, sp.Mid, sp.White, bitDepth);
                 gs = AutoStretch.ApplyManual(g, width, height, sp.Black, sp.Mid, sp.White, bitDepth);
-                bs = AutoStretch.ApplyManual(b, width, height, sp.Black + bOff, sp.Mid, sp.White, bitDepth);
+                bs = AutoStretch.ApplyManual(b, width, height, sp.Black, sp.Mid, sp.White, bitDepth);
             }
             var outp = new byte[planeSize * 3];
             for (int i = 0, j = 0; i < planeSize; i++, j += 3) {
