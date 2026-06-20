@@ -2401,7 +2401,12 @@ function ninaApp() {
                 stretchTarget: 0.15, // autostretch target background (lower = stronger)
                 passes: 1,           // 2 = second pass cleans bright-star halos
                 reduceHalos: true,   // mask-guided cleanup of residual halos
-                haloStrength: 0.5    // 0..1: coverage radius + fill window
+                haloStrength: 0.8    // 0..1: default tuned for starrem2k13 (bundled)
+            },
+            // Recommended halo-cleanup strength per model: starrem2k13 leaves
+            // wider rings than StarNet, so it wants more coverage by default.
+            _haloDefault(model) {
+                return model === 'starrem2k13' ? 0.8 : 0.5;
             }
         },
         crop: {
@@ -22616,7 +22621,12 @@ function ninaApp() {
             const avail = this.starRemovalModels();
             if (avail.length && !avail.some(m => m.value === this.starRemoval.options.model))
                 this.starRemoval.options.model = avail[0].value;
+            this.starRemoval.options.haloStrength = this.starRemoval._haloDefault(this.starRemoval.options.model);
             this.starRemoval.options.open = true;
+        },
+        // Switch the recommended halo-cleanup default when the model changes.
+        starRemovalModelChanged() {
+            this.starRemoval.options.haloStrength = this.starRemoval._haloDefault(this.starRemoval.options.model);
         },
         starRemovalCloseOptions() { this.starRemoval.options.open = false; },
         // Confirm the options modal → run with the chosen settings.
