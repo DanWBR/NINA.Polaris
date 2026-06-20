@@ -80,6 +80,11 @@ if ($Docker) {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         Fail "docker not found on PATH. Install Docker Desktop, or drop -Docker and use a local Python 3.7."
     }
+    # The engine must actually be running (and in Linux-containers mode).
+    & docker info 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Fail "Docker is installed but the engine isn't reachable. Start Docker Desktop (wait for the whale icon to settle), make sure it's in LINUX containers mode, then re-run with -Docker."
+    }
     $starAbs   = (Resolve-Path $StarnetDir).Path
     New-Item -ItemType Directory -Force -Path $ModelsDir | Out-Null
     $modelsAbs = (Resolve-Path $ModelsDir).Path
