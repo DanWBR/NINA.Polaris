@@ -21,10 +21,16 @@ the **Remove stars** dialog shows a **Model** dropdown:
 
 - **nox** (StarNet-like, ~54M params) — **MIT-licensed** (code *and* weights),
   the recommended default. Native colour model (one inference per tile) plus a
-  gray model; ~218 MB each. StarNet-grade quality with a permissive licence.
-- **starrem2k13** (pix2pix-style U-Net, ~31M params) — **MIT-licensed**, ~124 MB,
+  gray model. StarNet-grade quality with a permissive licence.
+- **starrem2k13** (pix2pix-style U-Net, ~31M params) — **MIT-licensed**,
   512² tiles processed per channel. (Uses the model from the pinned commit
   `0398ce05`, not the repo main branch's tiny U2NETP, which removes stars poorly.)
+
+All bundled star-removal models are stored as **FP16** (half the size, runs on
+phones/tablets via WebGPU and on WASM): nox ~109 MB each, starrem2k13 ~62 MB,
+StarNet ~109 MB. The I/O stays FP32 so accuracy is essentially unchanged. To
+(re)generate FP16 from a freshly converted FP32 model, run
+`scripts/quantize_onnx_models.py --fp16 --replace --only <family>`.
 - **StarNet++** (v1) — high-quality removal, but the weights are
   **CC BY-NC-SA (NonCommercial)**, so it is opt-in and you install it yourself.
 

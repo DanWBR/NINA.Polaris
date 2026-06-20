@@ -32,11 +32,16 @@ FP32), "2.0.0-fp16", "2.0.0-int8". Pick the one that fits.
 
 Usage:
 
-  pip install onnx onnxruntime onnxconverter-common
-  python scripts/quantize_onnx_models.py            # all models, FP16
+  pip install onnx onnxruntime onnxconverter-common onnxsim
+  python scripts/quantize_onnx_models.py            # all models, FP16 (sibling dir)
   python scripts/quantize_onnx_models.py --int8     # all models, INT8
   python scripts/quantize_onnx_models.py --fp16 --int8   # both
   python scripts/quantize_onnx_models.py --only denoise   # one family
+
+  # Star-removal models: shrink the bundled 1.0.0 IN PLACE (halves them,
+  # version stays 1.0.0, runs on phones/tablets via WebGPU + WASM):
+  python scripts/quantize_onnx_models.py --fp16 --replace \
+      --only nox --only starrem2k13 --only starnet
 """
 import argparse, os, sys
 from pathlib import Path
@@ -83,12 +88,28 @@ def to_fp16(src: Path, dst: Path) -> None:
     from onnxconverter_common import float16
     print(f"  loading {src.name} ({_size_mb(src):.1f} MB)...")
     model = onnx.load(str(src))
-    # keep_io_types=True so we still accept FP32 inputs / emit FP32
-    # outputs — saves the JS pipeline from having to convert tensors.
-    # The fp16 conversion happens for all the internal weights, which
-    # is where the size savings come from.
+    # Simplify FIRST. tf2onnx exports (StarNet / nox / starrem2k13) decompose
+    # LayerNorm into Mul/Div/Sub/Cast chains that trip the fp16 converter
+    # (it leaves a Div / Cast with mixed fp16+fp32 inputs → the model fails
+    # to load). onnxsim folds those constant-casts and canonicalises the
+    # graph so the conversion produces a valid model. Best-effort: if onnxsim
+    # is missing or fails, fall back to the raw model (fine for the simpler
+    # GraXpert graphs that converted cleanly before).
+    try:
+        from onnxsim import simplify
+        inp = model.graph.input[0]
+        dims = [(d.dim_value if (d.HasField('dim_value') and d.dim_value > 0) else 1)
+                for d in inp.type.tensor_type.shape.dim]
+        model, ok = simplify(model, overwrite_input_shapes={inp.name: dims})
+        if not ok:
+            print("  (onnxsim reported a check mismatch — using simplified graph anyway)")
+    except Exception as e:
+        print(f"  (onnxsim unavailable/failed: {e} — converting raw graph)")
+    # keep_io_types=True so we still accept FP32 inputs / emit FP32 outputs —
+    # saves the JS pipeline from converting tensors. shape inference ON so the
+    # converter places the boundary Cast nodes with correct types.
     converted = float16.convert_float_to_float16(
-        model, keep_io_types=True, disable_shape_infer=True)
+        model, keep_io_types=True, disable_shape_infer=False)
     dst.parent.mkdir(parents=True, exist_ok=True)
     onnx.save(converted, str(dst))
     print(f"  → {dst.relative_to(MODELS_ROOT)} ({_size_mb(dst):.1f} MB)")
@@ -131,6 +152,11 @@ def main():
                          "(e.g. 'denoise', 'bge'). Repeat to combine.")
     ap.add_argument("--force", action="store_true",
                     help="overwrite existing quantized outputs")
+    ap.add_argument("--replace", action="store_true",
+                    help="overwrite the source model.onnx IN PLACE instead of "
+                         "writing a -fp16/-int8 sibling (halves the bundled "
+                         "model; the registry version stays e.g. '1.0.0'). "
+                         "FP16 only.")
     args = ap.parse_args()
     if not args.fp16 and not args.int8:
         args.fp16 = True   # default action
@@ -146,8 +172,9 @@ def main():
     for family_dir, version_dir, onnx_path in targets:
         print(f"\n[{family_dir.name} / {version_dir.name}]")
         if args.fp16:
-            dst = family_dir / f"{version_dir.name}-fp16" / "model.onnx"
-            if dst.exists() and not args.force:
+            dst = (onnx_path if args.replace
+                   else family_dir / f"{version_dir.name}-fp16" / "model.onnx")
+            if dst.exists() and not args.force and not args.replace:
                 print(f"  fp16 already exists ({_size_mb(dst):.1f} MB) — skip "
                       f"(pass --force to overwrite)")
             else:
