@@ -14,12 +14,41 @@ Two pieces:
    independent blackpoint/midtones/highlights stretch per layer plus a
    Screen blend and opacity.
 
-## One-time setup: install the model
+## Choosing a model
 
-Star removal needs the converted StarNet model. It is **not** bundled by
-default (the weights are ~207 MB and NonCommercial — see Licensing below),
-so you install it once on the machine that has the file system Polaris
-serves from:
+Polaris supports two star-removal models. When both are installed the
+**Remove stars** dialog shows a **Model** dropdown:
+
+- **starrem2k13** (U2NETP) — **MIT-licensed** (code *and* weights), so it can
+  be bundled by default with no commercial restriction. The recommended
+  default. ~100 MB, 512² tiles, processed per channel.
+- **StarNet++** (v1) — generally higher-quality removal, but the weights are
+  **CC BY-NC-SA (NonCommercial)**, so it is opt-in and you install it yourself.
+
+Both run as ONNX in your browser through the same pipeline (auto-stretch into
+the trained domain, optional 2nd pass, and the mask-guided halo cleanup).
+
+## One-time setup: install a model
+
+### starrem2k13 (recommended, MIT)
+
+Convert it once on the machine Polaris serves from:
+
+```powershell
+# pick the current weights asset from the releases page, then:
+powershell -ExecutionPolicy Bypass -File scripts\convert-starrem2k13-onnx.ps1 `
+    -WeightsUrl https://github.com/code2k13/starrem2k13/releases/download/<tag>/<asset>
+```
+
+It writes `model.onnx` into
+`wwwroot/graxpert/models/starrem2k13-ai-models/1.0.0/`. See
+[`scripts/convert-starrem2k13-onnx.md`](../../scripts/convert-starrem2k13-onnx.md).
+
+### StarNet++ (optional, NonCommercial)
+
+StarNet is **not** bundled by default (the weights are ~207 MB and
+NonCommercial — see Licensing below), so you install it once on the machine
+that has the file system Polaris serves from:
 
 1. Get the StarNet v1 TensorFlow weights and the
    [`DanWBR/starnet`](https://github.com/DanWBR/starnet) checkout (the
@@ -43,8 +72,10 @@ serves from:
 1. Go to **FILES** and select **one** image (a stretched or linear master;
    FITS/XISF).
 2. Click **🌠 Remove stars**. In the options dialog you can tune:
+   - **Model** — starrem2k13 (MIT, default) or StarNet++ (if installed).
+     Only shown when more than one model is installed.
    - **Auto-stretch / Stretch strength** — stretch the linear data into
-     StarNet's trained domain (leave on for linear stacks).
+     the model's trained domain (leave on for linear stacks).
    - **Passes** — a 2nd pass re-runs the starless through the net to clean
      bright-star halos (~2× slower).
    - **Reduce halos** (on by default) — a post-process that removes the
@@ -109,8 +140,13 @@ the original.
 
 ## Licensing
 
-StarNet *code* is MIT, but the *pre-trained weights* (and the converted
-`model.onnx`, which embeds them) are
+**starrem2k13** is **MIT** — both the code and the trained weights — Copyright
+© code2k13 (Ashish Patel), <https://github.com/code2k13/starrem2k13>. MIT
+permits commercial and non-commercial use with attribution; the notice ships
+beside the model as `starrem2k13-ai-models/1.0.0/LICENSE.txt`.
+
+**StarNet++**: the *code* is MIT, but the *pre-trained weights* (and the
+converted `model.onnx`, which embeds them) are
 **Creative Commons Attribution-NonCommercial-ShareAlike 4.0** — Copyright
 © Nikita Misiura (nekitmm), <https://github.com/nekitmm/starnet>.
 NonCommercial use only, with attribution. The full notice ships beside the

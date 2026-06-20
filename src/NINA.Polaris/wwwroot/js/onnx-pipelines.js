@@ -1802,15 +1802,24 @@
 
         async _pass(pixels, width, height, opts = {}) {
             const channels = opts && opts.channels === 3 ? 3 : 1;
-            const family = 'starnet';
+            // Model profile. 'starnet' (default): 256² tiles, RGB fed together
+            // as a 3-channel NHWC tensor, [0,1] normalization. 'starrem2k13'
+            // (U2NETP, MIT-licensed): 512² tiles, ONE channel per inference
+            // (so RGB = 3 runs), and the net's /382 8-bit normalization →
+            // feed stretched·(255/382), read output·(382/255).
+            const isRem = opts.model === 'starrem2k13';
+            const family = isRem ? 'starrem2k13' : 'starnet';
             const version = opts.version || '1.0.0';
-            const TILE = 256;
-            // Default stride 96 → 80-px context margin per edge (more
-            // overlap than the 128/64 default), which softens residuals
-            // around bright stars at ~1.8× the tile count. Caller can pass
-            // opts.stride (32..256) to trade speed for quality.
-            const STRIDE = Math.max(32, Math.min(256, opts.stride || 96));
+            const TILE = isRem ? 512 : 256;
+            // starnet default stride 96 → 80-px context margin per edge (more
+            // overlap than 128/64), which softens residuals around bright
+            // stars (~1.8× tile count). Caller can pass opts.stride (32..256).
+            // starrem2k13 uses 448/32 (same overlap pattern as the decon path).
+            const STRIDE = isRem ? 448 : Math.max(32, Math.min(256, opts.stride || 96));
             const MARGIN = (TILE - STRIDE) / 2;
+            const LAYOUT = isRem ? 'single' : 'nhwc3';
+            const IN_SCALE = isRem ? (255 / 382) : 1;   // model input normalization
+            const OUT_SCALE = isRem ? (382 / 255) : 1;  // inverse on the output
             const planeLen = width * height;
             const INV = 1 / 65535;
 
@@ -1888,75 +1897,114 @@
             };
 
             const starless = new Uint16Array(pixels.length);
-            const tensorData = new Float32Array(TILE * TILE * 3);
             const totalTiles = itw * ith;
             let processed = 0;
             let firstTileMs = null;
             const t0 = performance.now();
 
-            for (let ty = 0; ty < ith; ty++) {
-                for (let tx = 0; tx < itw; tx++) {
-                    if (opts.shouldAbort && opts.shouldAbort()) throw new Error('aborted by user');
-                    const sx = tx * STRIDE, sy = ty * STRIDE;
-                    for (let y = 0; y < TILE; y++) {
-                        const py = sy + y;
-                        for (let x = 0; x < TILE; x++) {
-                            const b = (y * TILE + x) * 3;
-                            if (channels === 3) {
-                                tensorData[b]     = stretchVal(paddedRead(0, sx + x, py), 0);
-                                tensorData[b + 1] = stretchVal(paddedRead(1, sx + x, py), 1);
-                                tensorData[b + 2] = stretchVal(paddedRead(2, sx + x, py), 2);
-                            } else {
-                                const v = stretchVal(paddedRead(0, sx + x, py), 0);
-                                tensorData[b] = v; tensorData[b + 1] = v; tensorData[b + 2] = v;
-                            }
-                        }
+            // Write a STRIDE×STRIDE inner region of a tile's output back into
+            // the starless buffer for output channel `oc`. `read` returns the
+            // model output (stretched space) at tile-local (tx,ty).
+            const writeInner = (sx, sy, oc, read) => {
+                const destPlane = oc * planeLen;
+                for (let y = 0; y < STRIDE; y++) {
+                    const padY = sy + MARGIN + y, rawY = padY - offsetY;
+                    if (rawY < 0 || rawY >= height) continue;
+                    const rawRow = rawY * width;
+                    for (let x = 0; x < STRIDE; x++) {
+                        const padX = sx + MARGIN + x, rawX = padX - offsetX;
+                        if (rawX < 0 || rawX >= width) continue;
+                        const v = unstretchVal(read(MARGIN + x, MARGIN + y) * OUT_SCALE, oc);
+                        starless[destPlane + rawRow + rawX] = (v * 65535 + 0.5) | 0;
                     }
-                    const inputTensor = new ort.Tensor('float32', tensorData, [1, TILE, TILE, 3]);
-                    const tileT0 = performance.now();
-                    const result = await session.run({ [inputName]: inputTensor });
-                    if (firstTileMs == null) {
-                        firstTileMs = performance.now() - tileT0;
-                        console.log('[StarNet] first tile inference: '
-                            + firstTileMs.toFixed(1) + ' ms · backend='
-                            + (window.OnnxRegistry?.__lastBackend || '?')
-                            + ' · totalTiles=' + totalTiles
-                            + ' · ETA=' + (firstTileMs * totalTiles / 1000).toFixed(1) + 's');
-                    }
-                    const outData = result[outputName].data;
+                }
+            };
 
-                    for (let y = 0; y < STRIDE; y++) {
-                        const padY = sy + MARGIN + y, rawY = padY - offsetY;
-                        if (rawY < 0 || rawY >= height) continue;
-                        const tileRow = (MARGIN + y) * TILE + MARGIN;
-                        const rawRow = rawY * width;
-                        for (let x = 0; x < STRIDE; x++) {
-                            const padX = sx + MARGIN + x, rawX = padX - offsetX;
-                            if (rawX < 0 || rawX >= width) continue;
-                            const i3 = (tileRow + x) * 3;
-                            if (channels === 3) {
-                                for (let c = 0; c < 3; c++) {
-                                    // Model output is in stretched space →
-                                    // inverse-stretch back to linear.
-                                    const v = unstretchVal(outData[i3 + c], c);
-                                    starless[c * planeLen + rawRow + rawX] = (v * 65535 + 0.5) | 0;
+            if (LAYOUT === 'nhwc3') {
+                // StarNet: one inference per tile, RGB (or replicated mono) in
+                // a single [1,TILE,TILE,3] NHWC tensor.
+                const tensorData = new Float32Array(TILE * TILE * 3);
+                for (let ty = 0; ty < ith; ty++) {
+                    for (let tx = 0; tx < itw; tx++) {
+                        if (opts.shouldAbort && opts.shouldAbort()) throw new Error('aborted by user');
+                        const sx = tx * STRIDE, sy = ty * STRIDE;
+                        for (let y = 0; y < TILE; y++) {
+                            const py = sy + y;
+                            for (let x = 0; x < TILE; x++) {
+                                const b = (y * TILE + x) * 3;
+                                if (channels === 3) {
+                                    tensorData[b]     = stretchVal(paddedRead(0, sx + x, py), 0) * IN_SCALE;
+                                    tensorData[b + 1] = stretchVal(paddedRead(1, sx + x, py), 1) * IN_SCALE;
+                                    tensorData[b + 2] = stretchVal(paddedRead(2, sx + x, py), 2) * IN_SCALE;
+                                } else {
+                                    const v = stretchVal(paddedRead(0, sx + x, py), 0) * IN_SCALE;
+                                    tensorData[b] = v; tensorData[b + 1] = v; tensorData[b + 2] = v;
                                 }
-                            } else {
-                                const s = (outData[i3] + outData[i3 + 1] + outData[i3 + 2]) / 3;
-                                const v = unstretchVal(s, 0);
-                                starless[rawRow + rawX] = (v * 65535 + 0.5) | 0;
                             }
                         }
+                        const inputTensor = new ort.Tensor('float32', tensorData, [1, TILE, TILE, 3]);
+                        const tileT0 = performance.now();
+                        const result = await session.run({ [inputName]: inputTensor });
+                        if (firstTileMs == null) {
+                            firstTileMs = performance.now() - tileT0;
+                            console.log('[' + family + '] first tile: ' + firstTileMs.toFixed(1)
+                                + ' ms · backend=' + (window.OnnxRegistry?.__lastBackend || '?')
+                                + ' · tiles=' + totalTiles
+                                + ' · ETA=' + (firstTileMs * totalTiles / 1000).toFixed(1) + 's');
+                        }
+                        const outData = result[outputName].data;
+                        if (channels === 3) {
+                            for (let c = 0; c < 3; c++)
+                                writeInner(sx, sy, c, (tx2, ty2) => outData[(ty2 * TILE + tx2) * 3 + c]);
+                        } else {
+                            writeInner(sx, sy, 0, (tx2, ty2) => {
+                                const i3 = (ty2 * TILE + tx2) * 3;
+                                return (outData[i3] + outData[i3 + 1] + outData[i3 + 2]) / 3;
+                            });
+                        }
+                        processed++;
+                        if (opts.onProgress) opts.onProgress('tiles', processed / totalTiles);
                     }
-                    processed++;
-                    if (opts.onProgress) opts.onProgress('tiles', processed / totalTiles);
+                }
+            } else {
+                // starrem2k13: single-channel model. RGB → one inference per
+                // channel per tile (3× the runs of the NHWC path). Input/output
+                // tensors are [1,TILE,TILE].
+                const tensorData = new Float32Array(TILE * TILE);
+                const outChannels = channels === 3 ? 3 : 1;
+                for (let ty = 0; ty < ith; ty++) {
+                    for (let tx = 0; tx < itw; tx++) {
+                        if (opts.shouldAbort && opts.shouldAbort()) throw new Error('aborted by user');
+                        const sx = tx * STRIDE, sy = ty * STRIDE;
+                        for (let oc = 0; oc < outChannels; oc++) {
+                            const srcC = channels === 3 ? oc : 0;
+                            for (let y = 0; y < TILE; y++) {
+                                const py = sy + y, rowBase = y * TILE;
+                                for (let x = 0; x < TILE; x++)
+                                    tensorData[rowBase + x] = stretchVal(paddedRead(srcC, sx + x, py), srcC) * IN_SCALE;
+                            }
+                            const inputTensor = new ort.Tensor('float32', tensorData, [1, TILE, TILE]);
+                            const tileT0 = performance.now();
+                            const result = await session.run({ [inputName]: inputTensor });
+                            if (firstTileMs == null) {
+                                firstTileMs = performance.now() - tileT0;
+                                console.log('[' + family + '] first tile: ' + firstTileMs.toFixed(1)
+                                    + ' ms · backend=' + (window.OnnxRegistry?.__lastBackend || '?')
+                                    + ' · tiles=' + totalTiles + '×' + outChannels);
+                            }
+                            const outData = result[outputName].data;
+                            writeInner(sx, sy, oc, (tx2, ty2) => outData[ty2 * TILE + tx2]);
+                        }
+                        processed++;
+                        if (opts.onProgress) opts.onProgress('tiles', processed / totalTiles);
+                    }
                 }
             }
             const inferenceMs = performance.now() - t0;
             // run() derives stars + the public return shape across passes.
             return {
                 starless,
-                stats: { totalTiles, inferenceMs, version, stride: STRIDE },
+                stats: { totalTiles, inferenceMs, version, stride: STRIDE, model: family },
             };
         }
     }

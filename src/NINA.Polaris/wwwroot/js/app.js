@@ -2396,7 +2396,8 @@ function ninaApp() {
             // Options modal shown before running.
             options: {
                 open: false, path: '',
-                autoStretch: true,   // stretch into StarNet's trained domain
+                model: 'starrem2k13', // chosen model family (default = bundled MIT)
+                autoStretch: true,   // stretch into the model's trained domain
                 stretchTarget: 0.15, // autostretch target background (lower = stronger)
                 passes: 1,           // 2 = second pass cleans bright-star halos
                 reduceHalos: true,   // mask-guided cleanup of residual halos
@@ -22581,12 +22582,25 @@ function ninaApp() {
         },
 
         // ----- SN-3: StarNet++ star removal --------------------------
-        // True when a 'starnet' family model is registered, so the FILES
-        // "Remove stars" button only shows once the converted model is
-        // installed (scripts/convert-starnet-onnx.ps1 → starnet-ai-models).
+        // True when ANY star-removal model is registered, so the FILES
+        // "Remove stars" button only shows once a model is installed.
+        // Two families ship: 'starrem2k13' (U2NETP, MIT — the bundled
+        // default) and 'starnet' (StarNet++, NonCommercial — opt-in).
         onnxStarnetAvailable() {
+            return this.starRemovalModels().length > 0;
+        },
+        // The installed star-removal models, for the Remove-stars "Model"
+        // dropdown. Label + license note per family; ordered with the
+        // recommended/MIT default first.
+        starRemovalModels() {
             const models = this.onnx?.manifest?.models || [];
-            return models.some(m => m.family === 'starnet');
+            const fams = new Set(models.map(m => m.family));
+            const out = [];
+            if (fams.has('starrem2k13'))
+                out.push({ value: 'starrem2k13', label: 'starrem2k13 (U2NETP · MIT)' });
+            if (fams.has('starnet'))
+                out.push({ value: 'starnet', label: 'StarNet++ (NonCommercial)' });
+            return out;
         },
         starRemovalRunForSelection() {
             const sel = (this.files.selectedPaths || []).filter(Boolean);
@@ -22597,6 +22611,11 @@ function ninaApp() {
         // the re-entry point from the comparator's "Try again" button.
         starRemovalOpenOptions(path) {
             this.starRemoval.options.path = path;
+            // Default the model to an installed one (prefer the bundled MIT
+            // starrem2k13; fall back to whatever is present, e.g. StarNet).
+            const avail = this.starRemovalModels();
+            if (avail.length && !avail.some(m => m.value === this.starRemoval.options.model))
+                this.starRemoval.options.model = avail[0].value;
             this.starRemoval.options.open = true;
         },
         starRemovalCloseOptions() { this.starRemoval.options.open = false; },
@@ -22606,6 +22625,7 @@ function ninaApp() {
             const path = o.path;
             o.open = false;
             await this.starRemovalRun(path, {
+                model: o.model || 'starrem2k13',
                 autoStretch: o.autoStretch,
                 stretchTarget: Number(o.stretchTarget) || 0.15,
                 passes: Number(o.passes) || 1,
@@ -22644,6 +22664,7 @@ function ninaApp() {
                 const pipeline = new OnnxRegistry.StarRemovalPipeline();
                 const result = await pipeline.run(src.pixels, src.width, src.height, {
                     channels: src.channels,
+                    model: opts.model || 'starrem2k13',
                     useGpu: !!this.graxpert?.modalUseGpu,
                     autoStretch: opts.autoStretch !== false,
                     stretchTarget: opts.stretchTarget || 0.15,
