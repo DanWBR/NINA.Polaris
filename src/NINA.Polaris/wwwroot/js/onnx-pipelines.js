@@ -1511,12 +1511,14 @@
     // context margin per edge), keep the inner stride×stride of each
     // tile — the same tiling shape as DenoisePipeline. Faithful to the
     // fork's transform.py contract:
-    //   • input  [1,256,256,3] NHWC, pixels normalized to [0,1]
-    //     (NOTE: NO ×2−1 — the TF1 transform.py feeds [0,1] directly;
-    //      the in-graph batch-norm runs training=True, i.e. per-tile
-    //      batch statistics, so no external median/MAD normalize)
+    //   • input  [1,256,256,3] NHWC, values in [0,1] (NO ×2−1). StarNet
+    //     was trained on STRETCHED images, so we MTF-autostretch the
+    //     (usually linear) source into its trained domain first, then
+    //     inverse-stretch the output — without this, linear stacks come
+    //     out with black holes where bright stars were. The in-graph
+    //     batch-norm runs training=True (per-tile batch stats).
     //   • output [1,256,256,3], residual = input − ReLU(decoder),
-    //     clamped to [0,1] → the starless image
+    //     clamped to [0,1] → the starless image (inverse-stretched back)
     //   • mono → replicate the single plane to all 3 channels, average
     //     the 3 output channels back to mono.
     // Emits BOTH the starless image and the auto-derived stars-only
@@ -1557,13 +1559,61 @@
             const offsetY = (padH - height) / 2 | 0;
 
             // Edge-clamp read from raw pixels (px,py are PADDED coords),
-            // normalize to [0,1]. No median/MAD — StarNet wants raw [0,1].
+            // normalize to [0,1].
             function paddedRead(chan, px, py) {
                 let x = px - offsetX, y = py - offsetY;
                 if (x < 0) x = 0; else if (x >= width) x = width - 1;
                 if (y < 0) y = 0; else if (y >= height) y = height - 1;
                 return pixels[chan * planeLen + y * width + x] * INV;
             }
+
+            // ── Autostretch (critical) ──────────────────────────────
+            // StarNet was trained on NON-LINEAR (stretched) images. Fed a
+            // linear stack it overshoots bright stars, so input − ReLU(dec)
+            // goes negative → clamp to 0 → black holes where stars were.
+            // Fix: stretch each tile into the network's trained domain with
+            // the same MTF autostretch (GraXpert "15% bg, 3σ") the editor
+            // uses, then INVERSE-stretch the output back to the source's
+            // linear range. MTF's inverse is MTF with midtone (1−m). Default
+            // on; opts.autoStretch === false runs the raw [0,1] path.
+            const doStretch = opts.autoStretch !== false;
+            const mtf = (x, m) => {
+                if (x <= 0) return 0; if (x >= 1) return 1;
+                if (m <= 0) return 1; if (m >= 1) return 0;
+                return ((m - 1) * x) / ((2 * m - 1) * x - m);
+            };
+            // Per-channel stretch params (shadow + midtone) in [0,1] space.
+            const shA = new Array(channels).fill(0);   // shadow (black point)
+            const sclA = new Array(channels).fill(1);  // 1/(1−shadow)
+            const midA = new Array(channels).fill(0.5);// MTF midtone (m)
+            if (doStretch) {
+                for (let c = 0; c < channels; c++) {
+                    const st = medianMadSampledFromUint16(
+                        pixels.subarray(c * planeLen, (c + 1) * planeLen));
+                    const sh = Math.max(0, st.median - 3.0 * st.mad);
+                    const denom = Math.max(1e-6, 1 - sh);
+                    const xMed = Math.max(0, Math.min(1, (st.median - sh) / denom));
+                    let m = mtf(xMed, 0.15);          // target background 15%
+                    m = Math.min(0.999, Math.max(0.001, m));
+                    shA[c] = sh; sclA[c] = 1 / denom; midA[c] = m;
+                }
+            }
+            // Map a normalized linear value → stretched [0,1] for channel c.
+            const stretchVal = (v, c) => {
+                if (!doStretch) return v;
+                let x = (v - shA[c]) * sclA[c];
+                if (x < 0) x = 0; else if (x > 1) x = 1;
+                return mtf(x, midA[c]);
+            };
+            // Inverse: stretched [0,1] → normalized linear, for channel c.
+            const unstretchVal = (s, c) => {
+                if (!doStretch) return s;
+                if (s < 0) s = 0; else if (s > 1) s = 1;
+                const x = mtf(s, 1 - midA[c]);        // MTF inverse = midtone 1−m
+                let v = shA[c] + x * (1 - shA[c]);
+                if (v < 0) v = 0; else if (v > 1) v = 1;
+                return v;
+            };
 
             const starless = new Uint16Array(pixels.length);
             const tensorData = new Float32Array(TILE * TILE * 3);
@@ -1580,11 +1630,11 @@
                         for (let x = 0; x < TILE; x++) {
                             const b = (y * TILE + x) * 3;
                             if (channels === 3) {
-                                tensorData[b]     = paddedRead(0, sx + x, py);
-                                tensorData[b + 1] = paddedRead(1, sx + x, py);
-                                tensorData[b + 2] = paddedRead(2, sx + x, py);
+                                tensorData[b]     = stretchVal(paddedRead(0, sx + x, py), 0);
+                                tensorData[b + 1] = stretchVal(paddedRead(1, sx + x, py), 1);
+                                tensorData[b + 2] = stretchVal(paddedRead(2, sx + x, py), 2);
                             } else {
-                                const v = paddedRead(0, sx + x, py);
+                                const v = stretchVal(paddedRead(0, sx + x, py), 0);
                                 tensorData[b] = v; tensorData[b + 1] = v; tensorData[b + 2] = v;
                             }
                         }
@@ -1613,13 +1663,14 @@
                             const i3 = (tileRow + x) * 3;
                             if (channels === 3) {
                                 for (let c = 0; c < 3; c++) {
-                                    let v = outData[i3 + c];
-                                    v = v < 0 ? 0 : (v > 1 ? 1 : v);
+                                    // Model output is in stretched space →
+                                    // inverse-stretch back to linear.
+                                    const v = unstretchVal(outData[i3 + c], c);
                                     starless[c * planeLen + rawRow + rawX] = (v * 65535 + 0.5) | 0;
                                 }
                             } else {
-                                let v = (outData[i3] + outData[i3 + 1] + outData[i3 + 2]) / 3;
-                                v = v < 0 ? 0 : (v > 1 ? 1 : v);
+                                const s = (outData[i3] + outData[i3 + 1] + outData[i3 + 2]) / 3;
+                                const v = unstretchVal(s, 0);
                                 starless[rawRow + rawX] = (v * 65535 + 0.5) | 0;
                             }
                         }
