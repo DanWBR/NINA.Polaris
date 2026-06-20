@@ -46,13 +46,29 @@ Run from inside the `DanWBR/starnet` checkout (has `model.ckpt.*`, `model.py`,
    (or `tensorflow-cpu==2.x` with `tf.compat.v1` + `disable_v2_behavior()` if 1.15
    wheels are unavailable for your Python.)
 
-2. **Freeze the generator subgraph** — `export.py` already restores `model.ckpt`
-   and extracts the generator nodes listed in `gen_sub.txt`:
+2. **Freeze the generator subgraph (weights baked in).** Do **not** use the
+   fork's `export.py` + `gen_sub.txt`: it relies on `extract_sub_graph`, which
+   (a) does **not** bake the weights into the `.pb` (it leaves `Variable` nodes,
+   useless for standalone ONNX) and (b) lists stale node names — TF 1.15 emits
+   `FusedBatchNormV3`, not the `FusedBatchNorm` in `gen_sub.txt`, so it asserts
+   `... is not in graph`. Instead, restore the checkpoint and freeze from the
+   output node with `convert_variables_to_constants`:
+   ```python
+   import tensorflow as tf, model
+   X = tf.placeholder(tf.float32, [None,256,256,3], name="X")
+   Y = tf.placeholder(tf.float32, [None,256,256,3], name="Y")
+   model.model(X, Y)
+   saver = tf.train.Saver()
+   with tf.Session() as sess:
+       sess.run(tf.global_variables_initializer())
+       saver.restore(sess, "./model.ckpt")
+       gd = tf.graph_util.convert_variables_to_constants(
+           sess, sess.graph.as_graph_def(), ["generator/g_deconv7/Sub"])
+       tf.io.write_graph(gd, ".", "starnet_generator.pb", as_text=False)
    ```
-   python export.py        # writes starnet_generator.pb (+ .pbtxt)
-   ```
-   The output node is the last line of `gen_sub.txt`
-   (`generator/g_deconv7/Sub`).
+   (The `.ps1` writes exactly this as `freeze_starnet.py` and runs it.) BN uses
+   `training=True` (per-tile batch stats) — that is how StarNet runs inference,
+   and tf2onnx decomposes the training-mode `FusedBatchNormV3` accordingly.
 
 3. **GraphDef → ONNX** (fixed 256² input):
    ```
