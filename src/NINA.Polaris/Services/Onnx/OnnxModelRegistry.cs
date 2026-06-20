@@ -87,6 +87,7 @@ public class OnnxModelRegistry {
             ["denoise-ai-models"] = "denoise",
             ["deconvolution-stars-ai-models"] = "decon-stars",
             ["deconvolution-object-ai-models"] = "decon-objects",
+            ["starnet-ai-models"] = "starnet",
         };
 
     // Semver-ish (major.minor.patch) + optional quantization suffix.
