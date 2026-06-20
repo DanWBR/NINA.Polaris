@@ -11686,7 +11686,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="settings-section settings-section--wide">
                     <h3><span class="settings-card-icon">🧠</span>AI inference (ONNX)</h3>
                     <p class="hint" style="margin-top:0">
-                        In-browser GraXpert AI (BGE / Denoise / Deconvolution).
+                        In-browser AI ops — star removal (nox / starrem2k13 /
+                        StarNet++) and GraXpert (BGE / Denoise / Deconvolution).
                         Server hosts the model files, your browser fetches them
                         once and runs inference locally, works on any device
                         with WebGPU or WASM SIMD (laptops, phones, tablets).
@@ -11862,12 +11863,21 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </p>
                     </div>
 
-                    <p class="hint" style="margin-top:10px">
-                        Models © GraXpert Development Team, CC BY-NC-SA 4.0
-                        (non-commercial). The first use of an AI op will
-                        prompt you to acknowledge the licence. Polaris itself
-                        is AGPL-3.0 and does not redistribute the model files.
-                    </p>
+                    <div class="hint" style="margin-top:10px">
+                        <strong>Model licences.</strong> The first use of an AI
+                        op prompts you to acknowledge the relevant licence.
+                        Polaris itself is AGPL-3.0 and does not redistribute the
+                        model files.
+                        <ul style="margin:6px 0 0 0; padding-left:18px">
+                            <li><strong>nox</strong> &amp; <strong>starrem2k13</strong>
+                                (star removal) — MIT, code and weights.</li>
+                            <li><strong>StarNet++</strong> (star removal) —
+                                CC BY-NC-SA 4.0 (non-commercial), © Nikita Misiura.</li>
+                            <li><strong>GraXpert</strong> (BGE / Denoise /
+                                Deconvolution) — CC BY-NC-SA 4.0 (non-commercial),
+                                © GraXpert Development Team.</li>
+                        </ul>
+                    </div>
                     <!-- GX-7: opt-in to the legacy CLI subprocess path. -->
                     <details style="margin-top:12px">
                         <summary style="cursor:pointer; font-size:11px;
