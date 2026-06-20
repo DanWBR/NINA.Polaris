@@ -22246,6 +22246,14 @@ function ninaApp() {
                 this.blend.busy = false;
             }
         },
+        // Swap which file is the base (starless) and which is the blend
+        // (stars). The auto-derived _starless/_stars naming isn't always the
+        // order the user selected them in, so let them flip it here. Reloads
+        // the session with the paths exchanged (resets the per-layer stretch).
+        async blendSwap() {
+            if (this.blend.busy) return;
+            await this.blendOpen(this.blend.blendPath, this.blend.basePath);
+        },
         blendSet(panel, key, val) {
             const v = parseFloat(val);
             if (panel === null) this.blend.opacity = v;
