@@ -2398,7 +2398,9 @@ function ninaApp() {
                 open: false, path: '',
                 autoStretch: true,   // stretch into StarNet's trained domain
                 stretchTarget: 0.15, // autostretch target background (lower = stronger)
-                passes: 1            // 2 = second pass cleans bright-star halos
+                passes: 1,           // 2 = second pass cleans bright-star halos
+                reduceHalos: true,   // mask-guided cleanup of residual halos
+                haloStrength: 0.5    // 0..1: coverage radius + fill window
             }
         },
         crop: {
@@ -22580,7 +22582,9 @@ function ninaApp() {
             await this.starRemovalRun(path, {
                 autoStretch: o.autoStretch,
                 stretchTarget: Number(o.stretchTarget) || 0.15,
-                passes: Number(o.passes) || 1
+                passes: Number(o.passes) || 1,
+                reduceHalos: !!o.reduceHalos,
+                haloStrength: Number(o.haloStrength) || 0.5
             });
         },
         // Run StarNet on one file: fetch pixels → StarRemovalPipeline →
@@ -22618,6 +22622,8 @@ function ninaApp() {
                     autoStretch: opts.autoStretch !== false,
                     stretchTarget: opts.stretchTarget || 0.15,
                     passes: opts.passes || 1,
+                    reduceHalos: opts.reduceHalos !== false,
+                    haloStrength: opts.haloStrength != null ? opts.haloStrength : 0.5,
                     // Checked between tiles/passes by the pipeline; lets the
                     // modal's Cancel button stop a long run.
                     shouldAbort: () => this.starRemoval.aborting,

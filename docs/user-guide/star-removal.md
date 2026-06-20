@@ -42,8 +42,18 @@ serves from:
 
 1. Go to **FILES** and select **one** image (a stretched or linear master;
    FITS/XISF).
-2. Click **🌠 Remove stars**. On first use you accept the model licence
-   (CC BY-NC-SA, same prompt as the GraXpert AI ops).
+2. Click **🌠 Remove stars**. In the options dialog you can tune:
+   - **Auto-stretch / Stretch strength** — stretch the linear data into
+     StarNet's trained domain (leave on for linear stacks).
+   - **Passes** — a 2nd pass re-runs the starless through the net to clean
+     bright-star halos (~2× slower).
+   - **Reduce halos** (on by default) — a post-process that removes the
+     residual halos and dark rings StarNet leaves around bright stars
+     (see below). **Halo strength** controls how wide the cleanup reaches
+     around each star.
+
+   On first use you accept the model licence (CC BY-NC-SA, same prompt as
+   the GraXpert AI ops).
 3. A progress overlay shows the tiled inference. StarNet processes the
    image in 256×256 tiles; on a WebGPU-capable browser this is seconds,
    on plain WASM it can take up to a minute for a large master.
@@ -60,6 +70,30 @@ serves from:
 The stars-only image is auto-derived as `clamp(original − starless, 0)`,
 so it contains exactly what the network removed — no separate star mask
 step needed.
+
+## Halo reduction
+
+StarNet v1 removes the star core but tends to leave a soft low-frequency
+**halo** — and sometimes a **dark ring** — around the brightest stars in the
+starless image. The optional **Reduce halos** step cleans these up after the
+network runs, entirely in the browser:
+
+1. It builds a star mask from the removed flux (`original − starless`) and
+   **dilates** it to cover the halo radius around each star.
+2. Inside that mask it replaces the starless with a **smooth background
+   estimate** — the average of the surrounding pixels that lie *outside* the
+   star regions — so the halo/ring is filled with plausible background.
+3. The mask edge is feathered so there's no visible seam.
+
+**Halo strength** raises the coverage radius and fill window: higher removes
+larger halos but can soften faint nebulosity that sits directly under a bright
+star. If a target is mostly nebula with few bright stars, a lower strength (or
+turning it off) is safer; for star-dense fields with obvious halos, raise it.
+
+The cleanup runs on a downscaled copy (halos are low-frequency) so it stays
+fast and memory-safe even on large masters and SBCs. The removed halo flux is
+folded back into the `_stars` layer, so a Screen recombine still reconstructs
+the original.
 
 ## Notes
 

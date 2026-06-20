@@ -1557,7 +1557,25 @@
                 cur = r.starless;
                 lastStats = r.stats;
             }
-            const starless = cur;
+            let starless = cur;
+
+            // Optional residual-halo cleanup. StarNet v1 removes the star core
+            // but leaves the low-frequency halo (and sometimes a dark ring)
+            // around bright stars. We mask where flux was removed, dilate to
+            // cover the halo, and replace the starless there with a smooth
+            // background estimate. See _reduceHalos.
+            let haloCleaned = false;
+            if (opts.reduceHalos && (opts.haloStrength == null || opts.haloStrength > 0)) {
+                if (opts.shouldAbort && opts.shouldAbort()) throw new Error('aborted by user');
+                if (opts.onProgress) opts.onProgress('reducing halos', null);
+                await _yieldToBrowser();
+                starless = await this._reduceHalos(starless, pixels, width, height, channels, opts);
+                haloCleaned = true;
+            }
+
+            // stars = clamp(original − final starless, 0). Recomputed AFTER
+            // halo cleanup so the pair stays consistent (the removed halo flux
+            // ends up in the stars layer, where halos are expected).
             const stars = new Uint16Array(pixels.length);
             for (let i = 0; i < pixels.length; i++) {
                 const d = pixels[i] - starless[i];
@@ -1566,8 +1584,178 @@
             return {
                 pixels: starless, starless, stars,
                 width, height, channels,
-                stats: Object.assign({}, lastStats, { passes }),
+                stats: Object.assign({}, lastStats, { passes, haloCleaned }),
             };
+        }
+
+        // Residual-halo cleanup (mask-guided background inpaint). Works on the
+        // final starless + the original. Everything but the final blend runs at
+        // a downscaled resolution (halos are low-frequency, and it keeps the
+        // summed-area tables small enough for big masters in the browser):
+        //   1) star luminance = max channel of clamp(original − starless)
+        //   2) threshold → binary star mask, dilate to cover the halo radius
+        //   3) feather the dilated mask → alpha in [0,1]
+        //   4) per channel, estimate the background as the mean of UNMASKED
+        //      neighbours in a large window (masked box average via SAT)
+        //   5) upscale alpha + estimate, blend into the full-res starless:
+        //      out = starless·(1−alpha) + estimate·alpha
+        async _reduceHalos(starless, original, width, height, channels, opts) {
+            const strength = Math.max(0, Math.min(1, opts.haloStrength != null ? opts.haloStrength : 0.5));
+            if (strength <= 0) return starless;
+            const chans = channels === 3 ? 3 : 1;
+            const planeLen = width * height;
+
+            // Work scale: cap the long edge so the SATs stay small.
+            const maxDim = 1024;
+            const scale = Math.min(1, maxDim / Math.max(width, height));
+            const sw = Math.max(1, Math.round(width * scale));
+            const sh = Math.max(1, Math.round(height * scale));
+            const sPlane = sw * sh;
+
+            const sStarless = [], sOrig = [];
+            for (let c = 0; c < chans; c++) {
+                sStarless.push(this._downsamplePlane(starless, c * planeLen, width, height, sw, sh));
+                sOrig.push(this._downsamplePlane(original, c * planeLen, width, height, sw, sh));
+            }
+
+            // Removed-flux luminance → binary star mask.
+            const thr = 65535 * (0.02 - strength * 0.015);   // 0.005..0.02 of full scale
+            const mask = new Uint8Array(sPlane);
+            for (let i = 0; i < sPlane; i++) {
+                let v = 0;
+                for (let c = 0; c < chans; c++) {
+                    const d = sOrig[c][i] - sStarless[c][i];
+                    if (d > v) v = d;
+                }
+                if (v > thr) mask[i] = 1;
+            }
+
+            // Radii (in work-scale px): stronger → wider coverage + fill window.
+            const dilateR = Math.max(2, Math.round(3 + strength * 12));   // 3..15
+            const featherR = Math.max(1, dilateR >> 1);
+            const blurR = dilateR * 3;
+
+            const dil = this._dilate(mask, sw, sh, dilateR);
+            const alphaS = this._boxBlurF(dil, sw, sh, featherR);          // 0..1 feathered
+
+            // Background estimate from pixels OUTSIDE the dilated star regions.
+            const valid = new Float32Array(sPlane);
+            for (let i = 0; i < sPlane; i++) valid[i] = dil[i] ? 0 : 1;
+            const satC = this._sat(valid, sw, sh);
+
+            const out = new Uint16Array(starless.length);
+            const alphaFull = this._upsample(alphaS, sw, sh, width, height);
+            for (let c = 0; c < chans; c++) {
+                if (opts.shouldAbort && opts.shouldAbort()) throw new Error('aborted by user');
+                const vv = new Float32Array(sPlane);
+                for (let i = 0; i < sPlane; i++) vv[i] = sStarless[c][i] * valid[i];
+                const satV = this._sat(vv, sw, sh);
+                const estS = new Float32Array(sPlane);
+                for (let y = 0; y < sh; y++) {
+                    for (let x = 0; x < sw; x++) {
+                        const i = y * sw + x;
+                        const sC = this._satWin(satC, sw, sh, x, y, blurR);
+                        estS[i] = sC > 0 ? this._satWin(satV, sw, sh, x, y, blurR) / sC : sStarless[c][i];
+                    }
+                }
+                const estFull = this._upsample(estS, sw, sh, width, height);
+                const off = c * planeLen;
+                for (let i = 0; i < planeLen; i++) {
+                    const a = alphaFull[i];
+                    let v = starless[off + i];
+                    if (a > 0.0039) v = v * (1 - a) + estFull[i] * a;
+                    out[off + i] = v < 0 ? 0 : (v > 65535 ? 65535 : (v + 0.5) | 0);
+                }
+                await _yieldToBrowser();
+            }
+            return out;
+        }
+
+        // Box-average a plane region into a sw×sh Float32 buffer.
+        _downsamplePlane(buf, off, w, h, dw, dh) {
+            const out = new Float32Array(dw * dh);
+            const cnt = new Float32Array(dw * dh);
+            const rx = dw / w, ry = dh / h;
+            for (let y = 0; y < h; y++) {
+                const oy = Math.min(dh - 1, (y * ry) | 0);
+                for (let x = 0; x < w; x++) {
+                    const ox = Math.min(dw - 1, (x * rx) | 0);
+                    const di = oy * dw + ox;
+                    out[di] += buf[off + y * w + x]; cnt[di]++;
+                }
+            }
+            for (let i = 0; i < out.length; i++) if (cnt[i] > 0) out[i] /= cnt[i];
+            return out;
+        }
+
+        // Summed-area table ((w+1)×(h+1) Float64) of a Float32/Uint8 source.
+        _sat(src, w, h) {
+            const W = w + 1;
+            const sat = new Float64Array(W * (h + 1));
+            for (let y = 0; y < h; y++) {
+                let rs = 0;
+                const row = (y + 1) * W, prow = y * W;
+                for (let x = 0; x < w; x++) {
+                    rs += src[y * w + x];
+                    sat[row + x + 1] = sat[prow + x + 1] + rs;
+                }
+            }
+            return sat;
+        }
+
+        // Window sum [x−r, x+r]×[y−r, y+r] (clamped) from a SAT.
+        _satWin(sat, w, h, x, y, r) {
+            let x0 = x - r, y0 = y - r, x1 = x + r + 1, y1 = y + r + 1;
+            if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0;
+            if (x1 > w) x1 = w; if (y1 > h) y1 = h;
+            const W = w + 1;
+            return sat[y1 * W + x1] - sat[y0 * W + x1] - sat[y1 * W + x0] + sat[y0 * W + x0];
+        }
+
+        // Binary dilation by radius r (window-count > 0) via SAT.
+        _dilate(mask, w, h, r) {
+            const f = new Float32Array(mask.length);
+            for (let i = 0; i < mask.length; i++) f[i] = mask[i];
+            const sat = this._sat(f, w, h);
+            const out = new Uint8Array(mask.length);
+            for (let y = 0; y < h; y++)
+                for (let x = 0; x < w; x++)
+                    out[y * w + x] = this._satWin(sat, w, h, x, y, r) > 0 ? 1 : 0;
+            return out;
+        }
+
+        // Box blur (normalised by window area) → Float32 in source range.
+        _boxBlurF(src, w, h, r) {
+            const f = new Float32Array(src.length);
+            for (let i = 0; i < src.length; i++) f[i] = src[i];
+            const sat = this._sat(f, w, h);
+            const out = new Float32Array(src.length);
+            for (let y = 0; y < h; y++) {
+                const y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+                for (let x = 0; x < w; x++) {
+                    const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1);
+                    out[y * w + x] = this._satWin(sat, w, h, x, y, r) / ((x1 - x0) * (y1 - y0));
+                }
+            }
+            return out;
+        }
+
+        // Bilinear upsample of a sw×sh Float32 buffer to dw×dh.
+        _upsample(src, sw, sh, dw, dh) {
+            const out = new Float32Array(dw * dh);
+            const sx = dw > 1 ? (sw - 1) / (dw - 1) : 0;
+            const sy = dh > 1 ? (sh - 1) / (dh - 1) : 0;
+            for (let y = 0; y < dh; y++) {
+                const fy = y * sy, y0 = fy | 0, y1 = Math.min(sh - 1, y0 + 1), wy = fy - y0;
+                for (let x = 0; x < dw; x++) {
+                    const fx = x * sx, x0 = fx | 0, x1 = Math.min(sw - 1, x0 + 1), wx = fx - x0;
+                    const a = src[y0 * sw + x0], b = src[y0 * sw + x1];
+                    const c = src[y1 * sw + x0], d = src[y1 * sw + x1];
+                    out[y * dw + x] = a * (1 - wx) * (1 - wy) + b * wx * (1 - wy)
+                                    + c * (1 - wx) * wy + d * wx * wy;
+                }
+            }
+            return out;
         }
 
         async _pass(pixels, width, height, opts = {}) {
