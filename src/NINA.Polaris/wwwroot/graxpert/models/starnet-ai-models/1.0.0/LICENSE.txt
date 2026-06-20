@@ -1,0 +1,33 @@
+StarNet (v1) — star-removal model used by N.I.N.A. Polaris
+===========================================================
+
+Source project : StarNet by Nikita Misiura (nekitmm)
+                 https://github.com/nekitmm/starnet
+Polaris fork   : https://github.com/DanWBR/starnet
+Author         : Copyright (c) Nikita Misiura
+                 http://www.astrobin.com/users/nekitmm/
+
+The "model.onnx" in this directory is converted (TensorFlow 1 checkpoint
+-> ONNX) from the StarNet v1 pre-trained weights, using
+scripts/convert-starnet-onnx.ps1 in this repository. It is the SAME neural
+network, only re-serialized; no retraining or modification of the weights
+was performed.
+
+LICENSING
+---------
+- StarNet *code* is distributed under the MIT License.
+- StarNet *pre-trained weights* (and therefore this converted model.onnx,
+  which embeds those weights as constants) are licensed under
+  Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
+  (CC BY-NC-SA 4.0):
+      https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+  This means:
+    * Attribution    — credit Nikita Misiura (nekitmm), as above.
+    * NonCommercial  — the weights may not be used for commercial purposes.
+    * ShareAlike     — derivatives of the weights must use the same licence.
+
+N.I.N.A. Polaris is non-commercial open-source software and bundles/uses
+this model for non-commercial astrophotography processing, with the
+attribution and NonCommercial notice above. Users who require a commercial
+use case must obtain the weights under appropriate terms from the author.

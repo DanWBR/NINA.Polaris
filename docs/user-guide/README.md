@@ -92,6 +92,12 @@ Each tab in the sidebar has its own page. Read the ones you need:
   (BGE / Denoise / Decon) running directly in the browser via
   onnxruntime-web. Server hosts the `.onnx` files; any device with
   WebGPU or WASM SIMD does the heavy lifting locally.
+- **[Star removal (StarNet++)](star-removal.md)**, in-browser ONNX star
+  removal that writes `_starless` + `_stars` siblings, then opens Image
+  Blend to recombine them with an independent stretch per layer.
+- **[Image Blend](image-blend.md)**, recombine two same-size images with
+  an independent MTF stretch on each + Screen/Add/Lighten + opacity, with
+  a live preview. The finishing step of the starless workflow.
 - **[FILES](files.md)**, server-side file explorer.
 - **[HTTPS setup](https-setup.md)**, self-signed cert on port 5001,
   required for WebGPU + multi-thread WASM on LAN client devices
