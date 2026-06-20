@@ -243,6 +243,20 @@
         return hit ? wanted : requestedVersion;
     }
 
+    // Star removal default: prefer the -fp16 sibling on EVERY platform when
+    // it's registered. FP16 is the validated default for star removal (half
+    // the weights, runs well on SBCs/phones; the FP32 1.0.0 is an optional
+    // download for max desktop quality). Falls back to the requested version
+    // when no -fp16 sibling exists. Pure preference layer.
+    async function preferFp16(family, requestedVersion) {
+        if (/-fp16$|-int8$/.test(requestedVersion)) return requestedVersion;
+        const m = await fetchManifest();
+        const wanted = `${requestedVersion}-fp16`;
+        const hit = (m.models || []).find(
+            x => x.family === family && x.version === wanted);
+        return hit ? wanted : requestedVersion;
+    }
+
     /** Find the manifest entry for a given (family, version), or null. */
     async function lookupModel(family, version) {
         const m = await fetchManifest();
@@ -1815,9 +1829,12 @@
             const model = opts.model || 'starnet';
             const isRem = model === 'starrem2k13';
             const isNox = model === 'nox';
-            const version = opts.version || '1.0.0';
             const family = isNox ? (channels === 3 ? 'nox-color' : 'nox-gray')
                          : isRem ? 'starrem2k13' : 'starnet';
+            // FP16 is the default that runs for star removal (lighter, runs on
+            // SBCs/phones). The 1.0.0 FP32 is an optional download for max
+            // desktop quality; pass opts.version='1.0.0' to force it.
+            const version = opts.version || await preferFp16(family, '1.0.0');
             const TILE = (isRem || isNox) ? 512 : 256;
             // starnet default stride 96 → 80-px context margin per edge (more
             // overlap than 128/64), which softens residuals around bright

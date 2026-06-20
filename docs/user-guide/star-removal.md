@@ -26,11 +26,21 @@ the **Remove stars** dialog shows a **Model** dropdown:
   512² tiles processed per channel. (Uses the model from the pinned commit
   `0398ce05`, not the repo main branch's tiny U2NETP, which removes stars poorly.)
 
-All bundled star-removal models are stored as **FP16** (half the size, runs on
-phones/tablets via WebGPU and on WASM): nox ~109 MB each, starrem2k13 ~62 MB,
-StarNet ~109 MB. The I/O stays FP32 so accuracy is essentially unchanged. To
-(re)generate FP16 from a freshly converted FP32 model, run
-`scripts/quantize_onnx_models.py --fp16 --replace --only <family>`.
+Each star-removal model comes in two precisions, following the GraXpert
+convention:
+
+- **`1.0.0`** = the original **FP32** model (~218 MB nox/StarNet, ~125 MB
+  starrem2k13). Best quality; an optional download for desktops.
+- **`1.0.0-fp16`** = the **FP16** quantization (~109 MB nox/StarNet, ~62 MB
+  starrem2k13). This is the **default that runs** on every platform — half the
+  weights, fits SBCs/phones/tablets via WebGPU/WASM, I/O stays FP32 so accuracy
+  is essentially unchanged. It's what ships bundled in the OS images.
+
+The pipeline auto-selects the `-fp16` sibling when it's installed; the FP32
+`1.0.0` is there for whoever wants maximum quality. To (re)generate FP16 from a
+converted FP32 model, run
+`scripts/quantize_onnx_models.py --fp16 --only <family>` (writes a
+`{version}-fp16` sibling; add `--replace` to overwrite in place instead).
 - **StarNet++** (v1) — high-quality removal, but the weights are
   **CC BY-NC-SA (NonCommercial)**, so it is opt-in and you install it yourself.
 

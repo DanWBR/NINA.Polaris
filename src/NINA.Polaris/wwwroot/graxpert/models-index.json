@@ -2,30 +2,58 @@
   {
     "dir": "nox-color-ai-models",
     "version": "1.0.0",
-    "bytes": 109241715,
-    "label": "nox colour (StarNet-like, MIT) - star removal, FP16",
+    "bytes": 218424132,
+    "label": "nox colour (StarNet-like, MIT) - star removal, FP32",
     "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-color-ai-models/1.0.0/model.onnx"
+  },
+  {
+    "dir": "nox-color-ai-models",
+    "version": "1.0.0-fp16",
+    "bytes": 109241715,
+    "label": "nox colour (StarNet-like, MIT) - star removal, FP16 (default)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-color-ai-models/1.0.0-fp16/model.onnx"
   },
   {
     "dir": "nox-gray-ai-models",
     "version": "1.0.0",
-    "bytes": 109229542,
-    "label": "nox gray (StarNet-like, MIT) - star removal, FP16",
+    "bytes": 218399679,
+    "label": "nox gray (StarNet-like, MIT) - star removal, FP32",
     "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-gray-ai-models/1.0.0/model.onnx"
+  },
+  {
+    "dir": "nox-gray-ai-models",
+    "version": "1.0.0-fp16",
+    "bytes": 109229542,
+    "label": "nox gray (StarNet-like, MIT) - star removal, FP16 (default)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-gray-ai-models/1.0.0-fp16/model.onnx"
   },
   {
     "dir": "starrem2k13-ai-models",
     "version": "1.0.0",
-    "bytes": 62268180,
-    "label": "starrem2k13 (U-Net, MIT) - star removal, FP16",
+    "bytes": 124513510,
+    "label": "starrem2k13 (U-Net, MIT) - star removal, FP32",
     "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starrem2k13-ai-models/1.0.0/model.onnx"
+  },
+  {
+    "dir": "starrem2k13-ai-models",
+    "version": "1.0.0-fp16",
+    "bytes": 62268180,
+    "label": "starrem2k13 (U-Net, MIT) - star removal, FP16 (default)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starrem2k13-ai-models/1.0.0-fp16/model.onnx"
   },
   {
     "dir": "starnet-ai-models",
     "version": "1.0.0",
-    "bytes": 108871968,
-    "label": "StarNet++ (NonCommercial) - star removal, FP16",
+    "bytes": 217708816,
+    "label": "StarNet++ (NonCommercial) - star removal, FP32",
     "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starnet-ai-models/1.0.0/model.onnx"
+  },
+  {
+    "dir": "starnet-ai-models",
+    "version": "1.0.0-fp16",
+    "bytes": 108871968,
+    "label": "StarNet++ (NonCommercial) - star removal, FP16 (default)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starnet-ai-models/1.0.0-fp16/model.onnx"
   },
   {
     "dir": "bge-ai-models",
