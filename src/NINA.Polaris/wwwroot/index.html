@@ -10532,6 +10532,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         saved.
                     </p>
 
+                    <!-- Optimize-SBC launcher: opens the terminal to localhost
+                         and runs sudo raspi-config / armbian-config. Only the
+                         detected tool shows (from /api/system/sbc-tools). -->
+                    <div x-show="sbcTools.raspiConfig || sbcTools.armbianConfig"
+                         class="sbc-optimize" style="margin:6px 0 10px">
+                        <div class="control-row actions">
+                            <button class="btn btn-sm" x-show="sbcTools.raspiConfig"
+                                    @click="sbcOptimize('raspi-config')">⚙ raspi-config</button>
+                            <button class="btn btn-sm" x-show="sbcTools.armbianConfig"
+                                    @click="sbcOptimize('armbian-config')">⚙ armbian-config</button>
+                        </div>
+                        <p class="text-muted" style="font-size:11px; max-width:560px; margin-top:4px">
+                            Optimize this SBC: opens the terminal to <code>localhost</code>
+                            and runs the config tool. Enter your SBC login; <code>sudo</code>
+                            will prompt for your password once (Polaris never gets
+                            passwordless root). Needs the SSH server running.
+                        </p>
+                    </div>
+
                     <!-- Disabled state: the feature is gated server-side. Offer
                          an in-app enable button (behind a risk modal) so the
                          operator doesn't have to edit appsettings.json on a
@@ -10557,7 +10576,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </label>
                         <label>User
                             <input type="text" x-model="term.user" class="input-md"
-                                   autocomplete="off">
+                                   x-ref="termUser" autocomplete="off">
                         </label>
                         <label>Password
                             <input type="password" x-model="term.password" class="input-md"
@@ -15122,7 +15141,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260620-fp32sel"></script>
+    <script src="/js/app.js?v=20260620-sbcopt"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

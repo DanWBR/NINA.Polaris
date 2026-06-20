@@ -79,6 +79,36 @@ A 80×24 terminal opens with a live PTY. Everything works: `vim`, `htop`,
 Click **Disconnect** when done, or just close the tab. A 10-minute idle
 window also closes the session server-side.
 
+## Optimize the SBC (raspi-config / armbian-config)
+
+When Polaris runs on a Raspberry Pi or an Armbian board, the **Remote
+terminal** card shows an **Optimize this SBC** launcher with a button for
+whichever config tool is installed:
+
+- **⚙ raspi-config** on Raspberry Pi OS
+- **⚙ armbian-config** on Armbian (Orange Pi, Radxa, etc.)
+
+Both are detected automatically (`/usr/bin` or `/usr/sbin`); the button only
+appears when the binary exists. Clicking it:
+
+1. enables the remote terminal (one-time risk prompt) if it isn't already;
+2. fills **Host** = `localhost`, **Port** = 22, and queues
+   `sudo raspi-config` / `sudo armbian-config`;
+3. you enter your **SBC login + password** and Connect — the config TUI starts
+   automatically. `sudo` prompts for your password once.
+
+Use it to overclock, set the GPU memory split, enable I2C/SPI/serial, expand
+the filesystem, change locale/timezone, etc. Arrow keys, Enter and Esc all work
+in the whiptail/ncurses menus.
+
+**Root model:** the elevation is **your own `sudo`** inside your SSH session —
+Polaris never gains passwordless root and adds no sudoers rule. The launcher is
+just pre-typed input into your shell.
+
+**Prerequisites:** the SSH server must be running on the board and your login
+user must have `sudo` (the default `pi` / first Armbian user do). Same setup as
+the rest of this page.
+
 ## Security model, read this
 
 - Polaris never persists credentials. They live in memory for exactly the

@@ -538,10 +538,16 @@ function ninaApp() {
             serverEnabled: false, enabling: false,
             // modalOpen drives the floating terminal-window modal that the
             // live xterm session renders into (Connect opens it).
-            modalOpen: false
+            modalOpen: false,
+            // One-shot command run after connect (Optimize-SBC launcher sets
+            // e.g. 'sudo raspi-config'); cleared once sent in the auth frame.
+            initialCommand: ''
         },
         _termInstance: null, _termSocket: null, _termFitAddon: null,
         _termResizeObserver: null,
+        // Which SBC config TUIs are installed (from /api/system/sbc-tools);
+        // drives the "Optimize this SBC" launcher in the Remote terminal card.
+        sbcTools: { raspiConfig: false, armbianConfig: false, kind: '' },
 
         // Global UI zoom (CSS body { zoom: X }). uiZoom is the
         // committed/applied value (what's currently on
@@ -4934,6 +4940,37 @@ function ninaApp() {
             }
         },
 
+        // Detect which SBC config TUIs are installed (raspi-config /
+        // armbian-config) so the "Optimize this SBC" launcher only shows the
+        // relevant button. Best-effort; failures just leave both hidden.
+        async loadSbcTools() {
+            try { this.sbcTools = await this.apiGet('/api/system/sbc-tools'); }
+            catch { /* non-fatal: launcher stays hidden */ }
+        },
+
+        // Optimize-SBC launcher: open the Remote Terminal connected to
+        // localhost and run `sudo <tool>` (raspi-config / armbian-config).
+        // Root is the user's OWN sudo — Polaris gains no passwordless root.
+        async sbcOptimize(tool) {
+            if (tool !== 'raspi-config' && tool !== 'armbian-config') return;
+            if (!this.term.serverEnabled) { await this.enableTerminal(); }
+            if (!this.term.serverEnabled) return;   // user declined the gate
+            this.term.host = 'localhost';
+            this.term.port = 22;
+            this.term.initialCommand = 'sudo ' + tool;
+            if (this.term.user && this.term.password) {
+                await this.termConnect();
+            } else {
+                // Need the SBC login + sudo password; reveal the form focused.
+                this.term.lastError =
+                    'Enter your SBC login and password — ' + tool
+                    + ' will start automatically (sudo will prompt once).';
+                this.$nextTick(() => {
+                    try { this.$refs.termUser?.focus(); } catch { }
+                });
+            }
+        },
+
         async termConnect() {
             if (this.term.connected || this.term.connecting) return;
             if (!this.term.host || !this.term.user) {
@@ -5008,11 +5045,15 @@ function ninaApp() {
                     user: this.term.user,
                     password: this.term.password,
                     cols: this._termInstance.cols,
-                    rows: this._termInstance.rows
+                    rows: this._termInstance.rows,
+                    // Optional one-shot command (Optimize-SBC launcher).
+                    initialCommand: this.term.initialCommand || undefined
                 }));
                 // Wipe the password field as soon as the byte is on the
-                // wire so it doesn't sit visible in the form.
+                // wire so it doesn't sit visible in the form. Same for the
+                // one-shot command, it's consumed by this connect.
                 this.term.password = '';
+                this.term.initialCommand = '';
                 this.term.connecting = false;
                 this.term.connected = true;
             };
@@ -8355,6 +8396,9 @@ function ninaApp() {
                     // Remote-terminal opt-in gate (controls the connect form
                     // vs. the in-app "Enable terminal" button on the card).
                     this.term.serverEnabled = !!data.terminalEnabled;
+                    // Detect installed SBC config TUIs for the Optimize-SBC
+                    // launcher in the Remote terminal card.
+                    this.loadSbcTools();
                     // Mirror to the logs sub-object so the panel can
                     // surface the current state (informational only).
                     if (this.logs) this.logs.persistToDisk = !!data.logToDisk;

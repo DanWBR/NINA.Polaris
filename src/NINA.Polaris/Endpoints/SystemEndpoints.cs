@@ -46,6 +46,20 @@ public static class SystemEndpoints {
             lastError = relay.LastError
         }));
 
+        // Which SBC config TUIs are installed, so the UI can offer an
+        // "Optimize SBC" launcher (runs them via the Remote Terminal over SSH
+        // to localhost; root is the user's own sudo). Linux-only; cheap path
+        // probe, no subprocess.
+        group.MapGet("/sbc-tools", () => {
+            bool Has(params string[] paths) =>
+                OperatingSystem.IsLinux() && paths.Any(System.IO.File.Exists);
+            return Results.Ok(new {
+                raspiConfig = Has("/usr/bin/raspi-config", "/usr/sbin/raspi-config"),
+                armbianConfig = Has("/usr/bin/armbian-config", "/usr/sbin/armbian-config"),
+                kind = HostInfo.Current.Kind
+            });
+        });
+
         group.MapGet("/status", (EquipmentManager equip) => {
             var process = Process.GetCurrentProcess();
             // PA-7: surface the auto-incrementing 0.1.{days}.{seconds/2}

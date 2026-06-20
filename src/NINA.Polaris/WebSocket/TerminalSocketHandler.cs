@@ -131,6 +131,16 @@ public static class TerminalSocketHandler {
 
             await SendBanner(ws, $"Connected to {auth.User}@{auth.Host}:{port}\r\n", ct);
 
+            // Optional one-shot command (Optimize-SBC launcher sends e.g.
+            // "sudo raspi-config"). Single line only: strip CR/LF and cap the
+            // length so it can't be abused as a multi-command injection. It is
+            // no more privileged than the user typing it into their own shell.
+            if (!string.IsNullOrWhiteSpace(auth.InitialCommand)) {
+                var cmd = auth.InitialCommand.Replace("\r", "").Replace("\n", "").Trim();
+                if (cmd.Length > 256) cmd = cmd[..256];
+                if (cmd.Length > 0) shell.WriteLine(cmd);
+            }
+
             // ----- BIDIRECTIONAL PUMP -----
             // Two cooperating loops sharing the same WebSocket:
             //   readFromWs: client keystrokes → SSH stdin
@@ -171,6 +181,10 @@ public static class TerminalSocketHandler {
         public string? Password { get; init; }
         public int Cols { get; init; }
         public int Rows { get; init; }
+        /// <summary>Optional command typed into the shell once after connect
+        /// (e.g. "sudo raspi-config" from the Optimize-SBC launcher). No more
+        /// privileged than the user typing it — this is their own SSH session.</summary>
+        public string? InitialCommand { get; init; }
     }
 
     private record TerminalControl {
