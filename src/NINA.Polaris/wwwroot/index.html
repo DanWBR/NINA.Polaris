@@ -13640,6 +13640,21 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 </select>
             </label>
 
+            <label class="blend-row" style="margin-top:10px" x-show="starRemovalPrecisions().length > 1">
+                <span style="flex:0 0 150px">Precision</span>
+                <select class="input-sm" x-model="starRemoval.options.precision"
+                        style="flex:1 1 auto; min-width:0">
+                    <template x-for="p in starRemovalPrecisions()" :key="p.value">
+                        <option :value="p.value" x-text="p.label"></option>
+                    </template>
+                </select>
+            </label>
+            <p class="hint" x-show="starRemovalPrecisions().length > 1 && starRemoval.options.precision === 'fp32'"
+               style="margin-top:-4px">
+                FP32 is ~2× the size and memory of FP16 — best on a desktop; on
+                SBCs/phones the FP16 default is recommended.
+            </p>
+
             <label class="blend-row" style="margin-top:10px">
                 <span style="flex:0 0 150px">Auto-stretch</span>
                 <input type="checkbox" x-model="starRemoval.options.autoStretch">
@@ -15105,7 +15120,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260620-dl1"></script>
+    <script src="/js/app.js?v=20260620-fp32sel"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

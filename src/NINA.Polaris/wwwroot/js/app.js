@@ -2398,6 +2398,7 @@ function ninaApp() {
             options: {
                 open: false, path: '',
                 model: 'nox',        // chosen model (default = nox, StarNet-like MIT)
+                precision: 'fp16',   // 'fp16' (1.0.0-fp16, default) | 'fp32' (1.0.0)
                 autoStretch: true,   // stretch into the model's trained domain
                 stretchTarget: 0.15, // autostretch target background (lower = stronger)
                 passes: 1,           // 2 = second pass cleans bright-star halos
@@ -22625,6 +22626,25 @@ function ninaApp() {
                 out.push({ value: 'starnet', label: 'StarNet++ (NonCommercial)' });
             return out;
         },
+        // The on-disk families backing each star-removal model value.
+        _starRemovalFamilies(model) {
+            if (model === 'nox') return ['nox-color', 'nox-gray'];
+            if (model === 'starrem2k13') return ['starrem2k13'];
+            return ['starnet'];
+        },
+        // Which precisions are installed for the selected model: FP16
+        // (1.0.0-fp16, the lighter default) and/or FP32 (1.0.0, max quality).
+        // Only lists a precision when at least one backing family has it, so
+        // the dropdown never offers a version that would 404 on load.
+        starRemovalPrecisions() {
+            const models = this.onnx?.manifest?.models || [];
+            const fams = this._starRemovalFamilies(this.starRemoval.options.model);
+            const has = ver => models.some(m => fams.includes(m.family) && m.version === ver);
+            const out = [];
+            if (has('1.0.0-fp16')) out.push({ value: 'fp16', label: 'FP16 (lighter · default)' });
+            if (has('1.0.0'))      out.push({ value: 'fp32', label: 'FP32 (max quality)' });
+            return out;
+        },
         // ── model downloader (Settings → AI) ─────────────────────────
         async modelDlLoad() {
             this.modelDl.loading = true; this.modelDl.error = '';
@@ -22686,6 +22706,7 @@ function ninaApp() {
             const o = this.starRemoval.options;
             o.haloStrength = this.starRemoval._haloDefault(o.model);
             o.reduceHalos = this.starRemoval._reduceHalosDefault(o.model);
+            this._clampStarRemovalPrecision();
             o.open = true;
         },
         // Switch the recommended halo-cleanup defaults when the model changes.
@@ -22693,6 +22714,14 @@ function ninaApp() {
             const o = this.starRemoval.options;
             o.haloStrength = this.starRemoval._haloDefault(o.model);
             o.reduceHalos = this.starRemoval._reduceHalosDefault(o.model);
+            this._clampStarRemovalPrecision();
+        },
+        // Keep options.precision pointing at a precision that's actually
+        // installed for the current model (prefer fp16, the default).
+        _clampStarRemovalPrecision() {
+            const precs = this.starRemovalPrecisions().map(p => p.value);
+            if (precs.length && !precs.includes(this.starRemoval.options.precision))
+                this.starRemoval.options.precision = precs.includes('fp16') ? 'fp16' : precs[0];
         },
         starRemovalCloseOptions() { this.starRemoval.options.open = false; },
         // Confirm the options modal → run with the chosen settings.
@@ -22700,8 +22729,16 @@ function ninaApp() {
             const o = this.starRemoval.options;
             const path = o.path;
             o.open = false;
+            // Map the precision choice to a model version: FP32 = the original
+            // 1.0.0; FP16 = the 1.0.0-fp16 sibling (lighter, the default).
+            // Leave undefined when the choice isn't offered so the pipeline's
+            // preferFp16 picks the best installed variant.
+            const precs = this.starRemovalPrecisions();
+            let version;
+            if (precs.length > 1) version = o.precision === 'fp32' ? '1.0.0' : '1.0.0-fp16';
             await this.starRemovalRun(path, {
                 model: o.model || 'starrem2k13',
+                version,
                 autoStretch: o.autoStretch,
                 stretchTarget: Number(o.stretchTarget) || 0.15,
                 passes: Number(o.passes) || 1,
@@ -22741,6 +22778,7 @@ function ninaApp() {
                 const result = await pipeline.run(src.pixels, src.width, src.height, {
                     channels: src.channels,
                     model: opts.model || 'starrem2k13',
+                    version: opts.version,   // undefined → pipeline prefers -fp16
                     useGpu: !!this.graxpert?.modalUseGpu,
                     autoStretch: opts.autoStretch !== false,
                     stretchTarget: opts.stretchTarget || 0.15,
