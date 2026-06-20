@@ -52,6 +52,44 @@ public class ImageBlendService : IDisposable {
         string SessionId, string BasePath, string BlendPath,
         int Width, int Height, int Channels);
 
+    /// <summary>256-bin per-channel histogram (R==G==B for mono) plus basic
+    /// 16-bit stats, for the Image Blend adjustment histograms.</summary>
+    public sealed record HistogramData(
+        int[] R, int[] G, int[] B, int Min, int Max, double Avg, double Std);
+
+    /// <summary>Linear histograms of the loaded base + blend images, so the
+    /// client can draw an editor-style adjustment histogram per layer.</summary>
+    public (HistogramData? Base, HistogramData? Blend) GetHistograms(string sessionId) {
+        if (!_sessions.TryGetValue(sessionId, out var s)) return (null, null);
+        s.LastTouch = DateTime.UtcNow;
+        return (ComputeHistogram(s.Base.Data, s.Width, s.Height, s.Channels),
+                ComputeHistogram(s.Blend.Data, s.Width, s.Height, s.Channels));
+    }
+
+    /// <summary>256-bin per-channel histogram + stats from a decimated sample
+    /// of a plane-sequential ushort buffer (cheap; ~250k samples max).</summary>
+    private static HistogramData ComputeHistogram(ushort[] data, int w, int h, int channels) {
+        var R = new int[256]; var G = new int[256]; var B = new int[256];
+        long plane = (long)w * h;
+        int step = Math.Max(1, (int)(plane / 250_000));
+        int min = 65535, max = 0; double sum = 0, sumSq = 0; long n = 0;
+        int[][] bins = channels == 3 ? new[] { R, G, B } : new[] { R };
+        for (int c = 0; c < bins.Length; c++) {
+            long off = c * plane;
+            var bin = bins[c];
+            for (long i = 0; i < plane; i += step) {
+                int v = data[off + i];
+                bin[v >> 8]++;
+                if (v < min) min = v; if (v > max) max = v;
+                sum += v; sumSq += (double)v * v; n++;
+            }
+        }
+        if (channels != 3) { Array.Copy(R, G, 256); Array.Copy(R, B, 256); }
+        double avg = n > 0 ? sum / n : 0;
+        double var = n > 0 ? Math.Max(0, sumSq / n - avg * avg) : 0;
+        return new HistogramData(R, G, B, min, max, avg, Math.Sqrt(var));
+    }
+
     /// <summary>Per-image stretch + the blend settings for one render.</summary>
     public sealed record BlendParams(
         double BaseBlack = 0.0, double BaseMid = 0.5, double BaseWhite = 1.0,

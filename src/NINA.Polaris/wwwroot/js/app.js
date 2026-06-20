@@ -2376,7 +2376,10 @@ function ninaApp() {
             _drag: null,
             _viewInit: false,
             histOpen: true,   // RGB histogram overlay of the blended preview
-            _histOff: null
+            _histOff: null,
+            baseHist: null,   // per-layer linear histograms (from /load)
+            blendHist: null,
+            _hdrag: null      // active adjustment-histogram handle drag
         },
         // SN-3: StarNet++ star removal (ONNX, runs in the browser like
         // GraXpert). Drives a small progress overlay; on success it
@@ -22225,8 +22228,12 @@ function ninaApp() {
                 this.blend.width = info.width;
                 this.blend.height = info.height;
                 this.blend.channels = info.channels;
+                // Per-layer linear histograms for the adjustment graphs.
+                this.blend.baseHist = info.baseHist || null;
+                this.blend.blendHist = info.blendHist || null;
                 this.blend.busy = false;
                 await this.blendPreview();
+                this.$nextTick(() => { this.blendHistDraw('base'); this.blendHistDraw('blend'); });
             } catch (e) {
                 this.blend.error = 'Load failed: ' + e.message;
                 this.blend.busy = false;
@@ -22235,7 +22242,7 @@ function ninaApp() {
         blendSet(panel, key, val) {
             const v = parseFloat(val);
             if (panel === null) this.blend.opacity = v;
-            else this.blend[panel][key] = v;
+            else { this.blend[panel][key] = v; this.blendHistDraw(panel); }
             this.blendSchedulePreview();
         },
         blendSchedulePreview() {
@@ -22264,16 +22271,32 @@ function ninaApp() {
                 this.blend.previewUrl = URL.createObjectURL(blob);
             } catch (e) { /* transient — keep last preview */ }
         },
-        // Sensible non-linear starting points (true per-image stats would need
-        // a histogram pass; these match typical DSO defaults). Base (starless)
-        // gets a stronger shadow lift than the stars layer.
+        // Data-driven autostretch from the layer's histogram stats (black ≈
+        // avg − 2.8σ, midtone via MTF onto a target background). Falls back to
+        // fixed DSO defaults when no histogram is available. Base (starless)
+        // targets a darker background than the stars layer.
         blendAutoStretch(panel) {
-            if (panel === 'base') this.blend.base = { black: 0.0, mid: 0.15, white: 1.0 };
-            else this.blend.blend = { black: 0.0, mid: 0.35, white: 1.0 };
+            const h = this.blendHistData(panel);
+            const target = panel === 'base' ? 0.15 : 0.30;
+            if (h && typeof h.avg === 'number') {
+                const max = 65535;
+                const black = Math.max(0, Math.min(0.95, (h.avg - 2.8 * h.std) / max));
+                const med = Math.max(0, Math.min(1, h.avg / max));
+                const x = Math.max(0, (med - black) / Math.max(1e-4, 1 - black));
+                let m = this._mtf(x, target);
+                m = Math.min(0.999, Math.max(0.001, m));
+                this.blend[panel] = { black, mid: m, white: 1.0 };
+            } else {
+                this.blend[panel] = panel === 'base'
+                    ? { black: 0.0, mid: 0.15, white: 1.0 }
+                    : { black: 0.0, mid: 0.35, white: 1.0 };
+            }
+            this.blendHistDraw(panel);
             this.blendSchedulePreview();
         },
         blendResetPanel(panel) {
             this.blend[panel] = { black: 0.0, mid: 0.5, white: 1.0 };
+            this.blendHistDraw(panel);
             this.blendSchedulePreview();
         },
         async blendRender() {
@@ -22371,6 +22394,85 @@ function ninaApp() {
             drawCh(G, 'rgba(64,224,64,0.50)');
             drawCh(B, 'rgba(96,128,255,0.60)');
             ctx.globalCompositeOperation = 'source-over';
+        },
+        // ── Per-layer adjustment histogram (editor-style) ──────────────
+        // Each stretch panel (base/stars) gets a LINEAR histogram of its
+        // source with draggable blackpoint / midtone / whitepoint handles
+        // that drive that layer's black/mid/white. Lets you set the stretch
+        // visually on the data distribution — essential for linear frames.
+        blendHistData(key) { return key === 'base' ? this.blend.baseHist : this.blend.blendHist; },
+        blendHistDraw(key) {
+            const h = this.blendHistData(key);
+            const cv = document.querySelector('.blend-phist[data-panel="' + key + '"]');
+            if (!cv || !h) return;
+            const W = cv.width, H = cv.height;
+            const ctx = cv.getContext('2d');
+            ctx.clearRect(0, 0, W, H);
+            const R = h.r || h.R, G = h.g || h.G, B = h.b || h.B;
+            if (!R) return;
+            let mx = 1;
+            for (let i = 1; i < 255; i++) { if (R[i] > mx) mx = R[i]; if (G[i] > mx) mx = G[i]; if (B[i] > mx) mx = B[i]; }
+            const denom = Math.log1p(mx);
+            const drawCh = (arr, color) => {
+                ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(0, H);
+                for (let x = 0; x < W; x++) {
+                    const bin = Math.min(255, (x / W * 256) | 0);
+                    const v = Math.min(1, Math.log1p(arr[bin]) / denom);
+                    ctx.lineTo(x, H - v * H);
+                }
+                ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+            };
+            ctx.globalCompositeOperation = 'lighter';
+            drawCh(R, 'rgba(255,64,64,0.5)'); drawCh(G, 'rgba(64,224,64,0.45)'); drawCh(B, 'rgba(96,128,255,0.55)');
+            ctx.globalCompositeOperation = 'source-over';
+            // Handles: blackpoint / midtone / whitepoint.
+            const p = this.blend[key];
+            const bx = p.black * W, wx = p.white * W;
+            const mxp = (p.black + p.mid * (p.white - p.black)) * W;
+            ctx.fillStyle = 'rgba(0,0,0,0.45)';
+            ctx.fillRect(0, 0, Math.max(0, bx), H);
+            ctx.fillRect(Math.min(W, wx), 0, W - Math.min(W, wx), H);
+            const line = (x, color) => {
+                ctx.strokeStyle = color; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+            };
+            line(bx, 'rgba(80,160,255,0.95)');   // blackpoint
+            line(mxp, 'rgba(255,200,60,0.95)');  // midtone
+            line(wx, 'rgba(235,235,235,0.9)');   // whitepoint
+        },
+        blendHistApply(key, handle, nx) {
+            nx = Math.max(0, Math.min(1, nx));
+            const p = this.blend[key];
+            if (handle === 'black') { this.blendSet(key, 'black', Math.min(nx, p.white - 0.002)); }
+            else if (handle === 'white') { this.blendSet(key, 'white', Math.max(nx, p.black + 0.002)); }
+            else {
+                const span = Math.max(1e-4, p.white - p.black);
+                let m = (nx - p.black) / span;
+                m = Math.max(0.001, Math.min(0.999, m));
+                this.blendSet(key, 'mid', m);
+            }
+            this.blendHistDraw(key);
+        },
+        blendHistPointer(key, ev, phase) {
+            const cv = ev.currentTarget;
+            const rect = cv.getBoundingClientRect();
+            const nx = (ev.clientX - rect.left) / rect.width;
+            if (phase === 'down') {
+                const p = this.blend[key];
+                const midPos = p.black + p.mid * (p.white - p.black);
+                const cands = [['black', Math.abs(nx - p.black)],
+                               ['mid', Math.abs(nx - midPos)],
+                               ['white', Math.abs(nx - p.white)]].sort((a, b) => a[1] - b[1]);
+                this.blend._hdrag = { key, handle: cands[0][0] };
+                try { cv.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+                this.blendHistApply(key, cands[0][0], nx);
+            } else if (phase === 'move') {
+                const d = this.blend._hdrag;
+                if (!d || d.key !== key) return;
+                this.blendHistApply(key, d.handle, nx);
+            } else {
+                this.blend._hdrag = null;
+            }
         },
         blendFit() {
             const vp = this.$refs.blendViewer, img = this.$refs.blendImg;

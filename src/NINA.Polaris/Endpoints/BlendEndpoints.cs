@@ -36,16 +36,19 @@ public static class BlendEndpoints {
             if (string.IsNullOrWhiteSpace(req.BasePath) || string.IsNullOrWhiteSpace(req.BlendPath))
                 return Results.BadRequest(new { error = "basePath and blendPath are required." });
             var info = await svc.LoadAsync(req.BasePath, req.BlendPath, ct);
-            return info == null
-                ? Results.BadRequest(new { error = "Failed to load image pair (missing file or geometry mismatch)." })
-                : Results.Ok(new {
-                    sessionId = info.SessionId,
-                    basePath = info.BasePath,
-                    blendPath = info.BlendPath,
-                    width = info.Width,
-                    height = info.Height,
-                    channels = info.Channels
-                });
+            if (info == null)
+                return Results.BadRequest(new { error = "Failed to load image pair (missing file or geometry mismatch)." });
+            var (baseHist, blendHist) = svc.GetHistograms(info.SessionId);
+            return Results.Ok(new {
+                sessionId = info.SessionId,
+                basePath = info.BasePath,
+                blendPath = info.BlendPath,
+                width = info.Width,
+                height = info.Height,
+                channels = info.Channels,
+                baseHist,
+                blendHist
+            });
         });
 
         // ─── preview ─────────────────────────────────────────────────
