@@ -9352,7 +9352,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             @click="graxpertOpenModal('background-extraction')"
                             title="Background extraction (BGE): remove gradient with GraXpert (browser ONNX or CLI)"
                             aria-label="Background extraction">
-                        <span class="files-icon">🌅</span>
+                        <span class="files-icon">🌃</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
                             x-show="graxpert.status?.supportsDeconvolution
@@ -10016,7 +10016,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     :disabled="!editorState.session || !editorState.sourcePath"
                                     @click="graxpertOpenModal('background-extraction', editorState.sourcePath)"
                                     title="Remove gradient with GraXpert (opens the modal)">
-                                🌅 BGE
+                                🌃 BGE
                             </button>
                             <button class="btn btn-sm"
                                     x-show="graxpert.status?.supportsDenoising
@@ -10130,7 +10130,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         :disabled="editorAi.busy"
                                         @click="editorRunAi('background-extraction')"
                                         title="Background extraction, removes gradients">
-                                    🌅 Background
+                                    🌃 Background
                                 </button>
                                 <button class="btn btn-sm"
                                         x-show="onnxAvailableForOp('denoising')"
@@ -13178,7 +13178,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                  and the BGE batch is in flight). -->
             <div class="siril-modal-progress"
                  x-show="siril.modalBgePhase && !siril.currentJob">
-                <div class="hint" style="margin-bottom:6px">🌅 GraXpert BGE pre-pass</div>
+                <div class="hint" style="margin-bottom:6px">🌃 GraXpert BGE pre-pass</div>
                 <div class="siril-modal-progress-bar">
                     <div class="siril-modal-progress-fill"
                          :style="'width: ' + (siril.modalBgePhase
@@ -13270,7 +13270,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          @keydown.escape.window="graxpertIsRunning() || graxpertCloseModal()">
         <div class="siril-modal-frame">
             <h2>
-                <span x-show="graxpert.modalOp === 'background-extraction'">🌅 GraXpert Background Gradient Removal</span>
+                <span x-show="graxpert.modalOp === 'background-extraction'">🌃 GraXpert Background Gradient Removal</span>
                 <span x-show="graxpert.modalOp === 'deconvolution'">🌌 GraXpert Deconvolution</span>
                 <span x-show="graxpert.modalOp === 'denoising'">☄ GraXpert Denoise</span>
             </h2>
