@@ -2369,7 +2369,12 @@ function ninaApp() {
             blend: { black: 0.0, mid: 0.5, white: 1.0 },
             mode: 'screen', opacity: 1.0,
             previewUrl: '', busy: false, error: '',
-            _timer: null
+            _timer: null,
+            // Lightroom-style viewer + resizable side panel.
+            view: { zoom: 1, panX: 0, panY: 0 },
+            panelW: 360,
+            _drag: null,
+            _viewInit: false
         },
         // SN-3: StarNet++ star removal (ONNX, runs in the browser like
         // GraXpert). Drives a small progress overlay; on success it
@@ -22188,6 +22193,8 @@ function ninaApp() {
             this.blend.blend = { black: 0.0, mid: 0.5, white: 1.0 };
             this.blend.mode = 'screen';
             this.blend.opacity = 1.0;
+            this.blend.view = { zoom: 1, panX: 0, panY: 0 };
+            this.blend._viewInit = false;   // first preview load fits to frame
             this.blend.busy = true;
             try {
                 const r = await this.apiFetch('/api/blend/load', {
@@ -22288,6 +22295,72 @@ function ninaApp() {
                     body: JSON.stringify({ sessionId: sid })
                 }).catch(() => {});
             }
+        },
+
+        // ----- SN-6: Image Blend viewer (zoom / pan / fit) -----------
+        // Lightroom-style: centered img transformed by translate(-50%,-50%)
+        // then translate(pan) scale(zoom). Pan/zoom are measured from the
+        // viewer centre so wheel-zoom-to-cursor and drag-pan compose cleanly.
+        blendImgLoaded() {
+            // Fit only on the FIRST preview of a session; later slider-driven
+            // re-renders keep the user's current zoom/pan.
+            if (!this.blend._viewInit) { this.blendFit(); this.blend._viewInit = true; }
+        },
+        blendFit() {
+            const vp = this.$refs.blendViewer, img = this.$refs.blendImg;
+            if (!vp || !img || !img.naturalWidth) return;
+            const z = Math.min(vp.clientWidth / img.naturalWidth,
+                               vp.clientHeight / img.naturalHeight);
+            this.blend.view = { zoom: z > 0 ? z : 1, panX: 0, panY: 0 };
+        },
+        blendActual() { // 100% (1:1) about centre
+            this.blend.view = { zoom: 1, panX: 0, panY: 0 };
+        },
+        _blendClampZoom(z) { return Math.max(0.02, Math.min(40, z)); },
+        blendZoomBy(f) { // zoom about centre
+            const v = this.blend.view;
+            const nz = this._blendClampZoom(v.zoom * f);
+            const k = nz / v.zoom;
+            v.panX *= k; v.panY *= k; v.zoom = nz;
+        },
+        blendWheel(e) {
+            const v = this.blend.view, vp = this.$refs.blendViewer;
+            if (!vp) return;
+            const r = vp.getBoundingClientRect();
+            const cx = e.clientX - r.left - r.width / 2;   // cursor from centre
+            const cy = e.clientY - r.top - r.height / 2;
+            const nz = this._blendClampZoom(v.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+            const k = nz / v.zoom;
+            // keep the point under the cursor fixed
+            v.panX = cx - k * (cx - v.panX);
+            v.panY = cy - k * (cy - v.panY);
+            v.zoom = nz;
+        },
+        blendPanStart(e) {
+            if (e.button !== 0) return;
+            this.blend._drag = { x: e.clientX, y: e.clientY,
+                                 px: this.blend.view.panX, py: this.blend.view.panY };
+        },
+        blendPanMove(e) {
+            const d = this.blend._drag; if (!d) return;
+            this.blend.view.panX = d.px + (e.clientX - d.x);
+            this.blend.view.panY = d.py + (e.clientY - d.y);
+        },
+        blendPanEnd() { this.blend._drag = null; },
+        blendResizeStart(e) {
+            e.preventDefault();
+            const startX = e.clientX, startW = this.blend.panelW;
+            const move = (ev) => {
+                let w = startW - (ev.clientX - startX);   // panel is on the right
+                w = Math.max(280, Math.min(640, w));
+                this.blend.panelW = w;
+            };
+            const up = () => {
+                window.removeEventListener('mousemove', move);
+                window.removeEventListener('mouseup', up);
+            };
+            window.addEventListener('mousemove', move);
+            window.addEventListener('mouseup', up);
         },
 
         // ----- SN-3: StarNet++ star removal --------------------------
