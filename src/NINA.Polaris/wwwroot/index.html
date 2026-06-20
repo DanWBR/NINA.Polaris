@@ -9370,7 +9370,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             @click="graxpertOpenModal('denoising')"
                             title="Denoise: reduce noise with GraXpert"
                             aria-label="Denoise">
-                        <span class="files-icon">🔇</span>
+                        <span class="files-icon">☄</span>
                     </button>
                     <span style="flex:1"></span>
                     <button class="btn btn-sm btn-icon btn-primary"
@@ -10024,7 +10024,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     :disabled="!editorState.session || !editorState.sourcePath"
                                     @click="graxpertOpenModal('denoising', editorState.sourcePath)"
                                     title="Reduce noise with GraXpert (opens the modal)">
-                                🔇 Denoise
+                                ☄ Denoise
                             </button>
                             <button class="btn btn-sm"
                                     x-show="graxpert.status?.supportsDeconvolution
@@ -10137,7 +10137,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         :disabled="editorAi.busy"
                                         @click="editorRunAi('denoising')"
                                         title="Denoise, neural noise reduction">
-                                    🔇 Denoise
+                                    ☄ Denoise
                                 </button>
                                 <button class="btn btn-sm"
                                         x-show="onnxAvailableForOp('deconvolution')"
@@ -13272,7 +13272,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <h2>
                 <span x-show="graxpert.modalOp === 'background-extraction'">🌅 GraXpert Background Gradient Removal</span>
                 <span x-show="graxpert.modalOp === 'deconvolution'">✨ GraXpert Deconvolution</span>
-                <span x-show="graxpert.modalOp === 'denoising'">🔇 GraXpert Denoise</span>
+                <span x-show="graxpert.modalOp === 'denoising'">☄ GraXpert Denoise</span>
             </h2>
 
             <p class="hint">
