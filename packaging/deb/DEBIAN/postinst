@@ -48,9 +48,13 @@ case "$1" in
         # can rsync the GraXpert weights into it without sudo.
         if [ ! -d $POLARIS_MODELS ]; then
             mkdir -p $POLARIS_MODELS
-            chown $POLARIS_USER:$POLARIS_GROUP $POLARIS_MODELS
             echo "polaris: created models dir at $POLARIS_MODELS"
         fi
+        # Always (re)assert ownership of the top dir so the on-demand model
+        # downloader (running as $POLARIS_USER) can write here even if the dir
+        # pre-existed root-owned (e.g. an rsync-as-root or an upgrade). Not
+        # recursive: avoids re-chowning multi-GB weights on every install.
+        chown $POLARIS_USER:$POLARIS_GROUP $POLARIS_MODELS 2>/dev/null || true
 
         # ---- 3. Profile dir ----
         if [ ! -d $POLARIS_CONFIG_DIR ]; then
