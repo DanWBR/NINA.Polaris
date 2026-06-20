@@ -32,12 +32,11 @@ the trained domain, optional 2nd pass, and the mask-guided halo cleanup).
 
 ### starrem2k13 (recommended, MIT)
 
-Convert it once on the machine Polaris serves from:
+Install it once on the machine Polaris serves from. The upstream repo ships a
+prebuilt `weights/model.onnx`, so the script just copies it (no Docker needed):
 
 ```powershell
-# pick the current weights asset from the releases page, then:
-powershell -ExecutionPolicy Bypass -File scripts\convert-starrem2k13-onnx.ps1 `
-    -WeightsUrl https://github.com/code2k13/starrem2k13/releases/download/<tag>/<asset>
+powershell -ExecutionPolicy Bypass -File scripts\convert-starrem2k13-onnx.ps1
 ```
 
 It writes `model.onnx` into

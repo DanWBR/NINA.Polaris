@@ -1983,6 +1983,10 @@
                                 for (let x = 0; x < TILE; x++)
                                     tensorData[rowBase + x] = stretchVal(paddedRead(srcC, sx + x, py), srcC) * IN_SCALE;
                             }
+                            // Real ONNX I/O (tf2onnx export): input args_0 is
+                            // [1,H,W] (3D, no channel dim); output final_output
+                            // is [1,H,W,1]. Output is row-major so reading
+                            // ty*TILE+tx works regardless of the trailing 1.
                             const inputTensor = new ort.Tensor('float32', tensorData, [1, TILE, TILE]);
                             const tileT0 = performance.now();
                             const result = await session.run({ [inputName]: inputTensor });

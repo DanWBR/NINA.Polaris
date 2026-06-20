@@ -71,9 +71,21 @@ if (-not (Test-Path (Join-Path $Source "export_to_onnx.py"))) {
     throw "export_to_onnx.py not found under $Source -- is this a starrem2k13 checkout?"
 }
 
-# 2) Ensure weights are present. The repo keeps them out of git (LFS bandwidth)
-#    and publishes them as a Release asset. We can't guess the asset URL, so
-#    require it explicitly the first time.
+# FAST PATH: the upstream repo ships a prebuilt weights/model.onnx (U2NETP is
+# tiny, ~2.6 MB). If it's there, just copy it -- no Docker / export needed.
+$prebuilt = Join-Path $Source "weights\model.onnx"
+if (Test-Path $prebuilt) {
+    New-Item -ItemType Directory -Force -Path $ModelsDir | Out-Null
+    $target = Join-Path $ModelsDir "model.onnx"
+    Copy-Item -Path $prebuilt -Destination $target -Force
+    Write-Host "Copied prebuilt model -> $target" -ForegroundColor Green
+    Write-Host "Restart Polaris (or POST /api/onnx/rescan) to pick up the starrem2k13 family."
+    return
+}
+
+# 2) Otherwise (re-)export from weights. The repo keeps the trained weights out
+#    of git and publishes them as a Release asset; we can't guess the asset URL,
+#    so require it explicitly the first time.
 $weightsDir = Join-Path $Source "weights"
 $haveWeights = (Test-Path $weightsDir) -and `
     ((Get-ChildItem -Path $weightsDir -File -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0)
