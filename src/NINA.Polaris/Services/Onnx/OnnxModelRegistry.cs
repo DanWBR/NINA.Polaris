@@ -160,6 +160,33 @@ public class OnnxModelRegistry {
     public string BundledModelsPath => _bundledModelsPath;
 
     /// <summary>
+    /// A WRITABLE models directory for the on-demand downloader to drop new
+    /// models into: the profile's <c>OnnxModelsPath</c> if set, else
+    /// <c>/home/polaris/models</c> on Linux, else the bundled wwwroot tree.
+    /// Created if it doesn't exist. The scan (ResolveModelsPaths) already
+    /// merges all of these, so a model dropped here is picked up on rescan.
+    /// </summary>
+    public string ResolveDownloadTargetDir() {
+        var configured = _profile.Active?.OnnxModelsPath;
+        string target = !string.IsNullOrWhiteSpace(configured) ? configured!
+                      : OperatingSystem.IsLinux() ? LinuxPolarisModelsPath
+                      : _bundledModelsPath;
+        Directory.CreateDirectory(target);
+        return target;
+    }
+
+    /// <summary>True when {family-dir}/{version}/model.onnx exists in any of
+    /// the resolved model paths. <paramref name="familyDir"/> is the on-disk
+    /// directory name, e.g. "nox-color-ai-models".</summary>
+    public bool IsInstalled(string familyDir, string version) {
+        foreach (var root in ResolveModelsPaths()) {
+            if (File.Exists(Path.Combine(root, familyDir, version, "model.onnx")))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Snapshot of all currently-registered models. Cheap; intended for
     /// the /api/onnx/manifest endpoint.
     /// </summary>

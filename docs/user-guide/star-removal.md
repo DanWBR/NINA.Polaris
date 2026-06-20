@@ -92,6 +92,58 @@ that has the file system Polaris serves from:
    button appears in the FILES toolbar once the `starnet` family shows up
    in `GET /api/onnx/manifest`.
 
+### Downloading models on-device (bucket)
+
+Converting models needs a build machine with Docker; devices and OS images
+that ship Polaris **without** the bundled models (or phones/tablets) can pull
+ready-made `.onnx` files from a hosted bucket instead.
+
+1. In **Settings → AI inference (ONNX) → Download models**, paste the
+   **Bucket URL** (e.g. a public Supabase Storage bucket) and click
+   **Refresh catalog**.
+2. The table lists every model offered by the bucket; click **⬇ Download**
+   next to one. It streams onto this device's writable models directory, is
+   **SHA-256 verified**, and the registry rescans automatically — no browser
+   restart needed.
+
+**Bucket layout.** The base URL must serve a `models-index.json` plus the
+GraXpert/Polaris directory layout:
+
+```
+{baseUrl}/models-index.json
+{baseUrl}/nox-color-ai-models/1.0.0/model.onnx
+{baseUrl}/nox-gray-ai-models/1.0.0/model.onnx
+{baseUrl}/starrem2k13-ai-models/1.0.0/model.onnx
+...
+```
+
+`models-index.json` is a JSON array, one entry per downloadable model:
+
+```json
+[
+  {
+    "dir": "nox-color-ai-models",
+    "version": "1.0.0",
+    "bytes": 109212345,
+    "sha256": "<lowercase hex SHA-256 of model.onnx>",
+    "label": "nox colour (FP16)",
+    "url": "(optional absolute override; defaults to {baseUrl}/{dir}/{version}/model.onnx)"
+  }
+]
+```
+
+- `dir` is the on-disk family directory (the `{family}-ai-models` form).
+- `sha256` is optional but recommended; when present the download is rejected
+  on mismatch. Compute it with `sha256sum model.onnx` (or
+  `Get-FileHash model.onnx -Algorithm SHA256`).
+- The endpoints behind this UI are `GET /api/onnx/catalog`,
+  `POST /api/onnx/download` `{dir, version}`, and
+  `GET /api/onnx/download-status`. One download runs at a time.
+
+The downloaded file lands under the writable target dir resolved from your
+profile `OnnxModelsPath` → `/home/polaris/models` (Linux) → the bundled
+`wwwroot/graxpert/models` folder.
+
 ## Using it
 
 1. Go to **FILES** and select **one** image (a stretched or linear master;

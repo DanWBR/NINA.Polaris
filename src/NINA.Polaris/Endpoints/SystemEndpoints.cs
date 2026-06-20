@@ -195,6 +195,7 @@ public static class SystemEndpoints {
                 p.GraXpertDenoiseStrength = update.GraXpertDenoiseStrength;
                 // GX-1b: ONNX in-browser inference settings.
                 p.OnnxModelsPath = update.OnnxModelsPath ?? p.OnnxModelsPath;
+                p.OnnxModelsBucketUrl = update.OnnxModelsBucketUrl ?? p.OnnxModelsBucketUrl;
                 p.OnnxLicenseAcknowledged = update.OnnxLicenseAcknowledged;
                 p.OnnxDefaultDenoiseVersion = update.OnnxDefaultDenoiseVersion
                                                   ?? p.OnnxDefaultDenoiseVersion;

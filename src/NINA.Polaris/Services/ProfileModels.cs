@@ -147,6 +147,10 @@ public class UserProfile {
     // LicenseAcknowledged tracks the CC BY-NC-SA 4.0 consent the user
     // gave (models are non-commercial; consent is per-install).
     public string OnnxModelsPath { get; set; } = "";
+    // Base URL of a public bucket (e.g. Supabase Storage) hosting the ONNX
+    // models + a models-index.json, so a device/image without the bundled
+    // models can download them on demand. Empty = downloader disabled.
+    public string OnnxModelsBucketUrl { get; set; } = "";
     public bool OnnxLicenseAcknowledged { get; set; } = false;
     public string OnnxDefaultDenoiseVersion { get; set; } = "2.0.0";
     public bool OnnxPreferCli { get; set; } = false;

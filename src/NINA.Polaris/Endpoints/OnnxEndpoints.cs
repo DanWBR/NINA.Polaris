@@ -75,6 +75,35 @@ public static class OnnxEndpoints {
             return Results.Ok(new { count = reg.All().Count });
         });
 
+        // ─── on-demand model downloader (bucket) ─────────────────────
+        // Catalogue of models in the configured bucket + whether each is
+        // already installed locally. { configured:false } when no bucket URL.
+        g.MapGet("/catalog", async (ModelDownloadService dl, CancellationToken ct) => {
+            if (!dl.IsConfigured) return Results.Ok(new { configured = false, models = Array.Empty<object>() });
+            try {
+                var cat = await dl.GetCatalogAsync(ct);
+                return Results.Ok(new { configured = true, models = cat });
+            } catch (Exception ex) {
+                return Results.Ok(new { configured = true, error = ex.Message, models = Array.Empty<object>() });
+            }
+        });
+
+        // Start a background download of {dir}/{version}. 409 if one is busy.
+        g.MapPost("/download", (ModelDownloadService dl, ModelDownloadRequest req) => {
+            if (!dl.IsConfigured) return Results.BadRequest(new { error = "No model bucket URL configured." });
+            if (string.IsNullOrWhiteSpace(req.Dir) || string.IsNullOrWhiteSpace(req.Version))
+                return Results.BadRequest(new { error = "dir and version are required." });
+            try {
+                return dl.TryStart(req.Dir, req.Version)
+                    ? Results.Accepted($"/api/onnx/download-status", new { ok = true })
+                    : Results.Json(new { error = "A download is already in progress." },
+                        statusCode: StatusCodes.Status409Conflict);
+            } catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
+        });
+
+        // Poll for progress of the current/last download.
+        g.MapGet("/download-status", (ModelDownloadService dl) => Results.Ok(dl.Status));
+
         // ─── serve model bytes ───────────────────────────────────────
         // ETag-based conditional GET. The browser sends If-None-Match
         // on the second + Nth load; we return 304 when the hash matches.
@@ -170,4 +199,8 @@ public static class OnnxEndpoints {
             return Results.Ok(new { path = outPath });
         }).DisableAntiforgery();
     }
+
+    /// <summary>Body for POST /api/onnx/download — the on-disk family dir
+    /// (e.g. "nox-color-ai-models") + version to pull from the bucket.</summary>
+    public record ModelDownloadRequest(string Dir, string Version);
 }

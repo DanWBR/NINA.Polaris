@@ -42,17 +42,17 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260620-nox29">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260620-nox29">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260620-nox29">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260620-nox29">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-nox29">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-nox29">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-nox29">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260620-nox29">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260620-dl1">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260620-dl1">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260620-dl1">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260620-dl1">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-dl1">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-dl1">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260620-dl1">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
-    <link rel="stylesheet" href="/css/night-mode.css?v=20260620-nox29">
+    <link rel="stylesheet" href="/css/night-mode.css?v=20260620-dl1">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -11762,6 +11762,97 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         No models detected. Set the path above to a folder
                         containing the GraXpert ONNX models.
                     </div>
+
+                    <!-- ── On-demand model downloader (bucket) ───────────── -->
+                    <div style="margin-top:18px; border-top:1px solid var(--border,#2a2a2a); padding-top:14px"
+                         x-init="modelDlLoad()">
+                        <h4 style="margin:0 0 4px 0; font-size:13px">Download models</h4>
+                        <p class="hint" style="margin-top:0">
+                            Pull star-removal / GraXpert models from a hosted
+                            bucket onto this device. Useful for OS images and
+                            phones/tablets that don't ship the large model files.
+                            Downloads land in your writable models directory and
+                            are SHA-256 verified, no browser cache needed.
+                        </p>
+                        <label>Bucket URL
+                            <input type="text" class="input-md"
+                                   style="width:100%; max-width:560px"
+                                   x-model="settings.onnxModelsBucketUrl"
+                                   @change="(async () => { await saveSettingsToServer(); await modelDlLoad(); })()"
+                                   placeholder="e.g. https://xxxx.supabase.co/storage/v1/object/public/models">
+                        </label>
+                        <p class="hint">
+                            Base URL serving <code>models-index.json</code> plus
+                            <code>{family}-ai-models/{version}/model.onnx</code>.
+                        </p>
+
+                        <div class="control-row actions" style="margin-top:6px">
+                            <button class="btn btn-sm" @click="modelDlLoad()"
+                                    :disabled="modelDl.loading || !settings.onnxModelsBucketUrl">
+                                <span x-show="!modelDl.loading">⟳ Refresh catalog</span>
+                                <span x-show="modelDl.loading">Loading…</span>
+                            </button>
+                        </div>
+
+                        <p class="hint" x-show="modelDl.error"
+                           style="color:var(--accent-warn,#f59e0b)"
+                           x-text="modelDl.error"></p>
+
+                        <div x-show="modelDl.catalog?.length" style="margin-top:10px">
+                            <table class="onnx-models-table">
+                                <thead>
+                                    <tr>
+                                        <th>Model</th>
+                                        <th>Version</th>
+                                        <th style="text-align:right">Size</th>
+                                        <th style="text-align:right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="c in modelDl.catalog"
+                                              :key="c.dir + '/' + c.version">
+                                        <tr>
+                                            <td x-text="c.label"></td>
+                                            <td x-text="c.version"></td>
+                                            <td style="text-align:right; font-variant-numeric:tabular-nums"
+                                                x-text="c.bytes ? formatBytes(c.bytes) : '—'"></td>
+                                            <td style="text-align:right">
+                                                <span x-show="c.installed" class="muted"
+                                                      style="font-size:11px">✓ Installed</span>
+                                                <template x-if="!c.installed">
+                                                    <span>
+                                                        <button class="btn btn-sm"
+                                                                @click="modelDlStart(c.dir, c.version)"
+                                                                :disabled="modelDlBusy()"
+                                                                x-show="!(modelDlBusy() && modelDl.status?.dir === c.dir && modelDl.status?.version === c.version)">
+                                                            ⬇ Download
+                                                        </button>
+                                                        <span x-show="modelDlBusy() && modelDl.status?.dir === c.dir && modelDl.status?.version === c.version"
+                                                              style="font-size:11px; white-space:nowrap">
+                                                            <span x-text="modelDl.status?.state === 'verifying' ? 'Verifying…' : (modelDlPct(modelDl.status) + '%')"></span>
+                                                        </span>
+                                                    </span>
+                                                </template>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                            <!-- progress bar for the active download -->
+                            <div x-show="modelDlBusy() && modelDl.status?.totalBytes"
+                                 style="margin-top:8px; height:6px; border-radius:3px;
+                                        background:var(--border,#2a2a2a); overflow:hidden">
+                                <div :style="'width:' + modelDlPct(modelDl.status) + '%; height:100%; background:var(--accent,#4ea1ff); transition:width .2s'"></div>
+                            </div>
+                        </div>
+
+                        <p class="hint" x-show="modelDl.configured && !modelDl.catalog?.length && !modelDl.loading && !modelDl.error"
+                           style="margin-top:8px">
+                            Bucket reachable but no models listed in
+                            <code>models-index.json</code>.
+                        </p>
+                    </div>
+
                     <p class="hint" style="margin-top:10px">
                         Models © GraXpert Development Team, CC BY-NC-SA 4.0
                         (non-commercial). The first use of an AI op will
@@ -14995,7 +15086,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260620-nox29"></script>
+    <script src="/js/app.js?v=20260620-dl1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

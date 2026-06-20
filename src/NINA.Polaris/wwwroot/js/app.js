@@ -733,6 +733,7 @@ function ninaApp() {
             graxpertDenoiseStrength: 0.5,
             // GX-1b: ONNX in-browser inference (GraXpert AI models)
             onnxModelsPath: '',
+            onnxModelsBucketUrl: '',
             onnxLicenseAcknowledged: false,
             onnxDefaultDenoiseVersion: '2.0.0',
             onnxPreferCli: false,
@@ -2412,6 +2413,14 @@ function ninaApp() {
             _reduceHalosDefault(model) {
                 return model !== 'nox';
             }
+        },
+        // On-demand model downloader (Settings → AI). Pulls ONNX models from
+        // the configured bucket for devices that don't have them bundled.
+        modelDl: {
+            configured: false, loading: false, error: '',
+            catalog: [],          // [{dir,version,label,bytes,installed}]
+            status: null,         // {dir,version,receivedBytes,totalBytes,state,error}
+            _timer: null
         },
         crop: {
             open: false,
@@ -8357,6 +8366,7 @@ function ninaApp() {
                     this.settings.graxpertDeconPsfSize = data.graxpertDeconPsfSize ?? 4.0;
                     this.settings.graxpertDenoiseStrength = data.graxpertDenoiseStrength ?? 0.5;
                     this.settings.onnxModelsPath = data.onnxModelsPath || '';
+                    this.settings.onnxModelsBucketUrl = data.onnxModelsBucketUrl || '';
                     this.settings.onnxLicenseAcknowledged = !!data.onnxLicenseAcknowledged;
                     this.settings.onnxDefaultDenoiseVersion = data.onnxDefaultDenoiseVersion || '2.0.0';
                     this.settings.onnxPreferCli = !!data.onnxPreferCli;
@@ -16674,6 +16684,7 @@ function ninaApp() {
                         graxpertDeconPsfSize: this.settings.graxpertDeconPsfSize,
                         graxpertDenoiseStrength: this.settings.graxpertDenoiseStrength,
                         onnxModelsPath: this.settings.onnxModelsPath,
+                        onnxModelsBucketUrl: this.settings.onnxModelsBucketUrl,
                         onnxLicenseAcknowledged: this.settings.onnxLicenseAcknowledged,
                         onnxDefaultDenoiseVersion: this.settings.onnxDefaultDenoiseVersion,
                         onnxPreferCli: this.settings.onnxPreferCli
@@ -22613,6 +22624,50 @@ function ninaApp() {
             if (fams.has('starnet'))
                 out.push({ value: 'starnet', label: 'StarNet++ (NonCommercial)' });
             return out;
+        },
+        // ── model downloader (Settings → AI) ─────────────────────────
+        async modelDlLoad() {
+            this.modelDl.loading = true; this.modelDl.error = '';
+            try {
+                const r = await this.apiGet('/api/onnx/catalog');
+                this.modelDl.configured = !!r.configured;
+                this.modelDl.catalog = r.models || [];
+                if (r.error) this.modelDl.error = r.error;
+            } catch (e) {
+                this.modelDl.error = e.message || 'Failed to load catalog';
+            } finally { this.modelDl.loading = false; }
+        },
+        async modelDlStart(dir, version) {
+            try {
+                await this.apiPost('/api/onnx/download', { dir, version });
+                this.modelDl.status = { dir, version, receivedBytes: 0, totalBytes: 0, state: 'downloading' };
+                this._modelDlPoll();
+            } catch (e) {
+                this.toast('Download failed to start: ' + (e.message || ''), 'error');
+            }
+        },
+        _modelDlPoll() {
+            if (this.modelDl._timer) clearTimeout(this.modelDl._timer);
+            this.modelDl._timer = setTimeout(async () => {
+                try {
+                    const s = await this.apiGet('/api/onnx/download-status');
+                    this.modelDl.status = s;
+                    if (s.state === 'downloading' || s.state === 'verifying') {
+                        this._modelDlPoll();
+                    } else {
+                        if (s.state === 'done') { this.toast('Model downloaded', 'ok'); await this.modelDlLoad(); await this.loadOnnxManifest?.(); }
+                        else if (s.state === 'failed') this.toast('Download failed: ' + (s.error || ''), 'error', 6000);
+                    }
+                } catch { this._modelDlPoll(); }
+            }, 700);
+        },
+        modelDlPct(s) {
+            if (!s || !s.totalBytes) return 0;
+            return Math.min(100, Math.round((s.receivedBytes / s.totalBytes) * 100));
+        },
+        modelDlBusy() {
+            const s = this.modelDl.status;
+            return !!s && (s.state === 'downloading' || s.state === 'verifying');
         },
         starRemovalRunForSelection() {
             const sel = (this.files.selectedPaths || []).filter(Boolean);
