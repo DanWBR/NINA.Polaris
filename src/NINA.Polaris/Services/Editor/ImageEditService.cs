@@ -560,33 +560,27 @@ public class ImageEditService : IDisposable {
                     return (h, 0.0, 0.5, 1.0);
                 }
             }
-            double maxV = (1 << BitDepth) - 1;
-            if (maxV < 1) maxV = 65535;
+            // Two-stage stretch: the manual black/mid/white handles act in
+            // DISPLAY space on the per-channel auto NEUTRAL BASE (not the raw
+            // linear channels), so the reference histogram must be that base.
+            // It's still invariant to the Stretch edits (Stage A only), so the
+            // handles sit on it stably and seed at the (0,0.5,1) identity.
             var lin = _linear!;
             int planeSize = Width * Height;
+            var baseBuf = EditorStretch.Apply(lin, Width, Height, Channels, BitDepth, null);
             if (Channels == 3) {
                 var h = new int[768];
                 int step = Math.Max(1, planeSize / 300000);
-                for (int c = 0; c < 3; c++) {
-                    int off = c * planeSize, hoff = c * 256;
-                    for (int i = 0; i < planeSize; i += step) {
-                        int b = (int)(lin[off + i] / maxV * 255);
-                        h[hoff + (b < 0 ? 0 : b > 255 ? 255 : b)]++;
-                    }
+                for (int i = 0; i < planeSize; i += step) {
+                    int j = i * 3;
+                    h[baseBuf[j]]++; h[256 + baseBuf[j + 1]]++; h[512 + baseBuf[j + 2]]++;
                 }
-                var green = new ushort[planeSize];
-                Array.Copy(lin, planeSize, green, 0, planeSize);
-                var p = AutoStretch.ComputeAutoStretchParams(green, Width, Height, BitDepth);
-                return (h, p.Black, p.Mid, p.White);
+                return (h, 0.0, 0.5, 1.0);
             } else {
                 var h = new int[256];
-                int step = Math.Max(1, lin.Length / 300000);
-                for (int i = 0; i < lin.Length; i += step) {
-                    int b = (int)(lin[i] / maxV * 255);
-                    h[b < 0 ? 0 : b > 255 ? 255 : b]++;
-                }
-                var p = AutoStretch.ComputeAutoStretchParams(lin, Width, Height, BitDepth);
-                return (h, p.Black, p.Mid, p.White);
+                int step = Math.Max(1, baseBuf.Length / 300000);
+                for (int i = 0; i < baseBuf.Length; i += step) h[baseBuf[i]]++;
+                return (h, 0.0, 0.5, 1.0);
             }
         }
 
