@@ -47,7 +47,7 @@
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260620-studio1">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260620-skysearch2">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-solver1">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-dl1">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-rigs1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260620-guideside1">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260620-mobile1">
@@ -4656,14 +4656,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
 
                     <!-- INDI panel -->
-                    <div x-show="equipSource === 'indi'" style="margin-top:12px">
-                        <p>Connect to INDI server to discover devices. Typical on Linux / RPi
-                           or WSL2 on Windows.</p>
-                        <div class="control-row" style="margin-top: 10px; align-items: flex-end;">
-                            <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
-                            <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>
-                            <button class="btn btn-primary" @click="connectIndi()">Connect INDI</button>
-                        </div>
+                    <div x-show="equipSource === 'indi'" class="control-row"
+                         style="margin-top:10px; align-items:flex-end; flex-wrap:wrap;">
+                        <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
+                        <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>
+                        <button class="btn btn-primary" @click="connectIndi()">Connect INDI</button>
+                        <span class="hint" style="flex:1; min-width:200px; align-self:center;">
+                            Connect to INDI server to discover devices. Typical on Linux / RPi or WSL2 on Windows.</span>
                     </div>
 
                     <!-- Alpaca panel -->

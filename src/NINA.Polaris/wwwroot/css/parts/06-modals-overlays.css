@@ -1741,21 +1741,15 @@
    for their content. */
 .equip-grid {
     display: grid;
-    /* Mirrors the SETTINGS grid: viewport-driven 1 / 2 / 3 columns
-       instead of auto-fit/minmax math. Caps at 3 cols on wide desktops
-       so a Camera card with cooler chart + sensor metadata + connect
-       toggle keeps enough width for the chart to be readable; auto-fit
-       would otherwise drop to 4 cols on a 32-inch screen and compress
-       each card past the point those internal widgets stay legible. */
-    grid-template-columns: 1fr;
+    /* Column count follows the grid's ACTUAL width, not the viewport: pack as
+       many columns as fit at a ~440px floor (so 2 cols appear as soon as there
+       is room, even with the sidebar + density/zoom eating viewport width — the
+       old viewport breakpoints stayed 1-col in that case). The 440px floor
+       keeps the Camera card's cooler chart + sensor metadata legible; on a
+       genuinely huge screen it tops out around 3–4 readable cols. */
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr));
     gap: 12px;
     padding: 0;
-}
-@media (min-width: 900px) {
-    .equip-grid { grid-template-columns: 1fr 1fr; }
-}
-@media (min-width: 1500px) {
-    .equip-grid { grid-template-columns: 1fr 1fr 1fr; }
 }
 
 /* Metadata-only card variant (Main Telescope, Guidescope, Guide
