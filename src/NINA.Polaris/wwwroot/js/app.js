@@ -5148,12 +5148,26 @@ function ninaApp() {
                 this._applyDeviceTitle();
             } catch (_) { /* non-fatal */ }
         },
-        // Reflect the device name in the browser tab title (and the Android
-        // manager-app tab) so multiple Polaris hosts are distinguishable.
+        // Reflect the active rig name in the browser tab title (and the
+        // Android manager-app tab) so multiple rigs/hosts are
+        // distinguishable: "{rig name} - Polaris". Falls back to the device
+        // name, then the generic title, when no rig is active yet.
         _applyDeviceTitle() {
             try {
-                const n = (this.deviceFriendlyName || this.deviceMdnsName || '').trim();
-                document.title = n ? (n + ' · Polaris') : 'N.I.N.A. Polaris';
+                const rig = this.rigs?.find(r => r.id === this.activeRigId);
+                const label = (rig?.name
+                    || this.deviceFriendlyName
+                    || this.deviceMdnsName || '').trim();
+                document.title = label ? (label + ' - Polaris') : 'N.I.N.A. Polaris';
+                // In the Android wrapper the UI runs in a cross-origin
+                // iframe; the shell can't read our document.title, so push
+                // the label up so it can set this instance's tab text.
+                let inIframe = false;
+                try { inIframe = window.top !== window.self; } catch { inIframe = true; }
+                if (inIframe && window.parent) {
+                    window.parent.postMessage(
+                        { __polarisTitle: true, name: label }, '*');
+                }
             } catch (_) { /* SSR/no-DOM guard */ }
         },
         async saveDeviceName() {
@@ -15287,6 +15301,8 @@ function ninaApp() {
             // saveCurrentSelectionsToRig in that window would persist the
             // blanks over the rig and lose the attached filter / OTA.
             this._rigChoicesHydrated = true;
+            // Reflect the active rig name in the tab title ("{rig} - Polaris").
+            this._applyDeviceTitle();
         },
 
         async switchRig(id) {
@@ -15333,6 +15349,8 @@ function ninaApp() {
             if (!rig) return;
             rig.name = newName;
             await this.saveRig(rig);
+            // Renaming the active rig changes the tab title.
+            if (id === this.activeRigId) this._applyDeviceTitle();
         },
 
         // Debounced PUT, covers focal length / cooler target / etc. inline edits
