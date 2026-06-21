@@ -4657,11 +4657,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                     <!-- INDI panel -->
                     <div x-show="equipSource === 'indi'" class="control-row"
-                         style="margin-top:10px; align-items:flex-end; flex-wrap:wrap;">
+                         style="margin-top:10px; align-items:flex-end; flex-wrap:wrap; justify-content:center;">
                         <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
                         <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>
                         <button class="btn btn-primary" @click="connectIndi()">Connect INDI</button>
-                        <span class="hint" style="flex:1; min-width:200px; align-self:center;">
+                        <span class="hint" style="align-self:center;">
                             Connect to INDI server to discover devices. Typical on Linux / RPi or WSL2 on Windows.</span>
                     </div>
 
