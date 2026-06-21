@@ -130,6 +130,37 @@ public class SlewCenterService {
                 return;
             }
 
+            // Adaptive centering goal. A flat 30" tolerance is fine on a
+            // wide field but leaves the target visibly off-centre at long
+            // focal length / small FOV (the LDN 43 "lands low" report). So
+            // when we can derive the image scale (focal length + pixel
+            // size), aim for ~12 px of residual pointing error instead --
+            // tighter on long FL, naturally looser on short FL where 12 px
+            // is already coarse. Never tighter than an 8" floor (below the
+            // mount's repeatable pointing + seeing, chasing it just burns
+            // iterations) and never looser than the requested tolerance.
+            // The requested tolerance still acts as the "good enough"
+            // accept threshold on the final iteration (see after the loop),
+            // so a mount that can't hit the tight goal converges instead of
+            // failing.
+            double requestedTol = job.ToleranceArcsec;
+            double goalTol = requestedTol;
+            {
+                double flMm = rig?.FocalLengthMm ?? 0;
+                double pixUm = _equip.Camera?.PixelSizeX ?? 0;
+                if (flMm > 0 && pixUm > 0) {
+                    double scaleArcsecPerPx = pixUm * 206.265 / flMm;
+                    double adaptive = scaleArcsecPerPx * 12.0;
+                    goalTol = Math.Clamp(Math.Min(requestedTol, adaptive), 8.0, requestedTol);
+                    _logger.LogInformation(
+                        "Adaptive centering goal {Goal:F1}\" (scale {Scale:F2}\"/px, requested {Req:F0}\")",
+                        goalTol, scaleArcsecPerPx, requestedTol);
+                }
+            }
+            // Surface the active goal so the SKY tab status + logs reflect
+            // what we're actually converging to.
+            job.ToleranceArcsec = goalTol;
+
             // Don't bail upfront if no plate solver is available, the
             // user explicitly asked to slew, and they value the mount
             // physically moving to the target far more than they value
@@ -374,6 +405,21 @@ public class SlewCenterService {
                 // camera CaptureAsync timeout. 800 ms covers every
                 // mainstream mount we've tested with margin.
                 await Task.Delay(800, ct);
+            }
+
+            // Didn't reach the (possibly tightened) goal within the
+            // iteration budget. Accept anyway if we're inside the
+            // originally requested tolerance -- the adaptive goal is an
+            // aspiration, the requested tolerance is the contract, and a
+            // mount that lands at e.g. 18" against an 11" goal but a 30"
+            // request is centred for the user's purposes. Only fail when
+            // we're outside even the requested tolerance.
+            if (job.ErrorArcsec > 0 && job.ErrorArcsec <= requestedTol) {
+                job.State = SlewCenterState.Centered;
+                _logger.LogInformation(
+                    "Accepted at {Err:F1}\" (within requested {Req:F0}\", goal was {Goal:F1}\")",
+                    job.ErrorArcsec, requestedTol, goalTol);
+                return;
             }
 
             job.State = SlewCenterState.Failed;
