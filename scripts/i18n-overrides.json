@@ -26,7 +26,9 @@
     "Unpark": "Desestacionar",
     "Park mount": "Estacionar montagem",
     "Capture": "Capturar",
-    "Meridian flip": "Flip meridiano"
+    "Meridian flip": "Flip meridiano",
+    "Nothing connected yet. Pick a starting point below and the rest of the tabs come alive once your equipment is online.": "Nada conectado ainda. Escolha um ponto de partida abaixo e as demais abas ganham vida assim que seu equipamento estiver online.",
+    "Equipment is up. Plan the whole night, run a sequence, or jump into live stacking.": "Equipamento pronto. Planeje a noite inteira, execute uma sequência ou vá direto para o live stacking."
   },
   "es": {
     "Start": "Iniciar",
@@ -38,7 +40,9 @@
     "Unpark": "Desaparcar",
     "Park mount": "Aparcar montura",
     "Capture": "Capturar",
-    "Meridian flip": "Flip de meridiano"
+    "Meridian flip": "Flip de meridiano",
+    "Nothing connected yet. Pick a starting point below and the rest of the tabs come alive once your equipment is online.": "Nada conectado todavía. Elige un punto de partida abajo y el resto de las pestañas cobran vida cuando tu equipo esté en línea.",
+    "Equipment is up. Plan the whole night, run a sequence, or jump into live stacking.": "Equipo listo. Planifica toda la noche, ejecuta una secuencia o salta al live stacking."
   },
   "fr": {
     "Start": "Démarrer",
@@ -50,7 +54,9 @@
     "Unpark": "Déparquer",
     "Park mount": "Parquer la monture",
     "Capture": "Capturer",
-    "Meridian flip": "Retournement au méridien"
+    "Meridian flip": "Retournement au méridien",
+    "Nothing connected yet. Pick a starting point below and the rest of the tabs come alive once your equipment is online.": "Rien de connecté pour l’instant. Choisissez un point de départ ci-dessous ; les autres onglets s’activent dès que votre équipement est en ligne.",
+    "Equipment is up. Plan the whole night, run a sequence, or jump into live stacking.": "Équipement prêt. Planifiez toute la nuit, lancez une séquence ou passez au live stacking."
   },
   "de": {
     "Start": "Start",
@@ -62,6 +68,8 @@
     "Unpark": "Ausparken",
     "Park mount": "Montierung parken",
     "Capture": "Aufnehmen",
-    "Meridian flip": "Meridianwende"
+    "Meridian flip": "Meridianwende",
+    "Nothing connected yet. Pick a starting point below and the rest of the tabs come alive once your equipment is online.": "Noch nichts verbunden. Wähle unten einen Startpunkt – die übrigen Tabs werden aktiv, sobald deine Ausrüstung online ist.",
+    "Equipment is up. Plan the whole night, run a sequence, or jump into live stacking.": "Ausrüstung bereit. Plane die ganze Nacht, starte eine Sequenz oder springe ins Live-Stacking."
   }
 }

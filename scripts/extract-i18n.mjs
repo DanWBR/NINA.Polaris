@@ -23,6 +23,12 @@ const HTML = resolve(ROOT, 'src/NINA.Polaris/wwwroot/index.html');
 const APPJS = resolve(ROOT, 'src/NINA.Polaris/wwwroot/js/app.js');
 const OUT = resolve(ROOT, 'src/NINA.Polaris/wwwroot/data/locales/_source.json');
 
+// A sentinel that never occurs in UI text: we replace HTML tags with it and
+// split on it, so a single text node wrapped across source lines stays ONE key
+// (splitting on a newline or space would shatter it into partial keys that
+// never match the runtime DOM text the observer reads).
+const SENTINEL = String.fromCharCode(1);
+
 // Decode the HTML entities that appear in static markup so the extracted key
 // matches the DECODED text the runtime DOM observer sees (e.g. "Equipment &amp;
 // capture" in the source is "Equipment & capture" at runtime). Without this,
@@ -40,6 +46,7 @@ function decodeEntities(s) {
 }
 
 const norm = (s) => decodeEntities(s).replace(/\s+/g, ' ').trim();
+
 // High-precision filter: keep things that look like natural-language UI prose,
 // drop the code/CSS/Alpine-expression fragments that leak from a hand-written
 // HTML+JS scrape. Recall is sacrificed for precision so the catalog (and the
@@ -73,9 +80,10 @@ html = html.replace(/<script[\s\S]*?<\/script>/gi, ' ')
 for (const m of html.matchAll(/(?<![:\w-])(title|placeholder|aria-label|alt)\s*=\s*"([^"]*)"/g)) {
     if (keep(m[2])) found.add(norm(m[2]));
 }
-// Static element text: strip tags, split, filter.
-const text = html.replace(/<[^>]+>/g, '\n');
-for (const frag of text.split('\n')) {
+// Static element text: replace tags with the sentinel, split on it (one text
+// node -> one fragment), then norm() collapses internal whitespace.
+const text = html.replace(/<[^>]+>/g, SENTINEL);
+for (const frag of text.split(SENTINEL)) {
     if (keep(frag)) found.add(norm(frag));
 }
 
