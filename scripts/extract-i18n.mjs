@@ -23,7 +23,23 @@ const HTML = resolve(ROOT, 'src/NINA.Polaris/wwwroot/index.html');
 const APPJS = resolve(ROOT, 'src/NINA.Polaris/wwwroot/js/app.js');
 const OUT = resolve(ROOT, 'src/NINA.Polaris/wwwroot/data/locales/_source.json');
 
-const norm = (s) => s.replace(/\s+/g, ' ').trim();
+// Decode the HTML entities that appear in static markup so the extracted key
+// matches the DECODED text the runtime DOM observer sees (e.g. "Equipment &amp;
+// capture" in the source is "Equipment & capture" at runtime). Without this,
+// any string containing & < > " ' or a numeric/emoji entity never matches.
+const NAMED = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" };
+function decodeEntities(s) {
+    return s.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (m, body) => {
+        if (body[0] === '#') {
+            const cp = body[1] === 'x' || body[1] === 'X'
+                ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
+            return Number.isFinite(cp) ? String.fromCodePoint(cp) : m;
+        }
+        return Object.prototype.hasOwnProperty.call(NAMED, body) ? NAMED[body] : m;
+    });
+}
+
+const norm = (s) => decodeEntities(s).replace(/\s+/g, ' ').trim();
 // Keep only strings that contain at least one letter and aren't pure
 // numbers/symbols/expressions. Drop Alpine/JS expression fragments.
 function keep(s) {

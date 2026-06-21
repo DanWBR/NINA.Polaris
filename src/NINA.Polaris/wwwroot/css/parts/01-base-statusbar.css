@@ -832,6 +832,12 @@ body {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    /* i18n: some translated labels are longer than the English source
+       (e.g. "Configurações"); wrap + center instead of clipping. */
+    width: 100%;
+    text-align: center;
+    overflow-wrap: anywhere;
+    line-height: 1.15;
 }
 
 /* Main Content */
