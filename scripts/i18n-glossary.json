@@ -62,7 +62,11 @@
     "Subframe",
     "Plate solve",
     "Plate solving",
-    "Live stacking"
+    "Live stacking",
+    "Master Bias",
+    "Master Dark",
+    "Master dark",
+    "Master Flat"
   ],
   "keepInEnglishHints": [
     "plate solving",
