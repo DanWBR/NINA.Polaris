@@ -1,0 +1,67 @@
+{
+  "_comment": "Curated human corrections applied on top of machine translation (scripts/apply-i18n-overrides.mjs). 'all' applies to every language (calibration-frame names + core astro jargon kept in English, where MT produced nonsense like Flat->Apartment, Bias->statistical bias). Per-language sections fix homographs MT got wrong as button labels (imperative verb forms, e.g. Resume->résumé). Applied keys are removed from the machine-review markers.",
+  "all": {
+    "Bias": "Bias",
+    "Dark": "Dark",
+    "Flat": "Flat",
+    "Darks": "Darks",
+    "Flats": "Flats",
+    "Biases": "Biases",
+    "Binning": "Binning",
+    "Slew": "Slew",
+    "Dither": "Dither",
+    "Dithering": "Dithering",
+    "Plate solve": "Plate solve",
+    "Plate solving": "Plate solving",
+    "Live stacking": "Live stacking",
+    "Subframe": "Subframe"
+  },
+  "pt-BR": {
+    "Start": "Iniciar",
+    "Stop": "Parar",
+    "Abort": "Abortar",
+    "Pause": "Pausar",
+    "Resume": "Retomar",
+    "Park": "Estacionar",
+    "Unpark": "Desestacionar",
+    "Park mount": "Estacionar montagem",
+    "Capture": "Capturar",
+    "Meridian flip": "Flip meridiano"
+  },
+  "es": {
+    "Start": "Iniciar",
+    "Stop": "Detener",
+    "Abort": "Abortar",
+    "Pause": "Pausar",
+    "Resume": "Reanudar",
+    "Park": "Aparcar",
+    "Unpark": "Desaparcar",
+    "Park mount": "Aparcar montura",
+    "Capture": "Capturar",
+    "Meridian flip": "Flip de meridiano"
+  },
+  "fr": {
+    "Start": "Démarrer",
+    "Stop": "Arrêter",
+    "Abort": "Interrompre",
+    "Pause": "Pause",
+    "Resume": "Reprendre",
+    "Park": "Parquer",
+    "Unpark": "Déparquer",
+    "Park mount": "Parquer la monture",
+    "Capture": "Capturer",
+    "Meridian flip": "Retournement au méridien"
+  },
+  "de": {
+    "Start": "Start",
+    "Stop": "Stopp",
+    "Abort": "Abbrechen",
+    "Pause": "Pause",
+    "Resume": "Fortsetzen",
+    "Park": "Parken",
+    "Unpark": "Ausparken",
+    "Park mount": "Montierung parken",
+    "Capture": "Aufnehmen",
+    "Meridian flip": "Meridianwende"
+  }
+}

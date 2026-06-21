@@ -48,7 +48,21 @@
     "Adv",
     "Rigs",
     "Autorun",
-    "Polar"
+    "Polar",
+    "Bias",
+    "Dark",
+    "Flat",
+    "Darks",
+    "Flats",
+    "Biases",
+    "Binning",
+    "Slew",
+    "Dither",
+    "Dithering",
+    "Subframe",
+    "Plate solve",
+    "Plate solving",
+    "Live stacking"
   ],
   "keepInEnglishHints": [
     "plate solving",

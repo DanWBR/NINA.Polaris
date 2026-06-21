@@ -47,7 +47,7 @@ const norm = (s) => decodeEntities(s).replace(/\s+/g, ' ').trim();
 // here just stays English at runtime (graceful), so erring strict is safe.
 function keep(s) {
     s = norm(s);
-    if (!s || s.length < 2 || s.length > 140) return false;
+    if (!s || s.length < 2 || s.length > 320) return false;
     if (!/[A-Za-z]/.test(s)) return false;                       // needs a letter
     if (/^[^A-Za-z(À-ÿ]/.test(s)) return false;                  // must START with a letter or "("
     if (/^[a-z]/.test(s) && !/\s/.test(s)) return false;         // lone lowercase token (identifier/var)
