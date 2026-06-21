@@ -135,6 +135,13 @@ public class IndiTelescope : ITelescope {
         await _client.SetSwitchAsync(DeviceName, "ON_COORD_SET",
             new Dictionary<string, bool> { ["TRACK"] = true, ["SLEW"] = false, ["SYNC"] = false }, ct);
 
+        // Let the ON_COORD_SET mode switch settle before the coord write.
+        // Some LX200-class drivers (ZWO AM5/AM3) latch the requested action
+        // when the EQUATORIAL_EOD_COORD vector arrives; firing the number
+        // write in the same tick as the switch occasionally has the driver
+        // act on the previous mode. 250 ms is imperceptible vs a slew.
+        try { await Task.Delay(250, ct); } catch (TaskCanceledException) { return; }
+
         // 4. Issue the slew via the coord write -- ack-based so we
         //    actually know the driver received it. INDIROB-1: before
         //    this was fire-and-forget which raced IsSlewing (poller
@@ -175,6 +182,19 @@ public class IndiTelescope : ITelescope {
             var detail = string.IsNullOrEmpty(ack.AlertMessage)
                 ? "(no message from driver)"
                 : ack.AlertMessage;
+            // A GoTo rejected with NO driver message is almost always the
+            // LX200-class :MS# command reporting the target is unreachable
+            // (the AlertMessage string the protocol returns rarely makes it
+            // through the driver). The ZWO AM5/AM3 in EQ mode is a frequent
+            // case. Add the actionable causes so the operator isn't left with
+            // a bare "(no message from driver)".
+            if (operation == "slew" && string.IsNullOrEmpty(ack.AlertMessage)) {
+                throw new InvalidOperationException(
+                    $"Mount '{DeviceName}' refused the GoTo (driver gave no reason). " +
+                    "Most likely the target is below the horizon or past a slew/meridian " +
+                    "limit; also check the mount is unparked and — on a ZWO AM5/AM3 in EQ " +
+                    "mode — that it has been homed/initialised this session (try Find Home first).");
+            }
             throw new InvalidOperationException(
                 $"Mount '{DeviceName}' rejected {operation} on {property}: {detail}");
         }
