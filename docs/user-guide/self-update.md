@@ -45,6 +45,37 @@ Pi (service restart + .NET warm-up).
 
 ---
 
+## Updating when the SBC has no internet (relay through your phone/tablet)
+
+In the field your mini PC is often offline while the device you control it
+from (a phone or tablet on 4G/5G) is online. Polaris can update through **that**
+connection instead.
+
+When you click **Check for updates** (Settings → Power) and Polaris reaches the
+SBC but the SBC can't reach GitHub, the modal switches to **"Update through this
+device"**:
+
+1. Your browser reads the latest release info **from GitHub directly** (this
+   uses your phone's connection) and finds the right `polaris_<arch>.deb`.
+2. Tap **⬇ Download** — your device downloads the `.deb` over its own
+   connection (it saves to your Downloads).
+3. Tap **pick the file** and choose that downloaded `.deb`. The browser uploads
+   it to the SBC over the local network.
+4. The SBC verifies the upload's **SHA-256** against the digest your browser
+   read from the GitHub API, checks it's really the `polaris` package at a newer
+   version, then installs it exactly as the normal path does — service restarts,
+   page reloads.
+
+Because the integrity check is anchored to the checksum GitHub published (read
+over HTTPS by your device), a corrupted download or a wrong file is rejected
+before anything is installed, even though the SBC never talked to GitHub itself.
+
+> The package's bytes can't be fetched automatically by the browser (GitHub's
+> asset host doesn't allow cross-site reads), which is why there's a manual
+> download + pick step. The version lookup and checksum are automatic.
+
+---
+
 ## Why there's no password prompt
 
 The Polaris service runs as the unprivileged `polaris` system user. The

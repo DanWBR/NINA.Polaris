@@ -38,5 +38,28 @@ public static class UpdateEndpoints {
                 ? Results.Ok(new { started = true })
                 : Results.BadRequest(new { error });
         });
+
+        // Internet-free host facts (version + dpkg arch) the browser needs to
+        // find the right release asset on GitHub for the offline-sideload flow.
+        group.MapGet("/local-info", (UpdateService svc) => Results.Ok(svc.LocalInfo()));
+
+        // Offline / relay install: the SBC has no internet but the client
+        // (phone on 4G/5G) does, so the browser downloads the .deb from GitHub
+        // and POSTs the raw bytes here. The expected size + SHA-256 (which the
+        // browser also read from the GitHub API over TLS) come as headers so the
+        // server can verify integrity before the privileged install runs.
+        // Body is the raw .deb (application/octet-stream); Kestrel's 1 GB body
+        // limit (Program.cs) covers the ~80 MB package.
+        group.MapPost("/upload-deb", async (HttpRequest req, UpdateService svc, CancellationToken ct) => {
+            long expectedSize = 0;
+            if (req.Headers.TryGetValue("X-Expected-Size", out var sz))
+                long.TryParse(sz.ToString(), out expectedSize);
+            var sha = req.Headers.TryGetValue("X-Expected-Sha256", out var h) ? h.ToString() : null;
+
+            var (ok, error) = await svc.InstallFromUploadAsync(req.Body, expectedSize, sha, ct);
+            return ok
+                ? Results.Ok(new { started = true })
+                : Results.BadRequest(new { error });
+        });
     }
 }

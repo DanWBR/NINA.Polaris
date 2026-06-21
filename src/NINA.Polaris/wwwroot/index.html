@@ -15000,15 +15000,19 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <span class="modal-icon">⬆</span>
                 <h3>Software update available</h3>
             </div>
-            <p style="margin-bottom:8px">
+            <p style="margin-bottom:8px" x-show="!update.offline">
                 <b x-text="update.releaseName || ('Version ' + (update.latestVersion || ''))"></b>
                 <span style="opacity:.7" x-show="update.publishedAt"
                       x-text="' · ' + new Date(update.publishedAt).toLocaleDateString()"></span>
             </p>
-            <p style="opacity:.8;font-size:.85em;margin-bottom:10px">
+            <p style="opacity:.8;font-size:.85em;margin-bottom:10px" x-show="!update.offline">
                 Installed <b x-text="update.currentVersion"></b>
                 → new <b x-text="update.latestVersion"></b>
                 <span x-show="update.assetName" x-text="' · ' + update.assetName + ' (' + updateAssetSizeText() + ')'"></span>
+            </p>
+            <p style="margin-bottom:8px" x-show="update.offline">
+                <b>Update through this device</b>
+                <span style="opacity:.7"> · the SBC has no internet</span>
             </p>
             <!-- Changelog: the commits since the installed version (the
                  release body is just download/install instructions, so we
@@ -15027,15 +15031,15 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </div>
                 </template>
             </div>
-            <p class="hint" x-show="update.commits.length === 0"
+            <p class="hint" x-show="update.commits.length === 0 && !update.offline"
                style="font-size:.82em;opacity:.7;margin-bottom:12px">
                 Changelog unavailable for this update.
             </p>
-            <a x-show="update.htmlUrl" :href="update.htmlUrl" target="_blank" rel="noopener"
+            <a x-show="update.htmlUrl && !update.offline" :href="update.htmlUrl" target="_blank" rel="noopener"
                style="font-size:.8em;display:inline-block;margin-bottom:12px">View release on GitHub ↗</a>
 
-            <!-- Install controls -->
-            <template x-if="!update.installing && !update.done">
+            <!-- Install controls (online: the SBC downloads + installs itself) -->
+            <template x-if="!update.installing && !update.done && !update.offline">
                 <div>
                     <p style="font-size:.82em;opacity:.85;margin-bottom:4px">
                         The new package will be downloaded and installed, then Polaris
@@ -15046,6 +15050,70 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <div class="modal-actions" style="margin-top:14px">
                         <button class="btn btn-sm" @click="update.modalOpen = false">Cancel</button>
                         <button class="btn btn-sm btn-primary" @click="installUpdate()">Download &amp; install</button>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Offline relay: the SBC can't reach GitHub but this phone/tablet
+                 can. The browser reads the release info from GitHub, you download
+                 the .deb on this device, then pick it to upload + install. -->
+            <template x-if="!update.installing && !update.done && update.offline">
+                <div>
+                    <p style="font-size:.82em;opacity:.85;margin-bottom:8px">
+                        Your SBC has no internet, but this device does. Download the
+                        package here, then pick it to send it over to the SBC — it
+                        verifies the checksum before installing.
+                    </p>
+
+                    <div x-show="update.relayBusy" style="display:flex;align-items:center;gap:8px;margin:10px 0">
+                        <div class="spinner" style="width:16px;height:16px"></div>
+                        <span style="font-size:.85em">Looking up the latest release on GitHub…</span>
+                    </div>
+
+                    <p class="update-error" x-show="update.relayError" x-text="update.relayError"
+                       style="color:var(--danger,#f87171);font-size:.82em;margin:8px 0"></p>
+
+                    <!-- Already up to date -->
+                    <p x-show="update.relayInfo && update.relayInfo.upToDate"
+                       style="font-size:.85em;margin:8px 0">
+                        You're already on the latest version
+                        (<b x-text="update.relayInfo && update.relayInfo.latestVersion"></b>).
+                    </p>
+
+                    <!-- An update is available: download link + file picker -->
+                    <template x-if="update.relayInfo && !update.relayInfo.upToDate && update.relayInfo.assetName">
+                        <div>
+                            <p style="opacity:.85;font-size:.85em;margin-bottom:8px">
+                                Installed <b x-text="update.currentVersion"></b>
+                                → new <b x-text="update.relayInfo.latestVersion"></b>
+                            </p>
+                            <ol style="font-size:.85em;padding-left:20px;margin:0 0 12px">
+                                <li style="margin-bottom:8px">
+                                    <a :href="update.relayInfo.assetUrl" target="_blank" rel="noopener"
+                                       download class="btn btn-sm btn-primary" style="text-decoration:none">
+                                        ⬇ Download <span x-text="update.relayInfo.assetName"></span>
+                                    </a>
+                                    <span style="opacity:.7"
+                                          x-text="' (' + (update.relayInfo.assetSize/1024/1024).toFixed(1) + ' MB)'"></span>
+                                </li>
+                                <li>
+                                    Then pick that downloaded file:
+                                    <div style="margin-top:6px">
+                                        <input type="file" accept=".deb,application/vnd.debian.binary-package,application/octet-stream"
+                                               @change="relayUploadDeb($event)">
+                                    </div>
+                                </li>
+                            </ol>
+                        </div>
+                    </template>
+
+                    <p class="update-error" x-show="update.error" x-text="update.error"
+                       style="color:var(--danger,#f87171);font-size:.82em;margin-top:8px"></p>
+
+                    <div class="modal-actions" style="margin-top:14px">
+                        <button class="btn btn-sm" @click="update.modalOpen = false">Close</button>
+                        <button class="btn btn-sm" @click="relayCheckGithub()"
+                                :disabled="update.relayBusy">Check again</button>
                     </div>
                 </div>
             </template>
@@ -15239,7 +15307,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260620-syncmount1"></script>
+    <script src="/js/app.js?v=20260621-offlineupdate1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

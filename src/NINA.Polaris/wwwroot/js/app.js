@@ -108,7 +108,20 @@ function ninaApp() {
             commits: [],   // changelog: [{ sha, subject, body }] since installed version
             assetName: '', assetSize: 0,
             installing: false, done: false,
-            progress: '', error: ''
+            progress: '', error: '',
+            // Offline "relay" update: SBC has no internet but the client
+            // (phone on 4G/5G) does. The browser reads the release metadata
+            // from GitHub (CORS-allowed JSON), the user downloads the .deb on
+            // their device (a normal download — the asset bytes are NOT CORS-
+            // readable, so we can't fetch() them), then picks the file and we
+            // upload it to the SBC, which verifies the SHA-256 (read from the
+            // GitHub API) before installing.
+            offline: false,         // set when /api/update/check reached us but couldn't reach GitHub
+            relayOpen: false,       // offline-relay section expanded in the modal
+            relayBusy: false,       // fetching release metadata from GitHub
+            relayUploading: false,  // uploading the picked .deb to the SBC
+            relayError: '',
+            relayInfo: null         // { latestVersion, assetName, assetSize, assetUrl, sha256 }
         },
         // Brightness/contrast for the GUIDE camera frame (CSS filter on the
         // <img>, client-only). Restored from localStorage in init().
@@ -27770,11 +27783,23 @@ function ninaApp() {
             try {
                 const u = await this.checkUpdate(true);
                 if (!u) { this.toast('Update check failed — offline or server error', 'error'); return; }
-                if (u.error) { this.toast('Update check: ' + u.error, 'error'); return; }
                 if (!u.supported) {
                     this.toast('Self-update needs a Linux .deb install. Running v' + (u.currentVersion || '?'), 'info');
                     return;
                 }
+                // The SBC answered but couldn't reach GitHub (no internet on the
+                // mini PC). Offer the offline-relay path: the client's own
+                // connection downloads the package. See relayCheckGithub().
+                if (u.error) {
+                    this.update.offline = true;
+                    this.update.relayOpen = true;
+                    this.toast('Polaris couldn\'t reach GitHub from the SBC — you can update through this device instead.', 'info', 8000);
+                    this.openUpdateModal();
+                    this.update.modalOpen = true;
+                    this.relayCheckGithub();
+                    return;
+                }
+                this.update.offline = false;
                 if (u.updateAvailable) {
                     this.toast('Update available: v' + (u.latestVersion || '?'), 'success');
                     this.openUpdateModal();
@@ -27926,6 +27951,134 @@ function ninaApp() {
                 }
             } catch (e) { /* server down mid-restart — keep polling */ }
             setTimeout(() => this._pollUpdateComplete(oldVersion, startedAt), 4000);
+        },
+
+        // --- Offline "relay" update (SBC has no internet; the client does) ---
+        // Read this SBC's version + dpkg arch (no network), then query the
+        // GitHub releases API straight from the browser (api.github.com sends
+        // CORS '*', so the JSON is readable) and find the architecture-matched
+        // .deb. The asset *bytes* are NOT CORS-readable (the final
+        // release-assets host omits the header), so we don't fetch them — we
+        // hand the user a normal download link and a file picker instead.
+        async relayCheckGithub() {
+            if (this.update.relayBusy) return;
+            this.update.relayBusy = true;
+            this.update.relayError = '';
+            this.update.relayInfo = null;
+            try {
+                const li = await (await this.apiFetch('/api/update/local-info')).json();
+                if (!li.supported) {
+                    this.update.relayError = 'Self-update needs a Linux .deb install.';
+                    return;
+                }
+                const repo = li.repo || 'DanWBR/NINA.Polaris';
+                const arch = li.arch || '';
+                let rel;
+                try {
+                    const gh = await fetch('https://api.github.com/repos/' + repo + '/releases/latest', {
+                        headers: { 'Accept': 'application/vnd.github+json' }
+                    });
+                    if (!gh.ok) { this.update.relayError = 'GitHub returned HTTP ' + gh.status + '. Is this device online?'; return; }
+                    rel = await gh.json();
+                } catch (e) {
+                    this.update.relayError = 'Could not reach GitHub from this device. Check its internet connection.';
+                    return;
+                }
+                const tag = (rel.tag_name || '').replace(/^v/i, '');
+                if (tag && this._verCompare(tag, li.currentVersion) <= 0) {
+                    this.update.relayError = '';
+                    this.update.relayInfo = { upToDate: true, latestVersion: tag };
+                    return;
+                }
+                // Pick the polaris_*_<arch>.deb asset; prefer the versioned name.
+                const assets = Array.isArray(rel.assets) ? rel.assets : [];
+                const matches = assets.filter(a => {
+                    const n = (a.name || '').toLowerCase();
+                    return n.startsWith('polaris_') && n.endsWith('_' + arch.toLowerCase() + '.deb');
+                });
+                const asset = matches.find(a => (a.name || '').includes(tag)) || matches[0];
+                if (!asset) {
+                    this.update.relayError = 'No .deb asset for architecture "' + arch + '" in release ' + (rel.tag_name || '?') + '.';
+                    return;
+                }
+                this.update.relayInfo = {
+                    latestVersion: tag,
+                    assetName: asset.name,
+                    assetSize: asset.size || 0,
+                    // browser_download_url is a plain navigation download (no CORS
+                    // — it's not read by JS, the browser saves it to the device).
+                    assetUrl: asset.browser_download_url,
+                    sha256: (asset.digest || '').replace(/^sha256:/i, '')
+                };
+            } catch (e) {
+                this.update.relayError = 'Update lookup failed: ' + (e.message || e);
+            } finally {
+                this.update.relayBusy = false;
+            }
+        },
+        // Numeric dotted-version compare (1 if a>b, -1 if a<b, 0 if equal).
+        _verCompare(a, b) {
+            const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
+            const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+            const len = Math.max(pa.length, pb.length);
+            for (let i = 0; i < len; i++) {
+                const x = pa[i] || 0, y = pb[i] || 0;
+                if (x > y) return 1;
+                if (x < y) return -1;
+            }
+            return 0;
+        },
+        // User picked the .deb they downloaded on this device. Verify the size
+        // matches what GitHub reported, then upload it to the SBC with the
+        // expected size + SHA-256 (read from the GitHub API) so the server can
+        // confirm integrity before the privileged install. Then poll for the
+        // service to come back on the new version.
+        async relayUploadDeb(ev) {
+            const file = ev?.target?.files?.[0];
+            if (ev?.target) ev.target.value = '';   // allow re-picking the same file
+            if (!file) return;
+            const info = this.update.relayInfo;
+            if (!info || !info.sha256) {
+                this.update.relayError = 'Look up the release first so the checksum is known.';
+                return;
+            }
+            if (info.assetSize && file.size !== info.assetSize) {
+                this.update.relayError = 'Picked file is ' + file.size + ' bytes but the release asset is '
+                    + info.assetSize + ' bytes. Did the download finish? Pick the exact ' + info.assetName + '.';
+                return;
+            }
+            this.update.relayError = '';
+            this.update.relayUploading = true;
+            this.update.error = '';
+            this.update.installing = true;
+            this.update.progress = 'Uploading the package to your SBC…';
+            try {
+                const r = await this.apiUpload('/api/update/upload-deb', file, {
+                    method: 'POST',
+                    label: 'Update package',
+                    headers: {
+                        'Content-Type': 'application/octet-stream',
+                        'X-Expected-Size': String(info.assetSize || file.size),
+                        'X-Expected-Sha256': info.sha256
+                    }
+                });
+                if (!r.ok) {
+                    let msg = 'Install failed.';
+                    try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) {}
+                    this.update.error = msg;
+                    this.update.installing = false;
+                    return;
+                }
+                this.update.progress = 'Restarting service and applying update…';
+                this._pollUpdateComplete(this.appVersion || '', Date.now());
+            } catch (e) {
+                let msg = 'Upload failed: ' + (e.message || e);
+                if (e && e.body) { try { const j = JSON.parse(e.body); if (j.error) msg = j.error; } catch (_) {} }
+                this.update.error = msg;
+                this.update.installing = false;
+            } finally {
+                this.update.relayUploading = false;
+            }
         },
 
         formatHostRam(usedMB, totalMB) {

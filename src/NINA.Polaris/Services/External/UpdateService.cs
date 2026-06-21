@@ -15,6 +15,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace NINA.Polaris.Services.External;
@@ -305,11 +306,139 @@ public class UpdateService {
             return (false, "Download failed: " + ex.Message);
         }
 
-        // 2. Start the on-demand updater unit. The polaris user is authorized
-        //    to start exactly this unit, passwordless, by 50-polaris-update.rules
-        //    (manage-units → polaris-self-update.service). The unit runs apt in
-        //    its own cgroup, so the polaris.service restart the install triggers
-        //    won't kill it. --no-block returns once the job is enqueued.
+        // 2. Hand off to the on-demand updater unit (shared with the offline
+        //    sideload path below).
+        return await LaunchUpdaterUnitAsync();
+    }
+
+    /// <summary>
+    /// Offline / "relay" install. The SBC has no internet but the operator's
+    /// phone/tablet does, so the browser downloads the architecture-matched .deb
+    /// from GitHub over its own (4G/5G) link and POSTs the bytes here. We stage
+    /// them to the same path the updater unit reads and hand off to the same
+    /// install machinery as <see cref="InstallAsync"/>.
+    ///
+    /// <para>Because the package no longer comes from a server-resolved GitHub
+    /// URL, integrity is verified before anything privileged runs:
+    /// the browser also reads the asset's <c>sha256</c> digest from the GitHub
+    /// API (over TLS) and passes it as <paramref name="expectedSha256Hex"/>; we
+    /// recompute the hash of the received bytes and refuse to install on a
+    /// mismatch. As a second gate, <c>dpkg-deb</c> must report the package name
+    /// <c>polaris</c> with a version newer than the running one. So a tampered
+    /// upload (wrong bytes) or an unrelated/old package is rejected even though
+    /// the SBC itself never reached GitHub.</para>
+    /// </summary>
+    public async Task<(bool ok, string? error)> InstallFromUploadAsync(
+            Stream deb, long expectedSize, string? expectedSha256Hex, CancellationToken ct) {
+        if (!IsSupported) return (false, "Self-update is only available on a Linux .deb install.");
+        if (string.IsNullOrWhiteSpace(expectedSha256Hex))
+            return (false, "Missing the expected SHA-256 digest — cannot verify the package.");
+
+        var wantHex = expectedSha256Hex.Trim();
+        if (wantHex.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
+            wantHex = wantHex["sha256:".Length..];
+        wantHex = wantHex.ToLowerInvariant();
+
+        // 1. Stream the upload to the staging path, hashing + counting as we go
+        //    so an oversized or corrupt transfer fails without buffering it all
+        //    in memory (the .deb is ~80 MB on an SBC with little RAM).
+        long written = 0;
+        string gotHex;
+        try {
+            Directory.CreateDirectory(CacheDir);
+            using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            var buf = new byte[128 * 1024];
+            await using (var fs = File.Create(DebStagePath)) {
+                int n;
+                while ((n = await deb.ReadAsync(buf, ct)) > 0) {
+                    written += n;
+                    // Guard against a runaway upload: cap at the declared size
+                    // (+1 MB slack) so a lying Content-Length can't fill the disk.
+                    if (expectedSize > 0 && written > expectedSize + 1024 * 1024) {
+                        throw new InvalidOperationException("Upload exceeded the declared size.");
+                    }
+                    sha.AppendData(buf, 0, n);
+                    await fs.WriteAsync(buf.AsMemory(0, n), ct);
+                }
+            }
+            gotHex = Convert.ToHexString(sha.GetHashAndReset()).ToLowerInvariant();
+        } catch (Exception ex) {
+            try { File.Delete(DebStagePath); } catch { }
+            _logger.LogWarning(ex, "Update upload staging failed");
+            return (false, "Upload failed: " + ex.Message);
+        }
+
+        // 2. Integrity: byte count + SHA-256 must match what the browser read
+        //    from the GitHub API.
+        if (expectedSize > 0 && written != expectedSize) {
+            try { File.Delete(DebStagePath); } catch { }
+            return (false, $"Size mismatch: received {written} bytes, expected {expectedSize}.");
+        }
+        if (!string.Equals(gotHex, wantHex, StringComparison.Ordinal)) {
+            try { File.Delete(DebStagePath); } catch { }
+            _logger.LogWarning("Update upload SHA-256 mismatch (got {Got}, want {Want})", gotHex, wantHex);
+            return (false, "Checksum mismatch — the uploaded package is corrupt or not the genuine release. Aborted.");
+        }
+
+        // 3. dpkg sanity: must be the 'polaris' package, version newer than ours.
+        var (sane, sanityErr) = await VerifyDebPackageAsync(DebStagePath, ct);
+        if (!sane) {
+            try { File.Delete(DebStagePath); } catch { }
+            return (false, sanityErr);
+        }
+
+        _logger.LogInformation("Update: sideloaded {Bytes} bytes (sha256 ok), launching installer.", written);
+        return await LaunchUpdaterUnitAsync();
+    }
+
+    /// <summary>Read the staged .deb's control fields with <c>dpkg-deb</c> and
+    /// confirm it is the <c>polaris</c> package at a version newer than the one
+    /// running. Defence-in-depth behind the SHA-256 check: stops an authenticated
+    /// client sideloading an unrelated or downgrade package.</summary>
+    private async Task<(bool ok, string? error)> VerifyDebPackageAsync(string path, CancellationToken ct) {
+        try {
+            var pkg = (await RunCaptureAsync("dpkg-deb", new[] { "-f", path, "Package" }, ct)).Trim();
+            var ver = (await RunCaptureAsync("dpkg-deb", new[] { "-f", path, "Version" }, ct)).Trim();
+            if (!string.Equals(pkg, "polaris", StringComparison.OrdinalIgnoreCase))
+                return (false, $"Uploaded package is '{pkg}', not 'polaris'. Aborted.");
+            // Debian versions can carry an epoch / revision; take the upstream
+            // numeric core for a System.Version compare (best-effort).
+            var core = new string(ver.TakeWhile(c => char.IsDigit(c) || c == '.').ToArray());
+            if (Version.TryParse(core, out var v) && v <= CurrentVersion)
+                return (false, $"Uploaded version {ver} is not newer than the installed {CurrentVersion}. Aborted.");
+            return (true, null);
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "dpkg-deb verification failed");
+            return (false, "Could not verify the package with dpkg-deb: " + ex.Message);
+        }
+    }
+
+    /// <summary>Run a process and return its stdout, throwing on a non-zero
+    /// exit. Used for the short, bounded dpkg-deb field reads.</summary>
+    private static async Task<string> RunCaptureAsync(string file, string[] args, CancellationToken ct) {
+        var psi = new ProcessStartInfo {
+            FileName = file, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false
+        };
+        foreach (var a in args) psi.ArgumentList.Add(a);
+        using var proc = Process.Start(psi) ?? throw new InvalidOperationException($"Failed to start {file}");
+        using var to = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var link = CancellationTokenSource.CreateLinkedTokenSource(ct, to.Token);
+        var stdout = await proc.StandardOutput.ReadToEndAsync(link.Token);
+        await proc.WaitForExitAsync(link.Token);
+        if (proc.ExitCode != 0) {
+            var err = await proc.StandardError.ReadToEndAsync(CancellationToken.None);
+            throw new InvalidOperationException($"{file} exited {proc.ExitCode}: {err}".Trim());
+        }
+        return stdout;
+    }
+
+    /// <summary>Start the on-demand updater unit. The polaris user is authorized
+    /// to start exactly this unit, passwordless, by 50-polaris-update.rules
+    /// (manage-units → polaris-self-update.service). The unit runs apt in its own
+    /// cgroup, so the polaris.service restart the install triggers won't kill it.
+    /// Shared by the online (<see cref="InstallAsync"/>) and offline-sideload
+    /// (<see cref="InstallFromUploadAsync"/>) paths once the .deb is staged.</summary>
+    private async Task<(bool ok, string? error)> LaunchUpdaterUnitAsync() {
         try {
             var psi = new ProcessStartInfo {
                 FileName = "systemctl",
@@ -324,9 +453,9 @@ public class UpdateService {
             using var proc = Process.Start(psi)
                 ?? throw new InvalidOperationException("Failed to start systemctl");
 
-            // Not linked to ct for the same reason as the download above: once
-            // we have the .deb staged, launching the install must not be undone
-            // by a client that has already navigated away / timed out.
+            // Not linked to a request token: once the .deb is staged, launching
+            // the install must not be undone by a client that has already
+            // navigated away / timed out.
             using var waitCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var stderr = await proc.StandardError.ReadToEndAsync(waitCts.Token);
             await proc.WaitForExitAsync(waitCts.Token);
@@ -350,6 +479,25 @@ public class UpdateService {
             return (false, "Install launch error: " + ex.Message);
         }
     }
+
+    /// <summary>Lightweight, internet-free host facts the browser needs to drive
+    /// the offline-sideload flow: whether self-update applies here, the running
+    /// version, and the dpkg architecture to match the right release asset.
+    /// Unlike <see cref="CheckAsync"/> this never touches the network.</summary>
+    public UpdateLocalInfo LocalInfo() => new() {
+        Supported = IsSupported,
+        CurrentVersion = CurrentVersion.ToString(),
+        Arch = DpkgArch,
+        Repo = Repo
+    };
+}
+
+/// <summary>Offline host facts for the browser-relay update flow (no network).</summary>
+public class UpdateLocalInfo {
+    public bool Supported { get; set; }
+    public string CurrentVersion { get; set; } = "";
+    public string Arch { get; set; } = "";
+    public string Repo { get; set; } = "";
 }
 
 /// <summary>Result of an update check. <c>Supported</c> is false off a Linux
