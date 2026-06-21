@@ -645,6 +645,7 @@ function ninaApp() {
         // SKY plate-solver console is a right-edge overlay that the user can
         // collapse to a small pill (it used to push the map content in flow).
         skySolverHidden: false,
+        solveSyncBusy: false,   // guards the SKY "Solve & Sync" recovery
         _slewCenterTimer: null,
         fov: { width: 2.82, height: 1.88 },
 
@@ -25926,6 +25927,7 @@ function ninaApp() {
                 this.toast('Sky map not ready', 'error');
                 return;
             }
+            if (this._blockIfBelowHorizon(target.ra, target.dec)) return;
             try {
                 const resp = await this.apiPost('/api/sky/slew-and-center', {
                     ra: target.ra,
@@ -25960,7 +25962,112 @@ function ninaApp() {
             } catch { /* fall through to skyTarget */ }
             if (!target) target = this._currentSlewTarget();
             if (!target) { this.toast('Sky map not ready', 'error'); return; }
+            if (this._blockIfBelowHorizon(target.ra, target.dec)) return;
             return this.slewTo(target.ra, target.dec);
+        },
+
+        // Target altitude (deg) from the observer location now, or null when
+        // we have no usable coords. Lets us reject a GoTo before the driver
+        // does, with a clear reason.
+        _targetAltitudeDeg(raHours, decDeg) {
+            const lat = this.settings.latitude, lon = this.settings.longitude;
+            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+            if (Math.abs(lat) < 0.001 && Math.abs(lon) < 0.001) return null; // unset
+            try {
+                const r = this._equatorialToHorizontal(raHours, decDeg, lat, lon, new Date());
+                return Array.isArray(r) ? r[1] : null;
+            } catch { return null; }
+        },
+        // True (and toasts) when the target is below the horizon — used to
+        // fail a GoTo early instead of leaning on the mount's "(no message)"
+        // rejection (the AM3/LX200 below-horizon case).
+        _blockIfBelowHorizon(raHours, decDeg) {
+            const alt = this._targetAltitudeDeg(raHours, decDeg);
+            if (alt !== null && alt < 0) {
+                this.toast('Target is ' + Math.abs(alt).toFixed(0) +
+                    '° below the horizon right now — the mount would refuse the GoTo.', 'error');
+                return true;
+            }
+            return false;
+        },
+
+        // Manual position sync: tell the mount it is currently pointing at the
+        // map-centre (red FOV) coordinates, WITHOUT moving it. Recovers the
+        // driver's pointing model when it lost the real position (e.g. an INDI
+        // driver reload reset the AM3 to home) and you can't plate-solve
+        // (clouds) — you aim the map at the patch the scope is really on and
+        // confirm. A wrong sync throws off later GoTos, hence the modal.
+        async syncMountHere() {
+            if (!this.mount.connected) { this.toast('Connect a mount first', 'error'); return; }
+            let target = null;
+            try {
+                const c = await this._skyGetCenter();
+                if (c && Number.isFinite(c.raDeg) && Number.isFinite(c.decDeg)) {
+                    target = { ra: c.raDeg / 15, dec: c.decDeg };
+                }
+            } catch { /* fall through */ }
+            if (!target) target = this._currentSlewTarget();
+            if (!target) { this.toast('Sky map not ready', 'error'); return; }
+            const name = (this.skyTarget && this.skyTarget.name) ? this.skyTarget.name + '\n  ' : '';
+            if (!await this._confirmAsync(
+                'Tell the mount it is pointing at:\n\n  ' + name +
+                'RA ' + this.formatRA(target.ra) + '   Dec ' + this.formatDec(target.dec) +
+                '\n\nThis does NOT move the mount — it overwrites where the mount thinks it ' +
+                'is. Use it to recover pointing (e.g. after an INDI driver reload reset the ' +
+                'coordinates) when the scope is aimed at this region and you can\'t plate-solve. ' +
+                'A wrong sync sends every later GoTo off-target.',
+                { title: 'Sync mount to this position', okLabel: 'Sync here', danger: true })) return;
+            try {
+                await this.apiPost('/api/telescope/sync', { ra: target.ra, dec: target.dec });
+                this.toast('Mount synced to map centre (no movement)', 'ok');
+            } catch (e) {
+                this.toast('Mount sync failed: ' + (e?.message || e), 'error');
+            }
+        },
+
+        // One-tap recovery: capture a frame, plate-solve it, and sync the
+        // mount to the solved coords WITHOUT slewing — re-establishes the
+        // driver's pointing model on the real sky position (the proper fix
+        // after the AM3 driver lost its position). Needs a camera + clear sky;
+        // use "Sync here" (manual) when clouded out.
+        async solveAndSyncHere() {
+            if (!this.mount.connected) { this.toast('Connect a mount first', 'error'); return; }
+            if (this.solveSyncBusy) return;
+            this.solveSyncBusy = true;
+            this.filesSolveLog = '';
+            this.filesSolveLiveActive = true;
+            this.skySolverHidden = false;
+            try {
+                this.toast('Capturing solve frame…', 'info');
+                await this.apiPost('/api/camera/capture', {
+                    exposure: (this.slewCenter && this.slewCenter.exposureSec) || 3,
+                    gain: (this.slewCenter && this.slewCenter.gain != null) ? this.slewCenter.gain : 100,
+                    binning: 1,
+                    saveToDisk: false,
+                    feedLiveStack: false,
+                    kind: 'preview'
+                }, { timeout: 60000 });
+                const body = {};
+                if (Number.isFinite(this.mount.ra) && Number.isFinite(this.mount.dec)) {
+                    body.hintRa = this.mount.ra; body.hintDec = this.mount.dec;
+                }
+                this.toast('Plate solving…', 'info');
+                const resp = await this.apiPost('/api/platesolve/solve-latest', body, { timeout: 180000 });
+                const r = await resp.json();
+                if (!r || !r.success) {
+                    this.toast('Solve failed: ' + ((r && r.error) || 'unknown') +
+                        ' — try "Sync here" (manual) if clouded out.', 'warn');
+                    return;
+                }
+                await this.apiPost('/api/telescope/sync', { ra: r.raHours, dec: r.decDeg });
+                this._applySolvedFrame(r);
+                this.toast('Solved & synced — mount position recovered (no movement)', 'ok');
+            } catch (e) {
+                this.toast('Solve & Sync failed: ' + (e?.message || e), 'error');
+            } finally {
+                this.solveSyncBusy = false;
+                this.filesSolveLiveActive = false;
+            }
         },
 
         _currentSlewTarget() {
@@ -28183,6 +28290,17 @@ function ninaApp() {
                     // Detect a camera read-mode / HCG switch property to
                     // surface the dedicated control.
                     this.loadCameraReadModes();
+                    // Advisory: a reconnected/reloaded mount driver (esp. the
+                    // ZWO AM3/AM5) often comes back reporting home/default
+                    // coordinates that don't reflect where the scope is
+                    // actually pointing. Warn so the user recovers with a
+                    // no-move Sync (Solve & Sync, or "Sync here" on SKY)
+                    // instead of a blind Home. Only when a mount is present.
+                    if (this.mount && this.mount.connected) {
+                        this.toast('INDI reconnected — if the mount position looks reset to ' +
+                            'home, fix it without moving via Solve & Sync (PREVIEW) or ' +
+                            '"Sync here" on the SKY map; only Home if you must.', 'warn', 12000);
+                    }
                 }
             }
             if (eq.camera) {
