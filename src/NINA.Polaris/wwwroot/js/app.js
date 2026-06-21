@@ -15281,6 +15281,12 @@ function ninaApp() {
             // catalogue is loaded (loadOpticsCatalogue calls this again
             // once it is), so whichever of the two finishes last wins.
             this._resyncOpticsSelects();
+            // Gate optics saves until settings.* mirrors a real rig.
+            // Before this point settings.attachedFilter / brand / model
+            // are still at their empty defaults; a stray
+            // saveCurrentSelectionsToRig in that window would persist the
+            // blanks over the rig and lose the attached filter / OTA.
+            this._rigChoicesHydrated = true;
         },
 
         async switchRig(id) {
@@ -15824,6 +15830,12 @@ function ninaApp() {
         async saveCurrentSelectionsToRig() {
             const rig = this.rigs.find(r => r.id === this.activeRigId);
             if (!rig) return;
+            // Don't persist optics until the active rig has hydrated
+            // settings.* (brand/model/aperture/attachedFilter). Saving in
+            // the pre-hydration window would write the empty defaults over
+            // the rig and silently drop the attached filter / OTA -- the
+            // reported "filter lost on refresh/reconnect" bug.
+            if (!this._rigChoicesHydrated) return;
             const updated = {
                 ...rig,
                 camera: this.equipCameraChoice || rig.camera,
