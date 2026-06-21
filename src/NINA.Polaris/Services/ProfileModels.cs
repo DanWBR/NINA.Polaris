@@ -266,6 +266,16 @@ public class UserProfile {
     /// capability, so it stays opt-in.
     /// </summary>
     public bool TerminalEnabled { get; set; } = false;
+
+    /// <summary>
+    /// UI language for the web client (BCP-47-ish tag: "en", "pt-BR", "es",
+    /// "fr", "de"). The browser keeps its own per-device choice in
+    /// localStorage('nina-ui-lang') as the source of truth; this profile field
+    /// is the seed a fresh browser / the Android wrapper inherits when it has
+    /// no local choice yet. Empty/"en" = English (the source language, no
+    /// catalog). Does not affect server logs (those stay en-US by design).
+    /// </summary>
+    public string UiLanguage { get; set; } = "en";
 }
 
 /// <summary>Persisted native-guider calibration (the fields needed to rebuild a

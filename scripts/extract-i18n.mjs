@@ -1,0 +1,92 @@
+// Extract translatable English source strings for the Polaris web UI i18n
+// catalog (see wwwroot/js/i18n.js — "English source as key" model).
+//
+//   node scripts/extract-i18n.mjs
+//
+// Scans index.html for static element text + title/placeholder/aria-label/alt
+// attributes, and app.js for t('...') / $t('...') / toast('...') string
+// literals, then MERGES the findings into wwwroot/data/locales/_source.json as
+// a sorted { "English source": "" } map (existing entries preserved). It also
+// reports a count and likely orphans (entries in _source.json no longer found
+// in the source — candidates that an English edit left behind).
+//
+// This is a pragmatic tokenizer, not a full HTML/JS parser: it favours
+// recall (find candidate strings for translators) over precision. Curate the
+// per-language catalogs from _source.json; never hand-edit translations here.
+
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const HTML = resolve(ROOT, 'src/NINA.Polaris/wwwroot/index.html');
+const APPJS = resolve(ROOT, 'src/NINA.Polaris/wwwroot/js/app.js');
+const OUT = resolve(ROOT, 'src/NINA.Polaris/wwwroot/data/locales/_source.json');
+
+const norm = (s) => s.replace(/\s+/g, ' ').trim();
+// Keep only strings that contain at least one letter and aren't pure
+// numbers/symbols/expressions. Drop Alpine/JS expression fragments.
+function keep(s) {
+    s = norm(s);
+    if (!s || s.length > 200) return false;
+    if (!/[A-Za-z]/.test(s)) return false;            // no letters -> skip
+    if (/^[\d\s.,:;%°"'+\-/x×()]+$/.test(s)) return false;
+    // Looks like code / a binding, not prose:
+    if (/[{}<>]|=>|\$\{|\bx-|\b@click|\bfunction\b/.test(s)) return false;
+    if (/^[a-z]+([A-Z][a-z]+)+$/.test(s)) return false; // camelCase identifier
+    return true;
+}
+
+const found = new Set();
+
+// ---- index.html -----------------------------------------------------------
+let html = readFileSync(HTML, 'utf8');
+// Drop script/style blocks and comments.
+html = html.replace(/<script[\s\S]*?<\/script>/gi, ' ')
+           .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+           .replace(/<!--[\s\S]*?-->/g, ' ');
+
+// Static attributes (plain, not Alpine :bindings).
+for (const m of html.matchAll(/(?<![:\w-])(title|placeholder|aria-label|alt)\s*=\s*"([^"]*)"/g)) {
+    if (keep(m[2])) found.add(norm(m[2]));
+}
+// Static element text: strip tags, split, filter.
+const text = html.replace(/<[^>]+>/g, '\n');
+for (const frag of text.split('\n')) {
+    if (keep(frag)) found.add(norm(frag));
+}
+
+// ---- app.js ---------------------------------------------------------------
+const js = readFileSync(APPJS, 'utf8');
+// t('...') / $t('...') / this.$t('...') / toast('...') first string arg.
+const callRe = /(?:\$?t|toast)\(\s*(['"`])((?:\\.|(?!\1)[\s\S])*?)\1/g;
+for (const m of js.matchAll(callRe)) {
+    const raw = m[2].replace(/\\(['"`\\])/g, '$1');
+    if (keep(raw)) found.add(norm(raw));
+}
+
+// ---- merge ----------------------------------------------------------------
+let existing = {};
+if (existsSync(OUT)) {
+    try { existing = JSON.parse(readFileSync(OUT, 'utf8')); } catch { existing = {}; }
+}
+const merged = {};
+const keys = [...found].sort((a, b) => a.localeCompare(b));
+let added = 0;
+for (const k of keys) {
+    merged[k] = Object.prototype.hasOwnProperty.call(existing, k) ? existing[k] : '';
+    if (!(k in existing)) added++;
+}
+// Orphans: in the old file but no longer extracted.
+const orphans = Object.keys(existing).filter((k) => !found.has(k));
+
+mkdirSync(dirname(OUT), { recursive: true });
+writeFileSync(OUT, JSON.stringify(merged, null, 2) + '\n', 'utf8');
+
+console.log(`extract-i18n: ${keys.length} source strings -> ${OUT}`);
+console.log(`  new this run: ${added}`);
+if (orphans.length) {
+    console.log(`  orphans (in _source.json, not in source — review): ${orphans.length}`);
+    for (const o of orphans.slice(0, 20)) console.log(`    - ${JSON.stringify(o)}`);
+    if (orphans.length > 20) console.log(`    ... and ${orphans.length - 20} more`);
+}

@@ -214,8 +214,26 @@ public static class SystemEndpoints {
                 p.OnnxDefaultDenoiseVersion = update.OnnxDefaultDenoiseVersion
                                                   ?? p.OnnxDefaultDenoiseVersion;
                 p.OnnxPreferCli = update.OnnxPreferCli;
+                // UI language: only overwrite when the client actually sent a
+                // value, so a settings save from a page that omits it doesn't
+                // reset the stored preference.
+                if (!string.IsNullOrWhiteSpace(update.UiLanguage))
+                    p.UiLanguage = update.UiLanguage;
             });
             return Results.Ok(new { message = "Profile saved" });
+        });
+
+        // Dedicated UI-language setter. Separate from PUT /profile (which binds
+        // a full UserProfile and would clobber every other setting) so the
+        // language picker can persist just this one field. The browser's
+        // localStorage stays the source of truth; this only seeds a fresh
+        // browser / the Android wrapper.
+        group.MapPut("/ui-language", (UiLanguageRequest req, ProfileService profiles) => {
+            var lang = (req?.Language ?? "").Trim();
+            var allowed = new[] { "en", "pt-BR", "es", "fr", "de" };
+            if (!allowed.Contains(lang)) return Results.BadRequest(new { error = "unsupported language" });
+            profiles.UpdateSettings(p => p.UiLanguage = lang);
+            return Results.Ok(new { language = lang });
         });
 
         group.MapPost("/profile/save-as", (SaveAsRequest request, ProfileService profiles) => {
@@ -498,4 +516,5 @@ public static class SystemEndpoints {
     record AutoStartRequest(bool Enable);
     record GpuToggleRequest(bool Enabled);
     record TerminalEnableRequest(bool Enabled);
+    record UiLanguageRequest(string? Language);
 }

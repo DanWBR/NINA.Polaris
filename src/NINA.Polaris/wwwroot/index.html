@@ -75,8 +75,23 @@
                     document.documentElement.setAttribute('data-font', f);
                 }
             } catch (_) { /* private mode / disabled storage */ }
+            // i18n: stamp <html lang> and, for a non-English UI, hide the body
+            // until i18n.js has loaded the catalog and run the first pass, so
+            // the user never sees an English flash (FOUC). English is the
+            // identity language — no class, no hiding, no cost. js/i18n.js
+            // lifts the i18n-loading class once translation is applied.
+            try {
+                var L = localStorage.getItem('nina-ui-lang');
+                var SUP = ['en','pt-BR','es','fr','de'];
+                if (L && SUP.indexOf(L) >= 0 && L !== 'en') {
+                    document.documentElement.setAttribute('lang', L);
+                    document.documentElement.classList.add('i18n-loading');
+                }
+            } catch (_) { /* private mode / disabled storage */ }
         })();
     </script>
+    <!-- FOUC gate for non-English UIs (see head IIFE + js/i18n.js). -->
+    <style>html.i18n-loading body { visibility: hidden; }</style>
 </head>
 <body x-data="ninaApp()" x-init="init()">
 
@@ -463,7 +478,7 @@
                  wall-clock time next to the stacking stats was confusing).
                  Hidden on very narrow viewports to keep the badge row tidy. -->
             <span class="status-chip status-clock" x-text="currentTime"
-                  title="Current time"></span>
+                  title="Current time" data-no-i18n></span>
             <!-- DBGLOG-6: log inspector badge. Always visible (helps
                  trust + discoverability), colours by unread severity:
                  red when there are unread errors, amber for unread
@@ -10449,6 +10464,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <option value="system">System default</option>
                         </select>
                     </label>
+                    <!-- i18n: language picker. Changing it persists to
+                         localStorage + the profile and reloads so the whole UI
+                         re-renders in the chosen language (see js/i18n.js).
+                         English is the source language; the others are
+                         translated catalogs under /data/locales. -->
+                    <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:16px">
+                        <span style="min-width:90px">Language</span>
+                        <!-- Endonyms stay in their own language — never translate them. -->
+                        <select x-model="uiLang" @change="applyUiLang()" style="flex:1" data-no-i18n>
+                            <option value="en">English</option>
+                            <option value="pt-BR">Português (Brasil)</option>
+                            <option value="es">Español</option>
+                            <option value="fr">Français</option>
+                            <option value="de">Deutsch</option>
+                        </select>
+                    </label>
+                    <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px" data-no-i18n>
+                        Translations are community-assisted and may be partial; untranslated
+                        text falls back to English. Changing the language reloads the page.
+                    </p>
                     <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
                         <strong>Atkinson Hyperlegible</strong> was designed by the Braille
                         Institute for maximum legibility — letters with unique shapes so
@@ -12703,7 +12738,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
          auto-focus, slew, exposure, Siril job, GraXpert batch, ...).
          Right side: host CPU + RAM. Both feed off the per-second
          status WS message, no extra polling. -->
-    <footer class="activity-bar"
+    <!-- data-no-i18n: this footer is high-churn (host CPU/RAM updates ~1 Hz,
+         per-frame transfer chips) and mostly numeric/dynamic — keep the i18n
+         observer out of it. Activity-chip labels that need translating use $t
+         at their source instead. -->
+    <footer class="activity-bar" data-no-i18n
             :class="{ 'has-activities': activityChips().length > 0 }">
         <div class="activity-bar-ops">
             <template x-for="chip in activityChips()" :key="chip.id">
@@ -14796,6 +14835,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- On-screen keyboard (tablet). Self-contained, no framework dep; loads
          before Alpine so its focus delegation is live from first paint. -->
     <script src="/js/virtual-keyboard.js?v=20260620-vkbd-ios"></script>
+    <!-- i18n runtime. Loads BEFORE Alpine (non-deferred) so window.I18N + the
+         $t magic are ready when Alpine hydrates. English = identity (no fetch,
+         no observer, zero overhead). See js/i18n.js. -->
+    <script src="/js/i18n.js?v=20260621-i18n1"></script>
     <script src="/js/lib/alpine.min.js" defer></script>
     <!-- Cache buster on app.js so JS fixes propagate without users
          having to remember Ctrl+Shift+R. Bump the v= when shipping

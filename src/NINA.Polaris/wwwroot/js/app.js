@@ -598,6 +598,11 @@ function ninaApp() {
         // initial load can apply via inline script before the
         // CSS even parses (avoids FOUT).
         uiFont: 'atkinson',
+        // UI language (Settings → Appearance). 'en' is the source language
+        // (identity, no catalog). The i18n runtime (js/i18n.js) does the actual
+        // translation; this just drives the picker + persistence. Restored from
+        // localStorage('nina-ui-lang') in init().
+        uiLang: 'en',
         padScale: 100,   // control density %, applied (Settings → Appearance)
         padScaleDraft: 100, // slider draft; only committed to padScale on Apply
         // STUDIO: on narrow screens the Stack panel floats as a collapsible
@@ -3271,6 +3276,16 @@ function ninaApp() {
             this.uiFont = fontSaved && ['inter','atkinson','plex','system'].includes(fontSaved)
                 ? fontSaved
                 : 'atkinson';
+
+            // UI language: mirror whatever js/i18n.js resolved (localStorage is
+            // the source of truth). The actual translation already happened at
+            // load; this only syncs the picker. The profile UiLanguage acts as
+            // the seed for a fresh browser — handled in loadSettings().
+            try {
+                const langSaved = localStorage.getItem('nina-ui-lang');
+                const supported = (window.I18N && window.I18N.supported) || ['en','pt-BR','es','fr','de'];
+                if (langSaved && supported.includes(langSaved)) this.uiLang = langSaved;
+            } catch (_) { /* private mode */ }
             this.applyUiFont();
 
             // Control density (Settings → Appearance). Restore the saved % and
@@ -5237,6 +5252,21 @@ function ninaApp() {
                 else document.documentElement.setAttribute('data-font', v);
                 localStorage.setItem('nina-ui-font', v);
             } catch (_) { /* private mode etc. */ }
+        },
+
+        // UI language (Settings → Appearance). Persist to localStorage (the
+        // per-device source of truth, instant + offline), mirror to the profile
+        // so a fresh browser / the Android wrapper inherits it, then reload so
+        // the whole tree (incl. charts + WASM-derived UI) re-renders in the new
+        // language via js/i18n.js. English = no catalog (identity).
+        async applyUiLang() {
+            const supported = (window.I18N && window.I18N.supported) || ['en','pt-BR','es','fr','de'];
+            const v = supported.includes(this.uiLang) ? this.uiLang : 'en';
+            try { localStorage.setItem('nina-ui-lang', v); } catch (_) { /* private mode */ }
+            // Mirror to the profile via the dedicated endpoint (PUT /profile
+            // binds a full UserProfile and would clobber other settings).
+            try { await this.apiFetch('/api/system/ui-language', { method: 'PUT', body: JSON.stringify({ language: v }) }); } catch (_) { }
+            window.location.reload();
         },
 
         // Control density (Settings → Appearance). Percent 50–150, 100 =
