@@ -300,7 +300,11 @@
             el.type = 'text';
         }
         if (IS_IOS) {
-            el.setAttribute('data-pvk-ro', el.readOnly ? '1' : '0');
+            // Idempotent: preArmIOS may have already flipped readOnly on the
+            // pointerdown that preceded this focus, so only snapshot the
+            // ORIGINAL value once (otherwise we'd save our own "true").
+            if (!el.hasAttribute('data-pvk-ro'))
+                el.setAttribute('data-pvk-ro', el.readOnly ? '1' : '0');
             el.readOnly = true; // blocks iOS keyboard; we still set value via JS
         } else {
             el.setAttribute('data-pvk-im', el.getAttribute('inputmode') || '');
@@ -419,6 +423,26 @@
             if (document.activeElement !== current) hide();
         }, 120);
     }
+
+    // iOS opens the native keyboard the instant an editable field gains focus
+    // — that happens on the tap BEFORE our focusin handler runs, so setting
+    // readOnly in show() is too late and the native keyboard pops up (and
+    // covers our on-screen panel). Pre-arm readOnly on the pointerdown/
+    // touchstart that precedes the focus so iOS never decides to show it. Only
+    // on iOS + when the on-screen keyboard is enabled; restoreNative() undoes
+    // it on blur. The snapshot in suppressNative is guarded to stay idempotent.
+    function preArmIOS(e) {
+        if (!IS_IOS || !isEnabled()) return;
+        var t = e.target;
+        var el = (t && t.closest) ? t.closest('input, textarea') : null;
+        if (!el || !eligible(el)) return;
+        if (!el.hasAttribute('data-pvk-ro')) {
+            el.setAttribute('data-pvk-ro', el.readOnly ? '1' : '0');
+            el.readOnly = true;
+        }
+    }
+    document.addEventListener('pointerdown', preArmIOS, true);
+    document.addEventListener('touchstart', preArmIOS, true);
 
     document.addEventListener('focusin', onFocusIn, true);
     document.addEventListener('focusout', onFocusOut, true);
