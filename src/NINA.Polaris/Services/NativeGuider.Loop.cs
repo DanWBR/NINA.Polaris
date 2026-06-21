@@ -244,9 +244,18 @@ public sealed partial class NativeGuider {
     private async Task<IImageData?> CaptureFullAsync(ICamera cam, CancellationToken ct) {
         int expMs = Math.Max(50, Rig.NativeGuideExposureMs);
         int bin = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4);
-        var opts = new CaptureOptions(
-            Gain: Rig.NativeGuideGain > 0 ? Rig.NativeGuideGain : (int?)null,
-            BinX: bin, BinY: bin);
+        // Clamp the configured gain to the guide camera's real range. A stale
+        // or out-of-range profile value (e.g. carried over from a different
+        // camera) makes some SDKs wrap/saturate and the guide star brightness
+        // jumps around erratically; clamping keeps it within [GainMin, GainMax].
+        int? gain = null;
+        if (Rig.NativeGuideGain > 0) {
+            var g = Rig.NativeGuideGain;
+            if (cam.GainMax > cam.GainMin && cam.GainMax > 0)
+                g = Math.Clamp(g, cam.GainMin, cam.GainMax);
+            gain = g;
+        }
+        var opts = new CaptureOptions(Gain: gain, BinX: bin, BinY: bin);
         // Bound the capture to a guide-sized budget. CaptureAsync honours the
         // token (it registers cancellation on its BLOB TCS), so a linked CTS
         // that fires our deadline unblocks the await without waiting on the

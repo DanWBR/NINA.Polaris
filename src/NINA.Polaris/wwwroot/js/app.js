@@ -19418,6 +19418,13 @@ function ninaApp() {
             try {
                 await this.apiPost('/api/focuser/move/absolute', { position });
             } catch (e) {
+                // A redundant commit (slider release racing the goto, or a
+                // repeat tick) can hit the backend's "already moving" guard
+                // while the REAL move is already in flight, or the target
+                // equals the current position. Those are benign — the focuser
+                // still goes where asked — so don't show a scary error toast.
+                const msg = ((e && (e.body || e.message)) || '').toString();
+                if (/already moving|already at|already at target/i.test(msg)) return;
                 this.toast('Focus move failed', 'error');
             }
         },
