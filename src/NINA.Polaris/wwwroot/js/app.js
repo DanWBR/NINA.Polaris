@@ -21358,10 +21358,10 @@ function ninaApp() {
             // category name -> exact normalized titles it contains (emoji
             // stripped, lowercased). Category order is the display order.
             const CATS = [
+                ['Appearance & interface', ['appearance', 'device name']],
                 ['Equipment & capture', ['hardware', 'indi server', 'indi status', 'plate solving', 'sequencer']],
                 ['Image processing', ['ai inference (onnx)', 'gpu acceleration (opencl)', 'external tools', 'image cache', 'image output']],
                 ['Location & time',     ['clock', 'observatory']],
-                ['Appearance & interface', ['appearance', 'device name']],
                 ['Network & security',  ['authentication', 'https certificate',
                     'https endpoints (for webgpu + multi-thread wasm)', 'network (wifi)', 'remote terminal',
                     'auto-push to network storage']],
