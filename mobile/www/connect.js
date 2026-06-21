@@ -114,17 +114,18 @@ window.addEventListener('message', async (ev) => {
 });
 
 // ---------- tab title bridge ----------
-// The Polaris UI (in the cross-origin iframe) posts its active-rig label so
-// the shell can show "{rig} - Polaris" on this instance's tab. We can't read
-// the iframe's document.title cross-origin, so it pushes the name to us; we
-// match the sender frame to its instance and re-render the tab bar.
+// The Polaris UI (in the cross-origin iframe) posts its active-rig name so the
+// shell can label this instance's tab with it. We can't read the iframe's
+// document.title cross-origin, so it pushes the name to us; we match the sender
+// frame to its instance and re-render the tab bar. In the app the bare rig name
+// is enough (every tab is a Polaris instance), so no " - Polaris" suffix here.
 window.addEventListener('message', (ev) => {
   const d = ev.data;
   if (!d || d.__polarisTitle !== true) return;
   const name = (typeof d.name === 'string') ? d.name.trim() : '';
   for (const inst of instances.values()) {
     if (inst.frame && inst.frame.contentWindow === ev.source) {
-      inst.displayName = name ? (name + ' - Polaris') : null;
+      inst.displayName = name || null;
       renderTabs();
       break;
     }
