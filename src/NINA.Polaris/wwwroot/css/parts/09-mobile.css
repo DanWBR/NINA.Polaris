@@ -1,0 +1,42 @@
+/* ───────────────────────────────────────────────────────────────────────
+   09-mobile.css — defensive phone reflow.
+
+   Loaded LAST so it wins specificity ties. The app's base mobile strategy is
+   `body { zoom }` (see 01-base-statusbar.css): the whole desktop layout is
+   scaled to 0.85 (≤960px) / 0.75 (≤640px). That keeps everything visible but
+   several rows still overflow horizontally on a phone (iPhone 12 Pro). These
+   rules add real reflow — wrap toolbars/param rows, stop fixed-width inputs
+   from forcing horizontal scroll, and compact the header — at the ≤640px tier
+   (the same breakpoint where the 0.75 zoom is already active on the phone).
+
+   Everything here only loosens layout on narrow viewports, so it can't affect
+   the desktop. !important is used where the target carries an inline style. */
+@media (max-width: 640px) {
+    /* --- Header: let the right-side status cluster wrap instead of
+       overflowing, and drop the version string to buy width. --- */
+    .status-bar { gap: 8px; }
+    .status-bar-right {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        row-gap: 4px;
+        column-gap: 6px;
+    }
+    .brand-version { display: none; }
+
+    /* --- Param / control rows: wrap so the number inputs stack rather than
+       pushing the row wider than the screen (POLAR RA/Exp/Settle/Gain, FOCUS
+       Exposure/Gain/Interval/Min stars, etc.). --- */
+    .control-row { flex-wrap: wrap !important; }
+    .control-row.actions { flex-wrap: wrap !important; }
+
+    /* Number fields with a hard pixel width are the usual overflow culprit;
+       cap them to the column so they shrink with the viewport. */
+    .input-sm { max-width: 100%; }
+
+    /* --- File-browser / STUDIO toolbar: ~16 icons in one row overflowed;
+       let it wrap to as many rows as needed. --- */
+    .files-actions-icons { flex-wrap: wrap; }
+
+    /* --- AF param grid (FOCUS) wraps too. --- */
+    .af-params { flex-wrap: wrap; }
+}
