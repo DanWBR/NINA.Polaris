@@ -5227,7 +5227,7 @@ function ninaApp() {
         applyPadScale() {
             let v = Number(this.padScale);
             if (!Number.isFinite(v)) v = 100;
-            v = Math.min(150, Math.max(50, Math.round(v)));
+            v = Math.min(150, Math.max(10, Math.round(v)));
             this.padScale = v;
             try {
                 document.documentElement.style.setProperty('--pad-scale', (v / 100).toString());
