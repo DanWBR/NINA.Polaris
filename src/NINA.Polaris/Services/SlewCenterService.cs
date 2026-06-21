@@ -281,9 +281,16 @@ public class SlewCenterService {
                 _logger.LogInformation(
                     "Capturing {Exp}s solve frame at gain {Gain}", solveExposure, solveGain);
 
+                // Force full resolution (bin 1x1) for the solve frame regardless
+                // of the current preview/live binning. A binned solve (e.g. the
+                // camera left at bin3 by a preview => 1280x720 on a 4K sensor)
+                // loses stars and the scale ASTAP/astrometry rely on, which made
+                // SKY slew-and-solve fail intermittently. All camera backends
+                // honour CaptureOptions.BinX/Y per-capture, so the next preview/
+                // live capture restores the user's binning on its own.
                 var imageData = await _equip.Camera.CaptureAsync(
                     solveExposure,
-                    new NINA.Image.Interfaces.CaptureOptions(Gain: solveGain, ImageType: "SOLVE"),
+                    new NINA.Image.Interfaces.CaptureOptions(Gain: solveGain, BinX: 1, BinY: 1, ImageType: "SOLVE"),
                     ct);
 
                 var tempFits = Path.Combine(Path.GetTempPath(),
