@@ -10423,6 +10423,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      reflowed under your cursor on every input tick. -->
                 <div class="settings-section">
                     <h3><span class="settings-card-icon">🎨</span>Appearance</h3>
+                    <!-- i18n: language picker (kept at the top of the card).
+                         Changing it persists to localStorage + the profile and
+                         reloads so the whole UI re-renders in the chosen
+                         language (see js/i18n.js). English is the source
+                         language; the others are catalogs under /data/locales. -->
+                    <label style="display:flex; align-items:center; gap:12px; max-width:560px">
+                        <span style="min-width:90px">Language</span>
+                        <!-- Endonyms stay in their own language — never translate them. -->
+                        <select x-model="uiLang" @change="applyUiLang()" style="flex:1" data-no-i18n>
+                            <option value="en">English</option>
+                            <option value="pt-BR">Português (Brasil)</option>
+                            <option value="es">Español</option>
+                            <option value="fr">Français</option>
+                            <option value="de">Deutsch</option>
+                        </select>
+                    </label>
+                    <p class="text-muted" style="font-size: 12px; margin-top: 6px; margin-bottom: 18px; max-width:560px" data-no-i18n>
+                        Translations are community-assisted and may be partial; untranslated
+                        text falls back to English. Changing the language reloads the page.
+                    </p>
                     <label style="display:flex; align-items:center; gap:12px; max-width:560px">
                         <span style="min-width:90px">UI scale</span>
                         <input type="range" min="0.5" max="1.5" step="0.05"
@@ -10464,26 +10484,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <option value="system">System default</option>
                         </select>
                     </label>
-                    <!-- i18n: language picker. Changing it persists to
-                         localStorage + the profile and reloads so the whole UI
-                         re-renders in the chosen language (see js/i18n.js).
-                         English is the source language; the others are
-                         translated catalogs under /data/locales. -->
-                    <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:16px">
-                        <span style="min-width:90px">Language</span>
-                        <!-- Endonyms stay in their own language — never translate them. -->
-                        <select x-model="uiLang" @change="applyUiLang()" style="flex:1" data-no-i18n>
-                            <option value="en">English</option>
-                            <option value="pt-BR">Português (Brasil)</option>
-                            <option value="es">Español</option>
-                            <option value="fr">Français</option>
-                            <option value="de">Deutsch</option>
-                        </select>
-                    </label>
-                    <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px" data-no-i18n>
-                        Translations are community-assisted and may be partial; untranslated
-                        text falls back to English. Changing the language reloads the page.
-                    </p>
                     <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
                         <strong>Atkinson Hyperlegible</strong> was designed by the Braille
                         Institute for maximum legibility — letters with unique shapes so
@@ -14838,7 +14838,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- i18n runtime. Loads BEFORE Alpine (non-deferred) so window.I18N + the
          $t magic are ready when Alpine hydrates. English = identity (no fetch,
          no observer, zero overhead). See js/i18n.js. -->
-    <script src="/js/i18n.js?v=20260621-i18n1"></script>
+    <script src="/js/i18n.js?v=20260621-i18n2"></script>
     <script src="/js/lib/alpine.min.js" defer></script>
     <!-- Cache buster on app.js so JS fixes propagate without users
          having to remember Ctrl+Shift+R. Bump the v= when shipping
