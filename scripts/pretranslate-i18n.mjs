@@ -1,11 +1,14 @@
 // Bulk machine pre-translation of the Polaris UI catalog.
 //
-//   # DeepL (recommended):
-//   DEEPL_API_KEY=xxxx node scripts/pretranslate-i18n.mjs            # all released langs
-//   DEEPL_API_KEY=xxxx node scripts/pretranslate-i18n.mjs pt-BR es   # specific langs
+//   # DeepL (recommended) — PowerShell (Windows):
+//   $env:DEEPL_API_KEY = "xxxx"; node scripts/pretranslate-i18n.mjs           # all released langs
+//   $env:DEEPL_API_KEY = "xxxx"; node scripts/pretranslate-i18n.mjs pt-BR es  # specific langs
+//   # DeepL — bash/zsh (Linux/macOS):
+//   DEEPL_API_KEY=xxxx node scripts/pretranslate-i18n.mjs
 //
 //   # LibreTranslate (self-host / free):
-//   LIBRETRANSLATE_URL=http://localhost:5000 node scripts/pretranslate-i18n.mjs
+//   #   PowerShell:  $env:LIBRETRANSLATE_URL = "http://localhost:5000"; node scripts/pretranslate-i18n.mjs
+//   #   bash:        LIBRETRANSLATE_URL=http://localhost:5000 node scripts/pretranslate-i18n.mjs
 //
 // Reads wwwroot/data/locales/_source.json (run extract-i18n.mjs first), and for
 // each target language fills the MISSING keys in {lang}.json via the configured
