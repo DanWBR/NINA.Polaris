@@ -1,0 +1,32 @@
+/* ───────────────────────────────────────────────────────────────────────
+   10-density.css — user-adjustable control density.
+
+   Settings → Appearance exposes a 50–150% "control density" slider that sets
+   --pad-scale on :root (1 = 100% = the original spacing). Lower values tighten
+   the padding/gaps of the interactive chrome so controls pack closer together,
+   freeing room for the main views — useful on phones. It only scales SPACING,
+   not font size (unlike the body{zoom} fallback), so text stays readable.
+
+   We can't retrofit every hardcoded px in the app from one variable, so this
+   scales the high-impact, repeated spacing: buttons, inputs, toolbars, control
+   rows, and the imaging side panels. Base values mirror the originals in
+   02-imaging-panels.css / 04-focus-settings.css so --pad-scale:1 is a no-op.
+   Loaded last so these win. */
+:root { --pad-scale: 1; }
+
+/* Buttons — the most repeated control. */
+.btn { padding: calc(6px * var(--pad-scale)) calc(14px * var(--pad-scale)); }
+.btn-sm { padding: calc(4px * var(--pad-scale)) calc(10px * var(--pad-scale)); }
+
+/* Number / text inputs in the control clusters. */
+.input-sm { padding: calc(9px * var(--pad-scale)) calc(10px * var(--pad-scale)); }
+
+/* Control rows + their gap (POLAR / FOCUS / LIVE / VIDEO param clusters). */
+.control-row { gap: calc(12px * var(--pad-scale)); }
+
+/* Imaging side panel + SKY toolbar padding and gap. */
+.quick-controls { padding: calc(10px * var(--pad-scale)) calc(14px * var(--pad-scale)); }
+.sky-toolbar {
+    padding: calc(10px * var(--pad-scale)) calc(14px * var(--pad-scale));
+    gap: calc(8px * var(--pad-scale));
+}

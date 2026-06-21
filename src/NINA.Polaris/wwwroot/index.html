@@ -51,6 +51,7 @@
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260620-guideside1">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260620-mobile1">
+    <link rel="stylesheet" href="/css/parts/10-density.css?v=20260620-density1">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css?v=20260620-dl1">
@@ -10435,6 +10436,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         typeface. Persists per browser; no restart needed.
                     </p>
 
+                    <!-- Control density: scales the padding/gaps of buttons,
+                         inputs and toolbars (50–150%, 100% = default). Lower =
+                         tighter controls = more room for the main views; handy
+                         on phones. Text size is unaffected. -->
+                    <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:18px">
+                        <span style="min-width:90px">Control density</span>
+                        <input type="range" min="50" max="150" step="5"
+                               x-model.number="padScale" @input="applyPadScale()"
+                               style="flex:1">
+                        <span style="min-width:46px; text-align:right; font-variant-numeric:tabular-nums"
+                              x-text="padScale + '%'"></span>
+                        <button class="btn btn-xs" @click="padScale = 100; applyPadScale()"
+                                title="Reset to 100%">Reset</button>
+                    </label>
+                    <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
+                        Tightens the spacing of buttons, inputs and toolbars so more
+                        fits on screen — lower it on a phone to free room for the
+                        image / sky views. Doesn't change text size. Persists per browser.
+                    </p>
+
                     <!-- On-screen keyboard. Replaces the native Android/iOS
                          keyboard (which covers half the screen and fights
                          the Sky view) with a compact themed panel docked to
@@ -15192,7 +15213,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260620-skysearch1"></script>
+    <script src="/js/app.js?v=20260620-density1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

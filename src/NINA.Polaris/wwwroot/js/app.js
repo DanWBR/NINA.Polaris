@@ -585,6 +585,7 @@ function ninaApp() {
         // initial load can apply via inline script before the
         // CSS even parses (avoids FOUT).
         uiFont: 'atkinson',
+        padScale: 100,   // control density %, 50–150 (Settings → Appearance)
 
         // SWE-5: object-info card overlay on the sky map. Populated
         // when the bridge emits a map-click with a rich object payload
@@ -3253,6 +3254,12 @@ function ninaApp() {
                 : 'atkinson';
             this.applyUiFont();
 
+            // Control density (Settings → Appearance). Restore the saved % and
+            // push it into --pad-scale before first paint.
+            const padSaved = parseInt(localStorage.getItem('nina-pad-scale'), 10);
+            this.padScale = Number.isFinite(padSaved) ? padSaved : 100;
+            this.applyPadScale();
+
             // Mirror the on-screen-keyboard mode for the Settings <select>.
             // The module reads its own localStorage key independently, so
             // this is display-only sync (no behaviour change here).
@@ -5209,6 +5216,22 @@ function ninaApp() {
                 if (v === 'atkinson') document.documentElement.removeAttribute('data-font');
                 else document.documentElement.setAttribute('data-font', v);
                 localStorage.setItem('nina-ui-font', v);
+            } catch (_) { /* private mode etc. */ }
+        },
+
+        // Control density (Settings → Appearance). Percent 50–150, 100 =
+        // original spacing. Drives --pad-scale, which 10-density.css multiplies
+        // into the padding/gaps of buttons, inputs, toolbars and control rows
+        // so the user can pack controls tighter on small screens without
+        // shrinking text. Persisted in localStorage.
+        applyPadScale() {
+            let v = Number(this.padScale);
+            if (!Number.isFinite(v)) v = 100;
+            v = Math.min(150, Math.max(50, Math.round(v)));
+            this.padScale = v;
+            try {
+                document.documentElement.style.setProperty('--pad-scale', (v / 100).toString());
+                localStorage.setItem('nina-pad-scale', String(v));
             } catch (_) { /* private mode etc. */ }
         },
 
