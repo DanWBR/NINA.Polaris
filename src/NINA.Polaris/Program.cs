@@ -117,6 +117,20 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
     o.ValueLengthLimit = int.MaxValue;
 });
 
+// Defensive JSON hardening for every minimal-API response and
+// WriteAsJsonAsync call. System.Text.Json throws mid-serialization on a
+// non-finite double (NaN / +-Infinity), which a single garbage value (a
+// plate-solve scale, a mount position, a stat) turns into a 500 for the whole
+// endpoint. These converters emit JSON null for non-finite numbers instead,
+// which is valid JSON and parses on the JS side. See NINA.Polaris.Json.
+builder.Services.ConfigureHttpJsonOptions(o =>
+{
+    o.SerializerOptions.Converters.Add(new NINA.Polaris.Json.NonFiniteDoubleConverter());
+    o.SerializerOptions.Converters.Add(new NINA.Polaris.Json.NullableNonFiniteDoubleConverter());
+    o.SerializerOptions.Converters.Add(new NINA.Polaris.Json.NonFiniteFloatConverter());
+    o.SerializerOptions.Converters.Add(new NINA.Polaris.Json.NullableNonFiniteFloatConverter());
+});
+
 // Services
 // DBGLOG-1/2: ring buffer + ILogger provider that mirrors every
 // server-side log call into it. Registered FIRST so other singletons
