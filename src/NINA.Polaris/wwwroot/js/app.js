@@ -15276,6 +15276,11 @@ function ninaApp() {
             if (rig.phd2Port) this.guiderPort = rig.phd2Port;
             // PH2X: surface the rig's PHD2 algo preset choice on the pill.
             this.phd2ActivePreset = rig.phd2AlgoPreset || 'Default';
+            // Nudge the brand/model <select>s to re-adopt the saved
+            // values. Fire-and-forget: a no-op until the optics
+            // catalogue is loaded (loadOpticsCatalogue calls this again
+            // once it is), so whichever of the two finishes last wins.
+            this._resyncOpticsSelects();
         },
 
         async switchRig(id) {
@@ -15371,33 +15376,45 @@ function ninaApp() {
                 this.opticsCatalogue = { telescopes: [], accessories: [], loaded: true };
             }
             // Re-sync the Main Telescope / Guidescope dropdowns to the
-            // active rig's saved brand + model. Without this step, the
-            // common load order (loadRigs resolves first, then this
-            // catalogue) leaves the <select>s stuck on "Manual entry"
-            // and "Pick a model": when _applyRigToChoices set
-            // settings.telescopeBrand the brand <option> template was
-            // still empty, so the native select silently dropped the
-            // value, and Alpine's x-model never re-evaluates on
-            // template population alone. Toggling the value through
-            // null + back via $nextTick forces the select to pick up
-            // the now-present option.
+            // active rig's saved brand + model now that the catalogue
+            // (the <option> source) is populated. See
+            // _resyncOpticsSelects for why this is needed.
+            await this._resyncOpticsSelects();
+        },
+
+        // Force the brand/model <select>s to re-adopt the active rig's
+        // saved values. A native <select> silently drops an x-model
+        // value when its matching <option> isn't in the DOM yet, and
+        // Alpine doesn't re-evaluate x-model on template population
+        // alone. Two failure modes this fixes:
+        //   1. Load-order race: loadRigs + loadOpticsCatalogue both fire
+        //      un-awaited at startup; if the catalogue resolves before
+        //      the rig list, the selects never picked up the saved value
+        //      and showed "Manual entry" on every page load -- and a
+        //      later optics edit would then PUT the blanked value back,
+        //      losing the OTA on the rig.
+        //   2. Reconnect / refresh-drivers: re-applying a rig with the
+        //      catalogue already present needs the same nudge.
+        // Toggling through '' + $nextTick forces the select to pick up
+        // the now-present option. Idempotent + safe to call repeatedly.
+        async _resyncOpticsSelects() {
+            if (!this.opticsCatalogue?.loaded) return;
             const active = this.rigs?.find(r => r.id === this.activeRigId);
-            if (active) {
-                const bt = active.telescopeBrand || '';
-                const mt = active.telescopeModel || '';
-                const bg = active.guideTelescopeBrand || '';
-                const mg = active.guideTelescopeModel || '';
-                this.settings.telescopeBrand = '';
-                this.settings.telescopeModel = '';
-                this.settings.guideTelescopeBrand = '';
-                this.settings.guideTelescopeModel = '';
-                await this.$nextTick();
-                this.settings.telescopeBrand = bt;
-                this.settings.guideTelescopeBrand = bg;
-                await this.$nextTick();
-                this.settings.telescopeModel = mt;
-                this.settings.guideTelescopeModel = mg;
-            }
+            if (!active) return;
+            const bt = active.telescopeBrand || '';
+            const mt = active.telescopeModel || '';
+            const bg = active.guideTelescopeBrand || '';
+            const mg = active.guideTelescopeModel || '';
+            this.settings.telescopeBrand = '';
+            this.settings.telescopeModel = '';
+            this.settings.guideTelescopeBrand = '';
+            this.settings.guideTelescopeModel = '';
+            await this.$nextTick();
+            this.settings.telescopeBrand = bt;
+            this.settings.guideTelescopeBrand = bg;
+            await this.$nextTick();
+            this.settings.telescopeModel = mt;
+            this.settings.guideTelescopeModel = mg;
         },
 
         /// Distinct telescope brands in the catalogue, sorted.
@@ -19683,6 +19700,30 @@ function ninaApp() {
             this.filterNamesEdit.lastMessage = null;
         },
 
+        // Re-push the active rig's saved filter-slot names to the wheel
+        // after a (re)connect when the driver came back with defaults.
+        // No-op unless: the wheel supports name editing, the rig has
+        // saved names, the slot count matches, and the driver's current
+        // names actually differ (so we don't spam an identical push).
+        async _maybeRestoreFilterNames() {
+            try {
+                if (!this.filterWheel?.capabilities?.editNames) return;
+                const rig = this.rigs.find(r => r.id === this.activeRigId);
+                const saved = rig?.filterNames;
+                if (!Array.isArray(saved) || saved.length === 0) return;
+                const current = this.filterWheel.filters || [];
+                if (current.length !== saved.length) return;
+                const same = current.every((n, i) => n === saved[i]);
+                if (same) return;
+                await this.apiFetch('/api/filterwheel/names', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ names: saved })
+                });
+                this.filterWheel.filters = [...saved];
+            } catch (e) { /* driver may not support it; ignore */ }
+        },
+
         // PUT /api/filterwheel/names — pushes the edited names back
         // into the driver via INDI FILTER_NAME. Validates count
         // client-side first (server validates too, but this gives
@@ -19719,6 +19760,15 @@ function ninaApp() {
                 // update immediately rather than waiting for the
                 // next WS tick.
                 this.filterWheel.filters = body?.names ? [...body.names] : cleaned;
+                // Persist the names on the active rig too, so they
+                // survive a driver reset (some drivers revert
+                // FILTER_NAME to "Filter N" on reconnect). On the next
+                // (re)connect _maybeRestoreFilterNames re-pushes them.
+                const arig = this.rigs.find(r => r.id === this.activeRigId);
+                if (arig) {
+                    arig.filterNames = [...this.filterWheel.filters];
+                    this.saveRig(arig);
+                }
                 this.filterNamesEdit.open = false;
             } catch (e) {
                 const msg = e?.message || 'Save failed';
@@ -28237,6 +28287,7 @@ function ninaApp() {
             }
             if (eq.filterWheel) {
                 const fwOnline = eq.filterWheel.connected !== false;
+                const fwWasOnline = this.filterWheel?.connected === true;
                 this.filterWheel = {
                     connected: fwOnline,
                     position: eq.filterWheel.position,
@@ -28255,6 +28306,11 @@ function ninaApp() {
                 if (!this.equipFilterChoice && eq.filterWheel.name) {
                     this.equipFilterChoice = eq.filterWheel.name;
                 }
+                // On a fresh (re)connect, some drivers come back with
+                // default "Filter N" slot names and drop the labels the
+                // user set. If the active rig has saved names, push them
+                // back so the labels survive a driver reset.
+                if (fwOnline && !fwWasOnline) this._maybeRestoreFilterNames();
             }
             // Belt-and-suspenders: also sync on every WS tick so if a
             // race between this handler and refreshDevices() left a

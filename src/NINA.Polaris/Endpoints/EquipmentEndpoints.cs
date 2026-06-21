@@ -227,6 +227,13 @@ public static class EquipmentEndpoints {
                 // default "", so the worst case is a no-op.
                 if (update.AttachedFilter != null)
                     r.AttachedFilter = update.AttachedFilter;
+                // Mirror the filter-wheel slot names on the rig so they
+                // survive a driver reset (some drivers revert FILTER_NAME
+                // to "Filter N" on reconnect). Non-null guard: a pre-feature
+                // client omits it and JSON binds the default empty array, so
+                // the worst case is a no-op that doesn't wipe saved names.
+                if (update.FilterNames != null && update.FilterNames.Length > 0)
+                    r.FilterNames = update.FilterNames;
                 // INDIROB-3: per-device pre-connect delays. Replace
                 // wholesale when supplied (operator-driven full edit
                 // of the table), preserve when null/missing so a

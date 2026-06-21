@@ -458,6 +458,16 @@ public class EquipmentProfile {
     /// <summary>Model of the guide telescope. Optional, free-form.</summary>
     public string? GuideTelescopeModel { get; set; }
 
+    /// <summary>
+    /// Last-known filter-wheel slot names for this rig, in slot order.
+    /// Filter names normally live in the driver (INDI FILTER_NAME), but
+    /// some drivers reset them to "Filter N" on reconnect / driver reset,
+    /// which loses the user's labels. We mirror them on the rig profile so
+    /// the frontend can re-push them to the wheel after a reconnect when
+    /// the driver reverts to defaults. Empty when never edited.
+    /// </summary>
+    public string[] FilterNames { get; set; } = System.Array.Empty<string>();
+
     // ----- Guider backend selection (native vs PHD2) -----
 
     /// <summary>Which autoguider drives this rig. <c>native</c> (default)
