@@ -55,12 +55,15 @@ const gloss = JSON.parse(readFileSync(GLOSS, 'utf8'));
 const dnt = new Set(gloss.doNotTranslate || []);
 
 async function translateDeepL(texts, lang) {
-    const params = new URLSearchParams();
-    params.append('auth_key', deeplKey);
-    params.append('source_lang', 'EN');
-    params.append('target_lang', DEEPL_CODE[lang]);
-    for (const t of texts) params.append('text', t);
-    const r = await fetch(deeplUrl + '/v2/translate', { method: 'POST', body: params });
+    // Header-based auth (DeepL deprecated the legacy auth_key form field).
+    const r = await fetch(deeplUrl + '/v2/translate', {
+        method: 'POST',
+        headers: {
+            'Authorization': 'DeepL-Auth-Key ' + deeplKey,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ text: texts, source_lang: 'EN', target_lang: DEEPL_CODE[lang] })
+    });
     if (!r.ok) throw new Error('DeepL HTTP ' + r.status + ' ' + (await r.text()).slice(0, 200));
     return (await r.json()).translations.map((x) => x.text);
 }
