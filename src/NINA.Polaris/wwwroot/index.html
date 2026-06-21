@@ -6638,8 +6638,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="DSS Color survey streamed on demand from CDS Strasbourg. Lets you see actual nebulae/galaxies in deep-sky imagery when zoomed in. Requires internet. Turn off offline.">
                         🛰️ DSS Img<span x-show="skyDssVisible && skyDssSourceActive" x-cloak
                               x-text="skyDssSourceActive === 'local' ? ' · offline' : ' · online'"
-                              :style="'font-size:11px; opacity:0.75; color:' +
-                                      (skyDssSourceActive === 'local' ? '#4ade80' : '#60a5fa')"></span>
+                              :style="'font-size:11px; opacity:0.95; font-weight:600; color:' +
+                                      (skyDssSourceActive === 'local' ? '#4ade80' : '#0a1f5c')"></span>
                     </button>
                     <button class="btn btn-sm" @click="skyAutoCenterOnSelect = !skyAutoCenterOnSelect"
                             :class="skyAutoCenterOnSelect ? 'btn-active' : ''"
