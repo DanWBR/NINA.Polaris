@@ -12735,6 +12735,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <span class="activity-host-value" :class="hostMemClass()"
                       x-text="formatHostRam(host.memoryUsedMB, host.memoryTotalMB)"></span>
             </span>
+            <!-- This browser's JS heap (Chromium only; performance.memory is
+                 not exposed by Safari/Firefox, and there is no portable browser
+                 CPU metric, so we surface client memory only). -->
+            <span class="activity-host-stat" x-show="clientMemMB() !== null"
+                  title="This browser tab's JavaScript heap usage">
+                <span class="activity-host-label">Client</span>
+                <span class="activity-host-value" x-text="clientMemMB() + ' MB'"></span>
+            </span>
             <!-- Disk free / total on the volume hosting the active
                  rig's capture root. Hidden when the server didn't
                  manage to probe a mount (no rig, sandbox). Colour
@@ -15148,7 +15156,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260620-field4"></script>
+    <script src="/js/app.js?v=20260620-field5"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

@@ -27692,6 +27692,18 @@ function ninaApp() {
             return `${usedMB} / ${totalMB} MB`;
         },
 
+        // This browser tab's JS heap in MB, or null when the engine doesn't
+        // expose it (only Chromium implements performance.memory; Safari and
+        // Firefox don't, and there is no portable browser CPU metric). Read
+        // live each render — the host stats refresh ~1 Hz so this updates too.
+        clientMemMB() {
+            try {
+                const m = performance && performance.memory;
+                if (!m || !m.usedJSHeapSize) return null;
+                return Math.round(m.usedJSHeapSize / 1048576);
+            } catch (_) { return null; }
+        },
+
         // ─── NET-1: network throughput meter ────────────────────────────
         // Hooks that the WS handlers / wrapped ws.send / apiFetch / raw
         // editor fetches call to accumulate bytes. A 250ms timer
