@@ -85,18 +85,40 @@ public static class EquipmentEndpoints {
 
         group.MapPut("/rigs/{id}", (string id, EquipmentProfile update, ProfileService profiles) => {
             var ok = profiles.UpdateEquipmentProfile(id, r => {
-                r.Name = update.Name;
-                r.Camera = update.Camera;
+                // Identity + primary-device selections are the
+                // source-of-truth fields the operator complained about
+                // losing ("rig name reverts to Default", "main telescope
+                // / guide camera selection disappears after a while").
+                // The server is authoritative for these; a client PUT
+                // must never blank them. A blank value here is always a
+                // client-side glitch (a debounced save firing while a
+                // <select> is mid-render with no matching <option>, a
+                // stale in-memory rig, or a partial body from an old
+                // client) -- never a deliberate "clear". The UI has no
+                // flow that clears a name/camera/mount/focuser/wheel by
+                // PUTting empty (the choice handlers fall back to the
+                // stored value), so guarding blanks costs no capability
+                // and lets the saved rig self-heal on the next reload.
+                if (!string.IsNullOrWhiteSpace(update.Name))
+                    r.Name = update.Name;
+                if (!string.IsNullOrWhiteSpace(update.Camera))
+                    r.Camera = update.Camera;
                 // Empty/null camera driver from old clients is treated
                 // as the legacy default ("indi"), so untouched rig PUTs
                 // don't accidentally clear the driver field.
                 if (!string.IsNullOrWhiteSpace(update.CameraDriver))
                     r.CameraDriver = update.CameraDriver;
-                r.Telescope = update.Telescope;
+                if (!string.IsNullOrWhiteSpace(update.Telescope))
+                    r.Telescope = update.Telescope;
                 if (!string.IsNullOrWhiteSpace(update.TelescopeDriver))
                     r.TelescopeDriver = update.TelescopeDriver;
-                r.Focuser = update.Focuser;
-                r.FilterWheel = update.FilterWheel;
+                if (!string.IsNullOrWhiteSpace(update.Focuser))
+                    r.Focuser = update.Focuser;
+                if (!string.IsNullOrWhiteSpace(update.FilterWheel))
+                    r.FilterWheel = update.FilterWheel;
+                // Optional accessories stay clearable (empty = "None"):
+                // unlike the primary devices, deselecting these is a
+                // legitimate operation.
                 r.Rotator = update.Rotator;
                 r.FlatDevice = update.FlatDevice;
                 r.Dome = update.Dome;
@@ -137,12 +159,22 @@ public static class EquipmentEndpoints {
                     r.SlewCenterExposureSec = update.SlewCenterExposureSec;
                 if (update.SlewCenterGain > 0)
                     r.SlewCenterGain = update.SlewCenterGain;
-                r.FocalLengthMm = update.FocalLengthMm;
-                // Telescope picker fields. Strings safe to set as-is
-                // (empty string is the "no picker selection" sentinel).
-                r.ApertureMm     = update.ApertureMm;
-                r.TelescopeBrand = update.TelescopeBrand ?? "";
-                r.TelescopeModel = update.TelescopeModel ?? "";
+                // OTA optics on the Main Telescope card. These are also
+                // in the "lost after a while" report: a save firing while
+                // settings.* hasn't re-hydrated would zero them. A zero
+                // focal length / aperture is never a meaningful value, so
+                // treat <= 0 as "no change" and keep the stored optic.
+                if (update.FocalLengthMm > 0)
+                    r.FocalLengthMm = update.FocalLengthMm;
+                if (update.ApertureMm > 0)
+                    r.ApertureMm = update.ApertureMm;
+                // Telescope brand/model picker fields. Only overwrite when
+                // the client actually sends a value; a blank from a stale
+                // form must not wipe the saved scope name.
+                if (!string.IsNullOrWhiteSpace(update.TelescopeBrand))
+                    r.TelescopeBrand = update.TelescopeBrand;
+                if (!string.IsNullOrWhiteSpace(update.TelescopeModel))
+                    r.TelescopeModel = update.TelescopeModel;
                 r.AccessoryType  = update.AccessoryType  ?? "";
                 r.AccessoryModel = update.AccessoryModel ?? "";
                 // Default factor to 1.0 when the client omits it,
@@ -155,7 +187,12 @@ public static class EquipmentEndpoints {
                 // pre-native PUT doesn't clobber the new state.
                 if (!string.IsNullOrWhiteSpace(update.GuiderDriver))
                     r.GuiderDriver = update.GuiderDriver.Trim().ToLowerInvariant();
-                r.GuideCamera = update.GuideCamera;
+                // Guide camera selection: same source-of-truth guard as
+                // the imaging camera. The operator reported it vanishing
+                // "even while connected and guiding natively" -- a blank
+                // here is a client glitch, not a deliberate clear.
+                if (!string.IsNullOrWhiteSpace(update.GuideCamera))
+                    r.GuideCamera = update.GuideCamera;
                 if (!string.IsNullOrWhiteSpace(update.GuideCameraDriver))
                     r.GuideCameraDriver = update.GuideCameraDriver.Trim().ToLowerInvariant();
                 if (update.NativeGuideExposureMs > 0)
