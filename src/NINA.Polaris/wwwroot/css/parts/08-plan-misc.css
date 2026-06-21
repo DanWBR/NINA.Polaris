@@ -442,16 +442,20 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     color:#cdd3de; cursor:pointer; align-self:flex-end; padding-bottom:6px; }
 .guide-bottombar .gb-sep { width:1px; align-self:stretch; background:#222; margin:0 4px; }
 @media (max-width:900px){
-    .guide-pane { flex-direction:column; }
-    /* Stacked layout: the panel docks below the main column in normal flow
-       instead of floating, so undo the desktop overlay positioning. */
+    /* Keep the parameters panel as a collapsible right-edge OVERLAY instead of
+       stacking it below the graph. On a phone the graph area is precious, so an
+       overlay the operator can retract to the 28px handle beats a panel that
+       pushes the graph off-screen. Cap the width so it never exceeds the
+       viewport, and reserve only the handle (the expanded panel floats over the
+       graph; collapse it to see the graph full-width). */
+    .guide-side {
+        width: min(var(--guide-side-width, 336px), 88vw);
+        overflow-y: auto;
+    }
     .guide-pane.guide-has-side > .guide-main,
-    .guide-pane.guide-has-side.guide-controls-collapsed > .guide-main { margin-right:0; }
-    .guide-side { position:static; width:auto; flex:none; transform:none;
-        padding:10px 12px; overflow-y:auto; }
-    .guide-side.guide-side--collapsed { transform:none; }
-    /* The retract handle is meaningless in the stacked layout. */
-    .guide-side > .quick-controls-toggle { display:none; }
+    .guide-pane.guide-has-side.guide-controls-collapsed > .guide-main {
+        margin-right: 36px;
+    }
 }
 
 /* ───────────────────────── PLAN mode ───────────────────────── */
