@@ -6618,39 +6618,34 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             :class="skyGridMode !== 'none' ? 'btn-active' : ''"
                             x-text="'#️⃣ ' + skyGridLabel()"
                             title="Toggle the sky coordinate grid: off → Alt-Az → Equatorial"></button>
+                    <!-- Toggle pills: active = feature on (btn-active highlight),
+                         inactive = off. No ": on/off" text — the highlight is
+                         the state, which saves toolbar width. -->
                     <!-- Ecliptic line: the plane of the solar system. -->
                     <button class="btn btn-sm" @click="toggleSkyEcliptic()"
                             :class="skyEclipticVisible ? 'btn-active' : ''"
-                            x-text="'☀️ Ecliptic: ' + (skyEclipticVisible ? 'on' : 'off')"
-                            title="Toggle the ecliptic — the plane of the solar system, where the Sun, Moon and planets travel"></button>
+                            title="Toggle the ecliptic — the plane of the solar system, where the Sun, Moon and planets travel">☀️ Ecliptic</button>
                     <!-- Constellation stick-figure lines + labels. -->
                     <button class="btn btn-sm" @click="toggleSkyConstLines()"
                             :class="skyConstLines ? 'btn-active' : ''"
-                            x-text="'✶ Lines: ' + (skyConstLines ? 'on' : 'off')"
-                            title="Toggle the constellation stick-figure lines and names"></button>
+                            title="Toggle the constellation stick-figure lines and names">✶ Lines</button>
                     <!-- Constellation artwork (IAU western figure drawings). -->
                     <button class="btn btn-sm" @click="toggleSkyConstArt()"
                             :class="skyConstArt ? 'btn-active' : ''"
-                            x-text="'🎨 Figures: ' + (skyConstArt ? 'on' : 'off')"
-                            title="Toggle the constellation figure artwork (the classic mythological drawings)"></button>
-                    <label class="sky-autocenter-toggle"
-                           title="DSS Color survey streamed on demand from CDS Strasbourg. Lets you see actual nebulae/galaxies in deep-sky imagery when zoomed in. Requires internet. Turn off offline.">
-                        <input type="checkbox" x-model="skyDssVisible"
-                               @change="_skyToggleDss()">
-                        DSS imagery
-                        <span x-show="skyDssSourceActive" x-cloak
-                              x-text="skyDssSourceActive === 'local' ? '· offline' : '· online'"
-                              :style="'margin-left:4px; font-size:11px; opacity:0.7; color:' +
-                                      (skyDssSourceActive === 'local' ? '#4ade80' : '#60a5fa')"
-                              :title="skyDssSourceActive === 'local'
-                                  ? 'Using the downloaded offline tiles (CDS was unreachable at load)'
-                                  : 'Streaming from CDS Strasbourg (online)'"></span>
-                    </label>
-                    <label class="sky-autocenter-toggle"
-                           title="When on, picking a target (click on the map, search hit, or Stellarium import) smoothly pans the map to the object. Turn off if you want to keep your current framing while inspecting picks.">
-                        <input type="checkbox" x-model="skyAutoCenterOnSelect">
-                        Auto-center on select
-                    </label>
+                            title="Toggle the constellation figure artwork (the classic mythological drawings)">🎨 Figures</button>
+                    <!-- DSS imagery + Auto-center as toggle pills too; the DSS
+                         online/offline source shows as a tiny suffix when on. -->
+                    <button class="btn btn-sm" @click="skyDssVisible = !skyDssVisible; _skyToggleDss()"
+                            :class="skyDssVisible ? 'btn-active' : ''"
+                            title="DSS Color survey streamed on demand from CDS Strasbourg. Lets you see actual nebulae/galaxies in deep-sky imagery when zoomed in. Requires internet. Turn off offline.">
+                        🛰️ DSS Img<span x-show="skyDssVisible && skyDssSourceActive" x-cloak
+                              x-text="skyDssSourceActive === 'local' ? ' · offline' : ' · online'"
+                              :style="'font-size:11px; opacity:0.75; color:' +
+                                      (skyDssSourceActive === 'local' ? '#4ade80' : '#60a5fa')"></span>
+                    </button>
+                    <button class="btn btn-sm" @click="skyAutoCenterOnSelect = !skyAutoCenterOnSelect"
+                            :class="skyAutoCenterOnSelect ? 'btn-active' : ''"
+                            title="When on, picking a target (click on the map, search hit, or Stellarium import) smoothly pans the map to the object. Turn off if you want to keep your current framing while inspecting picks.">🎯 Auto center</button>
                 </div>
 
                 <!-- Sky Atlas filters -->
