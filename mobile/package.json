@@ -14,12 +14,12 @@
     "icons": "capacitor-assets generate --iconBackgroundColor '#102146' --iconBackgroundColorDark '#102146'"
   },
   "dependencies": {
+    "@capacitor-community/keep-awake": "^5.0.1",
     "@capacitor/android": "^6.1.2",
     "@capacitor/app": "^6.0.1",
     "@capacitor/core": "^6.1.2",
-    "@capacitor/geolocation": "^6.1.0",
+    "@capacitor/geolocation": "^6.1.1",
     "@capacitor/ios": "^6.1.2",
-    "@capacitor-community/keep-awake": "^5.0.1",
     "@capacitor/preferences": "^6.0.2",
     "capacitor-zeroconf": "^3.0.0",
     "polaris-onnx": "file:plugins/polaris-onnx"
