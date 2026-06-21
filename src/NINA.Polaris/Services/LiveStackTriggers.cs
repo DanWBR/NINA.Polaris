@@ -77,8 +77,10 @@ public class LiveStackTriggers {
 
     // ----- Auto dither block (ASIAIR-style: dither every N frames) -----
 
-    /// <summary>Master switch for dithering during live stacking.</summary>
-    public bool DitherEnabled { get; set; }
+    /// <summary>Master switch for dithering during live stacking. On by
+    /// default (ASIAIR parity) — dithering between subs is almost always
+    /// wanted to break up walking noise; it's a no-op when not guiding.</summary>
+    public bool DitherEnabled { get; set; } = true;
 
     /// <summary>Dither after the integrated-frame counter advances by this
     /// much since the last dither. 0 = disabled. Routed through the active

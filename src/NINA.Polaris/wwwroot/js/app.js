@@ -228,7 +228,7 @@ function ninaApp() {
             recenterToleranceArcsec: 30,
             // Auto dither (ASIAIR-style, every N integrated frames). Routed
             // through the active guider (native or external PHD2).
-            ditherEnabled: false,
+            ditherEnabled: true,
             ditherEveryNFrames: 3,
             ditherPixels: 5.0,
             ditherRaOnly: false,

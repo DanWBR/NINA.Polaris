@@ -4328,13 +4328,12 @@
                         <option :value="3000">3.0</option>
                         <option :value="5000">5.0</option>
                     </select></label>
-                    <label class="gb-field" x-show="guiderDriver === 'native'">Gain<select
-                               @change="setGuideGain(Number($event.target.value))"
-                               title="Guide-camera gain (range read from the camera)">
-                        <template x-for="g in guideGainOptions" :key="g">
-                            <option :value="g" :selected="guideGain === g" x-text="g"></option>
-                        </template>
-                    </select></label>
+                    <label class="gb-field" x-show="guiderDriver === 'native'">Gain<input type="number"
+                               :value="guideGain" @change="setGuideGain(Number($event.target.value))"
+                               :min="guideCameraGainMin || 0"
+                               :max="(guideCameraGainMax || 0) > 0 ? guideCameraGainMax : null"
+                               step="1" class="input-sm" style="width:5em"
+                               title="Guide-camera gain — type the value (camera range used as limits when reported)"></label>
                     <label class="gb-check" x-show="guiderDriver === 'native'"><input type="checkbox"
                                :checked="guideBin === 2" @change="setGuideBin($event.target.checked ? 2 : 1)"> Bin 2x2</label>
                     <button class="btn btn-sm" @click="guiderLoop()" :disabled="guider.looping">Loop</button>
@@ -6912,13 +6911,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     </select>
                                 </label>
                                 <label>Gain
-                                    <select class="input-sm"
-                                            @change="slewCenter.gain = Number($event.target.value); saveSlewCenterRigSettings()"
-                                            title="Solve-frame gain (range read from the camera)">
-                                        <template x-for="g in slewCenterGainOptions" :key="g">
-                                            <option :value="g" :selected="slewCenter.gain === g" x-text="g"></option>
-                                        </template>
-                                    </select>
+                                    <input type="number" class="input-sm" style="width:5em"
+                                           :value="slewCenter.gain"
+                                           @change="slewCenter.gain = Number($event.target.value); saveSlewCenterRigSettings()"
+                                           :min="equipCameraInfo?.gainMin || 0"
+                                           :max="(equipCameraInfo?.gainMax || 0) > 0 ? equipCameraInfo.gainMax : null"
+                                           step="1"
+                                           title="Solve-frame gain — type the value (camera range used as limits when reported)">
                                 </label>
                                 <span class="zwo-gain-presets"
                                       x-show="zwoPresetsForActiveCamera()"
@@ -15350,7 +15349,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260621-settingsorder3"></script>
+    <script src="/js/app.js?v=20260621-fieldbugs1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
