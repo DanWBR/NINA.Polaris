@@ -21359,9 +21359,9 @@ function ninaApp() {
             // stripped, lowercased). Category order is the display order.
             const CATS = [
                 ['Appearance & interface', ['appearance', 'device name']],
+                ['Location & time',     ['clock', 'observatory']],
                 ['Equipment & capture', ['hardware', 'indi server', 'indi status', 'plate solving', 'sequencer']],
                 ['Image processing', ['ai inference (onnx)', 'gpu acceleration (opencl)', 'external tools', 'image cache', 'image output']],
-                ['Location & time',     ['clock', 'observatory']],
                 ['Network & security',  ['authentication', 'https certificate',
                     'https endpoints (for webgpu + multi-thread wasm)', 'network (wifi)', 'remote terminal',
                     'auto-push to network storage']],
