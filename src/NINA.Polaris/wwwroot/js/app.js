@@ -490,6 +490,9 @@ function ninaApp() {
 
         // Sky
         skySearch: '',
+        // SKY toolbar: the search box is hidden behind the Search button so the
+        // toolbar fits on one row; clicking Search reveals + focuses the input.
+        skySearchOpen: false,
         skyTarget: null,
 
         // User toggle: when ON, picking a target (map click, search

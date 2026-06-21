@@ -6596,9 +6596,18 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <div class="sky-toolbar">
-                    <input type="text" class="search-input" placeholder="Search object (M31, NGC 7000, Orion...)"
-                           x-model="skySearch" @keyup.enter="searchSky()" @input="skyShowResults = false">
-                    <button class="btn btn-sm" @click="searchSky()">Search</button>
+                    <!-- Search collapses behind this button so the toolbar
+                         fits one row; clicking it reveals + focuses the box,
+                         Enter runs the search, Esc closes it. -->
+                    <button class="btn btn-sm" :class="skySearchOpen ? 'btn-active' : ''"
+                            @click="skySearchOpen = !skySearchOpen; if (skySearchOpen) $nextTick(() => $refs.skySearchInput && $refs.skySearchInput.focus())"
+                            title="Search for an object by name (M31, NGC 7000, …)">🔍 Search</button>
+                    <input type="text" class="search-input" x-ref="skySearchInput"
+                           x-show="skySearchOpen" x-cloak
+                           placeholder="Search object (M31, NGC 7000, Orion...)"
+                           x-model="skySearch" @keyup.enter="searchSky()"
+                           @keyup.escape="skySearchOpen = false"
+                           @input="skyShowResults = false">
                     <button class="btn btn-sm" @click="showAtlasFilters = !showAtlasFilters"
                             :class="showAtlasFilters ? 'btn-active' : ''">Filters</button>
                     <button class="btn btn-sm" @click="openMosaicPlanner()"
@@ -15188,7 +15197,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260620-solver1"></script>
+    <script src="/js/app.js?v=20260620-skysearch1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
