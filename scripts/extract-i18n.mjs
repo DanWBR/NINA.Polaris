@@ -40,16 +40,23 @@ function decodeEntities(s) {
 }
 
 const norm = (s) => decodeEntities(s).replace(/\s+/g, ' ').trim();
-// Keep only strings that contain at least one letter and aren't pure
-// numbers/symbols/expressions. Drop Alpine/JS expression fragments.
+// High-precision filter: keep things that look like natural-language UI prose,
+// drop the code/CSS/Alpine-expression fragments that leak from a hand-written
+// HTML+JS scrape. Recall is sacrificed for precision so the catalog (and the
+// translation/Crowdin effort) isn't polluted with junk keys. Anything missed
+// here just stays English at runtime (graceful), so erring strict is safe.
 function keep(s) {
     s = norm(s);
-    if (!s || s.length > 200) return false;
-    if (!/[A-Za-z]/.test(s)) return false;            // no letters -> skip
-    if (/^[\d\s.,:;%°"'+\-/x×()]+$/.test(s)) return false;
-    // Looks like code / a binding, not prose:
-    if (/[{}<>]|=>|\$\{|\bx-|\b@click|\bfunction\b/.test(s)) return false;
-    if (/^[a-z]+([A-Z][a-z]+)+$/.test(s)) return false; // camelCase identifier
+    if (!s || s.length < 2 || s.length > 140) return false;
+    if (!/[A-Za-z]/.test(s)) return false;                       // needs a letter
+    if (/^[^A-Za-z(À-ÿ]/.test(s)) return false;                  // must START with a letter or "("
+    if (/^[a-z]/.test(s) && !/\s/.test(s)) return false;         // lone lowercase token (identifier/var)
+    // Code-ish / Alpine-binding / expression fragments:
+    if (/[_<>{}=`$@#"]|=>|::|\|\||&&|\(\)|\/\/|\bx-[a-z]|@click|\bfunction\b/.test(s)) return false;
+    if (/\b(null|undefined|true|false|return)\b/.test(s) && !/\s\w+\s\w+/.test(s)) return false;
+    if (/^[-A-Za-z0-9]+\.[A-Za-z]/.test(s) && !/\s/.test(s)) return false; // dotted identifier
+    if (/^[a-z]+([A-Z][a-z]+)+$/.test(s)) return false;          // camelCase identifier
+    if (/\b(ps|video|editorState|guider|update|host|auth)\.[a-zA-Z]/.test(s)) return false; // alpine state paths
     return true;
 }
 

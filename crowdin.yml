@@ -1,0 +1,27 @@
+# Crowdin configuration for the Polaris web-UI translations.
+#
+#   export CROWDIN_PROJECT_ID=...        # numeric project id
+#   export CROWDIN_PERSONAL_TOKEN=...    # API token
+#   crowdin upload sources               # push the English source strings
+#   crowdin pull                         # fetch translations back into the repo
+#
+# Source language is English. The source file is the extracted, flat
+# { "English source": "translation" } catalog (regenerate with
+# scripts/extract-i18n.mjs). Per-language catalogs land back at
+# data/locales/{lang}.json. Crowdin's built-in Machine Translation
+# pre-translation can seed empty strings before community review — that is the
+# "machine now, community later" pipeline.
+project_id_env: CROWDIN_PROJECT_ID
+api_token_env: CROWDIN_PERSONAL_TOKEN
+preserve_hierarchy: true
+
+files:
+  - source: /src/NINA.Polaris/wwwroot/data/locales/_source.json
+    translation: /src/NINA.Polaris/wwwroot/data/locales/%locale%.json
+    # Map Crowdin locales to our on-disk filenames.
+    languages_mapping:
+      locale:
+        pt-BR: pt-BR
+        es-ES: es
+        fr-FR: fr
+        de-DE: de
