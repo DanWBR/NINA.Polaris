@@ -217,6 +217,47 @@
         }
     }
 
+    // Precess equatorial coordinates between J2000.0 and the equinox of
+    // date. The catalogue feeds us ICRS/J2000 RA/Dec, but the manual
+    // RA/Dec<->altaz math below uses apparent sidereal time (equinox of
+    // date). Skipping precession left the viewport centre off by the full
+    // J2000->now precession -- ~0.36 deg at dec -16 over 26 years, about
+    // one small-FOV frame, the "search lands beside the object" bug.
+    //
+    // Rigorous rotation via the IAU 1976 precession angles (Lieske 1977;
+    // Meeus, Astronomical Algorithms, Ch. 21). toDate=true precesses
+    // J2000 -> date (for look-at), toDate=false precesses date -> J2000
+    // (for reading the centre / map clicks back as ICRS).
+    function precessRaDec(raDeg, decDeg, mjd, toDate) {
+        var D2R = Math.PI / 180.0;
+        // Centuries of TT from J2000.0. UTC vs TT (~70 s) is negligible
+        // against precession at this precision.
+        var T = (mjd - 51544.5) / 36525.0;
+        var sec2rad = D2R / 3600.0;
+        var zeta  = (2306.2181 * T + 0.30188 * T * T + 0.017998 * T * T * T) * sec2rad;
+        var z     = (2306.2181 * T + 1.09468 * T * T + 0.018203 * T * T * T) * sec2rad;
+        var theta = (2004.3109 * T - 0.42665 * T * T - 0.041833 * T * T * T) * sec2rad;
+        var a0 = raDeg * D2R, d0 = decDeg * D2R;
+        var A, B, C, ra, dec;
+        if (toDate) {
+            A = Math.cos(d0) * Math.sin(a0 + zeta);
+            B = Math.cos(theta) * Math.cos(d0) * Math.cos(a0 + zeta) - Math.sin(theta) * Math.sin(d0);
+            C = Math.sin(theta) * Math.cos(d0) * Math.cos(a0 + zeta) + Math.cos(theta) * Math.sin(d0);
+            ra = Math.atan2(A, B) + z;
+        } else {
+            // Inverse rotation (transpose): swap zeta<->z and negate theta.
+            A = Math.cos(d0) * Math.sin(a0 - z);
+            B = Math.cos(theta) * Math.cos(d0) * Math.cos(a0 - z) + Math.sin(theta) * Math.sin(d0);
+            C = Math.cos(theta) * Math.sin(d0) - Math.sin(theta) * Math.cos(d0) * Math.cos(a0 - z);
+            ra = Math.atan2(A, B) - zeta;
+        }
+        if (C > 1) C = 1; if (C < -1) C = -1;
+        dec = Math.asin(C);
+        var TWO_PI = 2 * Math.PI;
+        ra = ((ra % TWO_PI) + TWO_PI) % TWO_PI;
+        return [ra / D2R, dec / D2R];
+    }
+
     function skyLookAt(raDeg, decDeg, fovDeg, objHint) {
         if (!window.__stel) return false;
         var stel = window.__stel;
@@ -248,8 +289,13 @@
             if (gstFrac < 0) gstFrac += 1;
             var lst = 2 * Math.PI * gstFrac + lng;
 
-            var raRad  = raDeg  * stel.D2R;
-            var decRad = decDeg * stel.D2R;
+            // Precess the ICRS/J2000 input to the equinox of date so it
+            // matches the apparent-sidereal-time frame used below (and the
+            // engine's own rendering). Without this the centre lands off
+            // by the full J2000->now precession.
+            var ofDate = precessRaDec(raDeg, decDeg, mjd, true);
+            var raRad  = ofDate[0] * stel.D2R;
+            var decRad = ofDate[1] * stel.D2R;
             var H = lst - raRad;
             var sinH = Math.sin(H), cosH = Math.cos(H);
             var sinDec = Math.sin(decRad), cosDec = Math.cos(decRad);
@@ -391,9 +437,15 @@
             // Normalise RA to [0, 2π).
             raRad = ((raRad % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
 
-            var raDeg  = raRad / stel.D2R;
-            var decDeg = dec   / stel.D2R;
+            var raDateDeg = raRad / stel.D2R;
+            var decDateDeg = dec  / stel.D2R;
             var fovDeg = fov   / stel.D2R;
+            // The altaz math above yields equinox-of-date coordinates;
+            // precess back to ICRS/J2000 so callers (skyTarget "Centre
+            // ra,dec", drag-to-frame, map clicks) get the same frame the
+            // catalogue + look-at use.
+            var icrs = precessRaDec(raDateDeg, decDateDeg, mjd, false);
+            var raDeg = icrs[0], decDeg = icrs[1];
             if (!isFinite(raDeg) || !isFinite(decDeg) || !isFinite(fovDeg)) {
                 return null;
             }
