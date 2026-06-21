@@ -760,6 +760,61 @@
     border-bottom: 1px solid var(--accent);
 }
 
+/* Plate-solver console as a right-edge, collapsible overlay (instead of
+   inline flow that pushed the SKY map down). Fixed to the screen so it
+   floats over the map on both desktop and phone. */
+.sky-solver-overlay {
+    position: fixed;
+    top: 64px;
+    right: 12px;
+    width: min(420px, 92vw);
+    max-height: calc(100vh - 150px);
+    overflow: auto;
+    z-index: 50;
+    background: var(--bg-elev, #11161f);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55);
+}
+.sky-solver-overlay .sky-slew-progress {
+    border-bottom: none;
+    background: transparent;
+}
+.sky-solver-overlay-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg-elev, #11161f);
+}
+/* Collapsed re-open pill, anchored to the right edge. */
+.sky-solver-pill {
+    position: fixed;
+    top: 64px;
+    right: 0;
+    z-index: 50;
+    border: 1px solid var(--accent);
+    border-right: none;
+    border-radius: 6px 0 0 6px;
+    background: var(--bg-elev, #11161f);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+@media (max-width: 640px) {
+    .sky-solver-overlay { top: 56px; right: 6px; max-height: calc(100vh - 120px); }
+    .sky-solver-pill { top: 56px; }
+}
+
 .slew-progress-row {
     display: flex;
     align-items: center;

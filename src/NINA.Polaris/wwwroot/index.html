@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260620-dl1">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260620-dl1">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260620-dl1">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-dl1">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-solver1">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-dl1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260620-dl1">
@@ -6991,6 +6991,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      them anxious about whether the run was actually
                      making progress; this brings it inline with
                      the ASIAIR pattern. -->
+                <!-- Plate-solver console: docked to the right edge of the
+                     screen as a collapsible overlay (was inline flow that
+                     pushed the map). The header ▸ hides it to a small pill
+                     (.sky-solver-pill) that re-opens it. -->
+                <div class="sky-solver-overlay" x-cloak
+                     x-show="!skySolverHidden && ((slewCenterStatus && slewCenterJobId) || slewCenterFailedLog)">
+                    <div class="sky-solver-overlay-head">
+                        <span>Plate solver</span>
+                        <button class="btn btn-xs" @click="skySolverHidden = true"
+                                title="Hide solver console">▸</button>
+                    </div>
                 <div class="sky-slew-progress" x-show="slewCenterStatus && slewCenterJobId">
                     <div class="slew-progress-row">
                         <span class="slew-phase-icon"
@@ -7034,6 +7045,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
                     <pre x-text="slewCenterFailedLog" class="solver-output-live"></pre>
                 </div>
+                </div><!-- /.sky-solver-overlay -->
+
+                <!-- Re-open pill, shown only while a solve/result exists but
+                     the overlay is collapsed. -->
+                <button class="sky-solver-pill" x-cloak
+                        x-show="skySolverHidden && ((slewCenterStatus && slewCenterJobId) || slewCenterFailedLog)"
+                        @click="skySolverHidden = false"
+                        title="Show solver console">◂ Solver</button>
 
                 <!-- The old .sky-info-panel sat below the iframe and
                      hosted Slew & Center / Slew Only / Center on mount /
@@ -15168,7 +15187,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260620-rigtitle"></script>
+    <script src="/js/app.js?v=20260620-solver1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

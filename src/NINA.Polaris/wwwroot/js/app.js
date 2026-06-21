@@ -633,6 +633,9 @@ function ninaApp() {
         // dismissible panel so the user can read why it failed; on success
         // it's cleared. Holds the captured filesSolveLog at failure time.
         slewCenterFailedLog: '',
+        // SKY plate-solver console is a right-edge overlay that the user can
+        // collapse to a small pill (it used to push the map content in flow).
+        skySolverHidden: false,
         _slewCenterTimer: null,
         fov: { width: 2.82, height: 1.88 },
 
@@ -17923,6 +17926,7 @@ function ninaApp() {
                 const data = await resp.json();
                 if (data.jobId) {
                     this.slewCenterJobId = data.jobId;
+                    this.skySolverHidden = false;
                     this._pollSlewCenter();
                     this.toast((centerOnly ? 'Centering' : 'Slew & Center')
                         + ' started -- check SKY tab for progress', 'ok');
@@ -25899,9 +25903,11 @@ function ninaApp() {
                 const data = await resp.json();
                 this.slewCenterJobId = data.jobId;
                 this.slewCenterStatus = { state: 'pending', iteration: 0 };
-                // Clear any leftover console from a previous run.
+                // Clear any leftover console from a previous run + re-open the
+                // overlay in case the user collapsed it last time.
                 this.slewCenterFailedLog = '';
                 this.filesSolveLog = '';
+                this.skySolverHidden = false;
                 this.toast('Slew & center started', 'ok');
                 this.startSlewCenterPolling();
             } catch (e) {
