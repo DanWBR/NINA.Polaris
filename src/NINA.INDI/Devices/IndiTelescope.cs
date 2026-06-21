@@ -86,6 +86,19 @@ public class IndiTelescope : ITelescope {
         DeviceName = deviceName;
     }
 
+    /// <summary>
+    /// Re-request this mount's properties from the driver. After an INDI
+    /// driver restart / reset (the ZWO AM3 in EQ mode is a repeat
+    /// offender), indiserver re-defines EQUATORIAL_EOD_COORD with its
+    /// default 0h/0° until the driver next polls the mount, so
+    /// <see cref="RightAscension"/> / <see cref="Declination"/> can read a
+    /// bogus 0,0. Re-issuing a device-scoped <c>getProperties</c> makes the
+    /// driver re-send the real pointing without forcing a full reconnect.
+    /// Read-only: no motion, no sync, no coordinate write.
+    /// </summary>
+    public Task RefreshAsync(CancellationToken ct = default)
+        => _client.SendAsync(Protocol.IndiXmlWriter.GetProperties(DeviceName), ct);
+
     public Task ConnectAsync(CancellationToken ct = default)
         => _client.ConnectDeviceAsync(DeviceName, ct);
 

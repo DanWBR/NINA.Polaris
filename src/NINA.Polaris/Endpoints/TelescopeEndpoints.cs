@@ -42,6 +42,37 @@ public static class TelescopeEndpoints {
             });
         });
 
+        // Recover the mount's real RA/Dec after an INDI driver reset.
+        // The ZWO AM3 (and other strain-wave/EQ-mode drivers) can come
+        // back from a driver restart reporting 0h/0° until the driver
+        // next polls the mount, which leaves the UI (and any slew that
+        // hints off "current position") working from a bogus origin.
+        // This re-issues a device-scoped getProperties so the driver
+        // re-sends its actual pointing -- read-only, no motion -- then
+        // returns the refreshed coordinates. Non-INDI mounts already
+        // read live, so they just echo the current values back.
+        group.MapPost("/refresh-position", async (EquipmentManager equip) => {
+            if (equip.Telescope == null)
+                return Results.BadRequest(new { error = "No telescope selected" });
+            try {
+                if (equip.Telescope is NINA.INDI.Devices.IndiTelescope indi) {
+                    await indi.RefreshAsync();
+                    // Give the driver a beat to echo the real coords back
+                    // before we read them off the refreshed property.
+                    await Task.Delay(600);
+                }
+                return Results.Ok(new {
+                    ra = equip.Telescope.RightAscension,
+                    dec = equip.Telescope.Declination,
+                    alt = equip.Telescope.Altitude,
+                    az = equip.Telescope.Azimuth,
+                    parked = equip.Telescope.IsParked
+                });
+            } catch (Exception ex) {
+                return Results.Problem(ex.Message);
+            }
+        });
+
         group.MapPost("/slew", async (EquipmentManager equip, SlewRequest request) => {
             if (equip.Telescope == null)
                 return Results.BadRequest(new { error = "No telescope selected" });

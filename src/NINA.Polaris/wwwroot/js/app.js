@@ -20853,6 +20853,27 @@ function ninaApp() {
             }
         },
 
+        // Recover the mount's real RA/Dec after an INDI driver reset. The
+        // ZWO AM3 (EQ mode) and similar drivers can come back reporting
+        // 0h/0deg until the driver next polls the mount, which leaves the
+        // readout (and any slew that hints off current position) working
+        // from a bogus origin. Re-issues a device-scoped getProperties on
+        // the server -- read-only, no motion -- and refreshes the readout.
+        async refreshMountPosition() {
+            try {
+                const resp = await this.apiPost('/api/telescope/refresh-position',
+                    null, { timeout: 5000 });
+                const body = await resp.json().catch(() => ({}));
+                if (body && typeof body.ra === 'number') {
+                    this.mount.ra = body.ra;
+                    this.mount.dec = body.dec;
+                    this.toast('Mount position refreshed from driver', 'ok');
+                }
+            } catch (e) {
+                this.toast('Refresh position failed: ' + (e?.message || e), 'error');
+            }
+        },
+
         // MOUNT-LOC: push the observer coords from the active profile
         // into the mount via INDI GEOGRAPHIC_COORD / Alpaca site-*
         // properties. Sends nothing in the body so the server falls

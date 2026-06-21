@@ -5457,6 +5457,18 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             title="Park -> Unpark -> Home. Use this if plain Home does nothing after powering the mount on (strain-wave mounts like ZWO AM3 need a park/unpark cycle to re-establish the position reference before Home works).">
                                         Reset &amp; Home
                                     </button>
+                                    <!-- Recover real RA/Dec after an INDI driver
+                                         reset. The ZWO AM3 (EQ mode) and similar
+                                         drivers can come back reporting 0h/0deg
+                                         until they next poll the mount; this
+                                         re-requests the coordinates (read-only,
+                                         no motion) so the readout + position-
+                                         hinted slews work from the true origin. -->
+                                    <button class="btn btn-sm" @click="refreshMountPosition()"
+                                            :disabled="!mount.connected"
+                                            title="Re-read the mount's real RA/Dec from the driver. Use after an INDI driver reset if the coordinates show 0h/0deg or look stuck. Read-only -- does not move the mount.">
+                                        Refresh Pos
+                                    </button>
                                     <!-- Combined site sync: pushes BOTH location
                                          (GEOGRAPHIC_COORD) AND wall-clock UTC
                                          (TIME_UTC) so the mount has all three
@@ -15156,7 +15168,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260620-rig2"></script>
+    <script src="/js/app.js?v=20260620-mount1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
