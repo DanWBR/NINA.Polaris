@@ -933,9 +933,32 @@
     color: var(--text-primary);
     margin: 0 0 8px;
 }
+/* Collapse handle for the Stack panel — only used on the narrow overlay
+   layout (shown via the @media block below); hidden on the desktop split. */
+.files-right-handle { display: none; }
+
 @media (max-width: 900px) {
-    .files-pane-split { flex-direction: column; }
-    .files-left, .files-right { flex: 1 1 auto; }
+    /* Keep the file tree on the LEFT at full width and float the Stack panel
+       as a collapsible right-edge overlay (instead of stacking it below). The
+       handle pulls it out / tucks it away; collapsed leaves a 28px sliver. */
+    .files-pane-split { flex-direction: row; position: relative; }
+    .files-left { flex: 1 1 auto; margin-right: 28px; }
+    .files-right {
+        position: absolute; right: 0; top: 0; bottom: 0;
+        width: min(420px, 88vw); flex: none; z-index: 5;
+        padding-left: 28px;            /* clear the absolute handle */
+        transition: transform 200ms ease;
+        box-shadow: -8px 0 24px rgba(0, 0, 0, 0.45);
+    }
+    .files-right.files-right--collapsed { transform: translateX(calc(100% - 28px)); }
+    .files-right-handle {
+        display: flex;
+        position: absolute; left: 0; top: 0; bottom: 0; width: 28px; z-index: 1;
+        align-items: center; justify-content: center;
+        background: var(--bg-elev, #11161f);
+        border: none; border-right: 1px solid var(--border);
+        color: var(--accent); font-size: 16px; cursor: pointer;
+    }
 }
 
 /* UNIF-2: Stack workspace slot cards. Lives inside .files-right-

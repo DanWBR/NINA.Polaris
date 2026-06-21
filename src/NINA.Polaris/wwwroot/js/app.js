@@ -586,6 +586,10 @@ function ninaApp() {
         // CSS even parses (avoids FOUT).
         uiFont: 'atkinson',
         padScale: 100,   // control density %, 50–150 (Settings → Appearance)
+        // STUDIO: on narrow screens the Stack panel floats as a collapsible
+        // right overlay so the file tree keeps the full width. Default
+        // collapsed (tree-first); no effect on the desktop side-by-side layout.
+        filesStackCollapsed: true,
 
         // SWE-5: object-info card overlay on the sky map. Populated
         // when the bridge emits a map-click with a rich object payload
