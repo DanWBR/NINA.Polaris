@@ -3785,6 +3785,11 @@
                                        x-model.number="guideView.contrast"
                                        @input="persistGuideView()" @dblclick="guideView.contrast=1; persistGuideView()"
                                        title="Contrast (double-click to reset)">
+                                <!-- Auto: back to the server's auto-stretched
+                                     baseline (no extra CSS brightness/contrast). -->
+                                <button class="btn btn-xs" @click="guideViewAuto()"
+                                        :disabled="guideView.brightness === 1 && guideView.contrast === 1"
+                                        title="Reset to the auto-stretched baseline">Auto</button>
                             </div>
                             <div class="phd2-cam-empty text-muted" x-show="!guider.view">Loop or guide to see the guide frame</div>
                             <div class="phd2-cal-banner" x-show="guider.calibrating && guider.calProgress"
@@ -15143,7 +15148,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260620-field3"></script>
+    <script src="/js/app.js?v=20260620-field4"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

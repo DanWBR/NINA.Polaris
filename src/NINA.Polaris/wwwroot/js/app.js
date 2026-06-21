@@ -14808,6 +14808,15 @@ function ninaApp() {
             } catch (e) { /* private mode / quota — non-fatal */ }
         },
 
+        // Reset the guide-frame brightness/contrast back to the auto-stretched
+        // baseline (1/1 = the server's ApplyGuide JPEG with no extra CSS
+        // filter), the best starting point for spotting the guide star.
+        guideViewAuto() {
+            this.guideView.brightness = 1;
+            this.guideView.contrast = 1;
+            this.persistGuideView();
+        },
+
         drawGuideCamOverlay() {
             const img = this.$refs.guidePhdCamImg;
             const canvas = this.$refs.guidePhdCamOverlay;
