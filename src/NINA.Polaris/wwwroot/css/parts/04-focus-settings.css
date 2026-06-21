@@ -257,6 +257,11 @@
        Stellarium even when the label wraps. */
     min-height: 32px;
 }
+/* Only the FIRST toggle gets the auto margin that pushes the pair to the
+   right edge; a second consecutive toggle sits right beside it (with the
+   toolbar's flex gap) instead of inheriting margin-left:auto and wrapping
+   to its own line. Keeps both checkboxes on the single toolbar row. */
+.sky-autocenter-toggle + .sky-autocenter-toggle { margin-left: 0; }
 .sky-autocenter-toggle input {
     cursor: pointer;
     margin: 0;
