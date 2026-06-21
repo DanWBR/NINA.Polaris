@@ -585,7 +585,8 @@ function ninaApp() {
         // initial load can apply via inline script before the
         // CSS even parses (avoids FOUT).
         uiFont: 'atkinson',
-        padScale: 100,   // control density %, 50–150 (Settings → Appearance)
+        padScale: 100,   // control density %, applied (Settings → Appearance)
+        padScaleDraft: 100, // slider draft; only committed to padScale on Apply
         // STUDIO: on narrow screens the Stack panel floats as a collapsible
         // right overlay so the file tree keeps the full width. Default
         // collapsed (tree-first); no effect on the desktop side-by-side layout.
@@ -3263,6 +3264,7 @@ function ninaApp() {
             const padSaved = parseInt(localStorage.getItem('nina-pad-scale'), 10);
             this.padScale = Number.isFinite(padSaved) ? padSaved : 100;
             this.applyPadScale();
+            this.padScaleDraft = this.padScale;
 
             // Mirror the on-screen-keyboard mode for the Settings <select>.
             // The module reads its own localStorage key independently, so
