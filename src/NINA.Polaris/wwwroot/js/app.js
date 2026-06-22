@@ -26984,6 +26984,7 @@ function ninaApp() {
             switch (k) {
                 case 'raspberry-pi': return '🍓';
                 case 'jetson':       return '🧠';
+                case 'orangepi':     return '🍊';
                 case 'rockpi':
                 case 'odroid':
                 case 'mini-pc':      return '🖥️';

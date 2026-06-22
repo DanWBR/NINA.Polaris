@@ -190,6 +190,9 @@ public static class HostInfo {
         var m = model.ToLowerInvariant();
         if (m.Contains("raspberry pi")) return "raspberry-pi";
         if (m.Contains("jetson")) return "jetson";
+        // Orange Pi must come before the rk35 rule below: the Orange Pi 5
+        // family is RK3588, which would otherwise be classified as "rockpi".
+        if (m.Contains("orange pi") || m.Contains("orangepi")) return "orangepi";
         if (m.Contains("rock pi") || m.Contains("rockpi") || m.Contains("rk35")) return "rockpi";
         if (m.Contains("odroid")) return "odroid";
         if (m.Contains("nuc")) return "mini-pc";
@@ -392,7 +395,7 @@ public static class HostInfo {
 /// show a label like "Raspberry Pi 5 Model B Rev 1.0" next to CPU%.
 /// </summary>
 /// <param name="Kind">Coarse classification for icon selection:
-/// raspberry-pi / jetson / rockpi / odroid / mini-pc / vm / windows
+/// raspberry-pi / jetson / orangepi / rockpi / odroid / mini-pc / vm / windows
 /// / linux / mac / generic.</param>
 /// <param name="Model">Full model string as reported by hardware.
 /// "Raspberry Pi 5 Model B Rev 1.0", "Intel(R) NUC11PAHi7", etc.
