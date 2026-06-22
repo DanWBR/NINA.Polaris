@@ -779,9 +779,9 @@ button,
        the bitmap is letterboxed by aspect ratio. */
     object-fit: contain;
     object-position: center;
-    /* PANZOOM: the overlay follows the same CSS transform as the
-       underlying .preview-canvas so annotations stay aligned. */
-    transform-origin: center center;
+    /* PANZOOM: must match .preview-canvas origin (0 0) so the
+       same CSS translate+scale keeps annotations aligned. */
+    transform-origin: 0 0;
     will-change: transform;
 }
 
