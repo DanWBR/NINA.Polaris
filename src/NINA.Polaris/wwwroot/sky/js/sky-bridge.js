@@ -469,8 +469,26 @@
     // mount SHOULD be pointing (the catalog object the user picked),
     // actual = where it actually ended up (from plate solve). The line
     // between them visualises the pointing error as an angular vector.
-    var __skyFovObjs = { mount: null, target: null, mosaic: null,
+    var __skyFovObjs = { mount: null, target: null,
                           alignTarget: null, alignActual: null, alignLine: null };
+    // Mosaic tiles are drawn ONE geojson object per panel (exactly like the
+    // mount rectangle) — the engine geojson parser renders a single Polygon
+    // per object, so packing every panel into one FeatureCollection silently
+    // dropped all but the first. Held in an array so all can be removed.
+    var __skyMosaicObjs = [];
+
+    function skyRemoveMosaic() {
+        if (__skyFovLayer) {
+            __skyMosaicObjs.forEach(function (o) {
+                try {
+                    if (typeof __skyFovLayer.remove === 'function') {
+                        __skyFovLayer.remove(o);
+                    }
+                } catch (e) { /* engine may not support remove — swallow */ }
+            });
+        }
+        __skyMosaicObjs = [];
+    }
 
     function skyEnsureFovLayer() {
         if (__skyFovLayer || !window.__stel) return __skyFovLayer;
@@ -890,7 +908,7 @@
         // FOV ratio to engine fov. Always at viewport centre, always
         // visible, doesn't need any engine round-trip.
         skyRemoveObj('mount');
-        skyRemoveObj('mosaic');
+        skyRemoveMosaic();
         __lastMountFov = mount || null;
         console.log('[Sky] set-fov-overlays mount=', mount, 'target=', target);
         try {
@@ -906,41 +924,46 @@
             // Update the screen-anchored target FOV CSS box.
             skyUpdateTargetFovBox(target);
             if (mosaic && mosaic.tiles && mosaic.tiles.length) {
-                // Mosaic grid: one glowing yellow polygon per tile plus a
-                // Point feature carrying the 1-based slew order, so the grid
-                // reads clearly over a bright target at small FOV (the old
-                // 1px / 0.7-opacity / no-glow style was nearly invisible on
-                // M42). Edges are sampled (segments=8) so panels far from the
-                // equator stay true rectangles instead of parallelograms.
-                var features = [];
+                // Mosaic grid: ONE geojson object per panel, built exactly
+                // like the mount rectangle (skyFovGeoJson). Packing every
+                // panel into a single FeatureCollection failed because the
+                // engine geojson parser renders only the first Polygon per
+                // object — the other panels were silently dropped, so the
+                // grid never showed. Same rot+180 + 16-segment edge sampling
+                // as the mount so off-equator panels stay true rectangles.
                 mosaic.tiles.forEach(function (t) {
+                    var rot = (t.rotationDeg || 0) + 180;
                     var ring = skyFovRect(t.raDeg, t.decDeg,
-                        t.widthDeg, t.heightDeg, t.rotationDeg || 0, 8);
-                    features.push({
+                        t.widthDeg, t.heightDeg, rot, 16);
+                    var features = [{
                         type: 'Feature',
                         properties: {
                             stroke: '#facc15', 'stroke-width': 2,
-                            'stroke-opacity': 0.95, 'stroke-glow': true,
-                            fill: '#facc15', 'fill-opacity': 0.06
+                            'stroke-opacity': 1, 'stroke-glow': true,
+                            fill: '#facc15', 'fill-opacity': 0.0
                         },
                         geometry: { type: 'Polygon', coordinates: [ring] }
-                    });
+                    }];
                     if (t.label) {
+                        // Panel number at the tile centre (1-based slew order).
                         features.push({
                             type: 'Feature',
                             properties: {
-                                title: t.label, stroke: '#fde68a',
-                                'text-anchor': 'center'
+                                stroke: '#fde68a', 'stroke-opacity': 1,
+                                'stroke-width': 0, fill: '#fde68a',
+                                'fill-opacity': 0, title: t.label,
+                                'text-anchor': 'center', 'text-size': 13
                             },
                             geometry: { type: 'Point',
                                 coordinates: [t.raDeg, t.decDeg] }
                         });
                     }
+                    var obj = stel.createObj('geojson', {
+                        data: { type: 'FeatureCollection', features: features }
+                    });
+                    __skyFovLayer.add(obj);
+                    __skyMosaicObjs.push(obj);
                 });
-                __skyFovObjs.mosaic = stel.createObj('geojson', {
-                    data: { type: 'FeatureCollection', features: features }
-                });
-                __skyFovLayer.add(__skyFovObjs.mosaic);
                 console.log('[Sky] mosaic grid created: ' + mosaic.tiles.length
                     + ' panels around RA=' + mosaic.tiles[0].raDeg.toFixed(2)
                     + '° Dec=' + mosaic.tiles[0].decDeg.toFixed(2) + '°');
