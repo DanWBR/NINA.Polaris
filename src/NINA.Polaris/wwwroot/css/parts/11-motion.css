@@ -42,20 +42,21 @@
 .anim-fade { animation: anim-fade-in 160ms ease-out; }
 .anim-pop  { animation: anim-pop-in 240ms cubic-bezier(0.16, 1, 0.3, 1); }
 
-/* ---- Modals: backdrop fades in, frame pops in --------------------------------
- * The modals toggle via Alpine x-show (display:none <-> flex/block); a CSS
- * animation re-runs each time the element returns to a rendered display, so
- * tagging the shared backdrop + frame classes here gives every modal a
- * fade+zoom open without touching the markup. Backdrops fade (opacity only);
- * frames pop (opacity + transform, GPU-composited). Reduce-motion still wins
- * via the kill switch below.
+/* ---- Modals: backdrop fades, frame pops ------------------------------------
+ * Two cases:
+ *   1. Backdrops that carry x-show get an Alpine `x-transition.opacity` in the
+ *      markup, so they fade BOTH in and out (the close reverse the user asked
+ *      for). We must NOT also CSS-animate those on enter or the two opacity
+ *      mechanisms fight — so they are absent from the list below.
+ *   2. The FRAME inside each backdrop has no x-show of its own, so it can't use
+ *      x-transition; it keeps a CSS pop on open (re-runs each time the backdrop
+ *      returns to a rendered display) and simply fades out with its parent
+ *      backdrop on close.
+ * Modals whose backdrop is NOT x-show (nested under an x-show wrapper) keep a
+ * pure-CSS enter fade here.
  */
-.siril-modal,
-.location-setup-modal,
-.files-editor-modal-backdrop,
-.files-text-modal,
 .editor-export-modal,
-.auth-overlay {
+.files-editor-modal-backdrop {
     animation: anim-fade-in 200ms ease-out;
 }
 .siril-modal-frame,
@@ -64,11 +65,7 @@
 .files-text-modal-inner,
 .editor-export-frame,
 .auth-modal,
-.cert-modal {
-    animation: anim-pop-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-/* The mosaic planner is a floating side panel (no backdrop): slide+fade it in
- * from the right rather than centre-pop. */
+.cert-modal,
 .mosaic-modal .mosaic-frame {
     animation: anim-pop-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }

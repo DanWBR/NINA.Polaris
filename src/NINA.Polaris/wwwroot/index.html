@@ -57,7 +57,7 @@
     <link rel="stylesheet" href="/css/night-mode.css?v=20260620-dl1">
     <!-- UI motion + reduce-motion kill switch. Loaded last so its overrides
          win the cascade. GPU-only (opacity/transform) animations. -->
-    <link rel="stylesheet" href="/css/parts/11-motion.css?v=20260622-motion2">
+    <link rel="stylesheet" href="/css/parts/11-motion.css?v=20260622-motion3">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -112,7 +112,7 @@
            - needSetup: first-run wizard, must create password
            - needLogin: returning user, password prompt
          Pinned at z-index: 99999 so nothing else floats over it. -->
-    <div class="auth-overlay"
+    <div class="auth-overlay" x-transition.opacity.duration.200ms
          x-cloak
          x-show="auth.booting || auth.needSetup || auth.needLogin">
 
@@ -10285,7 +10285,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             </div>
 
             <!-- Files: text preview modal -->
-            <div class="files-text-modal" x-show="files.preview.open && files.preview.kind === 'text'" x-cloak
+            <div class="files-text-modal" x-transition.opacity.duration.200ms x-show="files.preview.open && files.preview.kind === 'text'" x-cloak
                  @click.self="filesClosePreview()"
                  @keydown.escape.window="filesClosePreview()">
                 <div class="files-text-modal-inner">
@@ -10842,7 +10842,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
 
                     <!-- Change-password modal. -->
-                    <div class="auth-overlay" x-cloak x-show="auth.cpOpen">
+                    <div class="auth-overlay" x-transition.opacity.duration.200ms x-cloak x-show="auth.cpOpen">
                         <div class="auth-modal">
                             <h2>Change password</h2>
                             <form @submit.prevent="authChangePassword()">
@@ -10884,7 +10884,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
 
                     <!-- Disable-auth confirm modal. -->
-                    <div class="auth-overlay" x-cloak x-show="auth.disableOpen">
+                    <div class="auth-overlay" x-transition.opacity.duration.200ms x-cloak x-show="auth.disableOpen">
                         <div class="auth-modal">
                             <h2>Disable authentication</h2>
                             <p class="auth-hint">
@@ -12964,7 +12964,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
     <!-- Mosaic planner — floating panel (not a blocking modal) so the SKY map
          + live yellow grid overlay stay visible/interactive behind it. -->
-    <div class="mosaic-modal" x-show="mosaicOpen" x-cloak
+    <div class="mosaic-modal" x-transition.opacity.duration.200ms x-show="mosaicOpen" x-cloak
          @keydown.escape.window="closeMosaicPlanner()">
         <div class="location-setup-frame mosaic-frame">
             <button class="mosaic-close" @click="closeMosaicPlanner()" title="Close">✕</button>
@@ -13049,7 +13049,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
     </div>
 
     <!-- First-run location setup modal -->
-    <div class="location-setup-modal" x-show="showLocationSetup" x-cloak
+    <div class="location-setup-modal" x-transition.opacity.duration.200ms x-show="showLocationSetup" x-cloak
          @keydown.escape.window="dismissLocationSetup(false)">
         <div class="location-setup-frame">
             <h2>📍 Set your observatory location</h2>
@@ -13147,7 +13147,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
          install flow that matches docs/user-guide/https-setup.md, but
          in-app so the user doesn't have to chase a 404'd link to a
          raw .md file the server doesn't serve. -->
-    <div class="siril-modal cert-modal" x-show="certModal.open" x-cloak
+    <div class="siril-modal cert-modal" x-transition.opacity.duration.200ms x-show="certModal.open" x-cloak
          @click.self="certModal.open = false"
          @keydown.escape.window="certModal.open = false">
         <div class="siril-modal-frame cert-modal-frame" style="max-width:720px; max-height:88vh; overflow:auto">
@@ -13327,7 +13327,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     </div>
 
     <!-- Siril run modal (STUDIO entry point) -->
-    <div class="siril-modal" x-show="siril.modalOpen" x-cloak
+    <div class="siril-modal" x-transition.opacity.duration.200ms x-show="siril.modalOpen" x-cloak
          @click.self="sirilCloseModal()"
          @keydown.escape.window="sirilCloseModal()">
         <div class="siril-modal-frame">
@@ -13499,7 +13499,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          running. While a GraXpert run is in flight the user must
          use the Abort button explicitly -- this avoids "I clicked
          outside and now I don't know if it's still processing". -->
-    <div class="siril-modal" x-show="graxpert.modalOpen" x-cloak
+    <div class="siril-modal" x-transition.opacity.duration.200ms x-show="graxpert.modalOpen" x-cloak
          @click.self="graxpertIsRunning() || graxpertCloseModal()"
          @keydown.escape.window="graxpertIsRunning() || graxpertCloseModal()">
         <div class="siril-modal-frame">
@@ -13783,7 +13783,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          `cropRoi` rectangle in DISPLAY pixels, then `cropStartRun`
          converts to IMAGE pixels using the natural-width ratio
          before posting. -->
-    <div class="siril-modal" x-show="crop.open" x-cloak
+    <div class="siril-modal" x-transition.opacity.duration.200ms x-show="crop.open" x-cloak
          @click.self="cropClose()"
          @keydown.escape.window="cropClose()">
         <div class="siril-modal-frame">
@@ -13855,7 +13855,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- SN-3: Star removal OPTIONS modal — shown before running so the user
          can tune the autostretch and choose a 2nd pass. Re-openable from the
          comparator's "Try again" button to retry with different settings. -->
-    <div class="siril-modal" x-show="starRemoval.options.open" x-cloak
+    <div class="siril-modal" x-transition.opacity.duration.200ms x-show="starRemoval.options.open" x-cloak
          @click.self="starRemovalCloseOptions()"
          @keydown.escape.window="starRemovalCloseOptions()">
         <div class="siril-modal-frame" style="max-width:560px;width:92vw">
@@ -13948,7 +13948,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          from seconds on a GPU to a minute on WASM. On success the flow
          auto-opens the before/after comparator (original vs starless), so
          there's no OK button; the modal just hides when busy clears. -->
-    <div class="siril-modal" x-show="starRemoval.busy" x-cloak>
+    <div class="siril-modal" x-transition.opacity.duration.200ms x-show="starRemoval.busy" x-cloak>
         <div class="siril-modal-frame" style="max-width:460px;width:92vw">
             <h2 style="font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px">
                 🌠 Removing stars
@@ -14160,7 +14160,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- BATCH RENAME modal: rename the selected FITS files from their
          header fields via a token template, with a live old→new preview
          (dry-run) before applying. Mirrors the crop modal chrome. -->
-    <div class="siril-modal" x-show="batchRename.open" x-cloak
+    <div class="siril-modal" x-transition.opacity.duration.200ms x-show="batchRename.open" x-cloak
          @click.self="batchRenameClose()"
          @keydown.escape.window="batchRenameClose()">
         <div class="siril-modal-frame">
@@ -14253,7 +14253,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          per-star ellipse (oriented by the star's elongation) plus, on the
          Aberration tab, a radial arrow toward/away from frame centre.
          A 3x3 zone heatmap + plain-language verdict sit on the right. -->
-    <div class="siril-modal" x-show="analyze.open" x-cloak
+    <div class="siril-modal" x-transition.opacity.duration.200ms x-show="analyze.open" x-cloak
          @click.self="analyzeClose()"
          @keydown.escape.window="analyzeClose()"
          @resize.window.debounce.150ms="analyze.open && _analyzeRedraw()">
@@ -14599,7 +14599,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Plate solve options modal (FILES tab). Give ASTAP a starting
          position for files that have no RA/DEC header: search the sky
          catalogue by object name or type approximate coordinates. -->
-    <div class="location-setup-modal" x-show="filesSolveModal.open" x-cloak
+    <div class="location-setup-modal" x-transition.opacity.duration.200ms x-show="filesSolveModal.open" x-cloak
          @click.self="filesSolveModal.open = false"
          @keydown.escape.window="filesSolveModal.open = false">
         <div class="location-setup-frame" style="max-width: 540px;">
@@ -14691,7 +14691,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     </div>
 
     <!-- Rig manager modal -->
-    <div class="location-setup-modal" x-show="rigModalOpen" x-cloak
+    <div class="location-setup-modal" x-transition.opacity.duration.200ms x-show="rigModalOpen" x-cloak
          @click.self="rigModalOpen = false"
          @keydown.escape.window="rigModalOpen = false">
         <div class="location-setup-frame" style="max-width: 700px;">
