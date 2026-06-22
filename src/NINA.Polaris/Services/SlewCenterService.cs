@@ -330,23 +330,33 @@ public class SlewCenterService {
                 // the FOV on any non-square sensor and makes the hinted solve
                 // fail at the wrong image scale (N.I.N.A. desktop passes FoVH too).
                 double fovDeg = 0;
+                double scaleArcsec = 0;
                 double fl = _profiles.ActiveEquipmentProfile?.FocalLengthMm ?? 0;
                 double pixSize = _equip.Camera?.PixelSizeY ?? 0;
                 if (pixSize <= 0) pixSize = _equip.Camera?.PixelSizeX ?? 0;
                 int imgHeight = imageData.Properties.Height;
-                if (fl > 0 && pixSize > 0 && imgHeight > 0) {
-                    double sensorMm = pixSize * imgHeight / 1000.0;
-                    fovDeg = 2.0 * Math.Atan(sensorMm / (2.0 * fl)) * (180.0 / Math.PI);
+                if (fl > 0 && pixSize > 0) {
+                    // Pixel scale is dimension-independent and the tightest,
+                    // most reliable hint: ASTAP uses -fov (height) below, but
+                    // Astrometry.net / PlateSolve3 prefer arcsec/pixel, which
+                    // avoids the width-vs-height ambiguity and stops solve-field
+                    // from loading index files across every scale.
+                    scaleArcsec = 206.2648 * pixSize / fl;
+                    if (imgHeight > 0) {
+                        double sensorMm = pixSize * imgHeight / 1000.0;
+                        fovDeg = 2.0 * Math.Atan(sensorMm / (2.0 * fl)) * (180.0 / Math.PI);
+                    }
                 }
 
                 _logger.LogInformation(
-                    "Solve hints: RA={Ra:F4}h Dec={Dec:F4}° fov={Fov:F2}° radius=10°",
-                    hintRa, hintDec, fovDeg);
+                    "Solve hints: RA={Ra:F4}h Dec={Dec:F4}° fov={Fov:F2}° scale={Scale:F2}\"/px radius=10°",
+                    hintRa, hintDec, fovDeg, scaleArcsec);
 
                 var solveResult = await _solver.SolveAsync(tempFits, new PlateSolveOptions {
                     HintRa = hintRa,
                     HintDec = hintDec,
                     FovDeg = fovDeg,
+                    ScaleArcsecPerPixel = scaleArcsec,
                     SearchRadiusDeg = 10
                 }, ct, _progress != null ? _progress.Append : null);
 

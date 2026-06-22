@@ -155,6 +155,13 @@ public class AstrometryNetLocalSolver : IPlateSolver {
         var args = $"--overwrite --no-plots --no-verify --crpix-center "
                  + $"--wcs \"{WcsOutputPath(fitsPath)}\" --new-fits none "
                  + $"--downsample {Math.Max(1, options.Downsample)}";
+        // --cpulimit bounds solve-field's own effort so a doomed solve bails
+        // cleanly (writing nothing) instead of grinding through every index
+        // file until the hard process kill. Tie it to the configured timeout
+        // (CPU seconds ≤ wall-clock, so it stops at/under the budget and we
+        // still get usable stdout + the .wcs fallback). Default 180s.
+        var cpuLimit = _config.GetValue("PlateSolve:TimeoutSeconds", 180);
+        if (cpuLimit > 0) args += $" --cpulimit {cpuLimit}";
         if (options.HintRa.HasValue && options.HintDec.HasValue) {
             args += $" --ra {(options.HintRa.Value * 15).ToString(CultureInfo.InvariantCulture)}";
             args += $" --dec {options.HintDec.Value.ToString(CultureInfo.InvariantCulture)}";

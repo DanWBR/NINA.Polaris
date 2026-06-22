@@ -447,7 +447,13 @@ public static class PlateSolveEndpoints {
             double pixSize = headerPix > 0 ? headerPix
                 : (equip.Camera?.PixelSizeY ?? equip.Camera?.PixelSizeX ?? 3.76);
             if (imgHeight <= 0) imgHeight = 3008;
+            double scaleArcsec = 0;
             if (fl > 0) {
+                // Pixel scale (arcsec/pixel) is dimension-independent and the
+                // tightest hint for Astrometry.net / PlateSolve3, keeping
+                // solve-field from scanning index files across every scale.
+                // ASTAP still uses fovDeg (field height) below.
+                scaleArcsec = 206.2648 * pixSize / fl;
                 double sensorMm = pixSize * imgHeight / 1000.0;
                 fovDeg = 2.0 * Math.Atan(sensorMm / (2.0 * fl)) * (180.0 / Math.PI);
             }
@@ -457,11 +463,12 @@ public static class PlateSolveEndpoints {
                     HintRa = hintRa,
                     HintDec = hintDec,
                     FovDeg = fovDeg,
+                    ScaleArcsecPerPixel = scaleArcsec,
                     SearchRadiusDeg = request.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
                 };
                 logger.LogInformation(
-                    "FILES plate solve: {Path} hint RA={Ra} Dec={Dec} fov={Fov:F2}° radius={Rad}°",
-                    request.Path, hintRa, hintDec, fovDeg, options.SearchRadiusDeg);
+                    "FILES plate solve: {Path} hint RA={Ra} Dec={Dec} fov={Fov:F2}° scale={Scale:F2}\"/px radius={Rad}°",
+                    request.Path, hintRa, hintDec, fovDeg, scaleArcsec, options.SearchRadiusDeg);
 
                 progress.Begin("FILES");
                 PlateSolveResult result;
