@@ -13486,9 +13486,20 @@ function ninaApp() {
                 } catch (_) {}
                 this.redrawOverlay();
                 this.redrawPreviewOverlay();
-                this.toast(this.annotate.items.length
+                // Field diagnostic (no console available on the SBC/iPad): show
+                // solved scale + the rig-FOV-implied scale + ratio right in the
+                // toast so we can see whether the layer scale is the culprit.
+                let diag = '';
+                try {
+                    const implied = (this.fov?.width > 0 && j.width)
+                        ? (this.fov.width * 3600 / j.width) : 0;
+                    if (implied > 0) {
+                        diag = ` — ${(j.scaleArcsecPerPixel||0).toFixed(2)}"/px vs rig ${implied.toFixed(2)}"/px (×${(j.scaleArcsecPerPixel/implied).toFixed(3)})`;
+                    }
+                } catch (_) {}
+                this.toast((this.annotate.items.length
                     ? `Annotated ${this.annotate.items.length} object(s)`
-                    : 'Solved, but no catalog objects in frame', 'ok');
+                    : 'Solved, but no catalog objects in frame') + diag, 'ok', 9000);
             } catch (e) {
                 this.toast('Annotate failed: ' + (e.message || e), 'error');
             } finally {
