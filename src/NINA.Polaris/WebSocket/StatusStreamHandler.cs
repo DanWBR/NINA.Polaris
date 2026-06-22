@@ -84,6 +84,7 @@ public static class StatusStreamHandler {
         var plateSolveProgress = context.RequestServices
             .GetRequiredService<NINA.Polaris.Services.PlateSolving.PlateSolveProgressService>();
         var captureProgress = context.RequestServices.GetRequiredService<CaptureProgressService>();
+        var liveCapture = context.RequestServices.GetRequiredService<LiveCaptureService>();
         var logService = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Logging.LogService>();
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
@@ -639,7 +640,19 @@ public static class StatusStreamHandler {
                         // a reconnect. startedUtc + the server block's utcNow
                         // let the client compute elapsed without trusting its
                         // own (possibly skewed / freshly reloaded) clock.
-                        capture = BuildCapturePayload(captureProgress)
+                        capture = BuildCapturePayload(captureProgress),
+                        // Opt-in server-owned LIVE loop state. running=true means
+                        // the server is driving the LIVE session (the client only
+                        // offloads stacking); the LIVE shutter binds to this so a
+                        // reconnecting browser sees the session is still going.
+                        liveCapture = new {
+                            running = liveCapture.IsRunning,
+                            exposure = liveCapture.ExposureSeconds,
+                            gain = liveCapture.Gain,
+                            binX = liveCapture.BinX,
+                            frames = liveCapture.FrameCount,
+                            lastError = liveCapture.LastError
+                        }
                     };
 
                     payload = JsonSerializer.SerializeToUtf8Bytes(status, JsonOpts);

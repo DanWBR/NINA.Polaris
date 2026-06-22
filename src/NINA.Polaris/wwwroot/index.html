@@ -11629,6 +11629,24 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </p>
                 </div>
 
+                <!-- Server-owned LIVE capture loop (experimental, opt-in).
+                     Default OFF keeps the proven browser-driven loop. -->
+                <div class="settings-section">
+                    <h3><span class="settings-card-icon">🛰</span>LIVE capture loop</h3>
+                    <label class="checkbox-label"
+                        title="When ON, the LIVE session's capture loop runs on the server: it keeps capturing even if this browser disconnects, and client-side stacking becomes pure compute offload. Default OFF uses the browser-driven loop.">
+                        <input type="checkbox" x-model="settings.liveServerLoopEnabled" @change="saveSettingsToServer()">
+                        Run the LIVE loop on the server (experimental)
+                    </label>
+                    <p class="hint" style="margin-top:6px">
+                        Default OFF (browser drives the loop). Turn ON to make the server the
+                        orchestrator — the session survives a disconnect and the client only
+                        offloads stacking. <span x-show="serverLiveCapture.running" x-cloak
+                            style="color:var(--accent)">Server loop running ·
+                            <span x-text="serverLiveCapture.frames"></span> frames.</span>
+                    </p>
+                </div>
+
                 <!-- External post-processing tools (Siril + GraXpert).
                      Both run as external binaries; auto-detected on
                      startup, configurable via override paths. Spans
@@ -15376,7 +15394,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260621-fieldbugs10"></script>
+    <script src="/js/app.js?v=20260621-fieldbugs11"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

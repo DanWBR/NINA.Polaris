@@ -219,6 +219,15 @@ public class UserProfile {
     public bool PreferAdvancedSequencer { get; set; } = false;
 
     /// <summary>
+    /// Opt-in: run the LIVE capture loop on the SERVER instead of the
+    /// browser. When true, tapping LIVE starts a server-side loop that keeps
+    /// capturing even if the client disconnects (the client's WASM stacking
+    /// is pure compute offload — the server stays the orchestrator). Default
+    /// false keeps the proven client-driven loop. Experimental.
+    /// </summary>
+    public bool LiveServerLoopEnabled { get; set; } = false;
+
+    /// <summary>
     /// FIELD4-3: per-camera-id quirks (Bayer override + vertical
     /// flip). Keyed on the camera identifier the operator picked
     /// in the rig editor (INDI device name, Alpaca host:port:dev,

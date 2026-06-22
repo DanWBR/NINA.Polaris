@@ -88,6 +88,8 @@ function ninaApp() {
         // THIS client's clock (computed purely from server timestamps, so a
         // skewed/freshly-reloaded local clock doesn't matter).
         serverCapture: { active: false, source: '', exposureSeconds: 0, startedAtLocal: 0, runId: 0 },
+        // Opt-in server-owned LIVE loop state, mirrored from /ws/status.
+        serverLiveCapture: { running: false, exposure: 0, frames: 0 },
         // SHUT-1: shared shutter timer. setInterval(50ms) when ANY
         // capture is active; ticks shutterTick to force Alpine reactivity.
         shutterTick: 0,
@@ -758,6 +760,9 @@ function ninaApp() {
             stellariumHost: 'localhost',
             stellariumPort: 8090,
             preferAdvancedSequencer: false,
+            // Opt-in: run the LIVE capture loop on the server (the client
+            // only offloads WASM stacking). Hydrated from the profile.
+            liveServerLoopEnabled: false,
             // DBGLOG-9: when ON, LogRotatorService flushes every log
             // entry to a JSONL file under {LocalAppData}/NINA.Polaris/logs/.
             // Default OFF; the in-memory ring buffer is enough for most
@@ -8586,6 +8591,7 @@ function ninaApp() {
                     this.settings.imageOutputDir = data.imageOutputDir || '';
                     this.settings.imageNamePattern = data.imageNamePattern || '';
                     this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
+                    this.settings.liveServerLoopEnabled = !!data.liveServerLoopEnabled;
                     this.settings.autoConnectOnStartup = !!data.autoConnectOnStartup;
                     // DBGLOG-9: hydrate the persist-to-disk toggle.
                     this.settings.logToDisk = !!data.logToDisk;
@@ -16965,6 +16971,7 @@ function ninaApp() {
                         imageOutputDir: this.settings.imageOutputDir,
                         imageNamePattern: this.settings.imageNamePattern,
                         preferAdvancedSequencer: this.settings.preferAdvancedSequencer,
+                        liveServerLoopEnabled: this.settings.liveServerLoopEnabled,
                         autoConnectOnStartup: this.settings.autoConnectOnStartup,
                         // DBGLOG-9: opt-in disk persistence.
                         logToDisk: this.settings.logToDisk,
@@ -17190,11 +17197,34 @@ function ninaApp() {
         },
 
         async loopCapture() {
+            // Server-owned loop (opt-in): the server drives every exposure and
+            // keeps going if the browser drops; the client only offloads WASM
+            // stacking. We just ask it to start and reflect state from the WS
+            // `liveCapture` block — no client-side capture() loop.
+            if (this.settings.liveServerLoopEnabled) {
+                this.looping = true;
+                try {
+                    await this.apiPost('/api/livecapture/start', {
+                        exposure: Number(this.exposure) || 1,
+                        gain: this.gain,
+                        binning: parseInt(this.binning) || 1
+                    });
+                } catch (e) {
+                    this.looping = false;
+                    this.toast('Could not start server LIVE loop: ' + e.message, 'error');
+                }
+                return;
+            }
             this.looping = true;
             await this.capture();
         },
 
         async stopCapture() {
+            // Stop the server loop too when it's the one running (opt-in mode).
+            if (this.settings.liveServerLoopEnabled
+                || (this.serverLiveCapture && this.serverLiveCapture.running)) {
+                try { await this.apiPost('/api/livecapture/stop'); } catch (e) { }
+            }
             this.looping = false;
             this.capturing = false;
             this._captureStartedAt = null;
@@ -29297,6 +29327,20 @@ function ninaApp() {
             // null/stale). Pass the server "now" so elapsed is measured in
             // server time and re-based onto the local clock.
             this._absorbCaptureProgress(msg.capture, _serverNowMs);
+            // Opt-in server-owned LIVE loop: mirror its running state so the
+            // LIVE shutter shows active (and a reconnecting browser re-adopts a
+            // session that's still going on the server).
+            if (msg.liveCapture) {
+                this.serverLiveCapture = msg.liveCapture;
+                if (msg.liveCapture.running) {
+                    if (!this.looping) this.looping = true;
+                } else if (this.settings.liveServerLoopEnabled && this.looping
+                           && !(this.serverCapture && this.serverCapture.active)) {
+                    // Server loop ended on its own (e.g. duration cap) — clear
+                    // the client's looping flag so the shutter resets.
+                    this.looping = false;
+                }
+            }
             // SIM-6: simulator backend status (kind/installed/version/
             // running/runningDevices). The Settings panel binds to this.
             if (msg.simulator) this.simulator = msg.simulator;

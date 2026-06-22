@@ -21,6 +21,23 @@ public static class LiveStackEndpoints {
     public static void MapLiveStackEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/livestack");
 
+        // Opt-in server-owned LIVE capture loop. When the operator enabled
+        // UserProfile.LiveServerLoopEnabled, the LIVE shutter starts/stops
+        // this instead of the browser driving repeated /api/camera/capture
+        // calls — so the session keeps capturing even if the client drops,
+        // and client-side WASM stacking is pure compute offload.
+        var capGroup = app.MapGroup("/api/livecapture");
+        capGroup.MapPost("/start", (LiveCaptureService loop, LiveStartRequest req) => {
+            var ok = loop.Start(req?.Exposure ?? 1.0, req?.Gain ?? 0, req?.Binning ?? 1);
+            return ok
+                ? Results.Ok(new { status = "started", exposure = loop.ExposureSeconds })
+                : Results.BadRequest(new { error = loop.LastError ?? "Could not start (already running?)" });
+        });
+        capGroup.MapPost("/stop", (LiveCaptureService loop) => {
+            loop.Stop();
+            return Results.Ok(new { status = "stopped", frames = loop.FrameCount });
+        });
+
         group.MapPost("/start", (LiveStackingService stack) => {
             // Always begins a fresh stack (resets buffer). Use /resume
             // when the operator paused mid-session and wants to keep
@@ -413,4 +430,8 @@ public static class LiveStackEndpoints {
     /// the session-level override so the active rig's TargetSnr
     /// takes effect again.</summary>
     public record TargetSnrRequest(double? TargetSnr);
+
+    /// <summary>Body of POST /api/livecapture/start: the LIVE shutter's
+    /// exposure/gain/binning for the server-owned loop.</summary>
+    public record LiveStartRequest(double Exposure = 1.0, int Gain = 0, int Binning = 1);
 }

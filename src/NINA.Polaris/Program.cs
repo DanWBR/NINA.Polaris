@@ -145,6 +145,8 @@ builder.Logging.Services.AddSingleton<Microsoft.Extensions.Logging.ILoggerProvid
 builder.Services.AddHostedService<NINA.Polaris.Services.Logging.LogRotatorService>();
 builder.Services.AddSingleton<ImageRelayService>();
 builder.Services.AddSingleton<CameraStreamService>();
+// Opt-in server-owned LIVE capture loop (UserProfile.LiveServerLoopEnabled).
+builder.Services.AddSingleton<LiveCaptureService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.VideoRecordingService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.PlanetaryStackerService>();
 // KC-1: Keep Centered control loop. Toggled from the VIDEO sidebar
