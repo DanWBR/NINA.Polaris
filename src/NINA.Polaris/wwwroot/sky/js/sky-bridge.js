@@ -925,19 +925,25 @@
             }
             // Update the screen-anchored target FOV CSS box.
             skyUpdateTargetFovBox(target);
-            if (mosaic && mosaic.tiles && mosaic.tiles.length) {
-                // Mosaic grid: ONE geojson object per panel, built exactly
-                // like the mount rectangle (skyFovGeoJson). Packing every
-                // panel into a single FeatureCollection failed because the
-                // engine geojson parser renders only the first Polygon per
-                // object — the other panels were silently dropped, so the
-                // grid never showed. Same rot+180 + 16-segment edge sampling
-                // as the mount so off-equator panels stay true rectangles.
-                mosaic.tiles.forEach(function (t) {
-                    // Use the EXACT mount-rectangle draw path (skyFovGeoJson),
-                    // just yellow + a panel-number label, so the grid renders
-                    // identically to the proven mount overlay instead of a
-                    // hand-rolled FeatureCollection.
+        } catch (e) {
+            console.warn('[Sky] set-fov-overlays failed:', e);
+        }
+
+        // Mosaic grid in its OWN try so a failure here can't be masked by a
+        // mount/target error above (and vice-versa). One geojson object per
+        // panel via the exact mount-rectangle draw path (skyFovGeoJson), with
+        // per-tile try + logging for diagnostics.
+        if (mosaic && mosaic.tiles && mosaic.tiles.length) {
+            console.log('[Sky] mosaic: building ' + mosaic.tiles.length
+                + ' panels; first=', mosaic.tiles[0]);
+            var made = 0;
+            mosaic.tiles.forEach(function (t, i) {
+                try {
+                    if (!isFinite(t.raDeg) || !isFinite(t.decDeg)
+                        || !(t.widthDeg > 0) || !(t.heightDeg > 0)) {
+                        console.warn('[Sky] mosaic tile ' + i + ' has bad geometry', t);
+                        return;
+                    }
                     var obj = stel.createObj('geojson', {
                         data: skyFovGeoJson({
                             raDeg: t.raDeg, decDeg: t.decDeg,
@@ -947,13 +953,13 @@
                     });
                     __skyFovLayer.add(obj);
                     __skyMosaicObjs.push(obj);
-                });
-                console.log('[Sky] mosaic grid created: ' + mosaic.tiles.length
-                    + ' panels around RA=' + mosaic.tiles[0].raDeg.toFixed(2)
-                    + '° Dec=' + mosaic.tiles[0].decDeg.toFixed(2) + '°');
-            }
-        } catch (e) {
-            console.warn('[Sky] set-fov-overlays failed:', e);
+                    made++;
+                } catch (te) {
+                    console.warn('[Sky] mosaic tile ' + i + ' create failed:', te, t);
+                }
+            });
+            console.log('[Sky] mosaic grid created: ' + made + '/'
+                + mosaic.tiles.length + ' panels');
         }
     }
 
