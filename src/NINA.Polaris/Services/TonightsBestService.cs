@@ -84,13 +84,31 @@ public class TonightsBestService {
         var items = new List<TonightCandidate>();
 
         // --- DSOs ---
-        foreach (var dso in _catalog.AllObjects) {
-            // Coarse magnitude gate before doing the (expensive) altitude track.
-            if (dso.Magnitude > 10) continue;
+        foreach (var dso in _catalog.AllPlanningObjects) {
+            // FromDso maps a NULL catalog magnitude to the 99.0 sentinel, so a
+            // value < 90 means we really have a magnitude. Big emission/bright
+            // nebulae (Sh2, LBN) have no magnitude but a known size; the pool
+            // includes those (size ≥ 10′) so they can be ranked by SIZE instead.
+            bool hasMag = dso.Magnitude < 90;
+            double sizeArcmin = dso.SizeArcmin ?? 0;
+            if (hasMag) {
+                // Coarse brightness gate before the (expensive) altitude track.
+                if (dso.Magnitude > 10) continue;
+            } else {
+                // Magnitude-less: keep only the big, imageable nebulae.
+                if (sizeArcmin < 10) continue;
+            }
             var (peakAlt, peakUtc) = PeakAltitude(dso.Ra, dso.Dec, nightStart, nightEnd, stepMinutes: 30);
             if (peakAlt < 30) continue;
             var (curAlt, curAz) = AltitudeService.RaDecToAltAz(dso.Ra, dso.Dec, nowUtc, lat, lng);
-            var score = (int)Math.Round((6 - Math.Clamp(dso.Magnitude, -2, 12)) * 8 + peakAlt / 90.0 * 20);
+            // Magnitude-scored when we have one; otherwise a size-based score so
+            // a large nebula ranks comparably to a mid-brightness object. log2
+            // keeps the curve gentle (10′→~20, 30′→~26, 100′→~32) and the clamp
+            // stops a giant complex from dominating the whole list.
+            var score = hasMag
+                ? (int)Math.Round((6 - Math.Clamp(dso.Magnitude, -2, 12)) * 8 + peakAlt / 90.0 * 20)
+                : (int)Math.Round(Math.Clamp(6.0 * Math.Log2(Math.Max(sizeArcmin, 5.0)), 10, 42)
+                                  + peakAlt / 90.0 * 20);
             items.Add(new TonightCandidate(
                 Category:        "Dso",
                 Name:            dso.Name,
@@ -98,9 +116,9 @@ public class TonightsBestService {
                 Type:            dso.Type,
                 RaHours:         dso.Ra,
                 DecDeg:          dso.Dec,
-                Magnitude:       dso.Magnitude,
-                Size:            null,
-                SizeMajorArcmin: null,
+                Magnitude:       hasMag ? dso.Magnitude : (double?)null,
+                Size:            sizeArcmin > 0 ? $"{sizeArcmin:0.#}'" : null,
+                SizeMajorArcmin: sizeArcmin > 0 ? sizeArcmin : (double?)null,
                 SizeMinorArcmin: null,
                 CurrentAltDeg:   Math.Round(curAlt, 1),
                 CurrentAzDeg:    Math.Round(curAz,  1),
@@ -128,7 +146,33 @@ public class TonightsBestService {
         }
 
         // Cap DSOs + planets + Moon by score first…
-        var ordered = items.OrderByDescending(i => i.Score).Take(limit).ToList();
+        var byScore = items.OrderByDescending(i => i.Score).ToList();
+        var ordered = byScore.Take(limit).ToList();
+
+        // …but a single brightness-weighted global cap STARVES whole types:
+        // galaxies are intrinsically fainter than stars/open clusters, so they
+        // score low and get buried — the "only Andromeda under Galaxies" report.
+        // Guarantee each DSO sub-type's best few are present regardless of the
+        // global cutoff (same spirit as the comet append below).
+        var seen = new HashSet<string>(ordered.Select(i => i.Category + "/" + i.Name));
+        static bool TypeHas(TonightCandidate c, string needle) =>
+            c.Type != null && c.Type.Contains(needle, StringComparison.OrdinalIgnoreCase);
+        bool IsGalaxy(TonightCandidate c)  => c.Category == "Dso" && TypeHas(c, "Galaxy");
+        bool IsNebula(TonightCandidate c)  => c.Category == "Dso" && (TypeHas(c, "Nebula") || TypeHas(c, "HII"));
+        bool IsCluster(TonightCandidate c) => c.Category == "Dso" && TypeHas(c, "Cluster") && !TypeHas(c, "Galaxy");
+        void TopUp(Func<TonightCandidate, bool> match, int k) {
+            int have = ordered.Count(match);
+            foreach (var c in byScore) {
+                if (have >= k) break;
+                if (!match(c)) continue;
+                if (seen.Add(c.Category + "/" + c.Name)) { ordered.Add(c); have++; }
+            }
+        }
+        TopUp(IsGalaxy, 25);
+        TopUp(IsNebula, 25);
+        TopUp(IsCluster, 25);
+        // Keep the merged list score-ordered for the default "All" view.
+        ordered = ordered.OrderByDescending(i => i.Score).ToList();
 
         // …then append comets unconditionally. They share their own
         // category-filter chip in the UI, so cutting them by the global

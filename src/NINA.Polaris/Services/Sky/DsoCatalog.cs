@@ -373,22 +373,32 @@ public class DsoCatalog {
     /// Mag cap defaults to 12 so the Pi 2/3 in-memory footprint stays
     /// bounded (~5k rows × ~200 B = ~1 MB).</summary>
     public Task<IReadOnlyList<DsoObject>> LoadAllAsync(double? magCap = 12.0,
-            CancellationToken ct = default)
-        => Task.Run<IReadOnlyList<DsoObject>>(() => LoadAllSync(magCap), ct);
+            double? minSizeNoMag = null, CancellationToken ct = default)
+        => Task.Run<IReadOnlyList<DsoObject>>(() => LoadAllSync(magCap, minSizeNoMag), ct);
 
-    private IReadOnlyList<DsoObject> LoadAllSync(double? magCap) {
+    /// <param name="minSizeNoMag">When set (arcmin), ALSO include objects with
+    /// NO magnitude but an apparent size ≥ this. Surfaces big emission/bright
+    /// nebulae (Sh2, LBN) that carry no stellar magnitude and would otherwise
+    /// be dropped by the magnitude filter — used by the Tonight's Best pool.</param>
+    private IReadOnlyList<DsoObject> LoadAllSync(double? magCap, double? minSizeNoMag = null) {
         if (!IsAvailable) return Array.Empty<DsoObject>();
         try {
             using var conn = new SqliteConnection($"Data Source={_dbPath};Mode=ReadOnly");
             conn.Open();
             using var cmd = conn.CreateCommand();
             if (magCap.HasValue) {
+                var where = "magnitude IS NOT NULL AND magnitude <= $cap";
+                if (minSizeNoMag.HasValue) {
+                    where = "(" + where + ") OR (magnitude IS NULL "
+                          + "AND size_arcmin IS NOT NULL AND size_arcmin >= $minsize)";
+                    cmd.Parameters.AddWithValue("$minsize", minSizeNoMag.Value);
+                }
                 cmd.CommandText = @"
                     SELECT catalog, catalog_id, name, common_name, type,
                            ra_hours, dec_deg, magnitude, size_arcmin,
                            constellation, aliases
                     FROM objects
-                    WHERE magnitude IS NOT NULL AND magnitude <= $cap";
+                    WHERE " + where;
                 cmd.Parameters.AddWithValue("$cap", magCap.Value);
             } else {
                 cmd.CommandText = @"

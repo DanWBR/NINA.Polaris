@@ -35,6 +35,7 @@ public class SkyCatalogService {
     // magnitude at 12 so the in-memory footprint stays bounded on a
     // Pi 2/3 (~5k rows * ~200 B = ~1 MB).
     private List<CatalogObject>? _dsoAllCache;
+    private List<CatalogObject>? _dsoPlanningCache;
     private readonly object _allLock = new();
 
     /// <summary>Parameterless ctor kept for tests / legacy callers
@@ -280,6 +281,27 @@ public class SkyCatalogService {
                 _dsoAllCache = loaded.Select(FromDso).ToList();
             }
             return _dsoAllCache;
+        }
+    }
+
+    /// <summary>
+    /// Like <see cref="AllObjects"/> but ALSO includes magnitude-less objects
+    /// that carry an apparent size ≥ 10′ — i.e. big emission / bright nebulae
+    /// (Sh2, LBN) that have no stellar magnitude and would otherwise never
+    /// appear. Used by Tonight's Best so those large nebulae can be ranked by
+    /// size instead of brightness. Lazy + cached (same bounded footprint).
+    /// </summary>
+    public IReadOnlyList<CatalogObject> AllPlanningObjects {
+        get {
+            if (!UseDso) return _catalog;
+            if (_dsoPlanningCache != null) return _dsoPlanningCache;
+            lock (_allLock) {
+                if (_dsoPlanningCache != null) return _dsoPlanningCache;
+                var loaded = _dso!.LoadAllAsync(magCap: 12.0, minSizeNoMag: 10.0)
+                    .GetAwaiter().GetResult();
+                _dsoPlanningCache = loaded.Select(FromDso).ToList();
+            }
+            return _dsoPlanningCache;
         }
     }
 
