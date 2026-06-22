@@ -20,7 +20,7 @@ export const site = {
   readme: 'https://github.com/DanWBR/NINA.Polaris/blob/master/README.md',
   donate: 'https://buy.stripe.com/9B68wPeoLcMSgOz2iJbMQ02',
   patreon: 'https://www.patreon.com/c/nina_polaris',
-  discord: 'https://discord.gg/GtXxpWcK',
+  discord: 'https://discord.gg/FYQeNhEGDp',
 };
 
 export const navLinks = [
