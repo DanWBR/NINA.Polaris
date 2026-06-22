@@ -69,7 +69,9 @@ public class HostMetricsServiceTests {
         // The UI handles that as "no data yet", important the
         // service doesn't expose null or throw.
         var stub = new StubResourceMonitor();
-        var svc = new HostMetricsService(stub, MakeProfileService(), NullLogger<HostMetricsService>.Instance);
+        var svc = new HostMetricsService(stub, MakeProfileService(),
+            new FileBrowserService(NullLogger<FileBrowserService>.Instance),
+            NullLogger<HostMetricsService>.Instance);
         Assert.That(svc.Latest, Is.Not.Null);
         Assert.That(svc.Latest.CpuPercent, Is.EqualTo(0));
         Assert.That(svc.Latest.MemoryUsedMB, Is.EqualTo(0));
@@ -82,7 +84,9 @@ public class HostMetricsServiceTests {
         // ProcessCpuPercent precisely (depends on host scheduling),
         // but every other field has a deterministic source.
         var stub = new StubResourceMonitor { Cpu = 25.5, Mem = 60.0 };
-        var svc = new HostMetricsService(stub, MakeProfileService(), NullLogger<HostMetricsService>.Instance);
+        var svc = new HostMetricsService(stub, MakeProfileService(),
+            new FileBrowserService(NullLogger<FileBrowserService>.Instance),
+            NullLogger<HostMetricsService>.Instance);
 
         var proc = Process.GetCurrentProcess();
         var lastCpu = proc.TotalProcessorTime;
@@ -108,7 +112,9 @@ public class HostMetricsServiceTests {
         // (38.213% → 38.198% → 38.241%) look broken. Round at the
         // source.
         var stub = new StubResourceMonitor { Cpu = 38.21385, Mem = 12.94912 };
-        var svc = new HostMetricsService(stub, MakeProfileService(), NullLogger<HostMetricsService>.Instance);
+        var svc = new HostMetricsService(stub, MakeProfileService(),
+            new FileBrowserService(NullLogger<FileBrowserService>.Instance),
+            NullLogger<HostMetricsService>.Instance);
 
         var proc = Process.GetCurrentProcess();
         var lastCpu = proc.TotalProcessorTime;
@@ -126,7 +132,9 @@ public class HostMetricsServiceTests {
         // don't advance, every subsequent sample would compare
         // against the original baseline and the % drifts upward.
         var stub = new StubResourceMonitor();
-        var svc = new HostMetricsService(stub, MakeProfileService(), NullLogger<HostMetricsService>.Instance);
+        var svc = new HostMetricsService(stub, MakeProfileService(),
+            new FileBrowserService(NullLogger<FileBrowserService>.Instance),
+            NullLogger<HostMetricsService>.Instance);
 
         var proc = Process.GetCurrentProcess();
         var lastCpu = TimeSpan.FromSeconds(10);   // fake baseline

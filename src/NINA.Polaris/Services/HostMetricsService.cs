@@ -53,6 +53,7 @@ public class HostMetricsService : BackgroundService {
     private readonly IResourceMonitor _monitor;
     private readonly ILogger<HostMetricsService> _logger;
     private readonly ProfileService _profiles;
+    private readonly FileBrowserService _files;
 
     /// <summary>Most recent successful sample. Initialised to zeros.</summary>
     public HostMetricsSnapshot Latest { get; private set; } = new();
@@ -66,9 +67,11 @@ public class HostMetricsService : BackgroundService {
 
     public HostMetricsService(IResourceMonitor monitor,
                                ProfileService profiles,
+                               FileBrowserService files,
                                ILogger<HostMetricsService> logger) {
         _monitor = monitor;
         _profiles = profiles;
+        _files = files;
         _logger = logger;
     }
 
@@ -167,11 +170,17 @@ public class HostMetricsService : BackgroundService {
         // most recent value instead of the value at Process.GetCurrentProcess().
         process.Refresh();
 
-        // Disk usage on the volume that hosts the active rig's capture
-        // root. Surfaces free / total space in the activity bar so the
-        // user notices a full SSD before a sequence fails mid-frame.
-        var (diskFree, diskTotal, diskName) = TryGetDiskInfo(
-            _profiles?.Active?.ImageOutputDir);
+        // Disk usage on the volume that hosts the STUDIO root (where FILES /
+        // STUDIO browse + captures are written). Mirror the exact same
+        // resolution the FILES tab uses (ResolveStudioRoot) so the gauge
+        // always measures the disk the user actually sees in STUDIO — e.g.
+        // an NVMe SSD when ImageOutputDir points there — never the app's
+        // install partition. Surfaces free / total in the activity bar so
+        // the user notices a full disk before a sequence fails mid-frame.
+        string studioRoot;
+        try { studioRoot = _files.ResolveStudioRoot(_profiles?.Active?.ImageOutputDir); }
+        catch { studioRoot = _profiles?.Active?.ImageOutputDir ?? ""; }
+        var (diskFree, diskTotal, diskName) = TryGetDiskInfo(studioRoot);
 
         // Raspberry Pi under-voltage detection. The Pi VideoCore
         // firmware tracks USB / Vcore voltage and reports state via
@@ -272,21 +281,16 @@ public class HostMetricsService : BackgroundService {
     /// </summary>
     internal static (long freeBytes, long totalBytes, string mountName) TryGetDiskInfo(string? capturePath) {
         try {
-            // When the configured capture dir is unset or doesn't exist, anchor
-            // the gauge to where Polaris ACTUALLY runs from — AppContext
-            // .BaseDirectory (the install/root, e.g. the NVMe SSD on an Orange
-            // Pi) — NOT the user's home, which on an SBC is often the SD card
-            // root filesystem and would mis-report a different (smaller) disk.
-            // Falls back to home then CurrentDirectory only if the base dir
-            // can't be resolved.
+            // Callers pass the already-resolved STUDIO root (FileBrowserService
+            // .ResolveStudioRoot), which always points at an existing dir; this
+            // guard only catches an empty/missing path and mirrors that same
+            // home-then-CWD fallback so the gauge measures the STUDIO partition,
+            // not the app/root filesystem.
             if (string.IsNullOrWhiteSpace(capturePath)
                 || !Directory.Exists(Path.GetFullPath(capturePath))) {
-                var baseDir = AppContext.BaseDirectory;
                 var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                capturePath = (!string.IsNullOrEmpty(baseDir) && Directory.Exists(baseDir))
-                    ? baseDir
-                    : (!string.IsNullOrEmpty(home) && Directory.Exists(home))
-                        ? home : Environment.CurrentDirectory;
+                capturePath = (!string.IsNullOrEmpty(home) && Directory.Exists(home))
+                    ? home : Environment.CurrentDirectory;
             }
             var full = Path.GetFullPath(capturePath);
             DriveInfo? best = null;
