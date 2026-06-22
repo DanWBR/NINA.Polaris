@@ -11094,15 +11094,15 @@ function ninaApp() {
             this.editorAi.busy = true;
             this.editorAi.phase = 'preparing';
             try {
-                let pipeline;
+                let kind;
                 let runOpts = {};
                 switch (op) {
                     case 'background-extraction':
-                        pipeline = new OnnxRegistry.BgePipeline();
+                        kind = 'bge';
                         runOpts = { correction: this.settings.graxpertBgeCorrection };
                         break;
                     case 'denoising':
-                        pipeline = new OnnxRegistry.DenoisePipeline();
+                        kind = 'denoise';
                         runOpts = {
                             strength: this.settings.graxpertDenoiseStrength,
                             // GX-12k: per-run override via modal dropdown
@@ -11113,7 +11113,7 @@ function ninaApp() {
                         };
                         break;
                     case 'deconvolution':
-                        pipeline = new OnnxRegistry.DeconPipeline();
+                        kind = 'decon';
                         runOpts = {
                             strength: this.settings.graxpertDeconStrength,
                             psfPixels: this.settings.graxpertDeconPsfSize,
@@ -11134,8 +11134,8 @@ function ninaApp() {
                 if (!raw) throw new Error('Could not decode source');
 
                 this.editorAi.phase = 'running ' + op;
-                const result = await pipeline.run(
-                    raw.pixels, raw.width, raw.height,
+                const result = await OnnxRegistry.runOneShot(
+                    kind, raw.pixels, raw.width, raw.height,
                     Object.assign({}, runOpts, {
                         // GX-9: forward channel count so RGB FITS
                         // process per-channel.
@@ -24290,11 +24290,11 @@ function ninaApp() {
             this.graxpert.browserProgress = 0;
             try {
                 const op = this.graxpert.modalOp;
-                let pipeline;
+                let kind;
                 let runOpts = {};
                 switch (op) {
                     case 'background-extraction':
-                        pipeline = new OnnxRegistry.BgePipeline();
+                        kind = 'bge';
                         runOpts = {
                             correction: this.graxpert.modalCorrection,
                             // GX-9: forward the "save background" toggle so
@@ -24309,7 +24309,7 @@ function ninaApp() {
                         };
                         break;
                     case 'denoising':
-                        pipeline = new OnnxRegistry.DenoisePipeline();
+                        kind = 'denoise';
                         runOpts = {
                             strength: this.graxpert.modalDenoiseStrength,
                             // GX-12k: per-run model version from the
@@ -24322,7 +24322,7 @@ function ninaApp() {
                         };
                         break;
                     case 'deconvolution':
-                        pipeline = new OnnxRegistry.DeconPipeline();
+                        kind = 'decon';
                         // GX-12h: target now comes from the modal
                         // dropdown, Stars-only picks decon-stars,
                         // Object-only picks decon-objects ONNX models.
@@ -24363,8 +24363,8 @@ function ninaApp() {
                     }
 
                     this.graxpert.browserPhase = stem + ', running ' + op;
-                    const result = await pipeline.run(
-                        src.pixels, src.width, src.height,
+                    const result = await OnnxRegistry.runOneShot(
+                        kind, src.pixels, src.width, src.height,
                         Object.assign({}, runOpts, {
                             // GX-9: forward the channel count so RGB
                             // FITS process per-channel instead of

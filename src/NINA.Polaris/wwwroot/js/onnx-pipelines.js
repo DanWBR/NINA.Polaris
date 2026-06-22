@@ -30,6 +30,19 @@
     const IDB_DB_NAME = 'polaris-onnx-models';
     const IDB_STORE = 'blobs';
 
+    // One-shot worker (memory reclaim): GraXpert BGE/Denoise/Decon on the WASM
+    // backend grow the WASM heap, which never shrinks for the realm's life — so
+    // a tab that ran one op stays pinned at ~1 GB. We run those in a Worker the
+    // parent terminates after a short idle, which frees the whole heap. Kept
+    // alive across a batch (fast), torn down once idle (reclaims). See
+    // js/onnx-worker.js + runOneShot().
+    const ORT_WORKER_PATH = '/js/onnx-worker.js';
+    const ONESHOT_IDLE_MS = 15000;
+    let _osWorker = null;
+    let _osSeq = 0;
+    const _osJobs = new Map();   // id → { resolve, reject, onProgress }
+    let _osIdleTimer = null;
+
     // ─── ORT Web lazy loader ────────────────────────────────────────
     // ort.min.js sets `window.ort` when loaded via <script>. We resolve
     // the script-tag injection once; subsequent calls reuse the same
@@ -2048,6 +2061,107 @@
         }
     }
 
+    // ─── One-shot worker orchestration (memory reclaim) ─────────────
+    function _runInPage(kind, pixels, width, height, opts) {
+        const map = {
+            bge: BgePipeline, denoise: DenoisePipeline,
+            decon: DeconPipeline, starnet: StarRemovalPipeline
+        };
+        const P = map[kind];
+        if (!P) return Promise.reject(new Error('unknown pipeline: ' + kind));
+        return new P().run(pixels, width, height, opts);
+    }
+
+    function _scheduleOneShotIdle() {
+        if (_osIdleTimer) clearTimeout(_osIdleTimer);
+        _osIdleTimer = setTimeout(() => {
+            _osIdleTimer = null;
+            if (_osJobs.size === 0 && _osWorker) {
+                try { _osWorker.terminate(); } catch { /* ignore */ }
+                _osWorker = null;   // next run rebuilds; this frees the WASM heap
+                console.log('[OnnxRegistry] one-shot worker idle-terminated (memory reclaimed)');
+            }
+        }, ONESHOT_IDLE_MS);
+    }
+
+    function _ensureOneShotWorker() {
+        if (_osWorker) return _osWorker;
+        const w = new Worker(ORT_WORKER_PATH);
+        w.onmessage = (ev) => {
+            const m = ev.data || {};
+            const job = _osJobs.get(m.id);
+            if (!job) return;
+            if (m.type === 'progress') {
+                if (job.onProgress) { try { job.onProgress(m.phase, m.frac); } catch { /* ignore */ } }
+            } else if (m.type === 'done') {
+                _osJobs.delete(m.id); job.resolve(m.result); _scheduleOneShotIdle();
+            } else if (m.type === 'error') {
+                _osJobs.delete(m.id); job.reject(new Error(m.message || 'worker error')); _scheduleOneShotIdle();
+            }
+        };
+        w.onerror = (e) => {
+            // The worker crashed — fail every in-flight job and drop it so the
+            // next call rebuilds. The caller's .catch falls back in-page.
+            const err = new Error((e && e.message) || 'onnx worker crashed');
+            for (const [, job] of _osJobs) job.reject(err);
+            _osJobs.clear();
+            try { w.terminate(); } catch { /* ignore */ }
+            if (_osWorker === w) _osWorker = null;
+        };
+        _osWorker = w;
+        return w;
+    }
+
+    function _runInWorker(kind, pixels, width, height, opts) {
+        return new Promise((resolve, reject) => {
+            if (_osIdleTimer) { clearTimeout(_osIdleTimer); _osIdleTimer = null; }
+            let w;
+            try { w = _ensureOneShotWorker(); } catch (e) { reject(e); return; }
+            const id = ++_osSeq;
+            // Strip non-cloneable fields (callbacks) before postMessage; relay
+            // progress over the message channel instead.
+            const cleanOpts = {};
+            for (const k in opts) { if (typeof opts[k] !== 'function') cleanOpts[k] = opts[k]; }
+            _osJobs.set(id, { resolve, reject, onProgress: opts.onProgress });
+            let token = null;
+            try { token = sessionStorage.getItem('polaris_token') || localStorage.getItem('polaris_token'); } catch { /* private mode */ }
+            // Transfer a COPY of the input buffer so the caller's array stays usable.
+            let buf;
+            try { buf = pixels.buffer.slice(0); }
+            catch (e) { _osJobs.delete(id); reject(e); return; }
+            try {
+                w.postMessage({
+                    id, kind, pixels: buf,
+                    pixelsCtor: (pixels.constructor && pixels.constructor.name) || 'Uint16Array',
+                    width, height, opts: cleanOpts, token
+                }, [buf]);
+            } catch (e) { _osJobs.delete(id); reject(e); }
+        });
+    }
+
+    /**
+     * Run a one-shot GraXpert op, reclaiming memory afterwards. Same call
+     * shape + return as `new XPipeline().run(pixels, w, h, opts)`.
+     *
+     * Routes to a terminable Worker ONLY for the WASM backend (no WebGPU),
+     * where the heap-never-shrinks problem actually bites; with WebGPU the
+     * heavy memory is GPU-side + reclaimable, and WebGPU-in-worker is finicky,
+     * so that stays in-page. StarNet (shouldAbort callback + dual output) and
+     * any unknown kind also run in-page. On ANY worker failure it transparently
+     * falls back in-page, so the feature can't break — worst case is no reclaim.
+     */
+    function runOneShot(kind, pixels, width, height, opts = {}) {
+        const hasGpu = (typeof navigator !== 'undefined' && !!navigator.gpu);
+        const workerable = (kind === 'bge' || kind === 'denoise' || kind === 'decon');
+        if (hasGpu || !workerable || typeof Worker === 'undefined') {
+            return _runInPage(kind, pixels, width, height, opts);
+        }
+        return _runInWorker(kind, pixels, width, height, opts).catch((e) => {
+            console.warn('[OnnxRegistry] one-shot worker failed; running in-page', e);
+            return _runInPage(kind, pixels, width, height, opts);
+        });
+    }
+
     // ─── Public API ─────────────────────────────────────────────────
     window.OnnxRegistry = {
         loadOrtWeb,
@@ -2064,5 +2178,7 @@
         DenoisePipeline,
         DeconPipeline,
         StarRemovalPipeline,
+        // One-shot runner with post-run memory reclaim (WASM backend).
+        runOneShot,
     };
 })();
