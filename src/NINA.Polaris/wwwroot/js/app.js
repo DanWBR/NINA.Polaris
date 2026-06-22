@@ -17451,6 +17451,23 @@ function ninaApp() {
             return Math.max(0, Math.min(1, elapsed / sc.exposureSeconds));
         },
 
+        /// Single source of truth for a shutter's current exposure: prefer
+        /// the SERVER-reported capture (when its source is one the caller
+        /// owns) so every ring/countdown agrees and survives a reconnect;
+        /// fall back to the per-context local timer only in the brief gap
+        /// before the first status tick. `sources` is the set of capture
+        /// source tags this shutter represents. Returns { startedAt, exp }
+        /// or null when nothing is exposing.
+        _effectiveCapture(sources, localStart, localExp) {
+            const sc = this.serverCapture;
+            if (sc && sc.active && sources.includes(sc.source)
+                && sc.exposureSeconds > 0) {
+                return { startedAt: sc.startedAtLocal, exp: sc.exposureSeconds };
+            }
+            if (localStart) return { startedAt: localStart, exp: localExp };
+            return null;
+        },
+
         // ----- Per-tab context objects -----
 
         /// LIVE tab shutter context.
@@ -17475,15 +17492,22 @@ function ninaApp() {
         /// while the user is holding.
         liveShutterProgress() {
             if (this.armingLoop) return this._shutterArmProgress();
-            return this._shutterProgressFor(this._captureStartedAt, this._captureExposure);
+            const c = this._effectiveCapture(['live', 'stream'],
+                this._captureStartedAt, this._captureExposure);
+            return c ? this._shutterProgressFor(c.startedAt, c.exp) : 0;
         },
         liveShutterDashoffset() {
             return this._shutterDashoffsetFor(this.liveShutterProgress());
         },
         liveShutterCountdown() {
             if (this.armingLoop) return 'hold for loop...';
-            if (!this.capturing && !this.looping) return '';
-            return this._shutterCountdownFor(this._captureStartedAt, this._captureExposure);
+            const c = this._effectiveCapture(['live', 'stream'],
+                this._captureStartedAt, this._captureExposure);
+            // Server truth wins: show the countdown whenever the server (or
+            // our local timer) reports an exposure, even if our local
+            // capturing/looping flags lag behind after a reconnect.
+            if (!c && !this.capturing && !this.looping) return '';
+            return c ? this._shutterCountdownFor(c.startedAt, c.exp) : '';
         },
 
         /// PREVIEW tab shutter context.
@@ -17498,17 +17522,19 @@ function ninaApp() {
         },
         previewShutterProgress() {
             if (this.armingLoop) return this._shutterArmProgress();
-            return this._shutterProgressFor(
+            const c = this._effectiveCapture(['snap'],
                 this.preview._snapStartedAt, this.preview._snapExposure);
+            return c ? this._shutterProgressFor(c.startedAt, c.exp) : 0;
         },
         previewShutterDashoffset() {
             return this._shutterDashoffsetFor(this.previewShutterProgress());
         },
         previewShutterCountdown() {
             if (this.armingLoop) return 'hold for loop...';
-            if (!this.preview.busy && !this.preview.looping) return '';
-            return this._shutterCountdownFor(
+            const c = this._effectiveCapture(['snap'],
                 this.preview._snapStartedAt, this.preview._snapExposure);
+            if (!c && !this.preview.busy && !this.preview.looping) return '';
+            return c ? this._shutterCountdownFor(c.startedAt, c.exp) : '';
         },
 
         /// FOCUS Manual Assist shutter context. Tap = single snap,
