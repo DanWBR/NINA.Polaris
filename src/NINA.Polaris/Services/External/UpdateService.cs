@@ -69,6 +69,18 @@ public class UpdateService {
         }
     }
 
+    /// <summary>Running version as the X.Y.Z string shown in the UI. .NET
+    /// normalises the assembly version to 4 parts (0.85.1.0); we only ever
+    /// release with 3-part tags (0.85.1), so drop the trailing build/revision
+    /// component for display. Comparisons still use the full <see
+    /// cref="CurrentVersion"/> object, so this is purely cosmetic.</summary>
+    public static string CurrentVersionShort {
+        get {
+            var v = CurrentVersion;
+            return $"{v.Major}.{v.Minor}.{Math.Max(v.Build, 0)}";
+        }
+    }
+
     /// <summary>dpkg architecture string for the running process, used to pick
     /// the right release asset (polaris_VERSION_ARCH.deb).</summary>
     public static string DpkgArch => RuntimeInformation.ProcessArchitecture switch {
@@ -84,7 +96,7 @@ public class UpdateService {
     /// rate-limit errors return a result with <c>Error</c> set.</summary>
     public async Task<UpdateCheckResult> CheckAsync(bool force, CancellationToken ct) {
         if (!IsSupported)
-            return new UpdateCheckResult { Supported = false, CurrentVersion = CurrentVersion.ToString() };
+            return new UpdateCheckResult { Supported = false, CurrentVersion = CurrentVersionShort };
 
         lock (_cacheLock) {
             if (!force && _cached != null && DateTime.UtcNow - _cachedAtUtc < CacheTtl)
@@ -93,7 +105,7 @@ public class UpdateService {
 
         var result = new UpdateCheckResult {
             Supported = true,
-            CurrentVersion = CurrentVersion.ToString(),
+            CurrentVersion = CurrentVersionShort,
             Arch = DpkgArch
         };
         try {
@@ -486,7 +498,7 @@ public class UpdateService {
     /// Unlike <see cref="CheckAsync"/> this never touches the network.</summary>
     public UpdateLocalInfo LocalInfo() => new() {
         Supported = IsSupported,
-        CurrentVersion = CurrentVersion.ToString(),
+        CurrentVersion = CurrentVersionShort,
         Arch = DpkgArch,
         Repo = Repo
     };
