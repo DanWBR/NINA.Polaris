@@ -27736,6 +27736,20 @@ function ninaApp() {
         // live guider state (same source the GUIDE-tab Control panel
         // reads). Done as plain methods because the previous inline
         // x-show cascade rendered empty in some Alpine eval orders.
+        // True while a dither is in progress, from EITHER source: the
+        // guider's own transient IsDithering/IsSettling flags, OR the
+        // live-stack trigger orchestrator currently executing a dither
+        // (liveStackStatus.triggers.executingKind === 'dither'). The
+        // latter is the steady signal the LIVE-tab "Dithering…" label
+        // uses; folding it in here keeps the top status-bar badge in sync
+        // with what the LIVE panel shows during live-stack dithers (the
+        // native backend keeps appState "Guiding" through a dither, so its
+        // own flag can read false at the moment the badge re-renders).
+        _ditherActive() {
+            const g = this.guider || {};
+            if (g.dithering || g.settling) return true;
+            return this.liveStackStatus?.triggers?.executingKind === 'dither';
+        },
         phd2BadgeText() {
             const g = this.guider || {};
             // Backend name only — never the generic word "GUIDE"/"GUIDER",
@@ -27747,13 +27761,18 @@ function ninaApp() {
             // the operator sees the scope is deliberately being moved + settled
             // (the native backend keeps appState "Guiding" through a dither).
             // When the live settle telemetry is present, show error/tolerance.
-            if (g.dithering || g.settling) {
+            if (this._ditherActive()) {
                 const sp = g.settleProgress;
-                const verb = g.dithering ? 'DITHER' : 'SETTLE';
+                // Dither vs plain settle: the live-stack trigger signal also
+                // counts as dithering even when the native backend's own
+                // flag has already cleared.
+                const dith = g.dithering
+                    || this.liveStackStatus?.triggers?.executingKind === 'dither';
+                const verb = dith ? 'DITHER' : 'SETTLE';
                 if (sp && sp.errorPx != null && sp.thresholdPx != null) {
                     return `${tag} ${verb} ${sp.errorPx.toFixed(1)}/${sp.thresholdPx.toFixed(1)}px`;
                 }
-                return tag + (g.dithering ? ' DITHERING' : ' SETTLING');
+                return tag + (dith ? ' DITHERING' : ' SETTLING');
             }
             if (g.guiding) {
                 const rms = (g.rmsTotal != null) ? g.rmsTotal.toFixed(2) : '--';
@@ -27767,7 +27786,7 @@ function ninaApp() {
             const g = this.guider || {};
             if (!g.connected) return 'off';
             // Dither/settle is a transient, attention-worthy state -> amber.
-            if (g.dithering || g.settling) return 'warn';
+            if (this._ditherActive()) return 'warn';
             if (g.guiding) return 'ok';
             if (g.appState === 'LostLock') return 'error';
             return 'warn';
@@ -27776,9 +27795,11 @@ function ninaApp() {
             const g = this.guider || {};
             const tag = (g.backend === 'native') ? 'Native guider' : 'PHD2';
             if (!g.connected) return tag + ' not connected, click for Guider';
-            if (g.dithering || g.settling) {
+            if (this._ditherActive()) {
                 const sp = g.settleProgress;
-                const verb = g.dithering ? 'Dithering' : 'Settling';
+                const dith = g.dithering
+                    || this.liveStackStatus?.triggers?.executingKind === 'dither';
+                const verb = dith ? 'Dithering' : 'Settling';
                 if (sp) {
                     const e = (sp.errorPx != null) ? sp.errorPx.toFixed(2) : '--';
                     const t = (sp.thresholdPx != null) ? sp.thresholdPx.toFixed(2) : '--';
