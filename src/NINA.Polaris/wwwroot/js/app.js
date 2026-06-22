@@ -30128,6 +30128,13 @@ function ninaApp() {
             this.updateMosaicPreview();
         },
 
+        // Close the planner and clear the yellow grid overlay off the SKY map.
+        closeMosaicPlanner() {
+            this.mosaicOpen = false;
+            this.mosaicTiles = null;
+            try { this._pushSkyFovOverlays(); } catch (_) { /* SKY engine may be idle */ }
+        },
+
         async updateMosaicPreview() {
             try {
                 // apiPost returns the Response (not parsed JSON) — must .json()
@@ -30206,6 +30213,7 @@ function ninaApp() {
                     URL.revokeObjectURL(url);
                 } else {
                     // Hop into the Adv Sequencer tab so the user can see what landed
+                    this.mosaicTiles = null;
                     this.mosaicOpen = false;
                     this.tab = 'seqadv';
                     await this.loadAdvSeq();
@@ -30246,6 +30254,7 @@ function ninaApp() {
                 const created = await resp.json();
                 this.plans.push(created);
                 this.selectPlan(created.id);
+                this.mosaicTiles = null;
                 this.mosaicOpen = false;
                 this.tab = 'plan';
                 this.toast(`Exported ${p.targets.length} panels to a new plan`, 'ok');
