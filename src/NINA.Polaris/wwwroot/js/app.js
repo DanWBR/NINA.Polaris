@@ -3092,6 +3092,11 @@ function ninaApp() {
                 this.$watch('tab', v => {
                     try { sessionStorage.setItem('polaris_tab', v); } catch (_) { /* private mode */ }
                 });
+                // Tonight's Best: the altitude charts must be redrawn whenever
+                // the filter or FOV toggle changes the shown set (Alpine remounts
+                // the canvases blank otherwise).
+                this.$watch('tonight.filter', () => this._renderTonightChartsDeferred());
+                this.$watch('tonight.fitsFovOnly', () => this._renderTonightChartsDeferred());
             } catch (_) { /* $watch unavailable */ }
 
             // AUTH-3: gate the rest of init on auth. _authBoot is
@@ -12062,7 +12067,7 @@ function ninaApp() {
             this.tonight.loading = true;
             this.tonight.error = '';
             try {
-                const r = await this.apiGet('/api/sky/tonights-best?limit=30');
+                const r = await this.apiGet('/api/sky/tonights-best?limit=120');
                 this.tonight.items = r.items || [];
                 this.tonight.envelope = r;
                 this.tonight.lastFetched = new Date();
@@ -12653,13 +12658,62 @@ function ninaApp() {
         tonightFiltered() {
             let xs = this.tonight.items;
             if (this.tonight.filter && this.tonight.filter !== 'all') {
-                const cap = this.tonight.filter.charAt(0).toUpperCase() + this.tonight.filter.slice(1);
-                xs = xs.filter(i => i.category.toLowerCase() === this.tonight.filter);
+                xs = xs.filter(i => this._tonightMatch(i, this.tonight.filter));
             }
             if (this.tonight.fitsFovOnly && this.tonightHasFovData()) {
                 xs = xs.filter(i => i.fitsCameraFov === true);
             }
             return xs;
+        },
+
+        // Does an item belong to filter chip `f`? DSO sub-types are matched on
+        // the friendly type string from the catalog ("Spiral Galaxy", "Open
+        // Cluster", "Planetary Nebula", "HII Region", …), so Galaxies/Nebulae/
+        // Clusters work across the whole bundled DSO DB, not just Messier.
+        _tonightMatch(item, f) {
+            const cat = (item.category || '').toLowerCase();
+            const type = (item.type || '').toLowerCase();
+            switch (f) {
+                case 'galaxy':  return cat === 'dso' && /galaxy/.test(type);
+                case 'nebula':  return cat === 'dso' && /(nebula|hii)/.test(type);
+                case 'cluster': return cat === 'dso' && /cluster/.test(type) && !/galaxy/.test(type);
+                case 'planet':  return cat === 'planet';
+                case 'moon':    return cat === 'moon';
+                case 'comet':   return cat === 'comet';
+                case 'dso':     return cat === 'dso';
+                default:        return true;
+            }
+        },
+
+        // Filter chips to show: always "All", then only the categories that
+        // actually have ≥1 object up tonight. Keeps empty buckets (e.g. no
+        // galaxies above the horizon) and the lone Moon from cluttering the bar.
+        tonightChips() {
+            const defs = [
+                { key: 'galaxy',  label: 'Galaxies' },
+                { key: 'nebula',  label: 'Nebulae' },
+                { key: 'cluster', label: 'Clusters' },
+                { key: 'planet',  label: 'Planets' },
+                { key: 'moon',    label: 'Moon' },
+                { key: 'comet',   label: 'Comets' },
+            ];
+            const chips = [{ key: 'all', label: 'All' }];
+            for (const d of defs) {
+                if (this.tonight.items.some(i => this._tonightMatch(i, d.key))) chips.push(d);
+            }
+            return chips;
+        },
+
+        // Re-draw the altitude charts for whatever the current filter shows.
+        // Alpine recreates the per-card <canvas> when tonightFiltered() changes
+        // (filter / FOV toggle), so the freshly-mounted canvases start blank;
+        // redraw them on the next tick. Without this, charts vanished after
+        // every filter click.
+        _renderTonightChartsDeferred() {
+            this.$nextTick(() => {
+                try { this.tonightFiltered().forEach(i => this._renderTonightChart(i)); }
+                catch (_) { /* charts are best-effort */ }
+            });
         },
 
         tonightHasFovData() {

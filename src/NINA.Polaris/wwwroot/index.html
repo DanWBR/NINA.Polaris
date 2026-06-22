@@ -7667,11 +7667,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                 <!-- Filter chips -->
                 <div class="tonight-filters" x-show="!tonight.error && tonight.items.length">
-                    <template x-for="f in ['all','dso','planet','moon','comet']" :key="f">
+                    <template x-for="c in tonightChips()" :key="c.key">
                         <button class="tonight-filter-chip"
-                                :class="{ active: tonight.filter === f }"
-                                @click="tonight.filter = f"
-                                x-text="f === 'all' ? 'All' : f === 'dso' ? 'DSOs' : f.charAt(0).toUpperCase() + f.slice(1) + 's'"></button>
+                                :class="{ active: tonight.filter === c.key }"
+                                @click="tonight.filter = c.key"
+                                x-text="c.label"></button>
                     </template>
                     <label class="tonight-filter-chip tonight-filter-toggle"
                            :class="{ active: tonight.fitsFovOnly, disabled: !tonightHasFovData() }"
@@ -7772,7 +7772,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <span class="weather-legend-chip" style="background:rgba(255,193,7,0.18);color:#ffe082">Planet</span>
                     <span class="weather-legend-chip" style="background:rgba(33,150,243,0.18);color:#90caf9">DSO</span>
                     <span class="muted" style="margin-left:auto">
-                        Catalog: local 200 DSOs · Planets: <a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener">AstronomyEngine</a> · Images: <a href="https://images.nasa.gov/" target="_blank" rel="noopener">NASA</a> / <a href="https://en.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a>
+                        Catalog: bundled DSO database (to mag 12) · Planets: <a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener">AstronomyEngine</a> · Images: <a href="https://images.nasa.gov/" target="_blank" rel="noopener">NASA</a> / <a href="https://en.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a>
                     </span>
                 </div>
             </div>
@@ -15421,7 +15421,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260622-stackwarn1"></script>
+    <script src="/js/app.js?v=20260622-tonight1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
