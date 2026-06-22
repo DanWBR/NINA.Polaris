@@ -561,7 +561,7 @@
         return ring;
     }
 
-    function skyFovGeoJson(centre, color, glow) {
+    function skyFovGeoJson(centre, color, glow, labelOverride) {
         var raDeg = centre.raDeg, decDeg = centre.decDeg;
         var w = centre.widthDeg, h = centre.heightDeg;
         // +180°: the plate-solve position angle convention used upstream is
@@ -616,8 +616,10 @@
         // stacked vertically. Use a single hyphen-joined token with
         // NO inner whitespace so the renderer can't wrap.
         var rotPositive = ((rot % 360) + 360) % 360;
-        var labelText = 'Scope ' + w.toFixed(2) + 'x' + h.toFixed(2)
-            + ' rot ' + rotPositive.toFixed(1);
+        var labelText = (labelOverride != null && labelOverride !== '')
+            ? labelOverride
+            : 'Scope ' + w.toFixed(2) + 'x' + h.toFixed(2)
+              + ' rot ' + rotPositive.toFixed(1);
         var midTop = [(ring[2][0] + ring[3][0]) / 2, (ring[2][1] + ring[3][1]) / 2];
         var parallactic = skyParallacticAt(raDeg, decDeg);
         // The engine parses text-rotate as `-degrees * DD2R`
@@ -932,34 +934,16 @@
                 // grid never showed. Same rot+180 + 16-segment edge sampling
                 // as the mount so off-equator panels stay true rectangles.
                 mosaic.tiles.forEach(function (t) {
-                    var rot = (t.rotationDeg || 0) + 180;
-                    var ring = skyFovRect(t.raDeg, t.decDeg,
-                        t.widthDeg, t.heightDeg, rot, 16);
-                    var features = [{
-                        type: 'Feature',
-                        properties: {
-                            stroke: '#facc15', 'stroke-width': 2,
-                            'stroke-opacity': 1, 'stroke-glow': true,
-                            fill: '#facc15', 'fill-opacity': 0.0
-                        },
-                        geometry: { type: 'Polygon', coordinates: [ring] }
-                    }];
-                    if (t.label) {
-                        // Panel number at the tile centre (1-based slew order).
-                        features.push({
-                            type: 'Feature',
-                            properties: {
-                                stroke: '#fde68a', 'stroke-opacity': 1,
-                                'stroke-width': 0, fill: '#fde68a',
-                                'fill-opacity': 0, title: t.label,
-                                'text-anchor': 'center', 'text-size': 13
-                            },
-                            geometry: { type: 'Point',
-                                coordinates: [t.raDeg, t.decDeg] }
-                        });
-                    }
+                    // Use the EXACT mount-rectangle draw path (skyFovGeoJson),
+                    // just yellow + a panel-number label, so the grid renders
+                    // identically to the proven mount overlay instead of a
+                    // hand-rolled FeatureCollection.
                     var obj = stel.createObj('geojson', {
-                        data: { type: 'FeatureCollection', features: features }
+                        data: skyFovGeoJson({
+                            raDeg: t.raDeg, decDeg: t.decDeg,
+                            widthDeg: t.widthDeg, heightDeg: t.heightDeg,
+                            rotationDeg: t.rotationDeg || 0, flipV: false
+                        }, '#facc15', true, t.label ? ('Panel ' + t.label) : '')
                     });
                     __skyFovLayer.add(obj);
                     __skyMosaicObjs.push(obj);

@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-solver1">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-rigs1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260622-mosaic5">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260622-mosaic6">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260620-mobile1">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260620-density1">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -12967,6 +12967,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
     <div class="mosaic-modal" x-show="mosaicOpen" x-cloak
          @keydown.escape.window="closeMosaicPlanner()">
         <div class="location-setup-frame mosaic-frame">
+            <button class="mosaic-close" @click="closeMosaicPlanner()" title="Close">✕</button>
             <h2>🧩 Mosaic planner, <span x-text="mosaic.req.targetName"></span></h2>
             <p class="text-muted" style="font-size:13px;margin-bottom:14px">
                 Grid is centred on the selected target. Per-panel FOV is auto-filled
