@@ -8284,9 +8284,15 @@ function ninaApp() {
                 // image surface (not on a button/handle/panel) counts. The
                 // pz-toolbar already stops propagation, but the histogram
                 // handles + overlay clusters don't, so gate on the target.
-                s._tapCandidate = !e.target.closest(
+                const onOverlay = !!e.target.closest(
                     'button, input, select, label, .histo-panel, .pz-toolbar, ' +
                     '.preview-overlay-controls, .af-preview-badge, [data-no-tap]');
+                s._tapCandidate = !onOverlay;
+                // A press that lands on an interactive overlay (e.g. dragging a
+                // histogram stretch handle) must NOT also start a frame pan or
+                // double-tap reset — otherwise moving the slider drags the
+                // zoomed image underneath it. Bail before any pan/tap setup.
+                if (onOverlay) { s._dragging = false; return; }
                 s._tapX0 = e.clientX;
                 s._tapY0 = e.clientY;
                 s._suppressTap = false;
