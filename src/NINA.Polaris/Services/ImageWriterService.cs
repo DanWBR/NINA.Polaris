@@ -14,6 +14,7 @@
 
 using System.Globalization;
 using System.Linq;
+using NINA.Core.Enum;
 using NINA.Image.FileFormat.FITS;
 using NINA.Image.FileFormat.XISF;
 using NINA.Image.ImageData;
@@ -230,6 +231,42 @@ public class ImageWriterService {
                 && _equip.Camera is { IsConnected: true } ncam)
             m.Camera.Name = ncam.DeviceName;
 
+        // Bayer pattern, same gap class — this is the fix for OSC frames
+        // that occasionally save WITHOUT a BAYERPAT card and reopen as
+        // "mono" (raw mosaic shown in the editor). Two distinct holes
+        // funnel through this one chokepoint:
+        //   (1) The ASI native SDK adapter only stamps
+        //       Properties.BayerPattern, never MetaData.Camera.BayerPattern,
+        //       yet both FITSWriter and XISFWriter emit BAYERPAT from the
+        //       MetaData side — so ASI OSC saves never carried the card.
+        //   (2) INDI OSC drivers advertise the CFA via the CCD_CFA property
+        //       (read live per frame); when that property is momentarily
+        //       absent (right after a reconnect / driver re-publish) a frame
+        //       comes back with BayerPattern=None even on a colour sensor.
+        // Priority: trust the frame's own Properties pattern first; fall
+        // back to the per-rig override the operator configured for a driver
+        // that mis-reports / omits the CFA. The override here is the native
+        // (unflipped) sensor pattern: the relay's VerticalFlip row-shift is
+        // a wire/display-only concern and the on-disk buffer is in native
+        // orientation, so it must NOT be row-shifted.
+        if (m.Camera.BayerPattern == BayerPatternEnum.None) {
+            var effective = imageData.Properties.BayerPattern;
+            if (effective == BayerPatternEnum.None)
+                effective = ParseBayerOverride(
+                    _profile.ActiveEquipmentProfile?.BayerPatternOverride)
+                    ?? BayerPatternEnum.None;
+            if (effective != BayerPatternEnum.None) {
+                m.Camera.BayerPattern = effective;
+                m.Camera.SensorType = effective switch {
+                    BayerPatternEnum.RGGB => SensorType.RGGB,
+                    BayerPatternEnum.BGGR => SensorType.BGGR,
+                    BayerPatternEnum.GBRG => SensorType.GBRG,
+                    BayerPatternEnum.GRBG => SensorType.GRBG,
+                    _ => m.Camera.SensorType
+                };
+            }
+        }
+
         // Telescope, focal length comes from the *active rig* (a per-rig
         // optic property), falling back to the legacy profile value only if
         // no rigs have been set up.
@@ -307,6 +344,22 @@ public class ImageWriterService {
     }
 
     private static double Safe(double v) => double.IsNaN(v) || double.IsInfinity(v) ? 0 : v;
+
+    /// <summary>Parse a per-rig Bayer override string into a concrete
+    /// pattern, or null when it's empty / "Auto" / "None" / unrecognised
+    /// (in which case the caller leaves the pattern untouched). Mirrors the
+    /// parsing rules in <c>ImageRelayService.ResolveBayerOverride</c> so the
+    /// saved file and the live display agree on the sensor pattern.</summary>
+    private static BayerPatternEnum? ParseBayerOverride(string? raw) {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        if (string.Equals(raw, "Auto", StringComparison.OrdinalIgnoreCase)) return null;
+        if (Enum.TryParse<BayerPatternEnum>(raw, ignoreCase: true, out var p)
+                && p != BayerPatternEnum.None
+                && p != BayerPatternEnum.Auto) {
+            return p;
+        }
+        return null;
+    }
 
     /// <summary>
     /// Pick the structured subdirectory under ImageOutputDir for a frame

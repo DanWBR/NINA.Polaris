@@ -37,6 +37,13 @@ public class IndiCamera : ICamera {
     // to decide whether native streaming is producing usable frames or
     // whether it should bail out to loop mode.
     private int _emptyStreamFrameCount;
+    // Last non-None CFA pattern observed on CCD_CFA. An OSC sensor's
+    // Bayer layout never changes during a session, so once we've seen it
+    // we keep it: the INDI property store can transiently lose CCD_CFA
+    // (right after a reconnect / driver property re-publish), which would
+    // otherwise make a frame come back BayerPattern=None and save a colour
+    // light with no BAYERPAT card (reopens as "mono" in the editor).
+    private volatile BayerPatternEnum _lastCfa = BayerPatternEnum.None;
     public int EmptyStreamFrameCount => _emptyStreamFrameCount;
 
     public string DeviceName { get; }
@@ -106,16 +113,26 @@ public class IndiCamera : ICamera {
     public BayerPatternEnum BayerPattern {
         get {
             var cfaProp = _client.GetProperty(DeviceName, "CCD_CFA") as IndiTextProperty;
-            if (cfaProp == null) return BayerPatternEnum.None;
-            if (!cfaProp.Values.TryGetValue("CFA_TYPE", out var cfaType))
-                return BayerPatternEnum.None;
-            return (cfaType?.Trim().ToUpperInvariant()) switch {
-                "RGGB" => BayerPatternEnum.RGGB,
-                "BGGR" => BayerPatternEnum.BGGR,
-                "GBRG" => BayerPatternEnum.GBRG,
-                "GRBG" => BayerPatternEnum.GRBG,
-                _ => BayerPatternEnum.None
-            };
+            BayerPatternEnum live = BayerPatternEnum.None;
+            if (cfaProp != null
+                    && cfaProp.Values.TryGetValue("CFA_TYPE", out var cfaType)) {
+                live = (cfaType?.Trim().ToUpperInvariant()) switch {
+                    "RGGB" => BayerPatternEnum.RGGB,
+                    "BGGR" => BayerPatternEnum.BGGR,
+                    "GBRG" => BayerPatternEnum.GBRG,
+                    "GRBG" => BayerPatternEnum.GRBG,
+                    _ => BayerPatternEnum.None
+                };
+            }
+            // Cache the last good read and reuse it when the property is
+            // transiently missing, so a single CCD_CFA gap can't drop the
+            // pattern for a frame. The layout is fixed per session, so a
+            // stale value here is always the correct value.
+            if (live != BayerPatternEnum.None) {
+                _lastCfa = live;
+                return live;
+            }
+            return _lastCfa;
         }
     }
 
@@ -657,11 +674,20 @@ public class IndiCamera : ICamera {
                         imageData.MetaData);
                 }
                 // Also propagate into MetaData so FITSWriter emits
-                // the BAYERPAT keyword when saving frames to disk.
-                if (driverBayer != BayerPatternEnum.None) {
-                    imageData.MetaData.Camera.BayerPattern = driverBayer;
+                // the BAYERPAT keyword when saving frames to disk. Use the
+                // EFFECTIVE pattern: prefer the driver-advertised CFA, but
+                // fall back to whatever the BLOB header itself carried — a
+                // driver that DOES embed BAYERPAT in the FITS but has a
+                // momentarily-empty CCD_CFA would otherwise save with the
+                // pattern in Properties yet a None in MetaData, and the
+                // writer reads MetaData (reopens as "mono").
+                var effectiveBayer = driverBayer != BayerPatternEnum.None
+                    ? driverBayer
+                    : imageData.Properties.BayerPattern;
+                if (effectiveBayer != BayerPatternEnum.None) {
+                    imageData.MetaData.Camera.BayerPattern = effectiveBayer;
                     imageData.MetaData.Camera.SensorType =
-                        driverBayer switch {
+                        effectiveBayer switch {
                             BayerPatternEnum.RGGB => SensorType.RGGB,
                             BayerPatternEnum.BGGR => SensorType.BGGR,
                             BayerPatternEnum.GBRG => SensorType.GBRG,
