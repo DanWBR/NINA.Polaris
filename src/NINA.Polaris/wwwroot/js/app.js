@@ -30182,7 +30182,8 @@ function ninaApp() {
                 raDeg: p.raHours * 15, decDeg: p.decDeg,
                 widthDeg: plan.panelFovWidthDeg,
                 heightDeg: plan.panelFovHeightDeg,
-                rotationDeg: 0
+                rotationDeg: 0,
+                label: ((p.index ?? 0) + 1).toString()  // 1-based slew order
             }));
             this._pushSkyFovOverlays();
         },

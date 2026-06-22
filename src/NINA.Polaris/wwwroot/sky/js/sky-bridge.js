@@ -906,24 +906,44 @@
             // Update the screen-anchored target FOV CSS box.
             skyUpdateTargetFovBox(target);
             if (mosaic && mosaic.tiles && mosaic.tiles.length) {
-                // Mosaic grid: one polygon per tile, yellow.
-                var features = mosaic.tiles.map(function (t) {
+                // Mosaic grid: one glowing yellow polygon per tile plus a
+                // Point feature carrying the 1-based slew order, so the grid
+                // reads clearly over a bright target at small FOV (the old
+                // 1px / 0.7-opacity / no-glow style was nearly invisible on
+                // M42). Edges are sampled (segments=8) so panels far from the
+                // equator stay true rectangles instead of parallelograms.
+                var features = [];
+                mosaic.tiles.forEach(function (t) {
                     var ring = skyFovRect(t.raDeg, t.decDeg,
-                        t.widthDeg, t.heightDeg, t.rotationDeg || 0);
-                    return {
+                        t.widthDeg, t.heightDeg, t.rotationDeg || 0, 8);
+                    features.push({
                         type: 'Feature',
                         properties: {
-                            stroke: '#facc15', 'stroke-width': 1,
-                            'stroke-opacity': 0.7,
-                            fill: '#facc15', 'fill-opacity': 0.03
+                            stroke: '#facc15', 'stroke-width': 2,
+                            'stroke-opacity': 0.95, 'stroke-glow': true,
+                            fill: '#facc15', 'fill-opacity': 0.06
                         },
                         geometry: { type: 'Polygon', coordinates: [ring] }
-                    };
+                    });
+                    if (t.label) {
+                        features.push({
+                            type: 'Feature',
+                            properties: {
+                                title: t.label, stroke: '#fde68a',
+                                'text-anchor': 'center'
+                            },
+                            geometry: { type: 'Point',
+                                coordinates: [t.raDeg, t.decDeg] }
+                        });
+                    }
                 });
                 __skyFovObjs.mosaic = stel.createObj('geojson', {
                     data: { type: 'FeatureCollection', features: features }
                 });
                 __skyFovLayer.add(__skyFovObjs.mosaic);
+                console.log('[Sky] mosaic grid created: ' + mosaic.tiles.length
+                    + ' panels around RA=' + mosaic.tiles[0].raDeg.toFixed(2)
+                    + '° Dec=' + mosaic.tiles[0].decDeg.toFixed(2) + '°');
             }
         } catch (e) {
             console.warn('[Sky] set-fov-overlays failed:', e);
