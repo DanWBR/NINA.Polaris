@@ -13471,6 +13471,19 @@ function ninaApp() {
                 this.annotate.scaleArcsec = j.scaleArcsecPerPixel || 1;
                 this.annotate.items = j.objects || [];
                 this.annotate.active = true;
+                // DIAG: solved scale vs the rig-FOV-implied scale. If these
+                // differ, the annotation layer will look scaled (amplified /
+                // shrunk) relative to the stars. Report the ratio so we can
+                // pin the cause from the field.
+                try {
+                    const implied = (this.fov?.width > 0 && j.width)
+                        ? (this.fov.width * 3600 / j.width) : 0;
+                    console.log('[Annotate] solved scale=' + (j.scaleArcsecPerPixel||0).toFixed(3)
+                        + '"/px, rig-FOV-implied=' + implied.toFixed(3) + '"/px, ratio='
+                        + (implied > 0 ? (j.scaleArcsecPerPixel/implied).toFixed(3) : 'n/a')
+                        + ', frame=' + j.width + 'x' + j.height
+                        + ', rot=' + (j.rotationDeg||0).toFixed(1) + '°');
+                } catch (_) {}
                 this.redrawOverlay();
                 this.redrawPreviewOverlay();
                 this.toast(this.annotate.items.length
