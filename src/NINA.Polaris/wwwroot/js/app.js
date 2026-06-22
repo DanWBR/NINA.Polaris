@@ -26086,6 +26086,11 @@ function ninaApp() {
         async solveAndSyncHere() {
             if (!this.mount.connected) { this.toast('Connect a mount first', 'error'); return; }
             if (this.solveSyncBusy) return;
+            // Abort controller so the SKY panel's "Abort" button can cancel
+            // the in-flight capture + solve (both honour the request token
+            // server-side). Cleared in finally.
+            this._solveSyncAbort = new AbortController();
+            const signal = this._solveSyncAbort.signal;
             this.solveSyncBusy = true;
             this.filesSolveLog = '';
             this.filesSolveLiveActive = true;
@@ -26099,13 +26104,13 @@ function ninaApp() {
                     saveToDisk: false,
                     feedLiveStack: false,
                     kind: 'preview'
-                }, { timeout: 60000 });
+                }, { timeout: 60000, signal });
                 const body = {};
                 if (Number.isFinite(this.mount.ra) && Number.isFinite(this.mount.dec)) {
                     body.hintRa = this.mount.ra; body.hintDec = this.mount.dec;
                 }
                 this.toast('Plate solving…', 'info');
-                const resp = await this.apiPost('/api/platesolve/solve-latest', body, { timeout: 180000 });
+                const resp = await this.apiPost('/api/platesolve/solve-latest', body, { timeout: 180000, signal });
                 const r = await resp.json();
                 if (!r || !r.success) {
                     this.toast('Solve failed: ' + ((r && r.error) || 'unknown') +
@@ -26116,11 +26121,25 @@ function ninaApp() {
                 this._applySolvedFrame(r);
                 this.toast('Solved & synced — mount position recovered (no movement)', 'ok');
             } catch (e) {
-                this.toast('Solve & Sync failed: ' + (e?.message || e), 'error');
+                if (signal.aborted || e?.name === 'AbortError') {
+                    this.toast('Solve & Sync aborted', 'info');
+                } else {
+                    this.toast('Solve & Sync failed: ' + (e?.message || e), 'error');
+                }
             } finally {
                 this.solveSyncBusy = false;
                 this.filesSolveLiveActive = false;
+                this._solveSyncAbort = null;
             }
+        },
+
+        // Abort an in-flight "Solve & Sync": cancels the capture + solve
+        // HTTP requests (both observe the request cancellation token on
+        // the server) and tells the camera to abort its current exposure
+        // so the sensor stops immediately rather than finishing the frame.
+        async cancelSolveSync() {
+            try { this._solveSyncAbort?.abort(); } catch (e) {}
+            try { await this.apiPost('/api/camera/abort'); } catch (e) {}
         },
 
         _currentSlewTarget() {

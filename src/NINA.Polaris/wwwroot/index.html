@@ -7031,7 +7031,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      pushed the map). The header ▸ hides it to a small pill
                      (.sky-solver-pill) that re-opens it. -->
                 <div class="sky-solver-overlay" x-cloak
-                     x-show="!skySolverHidden && ((slewCenterStatus && slewCenterJobId) || slewCenterFailedLog)">
+                     x-show="!skySolverHidden && ((slewCenterStatus && slewCenterJobId) || slewCenterFailedLog || solveSyncBusy)">
                     <div class="sky-solver-overlay-head">
                         <span>Plate solver</span>
                         <button class="btn btn-xs" @click="skySolverHidden = true"
@@ -7080,12 +7080,29 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
                     <pre x-text="slewCenterFailedLog" class="solver-output-live"></pre>
                 </div>
+
+                <!-- "Solve & Sync" (capture + solve + sync, no slew) runs
+                     without a slew-center job id, so it needs its own
+                     panel + abort. Previously it ran in the background with
+                     no way to stop it. -->
+                <div class="sky-slew-progress" x-show="solveSyncBusy" x-cloak>
+                    <div class="slew-progress-row">
+                        <span class="slew-phase-icon">🎯</span>
+                        <span class="slew-state">Solve &amp; Sync — capturing + solving…</span>
+                        <button class="btn btn-sm btn-danger" @click="cancelSolveSync()"
+                                style="margin-left:auto">Abort</button>
+                    </div>
+                    <pre x-show="filesSolveLog"
+                         x-text="filesSolveLog"
+                         x-effect="filesSolveLog; $el.scrollTop = $el.scrollHeight"
+                         class="solver-output-live"></pre>
+                </div>
                 </div><!-- /.sky-solver-overlay -->
 
                 <!-- Re-open pill, shown only while a solve/result exists but
                      the overlay is collapsed. -->
                 <button class="sky-solver-pill" x-cloak
-                        x-show="skySolverHidden && ((slewCenterStatus && slewCenterJobId) || slewCenterFailedLog)"
+                        x-show="skySolverHidden && ((slewCenterStatus && slewCenterJobId) || slewCenterFailedLog || solveSyncBusy)"
                         @click="skySolverHidden = false"
                         title="Show solver console">◂ Solver</button>
 
@@ -15349,7 +15366,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260621-fieldbugs2"></script>
+    <script src="/js/app.js?v=20260621-fieldbugs3"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
