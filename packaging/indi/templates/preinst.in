@@ -1,0 +1,12 @@
+#!/bin/bash
+# preinst — runs before the package's files are unpacked.
+#
+# Defensive anti-shadow: the Polaris images were built with `make install`, so
+# the driver binaries are orphan files in /usr/bin. dpkg overwrites those
+# cleanly (an orphan file is not owned by any package, so there is no
+# "trying to overwrite" conflict). The only real hazard is a SECOND, older copy
+# left in /usr/local/bin from an earlier source build with the default CMake
+# prefix — /usr/local/bin precedes /usr/bin on PATH, so indiserver could keep
+# exec'ing the stale binary. Remove those copies for exactly the binaries this
+# package ships (the list is appended by build-driver-deb.sh below).
+set -e

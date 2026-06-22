@@ -1,0 +1,15 @@
+#!/bin/bash
+# postinst — runs after the package's files are unpacked.
+#
+# Refresh the dynamic linker cache so the bundled camera SDK shared object
+# (e.g. libASICamera2.so.*) is picked up. We deliberately do NOT restart
+# indiserver here: a driver swap mid-session would drop the mount/camera
+# connection. Polaris drives the indiserver bounce + equipment reconnect from
+# the update flow, while idle.
+set -e
+
+if [ "$1" = "configure" ]; then
+    ldconfig || true
+fi
+
+exit 0

@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "generated": "2026-06-22T00:00:00Z",
+  "base": { "libindi": "1.9.9" },
+  "packages": [
+    {
+      "package": "indi-asi",
+      "version": "2.1.0+danwbr1",
+      "arch": "arm64",
+      "url": "https://sourceforge.net/projects/ninapolaris/files/indi/indi-asi_2.1.0+danwbr1_arm64.deb/download",
+      "size": 5123456,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "summary": "Fix BAYERPAT race on ASI OSC frames",
+      "minPolaris": "3.3.0"
+    }
+  ]
+}
