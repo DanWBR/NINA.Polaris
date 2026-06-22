@@ -13604,6 +13604,24 @@ function ninaApp() {
             await this.studioAnnotateRun();
         },
 
+        // Look up a numeric FITS header value (by keyword) from the loaded
+        // editor headers (fitsHeaders.data.groups[].cards[]). Returns 0 when
+        // absent/non-numeric.
+        _fitsHeaderNum(keyword) {
+            try {
+                const groups = this.fitsHeaders?.data?.groups || [];
+                for (const g of groups) {
+                    for (const c of (g.cards || [])) {
+                        if (c.keyword === keyword) {
+                            const v = parseFloat(c.value);
+                            return Number.isFinite(v) ? v : 0;
+                        }
+                    }
+                }
+            } catch (_) {}
+            return 0;
+        },
+
         async studioAnnotateRun() {
             if (!this.imageViewerPath) {
                 this.toast('Open a FITS file in the viewer first.', 'error');
@@ -13628,9 +13646,26 @@ function ninaApp() {
                 this.studioAnnotate.items = j.objects || [];
                 this.studioAnnotate.active = true;
                 this._renderStudioAnnotations();
-                this.toast(this.studioAnnotate.items.length
+                // Field diagnostic: solved scale + a theoretical scale derived
+                // from the FITS headers (FOCALLEN + XPIXSZ/YPIXSZ) and the ratio.
+                // If the ratio isn't ~1 the annotation layer is scaled vs the
+                // image. Falls back to the active rig FOV when the header lacks
+                // focal length / pixel size.
+                let diag = '';
+                try {
+                    const hdr = (k) => this._fitsHeaderNum(k);
+                    const fl = hdr('FOCALLEN');
+                    const pix = hdr('YPIXSZ') || hdr('XPIXSZ');
+                    let implied = 0;
+                    if (fl > 0 && pix > 0) implied = 206.2648 * pix / fl;      // header-derived
+                    else if (this.fov?.width > 0 && j.width) implied = this.fov.width * 3600 / j.width;
+                    if (implied > 0) {
+                        diag = ` — ${(j.scaleArcsecPerPixel||0).toFixed(2)}"/px vs ${implied.toFixed(2)}"/px (×${(j.scaleArcsecPerPixel/implied).toFixed(3)})`;
+                    }
+                } catch (_) {}
+                this.toast((this.studioAnnotate.items.length
                     ? `Annotated ${this.studioAnnotate.items.length} object(s)`
-                    : 'Solved, but no catalog objects in frame', 'ok');
+                    : 'Solved, but no catalog objects in frame') + diag, 'ok', 12000);
             } catch (e) {
                 this.toast('Annotate failed: ' + (e.message || e), 'error');
             } finally {
