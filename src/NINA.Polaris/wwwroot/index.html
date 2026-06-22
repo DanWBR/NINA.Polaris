@@ -1098,9 +1098,9 @@
                         <button class="btn btn-sm" @click="identifyTarget(false)"
                                 :disabled="identifyBusy || !mount.connected"
                                 :title="mount.connected
-                                    ? 'Identify the object at the current pointing'
-                                    : 'Connect a mount to identify the target'">
-                            <span x-show="!identifyBusy">🔍</span>
+                                    ? 'Auto-fill the target name from the object at the current pointing'
+                                    : 'Connect a mount to auto-fill the target'">
+                            <span x-show="!identifyBusy">🔍 Auto</span>
                             <span x-show="identifyBusy">…</span>
                         </button>
                     </div>
@@ -2825,9 +2825,9 @@
                         <button class="btn btn-sm" @click="identifyTarget(false)"
                                 :disabled="identifyBusy || preview.busy || !mount.connected"
                                 :title="mount.connected
-                                    ? 'Identify the object at the current pointing'
-                                    : 'Connect a mount to identify the target'">
-                            <span x-show="!identifyBusy">🔍</span>
+                                    ? 'Auto-fill the target name from the object at the current pointing'
+                                    : 'Connect a mount to auto-fill the target'">
+                            <span x-show="!identifyBusy">🔍 Auto</span>
                             <span x-show="identifyBusy">…</span>
                         </button>
                     </div>
@@ -15427,7 +15427,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260622-mosaic6"></script>
+    <script src="/js/app.js?v=20260622-target1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
