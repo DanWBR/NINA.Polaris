@@ -20,6 +20,7 @@ export const site = {
   readme: 'https://github.com/DanWBR/NINA.Polaris/blob/master/README.md',
   donate: 'https://buy.stripe.com/9B68wPeoLcMSgOz2iJbMQ02',
   patreon: 'https://www.patreon.com/c/nina_polaris',
+  discord: 'https://discord.gg/GtXxpWcK',
 };
 
 export const navLinks = [
@@ -28,6 +29,7 @@ export const navLinks = [
   { label: 'Screenshots', href: '/#screenshots' },
   { label: 'Get Started', href: '/getting-started' },
   { label: 'Download & Install', href: '/install' },
+  { label: 'Discord ↗', href: site.discord, external: true },
   { label: 'Patreon ↗', href: site.patreon, external: true },
   { label: 'GitHub ↗', href: site.repo, external: true },
 ];
@@ -42,6 +44,7 @@ export const footerCols = [
       { label: 'GitHub repo', href: site.repo },
       { label: 'README', href: site.readme },
       { label: 'Issues / requests', href: site.issues },
+      { label: 'Discord (community)', href: site.discord },
       { label: 'Patreon (dev news)', href: site.patreon },
     ],
   },
