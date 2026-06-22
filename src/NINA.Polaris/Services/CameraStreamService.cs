@@ -248,9 +248,11 @@ public class CameraStreamService : IDisposable {
                 IImageData image;
                 if (ExposureSeconds >= 1.0) {
                     using (_captureProgress.Begin("stream", ExposureSeconds))
-                        image = await cam.CaptureAsync(ExposureSeconds, opts, ct);
+                        image = await CameraCaptureGate.RunAsync(
+                            () => cam.CaptureAsync(ExposureSeconds, opts, ct), ct);
                 } else {
-                    image = await cam.CaptureAsync(ExposureSeconds, opts, ct);
+                    image = await CameraCaptureGate.RunAsync(
+                        () => cam.CaptureAsync(ExposureSeconds, opts, ct), ct);
                 }
                 sw.Stop();
                 LastCaptureMs = sw.Elapsed.TotalMilliseconds;

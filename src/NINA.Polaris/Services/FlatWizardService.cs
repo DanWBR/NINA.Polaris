@@ -163,7 +163,7 @@ public class FlatWizardService {
             _logger.LogDebug("Auto-flat search iter {I} for {Filter} bin{B}: trying {Exp}s",
                 attempt + 1, filter, binning, exposure);
 
-            var img = await camera.CaptureAsync(exposure, ct);
+            var img = await CameraCaptureGate.RunAsync(() => camera.CaptureAsync(exposure, ct), ct);
             img.MetaData.Exposure.ImageType = "FLAT";
             var median = ComputeMedian(img);
 
@@ -257,7 +257,7 @@ public class FlatWizardService {
                     Progress = Progress with { Phase = "searching", SearchAttempt = attempt + 1, CurrentExposure = exposure };
                     _logger.LogDebug("Flat search iter {I}: trying {Exp}s", attempt + 1, exposure);
 
-                    var img = await camera.CaptureAsync(exposure, ct);
+                    var img = await CameraCaptureGate.RunAsync(() => camera.CaptureAsync(exposure, ct), ct);
                     img.MetaData.Exposure.ImageType = "FLAT";
                     var median = ComputeMedian(img);
                     Progress = Progress with { LastMedian = median };
@@ -294,7 +294,7 @@ public class FlatWizardService {
                 for (int n = 0; n < request.FramesPerFilter; n++) {
                     ct.ThrowIfCancellationRequested();
                     Progress = Progress with { Phase = "capturing", FramesCaptured = n };
-                    var img = await camera.CaptureAsync(exposure, ct);
+                    var img = await CameraCaptureGate.RunAsync(() => camera.CaptureAsync(exposure, ct), ct);
                     img.MetaData.Exposure.ImageType = "FLAT";
                     img.MetaData.Exposure.ExposureTime = exposure;
                     if (!string.IsNullOrEmpty(filterName))

@@ -93,7 +93,8 @@ public class SolveAndSyncInstruction : SequenceInstruction {
         if (ctx.Equipment.Telescope == null) throw new InvalidOperationException("No telescope connected");
         if (ctx.Equipment.Camera == null) throw new InvalidOperationException("No camera connected");
 
-        var image = await ctx.Equipment.Camera.CaptureAsync(ExposureSeconds, ct);
+        var image = await NINA.Polaris.Services.CameraCaptureGate.RunAsync(
+            () => ctx.Equipment.Camera.CaptureAsync(ExposureSeconds, ct), ct);
         var tempFits = Path.Combine(Path.GetTempPath(), $"nina_solve_{Guid.NewGuid():N}.fits");
         NINA.Image.FileFormat.FITS.FITSWriter.Write(image, tempFits);
         try {

@@ -211,7 +211,8 @@ public class SensorAnalysisService {
     }
 
     private static async Task<IImageData> CaptureAsync(ICamera cam, double exp, int gain, CancellationToken ct) {
-        return await cam.CaptureAsync(exp, new CaptureOptions(Gain: gain, ImageType: "FLAT"), ct);
+        return await CameraCaptureGate.RunAsync(
+            () => cam.CaptureAsync(exp, new CaptureOptions(Gain: gain, ImageType: "FLAT"), ct), ct);
     }
 
     // ----- math (static + testable) -----

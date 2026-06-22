@@ -481,11 +481,12 @@ public class BenchmarkService {
         long bytes = 0;
         try {
             // Warmup capture (driver spin-up, buffer alloc) - discarded.
-            await cam.CaptureAsync(exposure, opts, ct);
+            await CameraCaptureGate.RunAsync(() => cam.CaptureAsync(exposure, opts, ct), ct);
             for (int i = 0; i < frames; i++) {
                 ct.ThrowIfCancellationRequested();
                 var sw = Stopwatch.StartNew();
-                var frame = await cam.CaptureAsync(exposure, opts, ct);
+                var frame = await CameraCaptureGate.RunAsync(
+                    () => cam.CaptureAsync(exposure, opts, ct), ct);
                 sw.Stop();
                 times.Add(sw.Elapsed.TotalMilliseconds);
                 w = frame.Properties.Width;

@@ -124,7 +124,8 @@ public class AutoFocusService {
                 await WaitForFocuserSettle(ct);
 
                 int actualPos = focuser.Position;
-                var image = await camera.CaptureAsync(request.ExposureSeconds, ct);
+                var image = await CameraCaptureGate.RunAsync(
+                    () => camera.CaptureAsync(request.ExposureSeconds, ct), ct);
                 // Push each AF frame through the image relay so the
                 // Focus tab preview canvas (and the Live canvas) can
                 // render the sweep frames as the user watches the run.
@@ -220,7 +221,8 @@ public class AutoFocusService {
             double? finalHfr = null;
             int? finalStars = null;
             if (request.TakeConfirmationFrame) {
-                var image = await camera.CaptureAsync(request.ExposureSeconds, ct);
+                var image = await CameraCaptureGate.RunAsync(
+                    () => camera.CaptureAsync(request.ExposureSeconds, ct), ct);
                 try { await _relay.RelayImageAsync(image, FrameKind.Focus, ct); }
                 catch (Exception ex) { _logger.LogDebug(ex, "AF confirmation frame relay failed (non-fatal)"); }
                 var hfr = MeasureHFR(image, request.MinStars);

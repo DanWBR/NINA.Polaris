@@ -132,7 +132,8 @@ public sealed class LiveCaptureService {
                         BinX: BinX, BinY: BinX,
                         ImageType: "LIGHT");
                     using (_captureProgress.Begin("live", ExposureSeconds))
-                        image = await cam.CaptureAsync(ExposureSeconds, opts, ct);
+                        image = await CameraCaptureGate.RunAsync(
+                            () => cam.CaptureAsync(ExposureSeconds, opts, ct), ct);
                 } catch (OperationCanceledException) {
                     break;
                 } catch (Exception ex) {

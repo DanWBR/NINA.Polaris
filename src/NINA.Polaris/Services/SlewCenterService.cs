@@ -288,10 +288,10 @@ public class SlewCenterService {
                 // SKY slew-and-solve fail intermittently. All camera backends
                 // honour CaptureOptions.BinX/Y per-capture, so the next preview/
                 // live capture restores the user's binning on its own.
-                var imageData = await _equip.Camera.CaptureAsync(
+                var imageData = await CameraCaptureGate.RunAsync(() => _equip.Camera.CaptureAsync(
                     solveExposure,
                     new NINA.Image.Interfaces.CaptureOptions(Gain: solveGain, BinX: 1, BinY: 1, ImageType: "SOLVE"),
-                    ct);
+                    ct), ct);
 
                 var tempFits = Path.Combine(Path.GetTempPath(),
                     $"nina_solve_{job.Id}_{i}.fits");

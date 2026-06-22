@@ -91,7 +91,8 @@ public class TakeExposureInstruction : SequenceInstruction {
             ct.ThrowIfCancellationRequested();
             NINA.Image.Interfaces.IImageData image;
             using (ctx.CaptureProgress.Begin("sequencer", ExposureSeconds))
-                image = await ctx.Equipment.Camera.CaptureAsync(ExposureSeconds, capOpts, ct);
+                image = await NINA.Polaris.Services.CameraCaptureGate.RunAsync(
+                    () => ctx.Equipment.Camera.CaptureAsync(ExposureSeconds, capOpts, ct), ct);
 
             image.MetaData.Exposure.ExposureTime = ExposureSeconds;
             if (!string.IsNullOrEmpty(Filter)) image.MetaData.Exposure.Filter = Filter;

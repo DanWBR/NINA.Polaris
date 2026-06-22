@@ -400,7 +400,8 @@ public class SequenceEngine {
                     try {
                         NINA.Image.Interfaces.IImageData imageData;
                         using (_captureProgress.Begin("autorun", item.Exposure))
-                            imageData = await _equip.Camera.CaptureAsync(item.Exposure, capOpts, ct);
+                            imageData = await CameraCaptureGate.RunAsync(
+                            () => _equip.Camera.CaptureAsync(item.Exposure, capOpts, ct), ct);
 
                         // Populate exposure-level metadata before saving / relaying
                         imageData.MetaData.Exposure.ExposureTime = item.Exposure;
@@ -467,7 +468,8 @@ public class SequenceEngine {
                             await Task.Delay(2000, ct);
                             NINA.Image.Interfaces.IImageData imageData;
                             using (_captureProgress.Begin("autorun", item.Exposure))
-                                imageData = await _equip.Camera.CaptureAsync(item.Exposure, capOpts, ct);
+                                imageData = await CameraCaptureGate.RunAsync(
+                            () => _equip.Camera.CaptureAsync(item.Exposure, capOpts, ct), ct);
 
                             // Preview only (see note above): AUTORUN never feeds
                             // the LIVE-tab stacking accumulator, and routes to the

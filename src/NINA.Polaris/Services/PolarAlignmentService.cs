@@ -38,6 +38,12 @@ namespace NINA.Polaris.Services;
 /// refinement state later).
 /// </summary>
 public class PolarAlignmentService {
+    // Serialize polar-alignment captures against every other main-camera
+    // capture so a stray LIVE/preview frame can't race the native driver.
+    private static Task<IImageData> GatedCapture(
+            ICamera camera, double exp, CaptureOptions opts, CancellationToken ct)
+        => CameraCaptureGate.RunAsync(() => camera.CaptureAsync(exp, opts, ct), ct);
+
     private readonly EquipmentManager _equip;
     private readonly PlateSolveService _plateSolve;
     private readonly ProfileService _profiles;
@@ -170,7 +176,7 @@ public class PolarAlignmentService {
                 // 1. Capture at the CURRENT mount position (no slew).
                 IImageData image;
                 try {
-                    image = await camera.CaptureAsync(
+                    image = await GatedCapture(camera, 
                         job.Options.ExposureSeconds,
                         new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
                         ct);
@@ -340,7 +346,7 @@ public class PolarAlignmentService {
 
                 // Capture + plate-solve.
                 SetPhase(job, SolvingPhaseFor(i));
-                var image = await camera.CaptureAsync(
+                var image = await GatedCapture(camera, 
                     job.Options.ExposureSeconds,
                     new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
                     ct);
@@ -356,7 +362,7 @@ public class PolarAlignmentService {
                     _logger.LogInformation(
                         "Polar align point {Index} first solve failed ({Err}); retrying with 2x exposure",
                         i + 1, result.Error);
-                    var retryImage = await camera.CaptureAsync(
+                    var retryImage = await GatedCapture(camera, 
                         job.Options.ExposureSeconds * 2.0,
                         new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
                         ct);
@@ -693,7 +699,7 @@ public class PolarAlignmentService {
 
             // Capture.
             SetPhase(job, PolarAlignmentPhase.RudimentaryCapturing);
-            var image = await camera.CaptureAsync(
+            var image = await GatedCapture(camera, 
                 job.Options.ExposureSeconds,
                 new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
                 ct);
@@ -713,7 +719,7 @@ public class PolarAlignmentService {
                 _logger.LogInformation(
                     "Rudimentary: first solve failed ({Err}), retrying with 2x exposure",
                     solve.Error);
-                var retry = await camera.CaptureAsync(
+                var retry = await GatedCapture(camera, 
                     job.Options.ExposureSeconds * 2.0,
                     new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
                     ct);
