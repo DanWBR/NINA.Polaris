@@ -120,8 +120,28 @@ public static class AutoStretch {
             if (cum > half) { mad = i; break; }
         }
 
+        // White point: use a high percentile of the histogram rather than
+        // the single brightest sample. Uncooled guide cameras almost always
+        // have a few hot / amp-glow pixels pinned near saturation; anchoring
+        // the white point on the absolute max (observedMax) lets one such
+        // pixel pull white to ~1.0, which crushes every real star down toward
+        // black -- the "native guide preview is all black, stars barely show
+        // at any brightness/contrast or even in auto, although guiding works"
+        // field report (star *detection* runs on the raw pixels, so it is
+        // unaffected; only this preview render was). The genuine bright stars
+        // still clip to white, which is what we want; the hot pixels just clip
+        // alongside them instead of defining the scale.
+        long whiteTarget = (long)(count * 0.995);
+        long cumW = 0;
+        int percentileMax = observedMax;
+        for (int i = 0; i < hist.Length; i++) {
+            cumW += hist[i];
+            if (cumW >= whiteTarget) { percentileMax = i; break; }
+        }
+        // Never let the percentile collapse onto the background (uniform /
+        // near-empty fields): keep at least a small span above black.
         double black = Math.Clamp((median + blackSigma * mad) / maxVal, 0.0, 1.0);
-        double white = Math.Clamp(observedMax / maxVal, black + 1e-3, 1.0);
+        double white = Math.Clamp(percentileMax / maxVal, black + 1e-3, 1.0);
         return new StretchParams(black, Math.Clamp(midtone, 0.001, 0.999), white);
     }
 
