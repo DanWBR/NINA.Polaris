@@ -59,13 +59,25 @@ public sealed class RmsCalculator {
 
     public (double rmsRa, double rmsDec, double rmsTotal, double peakRa, double peakDec) Compute() {
         if (_q.Count == 0) return (0, 0, 0, 0, 0);
-        double sr = 0, sd = 0, pr = 0, pd = 0;
+        double sr = 0, sd = 0, mr = 0, md = 0, pr = 0, pd = 0;
         foreach (var (ra, dec) in _q) {
             sr += ra * ra; sd += dec * dec;
+            mr += ra; md += dec;
             pr = Math.Max(pr, Math.Abs(ra)); pd = Math.Max(pd, Math.Abs(dec));
         }
         int n = _q.Count;
-        double rRa = Math.Sqrt(sr / n), rDec = Math.Sqrt(sd / n);
+        // Standard deviation about the MEAN (population sigma):
+        //   sigma = sqrt(mean(x^2) - mean(x)^2)
+        // This matches PHD2 (AxisStats::GetPopulationSigma) and N.I.N.A.
+        // (RMS via Welford), which is what the ASIAIR also reports. The earlier
+        // form sqrt(mean(x^2)) measured RMS about ZERO, which equals
+        // sqrt(sigma^2 + mean^2) >= sigma — so any residual drift / mean offset
+        // inflated the displayed RMS above what PHD2/ASIAIR show for the same
+        // guiding. Clamp the variance at 0 to absorb floating-point noise.
+        double meanRa = mr / n, meanDec = md / n;
+        double varRa = Math.Max(0.0, sr / n - meanRa * meanRa);
+        double varDec = Math.Max(0.0, sd / n - meanDec * meanDec);
+        double rRa = Math.Sqrt(varRa), rDec = Math.Sqrt(varDec);
         return (rRa, rDec, Math.Sqrt(rRa * rRa + rDec * rDec), pr, pd);
     }
 }

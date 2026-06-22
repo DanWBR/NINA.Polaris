@@ -277,12 +277,44 @@ public class NativeGuiderCoreTests {
         rms.Add(3, 4);    // total 5
         rms.Add(-3, -4);  // total 5
         var (rmsRa, rmsDec, rmsTotal, peakRa, peakDec) = rms.Compute();
+        // Mean is 0 here, so population sigma == RMS-about-zero:
         // rmsRa = sqrt((9+9)/2) = 3; rmsDec = sqrt((16+16)/2)=4.
         Assert.That(rmsRa, Is.EqualTo(3.0).Within(1e-9));
         Assert.That(rmsDec, Is.EqualTo(4.0).Within(1e-9));
         Assert.That(rmsTotal, Is.EqualTo(5.0).Within(1e-9));
         Assert.That(peakRa, Is.EqualTo(3.0).Within(1e-9));
         Assert.That(peakDec, Is.EqualTo(4.0).Within(1e-9));
+    }
+
+    [Test]
+    public void RmsCalculator_SubtractsMean_NotRmsAboutZero() {
+        // Regression guard for the PHD2/ASIAIR/NINA parity fix: the RMS is the
+        // standard deviation ABOUT THE MEAN, not RMS about zero. A constant
+        // (pure offset / drift, zero scatter) must read sigma=0 — the old
+        // sqrt(mean(x^2)) form would have returned the offset itself (10).
+        var rms = new RmsCalculator(10);
+        rms.Add(10, -7);
+        rms.Add(10, -7);
+        rms.Add(10, -7);
+        var (rmsRa, rmsDec, rmsTotal, peakRa, peakDec) = rms.Compute();
+        Assert.That(rmsRa, Is.EqualTo(0.0).Within(1e-9), "constant RA → sigma 0");
+        Assert.That(rmsDec, Is.EqualTo(0.0).Within(1e-9), "constant Dec → sigma 0");
+        Assert.That(rmsTotal, Is.EqualTo(0.0).Within(1e-9));
+        // Peak still tracks the absolute excursion, independent of the mean.
+        Assert.That(peakRa, Is.EqualTo(10.0).Within(1e-9));
+        Assert.That(peakDec, Is.EqualTo(7.0).Within(1e-9));
+    }
+
+    [Test]
+    public void RmsCalculator_OffsetPlusScatter_MatchesPopulationSigma() {
+        // {2, 4} → mean 3, population sigma = sqrt(((2-3)^2+(4-3)^2)/2) = 1,
+        // regardless of the +3 offset. RMS-about-zero would give sqrt((4+16)/2)
+        // = sqrt(10) ≈ 3.16 — the inflation the user saw vs the ASIAIR.
+        var rms = new RmsCalculator(10);
+        rms.Add(2, 0);
+        rms.Add(4, 0);
+        var (rmsRa, _, _, _, _) = rms.Compute();
+        Assert.That(rmsRa, Is.EqualTo(1.0).Within(1e-9));
     }
 
     // ---- CalibrationProcess ----
