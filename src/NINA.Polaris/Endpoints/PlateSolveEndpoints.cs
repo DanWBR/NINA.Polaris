@@ -412,32 +412,43 @@ public static class PlateSolveEndpoints {
             }
 
             // Compute FOV from the FITS header first (FOCALLEN +
-            // XPIXSZ + NAXIS1), falling back to the active rig's
-            // focal length + connected camera pixel size.
+            // YPIXSZ + NAXIS2), falling back to the active rig's
+            // focal length + connected camera pixel size. ASTAP's -fov
+            // is the field *height* (vertical), so derive it from the
+            // image HEIGHT + Y pixel size — using the width over-states
+            // the FOV on any non-square sensor and makes a hinted solve
+            // fail at the wrong scale (N.I.N.A. desktop passes FoVH too).
             double fovDeg = 0;
             double headerFl = 0, headerPix = 0;
-            int imgWidth = 0;
+            int imgHeight = 0;
             if (fitsHeaders != null) {
                 if (fitsHeaders.TryGetValue("FOCALLEN", out var flCard))
                     double.TryParse(flCard.Value,
                         System.Globalization.NumberStyles.Float,
                         System.Globalization.CultureInfo.InvariantCulture,
                         out headerFl);
-                if (fitsHeaders.TryGetValue("XPIXSZ", out var pxCard))
+                // Prefer YPIXSZ for the vertical scale; fall back to XPIXSZ
+                // (square pixels in practice) when the header omits it.
+                if (fitsHeaders.TryGetValue("YPIXSZ", out var pyCard))
+                    double.TryParse(pyCard.Value,
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out headerPix);
+                if (headerPix <= 0 && fitsHeaders.TryGetValue("XPIXSZ", out var pxCard))
                     double.TryParse(pxCard.Value,
                         System.Globalization.NumberStyles.Float,
                         System.Globalization.CultureInfo.InvariantCulture,
                         out headerPix);
-                if (fitsHeaders.TryGetValue("NAXIS1", out var n1Card))
-                    int.TryParse(n1Card.Value, out imgWidth);
+                if (fitsHeaders.TryGetValue("NAXIS2", out var n2Card))
+                    int.TryParse(n2Card.Value, out imgHeight);
             }
             double fl = headerFl > 0 ? headerFl
                 : (profiles.ActiveEquipmentProfile?.FocalLengthMm ?? 0);
             double pixSize = headerPix > 0 ? headerPix
-                : (equip.Camera?.PixelSizeX ?? 3.76);
-            if (imgWidth <= 0) imgWidth = 3008;
+                : (equip.Camera?.PixelSizeY ?? equip.Camera?.PixelSizeX ?? 3.76);
+            if (imgHeight <= 0) imgHeight = 3008;
             if (fl > 0) {
-                double sensorMm = pixSize * imgWidth / 1000.0;
+                double sensorMm = pixSize * imgHeight / 1000.0;
                 fovDeg = 2.0 * Math.Atan(sensorMm / (2.0 * fl)) * (180.0 / Math.PI);
             }
 

@@ -324,15 +324,18 @@ public class SlewCenterService {
                 }
 
                 // FOV hint: ASTAP without a scale hint has to search its whole
-                // range, which is the main cause of slow/failed solves. Derive the
-                // horizontal FOV from the active rig focal length + camera pixel
-                // size + captured image width (same relation the FILES tab uses).
+                // range, which is the main cause of slow/failed solves. ASTAP's
+                // -fov is the field *height* (vertical), so derive it from the
+                // image HEIGHT + Y pixel size — using the width here over-states
+                // the FOV on any non-square sensor and makes the hinted solve
+                // fail at the wrong image scale (N.I.N.A. desktop passes FoVH too).
                 double fovDeg = 0;
                 double fl = _profiles.ActiveEquipmentProfile?.FocalLengthMm ?? 0;
-                double pixSize = _equip.Camera?.PixelSizeX ?? 0;
-                int imgWidth = imageData.Properties.Width;
-                if (fl > 0 && pixSize > 0 && imgWidth > 0) {
-                    double sensorMm = pixSize * imgWidth / 1000.0;
+                double pixSize = _equip.Camera?.PixelSizeY ?? 0;
+                if (pixSize <= 0) pixSize = _equip.Camera?.PixelSizeX ?? 0;
+                int imgHeight = imageData.Properties.Height;
+                if (fl > 0 && pixSize > 0 && imgHeight > 0) {
+                    double sensorMm = pixSize * imgHeight / 1000.0;
                     fovDeg = 2.0 * Math.Atan(sensorMm / (2.0 * fl)) * (180.0 / Math.PI);
                 }
 
