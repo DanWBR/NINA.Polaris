@@ -8981,7 +8981,15 @@ function ninaApp() {
             try {
                 frame.contentWindow.postMessage(msg, '*');
             } catch (e) {
-                console.warn('[Polaris→Sky] postMessage failed', e);
+                // structured-clone can't handle Alpine reactive Proxies; retry
+                // with a plain JSON copy so one reactive field can't drop the
+                // whole message (DataCloneError).
+                try {
+                    frame.contentWindow.postMessage(
+                        JSON.parse(JSON.stringify(msg)), '*');
+                } catch (e2) {
+                    console.warn('[Polaris→Sky] postMessage failed', e, e2);
+                }
             }
         },
 
@@ -13331,9 +13339,20 @@ function ninaApp() {
                     : 'screen-centred',
                 'fov=', w.toFixed(2) + '°×' + h.toFixed(2) + '°');
 
+            // mosaicTiles is an Alpine reactive array (a Proxy); postMessage
+            // can't structured-clone a Proxy and throws DataCloneError, which
+            // killed the WHOLE message (mount+target+mosaic) — that's why the
+            // grid never reached the SKY iframe. Send plain object copies.
+            const mosaicMsg = (this.mosaicTiles && this.mosaicTiles.length)
+                ? { tiles: this.mosaicTiles.map(t => ({
+                        raDeg: t.raDeg, decDeg: t.decDeg,
+                        widthDeg: t.widthDeg, heightDeg: t.heightDeg,
+                        rotationDeg: t.rotationDeg || 0,
+                        label: t.label || ''
+                    })) }
+                : null;
             this._skySendMessage({ type: 'set-fov-overlays', mount, target,
-                mosaic: this.mosaicTiles && this.mosaicTiles.length
-                    ? { tiles: this.mosaicTiles } : null });
+                mosaic: mosaicMsg });
         },
 
         // Pixel readout: convert mouse event coords to source-image coords +
