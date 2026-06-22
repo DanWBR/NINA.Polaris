@@ -161,10 +161,65 @@ public static class FitsThumbnailer {
     /// by callers that already have decoded pixel data (live-stack
     /// preview, future XISF reader, etc.).
     /// </summary>
+    /// <summary>Cheap heuristic: does this frame look like a raw Bayer mosaic?
+    /// A Bayer pattern is 2-pixel periodic, so neighbouring pixels (different
+    /// colour cells) differ much more than pixels two apart (same colour). We
+    /// sample a central band and compare the mean |adjacent diff| to the mean
+    /// |step-2 diff|; a clear excess (ratio &gt; 1.8) flags a mosaic. Pure noise
+    /// has ratio ~1, a focused mono starfield is smooth so also ~1.</summary>
+    private static bool LooksBayered(ushort[] p, int width, int height) {
+        if (width < 8 || height < 8) return false;
+        long adj = 0, step2 = 0; int n = 0;
+        int y0 = height / 4, y1 = height - height / 4;
+        int x0 = width / 4, x1 = width - width / 4 - 2;
+        // Stride a few rows/cols to keep this O(few thousand) even on big sensors.
+        int sy = Math.Max(1, (y1 - y0) / 64);
+        int sx = Math.Max(1, (x1 - x0) / 64);
+        for (int y = y0; y < y1; y += sy) {
+            int row = y * width;
+            for (int x = x0; x < x1; x += sx) {
+                int v = p[row + x];
+                adj += Math.Abs(v - p[row + x + 1]);
+                step2 += Math.Abs(v - p[row + x + 2]);
+                n++;
+            }
+        }
+        if (n == 0 || step2 == 0) return false;
+        return (double)adj / step2 > 1.8;
+    }
+
     public static byte[] RenderJpegFromBuffer(ushort[] pixels, int width, int height,
                                               int bitDepth, int maxDim = 256, int quality = 85,
                                               NINA.Image.ImageAnalysis.AutoStretch.StretchParams? overrideParams = null,
-                                              bool guideStretch = false) {
+                                              bool guideStretch = false,
+                                              bool bayer = false) {
+        // bayer=true: the buffer is a raw Bayer mosaic (e.g. a colour guide
+        // camera). Rendering it as grayscale shows the alternating per-cell
+        // sensitivities as a harsh checkerboard once stretched. Collapse each
+        // 2x2 Bayer quad into one averaged grayscale pixel (half resolution,
+        // plenty for a preview) so the user sees a clean starfield instead.
+        // Many guide-camera drivers stream raw frames WITHOUT a BAYERPAT tag,
+        // so IsBayered comes through false; for the guide preview (guideStretch)
+        // we additionally auto-detect the mosaic so a colour guide cam never
+        // shows the checkerboard regardless of how the driver flagged it.
+        bool doBayer = bayer || (guideStretch && LooksBayered(pixels, width, height));
+        if (doBayer && width >= 2 && height >= 2) {
+            int gw = width / 2, gh = height / 2;
+            var ds = new ushort[gw * gh];
+            for (int y = 0; y < gh; y++) {
+                int sr0 = (y * 2) * width;
+                int sr1 = sr0 + width;
+                int dr = y * gw;
+                for (int x = 0; x < gw; x++) {
+                    int sx = x * 2;
+                    int sum = pixels[sr0 + sx] + pixels[sr0 + sx + 1]
+                            + pixels[sr1 + sx] + pixels[sr1 + sx + 1];
+                    ds[dr + x] = (ushort)(sum >> 2);
+                }
+            }
+            pixels = ds; width = gw; height = gh;
+        }
+
         // Auto-stretch lives in NINA.Image (vendored portable copy).
         // GX-12c: when overrideParams is set, skip the auto-stretch
         // computation and apply the caller-supplied black/mid/white.

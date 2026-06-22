@@ -97,6 +97,10 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         public int Width, Height, BitDepth, OriginX, OriginY;
         public double LockX, LockY;
         public bool HaveLock;
+        // True when the source guide frame is a raw Bayer mosaic (colour guide
+        // camera); the JPEG preview then collapses 2x2 quads to grayscale so it
+        // doesn't render as a checkerboard.
+        public bool IsBayered;
         // (x, y) in full-sensor coords, per-star SNR, primary flag, found flag.
         public List<(double x, double y, double snr, bool primary, bool found)> Stars = new();
         public long FrameId;

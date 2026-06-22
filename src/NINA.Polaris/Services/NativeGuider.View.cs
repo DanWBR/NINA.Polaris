@@ -109,6 +109,7 @@ public sealed partial class NativeGuider {
             Width = img.Properties.Width,
             Height = img.Properties.Height,
             BitDepth = img.Properties.BitDepth,
+            IsBayered = img.Properties.IsBayered,
             OriginX = _lastFrameOriginX,
             OriginY = _lastFrameOriginY,
             // Pin the crosshair to the calibration anchor while calibrating so it
@@ -217,7 +218,7 @@ public sealed partial class NativeGuider {
         try {
             return NINA.Polaris.Services.Studio.FitsThumbnailer.RenderJpegFromBuffer(
                 vf.Pixels, vf.Width, vf.Height, vf.BitDepth, maxDim, quality,
-                guideStretch: true);
+                guideStretch: true, bayer: vf.IsBayered);
         } catch {
             return null;
         }
