@@ -30130,11 +30130,28 @@ function ninaApp() {
 
         async updateMosaicPreview() {
             try {
-                const plan = await this.apiPost('/api/mosaic/plan', this.mosaic.req);
+                // apiPost returns the Response (not parsed JSON) — must .json()
+                // it. The earlier code assigned the Response straight to
+                // mosaic.plan, so plan.panels was undefined → "0 panels / 0m".
+                const resp = await this.apiPost('/api/mosaic/plan', this.mosaic.req);
+                if (!resp.ok) { return; }
+                const plan = await resp.json();
                 this.mosaic.plan = plan;
                 // Draw an overlay on Aladin: clear previous, then add each panel as a rectangle
                 this._mosaicDrawOverlay(plan);
             } catch (e) { /* keep last plan on transient errors */ }
+        },
+
+        // Cells for the little grid preview in the modal (one per panel, placed
+        // at its row/col with its 1-based slew order so serpentine is visible).
+        mosaicGridCells() {
+            const p = this.mosaic.plan;
+            if (!p?.panels) return [];
+            return p.panels.map(panel => ({
+                order: (panel.index ?? 0) + 1,
+                col: (panel.col ?? 0) + 1,
+                row: (panel.row ?? 0) + 1
+            }));
         },
 
         _mosaicDrawOverlay(plan) {
@@ -30160,7 +30177,7 @@ function ninaApp() {
 
         async exportMosaicToSequencer(loadIntoEngine) {
             try {
-                const r = await this.apiPost('/api/mosaic/to-sequence', {
+                const resp = await this.apiPost('/api/mosaic/to-sequence', {
                     mosaic: this.mosaic.req,
                     exposureSeconds: this.mosaic.req.exposureSeconds,
                     exposureCount: this.mosaic.req.exposureCount,
@@ -30169,6 +30186,12 @@ function ninaApp() {
                     binning: 1,
                     loadIntoEngine: !!loadIntoEngine
                 });
+                if (!resp.ok) {
+                    let msg = 'Mosaic export failed';
+                    try { const j = await resp.json(); if (j?.error) msg = j.error; } catch { }
+                    this.toast(msg, 'error'); return;
+                }
+                const r = await resp.json();
                 this.toast(loadIntoEngine
                     ? `Loaded ${r.plan.panels.length}-panel mosaic into Advanced Sequencer`
                     : `Built ${r.plan.panels.length}-panel mosaic JSON (download below)`,
@@ -30188,6 +30211,45 @@ function ninaApp() {
                     await this.loadAdvSeq();
                 }
             } catch (e) { this.toast('Mosaic export failed: ' + e.message, 'error'); }
+        },
+
+        // Export the mosaic panels as a NEW imaging Plan (PLAN tab) — one target
+        // per panel, each with the modal's exposure/count/filter. Lets the user
+        // run the mosaic through the multi-target night planner instead of the
+        // Advanced Sequencer.
+        async exportMosaicToPlan() {
+            const panels = this.mosaic.plan?.panels;
+            if (!panels?.length) { this.toast('Build a mosaic first', 'warn'); return; }
+            try {
+                const p = this._blankPlan();
+                p.name = `Mosaic ${this.mosaic.req.targetName} `
+                       + `(${this.mosaic.req.cols}×${this.mosaic.req.rows})`;
+                p.targets = panels.map(panel => {
+                    const t = this._blankTarget();
+                    t.name = panel.name;
+                    t.raHours = panel.raHours;
+                    t.decDeg = panel.decDeg;
+                    t.frames = [{
+                        exposureSeconds: this.mosaic.req.exposureSeconds,
+                        count: this.mosaic.req.exposureCount,
+                        filter: this.mosaic.filterName || null,
+                        gain: null, binning: 1, imageType: 'LIGHT'
+                    }];
+                    return t;
+                });
+                const resp = await this.apiPost('/api/plan/plans', p);
+                if (!resp.ok) {
+                    let msg = 'Plan export failed';
+                    try { const j = await resp.json(); if (j?.error) msg = j.error; } catch { }
+                    this.toast(msg, 'error'); return;
+                }
+                const created = await resp.json();
+                this.plans.push(created);
+                this.selectPlan(created.id);
+                this.mosaicOpen = false;
+                this.tab = 'plan';
+                this.toast(`Exported ${p.targets.length} panels to a new plan`, 'ok');
+            } catch (e) { this.toast('Plan export failed: ' + (e.message || e), 'error'); }
         }
     };
 }

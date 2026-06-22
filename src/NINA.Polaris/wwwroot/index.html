@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-solver1">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-rigs1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260620-guideside1">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260622-mosaic1">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260620-mobile1">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260620-density1">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -13022,21 +13022,41 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
             </div>
 
-            <div x-show="mosaic.plan" class="warn-banner" style="margin:10px 0">
-                <strong x-text="(mosaic.plan?.panels?.length || 0) + ' panels'"></strong>
-               , estimated session time:
-                <strong x-text="mosaicTimeFormat(mosaic.plan?.estimatedTotalSeconds || 0)"></strong>
-                (slew + plate-solve + exposures, per-rig defaults assumed)
+            <!-- Summary: live grid preview + stat strip -->
+            <div x-show="mosaic.plan" class="mosaic-summary">
+                <div class="mosaic-grid-preview"
+                     :style="`grid-template-columns: repeat(${mosaic.plan?.cols||1}, 1fr); grid-template-rows: repeat(${mosaic.plan?.rows||1}, 1fr)`">
+                    <template x-for="cell in mosaicGridCells()" :key="cell.order">
+                        <div class="mosaic-cell"
+                             :style="`grid-column:${cell.col}; grid-row:${cell.row}`"
+                             x-text="cell.order"></div>
+                    </template>
+                </div>
+                <div class="mosaic-stats">
+                    <div class="mosaic-stat">
+                        <span class="mosaic-stat-value" x-text="(mosaic.plan?.panels?.length || 0)"></span>
+                        <span class="mosaic-stat-label">panels</span>
+                    </div>
+                    <div class="mosaic-stat">
+                        <span class="mosaic-stat-value" x-text="mosaicTimeFormat(mosaic.plan?.estimatedTotalSeconds || 0)"></span>
+                        <span class="mosaic-stat-label">est. session</span>
+                    </div>
+                    <div class="mosaic-stat">
+                        <span class="mosaic-stat-value" x-text="mosaic.req.overlapPercent + '%'"></span>
+                        <span class="mosaic-stat-label">overlap</span>
+                    </div>
+                    <p class="mosaic-stats-note">slew + plate-solve + exposures, per-rig defaults assumed</p>
+                </div>
             </div>
 
-            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+            <div class="mosaic-actions">
                 <button class="btn" @click="mosaicOpen = false">Cancel</button>
-                <button class="btn" @click="exportMosaicToSequencer(false)" :disabled="!mosaic.plan">
-                    Export to Advanced Sequencer
-                </button>
-                <button class="btn btn-primary" @click="exportMosaicToSequencer(true)" :disabled="!mosaic.plan">
-                    Export &amp; load now
-                </button>
+                <button class="btn" @click="exportMosaicToSequencer(false)" :disabled="!mosaic.plan?.panels?.length"
+                        title="Download an Advanced Sequencer JSON document">Sequencer JSON</button>
+                <button class="btn" @click="exportMosaicToPlan()" :disabled="!mosaic.plan?.panels?.length"
+                        title="Create a new multi-target Plan (PLAN tab), one target per panel">📋 Export to Plan</button>
+                <button class="btn btn-primary" @click="exportMosaicToSequencer(true)" :disabled="!mosaic.plan?.panels?.length"
+                        title="Load the mosaic straight into the Advanced Sequencer">Load in Sequencer</button>
             </div>
         </div>
     </div>
@@ -15421,7 +15441,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260622-tonight1"></script>
+    <script src="/js/app.js?v=20260622-mosaic1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

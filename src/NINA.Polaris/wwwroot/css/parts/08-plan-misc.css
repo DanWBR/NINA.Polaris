@@ -842,3 +842,30 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     .blend-side { width:auto !important; max-height:48vh; border-left:none;
         border-top:1px solid var(--border); }
 }
+
+/* ── Mosaic planner modal polish ─────────────────────────────────── */
+.mosaic-summary {
+    display: flex; align-items: center; gap: 18px;
+    margin: 14px 0; padding: 14px;
+    border: 1px solid var(--border, #2a2f3a); border-radius: 12px;
+    background: rgba(255,255,255,0.025);
+}
+.mosaic-grid-preview {
+    display: grid; gap: 3px; flex: 0 0 auto;
+    width: 120px; height: 120px;
+}
+.mosaic-cell {
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; font-size: 11px; font-weight: 650;
+    color: var(--accent, #4f8cff);
+    background: color-mix(in srgb, var(--accent, #4f8cff) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent, #4f8cff) 35%, transparent);
+}
+.mosaic-stats { display: flex; flex-wrap: wrap; gap: 18px 22px; align-items: baseline; flex: 1; }
+.mosaic-stat { display: flex; flex-direction: column; line-height: 1.15; }
+.mosaic-stat-value { font-size: 22px; font-weight: 700; color: var(--text, #e8edf4); }
+.mosaic-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted, #9aa4b2); }
+.mosaic-stats-note { flex-basis: 100%; margin: 2px 0 0; font-size: 11px; color: var(--text-muted, #9aa4b2); }
+.mosaic-actions {
+    display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px;
+}
