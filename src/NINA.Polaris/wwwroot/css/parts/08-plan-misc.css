@@ -870,6 +870,41 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 14px;
 }
 
+/* Mosaic planner form: three aligned columns, each row an inline
+   label-left field (matching the app's Settings rows) with the input
+   filling the remaining column width. Replaces the old label-above
+   .field stack that looked cramped / disorganised. */
+.mosaic-form {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px 18px;
+    margin-bottom: 16px;
+}
+.mosaic-form .mfield {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+.mosaic-form .mfield > span {
+    flex: 0 0 auto;
+    font-size: 13px;
+    color: var(--text-muted, #94a3b8);
+    white-space: nowrap;
+}
+.mosaic-form .mfield > input[type="number"],
+.mosaic-form .mfield > input[type="text"] {
+    flex: 1 1 auto;
+    min-width: 0;          /* allow the input to shrink inside the grid cell */
+    width: 100%;
+}
+.mosaic-form .mfield-check > input[type="checkbox"] {
+    flex: 0 0 auto;
+}
+@media (max-width: 540px) {
+    .mosaic-form { grid-template-columns: 1fr; }   /* phone: single column */
+}
+
 /* Floating (non-blocking) planner panel: no backdrop, anchored to one side so
    the SKY map + live grid overlay stay visible and interactive behind it. */
 .mosaic-modal {

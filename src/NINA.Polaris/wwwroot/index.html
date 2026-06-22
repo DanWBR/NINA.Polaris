@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-solver1">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-rigs1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260622-mosaic2">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260622-mosaic5">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260620-mobile1">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260620-density1">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -12973,54 +12973,39 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 from the active rig's sensor + focal length, adjust if needed.
             </p>
 
-            <div class="field-row" style="display:flex;gap:12px">
-                <div class="field" style="flex:1">
-                    <label>Columns</label>
-                    <input type="number" class="input-sm" min="1" max="20" x-model.number="mosaic.req.cols"
-                           @input="updateMosaicPreview()">
-                </div>
-                <div class="field" style="flex:1">
-                    <label>Rows</label>
-                    <input type="number" class="input-sm" min="1" max="20" x-model.number="mosaic.req.rows"
-                           @input="updateMosaicPreview()">
-                </div>
-                <div class="field" style="flex:1">
-                    <label>Overlap %</label>
-                    <input type="number" class="input-sm" min="0" max="80" step="5" x-model.number="mosaic.req.overlapPercent"
-                           @input="updateMosaicPreview()">
-                </div>
-            </div>
-            <div class="field-row" style="display:flex;gap:12px">
-                <div class="field" style="flex:1">
-                    <label>Panel FOV width (°)</label>
-                    <input type="number" class="input-sm" min="0.01" step="0.05" x-model.number="mosaic.req.panelFovWidthDeg"
-                           @input="updateMosaicPreview()">
-                </div>
-                <div class="field" style="flex:1">
-                    <label>Panel FOV height (°)</label>
-                    <input type="number" class="input-sm" min="0.01" step="0.05" x-model.number="mosaic.req.panelFovHeightDeg"
-                           @input="updateMosaicPreview()">
-                </div>
-                <div class="field" style="flex:1">
-                    <label class="checkbox-label" style="margin-top:18px">
-                        <input type="checkbox" x-model="mosaic.req.serpentine" @change="updateMosaicPreview()">
-                        Serpentine order
-                    </label>
-                </div>
-            </div>
-            <div class="field-row" style="display:flex;gap:12px">
-                <div class="field" style="flex:1">
-                    <label>Exposure (s)</label>
-                    <input type="number" class="input-sm" min="0" step="any" list="exposure-presets" x-model.number="mosaic.req.exposureSeconds">
-                </div>
-                <div class="field" style="flex:1">
-                    <label>Frames per panel</label>
-                    <input type="number" class="input-sm" min="1" x-model.number="mosaic.req.exposureCount">
-                </div>
-                <div class="field" style="flex:1">
-                    <label>Filter (optional)</label>
-                    <input type="text" class="input-sm" x-model="mosaic.filterName" placeholder="L / R / G / B…">
-                </div>
+            <!-- Inline label-left layout matching the app form style
+                 (e.g. the Settings → Appearance rows). Three aligned
+                 columns; inputs fill the remaining column width. -->
+            <div class="mosaic-form">
+                <label class="mfield"><span>Columns</span>
+                    <input type="number" class="input-sm" min="1" max="20"
+                           x-model.number="mosaic.req.cols" @input="updateMosaicPreview()"></label>
+                <label class="mfield"><span>Rows</span>
+                    <input type="number" class="input-sm" min="1" max="20"
+                           x-model.number="mosaic.req.rows" @input="updateMosaicPreview()"></label>
+                <label class="mfield"><span>Overlap %</span>
+                    <input type="number" class="input-sm" min="0" max="80" step="5"
+                           x-model.number="mosaic.req.overlapPercent" @input="updateMosaicPreview()"></label>
+
+                <label class="mfield"><span>FOV width (°)</span>
+                    <input type="number" class="input-sm" min="0.01" step="0.05"
+                           x-model.number="mosaic.req.panelFovWidthDeg" @input="updateMosaicPreview()"></label>
+                <label class="mfield"><span>FOV height (°)</span>
+                    <input type="number" class="input-sm" min="0.01" step="0.05"
+                           x-model.number="mosaic.req.panelFovHeightDeg" @input="updateMosaicPreview()"></label>
+                <label class="mfield mfield-check">
+                    <input type="checkbox" x-model="mosaic.req.serpentine" @change="updateMosaicPreview()">
+                    <span>Serpentine order</span></label>
+
+                <label class="mfield"><span>Exposure (s)</span>
+                    <input type="number" class="input-sm" min="0" step="any" list="exposure-presets"
+                           x-model.number="mosaic.req.exposureSeconds"></label>
+                <label class="mfield"><span>Frames / panel</span>
+                    <input type="number" class="input-sm" min="1"
+                           x-model.number="mosaic.req.exposureCount"></label>
+                <label class="mfield"><span>Filter</span>
+                    <input type="text" class="input-sm" x-model="mosaic.filterName"
+                           placeholder="L / R / G / B…"></label>
             </div>
 
             <!-- Summary: live grid preview + stat strip -->
@@ -15442,7 +15427,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260622-mosaic4"></script>
+    <script src="/js/app.js?v=20260622-mosaic5"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
