@@ -79,6 +79,15 @@ function ninaApp() {
         // ring resets to empty between exposures.
         _captureStartedAt: null,
         _captureExposure: 0,
+        // Server-authoritative current-exposure progress, absorbed from the
+        // /ws/status `capture` block every tick. Lets the per-frame countdown
+        // ("Xs of Ys") survive a disconnect/reconnect across LIVE stacking,
+        // AUTORUN and the advanced sequencer: a browser that reconnects mid-
+        // exposure reads the real elapsed off the server instead of restarting
+        // the local timer. startedAtLocal is the server's start re-based onto
+        // THIS client's clock (computed purely from server timestamps, so a
+        // skewed/freshly-reloaded local clock doesn't matter).
+        serverCapture: { active: false, source: '', exposureSeconds: 0, startedAtLocal: 0, runId: 0 },
         // SHUT-1: shared shutter timer. setInterval(50ms) when ANY
         // capture is active; ticks shutterTick to force Alpine reactivity.
         shutterTick: 0,
@@ -17212,7 +17221,8 @@ function ninaApp() {
         _startShutterTick() {
             if (this._shutterRafTimer) return;
             this._shutterRafTimer = setInterval(() => {
-                if (this._anyShutterActive() || this.armingLoop) {
+                if (this._anyShutterActive() || this.armingLoop
+                    || (this.serverCapture && this.serverCapture.active)) {
                     // Cheap mutation that invalidates any computed
                     // reading shutterTick. Wraparound at 1M avoids
                     // any potential int-precision drift over very
@@ -17339,6 +17349,106 @@ function ninaApp() {
             if (!this.armingLoop || !this._shutterArmStartedAt) return 0;
             const elapsed = Date.now() - this._shutterArmStartedAt;
             return Math.max(0, Math.min(1, elapsed / 600));
+        },
+
+        // ----- Server-driven current-exposure progress -----
+
+        /// Absorb the /ws/status `capture` block. Re-bases the server's
+        /// exposure start onto this client's clock using server-only
+        /// timestamps, then reconciles the per-context local timers so the
+        /// existing shutter countdowns are correct after a reconnect.
+        _absorbCaptureProgress(cap, serverNowMs) {
+            if (!cap || !cap.active || !cap.startedUtc) {
+                this.serverCapture = {
+                    active: false, source: cap?.source || '',
+                    exposureSeconds: cap?.exposureSeconds || 0,
+                    startedAtLocal: 0, runId: cap?.runId || 0
+                };
+                return;
+            }
+            const startedMs = Date.parse(cap.startedUtc);
+            let startedAtLocal;
+            if (Number.isFinite(startedMs) && Number.isFinite(serverNowMs)) {
+                // Elapsed measured purely in server time, then re-based to the
+                // local clock — robust to client clock skew / a fresh reload.
+                const elapsedMs = Math.max(0, serverNowMs - startedMs);
+                startedAtLocal = Date.now() - elapsedMs;
+            } else {
+                startedAtLocal = Date.now();
+            }
+            this.serverCapture = {
+                active: true,
+                source: cap.source || '',
+                exposureSeconds: cap.exposureSeconds || 0,
+                startedAtLocal,
+                runId: cap.runId || 0
+            };
+            this._reconcileCaptureTimers();
+            this._startShutterTick();
+        },
+
+        /// Push the server's start time into the matching per-context client
+        /// timer when the local one is missing or has drifted (the reconnect
+        /// case). During normal operation the local timer already matches, so
+        /// this is a no-op. AUTORUN/sequencer are handled in _autorunSyncFrame.
+        _reconcileCaptureTimers() {
+            const sc = this.serverCapture;
+            if (!sc.active) return;
+            const drift = (a) => (a ? Math.abs(a - sc.startedAtLocal) : Infinity);
+            if (sc.source === 'live') {
+                if (drift(this._captureStartedAt) > 1500) {
+                    this._captureStartedAt = sc.startedAtLocal;
+                    this._captureExposure = sc.exposureSeconds;
+                }
+                if (!this.capturing && !this.looping) this.capturing = true;
+            } else if (sc.source === 'snap') {
+                if (drift(this.preview._snapStartedAt) > 1500) {
+                    this.preview._snapStartedAt = sc.startedAtLocal;
+                    this.preview._snapExposure = sc.exposureSeconds;
+                }
+                if (!this.preview.busy && !this.preview.looping) this.preview.busy = true;
+            }
+        },
+
+        /// True while the server reports an exposure in flight (any context).
+        captureProgressActive() {
+            // eslint-disable-next-line no-unused-expressions
+            this.shutterTick;
+            return !!(this.serverCapture && this.serverCapture.active
+                && this.serverCapture.exposureSeconds > 0);
+        },
+
+        /// Status-bar chip label: "24s / 60s". Server-driven so it's correct
+        /// in every tab and survives a reconnect. Empty when idle.
+        captureProgressLabel() {
+            // eslint-disable-next-line no-unused-expressions
+            this.shutterTick;
+            const sc = this.serverCapture;
+            if (!sc || !sc.active || !(sc.exposureSeconds > 0)) return '';
+            const elapsed = Math.min(sc.exposureSeconds,
+                Math.max(0, (Date.now() - sc.startedAtLocal) / 1000));
+            const e = elapsed < 10 ? elapsed.toFixed(1) : Math.floor(elapsed);
+            return `${e}s / ${Math.round(sc.exposureSeconds)}s`;
+        },
+
+        /// Short context tag for the chip ("LIVE" / "AUTORUN" / "SEQ" / "SNAP").
+        captureProgressContext() {
+            const s = this.serverCapture?.source || '';
+            if (s === 'live' || s === 'stream') return 'LIVE';
+            if (s === 'autorun') return 'AUTORUN';
+            if (s === 'sequencer') return 'SEQ';
+            if (s === 'snap') return 'SNAP';
+            return s ? s.toUpperCase() : '';
+        },
+
+        /// 0..1 fraction of the current exposure (server-driven).
+        captureProgressFraction() {
+            // eslint-disable-next-line no-unused-expressions
+            this.shutterTick;
+            const sc = this.serverCapture;
+            if (!sc || !sc.active || !(sc.exposureSeconds > 0)) return 0;
+            const elapsed = (Date.now() - sc.startedAtLocal) / 1000;
+            return Math.max(0, Math.min(1, elapsed / sc.exposureSeconds));
         },
 
         // ----- Per-tab context objects -----
@@ -17551,7 +17661,26 @@ function ninaApp() {
             const key = (seq.currentItemIndex || 0) + ':' + (seq.currentFrameInItem || 0);
             if (this.autorunFrameKey !== key) {
                 this.autorunFrameKey = key;
-                this.autorunFrameStart = Date.now();
+                // Prefer the server's authoritative exposure start so a frame
+                // that began before this client (re)connected shows the real
+                // elapsed instead of restarting from full duration. Falls back
+                // to now when the server isn't reporting a sequencer/autorun
+                // exposure (e.g. between frames).
+                const sc = this.serverCapture;
+                this.autorunFrameStart =
+                    (sc && sc.active && (sc.source === 'autorun' || sc.source === 'sequencer'))
+                        ? sc.startedAtLocal
+                        : Date.now();
+            } else if (this.autorunFrameStart) {
+                // Same frame, but a reconnect may have just delivered the
+                // server's real start — adopt it if we'd drifted (e.g. our
+                // initial stamp assumed the frame just began).
+                const sc = this.serverCapture;
+                if (sc && sc.active
+                    && (sc.source === 'autorun' || sc.source === 'sequencer')
+                    && Math.abs(this.autorunFrameStart - sc.startedAtLocal) > 1500) {
+                    this.autorunFrameStart = sc.startedAtLocal;
+                }
             }
         },
 
@@ -29125,15 +29254,23 @@ function ninaApp() {
             // to Date.now() to compute wall-clock skew the user can
             // act on. Skew is positive when the server is AHEAD of
             // the client, negative when BEHIND.
+            let _serverNowMs = NaN;
             if (msg.server && msg.server.utcNow) {
                 this.clockSync.serverUtc = msg.server.utcNow;
                 this.clockSync.supported = !!msg.server.clockSyncSupported;
                 const serverMs = Date.parse(msg.server.utcNow);
                 if (Number.isFinite(serverMs)) {
+                    _serverNowMs = serverMs;
                     this.clockSync.skewSeconds = Math.round(
                         (serverMs - Date.now()) / 1000);
                 }
             }
+            // Server-authoritative current-exposure progress. Absorb here so
+            // the shutter countdowns + status-bar chip reflect the real frame
+            // elapsed even right after a reconnect (the local timers may be
+            // null/stale). Pass the server "now" so elapsed is measured in
+            // server time and re-based onto the local clock.
+            this._absorbCaptureProgress(msg.capture, _serverNowMs);
             // SIM-6: simulator backend status (kind/installed/version/
             // running/runningDevices). The Settings panel binds to this.
             if (msg.simulator) this.simulator = msg.simulator;

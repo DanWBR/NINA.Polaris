@@ -34,7 +34,8 @@ public class SequenceEngineDitherTests {
         var emptyConfig = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
         var plateSolve = new PlateSolveService(emptyConfig, NullLogger<PlateSolveService>.Instance);
         var profile = new ProfileService(emptyConfig, NullLogger<ProfileService>.Instance);
-        var stream = new CameraStreamService(equip, relay, NullLogger<CameraStreamService>.Instance);
+        var stream = new CameraStreamService(equip, relay, NullLogger<CameraStreamService>.Instance,
+            new CaptureProgressService());
         var slewCenter = new SlewCenterService(equip, plateSolve, profile, stream, NullLogger<SlewCenterService>.Instance);
         var native = new NativeGuider(equip, profile, NullLogger<NativeGuider>.Instance);
         var guiders = new ActiveGuiderProvider(profile, phd2, native);
@@ -46,7 +47,8 @@ public class SequenceEngineDitherTests {
         var flatWizard = new FlatWizardService(equip, imageWriter, profile,
             NullLogger<FlatWizardService>.Instance, emptyConfig);
         return new SequenceEngine(equip, relay, liveStack, phd2, guiders, meridianFlip, imageWriter,
-            graXpert, flatWizard, profile, NullLogger<SequenceEngine>.Instance);
+            graXpert, flatWizard, profile, new CaptureProgressService(),
+            NullLogger<SequenceEngine>.Instance);
     }
 
     [Test]

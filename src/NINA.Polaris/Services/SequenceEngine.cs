@@ -78,6 +78,7 @@ public class SequenceEngine {
 
     private readonly NINA.Polaris.Services.External.GraXpertService _graXpert;
     private readonly FlatWizardService _flatWizard;
+    private readonly CaptureProgressService _captureProgress;
 
     public SequenceEngine(EquipmentManager equip, ImageRelayService relay,
         LiveStackingService liveStack, PHD2Client phd2, ActiveGuiderProvider guiders,
@@ -86,6 +87,7 @@ public class SequenceEngine {
         NINA.Polaris.Services.External.GraXpertService graXpert,
         FlatWizardService flatWizard,
         ProfileService profile,
+        CaptureProgressService captureProgress,
         ILogger<SequenceEngine> logger) {
         _equip = equip;
         _relay = relay;
@@ -97,6 +99,7 @@ public class SequenceEngine {
         _graXpert = graXpert;
         _flatWizard = flatWizard;
         _profile = profile;
+        _captureProgress = captureProgress;
         _logger = logger;
     }
 
@@ -395,7 +398,9 @@ public class SequenceEngine {
 
                     bool frameOk = false;
                     try {
-                        var imageData = await _equip.Camera.CaptureAsync(item.Exposure, capOpts, ct);
+                        NINA.Image.Interfaces.IImageData imageData;
+                        using (_captureProgress.Begin("autorun", item.Exposure))
+                            imageData = await _equip.Camera.CaptureAsync(item.Exposure, capOpts, ct);
 
                         // Populate exposure-level metadata before saving / relaying
                         imageData.MetaData.Exposure.ExposureTime = item.Exposure;
@@ -460,7 +465,9 @@ public class SequenceEngine {
                         // Single retry after brief pause
                         try {
                             await Task.Delay(2000, ct);
-                            var imageData = await _equip.Camera.CaptureAsync(item.Exposure, capOpts, ct);
+                            NINA.Image.Interfaces.IImageData imageData;
+                            using (_captureProgress.Begin("autorun", item.Exposure))
+                                imageData = await _equip.Camera.CaptureAsync(item.Exposure, capOpts, ct);
 
                             // Preview only (see note above): AUTORUN never feeds
                             // the LIVE-tab stacking accumulator, and routes to the

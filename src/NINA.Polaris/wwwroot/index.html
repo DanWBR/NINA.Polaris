@@ -441,6 +441,16 @@
                   @click="tab='guide'"
                   :title="phd2BadgeTitle()"
                   x-text="phd2BadgeText()"></span>
+            <!-- Server-driven current-exposure progress. Visible in EVERY
+                 tab (LIVE stacking / AUTORUN / advanced sequencer) and
+                 survives a reconnect, so the operator always sees where the
+                 in-flight frame is, e.g. "LIVE 24s / 60s". -->
+            <span class="status-chip capture-progress-chip" x-show="captureProgressActive()" x-cloak
+                  :title="'Current exposure: ' + captureProgressContext() + ' ' + captureProgressLabel()">
+                <span class="chip-icon">◐</span>
+                <span x-text="captureProgressContext()" style="opacity:0.7;margin-right:4px"></span>
+                <span x-text="captureProgressLabel()" style="font-variant-numeric:tabular-nums"></span>
+            </span>
             <span class="status-chip" x-show="cameraTemp !== null">
                 <span class="chip-icon">T</span>
                 <span x-text="cameraTemp !== null ? cameraTemp.toFixed(1) + '&deg;C' : '--'"></span>
@@ -15366,7 +15376,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260621-fieldbugs8"></script>
+    <script src="/js/app.js?v=20260621-fieldbugs9"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

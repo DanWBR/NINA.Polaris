@@ -37,6 +37,7 @@ public class SequenceContext {
     public SlewCenterService SlewCenter { get; }
     public ImageWriterService ImageWriter { get; }
     public ProfileService Profiles { get; }
+    public CaptureProgressService CaptureProgress { get; }
     public ILogger Logger { get; }
 
     /// <summary>
@@ -90,6 +91,7 @@ public class SequenceContext {
         SlewCenterService slewCenter,
         ImageWriterService imageWriter,
         ProfileService profiles,
+        CaptureProgressService captureProgress,
         ILogger logger) {
         Equipment = equipment;
         Relay = relay;
@@ -101,6 +103,7 @@ public class SequenceContext {
         SlewCenter = slewCenter;
         ImageWriter = imageWriter;
         Profiles = profiles;
+        CaptureProgress = captureProgress;
         Logger = logger;
         RunStartedAt = DateTime.UtcNow;
     }

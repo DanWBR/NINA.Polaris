@@ -40,6 +40,7 @@ public class CameraStreamService : IDisposable {
     private readonly EquipmentManager _equip;
     private readonly ImageRelayService _relay;
     private readonly ILogger<CameraStreamService> _logger;
+    private readonly CaptureProgressService _captureProgress;
 
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
@@ -113,10 +114,12 @@ public class CameraStreamService : IDisposable {
 
     public CameraStreamService(EquipmentManager equip,
                                ImageRelayService relay,
-                               ILogger<CameraStreamService> logger) {
+                               ILogger<CameraStreamService> logger,
+                               CaptureProgressService captureProgress) {
         _equip = equip;
         _relay = relay;
         _logger = logger;
+        _captureProgress = captureProgress;
     }
 
     /// <summary>
@@ -238,7 +241,17 @@ public class CameraStreamService : IDisposable {
                     BinX: BinX, BinY: BinY,
                     ImageType: "STREAM");
                 var sw = System.Diagnostics.Stopwatch.StartNew();
-                var image = await cam.CaptureAsync(ExposureSeconds, opts, ct);
+                // Track the in-flight exposure so the LIVE/PREVIEW shutter
+                // countdown is server-driven and survives a reconnect. Only
+                // worth surfacing for real (>=1s) exposures; sub-second video
+                // frames would just flicker the countdown.
+                IImageData image;
+                if (ExposureSeconds >= 1.0) {
+                    using (_captureProgress.Begin("stream", ExposureSeconds))
+                        image = await cam.CaptureAsync(ExposureSeconds, opts, ct);
+                } else {
+                    image = await cam.CaptureAsync(ExposureSeconds, opts, ct);
+                }
                 sw.Stop();
                 LastCaptureMs = sw.Elapsed.TotalMilliseconds;
                 OnStreamFrame(image);

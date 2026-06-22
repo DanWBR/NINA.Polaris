@@ -155,6 +155,7 @@ public class AdvancedSequenceEngine {
             slewCenter: _services.GetRequiredService<SlewCenterService>(),
             imageWriter: _services.GetRequiredService<ImageWriterService>(),
             profiles: _services.GetRequiredService<ProfileService>(),
+            captureProgress: _services.GetRequiredService<CaptureProgressService>(),
             logger: _logger);
     }
 

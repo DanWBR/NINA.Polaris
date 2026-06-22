@@ -37,7 +37,8 @@ public class CameraStreamServiceTests {
             new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache(),
             new NINA.Polaris.Services.Simulator.Gear.SimGearService());
         var relay = new ImageRelayService(NullLogger<ImageRelayService>.Instance);
-        return new CameraStreamService(equip, relay, NullLogger<CameraStreamService>.Instance);
+        return new CameraStreamService(equip, relay, NullLogger<CameraStreamService>.Instance,
+            new CaptureProgressService());
     }
 
     [Test]

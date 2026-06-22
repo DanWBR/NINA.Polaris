@@ -83,6 +83,7 @@ public static class StatusStreamHandler {
         var polarAlign = context.RequestServices.GetRequiredService<PolarAlignmentService>();
         var plateSolveProgress = context.RequestServices
             .GetRequiredService<NINA.Polaris.Services.PlateSolving.PlateSolveProgressService>();
+        var captureProgress = context.RequestServices.GetRequiredService<CaptureProgressService>();
         var logService = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Logging.LogService>();
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
@@ -632,7 +633,13 @@ public static class StatusStreamHandler {
                         // Live plate-solve console output (STUDIO/FILES),
                         // streamed so the UI can show the solver running
                         // the same way the GraXpert local run does.
-                        plateSolve = BuildPlateSolvePayload(plateSolveProgress)
+                        plateSolve = BuildPlateSolvePayload(plateSolveProgress),
+                        // Server-authoritative current-exposure progress so
+                        // every capture button's "Xs of Ys" countdown survives
+                        // a reconnect. startedUtc + the server block's utcNow
+                        // let the client compute elapsed without trusting its
+                        // own (possibly skewed / freshly reloaded) clock.
+                        capture = BuildCapturePayload(captureProgress)
                     };
 
                     payload = JsonSerializer.SerializeToUtf8Bytes(status, JsonOpts);
@@ -709,6 +716,25 @@ public static class StatusStreamHandler {
                 currentCursor = 0L,
                 oldestRetained = 0L
             };
+        }
+    }
+
+    /// <summary>Current-exposure progress sub-object. <c>active=false</c> with
+    /// a null start when nothing is exposing. The client derives elapsed =
+    /// serverNow - startedUtc and remaining = exposureSeconds - elapsed.</summary>
+    private static object BuildCapturePayload(CaptureProgressService svc) {
+        try {
+            var s = svc.Snapshot();
+            return new {
+                runId = s.RunId,
+                active = s.Active,
+                source = s.Source,
+                exposureSeconds = s.ExposureSeconds,
+                startedUtc = s.StartedUtc?.ToString("o")
+            };
+        } catch {
+            return new { runId = 0L, active = false, source = (string?)null,
+                         exposureSeconds = 0.0, startedUtc = (string?)null };
         }
     }
 

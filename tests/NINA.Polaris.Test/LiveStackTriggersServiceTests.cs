@@ -117,7 +117,7 @@ public class LiveStackTriggersServiceTests {
         var autoFocus = new AutoFocusService(equip, relay, NullLogger<AutoFocusService>.Instance);
         var solver = new PlateSolveService(cfg, NullLogger<PlateSolveService>.Instance);
         var stream = new CameraStreamService(equip, relay,
-            NullLogger<CameraStreamService>.Instance);
+            NullLogger<CameraStreamService>.Instance, new CaptureProgressService());
         var slew = new SlewCenterService(equip, solver, profiles, stream,
             NullLogger<SlewCenterService>.Instance);
         var phd2 = new PHD2Client(NullLogger<PHD2Client>.Instance);

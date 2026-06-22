@@ -194,6 +194,9 @@ builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.AstrometryNetOn
 builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.AstrometryNetLocalSolver>();
 builder.Services.AddSingleton<PlateSolveService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.PlateSolveProgressService>();
+// Server-authoritative current-exposure tracker so the per-frame countdown
+// ("Xs of Ys") survives a client reconnect across every capture context.
+builder.Services.AddSingleton<CaptureProgressService>();
 builder.Services.AddSingleton<SlewCenterService>();
 builder.Services.AddSingleton<ProfileService>();
 // AUTH-1: local-server auth (password + session store + rate limit).

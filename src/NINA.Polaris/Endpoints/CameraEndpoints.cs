@@ -22,6 +22,7 @@ public static class CameraEndpoints {
 
         group.MapPost("/capture", async (EquipmentManager equip, ImageRelayService relay,
             LiveStackingService liveStack, ImageWriterService imageWriter,
+            CaptureProgressService captureProgress,
             ILoggerFactory loggerFactory,
             CaptureRequest request) => {
             // Diag log -- helps trace 'preview frame landing on live
@@ -65,7 +66,16 @@ public static class CameraEndpoints {
                     }
                 }
 
-                var imageData = await equip.Camera.CaptureAsync(request.Exposure);
+                // Track the in-flight exposure so the capture button shows a
+                // server-driven "Xs of Ys" countdown that survives a reconnect.
+                // A null/"live" kind is the LIVE continuous-capture loop; any
+                // other kind (preview/focus snap) maps to the PREVIEW shutter.
+                var captureSource = string.IsNullOrEmpty(request.Kind)
+                    || request.Kind.Equals("live", StringComparison.OrdinalIgnoreCase)
+                    ? "live" : "snap";
+                NINA.Image.Interfaces.IImageData imageData;
+                using (captureProgress.Begin(captureSource, request.Exposure))
+                    imageData = await equip.Camera.CaptureAsync(request.Exposure);
 
                 // PREVIEW tab: opt-in disk save under {rig}/snaps/.
                 // ImageWriterService is a no-op when ImageOutputDir is

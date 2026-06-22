@@ -89,7 +89,9 @@ public class TakeExposureInstruction : SequenceInstruction {
 
         for (int i = 0; i < Count; i++) {
             ct.ThrowIfCancellationRequested();
-            var image = await ctx.Equipment.Camera.CaptureAsync(ExposureSeconds, capOpts, ct);
+            NINA.Image.Interfaces.IImageData image;
+            using (ctx.CaptureProgress.Begin("sequencer", ExposureSeconds))
+                image = await ctx.Equipment.Camera.CaptureAsync(ExposureSeconds, capOpts, ct);
 
             image.MetaData.Exposure.ExposureTime = ExposureSeconds;
             if (!string.IsNullOrEmpty(Filter)) image.MetaData.Exposure.Filter = Filter;
