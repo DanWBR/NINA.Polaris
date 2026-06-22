@@ -9358,23 +9358,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             aria-label="Compare">
                         <span class="files-icon">↔</span>
                     </button>
-                    <!-- REMOVE STARS — StarNet++ (ONNX) star removal, runs in
-                         the browser like GraXpert. Writes {stem}_starless +
-                         {stem}_stars siblings, then opens the before/after
-                         comparator (original vs starless). Recombine is left
-                         to the user (✨ Image Blend). One file at a time. Only
-                         shown once the converted starnet model is installed
-                         (scripts/convert-starnet-onnx.ps1). -->
-                    <button class="btn btn-sm btn-icon"
-                            x-show="onnxStarnetAvailable()"
-                            :disabled="files.selectedPaths.length !== 1
-                                       || filesSelectedDir() != null
-                                       || starRemoval.busy"
-                            @click="starRemovalRunForSelection()"
-                            title="Remove stars (StarNet++): writes _starless + _stars, then shows original vs starless"
-                            aria-label="Remove stars">
-                        <span class="files-icon" x-text="starRemoval.busy ? '⏳' : '🌠'"></span>
-                    </button>
                     <!-- IMAGE BLEND — recombine two images (e.g. a stretched
                          starless + the stars-only image) with independent
                          per-image blackpoint/midtones/highlights + a Screen
@@ -9456,6 +9439,24 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     || onnxAvailableForOp('deconvolution')">
                         <span class="files-actions-sep" aria-hidden="true"></span>
                     </template>
+                    <!-- REMOVE STARS — StarNet++ (ONNX) star removal, runs in
+                         the browser like GraXpert. Writes {stem}_starless +
+                         {stem}_stars siblings, then opens the before/after
+                         comparator (original vs starless). Recombine is left
+                         to the user (✨ Image Blend). One file at a time. Only
+                         shown once the converted starnet model is installed
+                         (scripts/convert-starnet-onnx.ps1). Sits just left of
+                         BGE so the star-removal + GraXpert ops group together.-->
+                    <button class="btn btn-sm btn-icon"
+                            x-show="onnxStarnetAvailable()"
+                            :disabled="files.selectedPaths.length !== 1
+                                       || filesSelectedDir() != null
+                                       || starRemoval.busy"
+                            @click="starRemovalRunForSelection()"
+                            title="Remove stars (StarNet++): writes _starless + _stars, then shows original vs starless"
+                            aria-label="Remove stars">
+                        <span class="files-icon" x-text="starRemoval.busy ? '⏳' : '🌠'"></span>
+                    </button>
                     <button class="btn btn-sm btn-icon"
                             x-show="graxpert.status?.available
                                    || onnxAvailableForOp('background-extraction')"
