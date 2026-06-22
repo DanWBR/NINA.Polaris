@@ -60,6 +60,17 @@ public class PlateSolveService {
 
     public IEnumerable<IPlateSolver> AllSolvers => _solvers.Values;
 
+    /// <summary>The most recent successful solve (coords + when), shared so the
+    /// capture pipeline can name the saved-frame folder from the actual sky
+    /// position instead of "Unknown". Null until the first successful solve.</summary>
+    public LastSolveInfo? LastSuccessfulSolve { get; private set; }
+
+    private void RecordSolve(PlateSolveResult r) {
+        if (r.Success) {
+            LastSuccessfulSolve = new LastSolveInfo(r.RaHours, r.DecDeg, DateTime.UtcNow);
+        }
+    }
+
     public IPlateSolver PrimarySolver {
         get {
             // UI (profile) choice wins, then appsettings config.
@@ -94,7 +105,7 @@ public class PlateSolveService {
         if (primary.IsAvailable) {
             try { onLog?.Invoke($"== {primary.DisplayName} =="); } catch { }
             var result = await primary.SolveAsync(fitsPath, options, ct, onLog);
-            if (result.Success) return result;
+            if (result.Success) { RecordSolve(result); return result; }
             primaryError = result.Error;
             _logger.LogWarning("Primary solver {Name} failed: {Err}", primary.DisplayName, result.Error);
         } else {
@@ -107,7 +118,7 @@ public class PlateSolveService {
             _logger.LogInformation("Falling back to blind solver {Name}", blind.DisplayName);
             try { onLog?.Invoke($"== blind fallback: {blind.DisplayName} =="); } catch { }
             var blindResult = await blind.SolveAsync(fitsPath, options, ct, onLog);
-            if (blindResult.Success) return blindResult;
+            if (blindResult.Success) { RecordSolve(blindResult); return blindResult; }
             return PlateSolveResult.Failed(
                 $"Primary ({primary.DisplayName}) failed: {primaryError}. " +
                 $"Blind fallback ({blind.DisplayName}) failed: {blindResult.Error}");
@@ -119,6 +130,10 @@ public class PlateSolveService {
                 : $"Primary solver {primary.DisplayName} is not available: {primaryError}");
     }
 }
+
+/// <summary>Last successful plate-solve result, used to name capture folders
+/// from the real sky position. RA in hours, Dec in degrees, captured UTC.</summary>
+public sealed record LastSolveInfo(double RaHours, double DecDeg, DateTime WhenUtc);
 
 public class PlateSolveOptions {
     public double? HintRa { get; set; }

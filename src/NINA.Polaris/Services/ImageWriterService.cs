@@ -93,10 +93,17 @@ public class ImageWriterService {
     /// subscriber can never break a capture.</summary>
     public event Action<string>? ImageSaved;
 
-    public ImageWriterService(EquipmentManager equip, ProfileService profile, ILogger<ImageWriterService> logger) {
+    private readonly SkyCatalogService? _sky;
+    private readonly PlateSolveService? _plateSolve;
+
+    public ImageWriterService(EquipmentManager equip, ProfileService profile,
+        ILogger<ImageWriterService> logger,
+        SkyCatalogService? sky = null, PlateSolveService? plateSolve = null) {
         _equip = equip;
         _profile = profile;
         _logger = logger;
+        _sky = sky;
+        _plateSolve = plateSolve;
     }
 
     public void ResetSessionCounter() => _sessionFrameNumber = 0;
@@ -118,6 +125,15 @@ public class ImageWriterService {
 
         try {
             Directory.CreateDirectory(dir);
+
+            // When the caller didn't supply a meaningful target name (LIVE
+            // "(unnamed)", a blank AUTORUN target, etc.), auto-resolve the
+            // most important catalog object in the camera FOV at the current
+            // pointing — preferring the last successful plate solve — so the
+            // saved-frame folder gets a real name instead of "Unknown".
+            // Only for science frames (lights/snaps); calibration frames are
+            // foldered by exposure/filter and have no sky target.
+            targetName = ResolveTargetName(targetName, imageType, imageData, profile);
 
             EnrichMetadata(imageData, profile, targetName, imageType, gain);
             _sessionFrameNumber++;
@@ -201,6 +217,101 @@ public class ImageWriterService {
             _logger.LogError(ex, "Failed to save FITS to {Dir}", dir);
             return null;
         }
+    }
+
+    /// <summary>Names that mean "no real target" and should trigger an
+    /// auto-resolve from the sky position.</summary>
+    private static readonly HashSet<string> PlaceholderTargetNames =
+        new(StringComparer.OrdinalIgnoreCase) {
+            "unnamed", "(unnamed)", "unknown", "default", "target", "none", "n/a", "na"
+        };
+
+    /// <summary>
+    /// Resolve a meaningful target name for a science frame about to be saved.
+    /// If the caller already supplied a real name it's kept; otherwise the most
+    /// important catalog object inside the camera FOV at the current pointing is
+    /// used — preferring a recent successful plate solve over the mount's
+    /// open-loop coordinates. Keeps capture folders named (e.g. "M_42") instead
+    /// of "Unknown". Returns the original value when nothing can be resolved.
+    /// </summary>
+    private string? ResolveTargetName(string? targetName, string imageType,
+        IImageData imageData, UserProfile profile) {
+
+        var trimmed = (targetName ?? "").Trim();
+        if (!string.IsNullOrEmpty(trimmed) && !PlaceholderTargetNames.Contains(trimmed))
+            return trimmed;   // caller gave a real name — respect it
+
+        // Only science frames carry a sky target; calibration frames are
+        // foldered by exposure/filter and have no object.
+        var typeUpper = (imageType ?? "LIGHT").Trim().ToUpperInvariant();
+        if (typeUpper is "DARK" or "BIAS" or "FLAT" or "DARKFLAT") return targetName;
+        if (_sky == null) return targetName;
+
+        // Pointing: mount RA/Dec when connected, plus the last successful solve.
+        double? ra = null, dec = null;
+        var tel = _equip.Telescope;
+        bool mountOk = tel != null && tel.IsConnected
+            && !double.IsNaN(tel.RightAscension) && !double.IsNaN(tel.Declination);
+        if (mountOk) { ra = tel!.RightAscension; dec = tel.Declination; }
+
+        var solve = _plateSolve?.LastSuccessfulSolve;
+        if (solve != null) {
+            // Prefer the solve when there's no mount reading, or when it agrees
+            // with the mount pointing (it's the solve for THIS field, tighter
+            // than open-loop coords). A stale solve on another target is
+            // rejected by the 5° separation gate.
+            if (!mountOk) { ra = solve.RaHours; dec = solve.DecDeg; }
+            else if (AngularSepDeg(ra!.Value, dec!.Value, solve.RaHours, solve.DecDeg) <= 5.0) {
+                ra = solve.RaHours; dec = solve.DecDeg;
+            }
+        }
+
+        if (ra == null || dec == null) return targetName;
+
+        double fovRadius = ComputeFovRadiusDeg(imageData);
+        try {
+            var hit = _sky.Identify(ra.Value, dec.Value, fovRadius);
+            var name = hit?.Object?.Name;
+            if (!string.IsNullOrWhiteSpace(name)) {
+                _logger.LogInformation(
+                    "Auto-resolved capture target '{Name}' at RA={Ra:F3}h Dec={Dec:F2}° (FOV r={Fov:F2}°)",
+                    name, ra, dec, fovRadius);
+                return name!.Trim();
+            }
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Target auto-resolve failed");
+        }
+        return targetName;
+    }
+
+    /// <summary>Half the larger camera FOV dimension (degrees) from the active
+    /// rig focal length + camera pixel size + image dimensions. Falls back to
+    /// 1° when the geometry isn't known.</summary>
+    private double ComputeFovRadiusDeg(IImageData imageData) {
+        try {
+            double fl = _profile.ActiveEquipmentProfile?.FocalLengthMm ?? 0;
+            double pix = _equip.Camera?.PixelSizeY ?? _equip.Camera?.PixelSizeX ?? 0;
+            int w = imageData.Properties.Width, h = imageData.Properties.Height;
+            if (fl > 0 && pix > 0 && w > 0 && h > 0) {
+                double wmm = pix * w / 1000.0, hmm = pix * h / 1000.0;
+                double fovW = 2.0 * Math.Atan(wmm / (2.0 * fl)) * (180.0 / Math.PI);
+                double fovH = 2.0 * Math.Atan(hmm / (2.0 * fl)) * (180.0 / Math.PI);
+                double r = Math.Max(fovW, fovH) / 2.0;
+                if (r > 0 && r < 20) return r;
+            }
+        } catch { /* fall through to default */ }
+        return 1.0;
+    }
+
+    /// <summary>Great-circle separation in degrees. RA in hours, Dec in degrees.</summary>
+    private static double AngularSepDeg(double ra1H, double dec1D, double ra2H, double dec2D) {
+        double D2R = Math.PI / 180.0;
+        double ra1 = ra1H * 15.0 * D2R, ra2 = ra2H * 15.0 * D2R;
+        double d1 = dec1D * D2R, d2 = dec2D * D2R;
+        double dRa = ra2 - ra1, dDec = d2 - d1;
+        double a = Math.Sin(dDec / 2) * Math.Sin(dDec / 2)
+                 + Math.Cos(d1) * Math.Cos(d2) * Math.Sin(dRa / 2) * Math.Sin(dRa / 2);
+        return 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a)) / D2R;
     }
 
     private void EnrichMetadata(IImageData imageData, UserProfile profile,
