@@ -609,6 +609,10 @@ function ninaApp() {
         // initial load can apply via inline script before the
         // CSS even parses (avoids FOUT).
         uiFont: 'atkinson',
+        // Reduce motion (Settings → Appearance). Off = UI animations on.
+        // Stamped on <html data-reduce-motion> by the head IIFE before paint
+        // and mirrored here so the toggle shows the right state.
+        uiReduceMotion: false,
         // UI language (Settings → Appearance). 'en' is the source language
         // (identity, no catalog). The i18n runtime (js/i18n.js) does the actual
         // translation; this just drives the picker + persistence. Restored from
@@ -3312,6 +3316,12 @@ function ninaApp() {
             } catch (_) { /* private mode */ }
             this.applyUiFont();
 
+            // Reduce motion: mirror the value the head IIFE already stamped
+            // (localStorage is the source of truth) so the Settings toggle
+            // reflects reality. No re-apply needed — the attribute is set.
+            try { this.uiReduceMotion = localStorage.getItem('nina-reduce-motion') === '1'; }
+            catch (_) { /* private mode */ }
+
             // Control density (Settings → Appearance). Restore the saved % and
             // push it into --pad-scale before first paint.
             const padSaved = parseInt(localStorage.getItem('nina-pad-scale'), 10);
@@ -5285,6 +5295,22 @@ function ninaApp() {
                 if (v === 'atkinson') document.documentElement.removeAttribute('data-font');
                 else document.documentElement.setAttribute('data-font', v);
                 localStorage.setItem('nina-ui-font', v);
+            } catch (_) { /* private mode etc. */ }
+        },
+
+        // Reduce motion (Settings → Appearance). Toggles <html
+        // data-reduce-motion>, which 11-motion.css uses to collapse every
+        // animation/transition to ~instant. Persisted per browser; the head
+        // IIFE re-applies it before first paint on the next load.
+        applyUiReduceMotion() {
+            try {
+                if (this.uiReduceMotion) {
+                    document.documentElement.setAttribute('data-reduce-motion', '');
+                    localStorage.setItem('nina-reduce-motion', '1');
+                } else {
+                    document.documentElement.removeAttribute('data-reduce-motion');
+                    localStorage.setItem('nina-reduce-motion', '0');
+                }
             } catch (_) { /* private mode etc. */ }
         },
 

@@ -1,0 +1,66 @@
+/* 11-motion.css — lightweight UI motion + a global "reduce motion" kill switch.
+ *
+ * Loaded LAST so the reduce-motion overrides win the cascade. Everything here
+ * animates ONLY `opacity` / `transform`, which the browser composits on the GPU
+ * off the main thread — effectively free even on a weak client tablet. We never
+ * animate layout/paint properties (width/height/top/left/box-shadow/filter/
+ * background) here, and never the hot regions (image canvas, charts, xterm, the
+ * 1 Hz status chips).
+ *
+ * Two ways motion gets disabled:
+ *   1. The OS "reduce motion" accessibility setting (prefers-reduced-motion).
+ *   2. The in-app Settings → Appearance toggle, which stamps
+ *      <html data-reduce-motion> (also pre-stamped by the head IIFE before first
+ *      paint, so there is no flash on a device that has it off).
+ */
+
+/* ---- Main panel fade-in on tab change -------------------------------------
+ * The tab panels toggle via Alpine x-show (display:none <-> block). A CSS
+ * animation re-runs every time the element returns to a rendered display value,
+ * so simply attaching it to .tab-panel gives a fade-in each time that tab is
+ * shown — no per-panel markup, no JS. Opacity only (NOT transform): a
+ * transformed ancestor becomes the containing block for any position:fixed
+ * descendant, which would briefly mis-place fixed children during the animation.
+ */
+@keyframes panel-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+.tab-panel {
+    animation: panel-fade-in 160ms ease-out;
+}
+
+/* ---- Reusable GPU-only utilities (opt-in via class) ----------------------- */
+@keyframes anim-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes anim-pop-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.anim-fade { animation: anim-fade-in 160ms ease-out; }
+.anim-pop  { animation: anim-pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* ---- Reduce-motion kill switch -------------------------------------------
+ * Collapse all animations/transitions to ~instant rather than `none` so any JS
+ * relying on transitionend/animationend still fires. Covers both the OS setting
+ * and the in-app toggle. Infinite loops (spinners, pulses) drop to a single
+ * iteration so they stop churning the GPU / draining battery on weak clients.
+ */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+html[data-reduce-motion] *,
+html[data-reduce-motion] *::before,
+html[data-reduce-motion] *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+}

@@ -55,6 +55,9 @@
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css?v=20260620-dl1">
+    <!-- UI motion + reduce-motion kill switch. Loaded last so its overrides
+         win the cascade. GPU-only (opacity/transform) animations. -->
+    <link rel="stylesheet" href="/css/parts/11-motion.css?v=20260622-motion1">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -86,6 +89,14 @@
                 if (L && SUP.indexOf(L) >= 0 && L !== 'en') {
                     document.documentElement.setAttribute('lang', L);
                     document.documentElement.classList.add('i18n-loading');
+                }
+            } catch (_) { /* private mode / disabled storage */ }
+            // Reduce-motion: stamp the saved choice on <html> before first
+            // paint so a device with animations off never sees them flash.
+            // app.js restores the same value into the Settings toggle.
+            try {
+                if (localStorage.getItem('nina-reduce-motion') === '1') {
+                    document.documentElement.setAttribute('data-reduce-motion', '');
                 }
             } catch (_) { /* private mode / disabled storage */ }
         })();
@@ -10519,6 +10530,21 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         typeface. Persists per browser; no restart needed.
                     </p>
 
+                    <!-- Reduce motion: kill UI animations (panel fade, modal
+                         zoom, spinners) for weak client devices or motion
+                         sensitivity. Stamps <html data-reduce-motion>; the
+                         OS-level "reduce motion" setting is also honoured
+                         automatically. Persists per browser. -->
+                    <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:16px; cursor:pointer">
+                        <input type="checkbox" x-model="uiReduceMotion" @change="applyUiReduceMotion()">
+                        <span>Reduce motion (disable UI animations)</span>
+                    </label>
+                    <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
+                        Turns off panel fade-ins, modal zoom and spinners. Helps on
+                        older phones/tablets and respects motion sensitivity. Your
+                        device's system "reduce motion" setting is always honoured too.
+                    </p>
+
                     <!-- Control density: scales the padding/gaps of buttons,
                          inputs and toolbars (10–150%, 100% = default). Lower =
                          tighter controls = more room for the main views; handy
@@ -15394,7 +15420,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260621-fieldbugs11"></script>
+    <script src="/js/app.js?v=20260622-motion1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
