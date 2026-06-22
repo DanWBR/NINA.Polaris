@@ -24027,7 +24027,12 @@ function ninaApp() {
             // bare _decon, the new _decon_<variant>, or with a numeric
             // collision-avoidance suffix tacked on by the saver.
             const masterRx = /(^|[\\/])(?:result|integration|integrated|stack|stacked|master|autosave|livestack)[_-]|_drizzle_|_stack_|_integrated_|_\d+s\.(?:fits?|xisf|fts)$|_bge(?:_\d+)?\.|_denoise(?:_\d+)?\.|_decon(?:_(?:stars|objects))?(?:_\d+)?\./i;
-            const masterFolderRx = /[\\/](?:integrated|processed|masters?|stacks?|results?|siril|bge|denoise|decon)[\\/]/i;
+            // NOTE: "stack(?:s|ed)?" must cover "stacked" — Polaris saves
+            // user/live stacks under {rig}/stacked/ (ImageWriterService
+            // BuildStackedSubDir). A bare "stacks?" missed that folder, so a
+            // genuine stack triggered the "looks like a single exposure"
+            // warning (false positive reported from the field).
+            const masterFolderRx = /[\\/](?:integrated|processed|masters?|stack(?:s|ed)?|results?|siril|bge|denoise|decon)[\\/]/i;
             return this.graxpert.modalPaths.some(p => {
                 if (masterFolderRx.test(p)) return false;
                 if (masterRx.test(p.split(/[\\/]/).pop() || '')) return false;
