@@ -272,16 +272,21 @@ public class HostMetricsService : BackgroundService {
     /// </summary>
     internal static (long freeBytes, long totalBytes, string mountName) TryGetDiskInfo(string? capturePath) {
         try {
-            // Mirror the FILES/STUDIO root resolution (FileBrowserService
-            // .ResolveStudioRoot): when the configured capture dir is unset or
-            // doesn't exist, the FILES tab lands in the user's home directory,
-            // so the disk gauge must report THAT partition (the FILES home),
-            // not the app/root filesystem (Environment.CurrentDirectory).
+            // When the configured capture dir is unset or doesn't exist, anchor
+            // the gauge to where Polaris ACTUALLY runs from — AppContext
+            // .BaseDirectory (the install/root, e.g. the NVMe SSD on an Orange
+            // Pi) — NOT the user's home, which on an SBC is often the SD card
+            // root filesystem and would mis-report a different (smaller) disk.
+            // Falls back to home then CurrentDirectory only if the base dir
+            // can't be resolved.
             if (string.IsNullOrWhiteSpace(capturePath)
                 || !Directory.Exists(Path.GetFullPath(capturePath))) {
+                var baseDir = AppContext.BaseDirectory;
                 var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                capturePath = (!string.IsNullOrEmpty(home) && Directory.Exists(home))
-                    ? home : Environment.CurrentDirectory;
+                capturePath = (!string.IsNullOrEmpty(baseDir) && Directory.Exists(baseDir))
+                    ? baseDir
+                    : (!string.IsNullOrEmpty(home) && Directory.Exists(home))
+                        ? home : Environment.CurrentDirectory;
             }
             var full = Path.GetFullPath(capturePath);
             DriveInfo? best = null;
