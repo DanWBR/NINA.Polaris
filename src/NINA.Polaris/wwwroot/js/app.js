@@ -3050,6 +3050,16 @@ function ninaApp() {
                         && this._skyBridgeReady) {
                         this._skyPushObserverAndTime();
                     }
+                    // Tab-hidden recovery for live stacking: a backgrounded
+                    // tab may have its WS dropped or (on mobile) be discarded
+                    // and reloaded, leaving the LIVE canvas blank. On wake,
+                    // forget the last-shown stack marker + WS frame timestamp
+                    // so the next status tick re-pulls the current stack
+                    // preview and repaints it.
+                    if (document.visibilityState === 'visible') {
+                        this._lastStackFrameShown = 0;
+                        this._lastImageFrameAt = 0;
+                    }
                 });
             }
 
@@ -5813,6 +5823,11 @@ function ninaApp() {
         // event loop just sees a Promise it ignores.
         async handleImageFrame(arrayBuffer) {
             this.liveActive = true;
+            // Timestamp every delivered frame so the live-stack restore
+            // poller (see _maybeRestoreLiveStackPreview) can tell whether
+            // the WS already painted the latest stacked frame and skip a
+            // redundant /api/livestack/preview fetch.
+            this._lastImageFrameAt = Date.now();
 
             // Three on-wire formats now possible:
             //  (a) Bare JPEG -- starts with FF D8 at offset 0. Legacy
@@ -5901,6 +5916,56 @@ function ninaApp() {
             } else {
                 this._renderRawFrame(arrayBuffer);
             }
+        },
+
+        // Server-side live-stack restore (ASIAIR parity). The server
+        // pushes a freshly stacked frame over /ws/image-stream when it
+        // integrates a sub, but it does NOT re-push the latest stack to a
+        // browser that (re)connects, reloads, or wakes a discarded tab --
+        // so the canvas stayed blank until the next sub (minutes away),
+        // and the user had to flip the compute mode to "Auto" to force a
+        // redraw. /api/livestack/preview returns the current stacked JPEG
+        // on demand; pull + paint it whenever the server's frame counter
+        // has advanced past what the canvas last showed AND no WS frame
+        // arrived for it. That single rule covers all three reports:
+        // server-mode frame never showing, reload not restoring, and the
+        // hidden-tab discard.
+        _maybeRestoreLiveStackPreview(frameCount) {
+            if (!frameCount || frameCount <= 0) {
+                // Stack reset / not running: clear the marker so the next
+                // run's first frame restores.
+                this._lastStackFrameShown = 0;
+                return;
+            }
+            // Already showed this (or a newer) stacked frame.
+            if (frameCount <= (this._lastStackFrameShown || 0)) return;
+            // The WS just delivered a frame (within 3s): that paint already
+            // reflects the latest stack, so don't double-fetch. Mark it
+            // shown so we don't fetch on the next tick either.
+            if (this._lastImageFrameAt && (Date.now() - this._lastImageFrameAt) < 3000) {
+                this._lastStackFrameShown = frameCount;
+                return;
+            }
+            // Guard against overlapping fetches when ticks pile up.
+            if (this._stackRestoreInFlight) return;
+            this._stackRestoreInFlight = true;
+            this.restoreLiveStackPreview()
+                .then(ok => { if (ok) this._lastStackFrameShown = frameCount; })
+                .finally(() => { this._stackRestoreInFlight = false; });
+        },
+
+        async restoreLiveStackPreview() {
+            try {
+                const resp = await this.apiFetch('/api/livestack/preview');
+                if (!resp || !resp.ok) return false;
+                const buf = await resp.arrayBuffer();
+                if (!buf || buf.byteLength < 2) return false;
+                // Paint as a Live-kind frame so it lands on the LIVE canvas
+                // and mirrors to the preview canvas, exactly like a WS frame.
+                this._renderJpegFrame(buf, 0);
+                this.liveActive = true;
+                return true;
+            } catch (e) { return false; }
         },
 
         // JPEG mode: create blob URL, draw to every receiving canvas.
@@ -28960,6 +29025,14 @@ function ninaApp() {
                 // session (toggle ON + reference frame was Bayered).
                 if (typeof msg.liveStack.colorActive === 'boolean')
                     this.liveStackColorActive = msg.liveStack.colorActive;
+                // ASIAIR-parity restore: if the server has a newer stacked
+                // frame than the canvas is showing and the WS didn't just
+                // deliver it, pull the current stack JPEG so it reappears
+                // after a (re)connect / reload / hidden-tab wake instead of
+                // waiting for the next sub.
+                if (msg.liveStack.isRunning) {
+                    try { this._maybeRestoreLiveStackPreview(msg.liveStack.frameCount); } catch (e) {}
+                }
             }
             if (msg.plan !== undefined) {
                 this.planStatus = msg.plan;
