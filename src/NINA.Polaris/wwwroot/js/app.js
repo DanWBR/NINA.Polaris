@@ -30136,6 +30136,19 @@ function ninaApp() {
             this.mosaic.req.panelFovHeightDeg = +(this.fov?.height || 1).toFixed(3);
             this.mosaic.plan = null;
             this.mosaicOpen = true;
+            // Centre the SKY view on the mosaic centre so the yellow grid is
+            // always in frame. Without this the grid is drawn at the target's
+            // RA/Dec, which may be off-screen if the view was panned elsewhere
+            // (the operator reported "nada dos yellow rectangles" — the tiles
+            // were rendering correctly but outside the viewport). Pick a FOV
+            // that frames the whole grid with margin.
+            const totalW = (this.mosaic.req.cols || 1) * (this.mosaic.req.panelFovWidthDeg || 1);
+            const totalH = (this.mosaic.req.rows || 1) * (this.mosaic.req.panelFovHeightDeg || 1);
+            const frameFov = Math.max(Math.max(totalW, totalH) * 2.2, 1.0);
+            try {
+                this._skyLookAt(this.mosaic.req.centreRaHours,
+                    this.mosaic.req.centreDecDeg, frameFov, this.mosaic.req.targetName);
+            } catch (_) { /* sky engine may not be ready */ }
             this.updateMosaicPreview();
         },
 
