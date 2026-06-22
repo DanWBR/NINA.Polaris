@@ -42,6 +42,11 @@ public static class CameraEndpoints {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected" });
 
+            // Serialize against every other capture (LIVE loop, FOCUS-manual
+            // loop, a second browser tab, plate-solve/autofocus). Concurrent
+            // native CaptureAsync on one camera handle crashes the driver and
+            // takes the server down. Queue instead of racing.
+            await equip.CaptureGate.WaitAsync();
             try {
                 if (request.Binning > 0)
                     await equip.Camera.SetBinningAsync(request.Binning, request.Binning);
@@ -196,6 +201,8 @@ public static class CameraEndpoints {
                 return Results.Ok(new { status = "cancelled" });
             } catch (Exception ex) {
                 return Results.Problem(ex.Message);
+            } finally {
+                equip.CaptureGate.Release();
             }
         });
 

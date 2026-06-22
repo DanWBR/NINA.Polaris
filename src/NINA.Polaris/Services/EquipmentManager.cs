@@ -34,6 +34,15 @@ public class EquipmentManager : IDisposable {
     /// on the <see cref="ICamera"/> contract.</summary>
     public ICamera? Camera { get; private set; }
 
+    /// <summary>Serializes native camera <c>CaptureAsync</c> calls. Concurrent
+    /// captures on the same camera handle (e.g. the LIVE capture loop running in
+    /// one browser tab while the FOCUS-manual loop runs in another, or two open
+    /// tabs) call the vendor SDK / INDI BLOB path reentrantly, which crashes the
+    /// native driver and takes the whole server process down. Every capture call
+    /// site must acquire this gate around the camera interaction so a second
+    /// request queues behind the first instead of racing it.</summary>
+    public SemaphoreSlim CaptureGate { get; } = new(1, 1);
+
     /// <summary>Camera driver kind currently bound to <see cref="Camera"/>.
     /// Mirrors <c>EquipmentProfile.CameraDriver</c>. Null when no
     /// camera is selected.</summary>
