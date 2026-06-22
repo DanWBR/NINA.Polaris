@@ -52,7 +52,7 @@ public static class AuthEndpoints {
                 var token = auth.SetInitialPassword(req.Password ?? "");
                 if (token == null)
                     return Results.BadRequest(new { error = "setup failed" });
-                SetSessionCookie(ctx, token);
+                SetSessionCookie(ctx, token, req.Remember);
                 return Results.Ok(new { token });
             } catch (ArgumentException ex) {
                 return Results.BadRequest(new { error = ex.Message });
@@ -70,7 +70,7 @@ public static class AuthEndpoints {
             if (token == null)
                 return Results.Json(new { error = "invalid password" },
                     statusCode: 401);
-            SetSessionCookie(ctx, token);
+            SetSessionCookie(ctx, token, req.Remember);
             return Results.Ok(new { token });
         });
 
@@ -181,7 +181,7 @@ public static class AuthEndpoints {
     // matching strip logic in the reverse-proxy map in Program.cs.
     private static readonly string[] PathTokenRoots = { "/phd2-gui/t/" };
 
-    private static void SetSessionCookie(HttpContext ctx, string token) {
+    private static void SetSessionCookie(HttpContext ctx, string token, bool persist = false) {
         // Cookie carries auth for the embedded sub-apps (phd2-gui,
         // indi-web, sky) and any <iframe>/<img>/<a> navigation that
         // can't send the Authorization header. The bearer token in
@@ -206,16 +206,26 @@ public static class AuthEndpoints {
         var sameSite = ctx.Request.IsHttps
             ? SameSiteMode.None
             : SameSiteMode.Lax;
-        ctx.Response.Cookies.Append(AuthService.CookieName, token,
-            new CookieOptions {
-                HttpOnly = true,
-                Secure = ctx.Request.IsHttps,
-                SameSite = sameSite,
-                Path = "/",
-                // No Max-Age/Expires: cookie dies when the browser
-                // closes, mirroring sessionStorage behaviour on the
-                // JS side.
-            });
+        var opts = new CookieOptions {
+            HttpOnly = true,
+            Secure = ctx.Request.IsHttps,
+            SameSite = sameSite,
+            Path = "/",
+        };
+        // "Remember on this device": give the cookie an explicit lifetime
+        // so it survives a full browser / app restart, mirroring the
+        // localStorage bearer token the client keeps in the same case.
+        // Without this the cookie was always a session cookie that died
+        // on close, so cookie-authenticated requests (embedded iframes,
+        // <img>/<ws>, and the whole UI in the cross-origin Capacitor
+        // mobile wrapper) had to re-login every launch even though
+        // "remember" was ticked. Unchecked stays a session cookie
+        // (mirrors sessionStorage). The server-side session TTL
+        // (AuthSessionTimeoutHours, sliding) is still the real auth gate;
+        // a cookie that outlives its session just 401s into a re-login.
+        if (persist)
+            opts.Expires = DateTimeOffset.UtcNow.AddDays(30);
+        ctx.Response.Cookies.Append(AuthService.CookieName, token, opts);
     }
 
     private static void ClearSessionCookie(HttpContext ctx) {
@@ -223,8 +233,8 @@ public static class AuthEndpoints {
             new CookieOptions { Path = "/" });
     }
 
-    public record SetupRequest(string? Password);
-    public record LoginRequest(string? Password);
+    public record SetupRequest(string? Password, bool Remember = false);
+    public record LoginRequest(string? Password, bool Remember = false);
     public record ChangePasswordRequest(string? Current, string? New);
     public record DisableEnableRequest(string? Password);
 }

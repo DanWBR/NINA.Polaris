@@ -3918,7 +3918,14 @@ function ninaApp() {
                 const r = await fetch('/api/auth/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password: this.auth.loginPassword })
+                    // remember=true makes the server issue a persistent
+                    // session cookie (not just a session cookie) so a full
+                    // browser / mobile-wrapper restart stays logged in,
+                    // matching the localStorage token we keep below.
+                    body: JSON.stringify({
+                        password: this.auth.loginPassword,
+                        remember: !!this.auth.rememberMe
+                    })
                 });
                 if (r.status === 401) {
                     this.auth.loginError = 'Invalid password';
@@ -3953,7 +3960,10 @@ function ninaApp() {
                 const r = await fetch('/api/auth/setup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password: this.auth.setupPassword })
+                    body: JSON.stringify({
+                        password: this.auth.setupPassword,
+                        remember: !!this.auth.rememberMe
+                    })
                 });
                 if (!r.ok) {
                     const t = await r.text();
