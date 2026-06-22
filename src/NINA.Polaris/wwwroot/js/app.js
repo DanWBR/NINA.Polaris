@@ -3081,6 +3081,19 @@ function ninaApp() {
                 });
             }
 
+            // Tab-discard resilience: persist the active tab so a Chrome
+            // Memory-Saver discard (common when two heavy Polaris tabs run
+            // at once) restores the user to where they were instead of
+            // 'home'. sessionStorage survives a discard+restore but clears on
+            // a genuine tab close, so a brand-new tab still starts at home.
+            // The restore itself happens in _initCore (post-auth), gated on
+            // document.wasDiscarded so a manual reload keeps the default tab.
+            try {
+                this.$watch('tab', v => {
+                    try { sessionStorage.setItem('polaris_tab', v); } catch (_) { /* private mode */ }
+                });
+            } catch (_) { /* $watch unavailable */ }
+
             // AUTH-3: gate the rest of init on auth. _authBoot is
             // async; it restores the saved token, queries /status,
             // and either sets needLogin/needSetup (deferring the
@@ -3101,6 +3114,26 @@ function ninaApp() {
         },
 
         _initCore() {
+
+            // Tab-discard restore: if Chrome's Memory Saver discarded and
+            // reloaded this tab, document.wasDiscarded is true — return to the
+            // tab the user was on (persisted in sessionStorage) and replay its
+            // entry side effects, instead of dumping them on 'home'. Gated on
+            // wasDiscarded so a deliberate manual reload still opens the
+            // default tab. Other state (live stack, capture progress, the
+            // running sequence) already rehydrates from the server below.
+            try {
+                if (document.wasDiscarded) {
+                    const saved = sessionStorage.getItem('polaris_tab');
+                    const valid = ['home','live','polar','focus','preview','video','guide',
+                        'equip','sky','tonight','weather','plan','sequence','seqadv',
+                        'files','settings','help'];
+                    if (saved && valid.includes(saved) && saved !== this.tab) {
+                        this.tab = saved;
+                        this._applyTabSideEffects(saved);
+                    }
+                }
+            } catch (_) { /* sessionStorage blocked / wasDiscarded unsupported */ }
 
             // PA-7: pull the running version once. Cheap, fire-and-forget.
             // 'cache: no-store' so a long-lived browser tab against an
@@ -4209,11 +4242,14 @@ function ninaApp() {
         helpOpenTab(tabId) {
             this._helpPersist();
             this.tab = tabId;
-            // Mirror the side effects the sidebar buttons normally
-            // run on entering a tab. Without these the Sky map
-            // doesn't initialise its WebGL viewer and the Studio
-            // browser shows stale paths until the user manually
-            // navigates.
+            this._applyTabSideEffects(tabId);
+        },
+
+        // Replays the per-tab init the sidebar buttons run on entry (Sky map
+        // WebGL viewer, Studio file browser refresh, etc.). Shared by
+        // helpOpenTab and the tab-discard restore so they stay in sync.
+        // Best-effort: the tab still switches even if an init throws.
+        _applyTabSideEffects(tabId) {
             try {
                 if (tabId === 'sky') {
                     this.$nextTick(() => this.initSkyViewer && this.initSkyViewer());
