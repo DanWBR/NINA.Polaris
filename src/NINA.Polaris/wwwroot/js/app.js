@@ -15589,16 +15589,26 @@ function ninaApp() {
             const mt = active.telescopeModel || '';
             const bg = active.guideTelescopeBrand || '';
             const mg = active.guideTelescopeModel || '';
+            // The accessory <select> options are filtered by the OTA model,
+            // so it has the same drop-the-value-when-option-absent race as
+            // the brand/model selects. Re-adopt it LAST, after telescopeModel
+            // is set and its option list has rebuilt — otherwise the saved
+            // accessory shows blank and the next save PUTs the blank back,
+            // losing the reducer/flattener on the rig.
+            const ma = active.accessoryModel || '';
             this.settings.telescopeBrand = '';
             this.settings.telescopeModel = '';
             this.settings.guideTelescopeBrand = '';
             this.settings.guideTelescopeModel = '';
+            this.settings.accessoryModel = '';
             await this.$nextTick();
             this.settings.telescopeBrand = bt;
             this.settings.guideTelescopeBrand = bg;
             await this.$nextTick();
             this.settings.telescopeModel = mt;
             this.settings.guideTelescopeModel = mg;
+            await this.$nextTick();
+            this.settings.accessoryModel = ma;
         },
 
         /// Distinct telescope brands in the catalogue, sorted.
