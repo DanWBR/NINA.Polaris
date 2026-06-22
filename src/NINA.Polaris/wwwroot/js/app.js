@@ -13305,7 +13305,18 @@ function ninaApp() {
                 // post-solve rotation update re-pushes the mount
                 // rectangle even when ra/dec haven't moved.
                 sr: Number.isFinite(this.solveRotationDeg)
-                    ? this.solveRotationDeg.toFixed(2) : null
+                    ? this.solveRotationDeg.toFixed(2) : null,
+                // Mosaic signature: without this the early-return below
+                // swallows the mosaic grid, because opening the planner
+                // (or editing cols/rows/overlap) leaves mount + target
+                // FOV unchanged, so the key matched and the tiles were
+                // never pushed to the SKY map.
+                mo: (this.mosaicTiles && this.mosaicTiles.length)
+                    ? this.mosaicTiles.length + ':' + this.mosaicTiles.map(
+                        t => `${t.raDeg.toFixed(3)},${t.decDeg.toFixed(3)},`
+                            + `${(t.widthDeg||0).toFixed(3)}x${(t.heightDeg||0).toFixed(3)}`
+                        ).join('|')
+                    : null
             });
             if (key === this._lastFovOverlayKey) return;
             this._lastFovOverlayKey = key;
