@@ -46,10 +46,13 @@ public class FlatWizardSettings {
     /// most pixel scales; bump for very low-light sky flats.</summary>
     public int FramesPerFilter { get; set; } = 20;
 
-    /// <summary>Lower bound for the binary search (seconds). Should be
-    /// the shortest exposure the camera can produce reliably (sub-100ms
-    /// often has dead-time bias).</summary>
-    public double MinExposureSec { get; set; } = 0.1;
+    /// <summary>Lower bound for the search (seconds). Defaults very low
+    /// so bright LED flat panels on fast CMOS sensors (which can need
+    /// ~0.01 s to reach target ADU) still converge; a 0.1 s floor made
+    /// the search saturate at the floor and give up. Raise it per-rig if
+    /// your shortest reliable exposure is higher (very short exposures
+    /// can carry shutter/dead-time bias on some cameras).</summary>
+    public double MinExposureSec { get; set; } = 0.001;
 
     /// <summary>Upper bound for the binary search (seconds). Tune up for
     /// dim sky flats, down for bright panels so the search doesn't waste
@@ -64,7 +67,7 @@ public class FlatWizardSettings {
     /// <summary>Hard cap on binary-search iterations per filter. 10
     /// covers ~3 decades of dynamic range; bump only if the band is
     /// very tight (Tolerance &lt; 0.02) and convergence stalls.</summary>
-    public int MaxSearchIterations { get; set; } = 10;
+    public int MaxSearchIterations { get; set; } = 12;
 
     /// <summary>Flat-panel brightness 0-100 to apply (via flat-panel
     /// driver) before the wizard starts. 0 means "don't touch the

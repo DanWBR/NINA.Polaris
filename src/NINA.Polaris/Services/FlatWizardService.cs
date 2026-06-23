@@ -135,8 +135,8 @@ public class FlatWizardService {
     public async Task<double?> AutoFindExposureAsync(
         string filter, int binning,
         int targetAdu = 33000, double tolerance = 0.05,
-        double minExposure = 0.1, double maxExposure = 30.0,
-        int maxIterations = 12,
+        double minExposure = 0.001, double maxExposure = 30.0,
+        int maxIterations = 14,
         CancellationToken ct = default) {
         var camera = _equip.Camera ?? throw new InvalidOperationException("No camera connected");
         binning = Math.Max(1, binning);
@@ -364,10 +364,10 @@ public class FlatWizardRequest {
     public int FramesPerFilter { get; set; } = 20;
     public int TargetAdu { get; set; } = 30000;
     public double Tolerance { get; set; } = 0.05; // ±5%
-    public double MinExposure { get; set; } = 0.1;
+    public double MinExposure { get; set; } = 0.001;
     public double MaxExposure { get; set; } = 30.0;
     public int Binning { get; set; } = 1;
-    public int MaxSearchIterations { get; set; } = 10;
+    public int MaxSearchIterations { get; set; } = 12;
 }
 
 public record FlatWizardProgress {

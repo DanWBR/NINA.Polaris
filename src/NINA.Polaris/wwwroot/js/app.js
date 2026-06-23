@@ -742,10 +742,13 @@ function ninaApp() {
             targetAdu: 30000,
             tolerance: 0.05,
             framesPerFilter: 20,
-            minExposureSec: 0.1,
+            // Floor low enough for bright LED flat panels on fast CMOS
+            // sensors (some need ~0.01 s to hit target ADU); too high a
+            // floor makes the search saturate and never converge.
+            minExposureSec: 0.001,
             maxExposureSec: 30.0,
             binning: 1,
-            maxSearchIterations: 10,
+            maxSearchIterations: 12,
             panelBrightness: 0,
             selectedFilters: []
         },
@@ -17993,10 +17996,10 @@ function ninaApp() {
                 this.flatWizard.targetAdu = s.targetAdu ?? 30000;
                 this.flatWizard.tolerance = s.tolerance ?? 0.05;
                 this.flatWizard.framesPerFilter = s.framesPerFilter ?? 20;
-                this.flatWizard.minExposureSec = s.minExposureSec ?? 0.1;
+                this.flatWizard.minExposureSec = s.minExposureSec ?? 0.001;
                 this.flatWizard.maxExposureSec = s.maxExposureSec ?? 30.0;
                 this.flatWizard.binning = s.binning ?? 1;
-                this.flatWizard.maxSearchIterations = s.maxSearchIterations ?? 10;
+                this.flatWizard.maxSearchIterations = s.maxSearchIterations ?? 12;
                 this.flatWizard.panelBrightness = s.panelBrightness ?? 0;
             }
             try {

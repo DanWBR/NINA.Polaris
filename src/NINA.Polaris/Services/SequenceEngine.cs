@@ -311,10 +311,12 @@ public class SequenceEngine {
                 // exposure for this (filter, binning) before we enter
                 // the capture loop. Try the trained cache first (fast
                 // path; convergence skipped entirely). On miss, run the
-                // binary search and write the result back; subsequent
-                // sessions hit the fast path. On failure we keep
-                // item.Exposure as-is (whatever the user typed) so the
-                // run still produces something, with a warning log.
+                // search and write the result back; subsequent sessions
+                // hit the fast path. On failure we SKIP the flat item
+                // rather than fall back to the user's exposure: that value
+                // is a light-frame length (e.g. 60 s), so shooting flats at
+                // it just produces saturated frames that corrupt the master
+                // flat. Skipping with a clear error is the safer outcome.
                 if (imageType == "FLAT" && item.AutoExposure && _equip.Camera != null) {
                     var filterKey = item.Filter ?? "";
                     var binKey = Math.Max(1, item.Binning);
@@ -327,21 +329,26 @@ public class SequenceEngine {
                         _logger.LogInformation(
                             "Auto-flat: no trained exposure for filter '{F}' bin{B}, searching...",
                             filterKey, binKey);
+                        double? found;
                         try {
-                            var found = await _flatWizard.AutoFindExposureAsync(
+                            found = await _flatWizard.AutoFindExposureAsync(
                                 filterKey, binKey, ct: ct);
-                            if (found.HasValue) {
-                                item.Exposure = found.Value;
-                            } else {
-                                _logger.LogWarning(
-                                    "Auto-flat search did not converge; keeping user exposure {Exp}s",
-                                    item.Exposure);
-                            }
                         } catch (OperationCanceledException) { throw; }
                         catch (Exception ex) {
-                            _logger.LogWarning(ex,
-                                "Auto-flat search threw; keeping user exposure {Exp}s",
-                                item.Exposure);
+                            _logger.LogError(ex,
+                                "Auto-flat search threw for '{F}' bin{B}; skipping this flat set",
+                                filterKey, binKey);
+                            LastError = $"Auto-flat failed for '{filterKey}': {ex.Message}";
+                            continue;
+                        }
+                        if (found.HasValue) {
+                            item.Exposure = found.Value;
+                        } else {
+                            _logger.LogWarning(
+                                "Auto-flat did not converge for '{F}' bin{B} (panel too bright/dim for the search range); skipping this flat set",
+                                filterKey, binKey);
+                            LastError = $"Auto-flat for '{filterKey}' could not reach the target ADU; flat set skipped";
+                            continue;
                         }
                     }
                 }
