@@ -63,7 +63,10 @@ public static class PlateSolveEndpoints {
                 useBlindFallback = p.PlateSolveUseBlindFallback,
                 astapPath = p.AstapPath,
                 astapDataDir = p.AstapDataDir,
-                astrometryApiKey = p.AstrometryApiKey
+                astrometryApiKey = p.AstrometryApiKey,
+                solveFieldPath = p.SolveFieldPath,
+                useWsl = p.PlateSolveUseWsl,
+                wslDistro = p.PlateSolveWslDistro
             });
         });
 
@@ -78,6 +81,9 @@ public static class PlateSolveEndpoints {
                 if (update.AstapPath != null) p.AstapPath = string.IsNullOrWhiteSpace(update.AstapPath) ? null : update.AstapPath.Trim();
                 if (update.AstapDataDir != null) p.AstapDataDir = string.IsNullOrWhiteSpace(update.AstapDataDir) ? null : update.AstapDataDir.Trim();
                 if (update.AstrometryApiKey != null) p.AstrometryApiKey = string.IsNullOrWhiteSpace(update.AstrometryApiKey) ? null : update.AstrometryApiKey.Trim();
+                if (update.SolveFieldPath != null) p.SolveFieldPath = string.IsNullOrWhiteSpace(update.SolveFieldPath) ? null : update.SolveFieldPath.Trim();
+                if (update.UseWsl.HasValue) p.PlateSolveUseWsl = update.UseWsl.Value;
+                if (update.WslDistro != null) p.PlateSolveWslDistro = string.IsNullOrWhiteSpace(update.WslDistro) ? null : update.WslDistro.Trim();
             });
             return Results.Ok(new { message = "Plate solve settings saved" });
         });
@@ -689,7 +695,10 @@ public static class PlateSolveEndpoints {
         bool? UseBlindFallback = null,
         string? AstapPath = null,
         string? AstapDataDir = null,
-        string? AstrometryApiKey = null);
+        string? AstrometryApiKey = null,
+        string? SolveFieldPath = null,
+        bool? UseWsl = null,
+        string? WslDistro = null);
 
     /// <summary>Marker type for the ILogger&lt;T&gt; category --
     /// the static endpoint class itself can't be used as a generic

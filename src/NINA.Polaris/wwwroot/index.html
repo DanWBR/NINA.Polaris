@@ -11023,6 +11023,34 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             (Profile → API Key). Without it the online solver stays "not installed".
                             It does a blind solve over the internet — slower, but a good fallback when ASTAP can't solve.
                         </p>
+
+                        <hr style="border:none; border-top:1px solid var(--border); margin:14px 0">
+                        <p class="text-muted" style="font-size:11px; margin:0 0 8px">
+                            <strong>Astrometry.net (local solve-field)</strong> — pick
+                            "Astrometry.net (local solve-field)" above as the primary/blind solver to use it.
+                        </p>
+                        <label style="display:flex; align-items:center; gap:12px; margin-top:6px">
+                            <span style="min-width:120px">solve-field path</span>
+                            <input type="text" class="input-sm" style="flex:1"
+                                   x-model="psConfig.solveFieldPath"
+                                   placeholder="blank = auto (/usr/bin/solve-field, or 'solve-field' in WSL)">
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; margin-top:10px">
+                            <input type="checkbox" x-model="psConfig.useWsl">
+                            <span>Run via WSL (Windows → Linux Astrometry.net)</span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap:12px; margin-top:8px"
+                               x-show="psConfig.useWsl" x-cloak>
+                            <span style="min-width:120px">WSL distro</span>
+                            <input type="text" class="input-sm" style="flex:1"
+                                   x-model="psConfig.wslDistro"
+                                   placeholder="blank = default distro (e.g. Ubuntu-24.04)">
+                        </label>
+                        <p class="text-muted" style="font-size:11px; margin-top:6px" x-show="psConfig.useWsl" x-cloak>
+                            Polaris invokes <code>wsl.exe solve-field</code> and translates Windows paths to
+                            <code>/mnt/&lt;drive&gt;/…</code> automatically. Install solve-field + index files in
+                            the distro (e.g. <code>sudo apt install astrometry.net astrometry-data-tycho2</code>).
+                        </p>
                     </details>
 
                     <div style="margin-top:12px; display:flex; gap:8px; align-items:center">
@@ -15444,7 +15472,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260623-filesort"></script>
+    <script src="/js/app.js?v=20260623-wslsolve"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

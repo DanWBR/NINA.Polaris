@@ -32,20 +32,51 @@ namespace NINA.Polaris.Services.PlateSolving;
 public class AstrometryNetLocalSolver : IPlateSolver {
     private readonly IConfiguration _config;
     private readonly ILogger<AstrometryNetLocalSolver> _logger;
+    private readonly ProfileService? _profiles;
 
-    public AstrometryNetLocalSolver(IConfiguration config, ILogger<AstrometryNetLocalSolver> logger) {
+    public AstrometryNetLocalSolver(IConfiguration config, ILogger<AstrometryNetLocalSolver> logger,
+                                    ProfileService? profiles = null) {
         _config = config;
         _logger = logger;
+        _profiles = profiles;
     }
 
     public string Id => "astrometry-net-local";
     public string DisplayName => "Astrometry.net (local solve-field)";
     public bool SupportsBlindSolve => true;
 
-    public string SolverPath => _config.GetValue("PlateSolve:SolveFieldPath", GetDefaultPath())!;
+    /// <summary>Run solve-field through WSL (wsl.exe) instead of a native
+    /// process. Windows hosts use this to drive a Linux Astrometry.net build.</summary>
+    public bool UseWsl {
+        get {
+            if (_profiles?.Active.PlateSolveUseWsl == true) return true;
+            return _config.GetValue("PlateSolve:UseWsl", false);
+        }
+    }
+
+    /// <summary>Optional WSL distro (wsl.exe -d &lt;distro&gt;). Empty = default.</summary>
+    public string WslDistro =>
+        (!string.IsNullOrWhiteSpace(_profiles?.Active.PlateSolveWslDistro)
+            ? _profiles!.Active.PlateSolveWslDistro!
+            : _config.GetValue("PlateSolve:WslDistro", "")) ?? "";
+
+    public string SolverPath {
+        get {
+            var fromProfile = _profiles?.Active.SolveFieldPath;
+            if (!string.IsNullOrWhiteSpace(fromProfile)) return fromProfile!;
+            // Through WSL the binary lives in the distro, so a bare command is
+            // the right default; a native path makes no sense there.
+            if (UseWsl) return _config.GetValue("PlateSolve:SolveFieldPath", "solve-field")!;
+            return _config.GetValue("PlateSolve:SolveFieldPath", GetDefaultPath())!;
+        }
+    }
 
     public bool IsAvailable {
         get {
+            // Through WSL the binary lives in the Linux distro; we can't cheaply
+            // File.Exists it from Windows, so assume configured. (A bad command
+            // simply fails the solve with a clear error.)
+            if (UseWsl) return OperatingSystem.IsWindows();
             if (string.IsNullOrEmpty(SolverPath)) return false;
             // Allow either an absolute path to solve-field or a bare command on PATH
             if (File.Exists(SolverPath)) return true;
@@ -53,17 +84,44 @@ public class AstrometryNetLocalSolver : IPlateSolver {
         }
     }
 
+    /// <summary>Translate a Windows path to its WSL mount path:
+    /// <c>C:\Users\x\a.fits</c> → <c>/mnt/c/Users/x/a.fits</c>. Non-Windows
+    /// paths (already POSIX) pass through unchanged.</summary>
+    public static string ToWslPath(string winPath) {
+        if (string.IsNullOrEmpty(winPath)) return winPath;
+        if (winPath.Length >= 2 && winPath[1] == ':' && char.IsLetter(winPath[0])) {
+            var drive = char.ToLowerInvariant(winPath[0]);
+            var rest = winPath[2..].Replace('\\', '/');
+            if (!rest.StartsWith('/')) rest = "/" + rest;
+            return $"/mnt/{drive}{rest}";
+        }
+        return winPath.Replace('\\', '/');
+    }
+
     public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options,
             CancellationToken ct = default, Action<string>? onLog = null) {
         if (!IsAvailable) return PlateSolveResult.Failed("solve-field not configured (PlateSolve:SolveFieldPath)");
         if (!File.Exists(fitsPath)) return PlateSolveResult.Failed("FITS file not found: " + fitsPath);
 
-        var args = BuildArgs(fitsPath, options);
-        _logger.LogInformation("Plate solving {File} with solve-field: {Args}", fitsPath, args);
+        // Through WSL: launch wsl.exe [-d distro] solve-field <args with WSL
+        // paths>. Otherwise run the native binary with native paths.
+        string fileName, args;
+        if (UseWsl) {
+            var solveArgs = BuildArgs(fitsPath, options, forWsl: true);
+            var distro = WslDistro;
+            var pre = string.IsNullOrWhiteSpace(distro) ? "" : $"-d {distro} ";
+            fileName = "wsl.exe";
+            args = $"{pre}{SolverPath} {solveArgs}";
+        } else {
+            fileName = SolverPath;
+            args = BuildArgs(fitsPath, options);
+        }
+        _logger.LogInformation("Plate solving {File} with solve-field ({Mode}): {Args}",
+            fitsPath, UseWsl ? "WSL" : "native", args);
 
         try {
             var psi = new ProcessStartInfo {
-                FileName = SolverPath,
+                FileName = fileName,
                 Arguments = args,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
@@ -147,13 +205,16 @@ public class AstrometryNetLocalSolver : IPlateSolver {
     public static string WcsOutputPath(string fitsPath) =>
         Path.ChangeExtension(fitsPath, ".wcs");
 
-    /// <summary>Public for unit testing.</summary>
-    public string BuildArgs(string fitsPath, PlateSolveOptions options) {
+    /// <summary>Public for unit testing. <paramref name="forWsl"/> translates
+    /// the FITS + .wcs paths to /mnt/&lt;drive&gt;/... so a Linux solve-field
+    /// running under WSL can read/write the Windows files.</summary>
+    public string BuildArgs(string fitsPath, PlateSolveOptions options, bool forWsl = false) {
+        string Xlat(string p) => forWsl ? ToWslPath(p) : p;
         // --wcs pins the solution file to a known path (the .wcs fallback
         // reads it). --new-fits none skips the large rewritten FITS we
         // don't need. Quote the path for spaces.
         var args = $"--overwrite --no-plots --no-verify --crpix-center "
-                 + $"--wcs \"{WcsOutputPath(fitsPath)}\" --new-fits none "
+                 + $"--wcs \"{Xlat(WcsOutputPath(fitsPath))}\" --new-fits none "
                  + $"--downsample {Math.Max(1, options.Downsample)}";
         // --cpulimit bounds solve-field's own effort so a doomed solve bails
         // cleanly (writing nothing) instead of grinding through every index
@@ -186,7 +247,7 @@ public class AstrometryNetLocalSolver : IPlateSolver {
             args += $" --scale-low {lo.ToString("F4", CultureInfo.InvariantCulture)}";
             args += $" --scale-high {hi.ToString("F4", CultureInfo.InvariantCulture)}";
         }
-        args += $" \"{fitsPath}\"";
+        args += $" \"{Xlat(fitsPath)}\"";
         return args;
     }
 

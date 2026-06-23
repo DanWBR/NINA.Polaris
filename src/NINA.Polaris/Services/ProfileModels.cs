@@ -88,6 +88,19 @@ public class UserProfile {
     /// the site's Profile → API Key). Empty = the online solver stays disabled
     /// ("not installed" in the card).</summary>
     public string? AstrometryApiKey { get; set; }
+    /// <summary>Path to the local Astrometry.net <c>solve-field</c> binary.
+    /// Empty/null = auto (/usr/bin/solve-field on Linux; on Windows requires
+    /// WSL or a Cygwin/ANSVR install). When <see cref="PlateSolveUseWsl"/> is
+    /// on this is the path/command INSIDE the WSL distro (default
+    /// "solve-field").</summary>
+    public string? SolveFieldPath { get; set; }
+    /// <summary>Windows-only: run <c>solve-field</c> through WSL (wsl.exe).
+    /// Polaris translates the Windows FITS/.wcs paths to /mnt/&lt;drive&gt;/...
+    /// automatically. Lets a Windows host use the Linux Astrometry.net build.</summary>
+    public bool PlateSolveUseWsl { get; set; }
+    /// <summary>Optional WSL distro name (wsl.exe -d &lt;distro&gt;). Empty =
+    /// the default distro.</summary>
+    public string? PlateSolveWslDistro { get; set; }
 
     // TLS-1: Let's Encrypt via DuckDNS DNS-01 challenge. Replaces the
     // self-signed cert with a real publicly-trusted cert when the user
