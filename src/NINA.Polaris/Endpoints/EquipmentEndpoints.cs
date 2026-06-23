@@ -195,6 +195,29 @@ public static class EquipmentEndpoints {
                     r.GuideCamera = update.GuideCamera;
                 if (!string.IsNullOrWhiteSpace(update.GuideCameraDriver))
                     r.GuideCameraDriver = update.GuideCameraDriver.Trim().ToLowerInvariant();
+                // Auxiliary camera + focuser: same source-of-truth guard as the
+                // guide camera (blank = client glitch, not a deliberate clear).
+                if (!string.IsNullOrWhiteSpace(update.AuxCamera))
+                    r.AuxCamera = update.AuxCamera;
+                if (!string.IsNullOrWhiteSpace(update.AuxCameraDriver))
+                    r.AuxCameraDriver = update.AuxCameraDriver.Trim().ToLowerInvariant();
+                if (!string.IsNullOrWhiteSpace(update.AuxFocuser))
+                    r.AuxFocuser = update.AuxFocuser;
+                if (!string.IsNullOrWhiteSpace(update.AuxFocuserDriver))
+                    r.AuxFocuserDriver = update.AuxFocuserDriver.Trim().ToLowerInvariant();
+                if (update.AuxFocalLengthMm > 0)
+                    r.AuxFocalLengthMm = update.AuxFocalLengthMm;
+                if (update.AuxApertureMm >= 0)
+                    r.AuxApertureMm = update.AuxApertureMm;
+                r.AuxTelescopeBrand = update.AuxTelescopeBrand;
+                r.AuxTelescopeModel = update.AuxTelescopeModel;
+                if (update.AuxExposureMs > 0)
+                    r.AuxExposureMs = update.AuxExposureMs;
+                if (update.AuxGain >= 0)
+                    r.AuxGain = update.AuxGain;
+                if (update.AuxBinning > 0)
+                    r.AuxBinning = Math.Clamp(update.AuxBinning, 1, 4);
+                r.AuxEnabled = update.AuxEnabled;
                 if (update.NativeGuideExposureMs > 0)
                     r.NativeGuideExposureMs = update.NativeGuideExposureMs;
                 if (update.NativeCalibrationStepMs > 0)

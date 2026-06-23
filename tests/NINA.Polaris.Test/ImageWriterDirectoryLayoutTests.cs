@@ -117,6 +117,18 @@ public class ImageWriterDirectoryLayoutTests {
     }
 
     [Test]
+    public void Aux_GoesUnder_rig_aux_target_filter_session() {
+        // Auxiliary-camera frames live in their own aux/ tree (parallel to
+        // lights/) so they never mix with the main camera's lights, even on
+        // the same sky target.
+        var img = Frame("L", 120, 0, "M31", "AUX",
+            new DateTime(2026, 5, 21, 22, 30, 0, DateTimeKind.Local));
+        var sub = ImageWriterService.BuildSubDir("AUX", img, EmptyProfile(),
+            "MyRig", Session(2026, 5, 21));
+        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "aux", "M31", "L", "2026-05-21")));
+    }
+
+    [Test]
     public void UnknownTarget_FallsBackTo_Unknown() {
         var img = Frame("L", 60, 0, "", "LIGHT", new DateTime(2026, 5, 21));
         var sub = ImageWriterService.BuildSubDir("LIGHT", img, EmptyProfile(),

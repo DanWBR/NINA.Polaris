@@ -79,6 +79,7 @@ public class SequenceEngine {
     private readonly NINA.Polaris.Services.External.GraXpertService _graXpert;
     private readonly FlatWizardService _flatWizard;
     private readonly CaptureProgressService _captureProgress;
+    private readonly AuxCaptureService _aux;
 
     public SequenceEngine(EquipmentManager equip, ImageRelayService relay,
         LiveStackingService liveStack, PHD2Client phd2, ActiveGuiderProvider guiders,
@@ -88,6 +89,7 @@ public class SequenceEngine {
         FlatWizardService flatWizard,
         ProfileService profile,
         CaptureProgressService captureProgress,
+        AuxCaptureService aux,
         ILogger<SequenceEngine> logger) {
         _equip = equip;
         _relay = relay;
@@ -100,6 +102,7 @@ public class SequenceEngine {
         _flatWizard = flatWizard;
         _profile = profile;
         _captureProgress = captureProgress;
+        _aux = aux;
         _logger = logger;
     }
 
@@ -238,6 +241,8 @@ public class SequenceEngine {
     }
 
     private async Task RunAsync(CancellationToken ct) {
+        // Run the auxiliary camera capture loop alongside the sequence.
+        try { _aux.NotifySessionActive(true); } catch { }
         try {
             // Resume point captured ONCE up front. CurrentItemIndex is rewritten
             // on every iteration below, so the per-item start-frame check must
@@ -529,6 +534,8 @@ public class SequenceEngine {
             _logger.LogError(ex, "Sequence failed");
             // Failure: still try housekeeping so the rig isn't left tracking unattended.
             await RunEndActionsAsync(triggeredByStop: true);
+        } finally {
+            try { _aux.NotifySessionActive(false); } catch { }
         }
     }
 

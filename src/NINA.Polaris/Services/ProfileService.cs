@@ -367,6 +367,17 @@ public class ProfileService {
             AccessoryFactor = src.AccessoryFactor,
             RequiredBackspacingMm = src.RequiredBackspacingMm,
             GuiderFocalLengthMm = src.GuiderFocalLengthMm,
+            // Auxiliary (second) camera + its optics/focuser.
+            AuxCamera = src.AuxCamera, AuxCameraDriver = src.AuxCameraDriver,
+            AuxFocalLengthMm = src.AuxFocalLengthMm,
+            AuxApertureMm = src.AuxApertureMm,
+            AuxTelescopeBrand = src.AuxTelescopeBrand,
+            AuxTelescopeModel = src.AuxTelescopeModel,
+            AuxExposureMs = src.AuxExposureMs,
+            AuxGain = src.AuxGain,
+            AuxBinning = src.AuxBinning,
+            AuxEnabled = src.AuxEnabled,
+            AuxFocuser = src.AuxFocuser, AuxFocuserDriver = src.AuxFocuserDriver,
             // Native guider backend selection + tunables.
             GuiderDriver = src.GuiderDriver,
             GuideCamera = src.GuideCamera, GuideCameraDriver = src.GuideCameraDriver,

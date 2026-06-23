@@ -490,6 +490,58 @@ public class EquipmentProfile {
     /// <summary>Model of the guide telescope. Optional, free-form.</summary>
     public string? GuideTelescopeModel { get; set; }
 
+    // ----- Auxiliary (second) imaging camera -----
+    // A second camera riding the same mount with a different lens/telescope.
+    // It captures on its own cadence (independent of the main camera) and only
+    // saves frames to a separate aux/ subtree; it is NOT used for guiding,
+    // plate solving, live stacking, or sequencing. Mirrors the guide-camera
+    // slot's addressing scheme. It can also be viewed/focused in the FOCUS tab.
+
+    /// <summary>Aux-camera device id (same addressing scheme as
+    /// <see cref="Camera"/>). Null = no aux camera selected.</summary>
+    public string? AuxCamera { get; set; }
+
+    /// <summary>Aux-camera backend kind. Same enum as
+    /// <see cref="CameraDriver"/>. Defaults to <c>indi</c>.</summary>
+    public string AuxCameraDriver { get; set; } = "indi";
+
+    /// <summary>Effective focal length of the aux optics (mm). Stamped into
+    /// the saved aux frames' FITS FOCALLEN so FOV/plate-solve metadata is
+    /// correct for that train.</summary>
+    public double AuxFocalLengthMm { get; set; } = 200;
+
+    /// <summary>Aux optics aperture (mm). Optional, for f-ratio display.</summary>
+    public double AuxApertureMm { get; set; }
+
+    /// <summary>Brand of the aux telescope/lens. Optional, free-form.</summary>
+    public string? AuxTelescopeBrand { get; set; }
+
+    /// <summary>Model of the aux telescope/lens. Optional, free-form.</summary>
+    public string? AuxTelescopeModel { get; set; }
+
+    /// <summary>Aux-camera exposure per frame (ms). Independent of the main
+    /// camera since the optics differ. Default 5 s.</summary>
+    public int AuxExposureMs { get; set; } = 5000;
+
+    /// <summary>Aux-camera gain. 0 = leave the driver default.</summary>
+    public int AuxGain { get; set; }
+
+    /// <summary>Aux-camera binning. Default 1.</summary>
+    public int AuxBinning { get; set; } = 1;
+
+    /// <summary>When true, the aux capture loop runs (and saves frames) while a
+    /// main session (LIVE or AUTORUN) is active. Default off.</summary>
+    public bool AuxEnabled { get; set; }
+
+    /// <summary>Aux focuser device id (same addressing scheme as
+    /// <see cref="Focuser"/>). Optional; enables manual focusing of the aux
+    /// camera from the FOCUS tab. Null = no aux focuser.</summary>
+    public string? AuxFocuser { get; set; }
+
+    /// <summary>Aux focuser backend kind. Same enum as
+    /// <see cref="FocuserDriver"/>. Defaults to <c>indi</c>.</summary>
+    public string AuxFocuserDriver { get; set; } = "indi";
+
     /// <summary>
     /// Last-known filter-wheel slot names for this rig, in slot order.
     /// Filter names normally live in the driver (INDI FILTER_NAME), but

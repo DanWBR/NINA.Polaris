@@ -166,6 +166,39 @@ public class EquipmentManager : IDisposable {
         return GuideCamera;
     }
 
+    /// <summary>Currently-selected auxiliary (second) imaging camera. Rides the
+    /// same mount with different optics; captures on its own cadence and only
+    /// saves frames. Separate slot from <see cref="Camera"/> and
+    /// <see cref="GuideCamera"/>. Null when no aux camera is bound.</summary>
+    public ICamera? AuxCamera { get; private set; }
+
+    /// <summary>Driver kind bound to <see cref="AuxCamera"/>. Mirrors
+    /// <c>EquipmentProfile.AuxCameraDriver</c>. Null when unset.</summary>
+    public string? AuxCameraDriver { get; private set; }
+
+    /// <summary>Driver-specific device id the <see cref="AuxCamera"/> was
+    /// selected with (same vendor-SDK rescan-guard role as
+    /// <see cref="CameraDeviceId"/>). Null when no aux camera is selected.</summary>
+    public string? AuxCameraDeviceId { get; private set; }
+
+    /// <summary>Select the auxiliary camera. Reuses <see cref="CreateCamera"/>
+    /// so the full backend matrix is available. Rejects sharing the connected
+    /// imaging camera's device (same rule as <see cref="SelectGuideCamera"/>).</summary>
+    public ICamera SelectAuxCamera(string driver, string deviceId) {
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        if (Camera != null && Camera.IsConnected && CameraDriver == driver &&
+            string.Equals(Camera.DeviceName, deviceId, StringComparison.OrdinalIgnoreCase)) {
+            throw new InvalidOperationException(
+                "Aux camera must differ from the imaging camera while it is connected.");
+        }
+        AuxCamera = CreateCamera(driver, deviceId);
+        AuxCameraDriver = driver;
+        AuxCameraDeviceId = deviceId;
+        _logger.LogInformation("Aux camera selected: driver={Driver}, id={DeviceId}",
+            driver, deviceId);
+        return AuxCamera;
+    }
+
     private static ICamera CreateCanonCamera(string deviceId) {
         if (!OperatingSystem.IsWindows()) {
             throw new NotSupportedException(
@@ -362,6 +395,11 @@ public class EquipmentManager : IDisposable {
                 && !string.IsNullOrEmpty(GuideCameraDeviceId)
                 && !live.Any(c => c.Id == GuideCameraDeviceId)) {
                 live.Add(new(GuideCameraDeviceId, GuideCamera.DeviceName, "connected"));
+            }
+            if (AuxCamera != null && AuxCamera.IsConnected && AuxCameraDriver == driver
+                && !string.IsNullOrEmpty(AuxCameraDeviceId)
+                && !live.Any(c => c.Id == AuxCameraDeviceId)) {
+                live.Add(new(AuxCameraDeviceId, AuxCamera.DeviceName, "connected"));
             }
             if (live.Count > 0) return live;
         }
@@ -634,18 +672,41 @@ public class EquipmentManager : IDisposable {
 
     public IFocuser SelectFocuser(string driver, string deviceId) {
         driver = (driver ?? "indi").Trim().ToLowerInvariant();
-        Focuser = driver switch {
-            "indi" => new IndiFocuser(_indiClient, deviceId, _logger),
-            "ascom-com" => CreateAscomFocuser(deviceId),
-            "alpaca" => AlpacaFocuser.FromDeviceId(deviceId),
-            _ => throw new NotSupportedException(
-                $"Focuser driver '{driver}' is not implemented yet. " +
-                "Use 'indi', 'alpaca', or 'ascom-com'."),
-        };
+        Focuser = CreateFocuser(driver, deviceId);
         FocuserDriver = driver;
         _logger.LogInformation("Focuser selected: driver={Driver}, id={DeviceId}",
             driver, deviceId);
         return Focuser;
+    }
+
+    /// <summary>Construct an <see cref="IFocuser"/> for the given driver kind
+    /// without binding it to a slot. Shared by <see cref="SelectFocuser(string,string)"/>
+    /// and <see cref="SelectAuxFocuser"/>. Caller normalises <paramref name="driver"/>.</summary>
+    private IFocuser CreateFocuser(string driver, string deviceId) => driver switch {
+        "indi" => new IndiFocuser(_indiClient, deviceId, _logger),
+        "ascom-com" => CreateAscomFocuser(deviceId),
+        "alpaca" => AlpacaFocuser.FromDeviceId(deviceId),
+        _ => throw new NotSupportedException(
+            $"Focuser driver '{driver}' is not implemented yet. " +
+            "Use 'indi', 'alpaca', or 'ascom-com'."),
+    };
+
+    /// <summary>Currently-selected auxiliary focuser (for the aux camera's
+    /// optical train). Separate slot from <see cref="Focuser"/>; enables manual
+    /// focusing of the aux camera. Null when no aux focuser is bound.</summary>
+    public IFocuser? AuxFocuser { get; private set; }
+
+    /// <summary>Driver kind bound to <see cref="AuxFocuser"/>. Mirrors
+    /// <c>EquipmentProfile.AuxFocuserDriver</c>. Null when unset.</summary>
+    public string? AuxFocuserDriver { get; private set; }
+
+    public IFocuser SelectAuxFocuser(string driver, string deviceId) {
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        AuxFocuser = CreateFocuser(driver, deviceId);
+        AuxFocuserDriver = driver;
+        _logger.LogInformation("Aux focuser selected: driver={Driver}, id={DeviceId}",
+            driver, deviceId);
+        return AuxFocuser;
     }
 
     private static IFocuser CreateAscomFocuser(string progId) {
@@ -769,6 +830,31 @@ public class EquipmentManager : IDisposable {
             };
         }
 
+        if (AuxCamera != null) {
+            // Same shape as the imaging-camera block so the RIGS aux-camera
+            // card renders with the same template.
+            var apxX = AuxCamera.PixelSizeX;
+            var apxY = AuxCamera.PixelSizeY;
+            status["auxCamera"] = new {
+                name = AuxCamera.DeviceName,
+                connected = AuxCamera.IsConnected,
+                state = AuxCamera.State.ToString(),
+                temperature = Safe(AuxCamera.Temperature),
+                coolerOn = AuxCamera.CoolerOn,
+                coolerPower = Safe(AuxCamera.CoolerPower),
+                binX = AuxCamera.BinX,
+                binY = AuxCamera.BinY,
+                gain = AuxCamera.Gain,
+                gainMin = AuxCamera.GainMin,
+                gainMax = AuxCamera.GainMax,
+                bitDepth = AuxCamera.BitDepth,
+                maxX = AuxCamera.MaxX,
+                maxY = AuxCamera.MaxY,
+                pixelSizeX = Safe(apxX),
+                pixelSizeY = Safe(apxY)
+            };
+        }
+
         if (Telescope != null) {
             // Capabilities sub-object gates per-button UI affordances
             // (Park / Find Home / pier-side indicator). Sent every
@@ -826,6 +912,24 @@ public class EquipmentManager : IDisposable {
                     reverse     = fcaps.SupportsReverse,
                     backlash    = fcaps.SupportsBacklash,
                     temperature = fcaps.SupportsTemperature
+                }
+            };
+        }
+
+        if (AuxFocuser != null) {
+            var afcaps = AuxFocuser.Capabilities;
+            status["auxFocuser"] = new {
+                name = AuxFocuser.DeviceName,
+                connected = AuxFocuser.IsConnected,
+                position = AuxFocuser.Position,
+                temperature = Safe(AuxFocuser.Temperature),
+                maxPosition = AuxFocuser.MaxPosition,
+                moving = AuxFocuser.IsMoving,
+                capabilities = new {
+                    sync        = afcaps.SupportsSync,
+                    reverse     = afcaps.SupportsReverse,
+                    backlash    = afcaps.SupportsBacklash,
+                    temperature = afcaps.SupportsTemperature
                 }
             };
         }

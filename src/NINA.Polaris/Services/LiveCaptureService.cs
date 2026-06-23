@@ -44,6 +44,7 @@ public sealed class LiveCaptureService {
     private readonly CaptureProgressService _captureProgress;
     private readonly ActiveGuiderProvider _guiders;
     private readonly AutoFocusService _autoFocus;
+    private readonly AuxCaptureService _aux;
     private readonly ILogger<LiveCaptureService> _logger;
 
     private CancellationTokenSource? _cts;
@@ -60,13 +61,14 @@ public sealed class LiveCaptureService {
     public LiveCaptureService(EquipmentManager equip, LiveStackingService liveStack,
         ImageRelayService relay, CaptureProgressService captureProgress,
         ActiveGuiderProvider guiders, AutoFocusService autoFocus,
-        ILogger<LiveCaptureService> logger) {
+        AuxCaptureService aux, ILogger<LiveCaptureService> logger) {
         _equip = equip;
         _liveStack = liveStack;
         _relay = relay;
         _captureProgress = captureProgress;
         _guiders = guiders;
         _autoFocus = autoFocus;
+        _aux = aux;
         _logger = logger;
     }
 
@@ -88,6 +90,8 @@ public sealed class LiveCaptureService {
             _cts = new CancellationTokenSource();
             var ct = _cts.Token;
             _loopTask = Task.Run(() => RunLoop(ct));
+            // Kick off the auxiliary camera loop alongside the main session.
+            try { _aux.NotifySessionActive(true); } catch { }
             _logger.LogInformation(
                 "Server LIVE loop started: exp={Exp}s gain={Gain} bin={Bin}",
                 ExposureSeconds, Gain, BinX);
@@ -172,6 +176,7 @@ public sealed class LiveCaptureService {
             }
         } finally {
             lock (_lock) { IsRunning = false; }
+            try { _aux.NotifySessionActive(false); } catch { }
         }
     }
 

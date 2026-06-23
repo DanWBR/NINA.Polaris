@@ -147,6 +147,8 @@ builder.Services.AddSingleton<ImageRelayService>();
 builder.Services.AddSingleton<CameraStreamService>();
 // Opt-in server-owned LIVE capture loop (UserProfile.LiveServerLoopEnabled).
 builder.Services.AddSingleton<LiveCaptureService>();
+// Auxiliary (second) camera capture+save loop, runs alongside LIVE/AUTORUN.
+builder.Services.AddSingleton<AuxCaptureService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.VideoRecordingService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.PlanetaryStackerService>();
 // KC-1: Keep Centered control loop. Toggled from the VIDEO sidebar
@@ -1002,6 +1004,7 @@ app.MapCameraEndpoints();
 app.MapVideoEndpoints();
 app.MapTelescopeEndpoints();
 app.MapFocuserEndpoints();
+app.MapAuxEndpoints();
 app.MapFilterWheelEndpoints();
 // ASCOM Platform-specific (SetupDialog, platform-presence probe).
 // Per-device select/connect/discover are already handled by the

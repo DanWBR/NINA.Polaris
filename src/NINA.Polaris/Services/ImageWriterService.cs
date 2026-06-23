@@ -121,7 +121,8 @@ public class ImageWriterService {
         string? targetName = null,
         string imageType = "LIGHT",
         int gain = 0,
-        bool stacked = false) {
+        bool stacked = false,
+        double? focalLengthMmOverride = null) {
 
         var profile = _profile.Active;
         var dir = profile.ImageOutputDir;
@@ -144,6 +145,10 @@ public class ImageWriterService {
             targetName = ResolveTargetName(targetName, imageType, imageData, profile);
 
             EnrichMetadata(imageData, profile, targetName, imageType, gain);
+            // Aux camera frames carry the aux optics' focal length (different
+            // OTA than the main rig), so FOV/plate-solve metadata is correct.
+            if (focalLengthMmOverride is > 0)
+                imageData.MetaData.Telescope.FocalLength = focalLengthMmOverride.Value;
             _sessionFrameNumber++;
 
             // DSLR / mirrorless drivers attach the camera-native RAW
@@ -513,6 +518,14 @@ public class ImageWriterService {
             "SNAP"      => Path.Combine("snaps",
                             FormattableString.Invariant(
                                 $"{filter}_{sessionDate:yyyy-MM-dd}")),
+            // Auxiliary (second) camera frames live in their own aux/ tree so
+            // they never mix with the main camera's lights, even when both are
+            // on the same sky target. Same {target}/{filter}/{session} shape.
+            "AUX"       => Path.Combine("aux",
+                            SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name),
+                            filter,
+                            sessionDate.ToString("yyyy-MM-dd",
+                                System.Globalization.CultureInfo.InvariantCulture)),
             _           => Path.Combine("lights",
                             SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name),
                             filter,

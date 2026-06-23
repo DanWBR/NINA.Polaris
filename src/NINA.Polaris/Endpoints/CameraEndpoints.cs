@@ -39,6 +39,28 @@ public static class CameraEndpoints {
                 request.Exposure, request.Gain, request.Binning,
                 request.Kind ?? "(null=live)", request.FeedLiveStack,
                 request.SaveToDisk, liveStack.IsRunning);
+            // Aux-camera capture (FOCUS-manual on the auxiliary camera). A
+            // self-contained path: capture through the dedicated aux gate, relay
+            // for the FOCUS canvas, return HFR/star stats. Never feeds the live
+            // stack or saves here (the aux save loop owns archiving).
+            if (string.Equals(request.CameraSource, "aux", StringComparison.OrdinalIgnoreCase)) {
+                if (equip.AuxCamera == null || !equip.AuxCamera.IsConnected)
+                    return Results.BadRequest(new { error = "No aux camera connected" });
+                try {
+                    if (request.Binning > 0)
+                        await equip.AuxCamera.SetBinningAsync(request.Binning, request.Binning);
+                    var auxImg = await AuxCameraCaptureGate.RunAsync(async () => {
+                        using (captureProgress.Begin("aux", request.Exposure))
+                            return await equip.AuxCamera.CaptureAsync(request.Exposure);
+                    }, acquireTimeout: TimeSpan.FromSeconds(Math.Max(request.Exposure, 1) + 60));
+                    await relay.RelayImageAsync(auxImg!, FrameKind.Focus);
+                    var st = ComputeFocusStats(auxImg!);
+                    return Results.Ok(new { status = "captured", stats = st });
+                } catch (Exception ex) {
+                    return Results.Json(new { error = ex.Message }, statusCode: 500);
+                }
+            }
+
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected" });
 
@@ -460,7 +482,36 @@ public static class CameraEndpoints {
         // header as FrameKind so the browser routes the bitmap to that
         // panel's canvas only. Values: "live" (default), "preview",
         // "focus", "video", "slew-preview". Anything else → "live".
-        string? Kind = null);
+        string? Kind = null,
+        // Which camera to capture from: "main" (default) or "aux". The aux
+        // path is used by FOCUS-manual to focus the auxiliary camera; it
+        // captures through the separate aux gate and never feeds the stack
+        // or saves to disk here.
+        string? CameraSource = null);
+
+    /// <summary>Run the same star-detector + laplacian-variance pass the main
+    /// capture path uses, for the aux-camera FOCUS snap. Returns the stats shape
+    /// the manual-focus loop consumes (hfr/starCount/laplacianVar/width/height).</summary>
+    private static object ComputeFocusStats(NINA.Image.Interfaces.IImageData img) {
+        int starCount = 0; double hfr = 0, laplacianVar = 0;
+        try {
+            var detector = new NINA.Image.ImageAnalysis.StarDetector { MaxStarSize = 2000, MaxHfr = 100 };
+            var detected = detector.Detect(img.Data, img.Properties.Width, img.Properties.Height);
+            starCount = detected.Count;
+            if (detected.Count > 0) {
+                var sorted = detected.Select(s => s.HFR).OrderBy(h => h).ToList();
+                hfr = sorted[sorted.Count / 2];
+            }
+        } catch { }
+        try {
+            laplacianVar = NINA.Polaris.Services.Planetary.FrameQualityAnalyzer.LaplacianVariance(
+                img.Data, img.Properties.Width, img.Properties.Height, roiSize: 256);
+        } catch { }
+        return new {
+            starCount, hfr, laplacianVar,
+            width = img.Properties.Width, height = img.Properties.Height
+        };
+    }
 
     private static FrameKind ParseFrameKind(string? raw) => raw?.ToLowerInvariant() switch {
         "preview"      => FrameKind.Preview,

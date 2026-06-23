@@ -85,6 +85,7 @@ public static class StatusStreamHandler {
             .GetRequiredService<NINA.Polaris.Services.PlateSolving.PlateSolveProgressService>();
         var captureProgress = context.RequestServices.GetRequiredService<CaptureProgressService>();
         var liveCapture = context.RequestServices.GetRequiredService<LiveCaptureService>();
+        var auxCapture = context.RequestServices.GetRequiredService<AuxCaptureService>();
         var logService = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Logging.LogService>();
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
@@ -313,6 +314,14 @@ public static class StatusStreamHandler {
                         type = "status",
                         timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                         equipment = equip.GetEquipmentStatus(),
+                        // Auxiliary camera capture loop status (running + frames
+                        // saved this session + a no-output-folder warning).
+                        auxCapture = new {
+                            running = auxCapture.IsRunning,
+                            frameCount = auxCapture.FrameCount,
+                            lastError = auxCapture.LastError,
+                            noOutputDir = auxCapture.NoOutputDir
+                        },
                         // Stack status + triggers (LSTR-4). Triggers sub-object
                         // carries last-action timestamps + reference RA/Dec +
                         // executing flag so the UI banner + status lines can

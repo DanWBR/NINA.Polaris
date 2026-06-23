@@ -924,6 +924,26 @@ function ninaApp() {
         guideCameraDriver: 'indi',
         guideCameraVendorDevices: [],
         guideCameraDiscovering: false,
+
+        // Auxiliary (second) camera: its own device/driver/optics/capture
+        // settings. Hydrated from the rig on load; eq.auxCamera (WS) drives
+        // auxCameraConnected; status.auxCapture drives the auxCapture block.
+        auxCamera: '',
+        auxCameraDriver: 'indi',
+        auxCameraVendorDevices: [],
+        auxCameraDiscovering: false,
+        auxCameraConnected: false,
+        auxFocuser: '',
+        auxFocuserDriver: 'indi',
+        auxFocuserVendorDevices: [],
+        auxFocuserConnected: false,
+        aux: { focalLengthMm: 200, exposureSec: 5, gain: 0, binning: 1, enabled: false },
+        auxCapture: { running: false, frameCount: 0, noOutputDir: false },
+        _auxSaveTimer: null,
+        // FOCUS tab source switches: which camera the manual-focus loop
+        // captures from, and which focuser the manual jog drives.
+        focusCameraSource: 'main',
+        focusFocuserSource: 'main',
         guideGain: 40,   // native guide-camera gain default (0 = camera default)
         // Guide-camera gain range, hydrated from eq.guideCamera each WS tick.
         // Drives the Gain dropdown (min, max + evenly spaced intermediates).
@@ -15759,6 +15779,25 @@ function ninaApp() {
             }
             this.guideGain = rig.nativeGuideGain || 0;
             this.guideBin = rig.nativeGuideBin || 1;
+
+            // Auxiliary (second) camera + focuser + optics.
+            this.auxCamera = rig.auxCamera || '';
+            this.auxCameraDriver = rig.auxCameraDriver || 'indi';
+            if (this.auxCameraDriver !== 'indi') {
+                this.auxCameraVendorDevices = [];
+                try { this.detectAuxCameras(); } catch (e) {}
+            }
+            this.auxFocuser = rig.auxFocuser || '';
+            this.auxFocuserDriver = rig.auxFocuserDriver || 'indi';
+            if (this.auxFocuserDriver !== 'indi') {
+                this.auxFocuserVendorDevices = [];
+                try { this.detectAuxFocusers(); } catch (e) {}
+            }
+            this.aux.focalLengthMm = rig.auxFocalLengthMm || 200;
+            this.aux.exposureSec = (rig.auxExposureMs || 5000) / 1000;
+            this.aux.gain = rig.auxGain || 0;
+            this.aux.binning = rig.auxBinning || 1;
+            this.aux.enabled = !!rig.auxEnabled;
             this.nativeRaAlgorithm = rig.nativeRaAlgorithm || 'hysteresis';
             this.nativeDecAlgorithm = rig.nativeDecAlgorithm || 'resistswitch';
             this.nativeBacklashComp = !!rig.nativeBacklashComp;
@@ -20156,7 +20195,9 @@ function ninaApp() {
 
         async focusMove(steps) {
             try {
-                await this.apiPost('/api/focuser/move/relative', { steps });
+                const url = this.focusFocuserSource === 'aux'
+                    ? '/api/aux/focuser/move/relative' : '/api/focuser/move/relative';
+                await this.apiPost(url, { steps });
             } catch (e) {
                 this.toast('Focus move failed', 'error');
             }
@@ -20681,10 +20722,13 @@ function ninaApp() {
                     feedLiveStack: false,
                     // kind=focus routes the frame to the FOCUS tab
                     // canvases only (focusCanvas + manualFocusCanvas).
-                    kind: 'focus'
+                    kind: 'focus',
+                    // Focus the primary or auxiliary camera.
+                    cameraSource: this.focusCameraSource || 'main'
                 });
                 const r = await resp.json();
-                if (r.status !== 'complete') {
+                // Main path returns status="complete"; aux path "captured".
+                if (r.status !== 'complete' && r.status !== 'captured') {
                     this.manualFocus.lastError = 'Capture cancelled';
                     return;
                 }
@@ -22223,6 +22267,121 @@ function ninaApp() {
             } finally {
                 this.guideCameraDiscovering = false;
             }
+        },
+
+        // ----- Auxiliary (second) camera + focuser -----
+        setAuxCameraDriver(driver) {
+            this.auxCameraDriver = driver || 'indi';
+            this.auxCameraVendorDevices = [];
+            this.auxCamera = '';
+            this._persistRigSelection({ auxCameraDriver: this.auxCameraDriver, auxCamera: '' });
+            if (this.auxCameraDriver !== 'indi') this.detectAuxCameras();
+        },
+        setAuxCamera(id) {
+            this.auxCamera = id || '';
+            this._persistRigSelection({ auxCamera: this.auxCamera });
+        },
+        async detectAuxCameras() {
+            this.auxCameraDiscovering = true;
+            try {
+                const list = await this.apiGet(
+                    `/api/aux/camera/discover?driver=${encodeURIComponent(this.auxCameraDriver)}`);
+                this.auxCameraVendorDevices = list || [];
+                if (this.auxCameraVendorDevices.length === 0)
+                    this.toast('No aux cameras detected for ' + this.auxCameraDriver, 'warn');
+            } catch (e) {
+                this.toast('Aux camera discovery failed: ' + e.message, 'error');
+                this.auxCameraVendorDevices = [];
+            } finally { this.auxCameraDiscovering = false; }
+        },
+        async equipConnectAuxCamera() {
+            if (!this.auxCamera) { this.toast('Select an aux camera first', 'warn'); return; }
+            try {
+                const qs = this.auxCameraDriver && this.auxCameraDriver !== 'indi'
+                    ? `?driver=${encodeURIComponent(this.auxCameraDriver)}` : '';
+                await this.apiPost(`/api/aux/camera/select/${encodeURIComponent(this.auxCamera)}${qs}`);
+                await this.apiPost('/api/aux/camera/connect');
+                this.auxCameraConnected = true;
+                this._persistRigSelection({
+                    auxCamera: this.auxCamera,
+                    auxCameraDriver: this.auxCameraDriver || 'indi'
+                });
+                this.toast('Aux camera connected: ' + this.auxCamera, 'ok');
+            } catch (e) {
+                this.toast('Aux camera connection failed: ' + (e.message || e), 'error');
+            }
+        },
+        async equipDisconnectAuxCamera() {
+            try {
+                await this.apiPost('/api/aux/camera/disconnect');
+                this.auxCameraConnected = false;
+                this.toast('Aux camera disconnected', 'ok');
+            } catch (e) {
+                this.toast('Aux camera disconnect failed: ' + (e.message || e), 'error');
+            }
+        },
+        setAuxFocuserDriver(driver) {
+            this.auxFocuserDriver = driver || 'indi';
+            this.auxFocuserVendorDevices = [];
+            this.auxFocuser = '';
+            this._persistRigSelection({ auxFocuserDriver: this.auxFocuserDriver, auxFocuser: '' });
+            if (this.auxFocuserDriver !== 'indi') this.detectAuxFocusers();
+        },
+        setAuxFocuser(id) {
+            this.auxFocuser = id || '';
+            this._persistRigSelection({ auxFocuser: this.auxFocuser });
+        },
+        async detectAuxFocusers() {
+            try {
+                const list = await this.apiGet(
+                    `/api/focuser/discover?driver=${encodeURIComponent(this.auxFocuserDriver)}`);
+                this.auxFocuserVendorDevices = list || [];
+            } catch (e) { this.auxFocuserVendorDevices = []; }
+        },
+        async equipConnectAuxFocuser() {
+            if (!this.auxFocuser) { this.toast('Select an aux focuser first', 'warn'); return; }
+            try {
+                const qs = this.auxFocuserDriver && this.auxFocuserDriver !== 'indi'
+                    ? `?driver=${encodeURIComponent(this.auxFocuserDriver)}` : '';
+                await this.apiPost(`/api/aux/focuser/select/${encodeURIComponent(this.auxFocuser)}${qs}`);
+                await this.apiPost('/api/aux/focuser/connect');
+                this.auxFocuserConnected = true;
+                this._persistRigSelection({
+                    auxFocuser: this.auxFocuser,
+                    auxFocuserDriver: this.auxFocuserDriver || 'indi'
+                });
+                this.toast('Aux focuser connected', 'ok');
+            } catch (e) {
+                this.toast('Aux focuser connection failed: ' + (e.message || e), 'error');
+            }
+        },
+        async equipDisconnectAuxFocuser() {
+            try {
+                await this.apiPost('/api/aux/focuser/disconnect');
+                this.auxFocuserConnected = false;
+                this.toast('Aux focuser disconnected', 'ok');
+            } catch (e) {
+                this.toast('Aux focuser disconnect failed: ' + (e.message || e), 'error');
+            }
+        },
+        async toggleAuxEnabled() {
+            try { await this.apiPost('/api/aux/enabled', { enabled: !!this.aux.enabled }); }
+            catch (e) { this.toast('Aux toggle failed: ' + (e.message || e), 'error'); }
+            this.saveAux();
+        },
+        // Persist aux optics/capture settings onto the rig (debounced).
+        saveAuxDebounced() {
+            clearTimeout(this._auxSaveTimer);
+            this._auxSaveTimer = setTimeout(() => this.saveAux(), 600);
+        },
+        saveAux() {
+            this._persistRigSelection({
+                auxFocalLengthMm: Number(this.aux.focalLengthMm) || 0,
+                auxExposureMs: Math.round((Number(this.aux.exposureSec) || 0) * 1000),
+                auxGain: Math.max(0, Number(this.aux.gain) || 0),
+                auxBinning: Math.max(1, Number(this.aux.binning) || 1),
+                auxEnabled: !!this.aux.enabled
+            });
         },
 
         // Compute the currently-selected driver descriptor for UI
@@ -29270,6 +29429,14 @@ function ninaApp() {
             if (eq.guideCamera) {
                 this.guideCameraGainMin = eq.guideCamera.gainMin || 0;
                 this.guideCameraGainMax = eq.guideCamera.gainMax || 0;
+            }
+            // Aux camera + focuser connection state + aux capture loop status.
+            this.auxCameraConnected = !!(eq.auxCamera && eq.auxCamera.connected);
+            this.auxFocuserConnected = !!(eq.auxFocuser && eq.auxFocuser.connected);
+            if (msg.auxCapture) {
+                this.auxCapture.running = !!msg.auxCapture.running;
+                this.auxCapture.frameCount = msg.auxCapture.frameCount || 0;
+                this.auxCapture.noOutputDir = !!msg.auxCapture.noOutputDir;
             }
             if (eq.telescope) {
                 const prevRa = this.mount.ra, prevDec = this.mount.dec;
