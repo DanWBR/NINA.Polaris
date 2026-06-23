@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-solver1">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-rigs1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260623-guidesmooth">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260623-guidezoom">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260620-mobile1">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260620-density1">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -3810,14 +3810,33 @@
                     <!-- Camera view + right column (bullseye + profile) -->
                     <div class="phd2-grid">
                         <div class="phd2-cam">
-                            <img x-ref="guidePhdCamImg" class="phd2-cam-img" alt=""
+                            <!-- Zoom/pan wrapper: scaling this transforms the
+                                 frame AND its marker overlay together so they
+                                 stay aligned. Wheel to zoom, drag to pan when
+                                 zoomed. -->
+                            <div class="phd2-cam-view"
                                  x-show="guider.view"
-                                 :style="'cursor:crosshair; filter: brightness(' + guideView.brightness + ') contrast(' + guideView.contrast + ')'"
-                                 title="Click a star to select it for guiding"
-                                 @load="drawGuideCamOverlay(); drawGuideStarZoom()"
-                                 @click="guideSelectStarAt($event)">
-                            <canvas x-ref="guidePhdCamOverlay" class="phd2-cam-overlay"
-                                    x-show="guider.view"></canvas>
+                                 :style="guideZoomStyle()"
+                                 @wheel.prevent="guideZoomWheel($event)"
+                                 @pointerdown="guidePanStart($event)"
+                                 @pointermove="guidePanMove($event)"
+                                 @pointerup="guidePanEnd($event)"
+                                 @pointerleave="guidePanEnd($event)">
+                                <img x-ref="guidePhdCamImg" class="phd2-cam-img" alt=""
+                                     :style="'filter: brightness(' + guideView.brightness + ') contrast(' + guideView.contrast + ')'"
+                                     title="Click a star to select it for guiding · scroll to zoom"
+                                     @load="drawGuideCamOverlay(); drawGuideStarZoom()"
+                                     @click="guideSelectStarAt($event)">
+                                <canvas x-ref="guidePhdCamOverlay" class="phd2-cam-overlay"></canvas>
+                            </div>
+                            <!-- Zoom controls (top-left). Reset hidden at 1x. -->
+                            <div class="phd2-zoom-ctl" x-show="guider.view" x-cloak>
+                                <button class="btn btn-xs" @click="guideZoomBy(1/1.4)" title="Zoom out">−</button>
+                                <span class="phd2-zoom-val" x-text="(guideView.zoom||1).toFixed(1)+'×'"></span>
+                                <button class="btn btn-xs" @click="guideZoomBy(1.4)" title="Zoom in">+</button>
+                                <button class="btn btn-xs" x-show="(guideView.zoom||1) > 1"
+                                        @click="guideZoomReset()" title="Reset zoom">⟲</button>
+                            </div>
                             <!-- Brightness / contrast for the guide frame only
                                  (CSS filter on the <img>; the star overlay is a
                                  separate canvas and stays untouched). -->
@@ -15492,7 +15511,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260623-guidesmooth"></script>
+    <script src="/js/app.js?v=20260623-guidezoom"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

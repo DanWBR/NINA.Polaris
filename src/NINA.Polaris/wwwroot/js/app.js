@@ -136,7 +136,7 @@ function ninaApp() {
         },
         // Brightness/contrast for the GUIDE camera frame (CSS filter on the
         // <img>, client-only). Restored from localStorage in init().
-        guideView: { brightness: 1, contrast: 1 },
+        guideView: { brightness: 1, contrast: 1, zoom: 1, panX: 0, panY: 0 },
         // Local model for the RA/Dec aggressiveness sliders (percent). Kept in
         // sync with the server value via x-effect ONLY while the user isn't
         // dragging — otherwise the ~1 Hz WS status snapped the slider back
@@ -15313,6 +15313,66 @@ function ninaApp() {
             this.persistGuideView();
         },
 
+        // ---- Guide-frame zoom + pan ----
+        // The frame is an <img> with the marker <canvas> overlaid; both live in
+        // a wrapper we CSS-transform, so a single scale()/translate() zooms the
+        // image AND its overlay together and they stay aligned. Click-to-select
+        // maps via getBoundingClientRect, which already reflects the transform,
+        // so star picking stays correct at any zoom. Session-only (not
+        // persisted) — a fresh look-down starts at 1x.
+        _GUIDE_ZOOM_MIN: 1,
+        _GUIDE_ZOOM_MAX: 8,
+        guideZoomStyle() {
+            const z = this.guideView.zoom || 1;
+            return 'transform: scale(' + z + ') translate(' +
+                (this.guideView.panX || 0) + 'px,' + (this.guideView.panY || 0) + 'px);' +
+                ' cursor:' + (z > 1 ? 'grab' : 'crosshair') + ';';
+        },
+        _setGuideZoom(z, persist) {
+            z = Math.max(this._GUIDE_ZOOM_MIN, Math.min(this._GUIDE_ZOOM_MAX, z));
+            this.guideView.zoom = Math.round(z * 100) / 100;
+            if (this.guideView.zoom <= 1) { this.guideView.panX = 0; this.guideView.panY = 0; }
+            this._clampGuidePan();
+        },
+        guideZoomBy(factor) { this._setGuideZoom((this.guideView.zoom || 1) * factor); },
+        guideZoomReset() { this.guideView.zoom = 1; this.guideView.panX = 0; this.guideView.panY = 0; },
+        guideZoomWheel(ev) {
+            // Wheel up = zoom in. preventDefault is set on the binding (@wheel.prevent).
+            this.guideZoomBy(ev.deltaY < 0 ? 1.2 : 1 / 1.2);
+        },
+        _clampGuidePan() {
+            const img = this.$refs.guidePhdCamImg;
+            const z = this.guideView.zoom || 1;
+            if (!img || z <= 1) { this.guideView.panX = 0; this.guideView.panY = 0; return; }
+            // Max pan (pre-scale px) that keeps the frame covering the viewport.
+            const maxX = img.clientWidth * (z - 1) / (2 * z);
+            const maxY = img.clientHeight * (z - 1) / (2 * z);
+            this.guideView.panX = Math.max(-maxX, Math.min(maxX, this.guideView.panX));
+            this.guideView.panY = Math.max(-maxY, Math.min(maxY, this.guideView.panY));
+        },
+        guidePanStart(ev) {
+            if ((this.guideView.zoom || 1) <= 1) return;
+            this._guidePan = {
+                x: ev.clientX, y: ev.clientY,
+                px: this.guideView.panX || 0, py: this.guideView.panY || 0, moved: false
+            };
+        },
+        guidePanMove(ev) {
+            const p = this._guidePan;
+            if (!p) return;
+            const z = this.guideView.zoom || 1;
+            const dx = ev.clientX - p.x, dy = ev.clientY - p.y;
+            if (Math.abs(dx) + Math.abs(dy) > 3) p.moved = true;
+            // Drag delta is screen px; divide by scale to move in pre-scale units.
+            this.guideView.panX = p.px + dx / z;
+            this.guideView.panY = p.py + dy / z;
+            this._clampGuidePan();
+        },
+        guidePanEnd() {
+            if (this._guidePan && this._guidePan.moved) this._guideDragged = true;
+            this._guidePan = null;
+        },
+
         drawGuideCamOverlay() {
             const img = this.$refs.guidePhdCamImg;
             const canvas = this.$refs.guidePhdCamOverlay;
@@ -15359,6 +15419,11 @@ function ninaApp() {
         // click from displayed pixels back to full-sensor coords (inverse of the
         // overlay transform) and asks the server to pick the closest star.
         async guideSelectStarAt(ev) {
+            // Swallow the click that ends a pan-drag so dragging to reposition a
+            // zoomed frame doesn't also re-select a star. getBoundingClientRect
+            // below already reflects the zoom/pan transform, so the coordinate
+            // mapping itself stays correct at any zoom.
+            if (this._guideDragged) { this._guideDragged = false; return; }
             const v = this.guider.view;
             const img = this.$refs.guidePhdCamImg;
             if (!v || !img) return;

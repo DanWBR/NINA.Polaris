@@ -289,10 +289,20 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 @media (max-width:760px){ .phd2-grid { grid-template-columns:1fr; } }
 .phd2-cam { position:relative; background:#000; border:1px solid #222; border-radius:6px;
     min-height:260px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+/* Zoom/pan wrapper: scaled at the centre so the frame + overlay move as one.
+   line-height:0 collapses it to the image box; overflow on .phd2-cam clips the
+   zoomed-in content. */
+.phd2-cam-view { position:relative; line-height:0; transform-origin:center center;
+    touch-action:none; will-change:transform; }
 /* Smooth (bilinear) upscale of the guide preview JPEG: it is rendered small
    server-side, so nearest-neighbour made the stars look blocky/posterized.
    ASIAIR does the same — interpolate for a clean guide image. */
-.phd2-cam-img { max-width:100%; max-height:420px; display:block; image-rendering:auto; }
+.phd2-cam-img { max-width:100%; max-height:420px; display:block; image-rendering:auto; cursor:crosshair; }
+.phd2-zoom-ctl { position:absolute; top:6px; left:6px; z-index:3; display:flex;
+    align-items:center; gap:4px; background:rgba(0,0,0,0.45); border-radius:6px;
+    padding:2px 4px; }
+.phd2-zoom-ctl .btn { min-width:24px; }
+.phd2-zoom-val { font-size:11px; color:#cfd6e4; min-width:30px; text-align:center; }
 .phd2-cam-overlay { position:absolute; left:0; top:0; pointer-events:none; }
 .phd2-cam-empty { position:absolute; font-size:12px; }
 .cal-review-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000;
