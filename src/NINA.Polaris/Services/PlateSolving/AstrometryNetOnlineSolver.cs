@@ -96,35 +96,20 @@ public class AstrometryNetOnlineSolver : IPlateSolver {
             var cal = await Http.GetFromJsonAsync<NovaCalibration>(calUrl, ct);
             if (cal == null) return PlateSolveResult.Failed("Astrometry.net returned no calibration");
 
-            var solved = new PlateSolveResult {
+            // nova's reported "orientation" is rotated 180° from the convention
+            // Polaris's annotation projector expects (north-up / east-left), so
+            // annotations came out spun 180°. Field-confirmed: the online solver
+            // needs +180° and is NOT mirrored, so we keep the scalar-rotation
+            // projector path (no CD matrix) and just add the half-turn.
+            return new PlateSolveResult {
                 Success = true,
                 SolverUsed = Id,
                 RaDeg = cal.Ra,
                 RaHours = cal.Ra / 15.0,
                 DecDeg = cal.Dec,
                 ScaleArcsecPerPixel = cal.PixScale,
-                RotationDeg = cal.Orientation
+                RotationDeg = ((cal.Orientation + 180.0) % 360.0 + 360.0) % 360.0
             };
-            // Build the CD matrix from the calibration's orientation + parity so
-            // the annotation projector lands labels on the right objects for
-            // mirrored (OSC, positive-determinant) frames — the scalar rotation
-            // alone can't express parity and was off by a flip/180°.
-            // nova parity: 0 = det(CD) positive (mirrored, e.g. raw FITS),
-            // 1 = det negative ("normal" sky). Derived to match astrometry.net's
-            // own orientation formula (CRPIX left 0 → endpoint uses the centre).
-            if (cal.PixScale > 0 && cal.Parity >= -0.5) {
-                double s = cal.PixScale / 3600.0;
-                double o = cal.Orientation * Math.PI / 180.0;
-                double c = Math.Cos(o), sn = Math.Sin(o);
-                if (cal.Parity >= 0.5) {          // parity 1: det < 0 (north-up/east-left family)
-                    solved.CD11 = -s * c; solved.CD12 = s * sn;
-                    solved.CD21 =  s * sn; solved.CD22 = s * c;
-                } else {                          // parity 0: det > 0 (mirrored)
-                    solved.CD11 = s * c;  solved.CD12 = s * sn;
-                    solved.CD21 = -s * sn; solved.CD22 = s * c;
-                }
-            }
-            return solved;
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             _logger.LogWarning(ex, "Astrometry.net solve failed");
             return PlateSolveResult.Failed(ex.Message);
