@@ -399,6 +399,11 @@ function ninaApp() {
         focusTemp: null,
         focusMoving: false,
         focusConnected: false,
+        // Connection of the focuser the manual jog targets (main/aux/guide per
+        // focusFocuserSource). Drives the FOCUS/PREVIEW jog visibility + gates,
+        // separate from focusConnected (which stays the MAIN focuser for the
+        // RIGS card + Auto V-curve main path).
+        focusJogConnected: false,
         // Driver-reported MaxPosition (capped travel of the focuser
         // gear). Used by sliders that want an absolute scale (VIDEO
         // sidebar) so the user can drag from min to max without
@@ -29597,58 +29602,13 @@ function ninaApp() {
                 }
             }
             if (eq.focuser) {
-                // Source-aware live values for the FOCUS / PREVIEW jog. The
-                // manual Focuser switch can target main / aux / guide and
-                // focusMoveTo routes the command the same way, so the position
-                // readout + slider RANGE must follow the selected source —
-                // otherwise an absolute move would send a main-range value to
-                // the aux/guide motor. Connection + device identity below stay
-                // tied to the MAIN focuser (RIGS card, capabilities).
-                const fAct = (this.focusFocuserSource === 'aux' ? eq.auxFocuser
-                            : this.focusFocuserSource === 'guide' ? eq.guideFocuser
-                            : eq.focuser) || eq.focuser;
-                this.focusPosition = fAct.position;
-                this.focusTemp = fAct.temperature;
-                this.focusMoving = fAct.moving;
-                if (typeof fAct.maxPosition === 'number' && fAct.maxPosition > 0) {
-                    this.focusMaxPosition = fAct.maxPosition;
-                } else if (this.focusFocuserSource !== 'main') {
-                    // Aux/guide focuser without a published max → unknown range,
-                    // so the absolute slider disables (relative nudges still work)
-                    // instead of reusing the main focuser's range.
-                    this.focusMaxPosition = 0;
-                }
-                // Sync the slider's pending value to the current
-                // position unless the user is actively dragging
-                // (focusSliderDirty). Without this guard the 1 Hz
-                // WS push snaps the slider back to the live position
-                // mid-drag and you can't actually move it.
-                if (!this.focusSliderDirty) {
-                    this.focusSliderTarget = fAct.position;
-                }
-                // Honour the backend's connected flag instead of
-                // assuming "the focuser is in the payload, so it's
-                // connected", same disconnect-doesn't-stick bug the
-                // camera/telescope had. Treat missing 'connected'
+                // MAIN focuser connection + device identity (RIGS focuser card,
+                // capabilities, Auto V-curve main path). The FOCUS/PREVIEW jog
+                // live values (position, range, GoTo) are handled in the
+                // source-aware block right after this one so the manual jog can
+                // target the aux/guide focuser too. Treat missing 'connected'
                 // (older server build) as true for backward compat.
                 const focuserOnline = eq.focuser.connected !== false;
-                // Seed the GoTo input with the focuser's current position once
-                // per connection (keyed on a dedicated flag, not the
-                // focusConnected edge, since equipConnectFocuser pre-sets
-                // focusConnected before the first status tick lands). Reset the
-                // flag when offline so the next connect re-seeds.
-                if (focuserOnline) {
-                    if (!this._focusGotoSeeded
-                        && typeof fAct.position === 'number') {
-                        // Seed the GoTo from the ACTIVE source focuser so "Go"
-                        // sends a value in that motor's range. Re-seeded when the
-                        // Focuser source switch changes (clears _focusGotoSeeded).
-                        this.focusGotoTarget = fAct.position;
-                        this._focusGotoSeeded = true;
-                    }
-                } else {
-                    this._focusGotoSeeded = false;
-                }
                 this.focusConnected = focuserOnline;
                 this.selectedFocuser = focuserOnline ? eq.focuser.name : null;
                 if (!this.equipFocuserChoice && eq.focuser.name) {
@@ -29665,6 +29625,50 @@ function ninaApp() {
                         backlash:    !!eq.focuser.capabilities.backlash,
                         temperature: !!eq.focuser.capabilities.temperature
                     };
+                }
+            }
+            // ---- Source-aware FOCUS/PREVIEW jog state ----
+            // The manual Focuser switch (Primary | Auxiliary | Guide) picks
+            // which motor the jog slider / GoTo / nudges drive (focusMoveTo +
+            // focusAbort route the same way). Drive the jog readout, RANGE and
+            // connection from THAT focuser so an absolute move never sends a
+            // main-range value to the aux/guide motor — and so a guide/aux
+            // focuser can be jogged even when the main imaging focuser isn't
+            // connected. This block runs independently of `eq.focuser` for
+            // exactly that reason. Device identity / RIGS card stay on main above.
+            {
+                const fSrc = this.focusFocuserSource === 'aux' ? eq.auxFocuser
+                           : this.focusFocuserSource === 'guide' ? eq.guideFocuser
+                           : eq.focuser;
+                if (fSrc) {
+                    this.focusJogConnected = fSrc.connected !== false;
+                    this.focusPosition = fSrc.position;
+                    this.focusTemp = fSrc.temperature;
+                    this.focusMoving = fSrc.moving;
+                    if (typeof fSrc.maxPosition === 'number' && fSrc.maxPosition > 0) {
+                        this.focusMaxPosition = fSrc.maxPosition;
+                    } else {
+                        // No published range → disable the absolute slider
+                        // (relative nudges still work) instead of reusing a
+                        // stale range from a different motor.
+                        this.focusMaxPosition = 0;
+                    }
+                    if (!this.focusSliderDirty) this.focusSliderTarget = fSrc.position;
+                    // Seed GoTo once per connection from the ACTIVE source; the
+                    // Focuser switch clears _focusGotoSeeded so it re-seeds.
+                    if (this.focusJogConnected) {
+                        if (!this._focusGotoSeeded && typeof fSrc.position === 'number') {
+                            this.focusGotoTarget = fSrc.position;
+                            this._focusGotoSeeded = true;
+                        }
+                    } else {
+                        this._focusGotoSeeded = false;
+                    }
+                } else {
+                    // Selected source focuser not present in the payload
+                    // (e.g. Guide selected but no guide focuser connected).
+                    this.focusJogConnected = false;
+                    this._focusGotoSeeded = false;
                 }
             }
             if (eq.filterWheel) {

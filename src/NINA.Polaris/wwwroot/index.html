@@ -2307,28 +2307,30 @@
                      (stepper + step config + info) which was eating
                      ~180px of vertical real estate before the user
                      even saw the focus preview. -->
-                <div class="focus-controls focus-controls-compact" x-show="focusConnected">
+                <div class="focus-controls focus-controls-compact" x-show="focusJogConnected">
                     <!-- ASIAIR-style stepper: two pairs of arrow
                          buttons (SLOW + FAST) plus the live position
-                         readout in the middle. -->
+                         readout in the middle. focusJogConnected follows the
+                         manual Focuser source switch, so the strip + nudges work
+                         for the aux/guide motor too (even with no main focuser). -->
                     <div class="stepper stepper-compact">
-                        <button class="btn" style="touch-action:none" :disabled="!focusConnected"
+                        <button class="btn" style="touch-action:none" :disabled="!focusJogConnected"
                                 @pointerdown.prevent="startFocusNudgeRepeat(-focusStepFast)"
                                 @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                 @pointercancel="stopFocusNudgeRepeat()"
                                 :title="'Move OUT by ' + focusStepFast + ' steps (FAST, hold to repeat)'">&laquo;</button>
-                        <button class="btn" style="touch-action:none" :disabled="!focusConnected"
+                        <button class="btn" style="touch-action:none" :disabled="!focusJogConnected"
                                 @pointerdown.prevent="startFocusNudgeRepeat(-focusStepSlow)"
                                 @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                 @pointercancel="stopFocusNudgeRepeat()"
                                 :title="'Move OUT by ' + focusStepSlow + ' steps (SLOW, hold to repeat)'">&lt;</button>
                         <span class="stepper-value" x-text="focusPosition">0</span>
-                        <button class="btn" style="touch-action:none" :disabled="!focusConnected"
+                        <button class="btn" style="touch-action:none" :disabled="!focusJogConnected"
                                 @pointerdown.prevent="startFocusNudgeRepeat(focusStepSlow)"
                                 @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                 @pointercancel="stopFocusNudgeRepeat()"
                                 :title="'Move IN by ' + focusStepSlow + ' steps (SLOW, hold to repeat)'">&gt;</button>
-                        <button class="btn" style="touch-action:none" :disabled="!focusConnected"
+                        <button class="btn" style="touch-action:none" :disabled="!focusJogConnected"
                                 @pointerdown.prevent="startFocusNudgeRepeat(focusStepFast)"
                                 @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                 @pointercancel="stopFocusNudgeRepeat()"
@@ -2358,12 +2360,12 @@
                             <span>Goto</span>
                             <input type="number" min="0" step="1"
                                    x-model.number="focusGotoTarget"
-                                   :disabled="!focusConnected || focusMoving"
+                                   :disabled="!focusJogConnected || focusMoving"
                                    @keydown.enter.prevent="focusMoveTo(focusGotoTarget)"
                                    title="Move the focuser to this absolute position">
                         </label>
                         <button class="btn btn-sm"
-                                :disabled="!focusConnected || focusMoving"
+                                :disabled="!focusJogConnected || focusMoving"
                                 @click="focusMoveTo(focusGotoTarget)"
                                 title="Go to the absolute position entered">Go</button>
                         <span class="focus-readout" x-show="focusTemp !== null"
@@ -2892,7 +2894,7 @@
                          translucent sidebar — the legend interrupts the border
                          instead of needing a solid background). Live position
                          is centered + accent-coloured below the legend. -->
-                    <fieldset class="preview-focus-block" x-show="focusConnected"
+                    <fieldset class="preview-focus-block" x-show="focusJogConnected"
                               style="border:1px solid var(--border); border-radius:8px; margin:8px 0 0; padding:2px 10px 10px; min-width:0">
                         <legend style="padding:0 6px; font-size:12px; color:var(--text-muted)">Focus</legend>
                         <div style="text-align:center; margin:2px 0 8px">
@@ -3259,7 +3261,7 @@
              :data-max BEFORE the MutationObserver
              sees the new <div> and our
              _mountWheelPickers() runs. -->
-                            <template x-if="focusConnected && focusMaxPosition > 0">
+                            <template x-if="focusJogConnected && focusMaxPosition > 0">
                                 <div class="wheel-col">
                                     <button class="btn btn-sm wheel-nudge" style="touch-action:none"
                                             :disabled="focusMoving"
@@ -15750,7 +15752,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260623-focsrc"></script>
+    <script src="/js/app.js?v=20260623-focsrc2"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
