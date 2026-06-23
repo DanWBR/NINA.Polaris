@@ -148,7 +148,8 @@
       { "image": "/assets/screenshots/gs-live.jpg", "caption": "Annotated live view: deep-sky objects labelled over the integrated stack" },
       { "image": "/assets/screenshots/star-removal.jpg", "caption": "Star removal: before and after, with the stars stripped into a separate layer" },
       { "image": "/assets/screenshots/remove-stars-dialog.jpg", "caption": "Remove stars: pick a model, set precision, and tune halo cleanup" },
-      { "image": "/assets/screenshots/image-blend.jpg", "caption": "Image Blend: recombine starless and stars with an independent stretch per layer" }
+      { "image": "/assets/screenshots/image-blend.jpg", "caption": "Image Blend: recombine starless and stars with an independent stretch per layer" },
+      { "image": "/assets/screenshots/plate-solve.jpg", "caption": "Slew & Center: plate-solving and centering on the target from the sky map" }
     ]
   }
 }

@@ -112,6 +112,9 @@ const statusClass = (s: string) => {
                   {g.images.update.selfBadge && <span class="self-badge">{g.images.update.selfBadge}</span>}
                 </div>
                 <p class="img-update-intro">{g.images.update.selfBody}</p>
+                {g.images.update.selfImage && (
+                  <img class="self-shot" src={g.images.update.selfImage} alt="The in-app software update modal with release notes and a Download & install button" loading="lazy" />
+                )}
               </div>
             )}
 
@@ -552,6 +555,13 @@ const statusClass = (s: string) => {
     white-space: nowrap;
   }
   .manual-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+  .self-shot {
+    display: block;
+    width: 100%;
+    margin-top: 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
 
   .img-grid {
     display: grid;
