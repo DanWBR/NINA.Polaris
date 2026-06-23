@@ -44,7 +44,7 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260621-i18nnav">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260620-dl1">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260620-studio1">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260623-filesort">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260620-skysearch2">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-solver1">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-rigs1">
@@ -9577,23 +9577,23 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                            :checked="files.entries.length > 0 && files.selectedPaths.length === files.entries.length"
                                            @change="filesToggleAll($event.target.checked)">
                                 </th>
-                                <th class="files-col-name">Name</th>
-                                <th class="files-col-size">Size</th>
-                                <th class="files-col-mod">Modified</th>
-                                <th class="files-col-type">Type</th>
+                                <th class="files-col-name files-col-sortable" @click="filesSortBy('name')">Name <span class="files-sort-ind" x-text="filesSortIcon('name')"></span></th>
+                                <th class="files-col-size files-col-sortable" @click="filesSortBy('size')">Size <span class="files-sort-ind" x-text="filesSortIcon('size')"></span></th>
+                                <th class="files-col-mod files-col-sortable" @click="filesSortBy('modified')">Modified <span class="files-sort-ind" x-text="filesSortIcon('modified')"></span></th>
+                                <th class="files-col-type files-col-sortable" @click="filesSortBy('type')">Type <span class="files-sort-ind" x-text="filesSortIcon('type')"></span></th>
                                 <!-- UNIF-4: FITS metadata columns,
                                      only visible when toggle is on. -->
                                 <template x-if="files.showFitsMeta">
-                                    <th class="files-col-fitsmeta">IMAGETYP</th>
+                                    <th class="files-col-fitsmeta files-col-sortable" @click="filesSortBy('imageType')">IMAGETYP <span class="files-sort-ind" x-text="filesSortIcon('imageType')"></span></th>
                                 </template>
                                 <template x-if="files.showFitsMeta">
-                                    <th class="files-col-fitsmeta">Filter</th>
+                                    <th class="files-col-fitsmeta files-col-sortable" @click="filesSortBy('filter')">Filter <span class="files-sort-ind" x-text="filesSortIcon('filter')"></span></th>
                                 </template>
                                 <template x-if="files.showFitsMeta">
-                                    <th class="files-col-fitsmeta">Target</th>
+                                    <th class="files-col-fitsmeta files-col-sortable" @click="filesSortBy('target')">Target <span class="files-sort-ind" x-text="filesSortIcon('target')"></span></th>
                                 </template>
                                 <template x-if="files.showFitsMeta">
-                                    <th class="files-col-fitsmeta">Exp (s)</th>
+                                    <th class="files-col-fitsmeta files-col-sortable" @click="filesSortBy('exposure')">Exp (s) <span class="files-sort-ind" x-text="filesSortIcon('exposure')"></span></th>
                                 </template>
                             </tr>
                         </thead>
@@ -15444,7 +15444,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260623-annotcancel"></script>
+    <script src="/js/app.js?v=20260623-filesort"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

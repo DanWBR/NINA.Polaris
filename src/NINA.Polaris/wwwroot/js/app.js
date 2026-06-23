@@ -1786,6 +1786,10 @@ function ninaApp() {
             entries: [],
             roots: [],
             showHidden: false,
+            // Column sort: key + direction (1 asc, -1 desc). Click a column
+            // header to sort by it; directories always group first.
+            sortKey: 'name',
+            sortDir: 1,
             // UNIF-4: opt-in FITS metadata columns in the list. Reads
             // initial value from localStorage so a power user who
             // always wants them on doesn't have to re-toggle each
@@ -12149,7 +12153,8 @@ function ninaApp() {
                     + '&hidden=' + (this.files.showHidden ? 'true' : 'false')
                     + (this.files.showFitsMeta ? '&withMeta=true' : ''));
                 this.files.cwd = r.path || path;
-                this.files.entries = (r.entries || []).slice().sort(this._filesSortCmp);
+                this.files.entries = (r.entries || []).slice();
+                this._filesApplySort();
                 this.files.selectedPaths = [];
                 this._filesLastShiftIndex = -1;
                 localStorage.setItem('filesCwd', this.files.cwd);
@@ -12171,6 +12176,61 @@ function ninaApp() {
         _filesSortCmp(a, b) {
             if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
             return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        },
+
+        // Value extractor for a given sort key. Returns a string or number;
+        // mixed types are normalised so the comparator stays total.
+        _filesSortVal(e, key) {
+            switch (key) {
+                case 'size':      return e.isDirectory ? -1 : (Number(e.sizeBytes) || 0);
+                case 'modified':  return e.modifiedUtc ? Date.parse(e.modifiedUtc) || 0 : 0;
+                case 'type':      return (this.filesTypeLabel(e) || '').toLowerCase();
+                case 'imageType': return (e.fitsMeta?.imageType || '').toLowerCase();
+                case 'filter':    return (e.fitsMeta?.filter || '').toLowerCase();
+                case 'target':    return (e.fitsMeta?.target || '').toLowerCase();
+                case 'exposure':  return Number(e.fitsMeta?.exposureSec) || 0;
+                case 'name':
+                default:          return (e.name || '').toLowerCase();
+            }
+        },
+
+        // Full comparator honouring files.sortKey + files.sortDir. Directories
+        // always group first (standard file-manager behaviour); ties fall back
+        // to name so the order is stable.
+        _filesCmp(a, b) {
+            if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+            const key = this.files.sortKey || 'name';
+            const dir = this.files.sortDir === -1 ? -1 : 1;
+            const va = this._filesSortVal(a, key), vb = this._filesSortVal(b, key);
+            let c;
+            if (typeof va === 'number' && typeof vb === 'number') c = va - vb;
+            else c = String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' });
+            if (c === 0 && key !== 'name')
+                c = (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' });
+            return c * dir;
+        },
+
+        // Re-sort the current entries in place using the active sort state.
+        _filesApplySort() {
+            this.files.entries = (this.files.entries || []).slice().sort((a, b) => this._filesCmp(a, b));
+        },
+
+        // Click handler for a column header: toggle direction if it's the
+        // active column, otherwise switch to it ascending.
+        filesSortBy(key) {
+            if (this.files.sortKey === key) {
+                this.files.sortDir = this.files.sortDir === 1 ? -1 : 1;
+            } else {
+                this.files.sortKey = key;
+                this.files.sortDir = 1;
+            }
+            this._filesApplySort();
+        },
+
+        // Arrow glyph for a column header (▲/▼ when active, faint ↕ otherwise).
+        filesSortIcon(key) {
+            if (this.files.sortKey !== key) return '↕';
+            return this.files.sortDir === 1 ? '▲' : '▼';
         },
 
         // Build the parent path for the ".." row + the up button.

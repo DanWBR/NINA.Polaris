@@ -1244,6 +1244,10 @@
     font-size: 12px;
     z-index: 1;
 }
+.files-col-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.files-col-sortable:hover { color: var(--text); }
+.files-sort-ind { font-size: 10px; opacity: 0.4; margin-left: 2px; }
+.files-col-sortable:hover .files-sort-ind { opacity: 0.75; }
 .files-list tbody td {
     padding: 6px 10px;
     border-bottom: 1px solid rgba(255,255,255,0.04);
