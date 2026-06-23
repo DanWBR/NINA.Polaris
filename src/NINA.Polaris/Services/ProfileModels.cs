@@ -542,6 +542,15 @@ public class EquipmentProfile {
     /// <see cref="FocuserDriver"/>. Defaults to <c>indi</c>.</summary>
     public string AuxFocuserDriver { get; set; } = "indi";
 
+    /// <summary>Guide-scope focuser device id (same addressing scheme as
+    /// <see cref="Focuser"/>). Optional; some setups motorise the guide scope.
+    /// Null = no guide focuser.</summary>
+    public string? GuideFocuser { get; set; }
+
+    /// <summary>Guide focuser backend kind. Same enum as
+    /// <see cref="FocuserDriver"/>. Defaults to <c>indi</c>.</summary>
+    public string GuideFocuserDriver { get; set; } = "indi";
+
     /// <summary>
     /// Last-known filter-wheel slot names for this rig, in slot order.
     /// Filter names normally live in the driver (INDI FILTER_NAME), but

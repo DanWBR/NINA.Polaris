@@ -378,6 +378,7 @@ public class ProfileService {
             AuxBinning = src.AuxBinning,
             AuxEnabled = src.AuxEnabled,
             AuxFocuser = src.AuxFocuser, AuxFocuserDriver = src.AuxFocuserDriver,
+            GuideFocuser = src.GuideFocuser, GuideFocuserDriver = src.GuideFocuserDriver,
             // Native guider backend selection + tunables.
             GuiderDriver = src.GuiderDriver,
             GuideCamera = src.GuideCamera, GuideCameraDriver = src.GuideCameraDriver,

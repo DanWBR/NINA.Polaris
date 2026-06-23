@@ -2448,11 +2448,12 @@
                                 </select>
                             </label>
                             <label style="display:flex; align-items:center; gap:6px"
-                                   x-show="auxFocuser" x-cloak>
+                                   x-show="auxFocuser || guideFocuser" x-cloak>
                                 Focuser
                                 <select class="input-sm" x-model="focusFocuserSource" style="width:auto">
                                     <option value="main">Primary</option>
-                                    <option value="aux">Auxiliary</option>
+                                    <option value="aux" x-show="auxFocuser">Auxiliary</option>
+                                    <option value="guide" x-show="guideFocuser">Guide</option>
                                 </select>
                             </label>
                         </div>
@@ -5705,6 +5706,56 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     </p>
                                 </div>
                             </template>
+
+                            <!-- Guide-scope focuser (manual focusing of a
+                                 motorised guide scope). -->
+                            <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+                                <div class="equip-driver-row">
+                                    <label class="equip-driver-label">Guide focuser</label>
+                                    <select class="equip-select equip-driver-select"
+                                            @change="setGuideFocuserDriver($event.target.value)">
+                                        <template x-for="d in focuserDrivers" :key="'gfd-'+d.id">
+                                            <option :value="d.id" :disabled="!d.available"
+                                                    :selected="guideFocuserDriver === d.id"
+                                                    x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div class="equip-select-row" style="margin-top:6px">
+                                    <select class="equip-select"
+                                            x-show="guideFocuserDriver === 'indi'"
+                                            @change="setGuideFocuser($event.target.value)">
+                                        <option value="">Select guide focuser</option>
+                                        <template x-for="dev in devices" :key="'gfoc-'+dev.name">
+                                            <option :value="dev.name"
+                                                    :selected="guideFocuser === dev.name"
+                                                    x-text="dev.name"></option>
+                                        </template>
+                                    </select>
+                                    <select class="equip-select"
+                                            x-show="guideFocuserDriver !== 'indi'"
+                                            @change="setGuideFocuser($event.target.value)">
+                                        <option value="" x-text="'Select guide focuser'"></option>
+                                        <template x-for="c in guideFocuserVendorDevices" :key="'gfv-'+c.id">
+                                            <option :value="c.id"
+                                                    :selected="guideFocuser === c.id"
+                                                    x-text="c.model || c.id"></option>
+                                        </template>
+                                    </select>
+                                    <label class="equip-toggle"
+                                           :title="guideFocuserConnected ? 'Disconnect guide focuser' : 'Connect guide focuser'">
+                                        <input type="checkbox"
+                                               :checked="guideFocuserConnected"
+                                               :disabled="!guideFocuser && !guideFocuserConnected"
+                                               @change="$event.target.checked ? equipConnectGuideFocuser() : equipDisconnectGuideFocuser()">
+                                        <span class="equip-toggle-track"></span>
+                                        <span class="equip-toggle-thumb"></span>
+                                    </label>
+                                </div>
+                                <p class="hint" style="margin:4px 0 0;font-size:11px">
+                                    For manual focusing of a motorised guide scope (FOCUS tab → Focuser: Guide).
+                                </p>
+                            </div>
                         </div>
                     </div>
 
@@ -15677,7 +15728,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260623-auxcam"></script>
+    <script src="/js/app.js?v=20260623-guidefoc"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

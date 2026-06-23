@@ -205,6 +205,59 @@ public static class GuiderEndpoints {
             return Results.Ok(new { status = "disconnected" });
         });
 
+        // ----- Guide-scope focuser selection + connection + manual jog -----
+        // Some setups motorise the guide scope. Mirrors the aux focuser surface
+        // (see AuxEndpoints); a separate slot from the imaging + aux focusers.
+        group.MapGet("/focuser/discover", (EquipmentManager equip, string? driver)
+            => Results.Ok(equip.GetDiscoveredFocusersFor(driver ?? "indi")));
+
+        group.MapPost("/focuser/select/{deviceName}", (EquipmentManager equip,
+                string deviceName, string? driver) => {
+            try {
+                equip.SelectGuideFocuser(driver ?? "indi", deviceName);
+                return Results.Ok(new { selected = deviceName, driver = driver ?? "indi" });
+            } catch (NotSupportedException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        group.MapPost("/focuser/connect", async (EquipmentManager equip) => {
+            if (equip.GuideFocuser == null)
+                return Results.BadRequest(new { error = "No guide focuser selected" });
+            await equip.GuideFocuser.ConnectAsync();
+            return Results.Ok(new { status = "connected", device = equip.GuideFocuser.DeviceName });
+        });
+
+        group.MapPost("/focuser/disconnect", async (EquipmentManager equip) => {
+            if (equip.GuideFocuser == null)
+                return Results.Ok(new { status = "disconnected" });
+            await equip.GuideFocuser.DisconnectAsync();
+            return Results.Ok(new { status = "disconnected" });
+        });
+
+        group.MapPost("/focuser/move/absolute", async (EquipmentManager equip,
+                FocuserEndpoints.MoveAbsoluteRequest request) => {
+            if (equip.GuideFocuser == null)
+                return Results.BadRequest(new { error = "No guide focuser selected" });
+            await equip.GuideFocuser.MoveAbsoluteAsync(request.Position);
+            return Results.Ok(new { status = "moving", target = request.Position });
+        });
+
+        group.MapPost("/focuser/move/relative", async (EquipmentManager equip,
+                FocuserEndpoints.MoveRelativeRequest request) => {
+            if (equip.GuideFocuser == null)
+                return Results.BadRequest(new { error = "No guide focuser selected" });
+            await equip.GuideFocuser.MoveRelativeAsync(request.Steps);
+            return Results.Ok(new { status = "moving", steps = request.Steps });
+        });
+
+        group.MapPost("/focuser/abort", async (EquipmentManager equip) => {
+            if (equip.GuideFocuser == null)
+                return Results.BadRequest(new { error = "No guide focuser selected" });
+            await equip.GuideFocuser.AbortAsync();
+            return Results.Ok(new { status = "stopped" });
+        });
+
         // Lock the guide star nearest a clicked point (native guider only).
         group.MapPost("/select-star", async (ActiveGuiderProvider guiders, SelectStarRequest req) => {
             if (guiders.Active is not NativeGuider ng)

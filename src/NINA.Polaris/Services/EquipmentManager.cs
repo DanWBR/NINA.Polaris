@@ -709,6 +709,24 @@ public class EquipmentManager : IDisposable {
         return AuxFocuser;
     }
 
+    /// <summary>Currently-selected guide-scope focuser. Separate slot from
+    /// <see cref="Focuser"/> and <see cref="AuxFocuser"/>; enables manual focusing
+    /// of a motorised guide scope. Null when no guide focuser is bound.</summary>
+    public IFocuser? GuideFocuser { get; private set; }
+
+    /// <summary>Driver kind bound to <see cref="GuideFocuser"/>. Mirrors
+    /// <c>EquipmentProfile.GuideFocuserDriver</c>. Null when unset.</summary>
+    public string? GuideFocuserDriver { get; private set; }
+
+    public IFocuser SelectGuideFocuser(string driver, string deviceId) {
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        GuideFocuser = CreateFocuser(driver, deviceId);
+        GuideFocuserDriver = driver;
+        _logger.LogInformation("Guide focuser selected: driver={Driver}, id={DeviceId}",
+            driver, deviceId);
+        return GuideFocuser;
+    }
+
     private static IFocuser CreateAscomFocuser(string progId) {
         if (!OperatingSystem.IsWindows())
             throw new NotSupportedException("ASCOM COM drivers only run on Windows.");
@@ -930,6 +948,24 @@ public class EquipmentManager : IDisposable {
                     reverse     = afcaps.SupportsReverse,
                     backlash    = afcaps.SupportsBacklash,
                     temperature = afcaps.SupportsTemperature
+                }
+            };
+        }
+
+        if (GuideFocuser != null) {
+            var gfcaps = GuideFocuser.Capabilities;
+            status["guideFocuser"] = new {
+                name = GuideFocuser.DeviceName,
+                connected = GuideFocuser.IsConnected,
+                position = GuideFocuser.Position,
+                temperature = Safe(GuideFocuser.Temperature),
+                maxPosition = GuideFocuser.MaxPosition,
+                moving = GuideFocuser.IsMoving,
+                capabilities = new {
+                    sync        = gfcaps.SupportsSync,
+                    reverse     = gfcaps.SupportsReverse,
+                    backlash    = gfcaps.SupportsBacklash,
+                    temperature = gfcaps.SupportsTemperature
                 }
             };
         }

@@ -944,6 +944,12 @@ function ninaApp() {
         // captures from, and which focuser the manual jog drives.
         focusCameraSource: 'main',
         focusFocuserSource: 'main',
+        // Guide-scope focuser (optional motorised guide scope). Separate slot
+        // from the imaging + aux focusers; manual jog via FOCUS → Focuser: Guide.
+        guideFocuser: '',
+        guideFocuserDriver: 'indi',
+        guideFocuserVendorDevices: [],
+        guideFocuserConnected: false,
         guideGain: 40,   // native guide-camera gain default (0 = camera default)
         // Guide-camera gain range, hydrated from eq.guideCamera each WS tick.
         // Drives the Gain dropdown (min, max + evenly spaced intermediates).
@@ -15793,6 +15799,13 @@ function ninaApp() {
                 this.auxFocuserVendorDevices = [];
                 try { this.detectAuxFocusers(); } catch (e) {}
             }
+            // Guide-scope focuser (motorised guide scope).
+            this.guideFocuser = rig.guideFocuser || '';
+            this.guideFocuserDriver = rig.guideFocuserDriver || 'indi';
+            if (this.guideFocuserDriver !== 'indi') {
+                this.guideFocuserVendorDevices = [];
+                try { this.detectGuideFocusers(); } catch (e) {}
+            }
             this.aux.focalLengthMm = rig.auxFocalLengthMm || 200;
             this.aux.exposureSec = (rig.auxExposureMs || 5000) / 1000;
             this.aux.gain = rig.auxGain || 0;
@@ -20193,11 +20206,16 @@ function ninaApp() {
             }
         },
 
+        // Base path for the focuser the FOCUS-tab manual jog drives, per the
+        // "Focuser: Primary | Auxiliary | Guide" source switch.
+        _focuserApiBase() {
+            if (this.focusFocuserSource === 'aux') return '/api/aux/focuser';
+            if (this.focusFocuserSource === 'guide') return '/api/guider/focuser';
+            return '/api/focuser';
+        },
         async focusMove(steps) {
             try {
-                const url = this.focusFocuserSource === 'aux'
-                    ? '/api/aux/focuser/move/relative' : '/api/focuser/move/relative';
-                await this.apiPost(url, { steps });
+                await this.apiPost(`${this._focuserApiBase()}/move/relative`, { steps });
             } catch (e) {
                 this.toast('Focus move failed', 'error');
             }
@@ -20241,7 +20259,7 @@ function ninaApp() {
 
         async focusMoveTo(position) {
             try {
-                await this.apiPost('/api/focuser/move/absolute', { position });
+                await this.apiPost(`${this._focuserApiBase()}/move/absolute`, { position });
             } catch (e) {
                 // A redundant commit (slider release racing the goto, or a
                 // repeat tick) can hit the backend's "already moving" guard
@@ -22362,6 +22380,51 @@ function ninaApp() {
                 this.toast('Aux focuser disconnected', 'ok');
             } catch (e) {
                 this.toast('Aux focuser disconnect failed: ' + (e.message || e), 'error');
+            }
+        },
+        // ----- Guide-scope focuser (motorised guide scope) -----
+        setGuideFocuserDriver(driver) {
+            this.guideFocuserDriver = driver || 'indi';
+            this.guideFocuserVendorDevices = [];
+            this.guideFocuser = '';
+            this._persistRigSelection({ guideFocuserDriver: this.guideFocuserDriver, guideFocuser: '' });
+            if (this.guideFocuserDriver !== 'indi') this.detectGuideFocusers();
+        },
+        setGuideFocuser(id) {
+            this.guideFocuser = id || '';
+            this._persistRigSelection({ guideFocuser: this.guideFocuser });
+        },
+        async detectGuideFocusers() {
+            try {
+                const list = await this.apiGet(
+                    `/api/guider/focuser/discover?driver=${encodeURIComponent(this.guideFocuserDriver)}`);
+                this.guideFocuserVendorDevices = list || [];
+            } catch (e) { this.guideFocuserVendorDevices = []; }
+        },
+        async equipConnectGuideFocuser() {
+            if (!this.guideFocuser) { this.toast('Select a guide focuser first', 'warn'); return; }
+            try {
+                const qs = this.guideFocuserDriver && this.guideFocuserDriver !== 'indi'
+                    ? `?driver=${encodeURIComponent(this.guideFocuserDriver)}` : '';
+                await this.apiPost(`/api/guider/focuser/select/${encodeURIComponent(this.guideFocuser)}${qs}`);
+                await this.apiPost('/api/guider/focuser/connect');
+                this.guideFocuserConnected = true;
+                this._persistRigSelection({
+                    guideFocuser: this.guideFocuser,
+                    guideFocuserDriver: this.guideFocuserDriver || 'indi'
+                });
+                this.toast('Guide focuser connected', 'ok');
+            } catch (e) {
+                this.toast('Guide focuser connection failed: ' + (e.message || e), 'error');
+            }
+        },
+        async equipDisconnectGuideFocuser() {
+            try {
+                await this.apiPost('/api/guider/focuser/disconnect');
+                this.guideFocuserConnected = false;
+                this.toast('Guide focuser disconnected', 'ok');
+            } catch (e) {
+                this.toast('Guide focuser disconnect failed: ' + (e.message || e), 'error');
             }
         },
         async toggleAuxEnabled() {
@@ -29433,6 +29496,7 @@ function ninaApp() {
             // Aux camera + focuser connection state + aux capture loop status.
             this.auxCameraConnected = !!(eq.auxCamera && eq.auxCamera.connected);
             this.auxFocuserConnected = !!(eq.auxFocuser && eq.auxFocuser.connected);
+            this.guideFocuserConnected = !!(eq.guideFocuser && eq.guideFocuser.connected);
             if (msg.auxCapture) {
                 this.auxCapture.running = !!msg.auxCapture.running;
                 this.auxCapture.frameCount = msg.auxCapture.frameCount || 0;

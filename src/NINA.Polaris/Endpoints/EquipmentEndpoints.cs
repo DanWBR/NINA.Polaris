@@ -205,6 +205,10 @@ public static class EquipmentEndpoints {
                     r.AuxFocuser = update.AuxFocuser;
                 if (!string.IsNullOrWhiteSpace(update.AuxFocuserDriver))
                     r.AuxFocuserDriver = update.AuxFocuserDriver.Trim().ToLowerInvariant();
+                if (!string.IsNullOrWhiteSpace(update.GuideFocuser))
+                    r.GuideFocuser = update.GuideFocuser;
+                if (!string.IsNullOrWhiteSpace(update.GuideFocuserDriver))
+                    r.GuideFocuserDriver = update.GuideFocuserDriver.Trim().ToLowerInvariant();
                 if (update.AuxFocalLengthMm > 0)
                     r.AuxFocalLengthMm = update.AuxFocalLengthMm;
                 if (update.AuxApertureMm >= 0)
