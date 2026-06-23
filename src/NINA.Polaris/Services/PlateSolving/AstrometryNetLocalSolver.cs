@@ -324,6 +324,13 @@ public class AstrometryNetLocalSolver : IPlateSolver {
                 // CD column matching astrometry.net's reported orientation.
                 double rot = Math.Atan2(cd21, cd11) * 180.0 / Math.PI;
                 result.RotationDeg = ((rot % 360) + 360) % 360;
+                // Keep the full CD matrix + reference pixel so the annotation
+                // projector can use it directly: it carries parity (mirror),
+                // which the scalar rotation cannot, so labels land correctly on
+                // flipped (OSC, det>0) frames without the manual 180° knob.
+                result.CD11 = cd11; result.CD12 = cd12;
+                result.CD21 = cd21; result.CD22 = cd22;
+                result.CrPix1 = D("CRPIX1"); result.CrPix2 = D("CRPIX2");
             } else if (cards.ContainsKey("CDELT2")) {
                 double cdelt2 = D("CDELT2");
                 if (cdelt2 != 0) result.ScaleArcsecPerPixel = Math.Abs(cdelt2) * 3600.0;
