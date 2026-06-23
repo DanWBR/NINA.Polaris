@@ -2702,7 +2702,12 @@ function ninaApp() {
         // STUDIO (FILES image viewer) annotation overlay. Items are in the
         // saved frame's FULL-res IMAGE pixels; rendered as OSD overlays so they
         // track zoom/pan. width/height are the solved frame's full dimensions.
-        studioAnnotate: { active: false, busy: false, width: 0, height: 0, items: [] },
+        studioAnnotate: { active: false, busy: false, width: 0, height: 0, items: [], elapsed: 0 },
+        // AbortController + elapsed timer for the in-flight annotate solve, so
+        // the viewer can show progress (shared filesSolveLog console) and let
+        // the user cancel — same UX as the FILES plate solve.
+        _annotateAbort: null,
+        _annotateTimer: null,
         imageViewerPath: '',   // absolute path of the file open in the viewer (FILES); '' for the live frame
         // LIVE tab image-history + HFR chart are now a semi-transparent
         // overlay over the stacked image. Default hidden so the focus
@@ -13632,13 +13637,25 @@ function ninaApp() {
             }
             if (this.studioAnnotate.busy) return;
             this.studioAnnotate.busy = true;
+            // Live progress: elapsed counter + the shared solver console
+            // (filesSolveLog, streamed via /ws/status plateSolve) + a
+            // cancellable request, mirroring the FILES/SKY plate solve.
+            this.studioAnnotate.elapsed = 0;
+            this.filesSolveLog = '';
+            this.filesSolveLiveActive = true;
+            const _startedAt = Date.now();
+            this._annotateTimer = setInterval(() => {
+                this.studioAnnotate.elapsed = Math.round((Date.now() - _startedAt) / 1000);
+            }, 250);
+            const ac = new AbortController();
+            this._annotateAbort = ac;
             const tid = this._transferStart({ label: 'Annotate file (solve)', direction: 'down', total: 0 });
             try {
                 // extraRotationDeg stays 0 server-side; we rotate client-side so
                 // the rotation knob is instant.
                 const r = await this.apiPost('/api/platesolve/annotate-file',
                     { path: this.imageViewerPath, flip: !!this.annotateFlip, extraRotationDeg: 0 },
-                    { timeout: 180000 });
+                    { timeout: 180000, signal: ac.signal });
                 const j = await r.json();
                 if (!j.success) {
                     this.toast('Annotate failed: ' + (j.error || 'plate solve unsuccessful'), 'error');
@@ -13670,10 +13687,28 @@ function ninaApp() {
                     ? `Annotated ${this.studioAnnotate.items.length} object(s)`
                     : 'Solved, but no catalog objects in frame') + diag, 'ok', 12000);
             } catch (e) {
-                this.toast('Annotate failed: ' + (e.message || e), 'error');
+                // AbortError = the user cancelled (or the timeout fired).
+                if (e && (e.name === 'AbortError' || /abort/i.test(e.message || ''))) {
+                    this.toast('Annotate cancelled', 'warn');
+                } else {
+                    this.toast('Annotate failed: ' + (e.message || e), 'error');
+                }
             } finally {
                 this._transferEnd(tid);
                 this.studioAnnotate.busy = false;
+                this._annotateAbort = null;
+                if (this._annotateTimer) { clearInterval(this._annotateTimer); this._annotateTimer = null; }
+                this.filesSolveLiveActive = false;
+            }
+        },
+
+        // Cancel the in-flight annotate solve. Aborts the HTTP request; the
+        // server's CancellationToken then kills the ASTAP process. (No-op when
+        // the file had an embedded WCS — that path returns instantly.)
+        cancelStudioAnnotate() {
+            if (this._annotateAbort) {
+                this._annotateAbort.abort();
+                this.toast('Cancelling annotate…', 'warn');
             }
         },
 

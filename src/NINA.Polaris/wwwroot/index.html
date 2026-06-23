@@ -14542,6 +14542,22 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="btn btn-sm" @click="reloadImageViewer()" title="Reload">↻</button>
                 <button class="btn btn-sm btn-danger" @click="closeImageViewer()">✕</button>
             </div>
+            <!-- Annotate plate-solve in-progress banner: elapsed time, live
+                 solver console (shared filesSolveLog, streamed via /ws/status),
+                 and a Cancel button — same UX as the FILES/SKY plate solve. -->
+            <div x-show="studioAnnotate.busy" x-cloak style="padding: 6px 8px;">
+                <div style="display:flex; align-items:center; gap:12px; padding: 8px 10px;
+                            border: 1px solid var(--border); border-radius: 4px; background: var(--bg-elev); font-size: 12px;">
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span>Plate solving for annotation… <strong x-text="studioAnnotate.elapsed + 's'"></strong></span>
+                    <button class="btn btn-sm" style="margin-left:auto;"
+                            @click="cancelStudioAnnotate()">Cancel</button>
+                </div>
+                <pre x-show="filesSolveLog"
+                     x-text="filesSolveLog"
+                     x-effect="filesSolveLog; $el.scrollTop = $el.scrollHeight"
+                     class="solver-output-live"></pre>
+            </div>
             <!-- Canvas + side overlay live in a wrapper so flex layout
                  can shrink the canvas when the headers panel is open. -->
             <div class="image-viewer-body"
@@ -15428,7 +15444,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260623-guideexp"></script>
+    <script src="/js/app.js?v=20260623-annotcancel"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
