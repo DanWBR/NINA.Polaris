@@ -2444,16 +2444,18 @@
                                        :disabled="manualFocus.running"
                                        title="Frames with fewer detected stars than this report HFR=NaN">
                             </label>
-                            <!-- Aux camera support: focus the primary or the
-                                 auxiliary camera + drive its own focuser. Only
-                                 shown when an aux camera is configured. -->
+                            <!-- Aux / guide camera support: focus the primary,
+                                 the auxiliary, or the guide camera + drive its
+                                 own focuser. Shown when an aux or guide camera
+                                 is configured. -->
                             <label style="display:flex; align-items:center; gap:6px"
-                                   x-show="auxCamera" x-cloak>
+                                   x-show="auxCamera || guideCamera" x-cloak>
                                 Camera
                                 <select class="input-sm" x-model="focusCameraSource"
                                         :disabled="manualFocus.running" style="width:auto">
                                     <option value="main">Primary</option>
-                                    <option value="aux">Auxiliary</option>
+                                    <option value="aux" x-show="auxCamera">Auxiliary</option>
+                                    <option value="guide" x-show="guideCamera">Guide</option>
                                 </select>
                             </label>
                             <label style="display:flex; align-items:center; gap:6px"

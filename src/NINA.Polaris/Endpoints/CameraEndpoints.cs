@@ -61,6 +61,27 @@ public static class CameraEndpoints {
                 }
             }
 
+            // Guide-scope focusing: one-shot from the guide camera, relayed to
+            // the FOCUS canvas. No live-stack / disk save. The guide camera is
+            // normally owned by the guider loop, so this is meant for when the
+            // user is NOT guiding (e.g. focusing the guide scope before a run).
+            if (string.Equals(request.CameraSource, "guide", StringComparison.OrdinalIgnoreCase)) {
+                if (equip.GuideCamera == null || !equip.GuideCamera.IsConnected)
+                    return Results.BadRequest(new { error = "No guide camera connected" });
+                try {
+                    if (request.Binning > 0)
+                        await equip.GuideCamera.SetBinningAsync(request.Binning, request.Binning);
+                    using (captureProgress.Begin("guide", request.Exposure)) {
+                        var gImg = await equip.GuideCamera.CaptureAsync(request.Exposure);
+                        await relay.RelayImageAsync(gImg!, FrameKind.Focus);
+                        var st = ComputeFocusStats(gImg!);
+                        return Results.Ok(new { status = "captured", stats = st });
+                    }
+                } catch (Exception ex) {
+                    return Results.Json(new { error = ex.Message }, statusCode: 500);
+                }
+            }
+
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected" });
 
