@@ -2461,7 +2461,8 @@
                             <label style="display:flex; align-items:center; gap:6px"
                                    x-show="auxFocuser || guideFocuser" x-cloak>
                                 Focuser
-                                <select class="input-sm" x-model="focusFocuserSource" style="width:auto">
+                                <select class="input-sm" x-model="focusFocuserSource" style="width:auto"
+                                        @change="_focusGotoSeeded = false; focusSliderDirty = false">
                                     <option value="main">Primary</option>
                                     <option value="aux" x-show="auxFocuser">Auxiliary</option>
                                     <option value="guide" x-show="guideFocuser">Guide</option>
@@ -15749,7 +15750,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260623-iso"></script>
+    <script src="/js/app.js?v=20260623-focsrc"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

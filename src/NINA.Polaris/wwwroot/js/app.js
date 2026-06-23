@@ -20375,7 +20375,7 @@ function ninaApp() {
         },
 
         async focusAbort() {
-            try { await this.apiPost('/api/focuser/abort'); } catch (e) { }
+            try { await this.apiPost(`${this._focuserApiBase()}/abort`); } catch (e) { }
         },
 
         // Software-only recovery from a wedged EAF driver. Cycles
@@ -29597,12 +29597,26 @@ function ninaApp() {
                 }
             }
             if (eq.focuser) {
-                this.focusPosition = eq.focuser.position;
-                this.focusTemp = eq.focuser.temperature;
-                this.focusMoving = eq.focuser.moving;
-                if (typeof eq.focuser.maxPosition === 'number'
-                    && eq.focuser.maxPosition > 0) {
-                    this.focusMaxPosition = eq.focuser.maxPosition;
+                // Source-aware live values for the FOCUS / PREVIEW jog. The
+                // manual Focuser switch can target main / aux / guide and
+                // focusMoveTo routes the command the same way, so the position
+                // readout + slider RANGE must follow the selected source —
+                // otherwise an absolute move would send a main-range value to
+                // the aux/guide motor. Connection + device identity below stay
+                // tied to the MAIN focuser (RIGS card, capabilities).
+                const fAct = (this.focusFocuserSource === 'aux' ? eq.auxFocuser
+                            : this.focusFocuserSource === 'guide' ? eq.guideFocuser
+                            : eq.focuser) || eq.focuser;
+                this.focusPosition = fAct.position;
+                this.focusTemp = fAct.temperature;
+                this.focusMoving = fAct.moving;
+                if (typeof fAct.maxPosition === 'number' && fAct.maxPosition > 0) {
+                    this.focusMaxPosition = fAct.maxPosition;
+                } else if (this.focusFocuserSource !== 'main') {
+                    // Aux/guide focuser without a published max → unknown range,
+                    // so the absolute slider disables (relative nudges still work)
+                    // instead of reusing the main focuser's range.
+                    this.focusMaxPosition = 0;
                 }
                 // Sync the slider's pending value to the current
                 // position unless the user is actively dragging
@@ -29610,7 +29624,7 @@ function ninaApp() {
                 // WS push snaps the slider back to the live position
                 // mid-drag and you can't actually move it.
                 if (!this.focusSliderDirty) {
-                    this.focusSliderTarget = eq.focuser.position;
+                    this.focusSliderTarget = fAct.position;
                 }
                 // Honour the backend's connected flag instead of
                 // assuming "the focuser is in the payload, so it's
@@ -29625,8 +29639,11 @@ function ninaApp() {
                 // flag when offline so the next connect re-seeds.
                 if (focuserOnline) {
                     if (!this._focusGotoSeeded
-                        && typeof eq.focuser.position === 'number') {
-                        this.focusGotoTarget = eq.focuser.position;
+                        && typeof fAct.position === 'number') {
+                        // Seed the GoTo from the ACTIVE source focuser so "Go"
+                        // sends a value in that motor's range. Re-seeded when the
+                        // Focuser source switch changes (clears _focusGotoSeeded).
+                        this.focusGotoTarget = fAct.position;
                         this._focusGotoSeeded = true;
                     }
                 } else {
