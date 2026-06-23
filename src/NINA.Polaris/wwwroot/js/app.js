@@ -15237,7 +15237,10 @@ function ninaApp() {
             // horizontally) so the star fills the view like ASIAIR.
             const side = Math.min(w, h);
             const ox = (w - side) / 2, oy = (h - side) / 2;
-            ctx.imageSmoothingEnabled = false;
+            // Bilinear interpolation so the magnified star looks smooth (ASIAIR
+            // style) instead of a blocky grid of source pixels.
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             try { ctx.drawImage(img, sx, sy, sw, sh, ox, oy, side, side); } catch (e) { return; }
 
             // Centre crosshair on the lock point.
