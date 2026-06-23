@@ -58,11 +58,11 @@ public class SequenceEngineDitherTests {
         var s = new DitherSettings();
         Assert.That(s.Enabled, Is.False, "dither should default to OFF");
         Assert.That(s.Pixels, Is.EqualTo(5.0));
-        Assert.That(s.EveryNFrames, Is.EqualTo(1));
+        Assert.That(s.EveryNFrames, Is.EqualTo(3));
         Assert.That(s.RaOnly, Is.False);
-        Assert.That(s.SettlePixels, Is.EqualTo(1.5));
-        Assert.That(s.SettleTime, Is.EqualTo(10));
-        Assert.That(s.SettleTimeout, Is.EqualTo(40));
+        Assert.That(s.SettlePixels, Is.EqualTo(3.0));
+        Assert.That(s.SettleTime, Is.EqualTo(3));
+        Assert.That(s.SettleTimeout, Is.EqualTo(60));
     }
 
     [Test]
