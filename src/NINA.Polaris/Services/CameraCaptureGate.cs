@@ -35,17 +35,39 @@ public static class CameraCaptureGate {
     private static readonly SemaphoreSlim _gate = new(1, 1);
 
     /// <summary>Run a main-camera capture under the gate. A second caller queues
-    /// behind the first instead of racing it into the native driver.</summary>
+    /// behind the first instead of racing it into the native driver.
+    ///
+    /// <paramref name="acquireTimeout"/> caps how long we wait to ENTER the gate
+    /// (not the capture itself). If the holder wedges in the native driver, a
+    /// queued capture would otherwise block forever and freeze its shutter/
+    /// progress at 0; on timeout we throw <see cref="TimeoutException"/> so the
+    /// caller fails fast and the UI resets instead of hanging until a restart.
+    /// Null = wait indefinitely (legacy).</summary>
     public static async Task<T> RunAsync<T>(Func<Task<T>> capture,
-            CancellationToken ct = default) {
-        await _gate.WaitAsync(ct);
+            CancellationToken ct = default, TimeSpan? acquireTimeout = null) {
+        if (acquireTimeout is { } to) {
+            if (!await _gate.WaitAsync(to, ct))
+                throw new TimeoutException(
+                    "Camera busy: a previous capture did not release within "
+                    + $"{to.TotalSeconds:0}s (driver may be wedged).");
+        } else {
+            await _gate.WaitAsync(ct);
+        }
         try { return await capture(); }
         finally { _gate.Release(); }
     }
 
     /// <summary>Non-generic overload for capture calls that return a plain Task.</summary>
-    public static async Task RunAsync(Func<Task> capture, CancellationToken ct = default) {
-        await _gate.WaitAsync(ct);
+    public static async Task RunAsync(Func<Task> capture, CancellationToken ct = default,
+            TimeSpan? acquireTimeout = null) {
+        if (acquireTimeout is { } to) {
+            if (!await _gate.WaitAsync(to, ct))
+                throw new TimeoutException(
+                    "Camera busy: a previous capture did not release within "
+                    + $"{to.TotalSeconds:0}s (driver may be wedged).");
+        } else {
+            await _gate.WaitAsync(ct);
+        }
         try { await capture(); }
         finally { _gate.Release(); }
     }

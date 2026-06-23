@@ -78,9 +78,17 @@ public static class CameraEndpoints {
                 // FOCUS-manual loop, a second browser tab, autofocus, sequence,
                 // video, …). Concurrent native CaptureAsync on one camera handle
                 // crashes the driver and takes the server down.
-                using (captureProgress.Begin(captureSource, request.Exposure))
-                    imageData = await CameraCaptureGate.RunAsync(
-                        () => equip.Camera.CaptureAsync(request.Exposure));
+                //
+                // captureProgress.Begin() drives the shutter countdown, so it
+                // MUST start only AFTER we hold the gate — otherwise, while
+                // queued behind another capture, the shutter would tick down to
+                // 0 and sit there (the bug: "preview shutter stuck at 0"). The
+                // acquire timeout (running exposure + 60s slack) frees the UI if
+                // the holder wedges in the driver instead of hanging forever.
+                imageData = await CameraCaptureGate.RunAsync(async () => {
+                    using (captureProgress.Begin(captureSource, request.Exposure))
+                        return await equip.Camera.CaptureAsync(request.Exposure);
+                }, acquireTimeout: TimeSpan.FromSeconds(Math.Max(request.Exposure, 1) + 60));
 
                 // PREVIEW tab: opt-in disk save under {rig}/snaps/.
                 // ImageWriterService is a no-op when ImageOutputDir is

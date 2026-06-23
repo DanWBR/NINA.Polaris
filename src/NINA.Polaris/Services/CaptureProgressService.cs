@@ -65,6 +65,18 @@ public sealed class CaptureProgressService {
     /// <summary>Immutable snapshot for the status payload.</summary>
     public CaptureProgressSnapshot Snapshot() {
         lock (_lock) {
+            // Self-expire a run that has massively overrun its exposure without
+            // an End. If a capture wedges in the native driver (INDI BLOB
+            // stall), is abandoned, or throws past the using, the shutter would
+            // otherwise tick to 0 and sit there until a server restart (field
+            // report: "preview shutter stuck at 0, won't reset"). Clearing it
+            // here only resets the UI indicator — it does not touch the camera.
+            if (_active) {
+                var slackSeconds = Math.Max(_exposureSeconds + 60.0, 45.0);
+                if ((DateTime.UtcNow - _startedUtc).TotalSeconds > slackSeconds) {
+                    _active = false;
+                }
+            }
             return new CaptureProgressSnapshot(
                 _runId, _active, _source, _exposureSeconds,
                 _active ? _startedUtc : (DateTime?)null);
