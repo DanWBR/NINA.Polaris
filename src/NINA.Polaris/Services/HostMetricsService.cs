@@ -293,6 +293,31 @@ public class HostMetricsService : BackgroundService {
                     ? home : Environment.CurrentDirectory;
             }
             var full = Path.GetFullPath(capturePath);
+
+            // Primary (Linux): resolve the containing mount from /proc/mounts —
+            // it lists EVERY mount, unlike DriveInfo.GetDrives() which can omit
+            // one like an NVMe at /mnt/nvme. That omission was the bug: the gauge
+            // kept reporting the SD card's "/" (128 GB) while images saved to the
+            // NVMe (256 GB). Pick the longest mountpoint that contains the path,
+            // then statvfs it for the real free/total.
+            var procMount = ResolveProcMount(full);
+            if (procMount != null) {
+                try {
+                    var di = new DriveInfo(procMount);
+                    if (di.TotalSize > 0)
+                        return (di.AvailableFreeSpace, di.TotalSize, procMount);
+                } catch { /* fall through */ }
+            }
+
+            // Cross-platform: statvfs the path directly. On Unix `new
+            // DriveInfo(path)` resolves the filesystem containing the path.
+            try {
+                var di = new DriveInfo(full);
+                if (di.TotalSize > 0)
+                    return (di.AvailableFreeSpace, di.TotalSize, di.Name);
+            } catch { /* fall through to enumeration */ }
+
+            // Fallback: longest-prefix match over the enumerated drives.
             DriveInfo? best = null;
             foreach (var d in DriveInfo.GetDrives()) {
                 if (!d.IsReady) continue;
@@ -306,6 +331,35 @@ public class HostMetricsService : BackgroundService {
             return (best.AvailableFreeSpace, best.TotalSize, best.Name);
         } catch {
             return (0, 0, string.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Return the longest mountpoint in <c>/proc/mounts</c> that contains
+    /// <paramref name="fullPath"/> (Linux only). Reads the kernel mount table
+    /// directly because <see cref="DriveInfo.GetDrives"/> can omit real mounts
+    /// (e.g. an NVMe at /mnt/nvme), which made the disk gauge attribute the path
+    /// to "/" instead. Null when not on Linux / no match / read fails.
+    /// </summary>
+    private static string? ResolveProcMount(string fullPath) {
+        try {
+            if (!File.Exists("/proc/mounts")) return null;
+            string? best = null;
+            foreach (var line in File.ReadLines("/proc/mounts")) {
+                // Format: "<device> <mountpoint> <fstype> <opts> ...".
+                // Spaces in the mountpoint are octal-escaped as \040.
+                var parts = line.Split(' ');
+                if (parts.Length < 2) continue;
+                var mp = parts[1].Replace("\\040", " ");
+                if (mp.Length == 0) continue;
+                bool contains = mp == "/"
+                    ? true
+                    : (fullPath == mp || fullPath.StartsWith(mp + "/", StringComparison.Ordinal));
+                if (contains && (best == null || mp.Length > best.Length)) best = mp;
+            }
+            return best;
+        } catch {
+            return null;
         }
     }
 
