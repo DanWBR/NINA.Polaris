@@ -188,6 +188,62 @@ public static class FitsThumbnailer {
         return (double)adj / step2 > 1.8;
     }
 
+    /// <summary>
+    /// Cosmetic single-pixel hot/warm-pixel suppression for the guide preview.
+    /// Uncooled guide cameras sprinkle the field with isolated bright pixels
+    /// that survive the dark-background stretch as a swarm of little white dots
+    /// over the real stars. This replaces a pixel with the max of its 8
+    /// neighbours ONLY when it is a strict local maximum that towers far above
+    /// them — the signature of a 1-pixel defect. A real star is a cluster of
+    /// bright pixels, so its neighbours are nearly as bright and it is left
+    /// untouched. Returns a filtered COPY (the camera's raw buffer feeds star
+    /// detection and must never be mutated). Threshold is derived from a robust
+    /// noise estimate (sampled median + MAD) so it adapts to gain/exposure.
+    /// </summary>
+    internal static ushort[] SuppressHotPixels(ushort[] src, int width, int height) {
+        if (src.Length < (long)width * height || width < 3 || height < 3) return src;
+
+        // Robust background estimate from a strided sample (median + MAD).
+        int n = width * height;
+        int stride = Math.Max(1, n / 8192);
+        var sample = new List<ushort>(n / stride + 1);
+        for (int i = 0; i < n; i += stride) sample.Add(src[i]);
+        sample.Sort();
+        double median = sample[sample.Count / 2];
+        // MAD via a second pass over the same sample.
+        for (int i = 0; i < sample.Count; i++)
+            sample[i] = (ushort)Math.Min(65535, Math.Abs(sample[i] - median));
+        sample.Sort();
+        double mad = sample[sample.Count / 2];
+        double sigma = Math.Max(1.0, mad * 1.4826);
+        // An isolated speck is a pixel that clears the background AND whose
+        // brightest neighbour is still back down at the background floor — i.e.
+        // it stands completely alone. A real star is a cluster, so its
+        // neighbours are also above the floor and it is left untouched. This
+        // distinction is signal-independent, so a sharp/undersampled star core
+        // (which can tower over its neighbours) is never clipped.
+        double floor = median + 6.0 * sigma;
+
+        var dst = (ushort[])src.Clone();
+        for (int y = 1; y < height - 1; y++) {
+            int row = y * width;
+            for (int x = 1; x < width - 1; x++) {
+                int idx = row + x;
+                int v = src[idx];
+                if (v < floor) continue;   // background / faint: leave alone
+                // Brightest of the 8 neighbours.
+                int nmax = 0;
+                int up = idx - width, dn = idx + width;
+                nmax = Math.Max(nmax, src[idx - 1]); nmax = Math.Max(nmax, src[idx + 1]);
+                nmax = Math.Max(nmax, src[up - 1]); nmax = Math.Max(nmax, src[up]); nmax = Math.Max(nmax, src[up + 1]);
+                nmax = Math.Max(nmax, src[dn - 1]); nmax = Math.Max(nmax, src[dn]); nmax = Math.Max(nmax, src[dn + 1]);
+                // Stands alone (every neighbour back at the floor) → speck.
+                if (nmax < floor) dst[idx] = (ushort)nmax;
+            }
+        }
+        return dst;
+    }
+
     public static byte[] RenderJpegFromBuffer(ushort[] pixels, int width, int height,
                                               int bitDepth, int maxDim = 256, int quality = 85,
                                               NINA.Image.ImageAnalysis.AutoStretch.StretchParams? overrideParams = null,
@@ -219,6 +275,13 @@ public static class FitsThumbnailer {
             }
             pixels = ds; width = gw; height = gh;
         }
+
+        // Guide preview only: knock out isolated single-pixel hot/warm pixels
+        // before the stretch. Uncooled guide cams sprinkle the field with bright
+        // specks that survive the dark-background stretch as a constellation of
+        // little white dots over the real stars. Done on a COPY so the camera's
+        // raw buffer (used by star detection) is never mutated.
+        if (guideStretch) pixels = SuppressHotPixels(pixels, width, height);
 
         // Auto-stretch lives in NINA.Image (vendored portable copy).
         // GX-12c: when overrideParams is set, skip the auto-stretch
