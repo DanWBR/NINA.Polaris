@@ -239,6 +239,58 @@ public class AutoFocusServiceTests {
         Assert.That(inner.Count, Is.EqualTo(pts.Count));
     }
 
+    // ---- RejectLowWingOutliers ----
+
+    [Test]
+    public void RejectLowWingOutliers_DefocusDip_DropsTheLowFarPoint() {
+        // Clean V plus one far-defocus sample whose HFR collapses back down:
+        // the star has spread into a faint donut the detector can't measure, so
+        // it reads spuriously LOW even though it is further out of focus. On a
+        // convex V that is physically impossible, so it must be dropped.
+        var pts = Pts(
+            (4800, 8.5), (4850, 6.2), (4900, 4.0), (4950, 2.3), (5000, 1.5),
+            (5050, 2.3), (5100, 4.1), (5150, 6.3), (5200, 8.4),
+            (5250, 3.0)   // far-defocus dip — detection failure
+        );
+
+        var kept = AutoFocusService.RejectLowWingOutliers(pts, out var rejected);
+
+        Assert.That(rejected, Has.Count.EqualTo(1));
+        Assert.That(rejected[0].Position, Is.EqualTo(5250));
+        Assert.That(kept, Has.None.Matches<AutoFocusPoint>(p => p.Position == 5250));
+        Assert.That(kept, Has.Some.Matches<AutoFocusPoint>(p => p.Position == 5200));
+    }
+
+    [Test]
+    public void RejectLowWingOutliers_CleanVCurve_KeepsEverything() {
+        // Monotonic arms on both sides: nothing dips, nothing to drop.
+        var pts = Pts(
+            (4800, 8.5), (4850, 6.2), (4900, 4.0), (4950, 2.3), (5000, 1.5),
+            (5050, 2.3), (5100, 4.1), (5150, 6.3), (5200, 8.4)
+        );
+
+        var kept = AutoFocusService.RejectLowWingOutliers(pts, out var rejected);
+
+        Assert.That(rejected, Is.Empty);
+        Assert.That(kept.Count, Is.EqualTo(pts.Count));
+    }
+
+    [Test]
+    public void RejectLowWingOutliers_BothWingsDip_DropsBothFarPoints() {
+        // A defocus-detection failure on each extreme.
+        var pts = Pts(
+            (4750, 2.5),  // far-defocus dip on the left
+            (4800, 8.5), (4850, 6.2), (4900, 4.0), (4950, 2.3), (5000, 1.5),
+            (5050, 2.3), (5100, 4.1), (5150, 6.3), (5200, 8.4),
+            (5250, 3.0)   // far-defocus dip on the right
+        );
+
+        var kept = AutoFocusService.RejectLowWingOutliers(pts, out var rejected);
+
+        Assert.That(rejected, Has.Count.EqualTo(2));
+        Assert.That(kept, Has.None.Matches<AutoFocusPoint>(p => p.Position == 4750 || p.Position == 5250));
+    }
+
     // ---- Settings / state defaults ----
 
     [Test]

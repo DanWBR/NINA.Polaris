@@ -162,18 +162,32 @@ public class AutoFocusService {
                     $"Not enough valid samples to fit parabola ({validPoints.Count} of {positions.Count})");
             }
 
-            // Trim the flat shoulders first: on a fast scope / coarse step the
+            // Drop "low wing" samples first: a heavily-defocused star is a faint
+            // donut the detector can miss, latching onto noise blobs whose median
+            // HFR reads far too LOW. Physically a V-curve only RISES away from
+            // focus, so a sample whose HFR drops as it defocuses further is bogus
+            // (the operator's exact complaint: low HFR at the fully-defocused ends
+            // wrecking the V). Reject them before the fit so they can't drag the
+            // vertex. Flagged, not deleted, so the chart still shows them.
+            var wingClean = RejectLowWingOutliers(validPoints, out var lowWing);
+            if (lowWing.Count > 0) {
+                _logger.LogInformation(
+                    "AF: dropped {Count} low-HFR wing sample(s) (defocus detection failures) at {Pos}",
+                    lowWing.Count, string.Join(", ", lowWing.Select(p => p.Position)));
+            }
+
+            // Trim the flat shoulders next: on a fast scope / coarse step the
             // sweep extremes saturate (HFR stops growing), so the V-curve looks
             // like a skate ramp with a plateau on each side. Those plateaus are
             // many consistent points the residual sigma-clip below won't catch,
             // and they pull the parabola wider/flatter and shift the vertex off
             // true focus. Fit only the inner V. Dropped points are flagged (not
             // deleted) so the chart still shows them.
-            var innerPoints = TrimPlateaus(validPoints);
+            var innerPoints = TrimPlateaus(wingClean);
             foreach (var p in validPoints) {
                 if (!innerPoints.Contains(p)) p.Rejected = true;
             }
-            int trimmedCount = validPoints.Count - innerPoints.Count;
+            int trimmedCount = wingClean.Count - innerPoints.Count;
             if (trimmedCount > 0) {
                 _logger.LogInformation(
                     "AF: trimmed {Count} flat plateau point(s) from the V-curve shoulders before fitting",
@@ -446,6 +460,66 @@ public class AutoFocusService {
 
         fit = FitParabola(inliers);
         return (fit, inliers, rejected);
+    }
+
+    /// <summary>
+    /// Reject "low wing" samples: HFR readings that DROP as the star defocuses
+    /// further from focus. A real V-curve is convex — moving away from the
+    /// vertex, HFR only increases — so a wing sample lower than the highest HFR
+    /// already seen on its way out is unphysical. It happens when a heavily
+    /// defocused star (a faint, large donut) is missed by the detector, which
+    /// instead latches onto noise blobs whose median HFR reads far too small.
+    /// Those points sit well below the V on the shoulders and drag the
+    /// least-squares vertex sideways; the residual sigma-clip alone misses them
+    /// when several occur together.
+    ///
+    /// Walking outward from the lowest-HFR sample (the vertex) on each side, a
+    /// sample is dropped when its HFR falls below the running maximum minus a
+    /// tolerance (a fraction of the HFR range). Near the vertex the running max
+    /// is small, so normal scatter is never touched; only a clear drop after the
+    /// curve has already climbed is rejected.
+    /// </summary>
+    /// <param name="points">Valid sweep samples (any order).</param>
+    /// <param name="rejected">Receives the dropped low-wing samples.</param>
+    /// <param name="tolFraction">A drop counts as bogus when it exceeds this
+    /// fraction of the curve's HFR range below the running maximum.</param>
+    public static List<AutoFocusPoint> RejectLowWingOutliers(
+            IReadOnlyList<AutoFocusPoint> points,
+            out List<AutoFocusPoint> rejected,
+            double tolFraction = 0.2) {
+        rejected = new List<AutoFocusPoint>();
+        var sorted = points.OrderBy(p => p.Position).ToList();
+        int n = sorted.Count;
+        if (n < 5) return sorted;   // too few to tell a wing from the bowl
+
+        int vertex = 0;
+        for (int i = 1; i < n; i++)
+            if (sorted[i].HFR < sorted[vertex].HFR) vertex = i;
+        double min = sorted.Min(p => p.HFR), max = sorted.Max(p => p.HFR);
+        double range = max - min;
+        if (range <= 0) return sorted;
+        double tol = tolFraction * range;
+
+        var drop = new HashSet<AutoFocusPoint>();
+        // Left wing: outward = toward lower index.
+        double runMax = sorted[vertex].HFR;
+        for (int i = vertex - 1; i >= 0; i--) {
+            if (sorted[i].HFR < runMax - tol) drop.Add(sorted[i]);
+            else runMax = Math.Max(runMax, sorted[i].HFR);
+        }
+        // Right wing: outward = toward higher index.
+        runMax = sorted[vertex].HFR;
+        for (int i = vertex + 1; i < n; i++) {
+            if (sorted[i].HFR < runMax - tol) drop.Add(sorted[i]);
+            else runMax = Math.Max(runMax, sorted[i].HFR);
+        }
+
+        if (drop.Count == 0) return sorted;
+        // Keep at least 3 points to remain fittable; if over-zealous, bail.
+        var kept = sorted.Where(p => !drop.Contains(p)).ToList();
+        if (kept.Count < 3) return sorted;
+        rejected.AddRange(drop);
+        return kept;
     }
 
     /// <summary>
