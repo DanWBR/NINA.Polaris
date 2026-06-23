@@ -32,6 +32,7 @@ public sealed partial class NativeGuider {
         var token = _loopCts.Token;
         _paused = false;
         _starLostCount = 0;
+        _warned8Bit = false;
         SetAppState(mode == LoopMode.Guide ? "Guiding" : "Looping");
         _loopTask = Task.Run(() => LoopAsync(mode, token), token);
     }
@@ -241,6 +242,44 @@ public sealed partial class NativeGuider {
     // Pi over USB + LAN, while failing fast enough to retry.
     private const int GuideCaptureCushionMs = 8000;
 
+    // One-shot guard so we warn at most once per loop session (reset in
+    // StartLoop) when the guide camera is actually delivering 8-bit frames.
+    private bool _warned8Bit;
+
+    /// <summary>Warn (once per session) when the guide frames come back
+    /// effectively 8-bit despite the RAW16 enforcement in the camera adapter.
+    /// An 8-bit FITS frame is decoded into the HIGH byte of each 16-bit sample
+    /// (value &lt;&lt; 8), so every pixel's low byte is zero and only 256 grey
+    /// levels exist — the preview posterizes ("totally pixelated", few B&amp;W
+    /// nuances) even though guiding still works on the raw star peaks. The fix
+    /// is to set the camera capture format to RAW16 (RIGS / INDI panel); this
+    /// just tells the user that's what's happening.</summary>
+    private void WarnIfEightBitOnce(IImageData img) {
+        if (_warned8Bit) return;
+        var d = img.Data;
+        if (d == null || d.Length == 0) return;
+        // Sample evenly across the frame: if every non-zero sample has a zero
+        // low byte, the data is 8-bit shifted into the high byte. A genuine
+        // 12/16-bit frame has varied low bytes, so this won't false-positive.
+        int n = d.Length;
+        int step = Math.Max(1, n / 4096);
+        bool anyNonZero = false, anyLowByte = false;
+        for (int i = 0; i < n; i += step) {
+            ushort v = d[i];
+            if (v == 0) continue;
+            anyNonZero = true;
+            if ((v & 0xFF) != 0) { anyLowByte = true; break; }
+        }
+        if (!anyNonZero) return;   // empty / dropped frame; re-check next time
+        _warned8Bit = true;
+        if (!anyLowByte) {
+            RaiseAlert(
+                "Guide camera is sending 8-bit (RAW8) frames — the preview will look " +
+                "posterized/pixelated. Set the camera capture format to RAW16 " +
+                "(RIGS or the INDI control panel) for smooth guide images.", "warn");
+        }
+    }
+
     private async Task<IImageData?> CaptureFullAsync(ICamera cam, CancellationToken ct) {
         int expMs = Math.Max(50, Rig.NativeGuideExposureMs);
         int bin = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4);
@@ -271,8 +310,10 @@ public sealed partial class NativeGuider {
             // Apply the dark library / bad-pixel map (per NativeGuideCalibrationMode)
             // before any consumer sees the frame, so star detection, the multi-star
             // tracker, calibration and the live view all run on a calibrated frame.
-            if (img?.Data != null)
+            if (img?.Data != null) {
                 ApplyCalibrationInPlace(img.Data, img.Properties.Width, img.Properties.Height);
+                WarnIfEightBitOnce(img);
+            }
             return img;
         } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
             // Our budget elapsed, not a user Stop: a dropped/stalled frame.
