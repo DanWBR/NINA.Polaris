@@ -1053,7 +1053,16 @@
                     <div class="shutter-inputs">
                     <div class="control-row">
                         <label>Exposure (s)<input type="number" x-model.number="exposure" list="exposure-presets" step="any" min="0" class="input-sm"></label>
-                        <label>Gain<input type="number" x-model.number="gain" step="10" min="0" class="input-sm">  </label>
+                        <!-- DSLR (indi_gphoto): pick ISO from the camera's list. -->
+                        <label x-show="cameraUsesIso()" x-cloak>ISO
+                            <select class="input-sm" x-model.number="cameraIso.selected"
+                                    @change="setIso(cameraIso.selected)">
+                                <template x-for="v in cameraIso.options" :key="'iso'+v">
+                                    <option :value="v" x-text="v"></option>
+                                </template>
+                            </select>
+                        </label>
+                        <label x-show="!cameraUsesIso()">Gain<input type="number" x-model.number="gain" step="10" min="0" class="input-sm">  <span class="gain-help" tabindex="0" role="img" aria-label="About gain vs ISO" :title="gainIsoHint()">?</span></label>
                         <!-- ZWO L/M/H gain presets, render only when the
                              active camera matches a known ZWO model. -->
                         <span class="zwo-gain-presets" x-show="zwoPresetsForActiveCamera()"
@@ -15738,7 +15747,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260623-afsource"></script>
+    <script src="/js/app.js?v=20260623-iso"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

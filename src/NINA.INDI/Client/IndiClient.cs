@@ -673,6 +673,7 @@ public class IndiClient : IDisposable {
                 break;
             case IndiSwitchProperty esp when update is IndiSwitchProperty usp:
                 foreach (var (k, v) in usp.Values) esp.Values[k] = v;
+                foreach (var (k, v) in usp.Labels) esp.Labels[k] = v;
                 break;
             case IndiLightProperty elp when update is IndiLightProperty ulp:
                 foreach (var (k, v) in ulp.Values) elp.Values[k] = v;

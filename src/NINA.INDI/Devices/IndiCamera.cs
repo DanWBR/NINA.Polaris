@@ -141,11 +141,48 @@ public class IndiCamera : ICamera {
     // best-effort read here and return 0 when nothing matches.
     public int Gain => (int)_client.GetNumber(DeviceName, "CCD_CONTROLS", "Gain");
 
-    // ISO is not part of the INDI CCD spec, astronomy cameras report
-    // analogue gain instead. Empty list signals the UI to hide the ISO
-    // dropdown for INDI cameras.
-    public IReadOnlyList<int> IsoOptions => Array.Empty<int>();
-    public int SelectedIso => 0;
+    // ISO is not part of the INDI CCD spec; dedicated astronomy cameras report
+    // analogue gain instead and never publish CCD_ISO, so IsoOptions stays
+    // empty and the UI hides the ISO dropdown. DSLRs via indi_gphoto DO publish
+    // a CCD_ISO switch vector whose element labels carry the ISO value
+    // ("Auto","100","200",...). We surface those as the ISO list.
+    public IReadOnlyList<int> IsoOptions {
+        get {
+            var sw = _client.GetProperty(DeviceName, "CCD_ISO") as IndiSwitchProperty;
+            if (sw == null) return Array.Empty<int>();
+            var set = new SortedSet<int>();
+            foreach (var name in sw.Values.Keys) {
+                var lbl = sw.Labels.TryGetValue(name, out var l) ? l : name;
+                if (TryParseIso(lbl, out var iso) || TryParseIso(name, out iso))
+                    set.Add(iso);
+            }
+            return set.Count > 0 ? set.ToArray() : Array.Empty<int>();
+        }
+    }
+
+    public int SelectedIso {
+        get {
+            var sw = _client.GetProperty(DeviceName, "CCD_ISO") as IndiSwitchProperty;
+            if (sw == null) return 0;
+            foreach (var (name, on) in sw.Values) {
+                if (!on) continue;
+                var lbl = sw.Labels.TryGetValue(name, out var l) ? l : name;
+                if (TryParseIso(lbl, out var iso) || TryParseIso(name, out iso))
+                    return iso;
+            }
+            return 0;
+        }
+    }
+
+    /// <summary>Parse an ISO value from a CCD_ISO element label/name. Strips
+    /// any non-digits ("ISO 800" -> 800) and rejects 0 / non-numeric entries
+    /// like "Auto" so they never appear as a selectable speed.</summary>
+    private static bool TryParseIso(string? s, out int iso) {
+        iso = 0;
+        if (string.IsNullOrWhiteSpace(s)) return false;
+        var digits = new string(s.Where(char.IsDigit).ToArray());
+        return digits.Length > 0 && int.TryParse(digits, out iso) && iso > 0;
+    }
 
     /// <summary>Per-instance capabilities, SupportsVideoStream gets
     /// recomputed lazily from whether the driver advertises
@@ -159,9 +196,12 @@ public class IndiCamera : ICamera {
             var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
             var supportsWb = ctrl?.Values.ContainsKey("WB_R") == true
                           && ctrl.Values.ContainsKey("WB_B");
+            // DSLRs (indi_gphoto) publish CCD_ISO; astronomy cameras don't.
+            var supportsIso = _client.GetProperty(DeviceName, "CCD_ISO") is IndiSwitchProperty;
             return CameraCapabilities.Astro with {
                 SupportsVideoStream = supportsStream,
-                SupportsWhiteBalance = supportsWb
+                SupportsWhiteBalance = supportsWb,
+                SupportsIso = supportsIso
             };
         }
     }
@@ -479,8 +519,26 @@ public class IndiCamera : ICamera {
         } catch { /* driver rejected the switch, silent */ }
     }
 
-    /// <summary>INDI astronomy cameras don't expose ISO. No-op.</summary>
-    public Task SetIsoAsync(int iso, CancellationToken ct = default) => Task.CompletedTask;
+    /// <summary>Select an ISO on a DSLR (indi_gphoto CCD_ISO switch). No-op
+    /// for astronomy cameras that don't publish CCD_ISO.</summary>
+    public async Task SetIsoAsync(int iso, CancellationToken ct = default) {
+        var sw = _client.GetProperty(DeviceName, "CCD_ISO") as IndiSwitchProperty;
+        if (sw == null) return;
+        // Find the element whose label/name parses to the requested ISO, then
+        // drive a OneOfMany switch: that element On, all others Off.
+        string? target = null;
+        foreach (var name in sw.Values.Keys) {
+            var lbl = sw.Labels.TryGetValue(name, out var l) ? l : name;
+            if ((TryParseIso(lbl, out var v) || TryParseIso(name, out v)) && v == iso) {
+                target = name;
+                break;
+            }
+        }
+        if (target == null) return;   // requested ISO not offered by the driver
+        var states = sw.Values.Keys.ToDictionary(k => k, k => k == target);
+        try { await _client.SetSwitchAsync(DeviceName, "CCD_ISO", states, ct); }
+        catch { /* driver rejected, silent */ }
+    }
 
     public async Task<IImageData> CaptureAsync(double exposureSeconds, CaptureOptions? opts = null, CancellationToken ct = default) {
         // Re-assert BLOB delivery before every capture. INDI's

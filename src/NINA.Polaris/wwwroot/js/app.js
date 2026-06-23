@@ -1148,6 +1148,11 @@ function ninaApp() {
             bulb: false, videoStream: false, whiteBalance: false,
             maxX: 0, maxY: 0
         },
+        // DSLR ISO list + selection (populated by loadCameraCapabilities from
+        // the camera's CCD_ISO). Empty options => the camera uses analogue gain
+        // and the UI keeps the numeric Gain control. gainMin/Max drive the
+        // gain↔ISO helper tooltip range.
+        cameraIso: { options: [], selected: 0, gainMin: 0, gainMax: 0 },
         videoRecording: {
             recording: false, path: null, frames: 0, bytes: 0,
             durationSec: 0, droppedFrames: 0, lastError: null
@@ -4995,6 +5000,30 @@ function ninaApp() {
         isHcgActive(gain) {
             const t = this.hcgThreshold();
             return t != null && Number(gain) >= t;
+        },
+
+        // ----- Gain ↔ ISO helpers -----
+        // True when the active main camera is a DSLR exposing an ISO list.
+        cameraUsesIso() { return (this.cameraIso.options || []).length > 0; },
+        // Select an ISO on the camera (DSLR / indi_gphoto).
+        async setIso(iso) {
+            const v = Number(iso);
+            this.cameraIso.selected = v;
+            try { await this.apiPost('/api/camera/iso', { iso: v }); }
+            catch (e) { this.toast('ISO set failed: ' + (e.message || e), 'error'); }
+        },
+        // Plain-language explainer relating analogue gain to the ISO most
+        // people know from regular cameras. Shown as the Gain "?" tooltip on
+        // astro cameras. Appends the driver-reported gain range when known.
+        gainIsoHint() {
+            let s = 'Gain is analogue amplification — the astro-camera analogue of '
+                  + 'a DSLR’s ISO. Higher gain brightens the image and lowers '
+                  + 'read noise, but reduces dynamic range and full-well capacity. '
+                  + 'Like ISO, it does not collect more light; exposure time and '
+                  + 'aperture do that.';
+            const lo = this.cameraIso.gainMin, hi = this.cameraIso.gainMax;
+            if (hi > lo) s += ` This camera’s gain range is ${lo}–${hi}.`;
+            return s;
         },
 
         // ----- Camera read-mode / HCG driver control (INDI) -----
@@ -18997,6 +19026,13 @@ function ninaApp() {
                     this.video.wbMax = r.whiteBalanceMax;
                 if (r && typeof r.whiteBalanceR === 'number') this.video.wbR = r.whiteBalanceR;
                 if (r && typeof r.whiteBalanceB === 'number') this.video.wbB = r.whiteBalanceB;
+                // DSLR ISO: when the active camera (indi_gphoto) publishes a
+                // CCD_ISO list, surface it so the capture UIs can show an ISO
+                // dropdown instead of the numeric Gain field.
+                this.cameraIso.options = Array.isArray(r?.isoOptions) ? r.isoOptions : [];
+                this.cameraIso.selected = (r && typeof r.selectedIso === 'number') ? r.selectedIso : 0;
+                if (r && typeof r.gainMin === 'number') this.cameraIso.gainMin = r.gainMin;
+                if (r && typeof r.gainMax === 'number') this.cameraIso.gainMax = r.gainMax;
                 // If the rig had a saved ROI, push it to the camera
                 // now (subframe sticks across server restarts but not
                 // across camera reconnects, which is the more common
@@ -21815,6 +21851,9 @@ function ninaApp() {
                 });
                 this.toast('Camera connected: ' + this.equipCameraChoice, 'ok');
                 this.pollCameraInfo();
+                // Refresh capabilities so the ISO list (DSLR) / gain range
+                // populate for the capture tabs, not just after a VIDEO open.
+                this.loadCameraCapabilities();
             } catch (e) {
                 this.toast('Camera connection failed: ' + e.message, 'error');
             }

@@ -72,6 +72,11 @@ public class IndiNumberElement {
 public class IndiSwitchProperty : IndiProperty {
     public IndiSwitchRule Rule { get; set; } = IndiSwitchRule.OneOfMany;
     public Dictionary<string, bool> Values { get; set; } = new();
+    /// <summary>Element name -> human label, as published in the defSwitch
+    /// vector. Needed because some drivers (notably indi_gphoto's CCD_ISO)
+    /// carry the meaningful value in the label (e.g. "100") while the element
+    /// name is opaque (e.g. "ISO5"). Empty until the property is defined.</summary>
+    public Dictionary<string, string> Labels { get; set; } = new();
 }
 
 public class IndiLightProperty : IndiProperty {

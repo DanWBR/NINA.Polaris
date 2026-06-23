@@ -270,6 +270,15 @@ public static class CameraEndpoints {
                 whiteBalanceB = equip.Camera.WhiteBalanceB,
                 whiteBalanceMin = equip.Camera.WhiteBalanceMin,
                 whiteBalanceMax = equip.Camera.WhiteBalanceMax,
+                // Gain (analogue amplification, the astro-camera analogue of a
+                // DSLR's ISO) + its driver-reported range, and the ISO list for
+                // DSLRs. The UI shows an ISO dropdown when isoOptions is
+                // non-empty, otherwise the numeric Gain control.
+                gain = equip.Camera.Gain,
+                gainMin = equip.Camera.GainMin,
+                gainMax = equip.Camera.GainMax,
+                selectedIso = equip.Camera.SelectedIso,
+                isoOptions = equip.Camera.IsoOptions,
                 // Report which driver + device is currently bound so the
                 // frontend can reconcile its dropdown state on page reload
                 // (the cameraDriver Alpine state defaults from the saved
@@ -303,6 +312,18 @@ public static class CameraEndpoints {
                     statusCode: 501);
             await equip.Camera.SetWhiteBalanceAsync(req.Red, req.Blue);
             return Results.Ok(new { red = req.Red, blue = req.Blue });
+        });
+
+        // DSLR ISO selection (indi_gphoto CCD_ISO). 501 when the active camera
+        // doesn't expose ISO so the UI keeps the numeric Gain control instead.
+        group.MapPost("/iso", async (EquipmentManager equip, IsoRequest req) => {
+            if (equip.Camera == null)
+                return Results.BadRequest(new { error = "No camera selected" });
+            if (!equip.Camera.Capabilities.SupportsIso)
+                return Results.Json(new { error = "Camera does not support ISO" },
+                    statusCode: 501);
+            await equip.Camera.SetIsoAsync(req.Iso);
+            return Results.Ok(new { iso = req.Iso });
         });
 
         // VIDEO tab FOV / ROI selection. Planetary capture needs the
@@ -528,6 +549,7 @@ public static class CameraEndpoints {
     /// per default and lets the user push outside.</summary>
     public record WhiteBalanceRequest(double Red, double Blue);
     public record SubframeRequest(int X, int Y, int Width, int Height);
+    public record IsoRequest(int Iso);
 
     /// <summary>Start-stream body. ForceLoop=true skips native streaming
     /// even when the camera supports it (debugging the fallback).</summary>

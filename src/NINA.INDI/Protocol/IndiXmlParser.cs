@@ -175,8 +175,12 @@ public class IndiXmlParser {
         while (subtree.Read()) {
             if (subtree.NodeType == XmlNodeType.Element && subtree.Name == elementTag) {
                 string name = subtree.GetAttribute("name") ?? "";
+                // defSwitch carries the label; oneSwitch updates don't. Keep the
+                // label from the define so we can map e.g. CCD_ISO -> ISO value.
+                string? label = subtree.GetAttribute("label");
                 string value = subtree.ReadElementContentAsString().Trim();
                 prop.Values[name] = value == "On";
+                if (!string.IsNullOrEmpty(label)) prop.Labels[name] = label;
             }
         }
 

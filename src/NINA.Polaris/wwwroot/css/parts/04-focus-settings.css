@@ -926,6 +926,25 @@
     user-select: none;
 }
 
+/* Gain "?" helper dot: explains analogue gain in ISO terms on hover. */
+.gain-help {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    margin-left: 4px;
+    border-radius: 50%;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-secondary, #9fb3c8);
+    background: transparent;
+    border: 1px solid currentColor;
+    cursor: help;
+    user-select: none;
+    vertical-align: middle;
+}
+
 /* Live plate-solve console: streamed solver output while solving. */
 .solver-output-live {
     margin: 6px 0 0;
