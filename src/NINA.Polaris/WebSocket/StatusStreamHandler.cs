@@ -338,6 +338,10 @@ public static class StatusStreamHandler {
                             // counter rendered next to it.
                             saveFramesToDisk = liveStack.SaveFramesToDisk,
                             framesSavedToDisk = liveStack.FramesSavedToDisk,
+                            // True when "save frames" is on but no output folder
+                            // is configured, so frames are silently dropped. The
+                            // LIVE tab shows a warning to set a folder.
+                            saveFramesNoDir = liveStack.SaveFramesNoOutputDir,
                             // Colour (OSC debayer → RGB) stacking toggle +
                             // whether it's actually engaged this session (ON
                             // + the reference frame was Bayered). Drives the

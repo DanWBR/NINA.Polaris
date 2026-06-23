@@ -187,6 +187,30 @@ public class LiveStackingService {
     /// the toggle as live confirmation that the writes are landing.</summary>
     public int FramesSavedToDisk => _framesSavedToDisk;
 
+    /// <summary>True when the user asked to keep frames (<see cref="SaveFramesToDisk"/>)
+    /// but no image output folder is configured, so every save silently no-ops.
+    /// Surfaced on the status payload so the LIVE tab can warn instead of the
+    /// user discovering an empty lights/ folder after a whole session.</summary>
+    public bool SaveFramesNoOutputDir =>
+        SaveFramesToDisk && _writer != null && !_writer.HasOutputDir;
+
+    /// <summary>Persist one frame to disk if the user enabled it. Centralises
+    /// the save so both the stacking path (<see cref="AddFrameAsync"/>) and the
+    /// server LIVE loop's non-stacking branch archive frames identically.
+    /// No-op (and harmless) when saving is off or no writer is wired.</summary>
+    public void SaveFrameIfEnabled(IImageData imageData) {
+        if (!SaveFramesToDisk || _writer == null) return;
+        try {
+            var savedPath = _writer.SaveImage(imageData, imageType: "LIGHT");
+            if (savedPath != null) {
+                Interlocked.Increment(ref _framesSavedToDisk);
+                _logger.LogDebug("Live stack: saved frame to {Path}", savedPath);
+            }
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Live stack: failed to save frame to disk");
+        }
+    }
+
     // Frame-integrated subscribers (LSTR-1). Append-only list guarded
     // by _handlersLock for snapshotting; handlers awaited sequentially
     // inside AddFrameAsync so a slow handler (AF run, recenter) blocks
@@ -496,19 +520,7 @@ public class LiveStackingService {
         // frames, so we should keep ALL of them. Stacking math
         // below short-circuits when disarmed / past cap, but the
         // archive doesn't.
-        if (SaveFramesToDisk && _writer != null) {
-            try {
-                var savedPath = _writer.SaveImage(imageData, imageType: "LIGHT");
-                if (savedPath != null) {
-                    Interlocked.Increment(ref _framesSavedToDisk);
-                    _logger.LogDebug("Live stack: saved frame to {Path}", savedPath);
-                }
-            } catch (Exception ex) {
-                // Don't poison the stack pipeline because of a disk
-                // hiccup. Log and continue; the next frame will retry.
-                _logger.LogWarning(ex, "Live stack: failed to save frame to disk");
-            }
-        }
+        SaveFrameIfEnabled(imageData);
 
         if (!_isRunning) return;
 

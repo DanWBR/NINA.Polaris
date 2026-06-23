@@ -148,6 +148,11 @@ public sealed class LiveCaptureService {
                         if (ExposureSeconds > 0) _liveStack.AverageExposureSec = ExposureSeconds;
                         await _liveStack.AddFrameAsync(image, ct);
                     } else {
+                        // Not accumulating (live view only): relay for the
+                        // preview AND still archive the raw frame when the user
+                        // asked to keep frames — AddFrameAsync's save path is
+                        // skipped on this branch, so do it explicitly here.
+                        _liveStack.SaveFrameIfEnabled(image);
                         await _relay.RelayImageAsync(image, FrameKind.Live, ct);
                     }
                     FrameCount++;

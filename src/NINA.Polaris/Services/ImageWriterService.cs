@@ -108,6 +108,13 @@ public class ImageWriterService {
 
     public void ResetSessionCounter() => _sessionFrameNumber = 0;
 
+    /// <summary>True when an image output directory is configured. When false,
+    /// <see cref="SaveImage"/> silently no-ops, so callers (e.g. the live stack)
+    /// can surface a "frames not being saved — set an output folder" warning
+    /// instead of dropping frames quietly.</summary>
+    public bool HasOutputDir =>
+        !string.IsNullOrWhiteSpace(_profile.Active.ImageOutputDir);
+
     /// <summary>Save the image to disk and return the resulting path, or null
     /// if disabled / output dir missing.</summary>
     public string? SaveImage(IImageData imageData,
@@ -119,7 +126,8 @@ public class ImageWriterService {
         var profile = _profile.Active;
         var dir = profile.ImageOutputDir;
         if (string.IsNullOrWhiteSpace(dir)) {
-            _logger.LogDebug("ImageWriter: no output dir configured, skipping disk save");
+            _logger.LogWarning("ImageWriter: no output folder configured — frame NOT saved. " +
+                "Set an image output folder in the FILES tab to keep individual frames.");
             return null;
         }
 

@@ -1254,6 +1254,15 @@
                                   x-show="liveStackStatus?.framesSavedToDisk"
                                   x-text="'(' + liveStackStatus?.framesSavedToDisk + ' saved)'"></span>
                         </label>
+                        <!-- Save-frames is on but no image output folder is set,
+                             so every frame is silently dropped. Tell the user
+                             instead of letting them find an empty lights/ folder
+                             after the session. -->
+                        <div class="text-warn" style="font-size:11px; margin-top:2px"
+                             x-show="liveStackStatus?.saveFramesNoDir">
+                            ⚠ No output folder set — frames are NOT being saved.
+                            Set an image output folder in the FILES tab.
+                        </div>
                         <!-- Colour (OSC) live stacking is now always engaged:
                              OSC cameras stack in colour automatically (the only
                              mode), and mono rigs fall back to plain
