@@ -4,8 +4,9 @@ The RIGS tab is your equipment cockpit. It centralizes:
 
 1. **Driver-host connection**, INDI or Alpaca, always visible at top
 2. **Per-role equipment cards**, Main Telescope, Camera, Mount,
-   Focuser, Filter Wheel, Guidescope, Guide Camera, plus collapsible
-   Accessories (Rotator, Flat Panel, Dome, Weather)
+   Focuser, Filter Wheel, Guidescope, Guide Camera, Guide Focuser,
+   Aux Camera + Aux Focuser, plus collapsible Accessories (Rotator,
+   Flat Panel, Dome, Weather)
 3. **Multi-rig management**, switch between saved equipment bundles
 
 ## Connection strip (top of the tab)
@@ -59,6 +60,14 @@ when a cooled sensor is active.
 Sensor dimensions auto-detected from the driver, no manual entry
 needed (this used to be a Settings field; we removed it).
 
+**Gain vs ISO**: dedicated astronomy cameras expose an analogue
+**gain** number; the field carries a **(?)** helper that explains gain
+in ISO terms (higher gain = brighter + lower read noise, but less
+dynamic range). **DSLR / mirrorless** bodies (INDI gphoto on Linux)
+report **ISO** instead — when the driver publishes a CCD_ISO list,
+Polaris shows an **ISO dropdown** in the capture controls in place of
+the numeric gain box. See [DSLR on Linux](../dslr-linux.md).
+
 ### Mount
 
 Driver dropdown: INDI Telescope, Alpaca Telescope, or one of the
@@ -82,6 +91,41 @@ drive PHD2 pixel-scale sanity checks + the guiding resolution readout.
 Polaris doesn't manage this directly, PHD2 owns it. The card mirrors
 PHD2's `get_current_equipment` so you can see at a glance what guide
 cam PHD2 is using.
+
+### Guide Focuser
+
+An optional motor on the **guide scope** (some setups motorise it).
+Driver + device picker + connect toggle, same shape as the main
+focuser. Once connected it can be jogged from the FOCUS tab via the
+**Focuser: Guide** source switch, and auto-focused with the Auto
+V-curve **Optical train: Guide** option (which uses the guide camera).
+See [FOCUS → aux/guide focusing](focus.md#focusing-the-aux--guide-scope).
+
+### Aux Camera + Aux Focuser
+
+A **second imaging camera** riding the same mount through a different
+lens/telescope, captured in parallel to make use of the same tracked
+night. The aux card carries:
+
+- **Driver + device** picker (INDI / vendor SDK / Alpaca, like the main
+  camera), connect/disconnect, and live status.
+- **Focal length / aperture / brand / model** for the aux optical train
+  (its own values, used for the FITS `FOCALLEN` of aux frames).
+- **Exposure / gain / binning** — the aux loop runs on its **own
+  cadence**, independent of the main camera.
+- **Enable aux capture** toggle — when on, the aux loop captures + saves
+  frames automatically whenever a main session (LIVE or AUTORUN) is
+  running. It pauses while the mount is busy (dither / settle / meridian
+  flip / slew) so trailed frames aren't saved.
+- **Aux Focuser** picker — an optional focuser for the aux train, for
+  manual focusing (and Auto V-curve via **Optical train: Auxiliary**).
+
+Aux frames are written to a **separate `aux/` subtree**
+(`{rig}/aux/{target}/{filter}/{session}/`) so they never mix with the
+main camera's `lights/`. The aux camera is also viewable in the FOCUS
+tab via the **Camera: Auxiliary** source switch. Capture + save is all
+the aux camera does today — no guiding, plate solving, live stacking or
+sequencing through it.
 
 ### Accessories (collapsible)
 
@@ -125,6 +169,10 @@ Beyond the obvious device names, each rig stores:
 - **Focuser step size + backlash**
 - **Main scope** focal length + aperture + brand + model + accessory + factor + required back-focus
 - **Guide scope** focal length + aperture + brand + model
+- **Guide focuser** device + driver
+- **Aux camera** device + driver, aux optics (focal length + aperture +
+  brand + model), aux exposure / gain / binning, enable flag, and the
+  **aux focuser** device + driver
 - **PHD2** endpoint (host + port), profile id cache, algo preset, calibration step override, custom algo params
 - **Filter offsets** table
 - **Live-stack triggers** (refocus + recenter policy, see [LIVE](live-stacking.md))

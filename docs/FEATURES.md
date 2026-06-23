@@ -51,8 +51,13 @@ between them in one click. → [rigs.md](user-guide/rigs.md)
   mount + guider + accessories) as a named rig; the whole app retargets when
   you switch the active rig.
 - **Per-role device cards** — Main Telescope, Camera, Mount, Focuser, Filter
-  Wheel, Guidescope, Guide Camera, Rotator, Flat Panel, Dome, and Weather,
-  each with connect/disconnect and live status.
+  Wheel, Guidescope, Guide Camera, Guide Focuser, Rotator, Flat Panel, Dome,
+  and Weather, each with connect/disconnect and live status.
+- **Auxiliary camera + focuser** — a second imaging camera on the same mount
+  with its own optics/exposure/gain, captured in parallel into a separate
+  `aux/` tree; focusable from the FOCUS tab (manual or Auto V-curve).
+- **Gain ↔ ISO aware** — astronomy cameras show analogue gain with an ISO
+  explainer; DSLR/mirrorless bodies (gphoto on Linux) get a real ISO dropdown.
 - **Connection backends in one place:**
   - **INDI** (TCP/XML) — full native client for INDI servers.
   - **ASCOM Alpaca** (HTTP) — auto-discovery + connect for Alpaca devices.
@@ -116,7 +121,12 @@ Achieve and verify focus, and diagnose the optical train.
 - **Manual focus** — step the focuser in/out with a live preview canvas and
   real-time HFR (half-flux radius) + Laplacian-variance sharpness readout.
 - **Auto-focus** — automated V-curve sweep with parabola fit; robust on
-  heavy defocus, with an HFR-vs-position chart of the run.
+  heavy defocus, with an HFR-vs-position chart of the run. An **optical-train
+  selector** runs the sweep on the main, auxiliary, or guide camera+focuser
+  pair.
+- **Aux / guide focusing** — Camera + Focuser source switches (Primary /
+  Auxiliary / Guide) target a second OTA or a motorised guide scope; the
+  manual jog (position, range, GoTo, abort) follows the selected motor.
 - **Bahtinov mask helper** — overlay analysis of a Bahtinov diffraction
   pattern for precise manual focus.
 - **Field analysis tools** (shared capture, multiple views):

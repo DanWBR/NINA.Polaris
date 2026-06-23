@@ -241,6 +241,15 @@ position. Polaris:
 - **Backlash**, overshoot in steps when reversing direction. 0 for
   belt-driven focusers; use your focuser's published backlash for
   geared ones.
+- **Optical train**, which camera + focuser pair the sweep drives:
+  **Main** (imaging camera + main focuser), **Auxiliary** (aux camera
+  + aux focuser), or **Guide** (guide camera + guide focuser). Only
+  shown when an aux or guide focuser is configured on the rig. The
+  camera is always paired to the focuser — a V-curve needs the camera
+  that looks through the motor being moved. Guide-scope AF refuses to
+  start while the guider is looping/guiding (it would steal the guide
+  camera); stop guiding first. See
+  [Focusing the aux / guide scope](#focusing-the-aux--guide-scope).
 
 ### Live progress
 
@@ -264,6 +273,40 @@ focuser steps.
   position
 - **Stop Focuser**, only enabled while the focuser is moving (not
   during AF); emergency stop for a runaway manual command
+
+## Focusing the aux / guide scope
+
+When the active rig has an **auxiliary camera + focuser** (a second OTA
+riding the same mount) or a **motorised guide scope**, the FOCUS tab can
+target them instead of the main imaging train.
+
+Two small selectors appear in the Manual Assist controls (only when the
+matching device is configured):
+
+- **Camera: Primary | Auxiliary | Guide** — which camera the Manual
+  Assist loop and the ↻ Snap capture from. The frame still renders on
+  the focus canvas with the same HFR / Bahtinov tools.
+- **Focuser: Primary | Auxiliary | Guide** — which motor the manual
+  stepper, the GoTo box and the focus wheel drive.
+
+Everything in the manual jog follows the selected **Focuser** source:
+the position readout, the slider's range, GoTo and Abort all act on that
+motor (never the main one). If the chosen focuser doesn't publish a max
+travel, the absolute slider disables and you use the relative `<` / `>`
+nudges instead. A guide/aux focuser can be jogged even when the main
+imaging focuser isn't connected.
+
+For automated V-curve on these trains, use the **Optical train** selector
+in the Auto V-curve subtab (above). It pairs the camera and focuser for
+you, so picking *Guide* sweeps the guide focuser using the guide camera.
+
+> Guide-scope focusing shares the guide camera with the guider loop, so
+> do it while **not** guiding. Auto V-curve enforces this; for the manual
+> loop, stop guiding first to avoid two consumers hitting the camera.
+
+Automatic autofocus **during a session** (AUTORUN / LIVE triggers) always
+targets the **main** focuser — the aux/guide trains are manual-focus only
+for now.
 
 ## Auto-focus triggers (advanced)
 

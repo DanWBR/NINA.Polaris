@@ -64,6 +64,11 @@ Web Manager UI.
 
 ## Tips
 
+- **ISO (not gain)**: DSLRs report **ISO** instead of analogue gain.
+  When the gphoto driver publishes its `CCD_ISO` list, Polaris replaces
+  the numeric **Gain** box in the capture controls with an **ISO
+  dropdown** (100 / 200 / 400 / …), and the selected ISO is applied
+  before each exposure. Dedicated astronomy cameras keep the gain box.
 - **Battery life**: cameras don't sleep while in tether mode. Always
   use a dummy battery + AC adapter (or a USB-PD trigger that mimics
   the model's power input) for long sessions.
