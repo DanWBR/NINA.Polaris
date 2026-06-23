@@ -67,9 +67,17 @@ All sources are public-domain or openly licensed; Polaris itself
    License: Public domain via the CDS, Strasbourg.
 
 -------------------------------------------------------------------
+9. Herbig-Haro Objects (General Catalogue)
+-------------------------------------------------------------------
+   Source:  CDS VizieR catalog V/104/catalog
+            (Reipurth 1999, "A General Catalogue of Herbig-Haro
+             Objects, 2nd edition")
+   License: Public domain via the CDS, Strasbourg.
+
+-------------------------------------------------------------------
 VizieR acknowledgment
 -------------------------------------------------------------------
-Catalogs 2-8 above were obtained from VizieR, the CDS Strasbourg
+Catalogs 2-9 above were obtained from VizieR, the CDS Strasbourg
 astronomical catalogues service. As requested by CDS, please cite:
 
    "This research has made use of the VizieR catalogue access tool,

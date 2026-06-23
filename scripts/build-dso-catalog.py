@@ -20,12 +20,14 @@ Catalogs ingested (CAT-1):
   7. Hickson CG  -- 100 compact galaxy groups. Vizier VII/213 (public).
   8. Abell GC    -- ~2700 Abell-Corwin-Olowin galaxy clusters.
                     Vizier VII/110A (public, mag-trimmed to brightest).
+  9. Herbig-Haro -- 454 HH objects. Reipurth's General Catalogue.
+                    Vizier V/104 (public domain).
 
 Schema:
 
     CREATE TABLE objects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        catalog TEXT NOT NULL,    -- 'NGC' | 'IC' | 'M' | 'C' | 'Arp' | 'Sh2' | 'LDN' | 'LBN' | 'Abell-PN' | 'HCG' | 'AGC'
+        catalog TEXT NOT NULL,    -- 'NGC' | 'IC' | 'M' | 'C' | 'Arp' | 'Sh2' | 'LDN' | 'LBN' | 'Abell-PN' | 'HCG' | 'AGC' | 'HH'
         catalog_id TEXT NOT NULL, -- '7331' | '273' | '92'
         name TEXT NOT NULL,       -- 'NGC 7331'
         common_name TEXT,
@@ -136,6 +138,19 @@ VIZIER_CATALOGS = [
         "ingest":  dict(catalog="LBN", type_str="Bright Nebula",
                         name_prefix="LBN", id_col=2, ra_col=0,
                         dec_col=1, mag_col=None, size_col=3),
+    },
+    {
+        # Reipurth's General Catalogue of Herbig-Haro Objects. Vizier
+        # V/104/catalog (454 rows). Column 2 `HH` is the HH number; there
+        # is no tabulated magnitude or angular size (HH knots are
+        # arcsecond-scale and faint), so both are left None and the object
+        # is included regardless via the catalog being requested in full.
+        "cache":   "HH.tsv",
+        "source":  "V/104/catalog",
+        "columns": ["_RAJ2000", "_DEJ2000", "HH"],
+        "ingest":  dict(catalog="HH", type_str="Herbig-Haro Object",
+                        name_prefix="HH", id_col=2, ra_col=0,
+                        dec_col=1, mag_col=None, size_col=None),
     },
     # V/84 (Strasbourg-ESO PN catalog, ~1500 PNe) was tried here but
     # asu-tsv exposes only B1950 sexagesimal columns + `_RA.icrs` as

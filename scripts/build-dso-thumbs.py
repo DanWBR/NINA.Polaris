@@ -94,6 +94,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Generate DSO preview thumbnails (DSS2).")
     ap.add_argument("--catalogs", default="M,C",
                     help="comma list of catalogs to include (default M,C)")
+    ap.add_argument("--all-catalogs", default="",
+                    help="comma list of catalogs to include IN FULL, ignoring "
+                         "the mag/size filter (needed for catalogs like LDN that "
+                         "carry no magnitude or size, e.g. dark nebulae)")
     ap.add_argument("--max-mag", type=float, default=11.0)
     ap.add_argument("--min-size", type=float, default=3.0,
                     help="include objects at least this many arcmin even if faint")
@@ -106,27 +110,59 @@ def main() -> int:
     os.makedirs(OUT, exist_ok=True)
 
     cats = [c.strip().upper() for c in args.catalogs.split(",") if c.strip()]
-    placeholders = ",".join("?" for _ in cats)
+    all_cats = [c.strip().upper() for c in args.all_catalogs.split(",") if c.strip()]
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
+
+    rows = []
     # Bright OR large, within the chosen catalogs. magnitude can be a 99
     # sentinel for "unknown" in the catalog, so the size clause keeps big
     # well-known objects that lack a tabulated magnitude.
-    rows = con.execute(
-        f"""SELECT catalog, catalog_id, name, ra_hours, dec_deg, magnitude, size_arcmin
-            FROM objects
-            WHERE UPPER(catalog) IN ({placeholders})
-              AND ( (magnitude IS NOT NULL AND magnitude < ?)
-                    OR (size_arcmin IS NOT NULL AND size_arcmin >= ?) )
-            ORDER BY (magnitude IS NULL), magnitude ASC""",
-        (*cats, args.max_mag, args.min_size),
-    ).fetchall()
+    if cats:
+        placeholders = ",".join("?" for _ in cats)
+        rows += con.execute(
+            f"""SELECT catalog, catalog_id, name, ra_hours, dec_deg, magnitude, size_arcmin
+                FROM objects
+                WHERE UPPER(catalog) IN ({placeholders})
+                  AND ( (magnitude IS NOT NULL AND magnitude < ?)
+                        OR (size_arcmin IS NOT NULL AND size_arcmin >= ?) )
+                ORDER BY (magnitude IS NULL), magnitude ASC""",
+            (*cats, args.max_mag, args.min_size),
+        ).fetchall()
+
+    # Whole-catalog inclusion (no mag/size filter); only needs valid coords.
+    if all_cats:
+        placeholders = ",".join("?" for _ in all_cats)
+        rows += con.execute(
+            f"""SELECT catalog, catalog_id, name, ra_hours, dec_deg, magnitude, size_arcmin
+                FROM objects
+                WHERE UPPER(catalog) IN ({placeholders})
+                  AND ra_hours IS NOT NULL AND dec_deg IS NOT NULL
+                ORDER BY catalog, catalog_id""",
+            (*all_cats,),
+        ).fetchall()
     con.close()
+
+    # De-dup by slug in case a catalog appears in both lists.
+    seen = set()
+    deduped = []
+    for r in rows:
+        s = slug_for(r["catalog"], r["catalog_id"])
+        if s in seen:
+            continue
+        seen.add(s)
+        deduped.append(r)
+    rows = deduped
 
     if args.limit > 0:
         rows = rows[:args.limit]
 
-    print(f"{len(rows)} objects selected ({','.join(cats)}; mag<{args.max_mag} or >={args.min_size}')")
+    sel = []
+    if cats:
+        sel.append(f"{','.join(cats)} mag<{args.max_mag} or >={args.min_size}'")
+    if all_cats:
+        sel.append(f"{','.join(all_cats)} (full)")
+    print(f"{len(rows)} objects selected ({'; '.join(sel)})")
     print(f"-> {OUT}")
 
     done = skipped = failed = 0
