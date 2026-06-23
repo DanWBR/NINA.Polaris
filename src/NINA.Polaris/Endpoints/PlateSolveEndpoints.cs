@@ -274,6 +274,11 @@ public static class PlateSolveEndpoints {
             // possibly-downscaled preview).
             int width = 0, height = 0;
             double? hintRa = request.HintRa, hintDec = request.HintDec;
+            // If the FITS already carries a full WCS (CRVAL/CRPIX/CD), reuse it
+            // and skip re-solving entirely — re-running ASTAP on a full-res frame
+            // is slow and was timing out; the embedded WCS is exactly what a
+            // prior solve produced and is enough to place the annotations.
+            NINA.Image.FileFormat.FITS.WcsInfo? headerWcs = null;
             try {
                 using var hdrFs = File.OpenRead(request.Path);
                 var hdr = FITSReader.ReadHeadersOnly(hdrFs);
@@ -288,6 +293,7 @@ public static class PlateSolveEndpoints {
                         && double.TryParse(decC.Value, System.Globalization.NumberStyles.Float,
                             System.Globalization.CultureInfo.InvariantCulture, out var decV) && Math.Abs(decV) <= 90)
                         hintDec = decV;
+                    headerWcs = NINA.Image.FileFormat.FITS.WcsHeaders.Read(hdr);
                 }
             } catch { /* non-FITS or unreadable header block */ }
 
@@ -307,6 +313,33 @@ public static class PlateSolveEndpoints {
                         && !double.IsNaN(tel.RightAscension) && !double.IsNaN(tel.Declination)) {
                     hintRa ??= tel.RightAscension; hintDec ??= tel.Declination;
                 }
+            }
+
+            // Fast path: the FITS already has a usable WCS — project straight from
+            // it, no solver call. This is instant and avoids the re-solve timeout.
+            if (headerWcs != null
+                && (headerWcs.CD11 * headerWcs.CD22 - headerWcs.CD12 * headerWcs.CD21) != 0) {
+                double scale = Math.Sqrt(headerWcs.CD11 * headerWcs.CD11
+                                         + headerWcs.CD21 * headerWcs.CD21) * 3600.0;
+                double rotDeg = Math.Atan2(headerWcs.CD21, headerWcs.CD11) * 180.0 / Math.PI;
+                var hdrResult = new PlateSolveResult {
+                    Success = true, SolverUsed = "WCS (header)",
+                    RaDeg = headerWcs.RaDeg, RaHours = headerWcs.RaDeg / 15.0,
+                    DecDeg = headerWcs.DecDeg,
+                    ScaleArcsecPerPixel = scale, RotationDeg = rotDeg,
+                    CD11 = headerWcs.CD11, CD12 = headerWcs.CD12,
+                    CD21 = headerWcs.CD21, CD22 = headerWcs.CD22,
+                    CrPix1 = headerWcs.RefPixelX, CrPix2 = headerWcs.RefPixelY,
+                };
+                var hdrObjects = await ProjectAnnotationsAsync(dso, hdrResult, width, height,
+                    request.Flip ?? false, request.MagLimit ?? 14.0, request.ExtraRotationDeg ?? 0.0);
+                return Results.Ok(new {
+                    success = true, width, height,
+                    raHours = hdrResult.RaHours, decDeg = hdrResult.DecDeg,
+                    rotationDeg = hdrResult.RotationDeg, scaleArcsecPerPixel = hdrResult.ScaleArcsecPerPixel,
+                    solverUsed = hdrResult.SolverUsed,
+                    count = hdrObjects.Count, objects = hdrObjects
+                });
             }
 
             try {
