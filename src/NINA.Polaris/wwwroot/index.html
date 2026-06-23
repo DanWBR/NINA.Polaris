@@ -10967,7 +10967,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span x-show="psSelectedSolver?.available" class="text-ok">✓ ready</span>
                         <!-- Online solver isn't "installed" — it just needs an API key. -->
                         <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id === 'astrometry-net-online'" class="text-warn">⚠ needs an API key (set below)</span>
-                        <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id !== 'astrometry-net-online'" class="text-warn">⚠ not detected on this system</span>
+                        <!-- Local solve-field on Windows usually means WSL: tell the user to enable it + Save. -->
+                        <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id === 'astrometry-net-local'" class="text-warn">⚠ not detected — enable "Run via WSL" (in advanced below) or set the solve-field path, then click <strong>Save</strong></span>
+                        <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id !== 'astrometry-net-online' && psSelectedSolver?.id !== 'astrometry-net-local'" class="text-warn">⚠ not detected on this system</span>
                         <span x-show="psSelectedSolver?.path" class="text-muted"> · <code x-text="psSelectedSolver?.path"></code></span>
                     </p>
 
