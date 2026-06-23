@@ -135,7 +135,13 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     public bool IsCalibrating => AppState == "Calibrating";
     public string? CalibrationProgress => _calProgress;
     public object? CalibrationDetails => _calDetails;
-    public int ExposureMs => Math.Max(50, Rig.NativeGuideExposureMs);
+    // Fall back to 1 s (not the 50 ms floor) when the rig has no stored
+    // exposure yet (legacy rig / unset → 0). Reporting 50 ms made the GUIDE
+    // panel's dropdown snap to its smallest option (0.1 s) and look like the
+    // default was 0.1 s; 1 s is the sensible guiding default.
+    public int ExposureMs => Rig.NativeGuideExposureMs > 0
+        ? Math.Max(50, Rig.NativeGuideExposureMs)
+        : 1000;
     public bool IsPaused => AppState == "Paused";
     public bool IsLooping => AppState == "Looping";
     public bool IsSettling { get; private set; }

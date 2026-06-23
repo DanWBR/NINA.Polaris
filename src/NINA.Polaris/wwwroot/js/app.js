@@ -29335,7 +29335,10 @@ function ninaApp() {
                     // Snap to the nearest dropdown preset so the <select> always
                     // resolves to a matching <option> (a restored/odd value like
                     // 250 ms would otherwise leave the dropdown showing nothing).
-                    if (!this._expEditing) this.guideExp = this._snapExpMs(g.exposureMs);
+                    // A missing/zero value defaults to 1.0 s rather than snapping
+                    // down to the smallest 0.1 s option.
+                    if (!this._expEditing)
+                        this.guideExp = g.exposureMs > 0 ? this._snapExpMs(g.exposureMs) : 1000;
                 }
                 if (!g.connected) {
                     if (this.guider.connected) {
