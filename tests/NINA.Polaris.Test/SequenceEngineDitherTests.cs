@@ -30,7 +30,6 @@ public class SequenceEngineDitherTests {
         var relay = new ImageRelayService(NullLogger<ImageRelayService>.Instance);
         var liveStack = new LiveStackingService(relay, NullLogger<LiveStackingService>.Instance);
         var phd2 = new PHD2Client(NullLogger<PHD2Client>.Instance);
-        var autoFocus = new AutoFocusService(equip, relay, NullLogger<AutoFocusService>.Instance);
         var emptyConfig = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
         var plateSolve = new PlateSolveService(emptyConfig, NullLogger<PlateSolveService>.Instance);
         var profile = new ProfileService(emptyConfig, NullLogger<ProfileService>.Instance);
@@ -39,6 +38,7 @@ public class SequenceEngineDitherTests {
         var slewCenter = new SlewCenterService(equip, plateSolve, profile, stream, NullLogger<SlewCenterService>.Instance);
         var native = new NativeGuider(equip, profile, NullLogger<NativeGuider>.Instance);
         var guiders = new ActiveGuiderProvider(profile, phd2, native);
+        var autoFocus = new AutoFocusService(equip, relay, guiders, NullLogger<AutoFocusService>.Instance);
         var meridianFlip = new MeridianFlipService(equip, guiders, slewCenter, autoFocus, profile,
             NullLogger<MeridianFlipService>.Instance);
         var imageWriter = new ImageWriterService(equip, profile, NullLogger<ImageWriterService>.Instance);

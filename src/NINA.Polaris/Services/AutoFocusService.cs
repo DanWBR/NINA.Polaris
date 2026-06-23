@@ -29,6 +29,7 @@ namespace NINA.Polaris.Services;
 public class AutoFocusService {
     private readonly EquipmentManager _equip;
     private readonly ImageRelayService _relay;
+    private readonly ActiveGuiderProvider _guiders;
     private readonly ILogger<AutoFocusService> _logger;
 
     private CancellationTokenSource? _cts;
@@ -42,22 +43,76 @@ public class AutoFocusService {
 
     public AutoFocusService(EquipmentManager equip,
                             ImageRelayService relay,
+                            ActiveGuiderProvider guiders,
                             ILogger<AutoFocusService> logger) {
         _equip = equip;
         _relay = relay;
+        _guiders = guiders;
         _logger = logger;
     }
+
+    /// <summary>
+    /// Resolve the camera + focuser pair for an auto-focus run from the
+    /// request's optical-train <see cref="AutoFocusRequest.FocuserSource"/>
+    /// ("main" | "aux" | "guide"). A V-curve needs the camera that looks
+    /// through the same optics as the focuser being moved, so the two are
+    /// always paired by source rather than chosen independently. Throws an
+    /// <see cref="InvalidOperationException"/> with a source-specific message
+    /// when either device is missing.
+    /// </summary>
+    private (ICamera camera, IFocuser focuser, string source) ResolveDevices(AutoFocusRequest request) {
+        var source = (request.FocuserSource ?? "main").Trim().ToLowerInvariant();
+        ICamera? camera = source switch {
+            "aux"   => _equip.AuxCamera,
+            "guide" => _equip.GuideCamera,
+            _       => _equip.Camera
+        };
+        IFocuser? focuser = source switch {
+            "aux"   => _equip.AuxFocuser,
+            "guide" => _equip.GuideFocuser,
+            _       => _equip.Focuser
+        };
+        string label = source switch { "aux" => "aux", "guide" => "guide", _ => "" };
+        if (camera == null)
+            throw new InvalidOperationException(
+                source == "main" ? "No camera connected"
+                                 : $"No {label} camera connected");
+        if (focuser == null)
+            throw new InvalidOperationException(
+                source == "main" ? "No focuser connected"
+                                 : $"No {label} focuser connected");
+        return (camera, focuser, source);
+    }
+
+    /// <summary>Capture one frame through the gate that matches the optical
+    /// train. Main + aux each have their own static capture gate so the AF
+    /// sweep never collides with another consumer of that camera; the guide
+    /// camera has no shared gate (Start refuses to run while the guider owns
+    /// it), so we capture it directly.</summary>
+    private Task<IImageData> CaptureGated(string source, ICamera camera, double exposureSeconds,
+                                          CancellationToken ct) => source switch {
+        "aux"   => AuxCameraCaptureGate.RunAsync(() => camera.CaptureAsync(exposureSeconds, ct), ct),
+        "guide" => camera.CaptureAsync(exposureSeconds, ct),
+        _       => CameraCaptureGate.RunAsync(() => camera.CaptureAsync(exposureSeconds, ct), ct)
+    };
 
     public void Start(AutoFocusRequest request) {
         lock (_stateLock) {
             if (State == AutoFocusState.Running)
                 throw new InvalidOperationException("Auto-focus already running");
 
-            if (_equip.Camera == null)
-                throw new InvalidOperationException("No camera connected");
+            // Validate the requested optical train (camera + focuser pair).
+            var (_, _, source) = ResolveDevices(request);
 
-            if (_equip.Focuser == null)
-                throw new InvalidOperationException("No focuser connected");
+            // The guide scope shares its camera with the guider loop; running a
+            // V-curve sweep while it is looping/guiding would yank the camera out
+            // from under the guider. Require it stopped first.
+            if (source == "guide") {
+                var g = _guiders.Active;
+                if (g.IsConnected && (g.IsGuiding || g.IsLooping))
+                    throw new InvalidOperationException(
+                        "Stop guiding/looping before auto-focusing the guide scope");
+            }
 
             if (request.Steps < 3)
                 throw new ArgumentException("Steps must be >= 3 (need at least 3 points for parabola fit)");
@@ -79,7 +134,9 @@ public class AutoFocusService {
         }
 
         _runTask = Task.Run(() => RunAsync(request, _cts!.Token));
-        _logger.LogInformation("Auto-focus started: steps={Steps} stepSize={StepSize} exposure={Exp}s",
+        _logger.LogInformation(
+            "Auto-focus started: source={Source} steps={Steps} stepSize={StepSize} exposure={Exp}s",
+            (request.FocuserSource ?? "main").ToLowerInvariant(),
             request.Steps, request.StepSize, request.ExposureSeconds);
     }
 
@@ -92,8 +149,7 @@ public class AutoFocusService {
     }
 
     private async Task RunAsync(AutoFocusRequest request, CancellationToken ct) {
-        var camera = _equip.Camera!;
-        var focuser = _equip.Focuser!;
+        var (camera, focuser, source) = ResolveDevices(request);
         int startPosition = focuser.Position;
         int half = request.Steps / 2;
 
@@ -110,7 +166,7 @@ public class AutoFocusService {
                 _logger.LogDebug("Backlash compensation: moving below first position by {Backlash} steps",
                     request.BacklashSteps);
                 await focuser.MoveAbsoluteAsync(positions[0] - request.BacklashSteps, ct);
-                await WaitForFocuserSettle(ct);
+                await WaitForFocuserSettle(focuser, ct);
             }
 
             for (int i = 0; i < positions.Count; i++) {
@@ -121,11 +177,10 @@ public class AutoFocusService {
 
                 _logger.LogDebug("AF sample {I}/{N}: moving to {Pos}", i + 1, positions.Count, targetPos);
                 await focuser.MoveAbsoluteAsync(targetPos, ct);
-                await WaitForFocuserSettle(ct);
+                await WaitForFocuserSettle(focuser, ct);
 
                 int actualPos = focuser.Position;
-                var image = await CameraCaptureGate.RunAsync(
-                    () => camera.CaptureAsync(request.ExposureSeconds, ct), ct);
+                var image = await CaptureGated(source, camera, request.ExposureSeconds, ct);
                 // Push each AF frame through the image relay so the
                 // Focus tab preview canvas (and the Live canvas) can
                 // render the sweep frames as the user watches the run.
@@ -223,11 +278,11 @@ public class AutoFocusService {
             // Backlash compensation again for the final move
             if (request.BacklashSteps > 0 && bestPosition < focuser.Position) {
                 await focuser.MoveAbsoluteAsync(bestPosition - request.BacklashSteps, ct);
-                await WaitForFocuserSettle(ct);
+                await WaitForFocuserSettle(focuser, ct);
             }
 
             await focuser.MoveAbsoluteAsync(bestPosition, ct);
-            await WaitForFocuserSettle(ct);
+            await WaitForFocuserSettle(focuser, ct);
 
             int finalPosition = focuser.Focuser_ReadCurrentSafely();
 
@@ -235,8 +290,7 @@ public class AutoFocusService {
             double? finalHfr = null;
             int? finalStars = null;
             if (request.TakeConfirmationFrame) {
-                var image = await CameraCaptureGate.RunAsync(
-                    () => camera.CaptureAsync(request.ExposureSeconds, ct), ct);
+                var image = await CaptureGated(source, camera, request.ExposureSeconds, ct);
                 try { await _relay.RelayImageAsync(image, FrameKind.Focus, ct); }
                 catch (Exception ex) { _logger.LogDebug(ex, "AF confirmation frame relay failed (non-fatal)"); }
                 var hfr = MeasureHFR(image, request.MinStars);
@@ -304,8 +358,7 @@ public class AutoFocusService {
         }
     }
 
-    private async Task WaitForFocuserSettle(CancellationToken ct) {
-        var focuser = _equip.Focuser!;
+    private async Task WaitForFocuserSettle(IFocuser focuser, CancellationToken ct) {
         // Wait up to 30s for IsMoving to clear
         for (int i = 0; i < 60; i++) {
             ct.ThrowIfCancellationRequested();
@@ -656,6 +709,11 @@ public class AutoFocusRequest {
     /// <summary>Overshoot below the first position by this many steps to compensate backlash. 0 to disable.</summary>
     public int BacklashSteps { get; set; }
     public bool TakeConfirmationFrame { get; set; } = true;
+    /// <summary>Optical train to focus: "main" (imaging camera + focuser),
+    /// "aux" (aux camera + aux focuser), or "guide" (guide camera + guide
+    /// focuser). The camera is paired to the focuser since a V-curve needs the
+    /// camera looking through the same optics. Defaults to "main".</summary>
+    public string FocuserSource { get; set; } = "main";
 }
 
 public record AutoFocusProgress {

@@ -114,7 +114,6 @@ public class LiveStackTriggersServiceTests {
         var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance,
             new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache(),
             new NINA.Polaris.Services.Simulator.Gear.SimGearService());
-        var autoFocus = new AutoFocusService(equip, relay, NullLogger<AutoFocusService>.Instance);
         var solver = new PlateSolveService(cfg, NullLogger<PlateSolveService>.Instance);
         var stream = new CameraStreamService(equip, relay,
             NullLogger<CameraStreamService>.Instance, new CaptureProgressService());
@@ -123,6 +122,7 @@ public class LiveStackTriggersServiceTests {
         var phd2 = new PHD2Client(NullLogger<PHD2Client>.Instance);
         var native = new NativeGuider(equip, profiles, NullLogger<NativeGuider>.Instance);
         var guiders = new ActiveGuiderProvider(profiles, phd2, native);
+        var autoFocus = new AutoFocusService(equip, relay, guiders, NullLogger<AutoFocusService>.Instance);
         return new LiveStackTriggersService(stack, profiles, equip, autoFocus, slew, solver,
             guiders, NullLogger<LiveStackTriggersService>.Instance);
     }

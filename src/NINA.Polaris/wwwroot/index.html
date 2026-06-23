@@ -2635,10 +2635,20 @@
                             <input type="number" x-model.number="afParams.backlashSteps" min="0" step="1" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
+                        <!-- Optical train: pairs the camera + focuser of the same
+                             OTA. Aux/Guide only shown when that focuser is set. -->
+                        <label x-show="auxFocuser || guideFocuser" x-cloak>Optical train
+                            <select class="input-sm" x-model="afParams.focuserSource"
+                                    :disabled="autoFocus.state === 'running'">
+                                <option value="main">Main</option>
+                                <option value="aux" x-show="auxFocuser">Auxiliary</option>
+                                <option value="guide" x-show="guideFocuser">Guide</option>
+                            </select>
+                        </label>
                     </div>
                     <div class="af-actions">
                         <button class="btn btn-primary" @click="startAutoFocus()"
-                                :disabled="!focusConnected || !selectedCamera || autoFocus.state === 'running'">Start AF</button>
+                                :disabled="autoFocus.state === 'running' || (afParams.focuserSource === 'aux' ? (!auxFocuserConnected || !auxCameraConnected) : afParams.focuserSource === 'guide' ? (!guideFocuserConnected || !guider.guideCameraConnected) : (!focusConnected || !selectedCamera))">Start AF</button>
                         <button class="btn btn-danger" @click="abortAutoFocus()"
                                 :disabled="autoFocus.state !== 'running'">Abort AF</button>
                         <button class="btn btn-danger" @click="focusAbort()"
@@ -15728,7 +15738,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260623-guidefoc"></script>
+    <script src="/js/app.js?v=20260623-afsource"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

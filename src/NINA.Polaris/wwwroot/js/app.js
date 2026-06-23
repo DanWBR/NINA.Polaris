@@ -2909,7 +2909,11 @@ function ninaApp() {
             stepSize: 50,
             exposureSeconds: 2.0,
             minStars: 5,
-            backlashSteps: 0
+            backlashSteps: 0,
+            // Optical train to auto-focus: 'main' | 'aux' | 'guide'. Pairs the
+            // camera + focuser of the same OTA (a V-curve needs the camera that
+            // sees through the focuser being moved).
+            focuserSource: 'main'
         },
         afChartW: 600,
         afChartH: 180,
@@ -21080,6 +21084,7 @@ function ninaApp() {
                     exposureSeconds: this.afParams.exposureSeconds,
                     minStars: this.afParams.minStars,
                     backlashSteps: this.afParams.backlashSteps,
+                    focuserSource: this.afParams.focuserSource || 'main',
                     takeConfirmationFrame: true
                 });
                 this.toast('Auto-focus started', 'ok');
