@@ -1410,6 +1410,10 @@ label select.input-sm {
     min-width: 0;
     max-width: none;
     margin-left: 0;
+    /* .input-sm sets field-sizing:content, which sizes the box to its text and
+       defeats the flex-grow above (the field stayed name-width with empty space
+       after it). Pin it back to fixed so the input fills the remaining row. */
+    field-sizing: fixed;
 }
 /* Identify button: same tap-friendly height as .input-sm so the row
    reads as a single aligned unit instead of mismatched boxes. */
