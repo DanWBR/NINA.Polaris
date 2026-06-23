@@ -86,11 +86,23 @@ modal).
 Like Main Telescope but for the guide setup. Focal length + aperture
 drive PHD2 pixel-scale sanity checks + the guiding resolution readout.
 
-### Guide Camera (read-only)
+### Guide Camera
 
-Polaris doesn't manage this directly, PHD2 owns it. The card mirrors
-PHD2's `get_current_equipment` so you can see at a glance what guide
-cam PHD2 is using.
+Behaviour depends on the rig's **Guider driver** (`native` vs `phd2`,
+set on this card):
+
+- **Native guider** (default): Polaris manages the guide camera
+  directly. The card has a driver + device picker (INDI / Alpaca /
+  vendor SDK / Simulator) and a connect toggle, just like the imaging
+  camera. The built-in [native autoguider](guide-native.md) auto-
+  connects and uses it for pulse guiding. The guide camera must differ
+  from the imaging camera while that is connected.
+- **PHD2**: an external PHD2 process owns the camera. The card then
+  mirrors PHD2's `get_current_equipment` (read-only) so you can see at
+  a glance which guide cam PHD2 is using.
+
+You can also focus a motorised guide scope through this camera — see
+[Guide Focuser](#guide-focuser) below.
 
 ### Guide Focuser
 
@@ -242,6 +254,7 @@ with multiple devices "connected" to the same hardware).
 
 ## See also
 
-- [GUIDE (PHD2)](guide-phd2.md), adjacent tab for autoguiding
+- [GUIDE (native)](guide-native.md), the built-in autoguider
+- [GUIDE (PHD2)](guide-phd2.md), external PHD2 autoguiding
 - [Settings](#), observatory location, image output dir, theme
 - [Glossary → Rig](GLOSSARY.md#r)
