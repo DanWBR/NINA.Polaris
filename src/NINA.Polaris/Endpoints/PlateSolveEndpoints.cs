@@ -548,12 +548,40 @@ public static class PlateSolveEndpoints {
 
         var hits = await dso.QueryRegionAsync(result.RaHours, result.DecDeg,
             Math.Max(0.05, radiusDeg), magLimit, 300);
+
+        // Prefer the full WCS CD matrix when the solver gave us one: it encodes
+        // rotation AND parity (mirror/flip), so it lands on the right objects for
+        // mirrored optical trains where the scalar-rotation projector (which
+        // assumes north-up/east-left) is off by a flip. The solver's pixel grid
+        // is the FITS convention (1-based, CRPIX-centred); the viewer draws those
+        // pixels directly (no Y flip), so we map 1-based → 0-based display with a
+        // -0.5 shift and otherwise pass the pixel straight through. Verified
+        // numerically against a real mirrored SV605CC frame.
+        NINA.Image.FileFormat.FITS.WcsInfo? wcs = null;
+        if (result.HasCdMatrix) {
+            wcs = new NINA.Image.FileFormat.FITS.WcsInfo {
+                RaDeg = result.RaDeg != 0 ? result.RaDeg : result.RaHours * 15.0,
+                DecDeg = result.DecDeg,
+                RefPixelX = result.CrPix1 > 0 ? result.CrPix1 : (width + 1) / 2.0,
+                RefPixelY = result.CrPix2 > 0 ? result.CrPix2 : (height + 1) / 2.0,
+                CD11 = result.CD11!.Value, CD12 = result.CD12!.Value,
+                CD21 = result.CD21!.Value, CD22 = result.CD22!.Value,
+            };
+        }
+
         foreach (var o in hits) {
-            var p = AnnotationProjector.Project(result.RaHours, result.DecDeg,
-                result.ScaleArcsecPerPixel, result.RotationDeg, width, height, flip,
-                o.RaHours, o.DecDeg, extraRotationDeg);
-            if (p == null) continue;
-            var (x, y) = p.Value;
+            double x, y;
+            if (wcs != null) {
+                var (px, py) = wcs.RaDecToPixel(o.RaHours * 15.0, o.DecDeg);
+                if (double.IsNaN(px) || double.IsNaN(py)) continue;
+                x = px - 0.5; y = py - 0.5;   // 1-based FITS pixel → 0-based display, no Y flip
+            } else {
+                var p = AnnotationProjector.Project(result.RaHours, result.DecDeg,
+                    result.ScaleArcsecPerPixel, result.RotationDeg, width, height, flip,
+                    o.RaHours, o.DecDeg, extraRotationDeg);
+                if (p == null) continue;
+                (x, y) = p.Value;
+            }
             if (x < -margin || y < -margin || x > width + margin || y > height + margin) continue;
             // Marker radius in image pixels = half the object's angular size,
             // converted through the solved plate scale, so the circle hugs the

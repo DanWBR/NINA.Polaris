@@ -156,6 +156,26 @@ public class PlateSolveResult {
     /// <summary>Id of the solver that produced this result (or attempted to).</summary>
     public string? SolverUsed { get; set; }
 
+    /// <summary>Full WCS CD matrix (deg/pixel) when the solver exposes it
+    /// (ASTAP does, via its .wcs output). Unlike the scalar
+    /// <see cref="RotationDeg"/>, the CD matrix encodes rotation AND parity
+    /// (mirror/flip), so annotation projection that uses it lands on the
+    /// right objects for mirrored optical trains. Null for solvers that
+    /// only report scale + rotation.</summary>
+    public double? CD11 { get; set; }
+    public double? CD12 { get; set; }
+    public double? CD21 { get; set; }
+    public double? CD22 { get; set; }
+    /// <summary>Reference pixel (1-based, FITS convention) for the CD matrix.
+    /// Defaults to the image centre when the solver omits it.</summary>
+    public double CrPix1 { get; set; }
+    public double CrPix2 { get; set; }
+
+    /// <summary>True when the CD matrix is populated and usable.</summary>
+    public bool HasCdMatrix => CD11.HasValue && CD12.HasValue
+        && CD21.HasValue && CD22.HasValue
+        && (CD11.Value * CD22.Value - CD12.Value * CD21.Value) != 0;
+
     /// <summary>Raw solver process output (stdout + stderr), surfaced to the UI
     /// so the operator can see what the backend did. Null when not captured.</summary>
     public string? Output { get; set; }

@@ -250,6 +250,27 @@ public class AstapSolver : IPlateSolver {
                 double.TryParse(rotStr, CultureInfo.InvariantCulture, out var rot))
                 result.RotationDeg = rot;
 
+            // CD matrix (deg/pixel) + reference pixel. The CD matrix carries
+            // parity (mirror/flip) that CROTA1 alone cannot, so the annotation
+            // projector prefers it. ASTAP always writes CD1_1..CD2_2 + CRPIX1/2.
+            if (dict.TryGetValue("CD1_1", out var cd11) &&
+                double.TryParse(cd11, CultureInfo.InvariantCulture, out var v11) &&
+                dict.TryGetValue("CD1_2", out var cd12) &&
+                double.TryParse(cd12, CultureInfo.InvariantCulture, out var v12) &&
+                dict.TryGetValue("CD2_1", out var cd21) &&
+                double.TryParse(cd21, CultureInfo.InvariantCulture, out var v21) &&
+                dict.TryGetValue("CD2_2", out var cd22) &&
+                double.TryParse(cd22, CultureInfo.InvariantCulture, out var v22)) {
+                result.CD11 = v11; result.CD12 = v12;
+                result.CD21 = v21; result.CD22 = v22;
+            }
+            if (dict.TryGetValue("CRPIX1", out var cp1) &&
+                double.TryParse(cp1, CultureInfo.InvariantCulture, out var vcp1))
+                result.CrPix1 = vcp1;
+            if (dict.TryGetValue("CRPIX2", out var cp2) &&
+                double.TryParse(cp2, CultureInfo.InvariantCulture, out var vcp2))
+                result.CrPix2 = vcp2;
+
             _logger.LogInformation(
                 "ASTAP solve: RA={Ra:F4}h, Dec={Dec:F4}°, Scale={Scale:F2}\"/px, Rot={Rot:F1}°",
                 result.RaHours, result.DecDeg, result.ScaleArcsecPerPixel, result.RotationDeg);

@@ -170,4 +170,37 @@ public class WcsHeadersTests {
             try { File.Delete(tmp); } catch { }
         }
     }
+
+    [Test]
+    public void RaDecToPixel_MirroredFrame_LandsOnObjects() {
+        // Regression for the "annotate objects are in the wrong place"
+        // field bug: a real plate-solved SV605CC frame (IC 4605 region)
+        // whose CD matrix has a POSITIVE determinant — i.e. a mirrored
+        // (flipped-parity) image. The old annotate path used only the
+        // scalar rotation and assumed north-up/east-left, so it ignored
+        // the flip and placed every label on the wrong side. Projecting
+        // through the full CD matrix must land catalog objects on the
+        // pixels they actually occupy in the frame.
+        var wcs = new WcsInfo {
+            RaDeg = 247.4664115716, DecDeg = -24.7109603673,
+            RefPixelX = 1504.5, RefPixelY = 1504.5,
+            CD11 = 0.0018408227, CD12 = -0.000894126,
+            CD21 = 0.0008942307, CD22 = 0.0018399546,
+        };
+        // det > 0 → mirrored parity (the case the old code mishandled).
+        Assert.That(wcs.CD11 * wcs.CD22 - wcs.CD12 * wcs.CD21, Is.GreaterThan(0));
+
+        // Antares (α Sco) and M4 (NGC 6121), both well south of the
+        // field centre. Expected pixels were verified against the actual
+        // frame: Antares ≈ (1092, 769), M4 ≈ (497, 1003) in 1-based FITS
+        // pixels (3008×3008). A non-mirror-aware projection would put
+        // them on the opposite side (x ≈ 1900+).
+        var (ax, ay) = wcs.RaDecToPixel(247.3519, -26.4320);   // Antares
+        Assert.That(ax, Is.EqualTo(1092).Within(8), "Antares X");
+        Assert.That(ay, Is.EqualTo(769).Within(8), "Antares Y");
+
+        var (mx, my) = wcs.RaDecToPixel(245.8967, -26.5256);   // M4
+        Assert.That(mx, Is.EqualTo(497).Within(8), "M4 X");
+        Assert.That(my, Is.EqualTo(1003).Within(8), "M4 Y");
+    }
 }
