@@ -291,6 +291,20 @@ function closeTab(origin) {
   }
 }
 
+// Reload an instance's iframe. The Polaris UI is cross-origin, so we can't
+// call contentWindow.location.reload(); re-pointing src forces a fresh load.
+// Bounce through about:blank so re-assigning the same URL reliably reloads
+// (handy when the WebView's connection wedged or the UI needs a clean state).
+function reloadTab(origin) {
+  const inst = instances.get(origin);
+  if (!inst || !inst.frame) return;
+  try {
+    inst.frame.src = 'about:blank';
+    setTimeout(() => { try { inst.frame.src = origin; } catch {} }, 30);
+  } catch {}
+  activateTab(origin);
+}
+
 function renderTabs() {
   const bar = els.tabBar;
   bar.innerHTML = '';
@@ -303,6 +317,12 @@ function renderTabs() {
     label.className = 'tab-label';
     label.textContent = inst.displayName || inst.name;
     label.addEventListener('click', () => activateTab(origin));
+    const reload = document.createElement('button');
+    reload.className = 'tab-reload';
+    reload.type = 'button';
+    reload.textContent = '⟳';
+    reload.setAttribute('aria-label', 'Reload ' + inst.name);
+    reload.addEventListener('click', (e) => { e.stopPropagation(); reloadTab(origin); });
     const close = document.createElement('button');
     close.className = 'tab-close';
     close.type = 'button';
@@ -310,6 +330,7 @@ function renderTabs() {
     close.setAttribute('aria-label', 'Close ' + inst.name);
     close.addEventListener('click', (e) => { e.stopPropagation(); closeTab(origin); });
     tab.appendChild(label);
+    tab.appendChild(reload);
     tab.appendChild(close);
     bar.appendChild(tab);
   }

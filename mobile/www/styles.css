@@ -85,6 +85,11 @@ body.connected .tab-bar { display: flex; }
     font-size: 16px; line-height: 1; cursor: pointer; padding: 4px 4px;
 }
 .tab-close:hover { color: var(--text); }
+.tab-reload {
+    border: none; background: none; color: var(--muted);
+    font-size: 15px; line-height: 1; cursor: pointer; padding: 4px 2px;
+}
+.tab-reload:hover { color: var(--accent); }
 .tab-add {
     flex: 0 0 auto; margin: 6px 2px;
     border: 1px dashed var(--border); background: none; color: var(--accent);
