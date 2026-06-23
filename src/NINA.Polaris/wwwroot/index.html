@@ -10958,14 +10958,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 @change="psConfig.primary = $event.target.value">
                             <template x-for="s in psSolvers" :key="s.id">
                                 <option :value="s.id" :selected="psConfig.primary === s.id"
-                                        x-text="s.name + (s.available ? '' : ' (not installed)')"></option>
+                                        x-text="s.name + (s.available ? '' : (s.id === 'astrometry-net-online' ? ' (needs API key)' : ' (not installed)'))"></option>
                             </template>
                         </select>
                     </label>
                     <p class="text-muted" style="font-size:11px; margin:4px 0 0 132px"
                        x-show="psSelectedSolver">
                         <span x-show="psSelectedSolver?.available" class="text-ok">✓ ready</span>
-                        <span x-show="!psSelectedSolver?.available" class="text-warn">⚠ not detected on this system</span>
+                        <!-- Online solver isn't "installed" — it just needs an API key. -->
+                        <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id === 'astrometry-net-online'" class="text-warn">⚠ needs an API key (set below)</span>
+                        <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id !== 'astrometry-net-online'" class="text-warn">⚠ not detected on this system</span>
                         <span x-show="psSelectedSolver?.path" class="text-muted"> · <code x-text="psSelectedSolver?.path"></code></span>
                     </p>
 
@@ -10993,6 +10995,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         Blind fallback if primary fails
                     </label>
 
+                    <!-- Online astrometry.net needs an API key. Surface it here
+                         (not buried in advanced) whenever the online solver is the
+                         primary or the blind fallback (which defaults to online). -->
+                    <div style="max-width:600px; margin-top:10px"
+                         x-show="psConfig.primary === 'astrometry-net-online' || psConfig.useBlindFallback">
+                        <label style="display:flex; align-items:center; gap:12px">
+                            <span style="min-width:120px">Astrometry.net key</span>
+                            <input type="password" class="input-sm" style="flex:1" autocomplete="off"
+                                   x-model="psConfig.astrometryApiKey"
+                                   placeholder="required for the online solver">
+                        </label>
+                        <p class="text-muted" style="font-size:11px; margin:6px 0 0 132px">
+                            Free key from
+                            <a href="https://nova.astrometry.net/api_help" target="_blank" rel="noopener">nova.astrometry.net</a>
+                            (Profile → API Key). The online solver is a web service — nothing to install;
+                            it just needs this key. Without it it stays disabled. Blind solve over the
+                            internet: slower, but a solid fallback when ASTAP can't solve.
+                        </p>
+                    </div>
+
                     <details style="margin-top:12px; max-width:600px">
                         <summary class="text-muted" style="cursor:pointer; font-size:12px">ASTAP path overrides (advanced)</summary>
                         <label style="display:flex; align-items:center; gap:12px; margin-top:8px">
@@ -11009,19 +11031,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </label>
                         <p class="text-muted" style="font-size:11px; margin-top:6px">
                             Leave blank to auto-detect. Set these only if Polaris can't find your install.
-                        </p>
-                        <label style="display:flex; align-items:center; gap:12px; margin-top:12px">
-                            <span style="min-width:120px">Astrometry.net key</span>
-                            <input type="password" class="input-sm" style="flex:1"
-                                   autocomplete="off"
-                                   x-model="psConfig.astrometryApiKey"
-                                   placeholder="enables the online solver">
-                        </label>
-                        <p class="text-muted" style="font-size:11px; margin-top:6px">
-                            Free API key from
-                            <a href="https://nova.astrometry.net/api_help" target="_blank" rel="noopener">nova.astrometry.net</a>
-                            (Profile → API Key). Without it the online solver stays "not installed".
-                            It does a blind solve over the internet — slower, but a good fallback when ASTAP can't solve.
                         </p>
 
                         <hr style="border:none; border-top:1px solid var(--border); margin:14px 0">
