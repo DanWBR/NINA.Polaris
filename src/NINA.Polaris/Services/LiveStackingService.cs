@@ -83,6 +83,12 @@ public class LiveStackingService {
     private float[]? _stackR, _stackG, _stackB;
     private bool _colorActive;
     private BayerPatternEnum _bayerPattern = BayerPatternEnum.None;
+    // Last non-None Bayer pattern seen this session. Frames occasionally arrive
+    // with BayerPattern=None when the driver transiently drops CCD_CFA; relaying
+    // such a frame as mono makes the LIVE display flip colour->mono->colour. We
+    // stamp the relayed (mono-branch) frame with this last-good pattern so the
+    // client debayers consistently.
+    private BayerPatternEnum _lastGoodBayer = BayerPatternEnum.None;
     private int _width;
     private int _height;
     // Last frame's bit depth + metadata, retained so SaveCurrentStack can
@@ -418,6 +424,7 @@ public class LiveStackingService {
             _stackB = null;
             _colorActive = false;
             _bayerPattern = BayerPatternEnum.None;
+            _lastGoodBayer = BayerPatternEnum.None;
             _referenceStars = null;
             _flipped = false;
             _referencePier = PierSide.pierUnknown;
@@ -741,13 +748,22 @@ public class LiveStackingService {
                 await _relay.RelayRgbJpegAsync(rgbImage, maxDim: 4096, quality: 90,
                     kind: FrameKind.Live, ct: ct);
             } else {
+                // Stabilize the relayed Bayer pattern: a single frame whose
+                // CCD_CFA was momentarily empty (BayerPattern=None) must not
+                // flip the LIVE display to mono. Reuse the last good pattern.
+                if (props.BayerPattern != BayerPatternEnum.None
+                        && props.BayerPattern != BayerPatternEnum.Auto)
+                    _lastGoodBayer = props.BayerPattern;
+                var relayBayer = (props.BayerPattern != BayerPatternEnum.None
+                        && props.BayerPattern != BayerPatternEnum.Auto)
+                    ? props.BayerPattern : _lastGoodBayer;
                 var stackedPixels = GetStackedResult();
                 var stackedProps = new ImageProperties {
                     Width = _width,
                     Height = _height,
                     BitDepth = props.BitDepth,
-                    IsBayered = props.IsBayered,
-                    BayerPattern = props.BayerPattern
+                    IsBayered = relayBayer != BayerPatternEnum.None,
+                    BayerPattern = relayBayer
                 };
                 var stackedImage = new BaseImageData(stackedPixels, stackedProps, imageData.MetaData);
                 await _relay.RelayImageAsync(stackedImage, ct);
