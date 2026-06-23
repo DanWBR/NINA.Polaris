@@ -147,6 +147,20 @@ public class ProfileService {
                 _logger.LogInformation(
                     "ImageOutputDir seeded from POLARIS_IMAGE_OUTPUT_DIR env: {Dir}",
                     _activeProfile.ImageOutputDir);
+            } else {
+                // No explicit value and no deployment override: default to a
+                // "files" folder under the user's home so captures / saved live
+                // frames land somewhere sensible out of the box instead of
+                // being silently dropped. The directory is created lazily by
+                // ImageWriterService on the first save; user-set values always
+                // win (this only fires while the field is blank).
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                if (!string.IsNullOrWhiteSpace(home)) {
+                    _activeProfile.ImageOutputDir = Path.Combine(home, "files");
+                    _logger.LogInformation(
+                        "ImageOutputDir defaulted to {Dir} (home/files)",
+                        _activeProfile.ImageOutputDir);
+                }
             }
         }
     }
