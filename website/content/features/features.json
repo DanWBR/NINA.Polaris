@@ -25,7 +25,9 @@
       "intro": "Multi-rig equipment hub. Define several telescope setups (rigs) and switch between them in one click.",
       "items": [
         { "label": "Multi-rig profiles", "text": "save each optical train (main scope, camera, mount, guider, accessories) as a named rig; the whole app retargets when you switch the active rig." },
-        { "label": "Per-role device cards", "text": "Main Telescope, Camera, Mount, Focuser, Filter Wheel, Guidescope, Guide Camera, Rotator, Flat Panel, Dome, and Weather, each with connect/disconnect and live status." },
+        { "label": "Per-role device cards", "text": "Main Telescope, Camera, Mount, Focuser, Filter Wheel, Guidescope, Guide Camera, Guide Focuser, Rotator, Flat Panel, Dome, and Weather, each with connect/disconnect and live status." },
+        { "label": "Auxiliary camera and focuser", "text": "a second imaging camera on the same mount with its own optics, exposure, and gain, captured in parallel into a separate aux folder and focusable from the FOCUS tab (manual or Auto V-curve)." },
+        { "label": "Gain and ISO aware", "text": "astronomy cameras show analogue gain with an ISO explainer; DSLR and mirrorless bodies (gphoto on Linux) get a real ISO dropdown." },
         { "label": "Connection backends in one place", "text": "INDI (TCP/XML) full native client; ASCOM Alpaca (HTTP) auto-discovery and connect; ASCOM Platform (COM) Windows-only direct driver access; native vendor SDKs (ZWO ASI, Svbony, Player One, ToupTek-alike) driven directly; DSLR via Canon, Nikon, and Sony on Windows, gphoto2 on Linux." },
         { "label": "Per-rig optical data", "text": "main and guider focal length (auto-updated from plate solves), a filter offsets table, and per-camera quirk overrides (Bayer pattern, vertical flip) for cameras that report wrong metadata." },
         { "label": "Robust INDI handling", "text": "ack-based property writes, configurable per-device pre-connect delays, and idempotent connect logic." },
@@ -47,11 +49,13 @@
       "intro": "Plan what to shoot and where to point.",
       "items": [
         { "label": "Offline sky map", "text": "interactive sky atlas with bundled star data; works with no internet at the scope." },
+        { "label": "Offline DSS sky imagery", "text": "an optional real DSS photo background for the map that works fully offline at the telescope (provisionable, roughly 30 MB to 400 MB), with an online fallback when you have internet." },
         { "label": "Target search", "text": "find deep-sky objects by name or catalog from the bundled DSO database, or enter manual RA/DEC." },
+        { "label": "DSO preview thumbnails", "text": "a small offline DSS thumbnail on every search result and atlas card, so galaxies and nebulae are easy to tell apart at a glance." },
         { "label": "FOV overlays and framing", "text": "draw your camera's field of view on the map, rotate it, and drag to frame a target; the red (mount) and blue (target) rectangles track plate-solve results." },
         { "label": "Slew & center", "text": "send the mount to a target and plate-solve-center on it." },
-        { "label": "Mosaic planner", "text": "lay out multi-panel mosaics over a target." },
-        { "label": "Tonight", "text": "altitude curves and the best objects to image for your location and date, with twilight and night windows." },
+        { "label": "Mosaic planner", "text": "lay out multi-panel mosaics over a target, with a live preview of the tile grid drawn right on the sky map as you adjust columns, rows, and overlap." },
+        { "label": "Tonight", "text": "altitude curves and the best objects to image for your location and date, with twilight and night windows; the ranking also surfaces large emission and dark nebulae that carry size but no stellar magnitude." },
         { "label": "Weather", "text": "current conditions and forecast for the observing site." },
         { "label": "Stellarium sync", "text": "drive the view from and to a Stellarium instance." }
       ]
@@ -61,7 +65,8 @@
       "intro": "Achieve and verify focus, and diagnose the optical train.",
       "items": [
         { "label": "Manual focus", "text": "step the focuser in and out with a live preview canvas and real-time HFR (half-flux radius) plus Laplacian-variance sharpness readout." },
-        { "label": "Auto-focus", "text": "automated V-curve sweep with parabola fit; robust on heavy defocus, with an HFR-vs-position chart of the run." },
+        { "label": "Auto-focus", "text": "automated V-curve sweep with parabola fit; robust on heavy defocus, with an HFR-vs-position chart of the run. An optical-train selector runs the sweep on the main, auxiliary, or guide camera and focuser pair." },
+        { "label": "Aux and guide focusing", "text": "Camera and Focuser source switches (Primary, Auxiliary, or Guide) target a second OTA or a motorised guide scope; the manual jog (position, range, GoTo, abort) follows the selected motor." },
         { "label": "Bahtinov mask helper", "text": "overlay analysis of a Bahtinov diffraction pattern for precise manual focus." },
         { "label": "Field analysis tools", "text": "shared capture with multiple views. Tilt: a sensor-tilt map from corner-vs-center star sizes. Aberration Inspector: a 3x3 mosaic of 1:1 corner and center crops to judge coma, astigmatism, and backfocus. Inspector: full-field star metrics (eccentricity, FWHM) to spot collimation and spacing problems." },
         { "label": "Sensor analysis", "text": "characterize the camera sensor itself." }
@@ -119,6 +124,7 @@
         { "label": "Auto re-focus and re-center triggers", "text": "kick off an auto-focus or a re-center when HFR drifts or the target wanders." },
         { "label": "Save the current stack", "text": "to FITS at any time, into a dedicated stacked folder." },
         { "label": "Client-side compute offload", "text": "on a slow server (Pi 2/3) the stacking math can run in your browser via WebAssembly instead of the host." },
+        { "label": "Server-side capture loop", "text": "an optional, experimental mode that runs the capture loop on the server, so the stack keeps building even if the browser disconnects." },
         { "label": "Reference-frame suggestions", "text": "to improve alignment quality." }
       ]
     },
@@ -201,7 +207,7 @@
         { "label": "Remote access (Relay)", "text": "TLS-tunneled access to your rig from outside the LAN, with optional DuckDNS and Let's Encrypt." },
         { "label": "HTTPS setup", "text": "one-click self-signed certificate (port 5001) so client devices get WebGPU and multi-thread WASM for in-browser AI." },
         { "label": "Authentication", "text": "login and first-run wizard protecting the UI and API." },
-        { "label": "Remote terminal", "text": "embedded SSH terminal (xterm.js) to manage a headless host from the browser." },
+        { "label": "Remote terminal", "text": "embedded SSH terminal (xterm.js) to manage a headless host from the browser, with a one-click launcher for the native raspi-config or armbian-config tool." },
         { "label": "Clock sync", "text": "push the browser's UTC to a Pi without an RTC." },
         { "label": "Equipment simulator", "text": "built-in fake telescope, camera, focuser, and filter wheel that renders real stars at the simulated position, so plate solve, auto-focus, and live stacking all work without hardware." },
         { "label": "Benchmark", "text": "synthetic workloads to compare hardware (and GPU vs CPU) with a saved results history." },

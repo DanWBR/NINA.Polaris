@@ -99,15 +99,23 @@ Plan what to shoot and where to point. → [sky-explorer.md](user-guide/sky-expl
 
 - **Offline sky map** — interactive sky atlas with bundled star data; works
   with no internet at the scope.
+- **Offline DSS sky imagery** — an optional real DSS colour photo background
+  for the map, provisioned ahead of time (~30 MB to ~400 MB by tile order) so
+  it works fully offline at the telescope, with an online CDS fallback.
 - **Target search** — find deep-sky objects by name/catalog from the bundled
   DSO database, or enter manual RA/DEC.
+- **DSO preview thumbnails** — a small offline DSS thumbnail on each search
+  result and atlas card, so galaxies and nebulae are easy to tell apart.
 - **FOV overlays + framing** — draw your camera's field of view on the map,
   rotate it, and drag to frame a target; the red (mount) and blue (target)
   rectangles track plate-solve results.
 - **Slew & center** — send the mount to a target and plate-solve-center on it.
-- **Mosaic planner** — lay out multi-panel mosaics over a target.
+- **Mosaic planner** — lay out multi-panel mosaics over a target, with a live
+  preview of the tile grid drawn on the sky map as you adjust columns, rows,
+  and overlap.
 - **Tonight** — altitude curves and the best objects to image for your
-  location and date, with twilight/night windows.
+  location and date, with twilight/night windows; the ranking also surfaces
+  large emission/dark nebulae that carry size but no stellar magnitude.
 - **Weather** — current conditions and forecast for the observing site.
 - **Stellarium sync** — drive the view from / to a Stellarium instance.
 
@@ -229,6 +237,9 @@ frames arrive. → [live-stacking.md](user-guide/live-stacking.md)
 - **Client-side compute offload** — on a slow server (Pi 2/3) the stacking
   math can run in your browser via WebAssembly instead of the host.
   → [client-side-compute.md](user-guide/client-side-compute.md)
+- **Server-side capture loop** (experimental) — an opt-in mode that runs the
+  capture loop on the server, so the stack keeps building even if the browser
+  disconnects; the browser still handles WASM stacking compute.
 - **Reference-frame suggestions** to improve alignment quality.
 
 ---
@@ -372,7 +383,8 @@ Global configuration, host management, and connectivity.
 - **Authentication** — login + first-run wizard protecting the UI and API.
   → [authentication.md](user-guide/authentication.md)
 - **Remote terminal** — embedded SSH terminal (xterm.js) to manage a
-  headless host from the browser. → [remote-terminal.md](user-guide/remote-terminal.md)
+  headless host from the browser, with a one-click launcher for the native
+  raspi-config / armbian-config tool. → [remote-terminal.md](user-guide/remote-terminal.md)
 - **Clock sync** — push the browser's UTC to a Pi without an RTC.
 - **Equipment simulator** — built-in fake telescope/camera/focuser/filter
   wheel that renders real stars at the simulated position, so plate solve,

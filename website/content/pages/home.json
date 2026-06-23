@@ -20,6 +20,12 @@
       "image": "/assets/screenshots/devices.jpg"
     },
     {
+      "icon": "📷",
+      "title": "Multi-camera rigs",
+      "body": "Run a second imaging camera on the same mount with its own optics, exposure, and gain, captured in parallel. Add a motorised guide-scope focuser and run auto-focus on any optical train: main, auxiliary, or guide. DSLR and mirrorless bodies get a real ISO dropdown.",
+      "image": "/assets/screenshots/aux-camera.jpg"
+    },
+    {
       "icon": "📡",
       "title": "Native PHD2 guiding, with fallback to the real app",
       "body": "A native PHD2 implementation drives guiding directly, with a live RA/Dec chart, dither, settle, and profiles. When you want the original PHD2 interface, fall back to the real application embedded right in the browser over xpra or VNC.",
