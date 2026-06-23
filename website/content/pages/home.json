@@ -149,7 +149,12 @@
       { "image": "/assets/screenshots/star-removal.jpg", "caption": "Star removal: before and after, with the stars stripped into a separate layer" },
       { "image": "/assets/screenshots/remove-stars-dialog.jpg", "caption": "Remove stars: pick a model, set precision, and tune halo cleanup" },
       { "image": "/assets/screenshots/image-blend.jpg", "caption": "Image Blend: recombine starless and stars with an independent stretch per layer" },
-      { "image": "/assets/screenshots/plate-solve.jpg", "caption": "Slew & Center: plate-solving and centering on the target from the sky map" }
+      { "image": "/assets/screenshots/plate-solve.jpg", "caption": "Slew & Center: plate-solving and centering on the target from the sky map" },
+      { "image": "/assets/screenshots/guide-native.jpg", "caption": "Native guiding: the RA/Dec error graph, guide-star field, and calibration panel" },
+      { "image": "/assets/screenshots/live-ic4605.jpg", "caption": "Live stacking IC 4605 with the live histogram and stretch handles" },
+      { "image": "/assets/screenshots/live-lbn43.jpg", "caption": "Live stacking LBN 43 from a browser over the local network" },
+      { "image": "/assets/screenshots/live-lbn1110.jpg", "caption": "Live stacking LBN 1110, building up frame by frame" },
+      { "image": "/assets/screenshots/live-saturn.jpg", "caption": "Live stacking the Saturn Nebula (NGC 7009)" }
     ]
   }
 }
