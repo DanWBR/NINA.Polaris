@@ -1245,7 +1245,7 @@
                              preview, not an archive. The counter shows
                              how many frames landed in this session. -->
                         <label class="livestack-save-frames-label"
-                               title="Save every incoming frame to disk during live stacking (in addition to the integrated preview). Useful when you want a science-grade archive of the session. Off by default — turn on if you plan to re-stack or calibrate later.">
+                               title="Save every incoming frame to disk during live stacking (in addition to the integrated preview). Keeps a science-grade archive of the session for re-stacking or calibration later. On by default — uncheck if you only want the live preview and not an archive (needs an image output folder set in FILES).">
                             <input type="checkbox"
                                    x-model="liveStackSaveFrames"
                                    @change="saveLiveStackSaveFrames()">
