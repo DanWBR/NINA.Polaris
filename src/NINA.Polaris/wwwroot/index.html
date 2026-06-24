@@ -656,7 +656,7 @@
                  modal. Internally the tab token stays 'files' so
                  persisted localStorage keys, legacy bindings, and
                  filesInit() keep working without a migration. -->
-            <button class="nav-btn" :class="{ active: tab === 'files' }" @click="tab = 'files'; filesInit()" title="Studio (browser + stack + editor)">
+            <button class="nav-btn" :class="{ active: tab === 'files' }" data-tour="nav-studio" @click="tab = 'files'; filesInit()" title="Studio (browser + stack + editor)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Studio</span>
             </button>
@@ -9760,7 +9760,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          (FITS/XISF/PNG/JPG/TIFF) aren't gated here; the
                          server's /api/editor/load rejects unsupported
                          extensions with a clear error toast. -->
-                    <button class="btn btn-sm btn-icon"
+                    <button class="btn btn-sm btn-icon" data-tour="studio-editor"
                             :disabled="files.selectedPaths.length !== 1
                                        || filesSelectedDir() != null"
                             @click="filesOpenInEditor()"
@@ -9829,7 +9829,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          shown once the converted starnet model is installed
                          (scripts/convert-starnet-onnx.ps1). Sits just left of
                          BGE so the star-removal + GraXpert ops group together.-->
-                    <button class="btn btn-sm btn-icon"
+                    <button class="btn btn-sm btn-icon" data-tour="studio-starremoval"
                             x-show="onnxStarnetAvailable()"
                             :disabled="files.selectedPaths.length !== 1
                                        || filesSelectedDir() != null
@@ -9844,6 +9844,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                    || onnxAvailableForOp('background-extraction')"
                             :disabled="files.selectedPaths.length === 0"
                             @click="graxpertOpenModal('background-extraction')"
+                            data-tour="studio-bge"
                             title="Background extraction (BGE): remove gradient with GraXpert (browser ONNX or CLI)"
                             aria-label="Background extraction">
                         <span class="files-icon">🌃</span>
@@ -9853,6 +9854,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                    || onnxAvailableForOp('deconvolution')"
                             :disabled="files.selectedPaths.length === 0"
                             @click="graxpertOpenModal('deconvolution')"
+                            data-tour="studio-decon"
                             title="Deconvolution: sharpen with GraXpert"
                             aria-label="Deconvolution">
                         <span class="files-icon">🌌</span>
@@ -9862,6 +9864,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                    || onnxAvailableForOp('denoising')"
                             :disabled="files.selectedPaths.length === 0"
                             @click="graxpertOpenModal('denoising')"
+                            data-tour="studio-denoise"
                             title="Denoise: reduce noise with GraXpert"
                             aria-label="Denoise">
                         <span class="files-icon">☄</span>
@@ -10084,7 +10087,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          UNIF-3 will fill in the Actions toolbar with
                          Master/Calibrate/Integrate/Combine/ColorCal/
                          Siril wiring. -->
-                    <div class="files-right-pane stack-pane">
+                    <div class="files-right-pane stack-pane" data-tour="studio-stack">
                         <div class="stack-header">
                             <h3 class="stack-title">Stack workspace</h3>
                             <button class="btn btn-sm"
@@ -15881,7 +15884,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <script src="/js/app.js?v=20260624-centerbody"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
-    <script src="/js/tour.js?v=20260624-tour2"></script>
+    <script src="/js/tour.js?v=20260624-tour3"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

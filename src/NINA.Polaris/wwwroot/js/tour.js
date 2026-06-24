@@ -84,6 +84,48 @@
                 before: function (a) { a.tab = 'live'; if (a.quickControlsCollapsed) a.quickControlsCollapsed = false; }
             },
             {
+                target: '[data-tour="nav-studio"]', placement: 'right',
+                title: 'STUDIO — stack & process',
+                body: "After the night, STUDIO is your processing workspace. Let's walk through its tools, from raw frames to a finished image.",
+                before: function (a) { a.tab = 'files'; if (a.filesInit) a.filesInit(); }
+            },
+            {
+                target: '[data-tour="studio-stack"]', placement: 'left',
+                title: 'Stacking',
+                body: 'Drop your lights (and calibration frames) into the Stack workspace and integrate them into a single master — building masters, calibrating, and combining channels into RGB/LRGB.',
+                before: function (a) { a.tab = 'files'; }
+            },
+            {
+                target: '[data-tour="studio-starremoval"]', placement: 'bottom',
+                title: 'Star removal',
+                body: 'Split the master into a starless image + a stars-only image (StarNet, in the browser) — the basis for star reduction and processing the nebula separately.',
+                before: function (a) { a.tab = 'files'; }
+            },
+            {
+                target: '[data-tour="studio-bge"]', placement: 'bottom',
+                title: 'Background extraction (BGE)',
+                body: 'Remove light-pollution gradients and uneven background with GraXpert, for a flat, neutral sky.',
+                before: function (a) { a.tab = 'files'; }
+            },
+            {
+                target: '[data-tour="studio-denoise"]', placement: 'bottom',
+                title: 'Denoise',
+                body: 'Knock down noise with the GraXpert AI denoiser while preserving faint detail.',
+                before: function (a) { a.tab = 'files'; }
+            },
+            {
+                target: '[data-tour="studio-decon"]', placement: 'bottom',
+                title: 'Deconvolution',
+                body: 'Sharpen stars and structure with GraXpert deconvolution, recovering detail softened by seeing and optics.',
+                before: function (a) { a.tab = 'files'; }
+            },
+            {
+                target: '[data-tour="studio-editor"]', placement: 'bottom',
+                title: 'Image editor',
+                body: 'Open the Lightroom-style editor for the final touches: stretch, curves, colour calibration, crop, and export.',
+                before: function (a) { a.tab = 'files'; }
+            },
+            {
                 target: '[data-tour="nav-help"]', placement: 'right',
                 title: "That's the tour!",
                 body: 'Full step-by-step tutorials and troubleshooting live in the Help tab. Clear skies!',
