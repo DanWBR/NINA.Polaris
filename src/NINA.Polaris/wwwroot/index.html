@@ -4702,38 +4702,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                           x-text="indiConnected ? 'INDI (' + devices.length + ' devices)' : 'INDI Off'"></span>
                 </div>
 
-                <!-- RIGS sub-tabstrip. 'Equipment' (default) holds the
-                     rig selector + role-cards grid; 'INDI Drivers' hosts
-                     the embedded indi-web iframe so the driver picker
-                     has its own scrollable surface instead of competing
-                     for space at the bottom of the long equipment grid.
-                     Same pattern as the GUIDE tab's Control / PHD2 GUI
-                     tabstrip. -->
-                <div class="video-tabstrip">
-                    <button class="video-tab" :class="{ active: equipTab === 'equipment' }"
-                            @click="equipTab = 'equipment'">Equipment</button>
-                    <button class="video-tab" :class="{ active: equipTab === 'indi-web' }"
-                            @click="equipTab = 'indi-web'; indiWebStatusRefresh()">INDI Drivers</button>
-                    <button class="video-tab" :class="{ active: equipTab === 'indi-cp' }"
-                            @click="equipTab = 'indi-cp'; indiPropsLoad()">INDI Control Panel</button>
-                </div>
-
-                <!-- ===== Equipment subtab ===== -->
-                <div x-show="equipTab === 'equipment'">
-
-                <!-- Rig (equipment profile) selector -->
-                <div class="rig-bar">
-                    <span class="rig-bar-label">Rig:</span>
-                    <select class="input-md" x-model="activeRigId" @change="switchRig($event.target.value)">
-                        <template x-for="r in rigs" :key="r.id">
-                            <option :value="r.id" x-text="r.name"></option>
-                        </template>
-                    </select>
-                    <button class="btn btn-sm" @click="rigModalOpen = true; loadOpticsCatalogue(); loadCameraQuirks()">Manage rigs…</button>
-                    <button class="btn btn-sm" @click="saveCurrentSelectionsToRig()"
-                            :disabled="!indiConnected"
-                            title="Save current device selections into this rig">💾 Save selections</button>
-                </div>
+                <!-- Driver-host connection lives ABOVE the sub-tabstrip so
+                     the INDI / Alpaca connect controls (and the connected
+                     strip) stay visible on every sub-tab — Equipment, INDI
+                     Drivers, INDI Control Panel — since all of them need a
+                     live connection. -->
 
                 <!-- Compact connection strip, visible when an INDI server
                      is reachable. Replaces the bottom-of-panel "Disconnect
@@ -4890,6 +4863,40 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </template>
                         </div>
                     </div>
+                </div>
+
+                <!-- RIGS sub-tabstrip. 'Equipment' (default) holds the
+                     rig selector + role-cards grid; 'INDI Drivers' hosts
+                     the embedded indi-web iframe so the driver picker
+                     has its own scrollable surface instead of competing
+                     for space at the bottom of the long equipment grid.
+                     Same pattern as the GUIDE tab's Control / PHD2 GUI
+                     tabstrip. The connection strip above is shared by all
+                     three sub-tabs. -->
+                <div class="video-tabstrip">
+                    <button class="video-tab" :class="{ active: equipTab === 'equipment' }"
+                            @click="equipTab = 'equipment'">Equipment</button>
+                    <button class="video-tab" :class="{ active: equipTab === 'indi-web' }"
+                            @click="equipTab = 'indi-web'; indiWebStatusRefresh()">INDI Drivers</button>
+                    <button class="video-tab" :class="{ active: equipTab === 'indi-cp' }"
+                            @click="equipTab = 'indi-cp'; indiPropsLoad()">INDI Control Panel</button>
+                </div>
+
+                <!-- ===== Equipment subtab ===== -->
+                <div x-show="equipTab === 'equipment'">
+
+                <!-- Rig (equipment profile) selector -->
+                <div class="rig-bar">
+                    <span class="rig-bar-label">Rig:</span>
+                    <select class="input-md" x-model="activeRigId" @change="switchRig($event.target.value)">
+                        <template x-for="r in rigs" :key="r.id">
+                            <option :value="r.id" x-text="r.name"></option>
+                        </template>
+                    </select>
+                    <button class="btn btn-sm" @click="rigModalOpen = true; loadOpticsCatalogue(); loadCameraQuirks()">Manage rigs…</button>
+                    <button class="btn btn-sm" @click="saveCurrentSelectionsToRig()"
+                            :disabled="!indiConnected"
+                            title="Save current device selections into this rig">💾 Save selections</button>
                 </div>
 
                 <!-- Role grid: cards visible regardless of INDI connection
