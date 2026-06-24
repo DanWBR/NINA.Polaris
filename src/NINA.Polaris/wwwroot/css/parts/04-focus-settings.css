@@ -443,7 +443,14 @@
     align-items: center;
     gap: 6px;
 }
-.center-body-row .input-sm { min-width: 7em; }
+/* Match the body dropdown to the .btn-sm height (it's the tap-friendly
+   38px .input-sm by default, which towers over the action buttons). */
+.center-body-row .input-sm {
+    min-width: 6em;
+    min-height: 0;
+    padding: 4px 10px;
+    font-size: 12px;
+}
 
 /* When the "Solve frame" disclosure is expanded, drop it to its own
    full-width line below the action row (and after the body picker via
