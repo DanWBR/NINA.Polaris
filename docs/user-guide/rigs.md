@@ -2,23 +2,29 @@
 
 The RIGS tab is your equipment cockpit. It centralizes:
 
-1. **Driver-host connection**, INDI or Alpaca, always visible at top
+1. **Driver-host connection**, INDI or Alpaca, in a framed panel above
+   the sub-tabstrip (visible on every sub-tab)
 2. **Per-role equipment cards**, Main Telescope, Camera, Mount,
-   Focuser, Filter Wheel, Guidescope, Guide Camera, Guide Focuser,
-   Aux Camera + Aux Focuser, plus collapsible Accessories (Rotator,
-   Flat Panel, Dome, Weather)
+   Main Scope Focus Motor, Filter Wheel, Guiding System (Scope +
+   Camera + Focus Motor), Auxiliary Camera System (Camera + Lens/Scope
+   + Focus Motor), plus collapsible Accessories (Rotator, Flat Panel,
+   Dome, Weather)
 3. **Multi-rig management**, switch between saved equipment bundles
 
-## Connection strip (top of the tab)
+## Connection panel (top of the tab)
 
-When INDI/Alpaca is **not connected**, the strip expands to show:
+The driver-host connection lives in a framed panel **above the
+Equipment / INDI Drivers / INDI Control Panel sub-tabstrip**, so it
+stays visible on every sub-tab (all three need a live connection).
+
+When INDI/Alpaca is **not connected**, the panel shows:
 
 - **INDI tab**: Host + Port inputs + Connect button (default
   `localhost:7624`)
 - **ASCOM/Alpaca tab**: Discover button + manual host/port for NAT'd
   servers + per-server device list
 
-When **connected**, the strip collapses to a green compact bar showing
+When **connected**, the panel collapses to a green compact bar showing
 `✓ INDI · localhost:7624 · N devices`, with ⟳ Refresh and Disconnect
 buttons.
 
@@ -75,61 +81,56 @@ direct-WiFi drivers Polaris ships (SynScan WiFi, NexStar WiFi, LX200
 TCP). Connect → tracking toggle, park/unpark, RA/Dec readout, NSEW
 directional pad.
 
-### Focuser / Filter Wheel
+### Main Scope Focus Motor / Filter Wheel
 
-Standard select + connect. Filter Wheel exposes filter swap controls;
-filter labels come from the rig's `FilterOffsets` table (Manage rigs
-modal).
+Standard select + connect (the focuser card is named after the optical
+train it drives — the **Main Scope Focus Motor**). Filter Wheel exposes
+filter swap controls; filter labels come from the rig's `FilterOffsets`
+table (Manage rigs modal).
 
-### Guidescope (metadata-only)
+### Guiding System
 
-Like Main Telescope but for the guide setup. Focal length + aperture
-drive PHD2 pixel-scale sanity checks + the guiding resolution readout.
+One card for the whole guide setup, split into three labelled groups:
 
-Two ways to populate, mirroring the Main Telescope card:
+**Scope** (metadata-only) — like Main Telescope but for the guide
+optics. Focal length + aperture drive PHD2 pixel-scale sanity checks +
+the guiding resolution readout. Two ways to populate:
 
-**A. Catalog pickers** (preferred): **Brand** → **Model** dropdowns
-driven by `wwwroot/data/guidescopes.json` (curated common guide scopes:
-SVBony, ZWO, William Optics, Askar, Sky-Watcher, Orion, QHY, ...). The
-model list shows aperture + f-ratio; picking one auto-fills the guide
-focal length + aperture.
+- **Catalog pickers** (preferred): **Brand** → **Model** dropdowns
+  driven by `wwwroot/data/guidescopes.json` (curated common guide
+  scopes: SVBony, ZWO, William Optics, Askar, Sky-Watcher, Orion,
+  QHY, ...). The model list shows aperture + f-ratio; picking one
+  auto-fills the guide focal length + aperture.
+- **Manual entry**: leave Brand = "Manual entry" and type the numeric
+  focal length + aperture by hand (for off-catalog scopes). Guide
+  scopes take no accessory/reducer, so there is no accessory picker.
 
-**B. Manual entry**: leave Brand = "Manual entry" and type the numeric
-focal length + aperture by hand (for off-catalog scopes). Guide scopes
-take no accessory/reducer, so there is no accessory picker here.
-
-### Guide Camera
-
-Behaviour depends on the rig's **Guider driver** (`native` vs `phd2`,
-set on this card):
+**Camera** — behaviour depends on the rig's **Guider driver**
+(`native` vs `phd2`, set on this card):
 
 - **Native guider** (default): Polaris manages the guide camera
-  directly. The card has a driver + device picker (INDI / Alpaca /
-  vendor SDK / Simulator) and a connect toggle, just like the imaging
-  camera. The built-in [native autoguider](guide-native.md) auto-
-  connects and uses it for pulse guiding. The guide camera must differ
-  from the imaging camera while that is connected.
+  directly. Driver + device picker (INDI / Alpaca / vendor SDK /
+  Simulator) and a connect toggle, just like the imaging camera. The
+  built-in [native autoguider](guide-native.md) auto-connects and uses
+  it for pulse guiding. The guide camera must differ from the imaging
+  camera while that is connected.
 - **PHD2**: an external PHD2 process owns the camera. The card then
   mirrors PHD2's `get_current_equipment` (read-only) so you can see at
   a glance which guide cam PHD2 is using.
 
-You can also focus a motorised guide scope through this camera — see
-[Guide Focuser](#guide-focuser) below.
+**Focus Motor** — an optional motor on the **guide scope** (some setups
+motorise it). Driver + device picker + connect toggle. Once connected
+it can be jogged from the FOCUS tab via the **Focuser: Guide** source
+switch, and auto-focused with the Auto V-curve **Optical train: Guide**
+option (which uses the guide camera). See
+[FOCUS → aux/guide focusing](focus.md#focusing-the-aux--guide-scope).
 
-### Guide Focuser
-
-An optional motor on the **guide scope** (some setups motorise it).
-Driver + device picker + connect toggle, same shape as the main
-focuser. Once connected it can be jogged from the FOCUS tab via the
-**Focuser: Guide** source switch, and auto-focused with the Auto
-V-curve **Optical train: Guide** option (which uses the guide camera).
-See [FOCUS → aux/guide focusing](focus.md#focusing-the-aux--guide-scope).
-
-### Aux Camera + Aux Focuser
+### Auxiliary Camera System
 
 A **second imaging camera** riding the same mount through a different
 lens/telescope, captured in parallel to make use of the same tracked
-night. The aux card carries:
+night. The card is split into **Camera + Lens/Scope** and **Focus
+Motor** groups, and carries:
 
 - **Driver + device** picker (INDI / vendor SDK / Alpaca, like the main
   camera), connect/disconnect, and live status.
@@ -147,9 +148,12 @@ night. The aux card carries:
 Aux frames are written to a **separate `aux/` subtree**
 (`{rig}/aux/{target}/{filter}/{session}/`) so they never mix with the
 main camera's `lights/`. The aux camera is also viewable in the FOCUS
-tab via the **Camera: Auxiliary** source switch. Capture + save is all
-the aux camera does today — no guiding, plate solving, live stacking or
-sequencing through it.
+tab via the **Camera: Auxiliary** source switch. Capture + save is the
+aux camera's main job — no guiding, live stacking or sequencing through
+it — but the **SKY** map does draw its real field of view (see below):
+when connected it shows a **pink aux FOV rectangle**, and a SKY plate
+solve fires a parallel aux solve so the rectangle reflects the true
+rotation + scale the aux frame will come out with.
 
 ### Accessories (collapsible)
 

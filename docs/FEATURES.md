@@ -107,8 +107,12 @@ Plan what to shoot and where to point. → [sky-explorer.md](user-guide/sky-expl
 - **DSO preview thumbnails** — a small offline DSS thumbnail on each search
   result and atlas card, so galaxies and nebulae are easy to tell apart.
 - **FOV overlays + framing** — draw your camera's field of view on the map,
-  rotate it, and drag to frame a target; the red (mount) and blue (target)
-  rectangles track plate-solve results.
+  rotate it, and drag to frame a target; the blue (mount) and red (target)
+  rectangles track plate-solve results. A **pink** rectangle shows the aux
+  camera's field when an Auxiliary Camera System is configured.
+- **Aux FOV confirmation** — a plate solve from SKY fires a parallel solve on
+  the aux camera (independent hardware), so the pink rectangle reflects the
+  true rotation + scale the aux photo will come out with.
 - **Slew & center** — send the mount to a target and plate-solve-center on it.
 - **Mosaic planner** — lay out multi-panel mosaics over a target, with a live
   preview of the tile grid drawn on the sky map as you adjust columns, rows,

@@ -175,6 +175,36 @@ vs UTC time with:
 - **Moon altitude** overlay
 - **Best window** highlight where target is highest
 
+## Field of view overlays
+
+Polaris draws the camera footprints on the map so you can frame before
+slewing:
+
+- **Blue rectangle** — the **mount** FOV (main camera), anchored where
+  the scope is pointing. Sized from the active rig's focal length +
+  the connected camera's sensor; rotated to the solved camera angle
+  once a plate solve is available.
+- **Red rectangle** — the **target** framing box. Screen-anchored
+  (drag the map to compose) when idle; while imaging with a recent
+  solve it snaps to the solved sky position so red converges on blue
+  when you're framed correctly.
+- **Pink rectangle** — the **aux camera** FOV, shown when an
+  [Auxiliary Camera System](rigs.md#auxiliary-camera-system) is
+  configured (aux focal length set + the aux sensor reported once it
+  connects). The aux rides the same mount, so it's anchored at the
+  mount position.
+- **Yellow rectangles** — the [mosaic](#mosaic-planner) panels.
+
+### Confirming the aux camera framing
+
+When you run a plate solve from SKY (**Solve & Sync**), Polaris fires a
+**parallel solve on the aux camera** if it's connected — it captures
+one aux frame (aux exposure / gain / binning) and solves it on its own
+hardware, concurrently with the main solve. The pink rectangle then
+snaps onto the aux's **real solved rotation + scale**, so you know for
+certain the field and angle the aux photo will come out with instead of
+assuming it matches the mount. A toast reports the solved aux rotation.
+
 ## Slew & Center
 
 The big workflow button:
