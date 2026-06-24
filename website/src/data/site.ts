@@ -26,8 +26,6 @@ export const site = {
 
 export const navLinks = [
   { label: 'Features', href: '/features' },
-  { label: 'Benchmarks', href: '/#benchmarks' },
-  { label: 'Screenshots', href: '/#screenshots' },
   { label: 'Get Started', href: '/getting-started' },
   { label: 'Download & Install', href: '/install' },
   { label: 'About', href: '/about' },
