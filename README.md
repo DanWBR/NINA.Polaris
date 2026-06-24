@@ -430,6 +430,7 @@ the [`licenses/`](licenses/) folder, and the bundled `3rd-party-licenses` notice
 - [Serilog](https://serilog.net/) - the Serilog contributors.
 - [Json.NET](https://www.newtonsoft.com/json) - James Newton-King.
 - [SSH.NET](https://github.com/sshnet/SSH.NET) - the SSH.NET contributors.
+- [SMBLibrary](https://github.com/TalAloni/SMBLibrary) - Tal Aloni. Pure-managed SMB1/SMB2 client for the "auto-push images to network storage" backend.
 - [net-mdns (Makaretu.Dns)](https://github.com/richardschneider/net-mdns) - Richard Schneider. `nina.local` discovery.
 - [SQLite](https://www.sqlite.org/) - D. Richard Hipp and the SQLite team.
 - [Rockchip RKNN runtime](https://github.com/airockchip/rknn-toolkit2) - Rockchip. Optional NPU acceleration on RK35xx boards.
