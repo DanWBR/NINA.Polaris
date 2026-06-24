@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Image.FileFormat.FITS;
+using NINA.Image.Interfaces;
 using NINA.Polaris.Services;
 using NINA.Polaris.Services.PlateSolving;
 
@@ -181,6 +182,85 @@ public static class PlateSolveEndpoints {
                 // may have been deleted by a parallel cleanup or
                 // never written if FITSWriter threw before
                 // finishing).
+                try { File.Delete(tempFits); } catch { }
+            }
+        });
+
+        // ---- Aux-camera plate solve (parallel to the main solve) ----
+        // Captures one frame from the connected AUX camera, solves it, and
+        // returns RA/Dec/rotation/scale. The aux rides the same mount, so
+        // the value is the actual sky ROTATION + scale the aux frame will
+        // come out with — the operator sees the real pink aux FOV on SKY
+        // rather than an assumed angle. Independent hardware from the main
+        // camera, so it can run concurrently with the main solve.
+        group.MapPost("/solve-aux", async (
+                SolveAuxRequest? request,
+                PlateSolveService solver,
+                PlateSolveProgressService progress,
+                EquipmentManager equip,
+                ProfileService profiles,
+                ILogger<PlateSolveStatusMarker> logger,
+                CancellationToken ct) => {
+            var cam = equip.AuxCamera;
+            if (cam == null || !cam.IsConnected) {
+                return Results.BadRequest(new { error = "Aux camera not connected." });
+            }
+            if (!solver.IsAvailable) {
+                return Results.BadRequest(new { error = "No plate solver configured / installed." });
+            }
+
+            double? hintRa = request?.HintRa, hintDec = request?.HintDec;
+            if (!hintRa.HasValue || !hintDec.HasValue) {
+                var tel = equip.Telescope;
+                if (tel != null && tel.IsConnected
+                        && !double.IsNaN(tel.RightAscension) && !double.IsNaN(tel.Declination)) {
+                    hintRa ??= tel.RightAscension;
+                    hintDec ??= tel.Declination;
+                }
+            }
+
+            var tempFits = Path.Combine(Path.GetTempPath(),
+                $"polaris_aux_solve_{Guid.NewGuid():N}.fits");
+            try {
+                var exposure = request?.Exposure is > 0 ? request!.Exposure!.Value : 3.0;
+                var opts = new CaptureOptions(
+                    Gain: request?.Gain,
+                    BinX: request?.Binning, BinY: request?.Binning,
+                    ImageType: "Light");
+                logger.LogInformation(
+                    "AUX plate solve: capture {Exp}s gain={Gain} bin={Bin}, hint RA={Ra} Dec={Dec}",
+                    exposure, request?.Gain, request?.Binning, hintRa, hintDec);
+
+                var image = await cam.CaptureAsync(exposure, opts, ct);
+                FITSWriter.Write(image, tempFits);
+
+                var options = new PlateSolveOptions {
+                    HintRa = hintRa, HintDec = hintDec,
+                    SearchRadiusDeg = request?.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
+                };
+                progress.Begin("AUX");
+                PlateSolveResult result;
+                try { result = await solver.SolveAsync(tempFits, options, ct, progress.Append); }
+                finally { progress.End(); }
+
+                if (!result.Success) {
+                    return Results.Ok(new {
+                        success = false, error = result.Error, solverUsed = result.SolverUsed
+                    });
+                }
+                return Results.Ok(new {
+                    success = true,
+                    raHours = result.RaHours, decDeg = result.DecDeg, raDeg = result.RaDeg,
+                    rotationDeg = result.RotationDeg,
+                    scaleArcsecPerPixel = result.ScaleArcsecPerPixel,
+                    solverUsed = result.SolverUsed
+                });
+            } catch (OperationCanceledException) {
+                return Results.StatusCode(499);
+            } catch (Exception ex) {
+                logger.LogError(ex, "AUX plate solve failed");
+                return Results.Ok(new { success = false, error = ex.Message });
+            } finally {
                 try { File.Delete(tempFits); } catch { }
             }
         });
@@ -652,6 +732,17 @@ public static class PlateSolveEndpoints {
         double? HintDec,
         double? SearchRadiusDeg,
         bool? Silent = null);
+
+    /// <summary>POST body for <c>/api/platesolve/solve-aux</c>. Captures one
+    /// frame from the aux camera with these settings, then solves it. Hints
+    /// default to the mount's current pointing when omitted.</summary>
+    public record SolveAuxRequest(
+        double? HintRa = null,
+        double? HintDec = null,
+        double? SearchRadiusDeg = null,
+        double? Exposure = null,
+        int? Gain = null,
+        int? Binning = null);
 
     /// <summary>POST body for <c>/api/platesolve/annotate-latest</c>. Adds the
     /// DSO label options on top of the solve hints: a magnitude floor and a

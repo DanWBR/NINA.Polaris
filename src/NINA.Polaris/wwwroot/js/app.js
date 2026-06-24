@@ -946,6 +946,11 @@ function ninaApp() {
         // Aux camera sensor footprint (mm), hydrated from the WS status when
         // the aux camera reports CCD_INFO. Drives the pink aux FOV rect on SKY.
         auxSensorWidthMm: 0, auxSensorHeightMm: 0,
+        // Result of the parallel aux plate solve (fired alongside the main
+        // SKY solve). When present, the pink aux FOV rect anchors to this
+        // solved RA/Dec + rotation — the real angle the aux frame comes out
+        // with — instead of assuming the mount rotation.
+        auxSolvedFrame: null,
         auxCapture: { running: false, frameCount: 0, noOutputDir: false },
         _auxSaveTimer: null,
         // FOCUS tab source switches: which camera the manual-focus loop
@@ -13405,14 +13410,27 @@ function ninaApp() {
             let aux = null;
             const afl = this.aux?.focalLengthMm;
             const asw = this.auxSensorWidthMm, ash = this.auxSensorHeightMm;
-            if (mount && afl > 0 && asw > 0 && ash > 0) {
+            if (afl > 0 && asw > 0 && ash > 0) {
                 const auxW = 2 * Math.atan(asw / (2 * afl)) * (180 / Math.PI);
                 const auxH = 2 * Math.atan(ash / (2 * afl)) * (180 / Math.PI);
-                aux = {
-                    raDeg: mount.raDeg, decDeg: mount.decDeg,
-                    widthDeg: auxW, heightDeg: auxH,
-                    rotationDeg: mountRot, flipV: false
-                };
+                const asf = this.auxSolvedFrame;
+                if (asf && Number.isFinite(asf.raDeg) && Number.isFinite(asf.decDeg)) {
+                    // Real aux footprint from its own plate solve: actual
+                    // sky position + rotation the aux frame comes out with.
+                    aux = {
+                        raDeg: asf.raDeg, decDeg: asf.decDeg,
+                        widthDeg: auxW, heightDeg: auxH,
+                        rotationDeg: Number.isFinite(asf.rotationDeg) ? asf.rotationDeg : mountRot,
+                        flipV: false
+                    };
+                } else if (mount) {
+                    // No aux solve yet: assume it shares the mount pose.
+                    aux = {
+                        raDeg: mount.raDeg, decDeg: mount.decDeg,
+                        widthDeg: auxW, heightDeg: auxH,
+                        rotationDeg: mountRot, flipV: false
+                    };
+                }
             }
 
             // SWE-5: target rectangle is SCREEN-anchored (always at
@@ -27081,6 +27099,10 @@ function ninaApp() {
             this.filesSolveLog = '';
             this.filesSolveLiveActive = true;
             this.skySolverHidden = false;
+            // Golden touch: fire an aux-camera solve in PARALLEL (independent
+            // hardware) so the operator sees the real FOV + rotation the aux
+            // frame will come out with, on the pink SKY rectangle.
+            this.solveAuxFovInParallel();
             try {
                 this.toast('Capturing solve frame…', 'info');
                 await this.apiPost('/api/camera/capture', {
@@ -27126,6 +27148,48 @@ function ninaApp() {
         async cancelSolveSync() {
             try { this._solveSyncAbort?.abort(); } catch (e) {}
             try { await this.apiPost('/api/camera/abort'); } catch (e) {}
+        },
+
+        // Golden touch: capture + solve an aux-camera frame in parallel with
+        // the main SKY solve. The aux rides the same mount, so this reveals
+        // the REAL rotation + field the aux photo will come out with — the
+        // pink SKY rectangle snaps onto the solved aux pose. Fire-and-forget:
+        // never blocks or fails the main solve. No-op without an aux camera.
+        async solveAuxFovInParallel() {
+            if (!this.auxCameraConnected) return;
+            if (this._auxSolveBusy) return;
+            this._auxSolveBusy = true;
+            try {
+                const body = {
+                    exposure: (this.aux && this.aux.exposureSec > 0) ? this.aux.exposureSec : 3,
+                    binning: (this.aux && this.aux.binning > 0) ? this.aux.binning : 1
+                };
+                if (this.aux && this.aux.gain != null) body.gain = this.aux.gain;
+                if (Number.isFinite(this.mount.ra) && Number.isFinite(this.mount.dec)) {
+                    body.hintRa = this.mount.ra; body.hintDec = this.mount.dec;
+                }
+                this.toast('Solving aux camera FOV…', 'info');
+                const resp = await this.apiPost('/api/platesolve/solve-aux', body, { timeout: 180000 });
+                const r = await resp.json();
+                if (r && r.success) {
+                    const raDeg = Number.isFinite(r.raDeg) ? r.raDeg
+                        : (Number.isFinite(r.raHours) ? r.raHours * 15 : NaN);
+                    this.auxSolvedFrame = {
+                        raDeg, decDeg: r.decDeg,
+                        rotationDeg: Number.isFinite(r.rotationDeg) ? r.rotationDeg : 0,
+                        scaleArcsecPerPixel: r.scaleArcsecPerPixel
+                    };
+                    this.toast(`Aux FOV solved — rotation ${(r.rotationDeg || 0).toFixed(1)}°`, 'ok');
+                    try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
+                    catch (e) { /* SKY engine idle */ }
+                } else if (r) {
+                    this.toast('Aux FOV solve failed: ' + (r.error || 'unknown'), 'warn');
+                }
+            } catch (e) {
+                // Non-fatal: the main solve carries on regardless.
+            } finally {
+                this._auxSolveBusy = false;
+            }
         },
 
         _currentSlewTarget() {
