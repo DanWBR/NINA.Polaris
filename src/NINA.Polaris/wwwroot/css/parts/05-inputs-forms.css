@@ -989,6 +989,11 @@
     border-radius: var(--radius);
     margin: 10px 0;
     overflow: hidden;
+    /* The RIGS tab is a flex column; the Equipment sub-tab's card grid
+       grabs flex:1 and would otherwise squeeze this wrapper, and with
+       overflow:hidden the connect controls get clipped to an empty box.
+       Pin the panel so it always keeps its natural height. */
+    flex: 0 0 auto;
 }
 
 .equip-connect-prompt {
