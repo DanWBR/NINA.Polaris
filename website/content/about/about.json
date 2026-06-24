@@ -1,0 +1,36 @@
+{
+  "title": "About N.I.N.A. Polaris",
+  "logo": "/favicon-192.png",
+  "lede": "N.I.N.A. Polaris is a self-hosted, browser-based astrophotography control, capture and processing suite. It runs entirely on your own device (a Raspberry Pi, mini PC, or computer) and is reached from any browser on your network, with no app to install on the viewing device. It controls your equipment (INDI, ASCOM, Alpaca, and native camera SDKs), runs live stacking, guiding, focusing, plate solving, and sequencing, and includes a full editor with AI background extraction, denoise, and deconvolution.",
+  "author": {
+    "title": "Author & contact",
+    "intro": "Created and maintained by",
+    "name": "Daniel Wagner Oliveira de Medeiros",
+    "email": "danielwag@gmail.com",
+    "github": "https://github.com/DanWBR",
+    "linkedin": "https://www.linkedin.com/in/daniel-medeiros-6a3b9124/",
+    "astrobin": "https://app.astrobin.com/u/DanielWagner#gallery"
+  },
+  "license": {
+    "title": "Open-source & license",
+    "pre": "N.I.N.A. Polaris is free, open-source software licensed under the",
+    "licenseName": "GNU Affero General Public License v3.0 (AGPL-3.0)",
+    "licenseUrl": "https://www.gnu.org/licenses/agpl-3.0.html",
+    "mid": ". It is derived from",
+    "ninaName": "N.I.N.A. - Nighttime Imaging 'N' Astronomy",
+    "ninaUrl": "https://nighttime-imaging.eu/",
+    "post": "by Stefan Berg and contributors (MPL-2.0). Full credits for every project, library, and dataset used are bundled with the app and in the repository."
+  },
+  "version": {
+    "title": "Version & source",
+    "body": "Polaris ships frequent releases. The current code, the latest build, and the release notes all live on the project page on GitHub. On a .deb install, Polaris can update itself with one click from the status bar."
+  },
+  "report": {
+    "title": "Report a problem",
+    "body": "Found a bug, or have a feature request? Open an issue or start a discussion on GitHub. The in-app reporter pre-fills your client and server details to make diagnosis easier."
+  },
+  "support": {
+    "title": "Support the project",
+    "body": "Polaris stays free and open-source. If it has saved you an evening of fiddling and you would like to chip in, support is welcome but entirely optional. You can also follow development news and join the community."
+  }
+}

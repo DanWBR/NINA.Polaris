@@ -1,0 +1,159 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Footer from '../components/Footer.astro';
+import { site, aboutContent as a } from '../data/site';
+---
+
+<Layout
+  title="About, N.I.N.A. Polaris"
+  description="What N.I.N.A. Polaris is, who makes it, its open-source license, and how to support the project."
+>
+  <main>
+    <header class="page-head">
+      <div class="container">
+        <a class="back" href="/">← Back to home</a>
+        <div class="about-hero">
+          {a.logo && <img class="about-logo" src={a.logo} alt="N.I.N.A. Polaris" width="104" height="104" />}
+          <div>
+            <h1>{a.title}</h1>
+            <p class="lede">{a.lede}</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="container">
+        <div class="cards">
+
+          <article class="card">
+            <header class="card-head"><span class="sq-icon" style="--ic: #2196f3">⚖️</span><h2>{a.license.title}</h2></header>
+            <p>
+              {a.license.pre} <a href={a.license.licenseUrl} target="_blank" rel="noopener">{a.license.licenseName}</a>{a.license.mid}{' '}
+              <a href={a.license.ninaUrl} target="_blank" rel="noopener">{a.license.ninaName}</a> {a.license.post}
+            </p>
+          </article>
+
+          <article class="card">
+            <header class="card-head"><span class="sq-icon" style="--ic: #e11d6b">👤</span><h2>{a.author.title}</h2></header>
+            <p>{a.author.intro} <strong>{a.author.name}</strong>.</p>
+            <p>Contact: <a href={`mailto:${a.author.email}`}>{a.author.email}</a></p>
+            <p class="links">
+              <a href={a.author.github} target="_blank" rel="noopener">GitHub</a>
+              <a href={a.author.linkedin} target="_blank" rel="noopener">LinkedIn</a>
+              <a href={a.author.astrobin} target="_blank" rel="noopener">AstroBin</a>
+            </p>
+          </article>
+
+          <article class="card">
+            <header class="card-head"><span class="sq-icon" style="--ic: #10b981">🏷️</span><h2>{a.version.title}</h2></header>
+            <p>{a.version.body}</p>
+            <p class="links">
+              <a href={site.repo} target="_blank" rel="noopener">Project page</a>
+              <a href={`${site.repo}/releases`} target="_blank" rel="noopener">Releases</a>
+              <a href="/install">Download & Install</a>
+            </p>
+          </article>
+
+          <article class="card">
+            <header class="card-head"><span class="sq-icon" style="--ic: #f59e0b">🐞</span><h2>{a.report.title}</h2></header>
+            <p>{a.report.body}</p>
+            <p class="links">
+              <a href={site.issues} target="_blank" rel="noopener">Open an issue</a>
+              <a href={`${site.repo}/discussions`} target="_blank" rel="noopener">Start a discussion</a>
+            </p>
+          </article>
+
+          <article class="card card-wide">
+            <header class="card-head"><span class="sq-icon" style="--ic: #ec4899">❤️</span><h2>{a.support.title}</h2></header>
+            <p>{a.support.body}</p>
+            <div class="support-btns">
+              <a class="btn btn-primary" href={site.donate} target="_blank" rel="noopener">❤ Donate</a>
+              <a class="btn btn-ghost" href={site.patreon} target="_blank" rel="noopener">Patreon</a>
+              <a class="btn btn-ghost" href={site.discord} target="_blank" rel="noopener">Discord</a>
+              <a class="btn btn-ghost" href={site.repo} target="_blank" rel="noopener">Star on GitHub</a>
+            </div>
+          </article>
+
+        </div>
+
+        <p class="about-disclaimer">
+          N.I.N.A. Polaris is a community-driven fork of N.I.N.A. It is not affiliated with or
+          supported by the official N.I.N.A. team. For anything Polaris, open an issue on this
+          repository; please do not contact the N.I.N.A. developers about it.
+        </p>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</Layout>
+
+<style>
+  .page-head {
+    padding: 56px 0 40px;
+    border-bottom: 1px solid var(--border);
+  }
+  .back { display: inline-block; font-size: 14px; margin-bottom: 18px; color: var(--text-muted); }
+  .back:hover { color: var(--accent); text-decoration: none; }
+  .about-hero { display: flex; gap: 28px; align-items: flex-start; }
+  .about-logo {
+    flex-shrink: 0;
+    width: 104px;
+    height: 104px;
+    border-radius: 20px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  }
+  .page-head h1 { font-size: clamp(28px, 4.5vw, 44px); font-weight: 800; letter-spacing: -1px; margin-bottom: 14px; }
+  .lede { font-size: 16px; color: var(--text-muted); max-width: 78ch; line-height: 1.65; }
+  .section { padding: 48px 0; }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 20px;
+    align-items: start;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 24px;
+  }
+  .card-wide { grid-column: 1 / -1; }
+  .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .card-head h2 { font-size: 18px; font-weight: 700; }
+  .card p { font-size: 14.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 8px; }
+  .card a { color: var(--accent); }
+  .card .links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 6px; }
+  .support-btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+
+  .sq-icon {
+    --ic: var(--accent);
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    font-size: 20px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ic) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ic) 40%, transparent);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--ic) 22%, transparent);
+  }
+
+  .about-disclaimer {
+    margin-top: 36px;
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--text-muted);
+    opacity: 0.7;
+    max-width: 80ch;
+    border-left: 2px solid var(--border);
+    padding-left: 14px;
+  }
+
+  @media (max-width: 560px) {
+    .cards { grid-template-columns: 1fr; }
+    .about-hero { flex-direction: column; gap: 18px; }
+  }
+</style>
