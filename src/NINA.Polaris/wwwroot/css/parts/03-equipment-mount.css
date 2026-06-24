@@ -1679,6 +1679,15 @@
     font-size: 10px;
 }
 
+/* Thin vertical divider separating the rig selector group from the
+   bulk connect/disconnect actions in the equipment rig bar. */
+.rig-bar-sep {
+    width: 1px;
+    align-self: stretch;
+    margin: 2px 4px;
+    background: var(--border);
+}
+
 .rig-list {
     display: flex;
     flex-direction: column;

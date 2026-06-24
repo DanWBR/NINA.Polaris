@@ -895,6 +895,9 @@ function ninaApp() {
         equipDomeChoice: '',
         equipWeatherChoice: '',
         equipCoolerTarget: -10,
+        // Guards the "Connect all / Disconnect all" buttons while a bulk
+        // run is walking the device list sequentially.
+        equipBulkBusy: false,
         equipRotatorTarget: 0,
         equipFlatBrightness: 128,
         equipDomeTarget: 0,
@@ -21960,6 +21963,60 @@ function ninaApp() {
         },
 
         // --- Equipment tab connect/disconnect ---
+
+        // Bulk connect every device role that has a device selected (and
+        // isn't already connected). Each per-device handler keeps its own
+        // try/catch + toast, so one failure never stops the rest. We run
+        // them sequentially to avoid hammering the INDI server with parallel
+        // CONNECT writes; mount goes first so dependent gear (focuser/filter)
+        // attaches after the scope is up.
+        async equipConnectAll() {
+            const steps = [
+                { has: () => !!this.equipMountChoice && !this.mount?.connected, fn: () => this.equipConnectMount() },
+                { has: () => !!this.equipCameraChoice && !this.selectedCamera, fn: () => this.equipConnectCamera() },
+                { has: () => !!this.equipFocuserChoice && !this.focusConnected, fn: () => this.equipConnectFocuser() },
+                { has: () => !!this.equipFilterChoice && !this.filterWheel?.connected, fn: () => this.equipConnectFilter() },
+                { has: () => !!this.guideCamera && !this.guider?.guideCameraConnected, fn: () => this.equipConnectGuideCamera() },
+                { has: () => !!this.guideFocuser && !this.guideFocuserConnected, fn: () => this.equipConnectGuideFocuser() },
+                { has: () => !!this.auxCamera && !this.auxCameraConnected, fn: () => this.equipConnectAuxCamera() },
+                { has: () => !!this.auxFocuser && !this.auxFocuserConnected, fn: () => this.equipConnectAuxFocuser() },
+                { has: () => !!this.equipRotatorChoice && !this.rotator?.connected, fn: () => this.equipConnectRotator() },
+                { has: () => !!this.equipFlatChoice && !this.flatDevice?.connected, fn: () => this.equipConnectFlat() },
+                { has: () => !!this.equipDomeChoice && !this.dome?.connected, fn: () => this.equipConnectDome() },
+                { has: () => !!this.equipWeatherChoice && !this.weather?.connected, fn: () => this.equipConnectWeather() },
+            ];
+            const todo = steps.filter(s => s.has());
+            if (todo.length === 0) { this.toast('Nothing to connect — pick devices first', 'warn'); return; }
+            this.equipBulkBusy = true;
+            this.toast(`Connecting ${todo.length} device(s)…`, 'ok');
+            try { for (const s of todo) { await s.fn(); } }
+            finally { this.equipBulkBusy = false; }
+        },
+
+        // Bulk disconnect every currently-connected device. Reverse order of
+        // connectAll: accessories drop first, mount last.
+        async equipDisconnectAll() {
+            const steps = [
+                { has: () => !!this.weather?.connected, fn: () => this.equipDisconnectWeather() },
+                { has: () => !!this.dome?.connected, fn: () => this.equipDisconnectDome() },
+                { has: () => !!this.flatDevice?.connected, fn: () => this.equipDisconnectFlat() },
+                { has: () => !!this.rotator?.connected, fn: () => this.equipDisconnectRotator() },
+                { has: () => !!this.auxFocuserConnected, fn: () => this.equipDisconnectAuxFocuser() },
+                { has: () => !!this.auxCameraConnected, fn: () => this.equipDisconnectAuxCamera() },
+                { has: () => !!this.guideFocuserConnected, fn: () => this.equipDisconnectGuideFocuser() },
+                { has: () => !!this.guider?.guideCameraConnected, fn: () => this.equipDisconnectGuideCamera() },
+                { has: () => !!this.filterWheel?.connected, fn: () => this.equipDisconnectFilter() },
+                { has: () => !!this.focusConnected, fn: () => this.equipDisconnectFocuser() },
+                { has: () => !!this.selectedCamera, fn: () => this.equipDisconnectCamera() },
+                { has: () => !!this.mount?.connected, fn: () => this.equipDisconnectMount() },
+            ];
+            const todo = steps.filter(s => s.has());
+            if (todo.length === 0) { this.toast('No connected devices to disconnect', 'warn'); return; }
+            this.equipBulkBusy = true;
+            this.toast(`Disconnecting ${todo.length} device(s)…`, 'warn');
+            try { for (const s of todo) { await s.fn(); } }
+            finally { this.equipBulkBusy = false; }
+        },
 
         async equipConnectCamera() {
             if (!this.equipCameraChoice) return;
