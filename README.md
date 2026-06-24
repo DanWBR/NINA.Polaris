@@ -392,7 +392,10 @@ the [`licenses/`](licenses/) folder, and the bundled `3rd-party-licenses` notice
 - [SVBony SDK](https://www.svbony.com/) - SVBONY.
 - [Player One SDK](https://player-one-astronomy.com/) - Player One Astronomy.
 - [ToupTek SDK](https://www.touptek-astro.com/) - ToupTek Astro.
-- [Nikon SDK](https://sdk.nikonimaging.com/) - Nikon Corporation.
+- [Nikon SDK](https://sdk.nikonimaging.com/) - Nikon Corporation. Nikon DSLR / mirrorless support.
+- [Canon EDSDK](https://developercommunity.usa.canon.com/) - Canon Inc. Canon EOS DSLR / mirrorless support on Windows.
+- [Sony Camera Remote SDK](https://support.d-imaging.sony.co.jp/app/sdk/en/index.html) - Sony Corporation. Sony Alpha camera support on Windows.
+- [libgphoto2 / gPhoto2](http://www.gphoto.org/) - the gPhoto team. DSLR / mirrorless support on Linux (via the INDI gphoto driver).
 
 **Sky data, catalogs & astrometry**
 
