@@ -32,5 +32,98 @@
   "support": {
     "title": "Support the project",
     "body": "Polaris stays free and open-source. If it has saved you an evening of fiddling and you would like to chip in, support is welcome but entirely optional. You can also follow development news and join the community."
+  },
+  "credits": {
+    "title": "Credits & acknowledgements",
+    "intro": "N.I.N.A. Polaris stands on the shoulders of a large community of astronomy and open-source projects. Some we derive code from, some we studied as a reference, and many ship inside the capture and processing stack. Thank you to every author below. Full license texts are bundled with the app and in the source repository.",
+    "groups": [
+      {
+        "title": "Built on N.I.N.A.",
+        "items": [
+          { "name": "N.I.N.A. - Nighttime Imaging 'N' Astronomy", "url": "https://nighttime-imaging.eu/", "note": "Stefan Berg and the N.I.N.A. contributors. Polaris is derived from N.I.N.A.; large parts of the imaging, astrometry, sequencer and equipment model originate here (MPL-2.0)." }
+        ]
+      },
+      {
+        "title": "Guiding & gear simulation",
+        "items": [
+          { "name": "PHD2 - Open PHD Guiding", "url": "https://openphdguiding.org/", "note": "Andy Galasso, Bret McKee, Craig Stark and the PHD2 contributors. Used both as the managed external guider and as the reference for the built-in native autoguider and the gear simulator (BSD-3-Clause)." }
+        ]
+      },
+      {
+        "title": "Image processing & AI",
+        "items": [
+          { "name": "GraXpert", "url": "https://www.graxpert.com/", "note": "the GraXpert development team. Background extraction, denoising and deconvolution ONNX models, and the auto-stretch algorithm Polaris uses by default." },
+          { "name": "nox", "url": "https://github.com/charvey2718/nox", "note": "charvey2718. StarNet-like star-removal model (native colour and gray), the default behind Remove stars in FILES. Code and weights MIT." },
+          { "name": "starrem2k13", "url": "https://github.com/code2k13/starrem2k13", "note": "code2k13. pix2pix-style U-Net star-removal model, an alternative in Remove stars. Code and weights MIT." },
+          { "name": "StarNet++", "url": "https://github.com/nekitmm/starnet", "note": "Nikita Misiura (nekitmm). The original star-removal neural network, available in Remove stars. Code MIT; pre-trained weights are CC BY-NC-SA 4.0 (NonCommercial)." },
+          { "name": "Siril", "url": "https://siril.org/", "note": "the Free-Astro / Siril team. Optional external pre-processing and stacking integration." }
+        ]
+      },
+      {
+        "title": "Plate solving",
+        "items": [
+          { "name": "ASTAP", "url": "https://www.hnsky.org/astap.htm", "note": "Han Kleijn. The default fast offline plate solver and star database." },
+          { "name": "Astrometry.net", "url": "https://astrometry.net/", "note": "Dustin Lang, David W. Hogg and collaborators. Local and online blind plate solving." },
+          { "name": "PlateSolve3", "url": "https://planewave.com/", "note": "PlaneWave Instruments. Alternative plate solver." }
+        ]
+      },
+      {
+        "title": "Equipment, protocols & camera SDKs",
+        "items": [
+          { "name": "INDI Library", "url": "https://indilib.org/", "note": "Jasem Mutlaq and the INDI community. The primary equipment-control protocol (400+ Linux drivers)." },
+          { "name": "ASCOM Initiative & Alpaca", "url": "https://ascom-standards.org/", "note": "the ASCOM Initiative. Windows COM drivers and the cross-platform Alpaca protocol." },
+          { "name": "ZWO ASI SDK", "url": "https://www.zwoastro.com/", "note": "Suzhou ZWO Co., Ltd. Native ZWO camera support." },
+          { "name": "SVBony SDK", "url": "https://www.svbony.com/", "note": "SVBONY. Native SVBony camera support." },
+          { "name": "Player One SDK", "url": "https://player-one-astronomy.com/", "note": "Player One Astronomy. Native Player One camera support." },
+          { "name": "ToupTek SDK", "url": "https://www.touptek-astro.com/", "note": "ToupTek Astro. Native ToupTek (and OEM-alike) camera support." },
+          { "name": "Nikon SDK", "url": "https://sdk.nikonimaging.com/", "note": "Nikon Corporation. Nikon DSLR / mirrorless support." },
+          { "name": "Canon EDSDK", "url": "https://developercommunity.usa.canon.com/", "note": "Canon Inc. Canon EOS DSLR / mirrorless support on Windows." },
+          { "name": "Sony Camera Remote SDK", "url": "https://support.d-imaging.sony.co.jp/app/sdk/en/index.html", "note": "Sony Corporation. Sony Alpha camera support on Windows." },
+          { "name": "libgphoto2 / gPhoto2", "url": "http://www.gphoto.org/", "note": "the gPhoto team. DSLR / mirrorless support on Linux, via the INDI gphoto driver." }
+        ]
+      },
+      {
+        "title": "Sky data, catalogs & astrometry",
+        "items": [
+          { "name": "OpenNGC", "url": "https://github.com/mattiaverga/OpenNGC", "note": "Mattia Verga. The bundled NGC/IC/Messier/Caldwell deep-sky catalog (CC BY-SA 4.0)." },
+          { "name": "APASS - AAVSO Photometric All-Sky Survey", "url": "https://www.aavso.org/apass", "note": "the AAVSO. Reference photometry for color calibration." },
+          { "name": "Aladin Lite", "url": "https://aladin.cds.unistra.fr/", "note": "CDS, Université de Strasbourg / CNRS. The interactive sky atlas viewer." },
+          { "name": "Stellarium Web Engine", "url": "https://github.com/Stellarium/stellarium-web-engine", "note": "Stellarium Labs / Guillaume Chéreau and contributors. The WebGL planetarium sky view (AGPL-3.0)." },
+          { "name": "Astronomy Engine", "url": "https://github.com/cosinekitty/astronomy", "note": "Don Cross. High-precision ephemeris and coordinate math." }
+        ]
+      },
+      {
+        "title": "In-browser UI libraries",
+        "items": [
+          { "name": "Alpine.js", "url": "https://alpinejs.dev/", "note": "Caleb Porzio and contributors. The reactive framework behind the web UI." },
+          { "name": "Chart.js", "url": "https://www.chartjs.org/", "note": "the Chart.js contributors. Focus / guiding / statistics charts." },
+          { "name": "OpenSeadragon", "url": "https://openseadragon.github.io/", "note": "the OpenSeadragon contributors. Deep-zoom image viewer." },
+          { "name": "noVNC", "url": "https://novnc.com/", "note": "the noVNC authors. The embedded PHD2 GUI on Windows (MPL-2.0)." },
+          { "name": "xterm.js", "url": "https://xtermjs.org/", "note": "the xterm.js authors. In-browser terminal." },
+          { "name": "SunCalc", "url": "https://github.com/mourner/suncalc", "note": "Vladimir Agafonkin. Sun / twilight calculations for the sky view." },
+          { "name": "SortableJS", "url": "https://sortablejs.github.io/Sortable/", "note": "the SortableJS contributors. Drag-and-drop in the sequencer." }
+        ]
+      },
+      {
+        "title": "Server & .NET libraries",
+        "items": [
+          { "name": "Silk.NET", "url": "https://github.com/dotnet/Silk.NET", "note": "the .NET Foundation. OpenCL bindings for the optional SBC GPU compute backend." },
+          { "name": "SkiaSharp", "url": "https://github.com/mono/SkiaSharp", "note": "Microsoft, wrapping Google's Skia. Server-side image encoding and rendering." },
+          { "name": "ONNX Runtime (Web)", "url": "https://onnxruntime.ai/", "note": "Microsoft. Runs the GraXpert AI models in the browser." },
+          { "name": "YARP", "url": "https://github.com/microsoft/reverse-proxy", "note": "Microsoft. Reverse proxy for the embedded device web UIs." },
+          { "name": ".NET Community Toolkit (MVVM)", "url": "https://github.com/CommunityToolkit/dotnet", "note": "the .NET Foundation." },
+          { "name": "K4os.Compression.LZ4", "url": "https://github.com/MiloszKrajewski/K4os.Compression.LZ4", "note": "Milosz Krajewski. Fast frame compression for the live preview." },
+          { "name": "LettuceEncrypt", "url": "https://github.com/natemcmaster/LettuceEncrypt", "note": "Nate McMaster. Automatic Let's Encrypt certificates." },
+          { "name": "Serilog", "url": "https://serilog.net/", "note": "the Serilog contributors. Structured logging." },
+          { "name": "Json.NET", "url": "https://www.newtonsoft.com/json", "note": "James Newton-King. JSON serialization." },
+          { "name": "SSH.NET", "url": "https://github.com/sshnet/SSH.NET", "note": "the SSH.NET contributors." },
+          { "name": "SMBLibrary", "url": "https://github.com/TalAloni/SMBLibrary", "note": "Tal Aloni. Pure-managed SMB1/SMB2 client for the auto-push-to-network-storage backend." },
+          { "name": "net-mdns (Makaretu.Dns)", "url": "https://github.com/richardschneider/net-mdns", "note": "Richard Schneider. The nina.local mDNS discovery." },
+          { "name": "SQLite", "url": "https://www.sqlite.org/", "note": "D. Richard Hipp and the SQLite team. On-device databases." },
+          { "name": "Rockchip RKNN runtime", "url": "https://github.com/airockchip/rknn-toolkit2", "note": "Rockchip. Optional NPU acceleration for AI models on RK35xx boards." }
+        ]
+      }
+    ],
+    "outro": "Plus the wider amateur astronomy and free-software communities whose tools, drivers, documentation and feedback make a project like this possible. If your work is used here and not listed, it is an oversight, not an intent; please let us know on GitHub."
   }
 }

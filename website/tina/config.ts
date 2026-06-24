@@ -537,6 +537,38 @@ export default defineConfig({
               { type: 'string', name: 'body', label: 'Body', ui: { component: 'textarea' } },
             ],
           },
+          {
+            type: 'object',
+            name: 'credits',
+            label: 'Credits & acknowledgements',
+            fields: [
+              { type: 'string', name: 'title', label: 'Title' },
+              { type: 'string', name: 'intro', label: 'Intro', ui: { component: 'textarea' } },
+              {
+                type: 'object',
+                name: 'groups',
+                label: 'Credit groups',
+                list: true,
+                ui: { itemProps: (i) => ({ label: i?.title }) },
+                fields: [
+                  { type: 'string', name: 'title', label: 'Group title' },
+                  {
+                    type: 'object',
+                    name: 'items',
+                    label: 'Projects',
+                    list: true,
+                    ui: { itemProps: (i) => ({ label: i?.name }) },
+                    fields: [
+                      { type: 'string', name: 'name', label: 'Name' },
+                      { type: 'string', name: 'url', label: 'URL' },
+                      { type: 'string', name: 'note', label: 'Note', ui: { component: 'textarea' } },
+                    ],
+                  },
+                ],
+              },
+              { type: 'string', name: 'outro', label: 'Outro', ui: { component: 'textarea' } },
+            ],
+          },
         ],
       },
     ],

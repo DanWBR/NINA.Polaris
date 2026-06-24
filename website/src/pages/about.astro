@@ -68,7 +68,7 @@ import { site, aboutContent as a } from '../data/site';
             <header class="card-head"><span class="sq-icon" style="--ic: #ec4899">❤️</span><h2>{a.support.title}</h2></header>
             <p>{a.support.body}</p>
             <div class="support-btns">
-              <a class="btn btn-primary" href={site.donate} target="_blank" rel="noopener">❤ Donate</a>
+              <a class="btn btn-ghost" href={site.donate} target="_blank" rel="noopener">❤ Donate</a>
               <a class="btn btn-ghost" href={site.patreon} target="_blank" rel="noopener">Patreon</a>
               <a class="btn btn-ghost" href={site.discord} target="_blank" rel="noopener">Discord</a>
               <a class="btn btn-ghost" href={site.repo} target="_blank" rel="noopener">Star on GitHub</a>
@@ -76,6 +76,37 @@ import { site, aboutContent as a } from '../data/site';
           </article>
 
         </div>
+
+        {a.credits && (
+          <div class="credits">
+            <div class="credits-head">
+              <span class="sq-icon" style="--ic: #8b5cf6">🙏</span>
+              <h2>{a.credits.title}</h2>
+            </div>
+            <p class="credits-intro">
+              {a.credits.intro.split('source repository')[0]}
+              <a href={site.repo} target="_blank" rel="noopener">source repository</a>{a.credits.intro.split('source repository')[1]}
+            </p>
+            {a.credits.groups.map((g, i) => (
+              <details class="credits-group" open={i === 0}>
+                <summary>{g.title}</summary>
+                <ul>
+                  {g.items.map((it) => (
+                    <li>
+                      <a href={it.url} target="_blank" rel="noopener">{it.name}</a> <span>{it.note}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ))}
+            {a.credits.outro && (
+              <p class="credits-outro">
+                {a.credits.outro.split('let us know on GitHub')[0]}
+                <a href={site.repo} target="_blank" rel="noopener">let us know on GitHub</a>.
+              </p>
+            )}
+          </div>
+        )}
 
         <p class="about-disclaimer">
           N.I.N.A. Polaris is a community-driven fork of N.I.N.A. It is not affiliated with or
@@ -140,6 +171,49 @@ import { site, aboutContent as a } from '../data/site';
     border: 1px solid color-mix(in srgb, var(--ic) 40%, transparent);
     box-shadow: 0 0 14px color-mix(in srgb, var(--ic) 22%, transparent);
   }
+
+  /* Credits */
+  .credits { margin-top: 40px; }
+  .credits-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .credits-head h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  .credits-intro { font-size: 14.5px; color: var(--text-muted); line-height: 1.6; max-width: 80ch; margin-bottom: 20px; }
+  .credits-intro a, .credits-outro a { color: var(--accent); }
+  .credits-group {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  .credits-group summary {
+    cursor: pointer;
+    padding: 14px 18px;
+    font-size: 15px;
+    font-weight: 700;
+    list-style: none;
+    user-select: none;
+  }
+  .credits-group summary::-webkit-details-marker { display: none; }
+  .credits-group summary::before {
+    content: "▸";
+    display: inline-block;
+    margin-right: 10px;
+    color: var(--text-muted);
+    transition: transform 0.15s;
+  }
+  .credits-group[open] summary::before { transform: rotate(90deg); }
+  .credits-group summary:hover { color: var(--accent); }
+  .credits-group ul {
+    list-style: none;
+    padding: 0 18px 16px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .credits-group li { font-size: 14px; line-height: 1.55; }
+  .credits-group li a { color: var(--accent); font-weight: 600; }
+  .credits-group li span { color: var(--text-muted); }
+  .credits-outro { font-size: 14px; color: var(--text-muted); line-height: 1.6; max-width: 80ch; margin-top: 16px; }
 
   .about-disclaimer {
     margin-top: 36px;
