@@ -417,9 +417,10 @@
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
-    /* Top-align so a tall child (the expanded "Solve frame" panel) doesn't
-       stretch the buttons to its full height — they keep their natural size. */
-    align-items: flex-start;
+    /* Center each control on the row so the buttons + dropdown line up nicely.
+       The expanded "Solve frame" panel doesn't stretch them because it drops
+       to its own full-width line when open (see .slew-center-tune[open]). */
+    align-items: center;
     padding: 8px;
     background: rgba(8, 12, 22, 0.72);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -443,6 +444,15 @@
     gap: 6px;
 }
 .center-body-row .input-sm { min-width: 7em; }
+
+/* When the "Solve frame" disclosure is expanded, drop it to its own
+   full-width line below the action row (and after the body picker via
+   order) so its tall panel never disturbs the buttons. Collapsed, it
+   stays inline as a small summary chip. */
+.sky-map-overlay-actions .slew-center-tune[open] {
+    flex-basis: 100%;
+    order: 1;
+}
 .center-body-phase {
     font-size: 11px;
     color: var(--accent, #4ea1ff);
