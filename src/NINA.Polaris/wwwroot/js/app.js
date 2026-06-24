@@ -16976,6 +16976,7 @@ function ninaApp() {
         async startPlan() {
             if (!this.plan) return;
             if (this.planTargetCount() === 0) { this.toast('Add at least one enabled target', 'warn'); return; }
+            if (!await this.confirmCoolerForSession('the plan')) return;
             // Make sure the latest edits are persisted before the server reads them.
             clearTimeout(this._planSaveTimer);
             try {
@@ -17765,6 +17766,9 @@ function ninaApp() {
         },
 
         async loopCapture() {
+            // Cooler-off pre-flight before starting the LIVE loop (saves frames
+            // by default, so warm frames matter here too).
+            if (!await this.confirmCoolerForSession('the LIVE loop')) return;
             // Server-owned loop (opt-in): the server drives every exposure and
             // keeps going if the browser drops; the client only offloads WASM
             // stacking. We just ask it to start and reflect state from the WS
@@ -19492,6 +19496,8 @@ function ninaApp() {
 
         async toggleLiveStack() {
             const enabling = !this.liveStackEnabled;
+            // Cooler-off pre-flight before starting LIVE (skip when stopping).
+            if (enabling && !await this.confirmCoolerForSession('LIVE stacking')) return;
             // Read-before-flip: if the operator is resuming after a
             // pause, we want to ask "continue or restart?" while the
             // current state still reflects how many frames are stacked.
@@ -20089,6 +20095,22 @@ function ninaApp() {
             return new Promise(resolve => {
                 this._confirmResolver = resolve;
             });
+        },
+
+        // Pre-flight warning before starting a long session (AUTORUN / LIVE /
+        // PLAN): if the imaging camera is a cooled model but its cooler is OFF,
+        // ask the operator to confirm — running a cooled sensor warm adds a lot
+        // of thermal noise and makes the darks library useless. Returns true to
+        // proceed, false to cancel. No-op (returns true) for uncooled cameras.
+        async confirmCoolerForSession(sessionLabel) {
+            const cam = this.equipCameraInfo || {};
+            if (!cam.supportsCooler || cam.coolerOn) return true;
+            return await this._confirmAsync(
+                'The imaging camera is a cooled model but its cooler is currently OFF. '
+                + 'Starting ' + sessionLabel + ' now will shoot warm frames (more thermal '
+                + 'noise, and they won\'t match your cooled darks).\n\n'
+                + 'Turn the cooler on in RIGS → Camera first, or proceed anyway?',
+                { title: 'Cooler is off', okLabel: 'Start anyway', cancelLabel: 'Cancel', danger: true });
         },
         _confirmAccept() {
             const r = this._confirmResolver;
@@ -27592,6 +27614,7 @@ function ninaApp() {
         // restarts progress from zero.
         async _doStartSequence(resume) {
             this.seqResumePrompt = false;
+            if (!await this.confirmCoolerForSession('AUTORUN')) return;
             try {
                 if (!resume) {
                     await this.apiPost('/api/sequence', this.sequence);
@@ -29645,6 +29668,7 @@ function ninaApp() {
                 }
                 this.equipCameraInfo = {
                     coolerOn: coolerOn,
+                    supportsCooler: !!eq.camera.supportsCooler,
                     binX: eq.camera.binX || 0,
                     binY: eq.camera.binY || 0,
                     bitDepth: eq.camera.bitDepth || 0,

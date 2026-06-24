@@ -807,6 +807,7 @@ public class EquipmentManager : IDisposable {
                 temperature = Safe(Camera.Temperature),
                 coolerOn = Camera.CoolerOn,
                 coolerPower = Safe(Camera.CoolerPower),
+                supportsCooler = Camera.Capabilities.SupportsCooler,
                 binX = Camera.BinX,
                 binY = Camera.BinY,
                 gain = Camera.Gain,
