@@ -469,7 +469,7 @@
     // mount SHOULD be pointing (the catalog object the user picked),
     // actual = where it actually ended up (from plate solve). The line
     // between them visualises the pointing error as an angular vector.
-    var __skyFovObjs = { mount: null, target: null,
+    var __skyFovObjs = { mount: null, target: null, aux: null,
                           alignTarget: null, alignActual: null, alignLine: null };
     // Mosaic tiles are drawn ONE geojson object per panel (exactly like the
     // mount rectangle) — the engine geojson parser renders a single Polygon
@@ -876,6 +876,29 @@
         }
     }
 
+    // Cache + rebuild for the aux-camera FOV rectangle (pink). The aux
+    // camera rides the SAME mount, so it's celestial-anchored at the
+    // mount RA/Dec just like the blue mount rect; rebuilt on pan so its
+    // label stays glued to the top edge.
+    var __lastAuxFov = null;
+
+    function skyRebuildAuxGeoJson() {
+        var stel = window.__stel;
+        if (!stel || !__skyFovLayer || !__lastAuxFov) return;
+        if (!(__lastAuxFov.widthDeg > 0)) return;
+        try {
+            skyRemoveObj('aux');
+            __skyFovObjs.aux = stel.createObj('geojson', {
+                data: skyFovGeoJson(__lastAuxFov, '#ec4899', true,
+                    'Aux ' + __lastAuxFov.widthDeg.toFixed(2) + 'x'
+                        + __lastAuxFov.heightDeg.toFixed(2))   // pink, glow
+            });
+            __skyFovLayer.add(__skyFovObjs.aux);
+        } catch (e) {
+            console.warn('[Sky] aux geojson rebuild failed:', e);
+        }
+    }
+
     // Rebuild the celestial-anchored red target rectangle from the
     // last received target overlay. Mirrors skyRebuildMountGeoJson so
     // a pan (centre parallactic changes) keeps the label glued to the
@@ -898,21 +921,24 @@
         }
     }
 
-    function skySetFovOverlays(mount, target, mosaic) {
+    function skySetFovOverlays(mount, target, mosaic, aux) {
         var stel = window.__stel;
         if (!stel) return;
         skyEnsureFovLayer();
         if (!__skyFovLayer) return;
         // Mount stays as a celestial-anchored geojson (engine renders
         // it where the scope is pointing, even if user drags away).
-        // Mosaic likewise.
+        // Mosaic likewise. Aux camera rides the same mount → also
+        // celestial-anchored at the mount RA/Dec, drawn pink.
         // Target: SCREEN-anchored — pure CSS overlay sized by camera
         // FOV ratio to engine fov. Always at viewport centre, always
         // visible, doesn't need any engine round-trip.
         skyRemoveObj('mount');
+        skyRemoveObj('aux');
         skyRemoveMosaic();
         __lastMountFov = mount || null;
-        console.log('[Sky] set-fov-overlays mount=', mount, 'target=', target);
+        __lastAuxFov = aux || null;
+        console.log('[Sky] set-fov-overlays mount=', mount, 'target=', target, 'aux=', aux);
         try {
             if (mount && mount.widthDeg > 0) {
                 __skyFovObjs.mount = stel.createObj('geojson', {
@@ -922,6 +948,19 @@
                 console.log('[Sky] mount FOV rect created at RA=' + mount.raDeg.toFixed(2)
                     + '° Dec=' + mount.decDeg.toFixed(2) + '° size=' + mount.widthDeg.toFixed(2)
                     + '°×' + mount.heightDeg.toFixed(2) + '°');
+            }
+            // Aux camera FOV (pink), celestial-anchored like the mount.
+            if (aux && aux.widthDeg > 0
+                && typeof aux.raDeg === 'number' && isFinite(aux.raDeg)) {
+                __skyFovObjs.aux = stel.createObj('geojson', {
+                    data: skyFovGeoJson(aux, '#ec4899', true,
+                        'Aux ' + aux.widthDeg.toFixed(2) + 'x'
+                            + aux.heightDeg.toFixed(2))   // pink, glow
+                });
+                __skyFovLayer.add(__skyFovObjs.aux);
+                console.log('[Sky] aux FOV rect created at RA=' + aux.raDeg.toFixed(2)
+                    + '° Dec=' + aux.decDeg.toFixed(2) + '° size=' + aux.widthDeg.toFixed(2)
+                    + '°×' + aux.heightDeg.toFixed(2) + '°');
             }
             // Update the screen-anchored target FOV CSS box.
             skyUpdateTargetFovBox(target);
@@ -1099,6 +1138,12 @@
                 if (now - lastEmit < 100) return;
                 lastEmit = now;
                 if (__lastMountFov) skyRebuildMountGeoJson();
+                // Aux rides the same mount → rebuild it on pan too so its
+                // pink label stays glued to the rectangle's top edge.
+                if (__lastAuxFov && typeof __lastAuxFov.raDeg === 'number'
+                    && isFinite(__lastAuxFov.raDeg)) {
+                    skyRebuildAuxGeoJson();
+                }
                 // Same reasoning as the mount: a celestial-anchored red
                 // target needs its label re-rotated for the new centre
                 // parallactic on pan. Throttled with the mount rebuild.
@@ -1224,7 +1269,7 @@
                 // SWE-5: mount FOV (blue), target FOV (red dashed),
                 // optional mosaic grid (yellow). Each side is null to
                 // clear that overlay.
-                skySetFovOverlays(msg.mount || null, msg.target || null, msg.mosaic || null);
+                skySetFovOverlays(msg.mount || null, msg.target || null, msg.mosaic || null, msg.aux || null);
                 break;
             case 'set-alignment-markers':
                 // RDPA-3: target (green) + actual (red) point markers

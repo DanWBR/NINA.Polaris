@@ -943,6 +943,9 @@ function ninaApp() {
         auxFocuserVendorDevices: [],
         auxFocuserConnected: false,
         aux: { focalLengthMm: 200, exposureSec: 5, gain: 0, binning: 1, enabled: false },
+        // Aux camera sensor footprint (mm), hydrated from the WS status when
+        // the aux camera reports CCD_INFO. Drives the pink aux FOV rect on SKY.
+        auxSensorWidthMm: 0, auxSensorHeightMm: 0,
         auxCapture: { running: false, frameCount: 0, noOutputDir: false },
         _auxSaveTimer: null,
         // FOCUS tab source switches: which camera the manual-focus loop
@@ -13394,6 +13397,24 @@ function ninaApp() {
                 };
             }
 
+            // Aux camera FOV (pink). The aux rides the SAME mount, so it's
+            // anchored at the mount RA/Dec like the blue rect. Shown only
+            // when the aux camera is configured: a focal length + a sensor
+            // footprint (reported once the aux cam connects). No mount
+            // position → nothing to anchor to, so it piggybacks on `mount`.
+            let aux = null;
+            const afl = this.aux?.focalLengthMm;
+            const asw = this.auxSensorWidthMm, ash = this.auxSensorHeightMm;
+            if (mount && afl > 0 && asw > 0 && ash > 0) {
+                const auxW = 2 * Math.atan(asw / (2 * afl)) * (180 / Math.PI);
+                const auxH = 2 * Math.atan(ash / (2 * afl)) * (180 / Math.PI);
+                aux = {
+                    raDeg: mount.raDeg, decDeg: mount.decDeg,
+                    widthDeg: auxW, heightDeg: auxH,
+                    rotationDeg: mountRot, flipV: false
+                };
+            }
+
             // SWE-5: target rectangle is SCREEN-anchored (always at
             // viewport centre). Bridge renders it as a CSS overlay
             // sized from widthDeg/heightDeg + engine fov. No RA/Dec
@@ -13442,6 +13463,9 @@ function ninaApp() {
                               // refreshed silent solve re-pushes the red rect.
                               r: Number.isFinite(target.raDeg) ? target.raDeg.toFixed(3) : null,
                               d: Number.isFinite(target.decDeg) ? target.decDeg.toFixed(3) : null },
+                a: aux && { r: aux.raDeg.toFixed(3), d: aux.decDeg.toFixed(3),
+                            w: aux.widthDeg.toFixed(3), h: aux.heightDeg.toFixed(3),
+                            rot: (aux.rotationDeg||0).toFixed(2) },
                 // FIELD3-4: include solveRotationDeg in the key so a
                 // post-solve rotation update re-pushes the mount
                 // rectangle even when ra/dec haven't moved.
@@ -13485,7 +13509,7 @@ function ninaApp() {
                     })) }
                 : null;
             this._skySendMessage({ type: 'set-fov-overlays', mount, target,
-                mosaic: mosaicMsg });
+                mosaic: mosaicMsg, aux });
         },
 
         // Pixel readout: convert mouse event coords to source-image coords +
@@ -29586,6 +29610,15 @@ function ninaApp() {
             }
             // Aux camera + focuser connection state + aux capture loop status.
             this.auxCameraConnected = !!(eq.auxCamera && eq.auxCamera.connected);
+            // Aux sensor footprint (mm) for the pink SKY FOV rectangle.
+            // Derived from pixel count × pixel size (µm → mm). Kept on the
+            // instance so _pushSkyFovOverlays can size the aux rect from the
+            // aux focal length without a second status field.
+            if (eq.auxCamera && eq.auxCamera.maxX > 0 && eq.auxCamera.pixelSizeX > 0) {
+                this.auxSensorWidthMm  = eq.auxCamera.maxX * eq.auxCamera.pixelSizeX / 1000;
+                this.auxSensorHeightMm = eq.auxCamera.maxY * eq.auxCamera.pixelSizeY / 1000;
+                if (this.tab === 'sky') { try { this._pushSkyFovOverlays(); } catch (_) {} }
+            }
             this.auxFocuserConnected = !!(eq.auxFocuser && eq.auxFocuser.connected);
             this.guideFocuserConnected = !!(eq.guideFocuser && eq.guideFocuser.connected);
             if (msg.auxCapture) {
