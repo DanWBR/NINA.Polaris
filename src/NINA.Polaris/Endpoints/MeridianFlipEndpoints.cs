@@ -27,7 +27,15 @@ public static class MeridianFlipEndpoints {
             return Results.Ok(mf.Settings);
         });
 
-        group.MapGet("/status", (MeridianFlipService mf, EquipmentManager equip, ProfileService profile) => {
+        // Clear a standing safety-guard trip (UI "dismiss"). Does not restart
+        // anything — the operator decides whether to resume.
+        group.MapPost("/safety/reset", (MountSafetyGuardService guard) => {
+            guard.Reset();
+            return Results.Ok(new { tripped = guard.Tripped });
+        });
+
+        group.MapGet("/status", (MeridianFlipService mf, MountSafetyGuardService guard,
+                EquipmentManager equip, ProfileService profile) => {
             double? timeToMeridianHours = null;
             double? hourAngle = null;
             double? lst = null;
@@ -55,7 +63,11 @@ public static class MeridianFlipEndpoints {
                 timeToMeridianHours = timeToMeridianHours,
                 timeToMeridianMinutes = timeToMeridianHours.HasValue ? timeToMeridianHours * 60 : null,
                 timeToFlipHours = timeToFlipHours,
-                timeToFlipMinutes = timeToFlipHours.HasValue ? timeToFlipHours * 60 : null
+                timeToFlipMinutes = timeToFlipHours.HasValue ? timeToFlipHours * 60 : null,
+                // Mount safety guard (anti cable-wrap + guide circuit breaker).
+                safetyTripped = guard.Tripped,
+                safetyReason = guard.TripReason,
+                safetyTrippedAt = guard.TrippedAt
             });
         });
 

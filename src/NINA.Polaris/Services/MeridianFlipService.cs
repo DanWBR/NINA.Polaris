@@ -67,6 +67,10 @@ public class MeridianFlipService {
         if (settings.PauseBeforeMeridianMinutes < 0) settings.PauseBeforeMeridianMinutes = 0;
         if (settings.RecenterToleranceArcsec < 1) settings.RecenterToleranceArcsec = 1;
         if (settings.SettleSecondsAfterFlip < 0) settings.SettleSecondsAfterFlip = 0;
+        // Safety-guard normalisation (anti cable-wrap + guide circuit breaker).
+        if (settings.MaxMinutesPastMeridian < 0) settings.MaxMinutesPastMeridian = 0;
+        if (settings.MaxMinutesPastMeridian > 720) settings.MaxMinutesPastMeridian = 720;
+        if (settings.MaxConsecutiveGuideFailures < 0) settings.MaxConsecutiveGuideFailures = 0;
         Settings = settings;
     }
 
@@ -336,6 +340,30 @@ public class MeridianFlipSettings {
     /// of <see cref="Enabled"/> (which governs the sequencer). Driven by
     /// MeridianFlipAutoLiveService.</summary>
     public bool AutoFlipDuringLiveStack { get; set; }
+
+    // ---- Mount safety guard (anti cable-wrap + guiding circuit breaker) ----
+    // Independent of the flip flags above; protects against the failure mode
+    // where the mount keeps tracking past the meridian WITHOUT a flip (cables
+    // corkscrew around the head) and where a clouded-out session loops on
+    // guide-star recovery forever. Driven by MountSafetyGuardService.
+
+    /// <summary>Master switch for the safety guard. Default on; it only ever
+    /// halts (stop tracking / abort), never commands a risky move.</summary>
+    public bool SafetyStopEnabled { get; set; } = true;
+
+    /// <summary>Stop tracking + abort the session if the target tracks more
+    /// than this many minutes past the meridian without a flip having
+    /// happened. 0 disables this guard. Default 60.</summary>
+    public double MaxMinutesPastMeridian { get; set; } = 60;
+
+    /// <summary>Stop tracking + abort the session after this many consecutive
+    /// guide-star failures (lost lock / select failed) with no recovery.
+    /// 0 disables the circuit breaker. Default 20.</summary>
+    public int MaxConsecutiveGuideFailures { get; set; } = 20;
+
+    /// <summary>Also park the mount (not just stop tracking) when the safety
+    /// guard trips. Opt-in; default off to avoid an unexpected re-home.</summary>
+    public bool ParkOnSafetyStop { get; set; }
 }
 
 public enum MeridianFlipState {

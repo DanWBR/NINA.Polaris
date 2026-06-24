@@ -2958,8 +2958,16 @@ function ninaApp() {
             recenterToleranceArcsec: 30,
             settleSecondsAfterFlip: 5,
             autoFocusAfterFlip: false,
-            autoFlipDuringLiveStack: false
+            autoFlipDuringLiveStack: false,
+            // Mount safety guard (anti cable-wrap + guide circuit breaker).
+            safetyStopEnabled: true,
+            maxMinutesPastMeridian: 60,
+            maxConsecutiveGuideFailures: 20,
+            parkOnSafetyStop: false
         },
+        // Safety-guard trip state (from the meridian-flip WS/status payload).
+        mfSafetyTripped: false,
+        mfSafetyReason: null,
         mfState: 'idle',
         mfFlipsCompleted: 0,
         mfLastFlipError: null,
@@ -14465,10 +14473,24 @@ function ninaApp() {
                         recenterToleranceArcsec: data.recenterToleranceArcsec ?? 30,
                         settleSecondsAfterFlip: data.settleSecondsAfterFlip ?? 5,
                         autoFocusAfterFlip: !!data.autoFocusAfterFlip,
-                        autoFlipDuringLiveStack: !!data.autoFlipDuringLiveStack
+                        autoFlipDuringLiveStack: !!data.autoFlipDuringLiveStack,
+                        safetyStopEnabled: data.safetyStopEnabled !== false,
+                        maxMinutesPastMeridian: data.maxMinutesPastMeridian ?? 60,
+                        maxConsecutiveGuideFailures: data.maxConsecutiveGuideFailures ?? 20,
+                        parkOnSafetyStop: !!data.parkOnSafetyStop
                     };
                 }
             } catch (e) { }
+        },
+
+        // Dismiss a standing mount-safety trip (does not resume the session).
+        async resetMountSafety() {
+            try {
+                await this.apiPost('/api/meridianflip/safety/reset');
+                this.mfSafetyTripped = false;
+                this.mfSafetyReason = null;
+                this.toast('Mount safety trip cleared', 'ok');
+            } catch (e) { this.toast('Failed to clear safety trip', 'error'); }
         },
 
         saveMfSettings() {
@@ -29900,6 +29922,13 @@ function ninaApp() {
                 this.mfHourAngleHours = mf.hourAngleHours;
                 this.mfTimeToMeridianMinutes = mf.timeToMeridianMinutes;
                 this.mfTimeToFlipMinutes = mf.timeToFlipMinutes;
+                // Mount safety guard trip (anti cable-wrap / guide breaker).
+                const wasTripped = this.mfSafetyTripped;
+                this.mfSafetyTripped = !!mf.safetyTripped;
+                this.mfSafetyReason = mf.safetyReason || null;
+                if (this.mfSafetyTripped && !wasTripped) {
+                    this.toast('⚠ Mount safety stop: ' + (this.mfSafetyReason || 'session halted'), 'error');
+                }
                 // Sync server-side settings back (in case another client edited)
                 if (mf.settings) {
                     this.mfSettings.enabled = !!mf.settings.enabled;

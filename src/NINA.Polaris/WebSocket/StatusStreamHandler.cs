@@ -66,6 +66,7 @@ public static class StatusStreamHandler {
         var phd2Vnc = context.RequestServices.GetRequiredService<Phd2VncSessionService>();
         var autoFocus = context.RequestServices.GetRequiredService<AutoFocusService>();
         var meridianFlip = context.RequestServices.GetRequiredService<MeridianFlipService>();
+        var safetyGuard = context.RequestServices.GetRequiredService<MountSafetyGuardService>();
         var profile = context.RequestServices.GetRequiredService<ProfileService>();
         var hostMetrics = context.RequestServices.GetRequiredService<HostMetricsService>();
         var clockSync = context.RequestServices.GetRequiredService<ClockSyncService>();
@@ -282,7 +283,10 @@ public static class StatusStreamHandler {
                         timeToMeridianHours,
                         timeToMeridianMinutes = timeToMeridianHours * 60,
                         timeToFlipHours,
-                        timeToFlipMinutes = timeToFlipHours * 60
+                        timeToFlipMinutes = timeToFlipHours * 60,
+                        safetyTripped = safetyGuard.Tripped,
+                        safetyReason = safetyGuard.TripReason,
+                        safetyTrippedAt = safetyGuard.TrippedAt
                     };
 
                     var autoFocusPayload = new {

@@ -1,0 +1,282 @@
+// N.I.N.A. Polaris
+// Copyright (C) 2024-2026 Daniel Wagner (DanWBR) and the N.I.N.A. Polaris contributors
+//
+// This program is free software: you can redistribute it and/or modify it
+// under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or (at your
+// option) any later version.
+//
+// This program is distributed in the hope that it will be useful, but WITHOUT
+// ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+// FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License
+// for more details. You should have received a copy of the license along with
+// this program. If not, see <https://www.gnu.org/licenses/>.
+
+using NINA.Core.Enum;
+
+namespace NINA.Polaris.Services;
+
+/// <summary>
+/// Fail-safe watchdog that protects the mount + cabling during unattended
+/// sessions. Born from a real ASIAIR incident: a mount tracked hours past the
+/// meridian WITHOUT a flip (plate-solve angle stayed constant all night) while
+/// a clouded-out run looped on guide-star recovery forever — the RA axis wound
+/// the cabling into a corkscrew until a USB cable physically ripped.
+///
+/// Two guards, both opt-out, both purely *halting* (never command a risky move):
+///
+///  1. <b>Past-meridian cable-wrap limit</b> — if the target tracks more than
+///     <see cref="MeridianFlipSettings.MaxMinutesPastMeridian"/> past the
+///     meridian and no flip happened (GEM pier side unchanged, or a flip-less
+///     strain-wave mount), stop tracking + abort.
+///  2. <b>Guiding circuit breaker</b> — if the guider loses the star
+///     <see cref="MeridianFlipSettings.MaxConsecutiveGuideFailures"/> times in
+///     a row with no recovery, stop tracking + abort instead of looping.
+///
+/// On trip: abort the sequencer + LIVE loop + live stack, stop the guider,
+/// turn tracking OFF (this is what actually stops the winding), optionally
+/// park, and surface the trip on the WS status so the UI can banner it.
+/// </summary>
+public class MountSafetyGuardService : BackgroundService {
+    private readonly EquipmentManager _equip;
+    private readonly ProfileService _profile;
+    private readonly ActiveGuiderProvider _guiders;
+    private readonly SequenceEngine _sequence;
+    private readonly LiveCaptureService _liveCapture;
+    private readonly LiveStackingService _liveStack;
+    private readonly MeridianFlipService _meridian;
+    private readonly ILogger<MountSafetyGuardService> _logger;
+
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(15);
+
+    // ---- public trip state (read by the meridian-flip /status endpoint + WS) ----
+    public bool Tripped { get; private set; }
+    public string? TripReason { get; private set; }
+    public DateTime? TrippedAt { get; private set; }
+
+    // ---- meridian-crossing tracking ----
+    private double? _prevHa;
+    private PierSide _pierAtCrossing = PierSide.pierUnknown;
+    private bool _sawCrossing;
+    private bool _flippedSinceCrossing;
+
+    // ---- guiding circuit breaker ----
+    private int _consecutiveGuideFailures;
+    private IGuider? _subscribedGuider;
+    private bool _wasSessionActive;
+
+    public MountSafetyGuardService(
+            EquipmentManager equip, ProfileService profile, ActiveGuiderProvider guiders,
+            SequenceEngine sequence, LiveCaptureService liveCapture, LiveStackingService liveStack,
+            MeridianFlipService meridian, ILogger<MountSafetyGuardService> logger) {
+        _equip = equip;
+        _profile = profile;
+        _guiders = guiders;
+        _sequence = sequence;
+        _liveCapture = liveCapture;
+        _liveStack = liveStack;
+        _meridian = meridian;
+        _logger = logger;
+    }
+
+    /// <summary>Clear a trip (UI dismiss). Does not restart anything.</summary>
+    public void Reset() {
+        Tripped = false;
+        TripReason = null;
+        TrippedAt = null;
+        _consecutiveGuideFailures = 0;
+    }
+
+    // ----------------------- pure decision helpers (unit-tested) -----------------
+
+    /// <summary>
+    /// Should the cable-wrap guard trip? <paramref name="haHours"/> is the
+    /// target hour angle (negative = east of meridian, positive = west).
+    /// A GEM that has flipped since crossing the meridian is always safe; a
+    /// flip-less mount (no pier-side support) trips purely on hours-past.
+    /// </summary>
+    public static bool ShouldTripMeridian(double haHours, bool supportsPierSide,
+            bool flippedSinceCrossing, double maxMinutesPastMeridian) {
+        if (maxMinutesPastMeridian <= 0) return false;       // guard disabled
+        if (haHours <= 0) return false;                       // east of meridian, no wind
+        if (haHours * 60.0 <= maxMinutesPastMeridian) return false;
+        // Past the limit: a flipped GEM is safe; otherwise the axis is winding.
+        if (supportsPierSide && flippedSinceCrossing) return false;
+        return true;
+    }
+
+    /// <summary>Should the guiding circuit breaker trip?</summary>
+    public static bool ShouldTripBreaker(int consecutiveFailures, int threshold)
+        => threshold > 0 && consecutiveFailures >= threshold;
+
+    // ---------------------------------- loop ------------------------------------
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
+        try { await Task.Delay(TimeSpan.FromSeconds(12), stoppingToken); }
+        catch (OperationCanceledException) { return; }
+
+        while (!stoppingToken.IsCancellationRequested) {
+            try { await TickAsync(stoppingToken); }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex) { _logger.LogDebug(ex, "Safety-guard tick failed (non-fatal)"); }
+            try { await Task.Delay(PollInterval, stoppingToken); }
+            catch (OperationCanceledException) { break; }
+        }
+    }
+
+    private bool SessionActive =>
+        _sequence.State == SequenceState.Running
+        || _liveCapture.IsRunning
+        || _liveStack.IsRunning;
+
+    private async Task TickAsync(CancellationToken ct) {
+        EnsureGuiderSubscription();
+
+        var s = _meridian.Settings;
+        bool active = SessionActive;
+
+        // Re-arm on a fresh session start (idle → active).
+        if (active && !_wasSessionActive) {
+            _consecutiveGuideFailures = 0;
+            // Don't auto-clear a standing trip here; the UI/Reset does that.
+        }
+        _wasSessionActive = active;
+
+        if (!s.SafetyStopEnabled || !active || Tripped) {
+            // Still track the meridian-crossing state machine so we have an
+            // accurate flip history the moment a session starts.
+            UpdateMeridianState();
+            return;
+        }
+
+        // ---- Guard 1: past-meridian cable wrap ----
+        var (haHours, supportsPier, flipped) = UpdateMeridianState();
+        if (haHours.HasValue && _sawCrossing
+                && ShouldTripMeridian(haHours.Value, supportsPier, flipped, s.MaxMinutesPastMeridian)
+                && _meridian.State == MeridianFlipState.Idle) {
+            var mins = haHours.Value * 60.0;
+            await TripAsync(
+                $"Mount tracked {mins:F0} min past the meridian without a flip " +
+                $"(limit {s.MaxMinutesPastMeridian:F0} min) — stopping to prevent a cable wrap.",
+                s, ct);
+            return;
+        }
+
+        // ---- Guard 2: guiding circuit breaker ----
+        if (ShouldTripBreaker(_consecutiveGuideFailures, s.MaxConsecutiveGuideFailures)) {
+            await TripAsync(
+                $"Guider lost the star {_consecutiveGuideFailures} times in a row with no " +
+                $"recovery (limit {s.MaxConsecutiveGuideFailures}) — stopping the session.",
+                s, ct);
+        }
+    }
+
+    /// <summary>
+    /// Advance the meridian-crossing state machine and return the current
+    /// (haHours, supportsPierSide, flippedSinceCrossing). haHours is null when
+    /// no connected mount / RA is available.
+    /// </summary>
+    private (double? haHours, bool supportsPier, bool flipped) UpdateMeridianState() {
+        var scope = _equip.Telescope;
+        if (scope == null || !scope.IsConnected) {
+            _prevHa = null; _sawCrossing = false; _flippedSinceCrossing = false;
+            return (null, false, false);
+        }
+
+        var ra = scope.RightAscension;
+        if (double.IsNaN(ra)) return (null, false, false);
+
+        double lst = MeridianFlipService.ComputeLstHours(DateTime.UtcNow, _profile.Active.Longitude);
+        double ha = lst - ra;
+        while (ha > 12) ha -= 24;
+        while (ha < -12) ha += 24;
+
+        bool supportsPier = scope.Capabilities.SupportsPierSide;
+        var pier = scope.SideOfPier;
+
+        // Clearly east again (new approach / next night): reset the machine.
+        if (ha < -0.1) {
+            _sawCrossing = false;
+            _flippedSinceCrossing = false;
+            _pierAtCrossing = PierSide.pierUnknown;
+        }
+
+        // Detect the meridian crossing (HA goes − → ≥0): record the pier side then.
+        if (_prevHa.HasValue && _prevHa.Value < 0 && ha >= 0) {
+            _sawCrossing = true;
+            _pierAtCrossing = pier;
+            _flippedSinceCrossing = false;
+        }
+
+        // A flip is "seen" once the pier side differs from the crossing side.
+        if (_sawCrossing && supportsPier
+                && pier != PierSide.pierUnknown && _pierAtCrossing != PierSide.pierUnknown
+                && pier != _pierAtCrossing) {
+            _flippedSinceCrossing = true;
+        }
+
+        _prevHa = ha;
+        return (ha, supportsPier, _flippedSinceCrossing);
+    }
+
+    private async Task TripAsync(string reason, MeridianFlipSettings s, CancellationToken ct) {
+        Tripped = true;
+        TripReason = reason;
+        TrippedAt = DateTime.UtcNow;
+        _logger.LogError("MOUNT SAFETY STOP: {Reason}", reason);
+
+        // 1. Abort the running session(s) so nothing re-commands the mount.
+        try { _sequence.Stop(); } catch (Exception ex) { _logger.LogWarning(ex, "Safety: sequence stop failed"); }
+        try { _liveCapture.Stop(); } catch (Exception ex) { _logger.LogWarning(ex, "Safety: live capture stop failed"); }
+        try { _liveStack.Stop(); } catch (Exception ex) { _logger.LogWarning(ex, "Safety: live stack stop failed"); }
+
+        // 2. Stop the guider so it stops pulse-guiding / re-selecting.
+        try {
+            var g = _guiders.Active;
+            if (g.IsConnected) await g.StopAsync(ct);
+        } catch (Exception ex) { _logger.LogWarning(ex, "Safety: guider stop failed"); }
+
+        // 3. THE important one — turn tracking off so the RA axis stops winding.
+        var scope = _equip.Telescope;
+        if (scope != null && scope.IsConnected) {
+            try { await scope.SetTrackingAsync(false, ct); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Safety: stop-tracking failed"); }
+
+            // 4. Optional park (unwinds fully) — opt-in to avoid a surprise re-home.
+            if (s.ParkOnSafetyStop) {
+                try { await scope.ParkAsync(ct); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Safety: park failed"); }
+            }
+        }
+    }
+
+    // -------------------------- guider failure tracking --------------------------
+
+    private void EnsureGuiderSubscription() {
+        var g = _guiders.Active;
+        if (ReferenceEquals(g, _subscribedGuider)) return;
+        if (_subscribedGuider != null) {
+            _subscribedGuider.AppStateChanged -= OnGuiderAppState;
+            _subscribedGuider.Alert -= OnGuiderAlert;
+        }
+        _subscribedGuider = g;
+        g.AppStateChanged += OnGuiderAppState;
+        g.Alert += OnGuiderAlert;
+    }
+
+    private void OnGuiderAppState(string state) {
+        if (string.IsNullOrEmpty(state)) return;
+        if (state.Equals("LostLock", StringComparison.OrdinalIgnoreCase)) {
+            _consecutiveGuideFailures++;
+        } else if (state.Equals("Guiding", StringComparison.OrdinalIgnoreCase)) {
+            // Clean recovery resets the breaker.
+            _consecutiveGuideFailures = 0;
+        }
+    }
+
+    private void OnGuiderAlert(string _) {
+        // Alerts include "star selection failed" / "no star found" style
+        // messages; count them toward the breaker (reset on a Guiding state).
+        _consecutiveGuideFailures++;
+    }
+}

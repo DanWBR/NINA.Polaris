@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260623-livefill2">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260623-filesort">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260623-gainhelp">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-connpanel2">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-safetyguard">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-rigs1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260623-guidezoom">
@@ -8703,6 +8703,46 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                            x-show="mount.connected && Math.abs(settings.longitude || 0) < 0.01">
                             ⚠ Observatory longitude is 0, set it in Settings for correct LST.
                         </p>
+
+                        <!-- Mount safety guard: anti cable-wrap + guide circuit
+                             breaker. Stops tracking + aborts a session that's
+                             winding the mount past the meridian without a flip
+                             or looping forever on lost guide stars. -->
+                        <div class="safety-banner" x-show="mfSafetyTripped" x-cloak>
+                            <span>🛑 <strong>Mount safety stop</strong> — <span x-text="mfSafetyReason"></span></span>
+                            <button class="btn btn-sm" @click="resetMountSafety()">Dismiss</button>
+                        </div>
+                        <div class="autorun-option-body-head" style="margin-top:10px">
+                            <label class="seq-dither-toggle">
+                                <input type="checkbox" x-model="mfSettings.safetyStopEnabled" @change="saveMfSettings()">
+                                <span :class="mfSettings.safetyStopEnabled ? 'text-ok' : 'text-muted'"
+                                      x-text="mfSettings.safetyStopEnabled ? 'Safety guard on' : 'Safety guard off'"></span>
+                            </label>
+                            <span class="text-muted" style="font-size:11px">anti cable-wrap + guide breaker</span>
+                        </div>
+                        <div class="seq-dither-body" x-show="mfSettings.safetyStopEnabled">
+                            <div class="seq-dither-row">
+                                <label>Stop if past meridian (min)
+                                    <input type="number" x-model.number="mfSettings.maxMinutesPastMeridian"
+                                           min="0" max="720" step="5" class="input-sm"
+                                           @change="saveMfSettings()">
+                                </label>
+                                <label>Stop after lost-star count
+                                    <input type="number" x-model.number="mfSettings.maxConsecutiveGuideFailures"
+                                           min="0" step="1" class="input-sm"
+                                           @change="saveMfSettings()">
+                                </label>
+                            </div>
+                            <label class="seq-dither-checkbox">
+                                <input type="checkbox" x-model="mfSettings.parkOnSafetyStop" @change="saveMfSettings()">
+                                Park the mount on safety stop (not just stop tracking)
+                            </label>
+                            <p class="seq-dither-hint text-muted">
+                                A flip-less mount that tracks far past the meridian winds the
+                                cables; 0 in either field disables that guard. Stop-tracking
+                                ends the winding; park unwinds fully.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
@@ -15784,7 +15824,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260624-auxsolve"></script>
+    <script src="/js/app.js?v=20260624-safetyguard"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

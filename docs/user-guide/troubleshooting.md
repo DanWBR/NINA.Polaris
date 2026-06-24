@@ -231,6 +231,33 @@ the "Flip" or "Force Pier Side: East/West" button manually mid-flip.
 
 File an issue with your mount model, we'd like to support more.
 
+## Mount kept tracking past the meridian / cables wound up
+
+If a mount tracks for hours past the meridian **without flipping**, the
+RA axis winds the cabling around the head until something snags (a real
+ASIAIR incident on a high-declination target ripped a USB cable). This
+happens when meridian flip is off (or the mount — e.g. a strain-wave
+AM3/AM5 — is set to track far past the meridian) and the session keeps
+running, often while clouded out and looping on lost guide stars.
+
+Polaris guards against this with the **mount safety stop** (Meridian
+Flip panel → *Safety guard*, on by default):
+
+- **Past-meridian limit** — stops tracking + aborts the session if the
+  target tracks more than *N* minutes past the meridian without a flip
+  (default 60). A healthy flipped GEM never trips; a flip-less mount
+  trips purely on time past the meridian.
+- **Guide circuit breaker** — stops the session after *N* consecutive
+  lost-star failures with no recovery (default 20) instead of looping
+  forever.
+
+On a trip Polaris turns **tracking off** (ending the winding), aborts
+the sequence/LIVE run, and shows a red banner with a **Dismiss**
+button. Enable *Park on safety stop* to also send the mount home
+(unwinds fully). Tune both limits per rig in the same panel; set a
+field to 0 to disable that guard. For deliberate far-past-meridian
+imaging on a strain-wave mount, raise the minutes limit.
+
 ## Embedded PHD2 GUI (xpra) shows blank iframe
 
 Linux + xpra setup, but iframe stays blank. Diagnostic:

@@ -1114,6 +1114,22 @@
     background: transparent;
 }
 
+/* Mount safety-stop banner (anti cable-wrap / guide circuit breaker trip).
+   Red, prominent, with a Dismiss button — shown in the Meridian Flip panel. */
+.safety-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+    padding: 10px 12px;
+    border: 1px solid var(--danger, #dc2626);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--danger, #dc2626) 14%, transparent);
+    color: var(--text-primary);
+    font-size: 12px;
+}
+.safety-banner > span:first-child { flex: 1; }
+
 /* Sub-group inside a role card (e.g. the Guiding System card split into
    Scope / Camera / Focus Motor). A thin top divider + an uppercase
    accent label, mirroring .blend-group-title. The first group skips the

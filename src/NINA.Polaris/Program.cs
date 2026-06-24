@@ -279,6 +279,11 @@ builder.Services.AddSingleton<AutoFocusService>();
 builder.Services.AddSingleton<MeridianFlipService>();
 // Auto meridian flip during LIVE stacking (polls HA, flips when due).
 builder.Services.AddHostedService<MeridianFlipAutoLiveService>();
+// Fail-safe mount watchdog: anti cable-wrap (past-meridian limit) + guiding
+// circuit breaker. Singleton so the meridian-flip endpoint can read its trip
+// state; also hosted so its poll loop runs.
+builder.Services.AddSingleton<MountSafetyGuardService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MountSafetyGuardService>());
 builder.Services.AddSingleton<FlatWizardService>();
 // PA-1: TPPA orchestrator. Singleton because it holds CurrentJob
 // (consumed by StatusStreamHandler) + the in-flight CancellationTokenSource.
