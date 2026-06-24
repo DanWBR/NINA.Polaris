@@ -430,14 +430,13 @@
 }
 
 /* "Center on Sun/Moon/planet" inline cluster inside the map actions overlay:
-   body picker + action button + a small phase chip while a job runs. Full
-   width so it wraps onto its own line below the recovery buttons. */
+   body picker + action button + a small phase chip while a job runs. Stays
+   on the same row as the other actions (wraps as a unit only if the overlay
+   is too narrow). */
 .center-body-row {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
-    flex-wrap: wrap;
-    flex-basis: 100%;
 }
 .center-body-row .input-sm { min-width: 7em; }
 .center-body-phase {

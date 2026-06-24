@@ -45,7 +45,7 @@
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260621-i18nnav">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260623-livefill2">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260624-connectall">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260624-centerbody">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260624-centerbody2">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-safetyguard">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-rigs1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
@@ -7259,40 +7259,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 title="Tell the mount it is pointing at the map centre (red FOV), without moving. Use to recover pointing when you can't plate-solve (clouds). Confirms first.">
                             Sync here
                         </button>
-                        <!-- Center on a solar-system object. Plate solving can't
-                             lock onto the Sun/Moon/planets, so this solves a
-                             nearby star field to fix the model, then does a
-                             precise ephemeris GoTo onto the body. -->
-                        <div class="center-body-row">
-                            <select class="input-sm" x-model="centerBodyName"
-                                    :disabled="!mount.connected || centerBodyJobId"
-                                    title="Sun, Moon or a planet to center on (uses ephemeris + a nearby plate solve)">
-                                <option value="Moon">Moon</option>
-                                <option value="Sun">Sun ⚠</option>
-                                <option value="Mercury">Mercury</option>
-                                <option value="Venus">Venus</option>
-                                <option value="Mars">Mars</option>
-                                <option value="Jupiter">Jupiter</option>
-                                <option value="Saturn">Saturn</option>
-                                <option value="Uranus">Uranus</option>
-                                <option value="Neptune">Neptune</option>
-                            </select>
-                            <button class="btn btn-sm"
-                                    x-show="!centerBodyJobId"
-                                    @click="startCenterBody()"
-                                    :disabled="!mount.connected"
-                                    :title="!mount.connected ? 'Connect a mount first' : 'Ephemeris + solve a nearby star field + GoTo onto the object (plate solving can\'t solve the object itself)'">
-                                🪐 Center on body
-                            </button>
-                            <button class="btn btn-sm btn-danger"
-                                    x-show="centerBodyJobId"
-                                    @click="cancelCenterBody()"
-                                    title="Cancel the center-on-body job">
-                                Cancel
-                            </button>
-                            <span class="center-body-phase" x-show="centerBodyJobId && centerBodyStatus" x-cloak
-                                  x-text="centerBodyPhaseLabel(centerBodyStatus && centerBodyStatus.state)"></span>
-                        </div>
                         <details class="slew-center-tune">
                             <summary title="Per-rig capture settings used by Slew &amp; Center plate-solve">
                                 ⚙ Solve frame
@@ -7351,6 +7317,40 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 Used by Slew &amp; Center, meridian-flip recenter, and live-stack auto-recenter. Saved per-rig.
                             </p>
                         </details>
+                        <!-- Center on a solar-system object (last in the row).
+                             Plate solving can't lock onto the Sun/Moon/planets, so
+                             this solves a nearby star field to fix the model, then
+                             does a precise ephemeris GoTo onto the body. -->
+                        <span class="center-body-row">
+                            <select class="input-sm" x-model="centerBodyName"
+                                    :disabled="!mount.connected || centerBodyJobId"
+                                    title="Sun, Moon or a planet to center on (uses ephemeris + a nearby plate solve)">
+                                <option value="Moon">Moon</option>
+                                <option value="Sun">Sun ⚠</option>
+                                <option value="Mercury">Mercury</option>
+                                <option value="Venus">Venus</option>
+                                <option value="Mars">Mars</option>
+                                <option value="Jupiter">Jupiter</option>
+                                <option value="Saturn">Saturn</option>
+                                <option value="Uranus">Uranus</option>
+                                <option value="Neptune">Neptune</option>
+                            </select>
+                            <button class="btn btn-sm"
+                                    x-show="!centerBodyJobId"
+                                    @click="startCenterBody()"
+                                    :disabled="!mount.connected"
+                                    :title="!mount.connected ? 'Connect a mount first' : 'Ephemeris + solve a nearby star field + GoTo onto the object (plate solving can\'t solve the object itself)'">
+                                🪐 Center on body
+                            </button>
+                            <button class="btn btn-sm btn-danger"
+                                    x-show="centerBodyJobId"
+                                    @click="cancelCenterBody()"
+                                    title="Cancel the center-on-body job">
+                                Cancel
+                            </button>
+                            <span class="center-body-phase" x-show="centerBodyJobId && centerBodyStatus" x-cloak
+                                  x-text="centerBodyPhaseLabel(centerBodyStatus && centerBodyStatus.state)"></span>
+                        </span>
                     </div>
 
                     <!-- Top-centre progress + STOP overlay. Always
