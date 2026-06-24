@@ -37,7 +37,7 @@ import { site, aboutContent as a } from '../data/site';
           <article class="card">
             <header class="card-head"><span class="sq-icon" style="--ic: #e11d6b">👤</span><h2>{a.author.title}</h2></header>
             <p>{a.author.intro} <strong>{a.author.name}</strong>.</p>
-            <p>Contact: <a href={`mailto:${a.author.email}`}>{a.author.email}</a></p>
+            {a.author.email && <p>Contact: <a href={`mailto:${a.author.email}`}>{a.author.email}</a></p>}
             <p class="links">
               <a href={a.author.github} target="_blank" rel="noopener">GitHub</a>
               <a href={a.author.linkedin} target="_blank" rel="noopener">LinkedIn</a>
