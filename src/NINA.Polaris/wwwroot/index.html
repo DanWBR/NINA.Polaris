@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260623-livefill2">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260623-filesort">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260623-gainhelp">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-guidegroups">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-auxgroups">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-rigs1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260623-guidezoom">
@@ -5803,11 +5803,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <div class="equip-card equip-card-metadata">
                         <div class="equip-card-header">
                             <span class="equip-card-icon">&#x1F4F7;</span>
-                            <span class="equip-card-title">Aux Camera</span>
+                            <span class="equip-card-title">Auxiliary Camera System</span>
                             <span class="equip-status-dot"
                                   :class="auxCameraConnected ? 'connected' : (auxCamera ? 'configured' : 'disconnected')"></span>
                         </div>
                         <div class="equip-card-body">
+                            <!-- Group 1: Camera + Lens/Scope (driver + device +
+                                 connect, aux optics + capture settings). -->
+                            <div class="equip-group">
+                            <div class="equip-group-title">Camera + Lens/Scope</div>
                             <!-- Driver + device + connect (mirrors the guide cam). -->
                             <div class="equip-driver-row" x-show="cameraDrivers.length > 1">
                                 <label class="equip-driver-label">Cam driver</label>
@@ -5891,9 +5895,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                x-show="aux.enabled && auxCapture.noOutputDir">
                                 ⚠ No output folder set — aux frames are NOT being saved. Set one in FILES.
                             </p>
+                            </div><!-- /Camera + Lens/Scope group -->
 
-                            <!-- Aux focuser (manual focusing of the aux camera). -->
-                            <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+                            <!-- Group 2: Focus Motor (optional motor on the aux
+                                 train, for manual focusing from the FOCUS tab). -->
+                            <div class="equip-group">
+                                <div class="equip-group-title">Focus Motor</div>
                                 <div class="equip-driver-row">
                                     <label class="equip-driver-label">Aux focuser</label>
                                     <select class="equip-select equip-driver-select"
@@ -5936,10 +5943,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <span class="equip-toggle-thumb"></span>
                                     </label>
                                 </div>
-                                <p class="hint" style="margin:4px 0 0;font-size:11px">
-                                    For manual focusing of the aux camera (FOCUS tab → Camera: Auxiliary).
-                                </p>
-                            </div>
+                            </div><!-- /Focus Motor group -->
                         </div>
                     </div>
 
