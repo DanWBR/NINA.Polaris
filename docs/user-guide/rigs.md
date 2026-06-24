@@ -86,6 +86,18 @@ modal).
 Like Main Telescope but for the guide setup. Focal length + aperture
 drive PHD2 pixel-scale sanity checks + the guiding resolution readout.
 
+Two ways to populate, mirroring the Main Telescope card:
+
+**A. Catalog pickers** (preferred): **Brand** → **Model** dropdowns
+driven by `wwwroot/data/guidescopes.json` (curated common guide scopes:
+SVBony, ZWO, William Optics, Askar, Sky-Watcher, Orion, QHY, ...). The
+model list shows aperture + f-ratio; picking one auto-fills the guide
+focal length + aperture.
+
+**B. Manual entry**: leave Brand = "Manual entry" and type the numeric
+focal length + aperture by hand (for off-catalog scopes). Guide scopes
+take no accessory/reducer, so there is no accessory picker here.
+
 ### Guide Camera
 
 Behaviour depends on the rig's **Guider driver** (`native` vs `phd2`,
@@ -192,10 +204,11 @@ Beyond the obvious device names, each rig stores:
 ## Telescope + accessory catalog
 
 The dropdowns are driven by `wwwroot/data/telescopes.json` +
-`wwwroot/data/optical-accessories.json`. Both are checked in to the
-repo, to add a new OTA / reducer, edit the JSON, restart the server,
-refresh the browser. Pull requests with additions for popular new
-hardware are welcome.
+`wwwroot/data/optical-accessories.json` (Main Telescope card) and
+`wwwroot/data/guidescopes.json` (Guidescope card). All three are
+checked in to the repo, to add a new OTA / reducer / guide scope, edit
+the JSON, restart the server, refresh the browser. Pull requests with
+additions for popular new hardware are welcome.
 
 ## INDI control panel (property browser)
 

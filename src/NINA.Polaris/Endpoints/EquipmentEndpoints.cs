@@ -181,7 +181,7 @@ public static class EquipmentEndpoints {
                 // matches the no-accessory case.
                 r.AccessoryFactor = update.AccessoryFactor > 0 ? update.AccessoryFactor : 1.0;
                 r.RequiredBackspacingMm = update.RequiredBackspacingMm;
-                r.GuiderFocalLengthMm = update.GuiderFocalLengthMm;
+                if (update.GuiderFocalLengthMm > 0) r.GuiderFocalLengthMm = update.GuiderFocalLengthMm;
                 // Native guider backend selection + tunables. Empty/zero
                 // from an old client leaves the existing values alone so a
                 // pre-native PUT doesn't clobber the new state.

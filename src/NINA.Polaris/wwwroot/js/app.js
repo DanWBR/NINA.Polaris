@@ -883,7 +883,7 @@ function ninaApp() {
         // wwwroot/data/ when the Manage Rigs modal opens). Drives
         // the picker dropdowns and the "Required backspacing"
         // readout. See loadOpticsCatalogue().
-        opticsCatalogue: { telescopes: [], accessories: [], loaded: false },
+        opticsCatalogue: { telescopes: [], accessories: [], guidescopes: [], loaded: false },
 
         // Equipment tab state
         equipCameraChoice: '',
@@ -16021,20 +16021,23 @@ function ninaApp() {
         async loadOpticsCatalogue() {
             if (this.opticsCatalogue.loaded) return;
             try {
-                const [scopesResp, accResp] = await Promise.all([
+                const [scopesResp, accResp, guideResp] = await Promise.all([
                     fetch('/data/telescopes.json'),
-                    fetch('/data/optical-accessories.json')
+                    fetch('/data/optical-accessories.json'),
+                    fetch('/data/guidescopes.json')
                 ]);
                 const scopes = await scopesResp.json();
                 const acc = await accResp.json();
+                const guide = await guideResp.json();
                 this.opticsCatalogue = {
                     telescopes:  scopes.telescopes  || [],
                     accessories: acc.accessories     || [],
+                    guidescopes: guide.guidescopes   || [],
                     loaded: true
                 };
             } catch (e) {
                 this.toast?.('Failed to load optics catalogue: ' + e.message, 'warn');
-                this.opticsCatalogue = { telescopes: [], accessories: [], loaded: true };
+                this.opticsCatalogue = { telescopes: [], accessories: [], guidescopes: [], loaded: true };
             }
             // Re-sync the Main Telescope / Guidescope dropdowns to the
             // active rig's saved brand + model now that the catalogue
@@ -16098,6 +16101,19 @@ function ninaApp() {
         opticsModelsForRig(rig) {
             return this.opticsCatalogue.telescopes
                 .filter(t => t.brand === rig.telescopeBrand)
+                .sort((a, b) => a.apertureMm - b.apertureMm);
+        },
+
+        /// Distinct guide-scope brands in the catalogue, sorted.
+        get guidescopeBrands() {
+            const set = new Set(this.opticsCatalogue.guidescopes.map(g => g.brand));
+            return Array.from(set).sort();
+        },
+
+        /// Guide-scope models for the brand picked on the given rig.
+        guidescopeModelsForRig(rig) {
+            return this.opticsCatalogue.guidescopes
+                .filter(g => g.brand === rig.guideTelescopeBrand)
                 .sort((a, b) => a.apertureMm - b.apertureMm);
         },
 
@@ -16459,6 +16475,32 @@ function ninaApp() {
         },
         onAccessoryPick() {
             this._applyOpticsToSettings();
+            this.saveOpticsDebounced();
+        },
+
+        // Guide scope catalog resolver: when a guidescopes.json entry
+        // matches the picked brand+model, fill the guide focal length +
+        // aperture. Guide scopes take no accessory factor, so the focal
+        // length lands directly. Manual entry leaves the fields alone.
+        _applyGuideOpticsToSettings() {
+            const s = this.settings;
+            const scope = this.opticsCatalogue.guidescopes
+                .find(g => g.brand === s.guideTelescopeBrand
+                        && g.model === s.guideTelescopeModel);
+            if (scope) {
+                s.guiderApertureMm    = scope.apertureMm;
+                s.guiderFocalLengthMm = scope.focalLengthMm;
+            }
+        },
+
+        // Catalog picker change handlers for the Guidescope card.
+        onGuideScopeBrandPick() {
+            this.settings.guideTelescopeModel = '';
+            this._applyGuideOpticsToSettings();
+            this.saveOpticsDebounced();
+        },
+        onGuideScopeModelPick() {
+            this._applyGuideOpticsToSettings();
             this.saveOpticsDebounced();
         },
 

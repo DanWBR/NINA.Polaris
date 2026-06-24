@@ -1,0 +1,24 @@
+{
+  "guidescopes": [
+    { "brand": "SVBony", "model": "SV165", "type": "Guide scope", "apertureMm": 30, "focalLengthMm": 120 },
+    { "brand": "SVBony", "model": "SV106", "type": "Guide scope", "apertureMm": 50, "focalLengthMm": 190 },
+    { "brand": "SVBony", "model": "SV198", "type": "Guide scope", "apertureMm": 60, "focalLengthMm": 240 },
+    { "brand": "ZWO", "model": "30F4 Mini", "type": "Guide scope", "apertureMm": 30, "focalLengthMm": 120 },
+    { "brand": "ZWO", "model": "120 Mini", "type": "Guide scope", "apertureMm": 30, "focalLengthMm": 120 },
+    { "brand": "ZWO", "model": "60280 Guide Scope", "type": "Guide scope", "apertureMm": 60, "focalLengthMm": 280 },
+    { "brand": "William Optics", "model": "UniGuide 32", "type": "Guide scope", "apertureMm": 32, "focalLengthMm": 120 },
+    { "brand": "William Optics", "model": "UniGuide 50", "type": "Guide scope", "apertureMm": 50, "focalLengthMm": 200 },
+    { "brand": "Askar", "model": "FMA135", "type": "Guide scope", "apertureMm": 30, "focalLengthMm": 135 },
+    { "brand": "Askar", "model": "FMA180 Pro", "type": "Guide scope", "apertureMm": 40, "focalLengthMm": 180 },
+    { "brand": "Sky-Watcher", "model": "Evoguide 50ED", "type": "Guide scope", "apertureMm": 50, "focalLengthMm": 242 },
+    { "brand": "Orion", "model": "50mm Mini", "type": "Guide scope", "apertureMm": 50, "focalLengthMm": 162 },
+    { "brand": "Orion", "model": "60mm Multi-Use", "type": "Guide scope", "apertureMm": 60, "focalLengthMm": 240 },
+    { "brand": "QHYCCD", "model": "miniGuideScope", "type": "Guide scope", "apertureMm": 30, "focalLengthMm": 130 },
+    { "brand": "Astromania", "model": "60mm", "type": "Guide scope", "apertureMm": 60, "focalLengthMm": 240 },
+    { "brand": "Angeleyes", "model": "50mm", "type": "Guide scope", "apertureMm": 50, "focalLengthMm": 180 },
+    { "brand": "Angeleyes", "model": "60mm", "type": "Guide scope", "apertureMm": 60, "focalLengthMm": 240 },
+    { "brand": "Generic", "model": "30mm f/4", "type": "Guide scope", "apertureMm": 30, "focalLengthMm": 120 },
+    { "brand": "Generic", "model": "50mm f/3.8", "type": "Guide scope", "apertureMm": 50, "focalLengthMm": 190 },
+    { "brand": "Generic", "model": "60mm f/4", "type": "Guide scope", "apertureMm": 60, "focalLengthMm": 240 }
+  ]
+}
