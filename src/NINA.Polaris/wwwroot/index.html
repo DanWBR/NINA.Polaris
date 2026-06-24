@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260623-livefill2">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260623-filesort">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260623-gainhelp">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260620-solver1">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-guidegroups">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-rigs1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260623-guidezoom">
@@ -5623,6 +5623,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                   :class="guider.guideCameraConnected ? 'connected' : (settings.guiderFocalLengthMm > 0 ? 'configured' : 'disconnected')"></span>
                         </div>
                         <div class="equip-card-body">
+                            <!-- Group 1: Scope (guide OTA optics, metadata only). -->
+                            <div class="equip-group">
+                            <div class="equip-group-title">Scope</div>
                             <div class="equip-meta-row">
                                 <label>Brand
                                     <select x-model="settings.guideTelescopeBrand"
@@ -5667,12 +5670,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <strong x-text="guider.pixelScale?.toFixed(3) + '&quot;/px'"></strong>
                                 at this guide scope.
                             </p>
+                            </div><!-- /Scope group -->
 
-                            <!-- The guider backend + algorithms now live in the
-                                 GUIDE tab. This card is the guide camera itself:
-                                 PHD2 owns its own guide cam, so the hardware
-                                 controls show only for the native guider. -->
-                            <p class="hint" x-show="guiderDriver !== 'native'" style="margin:6px 0 0;font-size:11px">
+                            <!-- Group 2: Camera (guide camera; PHD2 owns its own,
+                                 so the hardware controls show only for the native
+                                 guider — backend lives in the GUIDE tab). -->
+                            <div class="equip-group">
+                            <div class="equip-group-title">Camera</div>
+                            <p class="hint" x-show="guiderDriver !== 'native'" style="margin:0;font-size:11px">
                                 This rig uses the <strong>PHD2</strong> guider, which owns its own
                                 guide camera. Switch to the <strong>Native</strong> guider in the
                                 GUIDE tab to manage the guide camera here.
@@ -5740,10 +5745,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     </p>
                                 </div>
                             </template>
+                            </div><!-- /Camera group -->
 
-                            <!-- Guide-scope focuser (manual focusing of a
-                                 motorised guide scope). -->
-                            <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+                            <!-- Group 3: Focus Motor (optional motor on the guide
+                                 scope, for manual focusing from the FOCUS tab). -->
+                            <div class="equip-group">
+                                <div class="equip-group-title">Focus Motor</div>
                                 <div class="equip-driver-row">
                                     <label class="equip-driver-label">Guide focuser</label>
                                     <select class="equip-select equip-driver-select"
