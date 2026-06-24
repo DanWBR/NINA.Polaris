@@ -685,6 +685,12 @@ function ninaApp() {
         skySolverHidden: false,
         solveSyncBusy: false,   // guards the SKY "Solve & Sync" recovery
         _slewCenterTimer: null,
+        // "Center on Sun/Moon/planet" (solve-near-and-offset). Body picker +
+        // job tracking, mirrors the slew-center job lifecycle.
+        centerBodyName: 'Moon',
+        centerBodyJobId: null,
+        centerBodyStatus: null,
+        _centerBodyTimer: null,
         fov: { width: 2.82, height: 1.88 },
 
         // Shared target identification, shown on PREVIEW + LIVE and stamped
@@ -27122,6 +27128,86 @@ function ninaApp() {
             if (!target) { this.toast('Sky map not ready', 'error'); return; }
             if (this._blockIfBelowHorizon(target.ra, target.dec)) return;
             return this.slewTo(target.ra, target.dec);
+        },
+
+        // ---- Center on Sun / Moon / planet (solve-near-and-offset) ----
+        // Plate solving can't lock onto a washed-out lunar/solar disk or a
+        // starless planetary frame, so the server solves a nearby star field to
+        // correct the pointing model, then does a precise ephemeris GoTo onto the
+        // object. Job-shaped; we poll status and reuse the SKY solver console
+        // (the offset-field solve streams to it for free).
+        async startCenterBody() {
+            if (!this.mount.connected) { this.toast('Connect a mount first', 'error'); return; }
+            if (this.centerBodyJobId) { this.toast('A center job is already running', 'warn'); return; }
+            const body = this.centerBodyName;
+            if (body === 'Sun') {
+                if (!await this._confirmAsync(
+                    'You are about to slew the telescope to the SUN.\n\n' +
+                    'Pointing an unfiltered telescope at the Sun will instantly destroy ' +
+                    'your camera and can cause permanent eye damage. Only continue if a ' +
+                    'certified full-aperture solar filter is fitted.',
+                    { title: 'Center on the Sun', okLabel: 'Solar filter fitted — continue', danger: true })) return;
+            }
+            try {
+                const resp = await this.apiPost('/api/sky/center-body', { body });
+                const data = await resp.json();
+                this.centerBodyJobId = data.jobId;
+                this.centerBodyStatus = { state: 'pending', body };
+                // Show the solver console — phase 1 (offset-field solve) streams there.
+                this.skySolverHidden = false;
+                this.toast('Center on ' + body + ' started', 'ok');
+                this.startCenterBodyPolling();
+            } catch (e) {
+                this.toast('Center on ' + body + ' failed: ' + (e?.message || e), 'error');
+            }
+        },
+        startCenterBodyPolling() {
+            this.stopCenterBodyPolling();
+            this._centerBodyTimer = setInterval(() => this.pollCenterBody(), 1000);
+        },
+        stopCenterBodyPolling() {
+            if (this._centerBodyTimer) { clearInterval(this._centerBodyTimer); this._centerBodyTimer = null; }
+        },
+        async pollCenterBody() {
+            if (!this.centerBodyJobId) return;
+            try {
+                const data = await this.apiGet(`/api/sky/center-body/${this.centerBodyJobId}/status`);
+                this.centerBodyStatus = data;
+                if (['done', 'failed', 'cancelled'].includes(data.state)) {
+                    this.stopCenterBodyPolling();
+                    this.centerBodyJobId = null;
+                    if (data.state === 'done') {
+                        let msg = 'Centered on ' + data.body;
+                        if (data.trackingMode) msg += ' — ' + data.trackingMode + ' tracking on';
+                        this.toast(msg, 'ok');
+                    } else if (data.state === 'failed') {
+                        this.toast('Center on ' + data.body + ' failed: ' + (data.error || ''), 'error');
+                    } else {
+                        this.toast('Center cancelled', 'warn');
+                    }
+                }
+            } catch (e) { /* transient; keep polling until a terminal state */ }
+        },
+        async cancelCenterBody() {
+            if (!this.centerBodyJobId) return;
+            try { await this.apiPost(`/api/sky/center-body/${this.centerBodyJobId}/cancel`); } catch { }
+            this.stopCenterBodyPolling();
+            this.centerBodyJobId = null;
+            this.centerBodyStatus = null;
+            this.toast('Center cancelled', 'warn');
+        },
+        // Human-readable phase label for the center-body status chip.
+        centerBodyPhaseLabel(state) {
+            switch (state) {
+                case 'pending': return 'Starting…';
+                case 'computingephemeris': return 'Computing position…';
+                case 'correctingmodel': return 'Solving nearby field…';
+                case 'slewingtotarget': return 'Slewing to target…';
+                case 'done': return 'Centered';
+                case 'failed': return 'Failed';
+                case 'cancelled': return 'Cancelled';
+                default: return state || '';
+            }
         },
 
         // Target altitude (deg) from the observer location now, or null when

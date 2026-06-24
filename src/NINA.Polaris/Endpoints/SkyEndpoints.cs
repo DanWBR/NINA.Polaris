@@ -60,6 +60,52 @@ public static class SkyEndpoints {
             return Results.Ok(new { jobId, state = "cancelled" });
         });
 
+        // ---- Center on a solar-system object (solve-near-and-offset) ----
+        // Plate solving can't lock onto the Sun/Moon/planets (washed-out disk
+        // or no background stars), so this orchestrates: ephemeris → solve a
+        // nearby star field → precise relative GoTo onto the object. Job-shaped
+        // like slew-and-center; the client polls /status.
+
+        group.MapGet("/center-body/list", () =>
+            Results.Ok(new { bodies = SolarSystemCenterService.SupportedBodies }));
+
+        group.MapPost("/center-body", (CenterBodyRequest request,
+            SolarSystemCenterService svc) => {
+            if (!SolarSystemCenterService.TryParseBody(request.Body, out _))
+                return Results.BadRequest(new { error = $"Unsupported body '{request.Body}'" });
+            var job = svc.StartJob(request.Body,
+                request.OffsetDeg ?? 4.0, request.ToleranceArcsec ?? 30.0);
+            return Results.Accepted(value: new {
+                jobId = job.Id,
+                body = job.Body,
+                state = job.State.ToString().ToLowerInvariant()
+            });
+        });
+
+        group.MapGet("/center-body/{jobId}/status", (string jobId,
+            SolarSystemCenterService svc) => {
+            var job = svc.GetJob(jobId);
+            if (job == null) return Results.NotFound(new { error = "Job not found" });
+            return Results.Ok(new {
+                jobId = job.Id,
+                body = job.Body,
+                state = job.State.ToString().ToLowerInvariant(),
+                targetRa = job.TargetRa,
+                targetDec = job.TargetDec,
+                offsetRa = job.OffsetRa,
+                offsetDec = job.OffsetDec,
+                solveErrorArcsec = job.SolveErrorArcsec,
+                trackingMode = job.TrackingMode,
+                error = job.Error
+            });
+        });
+
+        group.MapPost("/center-body/{jobId}/cancel", (string jobId,
+            SolarSystemCenterService svc) => {
+            svc.CancelJob(jobId);
+            return Results.Ok(new { jobId, state = "cancelled" });
+        });
+
         group.MapGet("/catalog/search", (string query, SkyCatalogService catalog) => {
             var results = catalog.Search(query);
             return Results.Ok(new {
@@ -431,4 +477,11 @@ public static class SkyEndpoints {
 
     public record SlewAndCenterRequest(double Ra, double Dec, double ToleranceArcsec = 30.0,
         bool CenterOnly = false);
+
+    /// <summary>POST body for <c>/api/sky/center-body</c>. <c>Body</c> is a
+    /// friendly name (Sun/Moon/Mercury…Neptune). <c>OffsetDeg</c> is how far the
+    /// nearby star field sits from the object (default 4°); <c>ToleranceArcsec</c>
+    /// is the offset-field centering tolerance.</summary>
+    public record CenterBodyRequest(string Body, double? OffsetDeg = null,
+        double? ToleranceArcsec = null);
 }

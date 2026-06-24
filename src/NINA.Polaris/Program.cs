@@ -202,6 +202,9 @@ builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.PlateSolveProgr
 // ("Xs of Ys") survives a client reconnect across every capture context.
 builder.Services.AddSingleton<CaptureProgressService>();
 builder.Services.AddSingleton<SlewCenterService>();
+// "Center on Sun/Moon/planet" — solve-near-and-offset (Mode A) for
+// solar-system objects plate solving can't handle directly.
+builder.Services.AddSingleton<SolarSystemCenterService>();
 builder.Services.AddSingleton<ProfileService>();
 // AUTH-1: local-server auth (password + session store + rate limit).
 // Middleware that consumes this is wired in AUTH-2.

@@ -221,6 +221,37 @@ The big workflow button:
 Status banner shows phase live: "Slewing → Capturing → Solving →
 Centering → ✓ Centered (12 arcsec error)".
 
+## Center on Sun / Moon / planet
+
+Plate solving can't lock onto solar-system objects — the Sun/Moon wash the
+frame out, and a planet shot (long focal length, millisecond exposures) has no
+background stars to match. So Slew & Center fails on them. The **Center on
+body** picker on the map handles them with a *solve-near-and-offset* strategy:
+
+1. Pick **Moon / Sun / a planet** from the dropdown and click 🪐 **Center on
+   body** (mount must be connected).
+2. Polaris computes the object's apparent topocentric position from its built-in
+   ephemeris (your profile location + clock).
+3. It slews a few degrees off to a **nearby star field** and runs the normal
+   plate-solve + sync there — correcting the mount's pointing model right next
+   to the target, without ever solving the object itself.
+4. It re-reads the ephemeris (the Moon moves ~0.5°/h) and does a precise GoTo
+   onto the object. For the Moon/Sun it then switches the mount to **lunar /
+   solar tracking** so the object stays centred.
+
+The phase chip shows progress (Computing position → Solving nearby field →
+Slewing to target → Centered), and the offset-field solve streams to the SKY
+solver console like any other solve.
+
+> **⚠ Sun:** selecting the Sun pops a confirmation — only proceed with a
+> certified full-aperture solar filter fitted. An unfiltered scope on the Sun
+> destroys the camera instantly and can cause permanent eye damage. No software
+> can protect against this.
+
+Needs a connected mount, camera, and a working plate solver (for the offset
+field). If the nearby field won't solve, raise the offset or pick a clearer
+patch of sky.
+
 ## Mosaic planner
 
 Click 🧩 **Plan mosaic** with a target selected:
