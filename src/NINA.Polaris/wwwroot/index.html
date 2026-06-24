@@ -58,6 +58,8 @@
     <!-- UI motion + reduce-motion kill switch. Loaded last so its overrides
          win the cascade. GPU-only (opacity/transform) animations. -->
     <link rel="stylesheet" href="/css/parts/11-motion.css?v=20260622-motion3">
+    <!-- Interactive introductory tour (coach-marks / spotlight). -->
+    <link rel="stylesheet" href="/css/parts/12-tour.css?v=20260624-tour1">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -573,7 +575,7 @@
 
     <div class="app-layout">
         <!-- Sidebar (desktop) / Bottom tabs (mobile) -->
-        <nav class="sidebar">
+        <nav class="sidebar" data-tour="nav-rail">
             <!-- Sidebar order follows the rough mental model of a
                  typical session: arrive (Home) → pick gear (Rigs) →
                  pick a target (Sky) → start guiding (Guide) → focus
@@ -666,7 +668,7 @@
                  first-night checklist + workflow paths + troubleshoot
                  FAQ). Last in the nav so it doesn't compete with the
                  daily-use tabs but stays discoverable. -->
-            <button class="nav-btn" :class="{ active: tab === 'help' }"
+            <button class="nav-btn" :class="{ active: tab === 'help' }" data-tour="nav-help"
                     @click="tab = 'help'; helpOnTabEnter()" title="Help">
                 <svg viewBox="0 0 24 24" width="22" height="22">
                     <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/>
@@ -1165,7 +1167,7 @@
                              case. Reset starts a fresh stack (clears the
                              accumulator) without disarming. -->
                         <button class="btn" :class="liveStackEnabled ? 'btn-active' : ''"
-                                @click="toggleLiveStack()"
+                                @click="toggleLiveStack()" data-tour="live-actions"
                                 :title="liveStackEnabled
                                     ? 'Pause stacking (raw passthrough)'
                                     : 'Resume continuous stacking'">
@@ -2660,7 +2662,7 @@
                             </select>
                         </label>
                     </div>
-                    <div class="af-actions">
+                    <div class="af-actions" data-tour="focus-actions">
                         <button class="btn btn-primary" @click="startAutoFocus()"
                                 :disabled="autoFocus.state === 'running' || (afParams.focuserSource === 'aux' ? (!auxFocuserConnected || !auxCameraConnected) : afParams.focuserSource === 'guide' ? (!guideFocuserConnected || !guider.guideCameraConnected) : (!focusConnected || !selectedCamera))">Start AF</button>
                         <button class="btn btn-danger" @click="abortAutoFocus()"
@@ -2725,7 +2727,7 @@
 
             <!-- PREVIEW, snap test shots with optional save -->
             <div x-show="tab === 'preview'" class="tab-panel preview-tab-panel">
-                <div class="panel-header">
+                <div class="panel-header" data-tour="preview-actions">
                     Preview
                     <span class="status-indicator-sm"
                           :class="preview.busy ? 'warn' : (selectedCamera ? 'ok' : 'error')"
@@ -3678,7 +3680,7 @@
 
             <!-- GUIDER (PHD2) -->
             <div x-show="tab === 'guide'" class="tab-panel tab-panel-guide">
-                <div class="panel-header">
+                <div class="panel-header" data-tour="guide-actions">
                     <span x-text="guider.backend === 'native' ? 'Guider (Native)' : 'Guider (PHD2)'">Guider</span>
                     <span class="status-indicator-sm" :class="guider.connected ? (guider.guiding ? 'ok' : 'warn') : 'error'"
                           x-text="guider.connected ? guider.appState : 'Disconnected'"></span>
@@ -4889,7 +4891,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div x-show="equipTab === 'equipment'">
 
                 <!-- Rig (equipment profile) selector -->
-                <div class="rig-bar">
+                <div class="rig-bar" data-tour="rigs-connect">
                     <span class="rig-bar-label">Rig:</span>
                     <select class="input-md" x-model="activeRigId" @change="switchRig($event.target.value)">
                         <template x-for="r in rigs" :key="r.id">
@@ -6974,7 +6976,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <!-- Search collapses behind this button so the toolbar
                          fits one row; clicking it reveals + focuses the box,
                          Enter runs the search, Esc closes it. -->
-                    <button class="btn btn-sm" :class="skySearchOpen ? 'btn-active' : ''"
+                    <button class="btn btn-sm" :class="skySearchOpen ? 'btn-active' : ''" data-tour="sky-search"
                             @click="skySearchOpen = !skySearchOpen; if (skySearchOpen) $nextTick(() => $refs.skySearchInput && $refs.skySearchInput.focus())"
                             title="Search for an object by name (M31, NGC 7000, …)">🔍 Search</button>
                     <input type="text" class="search-input" x-ref="skySearchInput"
@@ -8663,7 +8665,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             </template>
 
             <div x-show="tab === 'sequence'" class="tab-panel tab-panel-autorun">
-                <div class="panel-header">
+                <div class="panel-header" data-tour="autorun-actions">
                     Autorun
                     <span class="status-indicator-sm" :class="{
                         'ok': seqState === 'running',
@@ -12599,6 +12601,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </p>
                         <div class="help-landing-grid">
                             <button class="help-tutorial-card"
+                                    @click="window.PolarisTour && PolarisTour.start('intro')">
+                                <span class="help-card-icon">🧭</span>
+                                <h3>Interactive tour</h3>
+                                <p>A guided walkthrough that points at the
+                                real controls and switches screens for you.
+                                The fastest way to get oriented.</p>
+                                <span class="help-card-meta">~1 min</span>
+                            </button>
+                            <button class="help-tutorial-card"
                                     @click="helpStart('firstNight')">
                                 <span class="help-card-icon">🚀</span>
                                 <h3>First night</h3>
@@ -15868,6 +15879,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     </div>
 
     <script src="/js/app.js?v=20260624-centerbody"></script>
+    <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
+         only for navigation, issues no API calls (additive + isolated). -->
+    <script src="/js/tour.js?v=20260624-tour1"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

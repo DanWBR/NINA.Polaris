@@ -1,0 +1,145 @@
+/* Interactive introductory tour (coach-marks). Spotlight overlay + tooltip
+   with a directional arrow, plus a one-time first-run offer card. Driven by
+   js/tour.js; z-index sits below the auth/confirm modals (~1000) so setup
+   dialogs always win. */
+
+.tour-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    display: none;
+    /* Transparent but click-blocking: the dim is the hole's box-shadow; the
+       overlay itself swallows stray clicks so the tour can't trigger app
+       actions behind it. The tooltip re-enables pointer events for itself. */
+    pointer-events: auto;
+}
+.tour-overlay.active { display: block; }
+
+/* The "hole": a transparent rect over the highlighted element. The huge
+   spread box-shadow dims the rest of the screen; the outline is the focus
+   ring around the target. */
+.tour-hole {
+    position: fixed;
+    display: none;
+    border-radius: 8px;
+    box-shadow: 0 0 0 9999px rgba(4, 8, 16, 0.66);
+    outline: 2px solid var(--accent, #4ea1ff);
+    outline-offset: 2px;
+    pointer-events: none;
+    transition: top .25s ease, left .25s ease, width .25s ease, height .25s ease;
+}
+
+.tour-tip {
+    position: fixed;
+    width: max-content;
+    max-width: 360px;
+    background: var(--bg-secondary, #141a26);
+    border: 1px solid var(--border, #2a3344);
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+    color: var(--text-primary, #e6ecf5);
+}
+.tour-tip-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.tour-tip-body {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text-secondary, #b6c0cf);
+}
+.tour-tip-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+}
+.tour-tip-count {
+    font-size: 11px;
+    color: var(--text-muted, #8893a4);
+    white-space: nowrap;
+}
+.tour-tip-btns { display: flex; gap: 6px; }
+
+.tour-btn {
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border, #2a3344);
+    background: var(--bg-tertiary, #1b2230);
+    color: var(--text-primary, #e6ecf5);
+    cursor: pointer;
+}
+.tour-btn:hover { background: var(--bg-secondary, #232c3c); border-color: var(--text-muted, #8893a4); }
+.tour-btn-primary {
+    background: var(--accent, #4ea1ff);
+    border-color: var(--accent, #4ea1ff);
+    color: #fff;
+}
+.tour-btn-primary:hover { background: var(--accent-hover, #6cb2ff); }
+
+/* Directional arrow — a small rotated square pinned to the tip edge that
+   points toward the highlighted element. */
+.tour-arrow {
+    position: fixed;
+    width: 12px;
+    height: 12px;
+    background: var(--bg-secondary, #141a26);
+    border: 1px solid var(--border, #2a3344);
+    pointer-events: none;
+    display: none;
+}
+.tour-overlay.active .tour-arrow.tour-arrow-up,
+.tour-overlay.active .tour-arrow.tour-arrow-down,
+.tour-overlay.active .tour-arrow.tour-arrow-left,
+.tour-overlay.active .tour-arrow.tour-arrow-right { display: block; }
+/* Each variant rotates the square and clips two borders so only the corner
+   facing the target shows. translate centers it on the (left,top) anchor. */
+.tour-arrow-up {
+    transform: translate(-50%, -50%) rotate(45deg);
+    border-right: none; border-bottom: none;
+}
+.tour-arrow-down {
+    transform: translate(-50%, -50%) rotate(45deg);
+    border-left: none; border-top: none;
+}
+.tour-arrow-left {
+    transform: translate(-50%, -50%) rotate(45deg);
+    border-top: none; border-right: none;
+}
+.tour-arrow-right {
+    transform: translate(-50%, -50%) rotate(45deg);
+    border-bottom: none; border-left: none;
+}
+
+/* One-time first-run offer, bottom-right, non-blocking. */
+.tour-offer {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 880;
+    width: 280px;
+    background: var(--bg-secondary, #141a26);
+    border: 1px solid var(--accent, #4ea1ff);
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    color: var(--text-primary, #e6ecf5);
+}
+.tour-offer-title { font-size: 13.5px; font-weight: 600; margin-bottom: 4px; }
+.tour-offer-body { font-size: 12px; line-height: 1.5; color: var(--text-secondary, #b6c0cf); }
+.tour-offer-btns { display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .tour-hole { transition: none; }
+}
+
+/* Mobile: keep the tooltip readable on narrow viewports. */
+@media (max-width: 720px) {
+    .tour-tip { max-width: calc(100vw - 24px); }
+    .tour-offer { right: 10px; bottom: 10px; left: 10px; width: auto; }
+}

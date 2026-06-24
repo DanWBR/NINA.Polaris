@@ -21,6 +21,10 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HTML = resolve(ROOT, 'src/NINA.Polaris/wwwroot/index.html');
 const APPJS = resolve(ROOT, 'src/NINA.Polaris/wwwroot/js/app.js');
+// Interactive tour: step copy lives in plain object literals (title:/body:) and
+// injected button/offer text, not t()/toast() calls, so it's scanned as generic
+// string literals below (keep() drops the selectors/class-name fragments).
+const TOURJS = resolve(ROOT, 'src/NINA.Polaris/wwwroot/js/tour.js');
 const OUT = resolve(ROOT, 'src/NINA.Polaris/wwwroot/data/locales/_source.json');
 
 // A sentinel that never occurs in UI text: we replace HTML tags with it and
@@ -94,6 +98,18 @@ const callRe = /(?:\$?t|toast)\(\s*(['"`])((?:\\.|(?!\1)[\s\S])*?)\1/g;
 for (const m of js.matchAll(callRe)) {
     const raw = m[2].replace(/\\(['"`\\])/g, '$1');
     if (keep(raw)) found.add(norm(raw));
+}
+
+// ---- tour.js --------------------------------------------------------------
+// Every quoted string literal; keep() filters out CSS selectors, class names
+// and other code fragments, leaving the user-facing step/offer/button copy.
+if (existsSync(TOURJS)) {
+    const tourjs = readFileSync(TOURJS, 'utf8');
+    const strRe = /(['"`])((?:\\.|(?!\1)[\s\S])*?)\1/g;
+    for (const m of tourjs.matchAll(strRe)) {
+        const raw = m[2].replace(/\\(['"`\\])/g, '$1');
+        if (keep(raw)) found.add(norm(raw));
+    }
 }
 
 // ---- merge ----------------------------------------------------------------
