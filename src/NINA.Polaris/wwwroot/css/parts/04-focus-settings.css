@@ -412,6 +412,7 @@
 .sky-map-overlay-actions {
     position: absolute;
     left: 12px;
+    right: 12px;
     bottom: 12px;
     display: flex;
     gap: 6px;
