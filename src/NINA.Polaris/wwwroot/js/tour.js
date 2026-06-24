@@ -78,9 +78,9 @@
                 before: function (a) { a.tab = 'sequence'; if (a.autorunTab !== undefined) a.autorunTab = 'sequence'; if (a._applyTabSideEffects) a._applyTabSideEffects('sequence'); }
             },
             {
-                target: '[data-tour="live-actions"]', placement: 'left',
+                target: '[data-tour="nav-live"]', placement: 'right',
                 title: 'LIVE — watch it stack',
-                body: 'Frames stack in real time here (ASIAIR-style live view), so you watch the image build up as the session goes on.',
+                body: 'Open the LIVE view: frames stack in real time here (ASIAIR-style), so you watch the image build up as the session goes on.',
                 before: function (a) { a.tab = 'live'; if (a.quickControlsCollapsed) a.quickControlsCollapsed = false; }
             },
             {

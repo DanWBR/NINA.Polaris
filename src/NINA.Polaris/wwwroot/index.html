@@ -633,7 +633,7 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="4" width="18" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M8 2v4M16 2v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.5 14l2 2 4-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Plan</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'live' }" @click="tab = 'live'" title="Live View">
+            <button class="nav-btn" :class="{ active: tab === 'live' }" data-tour="nav-live" @click="tab = 'live'" title="Live View">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
                 <span class="nav-label">Live</span>
             </button>
@@ -15881,7 +15881,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <script src="/js/app.js?v=20260624-centerbody"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
-    <script src="/js/tour.js?v=20260624-tour1"></script>
+    <script src="/js/tour.js?v=20260624-tour2"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.
