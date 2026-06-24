@@ -980,6 +980,17 @@
     flex-direction: column;
 }
 
+/* Framed panel wrapping the driver-host connection block (connected
+   strip + INDI/Alpaca connect prompt) that sits above the RIGS
+   sub-tabstrip. Gives the connection controls a distinct card surface. */
+.equip-conn-panel {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin: 10px 0;
+    overflow: hidden;
+}
+
 .equip-connect-prompt {
     /* Sits at the top of the panel, do NOT stretch to fill vertical
        space, otherwise the connect form ends up centered in the middle

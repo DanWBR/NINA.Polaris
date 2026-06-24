@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260623-livefill2">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260623-filesort">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260623-gainhelp">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-auxgroups">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-connpanel">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-rigs1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260623-guidezoom">
@@ -4706,7 +4706,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      the INDI / Alpaca connect controls (and the connected
                      strip) stay visible on every sub-tab — Equipment, INDI
                      Drivers, INDI Control Panel — since all of them need a
-                     live connection. -->
+                     live connection. Wrapped in a panel so it reads as a
+                     distinct, framed control block. -->
+                <div class="equip-conn-panel">
 
                 <!-- Compact connection strip, visible when an INDI server
                      is reachable. Replaces the bottom-of-panel "Disconnect
@@ -4864,6 +4866,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
                     </div>
                 </div>
+                </div><!-- /equip-conn-panel -->
 
                 <!-- RIGS sub-tabstrip. 'Equipment' (default) holds the
                      rig selector + role-cards grid; 'INDI Drivers' hosts
