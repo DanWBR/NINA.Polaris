@@ -376,6 +376,9 @@ the [`licenses/`](licenses/) folder, and the bundled `3rd-party-licenses` notice
 **Image processing & AI**
 
 - [GraXpert](https://www.graxpert.com/) - the GraXpert development team. Background extraction, denoise and deconvolution ONNX models, and the default auto-stretch algorithm.
+- [nox](https://github.com/charvey2718/nox) - charvey2718. StarNet-like star-removal model (native colour + gray), the default behind FILES → Remove stars. Code and weights MIT.
+- [starrem2k13](https://github.com/code2k13/starrem2k13) - code2k13. pix2pix-style U-Net star-removal model, an alternative in FILES → Remove stars. Code and weights MIT.
+- [StarNet++](https://github.com/nekitmm/starnet) - Nikita Misiura (nekitmm). The original star-removal neural network. Code MIT; pre-trained weights © Nikita Misiura, CC BY-NC-SA 4.0 (NonCommercial).
 - [Siril](https://siril.org/) - the Free-Astro / Siril team. Optional external pre-processing and stacking.
 
 **Plate solving**
