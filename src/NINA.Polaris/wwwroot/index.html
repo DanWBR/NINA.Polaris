@@ -427,12 +427,12 @@
                  Equipment tab focused on that source. Each badge shows
                  ON / OFF / a count, and uses ok (green) / warn (amber) /
                  error (red) / off (grey) colour states. -->
-            <span class="status-indicator" :class="indiConnected ? 'ok' : 'off'"
+            <span class="status-indicator" :class="indiConnected ? 'ok' : 'off'" data-tour="statusbar-indi"
                   @click="tab='equip'; equipSource='indi'"
                   :title="indiConnected ? 'INDI connected' : 'INDI not connected, click to open Equipment'">
                 <span x-text="indiConnected ? 'INDI' : 'INDI OFF'"></span>
             </span>
-            <span class="status-indicator"
+            <span class="status-indicator" data-tour="statusbar-alpaca"
                   :class="(alpaca.servers && alpaca.servers.length) ? 'ok' : 'off'"
                   @click="tab='equip'; equipSource='alpaca'"
                   :title="(alpaca.servers && alpaca.servers.length)
@@ -449,7 +449,7 @@
                  spans were causing the badge to render empty when
                  Alpine couldn't evaluate one of the cascading
                  conditions cleanly. -->
-            <span class="status-indicator"
+            <span class="status-indicator" data-tour="statusbar-phd2"
                   :class="phd2BadgeClass()"
                   @click="tab='guide'"
                   :title="phd2BadgeTitle()"
@@ -519,7 +519,7 @@
                       x-show="logs.unreadErrors + logs.unreadWarnings > 0"
                       x-text="logs.unreadErrors + logs.unreadWarnings"></span>
             </button>
-            <button class="btn-icon" @click="toggleNightMode()" :title="nightMode ? 'Day Mode' : 'Night Mode'">
+            <button class="btn-icon" data-tour="statusbar-night" @click="toggleNightMode()" :title="nightMode ? 'Day Mode' : 'Night Mode'">
                 <span x-text="nightMode ? 'DAY' : 'NIGHT'"></span>
             </button>
             <!-- Fullscreen toggle badge. Moved here from the sidebar
@@ -1791,7 +1791,7 @@
                     </div><!-- /.quick-controls-scroll -->
                 </div>
                 </div><!-- /.live-pane -->
-                <div class="stats-bar">
+                <div class="stats-bar" data-tour="statusbar-stats">
                     <span>Stars: <strong x-text="stats.starCount">--</strong></span>
                     <span>HFR: <strong x-text="stats.hfr || '--'">--</strong></span>
                     <span>Mean: <strong x-text="stats.mean || '--'">--</strong></span>
@@ -10719,7 +10719,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      the default install-instructions tab. -->
                 <div class="settings-section"
                      x-init="tlsInit()">
-                    <h3><span class="settings-card-icon">🔒</span>HTTPS Certificate</h3>
+                    <h3 data-tour="set-https"><span class="settings-card-icon">🔒</span>HTTPS Certificate</h3>
                     <p class="hint" style="margin-top:0">
                         Polaris uses a self-signed certificate so the
                         connection is encrypted on your LAN. Install the
@@ -10783,7 +10783,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      mounted path). Mirrors the capture folder tree onto the
                      target; the local copy is kept. -->
                 <div class="settings-section" x-init="loadStorageConfig()">
-                    <h3><span class="settings-card-icon">📤</span>Auto-push to network storage</h3>
+                    <h3 data-tour="set-storage"><span class="settings-card-icon">📤</span>Auto-push to network storage</h3>
                     <p class="hint" style="margin-top:0">
                         Copy every saved image to a NAS, network share or SSH box as it's
                         written, mirroring the capture folder tree. The local copy stays put.
@@ -10857,7 +10857,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      the slider impossible to aim because the UI
                      reflowed under your cursor on every input tick. -->
                 <div class="settings-section">
-                    <h3><span class="settings-card-icon">🎨</span>Appearance</h3>
+                    <h3 data-tour="set-appearance"><span class="settings-card-icon">🎨</span>Appearance</h3>
                     <!-- i18n: language picker (kept at the top of the card).
                          Changing it persists to localStorage + the profile and
                          reloads so the whole UI re-renders in the chosen
@@ -11027,7 +11027,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          zoom; baseline order 3 ships in the bundle. -->
                     <div style="border-top:1px solid var(--border); margin-top:18px; padding-top:14px"
                          x-init="loadDssStatus()">
-                        <div style="font-weight:600; margin-bottom:4px">
+                        <div style="font-weight:600; margin-bottom:4px" data-tour="set-skyimg">
                             <span class="settings-card-icon">🌌</span>Sky imagery (offline DSS)
                         </div>
                         <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
@@ -11100,7 +11100,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      No auto-login: every Connect prompts for user +
                      password again, and credentials never persist. -->
                 <div class="settings-section">
-                    <h3><span class="settings-card-icon">🖥</span>Remote terminal</h3>
+                    <h3 data-tour="set-terminal"><span class="settings-card-icon">🖥</span>Remote terminal</h3>
                     <p class="text-muted" style="font-size: 12px; max-width:560px">
                         SSH into the Polaris host (or any other Linux box on your LAN)
                         from the browser. Credentials are sent per-session and never
@@ -11207,7 +11207,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      requires confirming the current password so a
                      stolen session token alone can't undo the gate. -->
                 <div class="settings-section">
-                    <h3><span class="settings-card-icon">🔐</span>Authentication</h3>
+                    <h3 data-tour="set-auth"><span class="settings-card-icon">🔐</span>Authentication</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Password gate for this Polaris server. Loopback
                         (127.0.0.1) always bypasses, so SSH tunnels and
@@ -11321,7 +11321,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      cloned SD-card image just works; this lets the owner
                      give each one a readable name. -->
                 <div class="settings-section" id="device-name-card">
-                    <h3><span class="settings-card-icon">🔭</span>Device name</h3>
+                    <h3 data-tour="set-devicename"><span class="settings-card-icon">🔭</span>Device name</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Shown when phones/tablets discover this telescope
                         computer on the network?. Give it a name you'll
@@ -11342,7 +11342,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                 <!-- Plate solving: pick the solver + tune speed/accuracy. -->
                 <div class="settings-section" id="platesolve-card" x-init="loadPlateSolveConfig()">
-                    <h3><span class="settings-card-icon">🎯</span>Plate solving</h3>
+                    <h3 data-tour="set-platesolve"><span class="settings-card-icon">🎯</span>Plate solving</h3>
                     <p class="text-muted" style="font-size:12px; max-width:600px; margin-top:4px">
                         Choose which installed solver to use and how aggressively
                         to downsample. On slower hardware (Pi-class), a higher
@@ -11474,7 +11474,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      a running sequence. id="clock-card" so the
                      activity-bar chip can scrollIntoView() on click. -->
                 <div class="settings-section" id="clock-card">
-                    <h3><span class="settings-card-icon">⏰</span>Clock</h3>
+                    <h3 data-tour="set-clock"><span class="settings-card-icon">⏰</span>Clock</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Sync the Pi's wall clock from this device when
                         the host is offline (no NTP) and the Pi has no
@@ -11520,7 +11520,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <div class="settings-section" id="power-card">
-                    <h3><span class="settings-card-icon">⏻</span>Power</h3>
+                    <h3 data-tour="set-power"><span class="settings-card-icon">⏻</span>Power</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Restart the Polaris server or reboot the whole device
                         without an SSH session. Handy on a headless SBC at the
@@ -11609,7 +11609,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <div class="settings-section network-section">
-                    <h3><span class="settings-card-icon">📡</span>Network (WiFi)</h3>
+                    <h3 data-tour="set-network"><span class="settings-card-icon">📡</span>Network (WiFi)</h3>
                     <!-- Body wrapper: forces consistent padding on the
                          four x-if branches. Without it, the rendered
                          <template> content lands as a direct child of
@@ -11696,7 +11696,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <div class="settings-section">
-                    <h3><span class="settings-card-icon">🌍</span>Observatory</h3>
+                    <h3 data-tour="set-observatory"><span class="settings-card-icon">🌍</span>Observatory</h3>
 
                     <!-- Two helpers above the raw lat/lng inputs: address
                          search (geocoded via Nominatim) and "use my
@@ -11764,7 +11764,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <div class="settings-section">
-                    <h3><span class="settings-card-icon">💾</span>Image Output</h3>
+                    <h3 data-tour="set-imageoutput"><span class="settings-card-icon">💾</span>Image Output</h3>
                     <!-- The actual root-picker moved to the FILES tab so the
                          user can browse to the folder instead of typing it.
                          Keep a read-only summary + jump-link here so the
@@ -11803,7 +11803,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <div class="settings-section" x-init="loadCacheStats()">
-                    <h3><span class="settings-card-icon">🗂</span>Image cache</h3>
+                    <h3 data-tour="set-imagecache"><span class="settings-card-icon">🗂</span>Image cache</h3>
                     <p class="hint" style="margin-top:0">
                         Polaris keeps rendered previews + thumbnails on disk so
                         re-opening a file is instant and doesn't re-render on
@@ -11835,7 +11835,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <div class="settings-section" x-init="loadGpuInfo()">
-                    <h3><span class="settings-card-icon">🎛️</span>GPU acceleration (OpenCL)</h3>
+                    <h3 data-tour="set-gpu"><span class="settings-card-icon">🎛️</span>GPU acceleration (OpenCL)</h3>
                     <p class="hint" style="margin-top:0">
                         Offloads classic image math (debayer, alignment warp,
                         stretch, editor blur, live-stack integration) to the SBC
@@ -11879,7 +11879,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <div class="settings-section" x-init="loadBenchmark()">
-                    <h3><span class="settings-card-icon">📊</span>Hardware benchmark</h3>
+                    <h3 data-tour="set-benchmark"><span class="settings-card-icon">📊</span>Hardware benchmark</h3>
                     <p class="hint" style="margin-top:0">
                         Measures how fast this machine runs the Polaris image
                         pipeline (stacking, capture/video encode) plus a raw
@@ -12061,7 +12061,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <div class="settings-section">
-                    <h3><span class="settings-card-icon">⚙</span>Hardware</h3>
+                    <h3 data-tour="set-hardware"><span class="settings-card-icon">⚙</span>Hardware</h3>
                     <label class="checkbox-label" title="When Polaris starts up, automatically connect to INDI, run an Alpaca discovery on the local network, and connect every device saved on the active rig. Toasts surface each step.">
                         <input type="checkbox" x-model="settings.autoConnectOnStartup" @change="saveSettingsToServer()">
                         Auto-connect hardware on server startup
@@ -12080,7 +12080,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      Pi; turn on when you're chasing a bug that needs
                      hours-old context to reproduce. -->
                 <div class="settings-section">
-                    <h3><span class="settings-card-icon">📝</span>Debug logging</h3>
+                    <h3 data-tour="set-debuglog"><span class="settings-card-icon">📝</span>Debug logging</h3>
                     <label class="checkbox-label"
                         title="When ON, every log entry is also written to {LocalAppData}/NINA.Polaris/logs/ as JSONL. Files older than 7 days are cleaned up automatically.">
                         <input type="checkbox" x-model="settings.logToDisk" @change="saveSettingsToServer()">
@@ -12095,7 +12095,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <!-- Server-owned LIVE capture loop (experimental, opt-in).
                      Default OFF keeps the proven browser-driven loop. -->
                 <div class="settings-section">
-                    <h3><span class="settings-card-icon">🛰</span>LIVE capture loop</h3>
+                    <h3 data-tour="set-liveloop"><span class="settings-card-icon">🛰</span>LIVE capture loop</h3>
                     <label class="checkbox-label"
                         title="When ON, the LIVE session's capture loop runs on the server: it keeps capturing even if this browser disconnects, and client-side stacking becomes pure compute offload. Default OFF uses the browser-driven loop.">
                         <input type="checkbox" x-model="settings.liveServerLoopEnabled" @change="saveSettingsToServer()">
@@ -12117,7 +12117,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      a path input + status + Re-detect button, which
                      does not lay out cleanly in a 420 px column. -->
                 <div class="settings-section settings-section--wide">
-                    <h3><span class="settings-card-icon">🛠</span>External tools</h3>
+                    <h3 data-tour="set-tools"><span class="settings-card-icon">🛠</span>External tools</h3>
                     <p class="hint" style="margin-top:0;margin-bottom:10px">
                         Polaris can drive Siril (preprocessing + stacking) and GraXpert (background
                         extraction, deconvolution, denoising) as external binaries when installed
@@ -12335,7 +12335,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </template>
 
                 <div class="settings-section settings-section--wide">
-                    <h3><span class="settings-card-icon">🧠</span>AI inference (ONNX)</h3>
+                    <h3 data-tour="set-ai"><span class="settings-card-icon">🧠</span>AI inference (ONNX)</h3>
                     <p class="hint" style="margin-top:0">
                         In-browser AI ops — star removal (nox / starrem2k13 /
                         StarNet++) and GraXpert (BGE / Denoise / Deconvolution).
@@ -12557,7 +12557,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      clean Raspberry Pi image can ship with no personal
                      or test config. Captured images are NOT touched. -->
                 <div class="settings-section settings-section--wide danger-section">
-                    <h3><span class="settings-card-icon">⚠️</span>Reset everything to factory defaults</h3>
+                    <h3 data-tour="set-reset"><span class="settings-card-icon">⚠️</span>Reset everything to factory defaults</h3>
                     <p class="hint" style="margin-top:0">
                         This wipes <strong>all</strong> of your saved settings:
                         every rig, equipment profile, the app password and
@@ -12623,6 +12623,23 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 real controls and switches screens for you.
                                 The fastest way to get oriented.</p>
                                 <span class="help-card-meta">~1 min</span>
+                            </button>
+                            <button class="help-tutorial-card"
+                                    @click="window.PolarisTour && PolarisTour.start('statusbars')">
+                                <span class="help-card-icon">📊</span>
+                                <h3>Status bars tour</h3>
+                                <p>What every item in the top header and the
+                                bottom activity bar means — connections,
+                                chips, traffic, host stats.</p>
+                                <span class="help-card-meta">optional</span>
+                            </button>
+                            <button class="help-tutorial-card"
+                                    @click="window.PolarisTour && PolarisTour.start('settings')">
+                                <span class="help-card-icon">⚙️</span>
+                                <h3>Settings tour</h3>
+                                <p>Walk through every Settings card one by one
+                                and learn what each configuration does.</p>
+                                <span class="help-card-meta">optional</span>
                             </button>
                             <button class="help-tutorial-card"
                                     @click="helpStart('firstNight')">
@@ -15896,7 +15913,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <script src="/js/app.js?v=20260624-centerbody"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
-    <script src="/js/tour.js?v=20260624-tour3"></script>
+    <script src="/js/tour.js?v=20260624-tour4"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

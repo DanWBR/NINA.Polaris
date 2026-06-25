@@ -128,13 +128,138 @@
             {
                 target: '[data-tour="nav-help"]', placement: 'right',
                 title: "That's the tour!",
-                body: 'Full step-by-step tutorials and troubleshooting live in the Help tab. Clear skies!',
+                body: 'Full step-by-step tutorials live in the Help tab — including two optional deep-dives: a tour of the top/bottom status bars and a walk through every Settings card. Clear skies!',
                 before: function () { /* stay put */ }
             }
         ];
     }
 
-    var state = { active: false, steps: null, idx: 0, els: null, raf: 0, onResize: null, onKey: null };
+    // Optional deep-dive: the top header bar + the bottom activity bar. Each
+    // item uses skipIfMissing so chips that only appear in certain states
+    // (battery, camera temp, transfers…) are skipped rather than shown empty.
+    function statusbarSteps() {
+        return [
+            {
+                center: true,
+                title: 'Status bars',
+                body: "Polaris frames every screen between two status bars. Let's go over what each item means — top bar first, then the bottom one.",
+                before: function (a) { a.tab = 'home'; }
+            },
+            {
+                target: '.brand', placement: 'bottom', skipIfMissing: true,
+                title: 'Top bar — app + version',
+                body: 'The N.I.N.A. Polaris logo (click it to jump Home) and the running version number.'
+            },
+            {
+                target: '[data-tour="statusbar-indi"]', placement: 'bottom', skipIfMissing: true,
+                title: 'INDI status',
+                body: 'Whether the INDI server is connected. Green = connected, grey = off. Click it to jump to the Equipment tab.'
+            },
+            {
+                target: '[data-tour="statusbar-alpaca"]', placement: 'bottom', skipIfMissing: true,
+                title: 'Alpaca status',
+                body: 'ASCOM Alpaca devices discovered on the network, with a count. Click to open Equipment on the Alpaca source.'
+            },
+            {
+                target: '[data-tour="statusbar-phd2"]', placement: 'bottom', skipIfMissing: true,
+                title: 'Guiding status',
+                body: "The guider's connection + state (idle, guiding, lost…). Click to open the Guide tab."
+            },
+            {
+                target: '.status-clock', placement: 'bottom', skipIfMissing: true,
+                title: 'Chips + clock',
+                body: 'This area shows live chips when relevant — current-exposure progress, camera temperature, stacked-frame count, this device\'s battery — plus the wall clock.'
+            },
+            {
+                target: '.log-badge', placement: 'bottom', skipIfMissing: true,
+                title: 'Debug log',
+                body: 'Opens the in-app log. The badge turns amber/red with a count when there are unread warnings or errors.'
+            },
+            {
+                target: '[data-tour="statusbar-night"]', placement: 'bottom', skipIfMissing: true,
+                title: 'Night mode',
+                body: 'Toggle the red, dark-adapted colour scheme for use at the telescope.'
+            },
+            {
+                target: '.fullscreen-badge', placement: 'bottom', skipIfMissing: true,
+                title: 'Fullscreen',
+                body: 'Hide the browser chrome — handy on a mini-PC kiosk or a tablet at the scope.'
+            },
+            {
+                target: '.ui-lock-badge', placement: 'bottom', skipIfMissing: true,
+                title: 'Lock UI',
+                body: 'Block accidental taps: the screen stays visible but only the floating unlock pill is clickable.'
+            },
+            {
+                target: '[data-tour="statusbar-stats"]', placement: 'top', skipIfMissing: true,
+                title: 'Bottom — capture stats',
+                body: 'In LIVE/PREVIEW the bottom stats line shows the latest frame quality: detected stars, HFR (focus), mean level, SNR, frame count and stacking state.',
+                before: function (a) { a.tab = 'live'; }
+            },
+            {
+                target: '.activity-bar-ops', placement: 'top', skipIfMissing: true,
+                title: 'Activity chips',
+                body: 'The footer shows what the server is busy with right now — running jobs, background tasks, warnings — as compact chips.'
+            },
+            {
+                target: '.activity-net', placement: 'top', skipIfMissing: true,
+                title: 'Network traffic',
+                body: 'Live client↔server data rate: ↓ received and ↑ sent, so you can see frames and previews flowing.'
+            },
+            {
+                target: '.activity-bar-host', placement: 'top', skipIfMissing: true,
+                title: 'Host stats',
+                body: 'The server machine at a glance: CPU, RAM, free disk, device model, and a clock-skew warning if the server clock drifts. Disk colour warns before you run out of space.'
+            },
+            {
+                center: true,
+                title: 'Status bars — done',
+                body: 'Those two bars give you situational awareness from any screen. Back to imaging!'
+            }
+        ];
+    }
+
+    // Optional deep-dive: walk every SETTINGS card. Cards that don't exist on
+    // this platform (e.g. WiFi/Power/HTTPS on non-SBC hosts) are skipped.
+    function settingsSteps() {
+        var open = function (a) { a.tab = 'settings'; };
+        return [
+            { center: true, title: 'Settings', body: "Let's walk through the Settings cards one by one — what each one is for. Cards that don't apply to your device are skipped.", before: open },
+            { target: '[data-tour="set-https"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'HTTPS certificate', body: 'Generate/install a TLS certificate so the browser trusts the server over HTTPS — needed for WebGPU and secure remote access.' },
+            { target: '[data-tour="set-storage"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Auto-push to network storage', body: 'Automatically copy saved frames to a NAS / network share as they are written.' },
+            { target: '[data-tour="set-appearance"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Appearance', body: 'UI theme, font and density — and the night-mode colours.' },
+            { target: '[data-tour="set-skyimg"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Sky imagery (offline DSS)', body: 'Download deep-sky survey tiles for offline use, so the Sky map shows real imagery without internet.' },
+            { target: '[data-tour="set-terminal"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Remote terminal', body: 'An in-browser shell to the server host — handy for quick fixes without SSH.' },
+            { target: '[data-tour="set-auth"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Authentication', body: 'Set or change the password that protects remote access to Polaris.' },
+            { target: '[data-tour="set-devicename"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Device name', body: 'The friendly name shown in the browser tab, mDNS (nina.local) and on the network.' },
+            { target: '[data-tour="set-platesolve"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Plate solving', body: 'Pick and configure the solver (ASTAP, Astrometry.net…) used by Slew & Center and recovery.' },
+            { target: '[data-tour="set-clock"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Clock', body: "Sync the server clock — important because accurate time drives the mount's coordinate calculations." },
+            { target: '[data-tour="set-power"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Power', body: 'Shut down or reboot the server host (SBC) safely from the UI.' },
+            { target: '[data-tour="set-network"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Network (WiFi)', body: 'View and switch the WiFi network the server is connected to.' },
+            { target: '[data-tour="set-observatory"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Observatory', body: 'Your site latitude/longitude/altitude — used for the sky, twilight, altitude charts and GoTo.' },
+            { target: '[data-tour="set-imageoutput"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Image output', body: 'Where captured frames are saved and in what format (FITS/XISF), plus the folder layout.' },
+            { target: '[data-tour="set-imagecache"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Image cache', body: 'Polaris keeps rendered previews + thumbnails on disk; here you see usage and can clear it.' },
+            { target: '[data-tour="set-gpu"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'GPU acceleration (OpenCL)', body: 'Use the GPU to speed up image math (stacking/stretch) when an OpenCL device is available.' },
+            { target: '[data-tour="set-benchmark"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Hardware benchmark', body: 'Measure this host\'s processing speed and compare it against reference boards.' },
+            { target: '[data-tour="set-hardware"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Hardware', body: 'Detected machine info — model, OS, CPU/RAM — for diagnostics.' },
+            { target: '[data-tour="set-debuglog"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Debug logging', body: 'Control log verbosity and optionally persist the debug log to disk for troubleshooting.' },
+            { target: '[data-tour="set-liveloop"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'LIVE capture loop', body: 'Defaults for the continuous LIVE capture loop (exposure/gain/cadence).' },
+            { target: '[data-tour="set-tools"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'External tools', body: 'Paths to optional external programs (e.g. Siril, GraXpert) Polaris can hand off to.' },
+            { target: '[data-tour="set-ai"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'AI inference (ONNX)', body: 'Manage the AI models (star removal, denoise, deconvolution, BGE) and where they run (browser/NPU/CLI).' },
+            { target: '[data-tour="set-reset"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Reset to factory defaults', body: 'Danger zone — wipe all settings and start fresh. Use only as a last resort.' },
+            { center: true, title: 'Settings — done', body: "That's the full Settings tour. You can revisit it any time from Help." }
+        ];
+    }
+
+    var state = { active: false, steps: null, idx: 0, dir: 1, els: null, raf: 0, onResize: null, onKey: null };
+
+    // Tour registry — start(id) picks the step list. 'intro' is the main
+    // overview; 'statusbars' and 'settings' are the optional deep-dives.
+    function tourSteps(id) {
+        if (id === 'statusbars') return statusbarSteps();
+        if (id === 'settings') return settingsSteps();
+        return introSteps();
+    }
 
     function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, hi)); }
 
@@ -241,9 +366,13 @@
         }
     }
 
+    // Resolve a step's target: wait (briefly) for it to exist + be visible,
+    // scrolling it into view. Calls cb(found) — found=false means the anchor
+    // never showed up (e.g. a platform-specific Settings card that isn't
+    // rendered on this host).
     function waitForTarget(step, cb) {
-        if (!step.target) { requestAnimationFrame(function () { requestAnimationFrame(cb); }); return; }
-        var tries = 0, max = 90; // ~1.5 s at 60 fps, then fall back to centered
+        if (!step.target) { requestAnimationFrame(function () { requestAnimationFrame(function () { cb(true); }); }); return; }
+        var tries = 0, max = 60; // ~1 s at 60 fps, then give up
         (function poll() {
             if (!state.active) return;
             var el = document.querySelector(step.target);
@@ -251,12 +380,12 @@
             if (el && r && r.width > 0 && r.height > 0) {
                 if (r.top < 4 || r.bottom > window.innerHeight - 4 || r.left < 4 || r.right > window.innerWidth - 4) {
                     try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) { }
-                    requestAnimationFrame(function () { requestAnimationFrame(cb); });
+                    requestAnimationFrame(function () { requestAnimationFrame(function () { cb(true); }); });
                     return;
                 }
-                cb(); return;
+                cb(true); return;
             }
-            if (++tries > max) { cb(); return; }
+            if (++tries > max) { cb(false); return; }
             requestAnimationFrame(poll);
         })();
     }
@@ -264,11 +393,22 @@
     function go(i) {
         if (!state.active) return;
         i = clamp(i, 0, state.steps.length - 1);
+        state.dir = i >= state.idx ? 1 : -1;
         state.idx = i;
         var step = state.steps[i];
         try { if (step.before) step.before(app()); } catch (e) { }
         renderTipContent(step);
-        waitForTarget(step, place);
+        waitForTarget(step, function (found) {
+            // Auto-skip a missing optional anchor (status-bar / Settings tours)
+            // by continuing in the current direction, so absent platform cards
+            // don't leave a stranded centered card. The closing step has no
+            // target, so forward-skipping always terminates cleanly.
+            if (!found && step.skipIfMissing) {
+                var ni = state.idx + state.dir;
+                if (ni >= 0 && ni < state.steps.length) { go(ni); return; }
+            }
+            place();
+        });
     }
 
     function start(id) {
@@ -277,8 +417,9 @@
         if (a.auth && a.auth.needSetup) return;
         if (a.showLocationSetup) return;
         if (state.active) return;
-        state.steps = introSteps(); // single "intro" tour for now
+        state.steps = tourSteps(id);
         state.idx = 0;
+        state.dir = 1;
         state.active = true;
         ensureEls();
         state.els.overlay.classList.add('active');
