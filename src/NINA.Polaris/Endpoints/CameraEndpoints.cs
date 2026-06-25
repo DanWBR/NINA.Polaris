@@ -53,7 +53,10 @@ public static class CameraEndpoints {
                         using (captureProgress.Begin("aux", request.Exposure))
                             return await equip.AuxCamera.CaptureAsync(request.Exposure);
                     }, acquireTimeout: TimeSpan.FromSeconds(Math.Max(request.Exposure, 1) + 60));
-                    await relay.RelayImageAsync(auxImg!, FrameKind.Focus);
+                    // Route to the PREVIEW canvas when the caller asks for it
+                    // (kind=preview), else keep the legacy FOCUS-canvas target.
+                    await relay.RelayImageAsync(auxImg!,
+                        string.IsNullOrEmpty(request.Kind) ? FrameKind.Focus : ParseFrameKind(request.Kind));
                     var st = ComputeFocusStats(auxImg!);
                     return Results.Ok(new { status = "captured", stats = st });
                 } catch (Exception ex) {
@@ -73,7 +76,8 @@ public static class CameraEndpoints {
                         await equip.GuideCamera.SetBinningAsync(request.Binning, request.Binning);
                     using (captureProgress.Begin("guide", request.Exposure)) {
                         var gImg = await equip.GuideCamera.CaptureAsync(request.Exposure);
-                        await relay.RelayImageAsync(gImg!, FrameKind.Focus);
+                        await relay.RelayImageAsync(gImg!,
+                            string.IsNullOrEmpty(request.Kind) ? FrameKind.Focus : ParseFrameKind(request.Kind));
                         var st = ComputeFocusStats(gImg!);
                         return Results.Ok(new { status = "captured", stats = st });
                     }

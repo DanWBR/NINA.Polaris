@@ -2823,6 +2823,18 @@
                          (.shutter-inputs / .shutter-wrap / .shutter-secondary). -->
                     <div class="shutter-inputs">
                     <div class="control-row">
+                        <!-- Camera source: snap from the main, guide or aux
+                             camera. Only shown when a secondary camera is
+                             connected (otherwise it's always the main cam). -->
+                        <label x-show="(guider && guider.guideCameraConnected) || auxCameraConnected">
+                            Camera
+                            <select x-model="preview.cameraSource" class="input-sm"
+                                    :disabled="preview.busy || preview.looping">
+                                <option value="main">Main</option>
+                                <option value="guide" x-show="guider && guider.guideCameraConnected">Guide</option>
+                                <option value="aux" x-show="auxCameraConnected">Aux</option>
+                            </select>
+                        </label>
                         <label>Exposure (s)
                             <input type="number" x-model.number="preview.exposure"
                                    list="exposure-presets" step="any" min="0" class="input-sm"
@@ -15910,7 +15922,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260624-centerbody"></script>
+    <script src="/js/app.js?v=20260624-previewsrc"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

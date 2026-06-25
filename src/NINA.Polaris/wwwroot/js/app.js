@@ -1073,6 +1073,10 @@ function ninaApp() {
             binning: 1,
             filter: '',          // empty = keep current filter
             saveToDisk: false,
+            // Which camera to snap from: 'main' | 'guide' | 'aux'. Aux/guide
+            // snaps relay to the same previewCanvas (kind=preview) but never
+            // feed the live stack or save to disk.
+            cameraSource: 'main',
             targetName: 'snap',
             busy: false,
             looping: false,
@@ -18125,7 +18129,7 @@ function ninaApp() {
         previewShutterCtx() {
             return {
                 isActive: () => !!(this.preview.busy || this.preview.looping),
-                disabled: () => !this.selectedCamera || this.cameraStream.running,
+                disabled: () => !this.previewSourceReady() || this.cameraStream.running,
                 onTap: () => this.previewTakeSnap(),
                 onLongPress: () => this.previewToggleLoop(),
                 onAbort: () => this.previewAbort()
@@ -18514,10 +18518,26 @@ function ninaApp() {
         // image arrives via the WS image stream (same channel LIVE uses)
         // and gets mirrored onto the PREVIEW canvas by
         // _mirrorLiveToPreviewCanvas.
+        // Is the camera the PREVIEW selector points at actually connected?
+        previewSourceReady(src) {
+            switch (src || this.preview.cameraSource || 'main') {
+                case 'guide': return !!(this.guider && this.guider.guideCameraConnected);
+                case 'aux': return !!this.auxCameraConnected;
+                default: return !!this.selectedCamera;
+            }
+        },
+        previewSourceLabel(src) {
+            switch (src || this.preview.cameraSource || 'main') {
+                case 'guide': return 'guide';
+                case 'aux': return 'aux';
+                default: return 'main';
+            }
+        },
         async previewTakeSnap() {
             if (this.preview.busy) return;
-            if (!this.selectedCamera) {
-                this.toast('No camera connected', 'warn');
+            const camSrc = this.preview.cameraSource || 'main';
+            if (!this.previewSourceReady(camSrc)) {
+                this.toast('No ' + this.previewSourceLabel(camSrc) + ' camera connected', 'warn');
                 return;
             }
             this.preview.busy = true;
@@ -18551,7 +18571,12 @@ function ninaApp() {
                     // previewCanvas only, leaving the LIVE canvas
                     // untouched. Without this every preview tap
                     // overwrites the live-stack accumulator's display.
-                    kind: 'preview'
+                    kind: 'preview',
+                    // Which camera to snap from. Main is the default path;
+                    // guide/aux capture the secondary cameras and still land
+                    // on previewCanvas (kind=preview) but ignore filter/save/
+                    // live-stack server-side.
+                    cameraSource: camSrc === 'main' ? null : camSrc
                 };
                 // Diag log -- if the user reports 'preview frame ends
                 // up on the LIVE canvas / live stack', open DevTools
