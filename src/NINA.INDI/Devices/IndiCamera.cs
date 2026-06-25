@@ -18,6 +18,7 @@ using NINA.Image.ImageData;
 using NINA.Image.Interfaces;
 using NINA.INDI.Client;
 using NINA.INDI.Protocol;
+using SkiaSharp;
 
 namespace NINA.INDI.Devices;
 
@@ -330,8 +331,14 @@ public class IndiCamera : ICamera {
     // cheap "already 16-bit?" check on each capture.
     private string? _formatProp;     // "CCD_CAPTURE_FORMAT" / "CCD_VIDEO_FORMAT", or null
     private string? _raw16Element;   // switch element name of the 16-bit RAW format
-    private string? _fitsElement;    // FORMAT_FITS element of CCD_TRANSFER_FORMAT ("Encode")
     private bool _raw16Forced;       // have we written RAW16 at least once this session?
+
+    /// <summary>True when this is a DSLR driven by indi_gphoto. CCD_CAPTURE_TARGET
+    /// (RAM / SD Card) is a gphoto-only property, so its presence is a reliable
+    /// tell. gphoto's bundled FITS converter wedges on newer bodies (Canon SL2
+    /// etc.) — capture fires but no BLOB is ever delivered — so for these we
+    /// request the camera-native RAW and decode the embedded JPEG ourselves.</summary>
+    private bool IsGphotoNative => _client.GetProperty(DeviceName, "CCD_CAPTURE_TARGET") != null;
 
     private async Task EnsureRaw16FormatAsync(CancellationToken ct) {
         // Resolve the format property + 16-bit element. Re-probe each capture
@@ -373,25 +380,25 @@ public class IndiCamera : ICamera {
         } catch { /* driver rejected; non-fatal — manual INDI panel still works */ }
     }
 
-    // Force the transfer/encode format to FITS (CCD_TRANSFER_FORMAT, labelled
-    // "Encode" in the INDI panel, elements FORMAT_FITS / FORMAT_NATIVE /
-    // FORMAT_XISF). Our BLOB pipeline decodes FITS; if a driver is left on
-    // FORMAT_NATIVE the frame arrives in a raw blob we can't parse. Cheap
-    // re-probe + "already FITS?" guard, same pattern as the RAW16 selector.
+    // Force the transfer/encode format (CCD_TRANSFER_FORMAT, "Encode" in the
+    // INDI panel, elements FORMAT_FITS / FORMAT_NATIVE / FORMAT_XISF).
+    // Astro cameras → FITS (our pipeline decodes it directly). gphoto DSLRs →
+    // NATIVE, because the driver's FITS converter is unreliable on newer bodies;
+    // OnBlobReceived then decodes the embedded JPEG from the native RAW. Cheap
+    // re-probe + "already correct?" guard, same pattern as the RAW16 selector.
     private async Task EnsureFitsTransferAsync(CancellationToken ct) {
-        if (_fitsElement == null) {
-            if (_client.GetProperty(DeviceName, "CCD_TRANSFER_FORMAT") is IndiSwitchProperty sw
-                    && sw.Values.Count > 0) {
-                foreach (var k in sw.Values.Keys) {
-                    if (k.ToUpperInvariant().Contains("FITS")) { _fitsElement = k; break; }
-                }
-            }
+        if (_client.GetProperty(DeviceName, "CCD_TRANSFER_FORMAT") is not IndiSwitchProperty cur
+                || cur.Values.Count == 0)
+            return;   // no transfer-format property on this driver
+        var want = IsGphotoNative ? "NATIVE" : "FITS";
+        string? target = null;
+        foreach (var k in cur.Values.Keys) {
+            if (k.ToUpperInvariant().Contains(want)) { target = k; break; }
         }
-        if (_fitsElement == null) return;   // no transfer-format property on this driver
-        if (_client.GetProperty(DeviceName, "CCD_TRANSFER_FORMAT") is not IndiSwitchProperty cur) return;
-        if (cur.Values.TryGetValue(_fitsElement, out var on) && on) return;   // already FITS
+        if (target == null) return;   // requested format not offered by this driver
+        if (cur.Values.TryGetValue(target, out var on) && on) return;   // already set
         var payload = new Dictionary<string, bool>();
-        foreach (var k in cur.Values.Keys) payload[k] = (k == _fitsElement);
+        foreach (var k in cur.Values.Keys) payload[k] = (k == target);
         try {
             await _client.SetSwitchAsync(DeviceName, "CCD_TRANSFER_FORMAT", payload, ct);
         } catch { /* driver rejected; non-fatal */ }
@@ -744,7 +751,28 @@ public class IndiCamera : ICamera {
             if (element.Data == null || element.Data.Length == 0) continue;
 
             try {
-                var imageData = FITSReader.Read(element.Data);
+                // gphoto (FORMAT_NATIVE) delivers a camera-native RAW (.cr2/.nef/
+                // .arw) or a JPEG, not FITS — the BLOB's format attribute tells us
+                // which. Decode the embedded full-res JPEG for the preview/stats/
+                // stack; the untouched RAW rides on IHasRawFile so save-to-disk
+                // writes the real .cr2. Anything FITS (or no format hint) stays on
+                // the FITS reader.
+                var blobFmt = (element.Format ?? "").Trim().ToLowerInvariant();
+                bool treatAsRaw = blobFmt.Length > 0 && !blobFmt.Contains("fit");
+                IImageData imageData;
+                if (treatAsRaw) {
+                    var decoded = DecodeRawDslrBlob(element.Data, blobFmt);
+                    if (decoded == null) {
+                        if (_isStreaming) Interlocked.Increment(ref _emptyStreamFrameCount);
+                        else _exposureTcs?.TrySetException(new InvalidDataException(
+                            $"INDI BLOB from {DeviceName} (format '{blobFmt}') had no " +
+                            $"decodable embedded JPEG"));
+                        continue;
+                    }
+                    imageData = decoded;
+                } else {
+                    imageData = FITSReader.Read(element.Data);
+                }
 
                 // Some INDI drivers (notably indi_asi_ccd under
                 // CCD_VIDEO_STREAM mode) emit BLOBs that aren't a
@@ -844,6 +872,74 @@ public class IndiCamera : ICamera {
                 // don't poison the whole stream.
             }
         }
+    }
+
+    // ---- DSLR native-RAW decode (indi_gphoto FORMAT_NATIVE) ----
+
+    /// <summary>Build an IImageData from a camera-native DSLR BLOB (CR2/NEF/ARW
+    /// or JPEG). We don't decode the Bayer RAW itself — we pull out the
+    /// embedded full-res JPEG (every CR2/NEF carries one) and use its luminance
+    /// plane for the on-screen preview, stats and stacking, exactly like the
+    /// vendor-SDK DSLR path. The original RAW bytes are attached via IHasRawFile
+    /// so the save-to-disk path writes the real .cr2. Returns null if no JPEG is
+    /// embedded / decodable.</summary>
+    private IImageData? DecodeRawDslrBlob(byte[] data, string ext) {
+        var jpeg = LooksLikeJpeg(data) ? data : ExtractLargestJpeg(data);
+        if (jpeg == null) return null;
+        SKBitmap? bmp = null;
+        try { bmp = SKBitmap.Decode(jpeg); } catch { bmp = null; }
+        if (bmp == null || bmp.Width <= 0 || bmp.Height <= 0) { bmp?.Dispose(); return null; }
+        int w = bmp.Width, h = bmp.Height;
+        var pixels = new ushort[w * h];
+        try {
+            var cols = bmp.Pixels;   // SKColor[], color-type agnostic
+            for (int i = 0; i < pixels.Length; i++) {
+                var c = cols[i];
+                // Rec.601 luma, 8-bit → 16-bit so the stretch/histogram pipeline
+                // behaves the same as a FITS frame.
+                double luma = 0.299 * c.Red + 0.587 * c.Green + 0.114 * c.Blue;
+                pixels[i] = (ushort)Math.Clamp(luma * 256, 0, 65535);
+            }
+        } finally { bmp.Dispose(); }
+
+        var props = new ImageProperties {
+            Width = w, Height = h, BitDepth = 16,
+            IsBayered = false, BayerPattern = BayerPatternEnum.None
+        };
+        var meta = new ImageMetaData { CreationTime = DateTime.UtcNow };
+        return new BaseImageData(pixels, props, meta) {
+            RawFileBytes = data,
+            RawFileExtension = ext.StartsWith('.') ? ext : "." + ext
+        };
+    }
+
+    private static bool LooksLikeJpeg(byte[] d) =>
+        d != null && d.Length > 3 && d[0] == 0xFF && d[1] == 0xD8 && d[2] == 0xFF;
+
+    /// <summary>Scan a container (CR2/NEF/ARW are TIFF-based and embed one or
+    /// more JPEGs) for the largest complete JPEG. Safe because JPEG byte-stuffing
+    /// guarantees an unescaped 0xFFD9 only ever marks a real End-Of-Image.</summary>
+    private static byte[]? ExtractLargestJpeg(byte[] data) {
+        byte[]? best = null;
+        int i = 0;
+        while (i + 3 < data.Length) {
+            if (data[i] == 0xFF && data[i + 1] == 0xD8 && data[i + 2] == 0xFF) {
+                int j = i + 2;
+                while (j + 1 < data.Length && !(data[j] == 0xFF && data[j + 1] == 0xD9)) j++;
+                if (j + 1 < data.Length) {
+                    int len = j + 2 - i;
+                    if (best == null || len > best.Length) {
+                        best = new byte[len];
+                        Array.Copy(data, i, best, 0, len);
+                    }
+                    i = j + 2;
+                    continue;
+                }
+                break;   // SOI with no EOI — truncated, stop
+            }
+            i++;
+        }
+        return best;
     }
 
     private void OnPropertyChanged(string device, IndiProperty prop) {
