@@ -469,6 +469,15 @@ public class EquipmentProfile {
     /// publish a value.</summary>
     public double? RequiredBackspacingMm { get; set; }
 
+    /// <summary>Main-camera pixel size in micrometres. Fallback for backends
+    /// that don't report it via CCD_INFO — notably <c>indi_gphoto</c> (DSLRs),
+    /// which leaves CCD_PIXEL_SIZE at 0 until/unless told. 0 = "let the camera
+    /// report it" (the normal case for dedicated astro cameras). When set and
+    /// the connected camera reports 0, Polaris pushes it into the driver's
+    /// CCD_INFO on connect so FOV, the plate-solve scale hint, and the
+    /// post-solve focal-length auto-update all get a correct pixel scale.</summary>
+    public double CameraPixelSizeUm { get; set; }
+
     // Focal length of the guide scope. Used for record-keeping and as a
     // sanity-check reference against PHD2's reported pixel scale. PHD2 itself
     // computes its pixel scale from its own configuration; we just track what

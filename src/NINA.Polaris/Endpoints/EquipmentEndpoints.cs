@@ -168,6 +168,11 @@ public static class EquipmentEndpoints {
                     r.FocalLengthMm = update.FocalLengthMm;
                 if (update.ApertureMm > 0)
                     r.ApertureMm = update.ApertureMm;
+                // Main-camera pixel size fallback (µm). >=0 so the user can
+                // clear it back to 0 ("let the camera report it"); negatives
+                // from a stale client are ignored.
+                if (update.CameraPixelSizeUm >= 0)
+                    r.CameraPixelSizeUm = update.CameraPixelSizeUm;
                 // Telescope brand/model picker fields. Only overwrite when
                 // the client actually sends a value; a blank from a stale
                 // form must not wipe the saved scope name.

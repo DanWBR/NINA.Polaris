@@ -438,11 +438,30 @@ public static class CameraEndpoints {
         group.MapGet("/discover", (EquipmentManager equip, string? driver)
             => Results.Ok(equip.GetDiscoveredCamerasFor(driver ?? "indi")));
 
-        group.MapPost("/connect", async (EquipmentManager equip, ILoggerFactory loggerFactory) => {
+        group.MapPost("/connect", async (EquipmentManager equip, ProfileService profileSvc, ILoggerFactory loggerFactory) => {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected. Use POST /api/camera/select/{name} first" });
 
             await equip.Camera.ConnectAsync();
+            // Per-rig pixel-size fallback. indi_gphoto (DSLR) leaves CCD_INFO
+            // pixel size at 0; push the rig's configured value into the driver
+            // so PixelSizeX/Y — and therefore FOV, the plate-solve scale hint,
+            // and the post-solve focal-length auto-update — get a real number.
+            // Only when the rig has a value AND the camera actually reports 0
+            // (don't override a camera that knows its own pixel pitch).
+            try {
+                var rigPx = profileSvc.ActiveEquipmentProfile?.CameraPixelSizeUm ?? 0;
+                if (rigPx > 0 && equip.Camera.PixelSizeX <= 0
+                    && equip.Camera is NINA.INDI.Devices.IndiCamera indiCam) {
+                    await indiCam.TrySetPixelSizeAsync(rigPx);
+                    loggerFactory.CreateLogger("Polaris.Camera")
+                        .LogInformation("Pushed rig pixel size {Px}µm into {Dev} CCD_INFO " +
+                            "(camera reported 0)", rigPx, equip.Camera.DeviceName);
+                }
+            } catch (Exception ex) {
+                loggerFactory.CreateLogger("Polaris.Camera")
+                    .LogDebug(ex, "Pixel-size push on connect skipped (non-fatal)");
+            }
             // The camera's ROI (CCD_FRAME for INDI) is retained by the driver
             // across browser sessions and even reconnects — the INDI server on
             // the SBC keeps running. So a planetary ROI set in a prior VIDEO

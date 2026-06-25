@@ -810,6 +810,9 @@ function ninaApp() {
             // Bound to the Main Telescope card on the RIGS tab; edits
             // persist via saveOpticsDebounced -> saveCurrentSelectionsToRig.
             aperture: 0,
+            // Main-camera pixel size fallback (µm). 0 = let the camera report
+            // it; only needed for backends that don't (indi_gphoto / DSLRs).
+            cameraPixelSizeUm: 0,
             telescopeBrand: '',
             telescopeModel: '',
             accessoryType: '',
@@ -16041,6 +16044,7 @@ function ninaApp() {
             // OTA optics, hydrate the Main Telescope card on the RIGS tab.
             // Empty/zero values are fine (the card just shows blanks).
             this.settings.aperture = rig.apertureMm || 0;
+            this.settings.cameraPixelSizeUm = rig.cameraPixelSizeUm || 0;
             this.settings.telescopeBrand = rig.telescopeBrand || '';
             this.settings.telescopeModel = rig.telescopeModel || '';
             this.settings.accessoryType = rig.accessoryType || '';
@@ -16701,6 +16705,9 @@ function ninaApp() {
                 focalLengthMm: this.settings.focalLength,
                 // OTA optics (Main Telescope card on the RIGS tab)
                 apertureMm: this.settings.aperture,
+                // Main-camera pixel size fallback (µm). 0 = let the camera
+                // report it. Used to feed indi_gphoto, which reports 0.
+                cameraPixelSizeUm: Number(this.settings.cameraPixelSizeUm) || 0,
                 telescopeBrand: this.settings.telescopeBrand,
                 telescopeModel: this.settings.telescopeModel,
                 accessoryType: this.settings.accessoryType,

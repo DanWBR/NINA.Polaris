@@ -628,6 +628,22 @@ public class IndiCamera : ICamera {
         _exposureTcs?.TrySetCanceled();
     }
 
+    /// <summary>Force the driver's CCD_INFO pixel size, in micrometres.
+    /// Meant for backends that don't report it — notably <c>indi_gphoto</c>
+    /// (DSLRs), which leaves CCD_PIXEL_SIZE at 0. Writes the square pixel
+    /// element (CCD_PIXEL_SIZE) plus the X/Y pair so the getters above return
+    /// the supplied value. Best-effort: drivers that lock CCD_INFO just
+    /// ignore the write. Pass um &lt;= 0 to no-op.</summary>
+    public async Task TrySetPixelSizeAsync(double um, CancellationToken ct = default) {
+        if (um <= 0) return;
+        await _client.SetNumberAsync(DeviceName, "CCD_INFO",
+            new Dictionary<string, double> {
+                ["CCD_PIXEL_SIZE"] = um,
+                ["CCD_PIXEL_SIZE_X"] = um,
+                ["CCD_PIXEL_SIZE_Y"] = um
+            }, ct);
+    }
+
     /// <summary>Writes CCD_FRAME (X, Y, WIDTH, HEIGHT). Passing w=0 OR
     /// h=0 resets to the full sensor (Max X/Y).</summary>
     public async Task SetSubframeAsync(int x, int y, int width, int height, CancellationToken ct = default) {

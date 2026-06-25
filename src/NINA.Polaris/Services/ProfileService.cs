@@ -366,6 +366,7 @@ public class ProfileService {
             AccessoryModel = src.AccessoryModel,
             AccessoryFactor = src.AccessoryFactor,
             RequiredBackspacingMm = src.RequiredBackspacingMm,
+            CameraPixelSizeUm = src.CameraPixelSizeUm,
             GuiderFocalLengthMm = src.GuiderFocalLengthMm,
             // Auxiliary (second) camera + its optics/focuser.
             AuxCamera = src.AuxCamera, AuxCameraDriver = src.AuxCameraDriver,
