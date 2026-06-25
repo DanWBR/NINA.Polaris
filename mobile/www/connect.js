@@ -204,6 +204,16 @@ function updateOpenButton() {
   els.openSelectedBtn.textContent = n > 1 ? `Open ${n} instances` : 'Open';
 }
 
+// Re-entrancy guard: scan() is triggered from several places (init, the
+// rescan button, opening the picker, closing the last tab). Each ZeroConf
+// .watch() acquires a jmDNS multicast lock + background thread on Android;
+// stacking them (without closing the previous one) leaks locks and can wedge
+// the WebView. So only one scan runs at a time, and we always close any prior
+// watcher before starting a new one.
+let _scanning = false;
+let _scanTimers = [];
+function clearScanTimers() { _scanTimers.forEach(clearTimeout); _scanTimers = []; }
+
 async function scan() {
   discovered.clear();
   renderList();
@@ -212,25 +222,38 @@ async function scan() {
       'Automatic discovery needs the installed app. Enter the address below.';
     return;
   }
+  if (_scanning) return;            // already searching — don't stack watchers
+  _scanning = true;
+  clearScanTimers();
+  // Close any watcher left over from a previous scan before opening a new one.
+  try { await ZeroConf.close(); } catch {}
   els.scanHint.innerHTML = '<span class="spinner"></span>Searching the local network…';
   try {
-    await ZeroConf.watch({ type: MDNS_TYPE, domain: 'local.' }, (result) => {
-      if (!result || result.action !== 'resolved' || !result.service) return;
-      const s = result.service;
-      const addr = (s.ipv4Addresses && s.ipv4Addresses[0]) || s.hostname;
-      if (!addr) return;
-      const origin = toOrigin(addr, s.port || 5000);
-      const friendly = (s.txtRecord && s.txtRecord.friendly) || s.name || 'Polaris';
-      discovered.set(origin, { name: friendly, addr: `${addr}:${s.port || 5000}` });
-      els.scanHint.textContent = `${discovered.size} found.`;
-      renderList();
+    // Don't await watch(): on Android the native call can be slow to settle,
+    // and awaiting it on the launch path would block the UI. Fire it and let
+    // the callback stream results in.
+    Promise.resolve(
+      ZeroConf.watch({ type: MDNS_TYPE, domain: 'local.' }, (result) => {
+        if (!result || result.action !== 'resolved' || !result.service) return;
+        const s = result.service;
+        const addr = (s.ipv4Addresses && s.ipv4Addresses[0]) || s.hostname;
+        if (!addr) return;
+        const origin = toOrigin(addr, s.port || 5000);
+        const friendly = (s.txtRecord && s.txtRecord.friendly) || s.name || 'Polaris';
+        discovered.set(origin, { name: friendly, addr: `${addr}:${s.port || 5000}` });
+        els.scanHint.textContent = `${discovered.size} found.`;
+        renderList();
+      })
+    ).catch((e) => {
+      els.scanHint.textContent = 'Discovery failed: ' + (e && e.message ? e.message : e);
     });
-    setTimeout(() => { try { ZeroConf.close(); } catch {} }, 8000);
-    setTimeout(() => {
+    _scanTimers.push(setTimeout(() => { try { ZeroConf.close(); } catch {} _scanning = false; }, 8000));
+    _scanTimers.push(setTimeout(() => {
       if (discovered.size === 0)
         els.scanHint.textContent = 'Nothing found yet. Enter the address below.';
-    }, 8500);
+    }, 8500));
   } catch (e) {
+    _scanning = false;
     els.scanHint.textContent = 'Discovery failed: ' + (e && e.message ? e.message : e);
   }
 }
@@ -494,5 +517,8 @@ async function requestStartupPermissions() {
   refreshPickerExtras();
   // Prompt for location right away (see requestStartupPermissions).
   requestStartupPermissions();
-  scan();
+  // Defer discovery off the launch critical path: the picker + manual address
+  // box are usable immediately, and a slow/hanging ZeroConf init can't freeze
+  // the first paint. (Discovery also re-runs whenever the picker is shown.)
+  setTimeout(() => { try { scan(); } catch {} }, 400);
 })();
