@@ -413,19 +413,14 @@ public class IndiCamera : ICamera {
     /// don't expose these properties and just no-op, and we only write when the
     /// value isn't already correct (so we don't re-poke the driver every frame).</summary>
     private async Task EnsureClientUploadAsync(CancellationToken ct) {
-        // Capture target → RAM (CCD_CAPTURE_TARGET, elements RAM / SD_CARD).
-        if (_client.GetProperty(DeviceName, "CCD_CAPTURE_TARGET") is IndiSwitchProperty tgt
-                && tgt.Values.Count > 0) {
-            string? ram = null;
-            foreach (var k in tgt.Values.Keys)
-                if (k.ToUpperInvariant().Contains("RAM")) { ram = k; break; }
-            if (ram != null && !(tgt.Values.TryGetValue(ram, out var onRam) && onRam)) {
-                var payload = new Dictionary<string, bool>();
-                foreach (var k in tgt.Values.Keys) payload[k] = (k == ram);
-                try { await _client.SetSwitchAsync(DeviceName, "CCD_CAPTURE_TARGET", payload, ct); }
-                catch { /* driver rejected; non-fatal */ }
-            }
-        }
+        // NOTE: we deliberately do NOT force CCD_CAPTURE_TARGET. Forcing RAM
+        // (internal memory) was meant to stop frames landing on the SD card with
+        // no BLOB, but on several Canon bodies the internal-RAM capture path does
+        // not actually trigger the shutter via gphoto, while the SD-card path
+        // does (it's what `gphoto2 --capture-image-and-download` uses). With
+        // CCD_FORCE_BLOB + upload→client the frame is delivered to us regardless
+        // of target, so leave the target to the driver/user (the RIGS INDI panel
+        // can pick RAM vs SD Card). We only assert the upload mode below.
         // Upload mode → client (UPLOAD_MODE, elements UPLOAD_CLIENT/_LOCAL/_BOTH).
         if (_client.GetProperty(DeviceName, "UPLOAD_MODE") is IndiSwitchProperty up
                 && up.Values.Count > 0) {
