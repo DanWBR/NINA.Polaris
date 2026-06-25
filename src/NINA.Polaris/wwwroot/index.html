@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-safetyguard">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260620-rigs1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260623-guidezoom">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260624-untestedwarn">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260620-mobile1">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260620-density1">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -1859,6 +1859,10 @@
                     <span class="status-indicator-sm"
                           :class="polarStatusClass()"
                           x-text="polarStatusLabel()"></span>
+                </div>
+                <div class="feature-untested-warn">
+                    ⚠ This feature was not tested yet - use it with caution.
+                    <a href="https://github.com/DanWBR/NINA.Polaris/issues" target="_blank" rel="noopener">Click here to report an issue</a>
                 </div>
 
                 <!-- RDPA-4: workflow picker. TPPA = original 3-point
@@ -8274,6 +8278,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     Plan
                     <span class="status-indicator-sm" :class="planChipClass()" x-text="planChipLabel()"></span>
                 </div>
+                <div class="feature-untested-warn">
+                    ⚠ This feature was not tested yet - use it with caution.
+                    <a href="https://github.com/DanWBR/NINA.Polaris/issues" target="_blank" rel="noopener">Click here to report an issue</a>
+                </div>
 
                 <!-- Plan picker toolbar -->
                 <div class="plan-toolbar">
@@ -9482,6 +9490,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     Advanced Sequencer
                     <span class="status-indicator-sm" :class="advSeq.state === 'Running' ? 'ok' : (advSeq.lastError ? 'error' : 'warn')"
                           x-text="advSeq.state || 'Idle'"></span>
+                </div>
+                <div class="feature-untested-warn">
+                    ⚠ This feature was not tested yet - use it with caution.
+                    <a href="https://github.com/DanWBR/NINA.Polaris/issues" target="_blank" rel="noopener">Click here to report an issue</a>
                 </div>
 
                 <!-- Toolbar -->
