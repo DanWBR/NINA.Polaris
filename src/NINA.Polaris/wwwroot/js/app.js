@@ -16289,6 +16289,12 @@ function ninaApp() {
             if (!this.opticsCatalogue?.loaded) return;
             const active = this.rigs?.find(r => r.id === this.activeRigId);
             if (!active) return;
+            // Suppress optics auto-save for the whole toggle dance below: we
+            // blank settings.* then restore them across $nextTicks, and a
+            // debounced save landing mid-toggle would PUT those transient
+            // blanks and wipe the rig's OTA/accessory/guide-scope (the
+            // "lost my config" report). Cleared in finally.
+            this._resyncingOptics = true;
             const bt = active.telescopeBrand || '';
             const mt = active.telescopeModel || '';
             const bg = active.guideTelescopeBrand || '';
@@ -16313,6 +16319,8 @@ function ninaApp() {
             this.settings.guideTelescopeModel = mg;
             await this.$nextTick();
             this.settings.accessoryModel = ma;
+            await this.$nextTick();
+            this._resyncingOptics = false;
         },
 
         /// Distinct telescope brands in the catalogue, sorted.
@@ -16815,6 +16823,9 @@ function ninaApp() {
             // the rig and silently drop the attached filter / OTA -- the
             // reported "filter lost on refresh/reconnect" bug.
             if (!this._rigChoicesHydrated) return;
+            // Also skip while _resyncOpticsSelects is mid-toggle (settings.*
+            // are transiently blank); the restored values save afterwards.
+            if (this._resyncingOptics) return;
             const updated = {
                 ...rig,
                 camera: this.equipCameraChoice || rig.camera,

@@ -183,11 +183,21 @@ public static class EquipmentEndpoints {
                     r.TelescopeBrand = update.TelescopeBrand;
                 if (!string.IsNullOrWhiteSpace(update.TelescopeModel))
                     r.TelescopeModel = update.TelescopeModel;
-                r.AccessoryType  = update.AccessoryType  ?? "";
-                r.AccessoryModel = update.AccessoryModel ?? "";
-                // Default factor to 1.0 when the client omits it,
-                // matches the no-accessory case.
-                r.AccessoryFactor = update.AccessoryFactor > 0 ? update.AccessoryFactor : 1.0;
+                // Main-telescope optical accessory (reducer/flattener/barlow)
+                // brand+model: source-of-truth, like the scope brand/model. A
+                // blank here is a client glitch (a debounced optics save firing
+                // while settings.* hasn't re-hydrated after a rig load/reconnect
+                // — the exact "lost my reducer/accessory" report), NOT a
+                // deliberate clear, so never blank-overwrite. To actually remove
+                // an accessory, pick a different one. Factor only moves with a
+                // real value.
+                if (!string.IsNullOrWhiteSpace(update.AccessoryType))
+                    r.AccessoryType = update.AccessoryType;
+                if (!string.IsNullOrWhiteSpace(update.AccessoryModel)) {
+                    r.AccessoryModel = update.AccessoryModel;
+                    if (update.AccessoryFactor > 0)
+                        r.AccessoryFactor = update.AccessoryFactor;
+                }
                 r.RequiredBackspacingMm = update.RequiredBackspacingMm;
                 if (update.GuiderFocalLengthMm > 0) r.GuiderFocalLengthMm = update.GuiderFocalLengthMm;
                 // Native guider backend selection + tunables. Empty/zero
@@ -227,8 +237,11 @@ public static class EquipmentEndpoints {
                 if (update.AuxCameraBitDepth >= 0) r.AuxCameraBitDepth = update.AuxCameraBitDepth;
                 if (update.AuxApertureMm >= 0)
                     r.AuxApertureMm = update.AuxApertureMm;
-                r.AuxTelescopeBrand = update.AuxTelescopeBrand;
-                r.AuxTelescopeModel = update.AuxTelescopeModel;
+                // Aux scope brand/model: source-of-truth, never blank-overwrite.
+                if (!string.IsNullOrWhiteSpace(update.AuxTelescopeBrand))
+                    r.AuxTelescopeBrand = update.AuxTelescopeBrand;
+                if (!string.IsNullOrWhiteSpace(update.AuxTelescopeModel))
+                    r.AuxTelescopeModel = update.AuxTelescopeModel;
                 if (update.AuxExposureMs > 0)
                     r.AuxExposureMs = update.AuxExposureMs;
                 if (update.AuxGain >= 0)
@@ -273,8 +286,12 @@ public static class EquipmentEndpoints {
                 // Defensive: clamp aperture to a sane lower bound so
                 // a stray zero doesn't blow up the f-ratio calc on the UI.
                 if (update.GuiderApertureMm > 0) r.GuiderApertureMm = update.GuiderApertureMm;
-                r.GuideTelescopeBrand = update.GuideTelescopeBrand;
-                r.GuideTelescopeModel = update.GuideTelescopeModel;
+                // Guide scope brand/model: source-of-truth, never blank-overwrite
+                // (the "lost my guide scope" report). Same blank=glitch rule.
+                if (!string.IsNullOrWhiteSpace(update.GuideTelescopeBrand))
+                    r.GuideTelescopeBrand = update.GuideTelescopeBrand;
+                if (!string.IsNullOrWhiteSpace(update.GuideTelescopeModel))
+                    r.GuideTelescopeModel = update.GuideTelescopeModel;
                 r.PHD2Host = update.PHD2Host;
                 r.PHD2Port = update.PHD2Port;
                 // PHD2 deep-integration fields. Defensive defaults so an
