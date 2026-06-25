@@ -6018,8 +6018,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <!-- Aux pixel size + DSLR picker. Same purpose as the
                                  main camera: a DSLR on the aux port (gphoto)
                                  reports pixel size 0, so set it here and Polaris
-                                 pushes it into the aux driver on connect. -->
-                            <div class="equip-meta-row">
+                                 pushes it into the aux driver on connect. Only
+                                 shown when a DSLR is actually on the aux port
+                                 (gphoto exposes ISO) — never for an astro cam
+                                 like the SV605CC, which reports its own pixel. -->
+                            <div class="equip-meta-row" x-show="auxIsDslr" x-cloak>
                                 <label>Pixel size (µm)
                                     <input type="number" x-model.number="aux.pixelSizeUm"
                                            @change="saveAuxDebounced()" step="0.01" min="0"
@@ -16024,7 +16027,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260625-dslrcaps"></script>
+    <script src="/js/app.js?v=20260625-auxdslr"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

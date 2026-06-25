@@ -953,6 +953,10 @@ function ninaApp() {
         auxCameraVendorDevices: [],
         auxCameraDiscovering: false,
         auxCameraConnected: false,
+        // True when the connected aux camera is a DSLR/gphoto (exposes ISO).
+        // Drives the aux DSLR pixel/brand/model pickers + ISO so they appear
+        // wherever the DSLR actually is, never on an astro cam (e.g. SV605CC).
+        auxIsDslr: false,
         auxFocuser: '',
         auxFocuserDriver: 'indi',
         auxFocuserVendorDevices: [],
@@ -5075,7 +5079,7 @@ function ninaApp() {
         // gphoto uses ISO, not analogue gain, so show an ISO dropdown instead.
         previewAuxUsesIso() {
             return this.preview.cameraSource === 'aux' && !!this.auxCameraConnected
-                && ((this.aux?.maxX > 0) || (this.aux?.pixelSizeUm > 0));
+                && this.auxIsDslr;
         },
         // Push an ISO to the aux DSLR (out-of-band, like the main camera's setIso).
         async setAuxIso(iso) {
@@ -30065,6 +30069,9 @@ function ninaApp() {
             }
             // Aux camera + focuser connection state + aux capture loop status.
             this.auxCameraConnected = !!(eq.auxCamera && eq.auxCamera.connected);
+            // DSLR-ness follows the actual aux camera (gphoto exposes ISO), so
+            // the DSLR pickers live wherever the DSLR is plugged in.
+            this.auxIsDslr = !!(eq.auxCamera && eq.auxCamera.supportsIso);
             // Aux sensor footprint (mm) for the pink SKY FOV rectangle.
             // Derived from pixel count × pixel size (µm → mm). Kept on the
             // instance so _pushSkyFovOverlays can size the aux rect from the

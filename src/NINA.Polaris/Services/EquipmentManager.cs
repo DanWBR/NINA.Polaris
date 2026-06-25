@@ -870,7 +870,11 @@ public class EquipmentManager : IDisposable {
                 maxX = AuxCamera.MaxX,
                 maxY = AuxCamera.MaxY,
                 pixelSizeX = Safe(apxX),
-                pixelSizeY = Safe(apxY)
+                pixelSizeY = Safe(apxY),
+                // DSLR signal for the UI: gphoto exposes CCD_ISO, astro cams
+                // don't. Lets the aux card show the DSLR pixel/brand/model
+                // pickers + ISO only when a DSLR is actually on the aux port.
+                supportsIso = AuxCamera.Capabilities.SupportsIso
             };
         }
 
