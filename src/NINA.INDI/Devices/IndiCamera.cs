@@ -884,10 +884,23 @@ public class IndiCamera : ICamera {
     /// so the save-to-disk path writes the real .cr2. Returns null if no JPEG is
     /// embedded / decodable.</summary>
     private IImageData? DecodeRawDslrBlob(byte[] data, string ext) {
-        var jpeg = LooksLikeJpeg(data) ? data : ExtractLargestJpeg(data);
-        if (jpeg == null) return null;
+        // The whole BLOB might already be a JPEG (gphoto delivering .jpg), else
+        // it's a TIFF-based RAW (CR2/NEF/ARW) with one or more embedded JPEGs.
+        // Try the candidates largest-first and take the first that actually
+        // decodes — robust across Canon/Nikon/Sony (and skips any false SOI/EOI
+        // hit inside the compressed raw data, which simply won't decode).
         SKBitmap? bmp = null;
-        try { bmp = SKBitmap.Decode(jpeg); } catch { bmp = null; }
+        if (LooksLikeJpeg(data)) {
+            try { bmp = SKBitmap.Decode(data); } catch { bmp = null; }
+        }
+        if (bmp == null || bmp.Width <= 0 || bmp.Height <= 0) {
+            bmp?.Dispose(); bmp = null;
+            foreach (var cand in EnumerateJpegCandidates(data)) {
+                try { bmp = SKBitmap.Decode(cand); } catch { bmp = null; }
+                if (bmp != null && bmp.Width > 0 && bmp.Height > 0) break;
+                bmp?.Dispose(); bmp = null;
+            }
+        }
         if (bmp == null || bmp.Width <= 0 || bmp.Height <= 0) { bmp?.Dispose(); return null; }
         int w = bmp.Width, h = bmp.Height;
         var pixels = new ushort[w * h];
@@ -916,22 +929,20 @@ public class IndiCamera : ICamera {
     private static bool LooksLikeJpeg(byte[] d) =>
         d != null && d.Length > 3 && d[0] == 0xFF && d[1] == 0xD8 && d[2] == 0xFF;
 
-    /// <summary>Scan a container (CR2/NEF/ARW are TIFF-based and embed one or
-    /// more JPEGs) for the largest complete JPEG. Safe because JPEG byte-stuffing
-    /// guarantees an unescaped 0xFFD9 only ever marks a real End-Of-Image.</summary>
-    private static byte[]? ExtractLargestJpeg(byte[] data) {
-        byte[]? best = null;
+    /// <summary>Enumerate the complete JPEGs embedded in a container (CR2/NEF/ARW
+    /// are TIFF-based and carry one or more), largest first. JPEG byte-stuffing
+    /// guarantees an unescaped 0xFFD9 only ends a real JPEG, but a TIFF wrapper /
+    /// compressed raw plane can still produce a coincidental SOI..EOI span — so
+    /// the caller decodes candidates in turn and keeps the first that's valid.</summary>
+    private static IEnumerable<byte[]> EnumerateJpegCandidates(byte[] data) {
+        var found = new List<(int off, int len)>();
         int i = 0;
         while (i + 3 < data.Length) {
             if (data[i] == 0xFF && data[i + 1] == 0xD8 && data[i + 2] == 0xFF) {
                 int j = i + 2;
                 while (j + 1 < data.Length && !(data[j] == 0xFF && data[j + 1] == 0xD9)) j++;
                 if (j + 1 < data.Length) {
-                    int len = j + 2 - i;
-                    if (best == null || len > best.Length) {
-                        best = new byte[len];
-                        Array.Copy(data, i, best, 0, len);
-                    }
+                    found.Add((i, j + 2 - i));
                     i = j + 2;
                     continue;
                 }
@@ -939,7 +950,11 @@ public class IndiCamera : ICamera {
             }
             i++;
         }
-        return best;
+        foreach (var (off, len) in found.OrderByDescending(f => f.len)) {
+            var jpeg = new byte[len];
+            Array.Copy(data, off, jpeg, 0, len);
+            yield return jpeg;
+        }
     }
 
     private void OnPropertyChanged(string device, IndiProperty prop) {
