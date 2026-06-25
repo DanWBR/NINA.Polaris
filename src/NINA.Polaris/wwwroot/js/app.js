@@ -22891,7 +22891,13 @@ function ninaApp() {
         },
 
         get isDslrCamera() {
-            return ['canon-edsdk', 'nikon-sdk', 'sony-sdk'].includes(this.cameraDriver);
+            // DSLR/mirrorless == vendor SDK drivers OR any camera that exposes
+            // ISO (indi_gphoto comes through the generic INDI driver, so detect
+            // it by capability, not driver name). Keying off the camera itself
+            // means the cooler/temperature rows hide and the ISO control shows
+            // regardless of which slot (main/aux) the DSLR is plugged into.
+            return ['canon-edsdk', 'nikon-sdk', 'sony-sdk'].includes(this.cameraDriver)
+                || this.cameraCaps.iso === true;
         },
 
         async setCameraIso(iso) {

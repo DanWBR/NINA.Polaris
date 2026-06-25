@@ -199,7 +199,13 @@ public class IndiCamera : ICamera {
                           && ctrl.Values.ContainsKey("WB_B");
             // DSLRs (indi_gphoto) publish CCD_ISO; astronomy cameras don't.
             var supportsIso = _client.GetProperty(DeviceName, "CCD_ISO") is IndiSwitchProperty;
+            // Cooling is only real when the driver actually exposes CCD_COOLER.
+            // DSLRs (gphoto) and uncooled astro cams (e.g. ASI715MC) don't, so
+            // the UI must not show temperature/cooler controls for them. This
+            // keys off the driver capability, not the main/aux slot.
+            var supportsCooler = _client.GetProperty(DeviceName, "CCD_COOLER") is IndiSwitchProperty;
             return CameraCapabilities.Astro with {
+                SupportsCooler = supportsCooler,
                 SupportsVideoStream = supportsStream,
                 SupportsWhiteBalance = supportsWb,
                 SupportsIso = supportsIso

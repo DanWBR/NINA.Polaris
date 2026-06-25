@@ -5320,7 +5320,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                          or cooler state, hide both rows
                                          when the active driver is a vendor SDK. -->
                                     <span x-show="!isDslrCamera && cameraTemp !== null">Temp: <strong x-text="(cameraTemp?.toFixed(1) || '--') + '°C'"></strong></span>
-                                    <span x-show="!isDslrCamera">Cooler: <strong :class="equipCameraInfo.coolerOn ? 'text-ok' : 'text-muted'"
+                                    <span x-show="!isDslrCamera && cameraCaps.cooler !== false">Cooler: <strong :class="equipCameraInfo.coolerOn ? 'text-ok' : 'text-muted'"
                                                           x-text="equipCameraInfo.coolerOn ? 'ON' : 'OFF'"></strong></span>
                                     <span x-show="!isDslrCamera && equipCameraInfo.binX">Bin: <strong x-text="equipCameraInfo.binX + 'x' + equipCameraInfo.binY"></strong></span>
                                     <span x-show="equipCameraInfo.bitDepth">Depth: <strong x-text="equipCameraInfo.bitDepth + '-bit'"></strong></span>
@@ -5384,7 +5384,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                      glance (green = ON, red = OFF),
                                      replaces the old "Cooler OFF"
                                      button-with-label that read ambiguously. -->
-                                <div class="equip-inline-controls" x-show="!isDslrCamera">
+                                <div class="equip-inline-controls" x-show="!isDslrCamera && cameraCaps.cooler !== false">
                                     <label class="equip-toggle"
                                            :title="equipCameraInfo.coolerOn ? 'Turn cooler OFF' : 'Turn cooler ON'">
                                         <input type="checkbox"
@@ -16024,7 +16024,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260625-dslrcolor-iso"></script>
+    <script src="/js/app.js?v=20260625-dslrcaps"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
