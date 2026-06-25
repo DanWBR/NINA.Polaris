@@ -76,7 +76,15 @@ public class IndiClient : IDisposable {
         _parser.PropertyDefined += OnPropertyDefined;
         _parser.PropertyUpdated += OnPropertyUpdated;
         _parser.PropertyDeleted += OnPropertyDeleted;
-        _parser.MessageReceived += (dev, msg) => MessageReceived?.Invoke(dev, msg);
+        _parser.MessageReceived += (dev, msg) => {
+            // Driver <message> elements carry human-readable status/errors
+            // (e.g. gphoto "Error: ... PTP I/O Error", "Bulb capture failed").
+            // Surface them in the debug log so a failed capture shows the
+            // driver's own reason instead of just a client-side timeout.
+            if (!string.IsNullOrWhiteSpace(msg))
+                DiagLogger.LogInformation("INDI MSG ← {Device}: {Message}", dev, msg);
+            MessageReceived?.Invoke(dev, msg);
+        };
 
         // Auto-CONFIG_LOAD watcher: when a device's CONNECTION switch
         // transitions to CONNECT=On, dispatch CONFIG_LOAD ~1.5s later so
@@ -632,6 +640,18 @@ public class IndiClient : IDisposable {
             existing.Message = prop.Message;
         } else {
             deviceProps[prop.Name] = prop;
+        }
+
+        // Surface driver-reported errors in the debug log. INDI sends
+        // state=Alert (often with message="...") when it rejects/aborts an
+        // operation — e.g. a gphoto exposure that doesn't fire, a parked mount,
+        // a below-horizon slew. Without this only the OUTGOING command was
+        // logged, so a capture that silently failed looked like a Polaris
+        // timeout instead of "driver said: <reason>".
+        if (prop.State == IndiPropertyState.Alert) {
+            DiagLogger.LogWarning("INDI ALERT ← device='{Device}' property='{Property}'{Msg}",
+                prop.Device, prop.Name,
+                string.IsNullOrWhiteSpace(prop.Message) ? "" : " message='" + prop.Message + "'");
         }
 
         if (prop is IndiBlobProperty blob)
