@@ -3723,7 +3723,12 @@ function ninaApp() {
                 }
 
                 if (err.name === 'AbortError') {
-                    this.serverReachable = false;
+                    // A per-request timeout (slow capture, slow plate solve,
+                    // big upload) is NOT a server outage — don't flip
+                    // serverReachable, or the next successful request fires a
+                    // spurious "Server reconnected" toast on every slow op.
+                    // Genuine outages still surface via the TypeError branch
+                    // below (connection refused) and the WebSocket watchdog.
                     throw new Error('Request timed out');
                 }
                 if (err instanceof TypeError && err.message.includes('fetch')) {
