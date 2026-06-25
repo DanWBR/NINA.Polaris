@@ -693,8 +693,19 @@ public class IndiCamera : ICamera {
     /// ignore the write. Pass um &lt;= 0 to no-op.</summary>
     public async Task TrySetPixelSizeAsync(double um, CancellationToken ct = default) {
         if (um <= 0) return;
+        // CRITICAL: do NOT write CCD_INFO while the sensor resolution is still
+        // unknown (Max X/Y == 0). indi_gphoto only learns the resolution after
+        // the first exposure; if we write CCD_INFO before that, the driver flips
+        // CCD_INFO to a "client-provided" state with Max X/Y still 0 and then
+        // REJECTS the exposure with "Please update the CCD Information ... before
+        // proceeding" — i.e. our pixel-size push was breaking capture entirely.
+        // Only push once the driver knows its real geometry (astro cams always
+        // do; DSLRs only after the first frame).
+        if (MaxX <= 0 || MaxY <= 0) return;
         await _client.SetNumberAsync(DeviceName, "CCD_INFO",
             new Dictionary<string, double> {
+                ["CCD_MAX_X"] = MaxX,
+                ["CCD_MAX_Y"] = MaxY,
                 ["CCD_PIXEL_SIZE"] = um,
                 ["CCD_PIXEL_SIZE_X"] = um,
                 ["CCD_PIXEL_SIZE_Y"] = um
