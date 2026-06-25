@@ -5340,6 +5340,32 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <span class="text-muted" style="font-size:11px">
                                         applied on connect (DSLR / gphoto)</span>
                                 </div>
+                                <!-- DSLR model picker: auto-fills the pixel size
+                                     above from a curated catalogue. Brand+model
+                                     aren't persisted; the resolved µm is. -->
+                                <div class="equip-meta-row"
+                                     x-show="!(equipCameraInfo.pixelSizeUm > 0)" x-cloak>
+                                    <label>Camera brand
+                                        <select x-model="dslrPick.mainBrand" class="input-sm"
+                                                @change="dslrPick.mainModel = ''">
+                                            <option value="">Pick a brand</option>
+                                            <template x-for="b in dslrBrands" :key="'cb'+b">
+                                                <option :value="b" x-text="b"></option>
+                                            </template>
+                                        </select>
+                                    </label>
+                                    <label>Model
+                                        <select x-model="dslrPick.mainModel" class="input-sm"
+                                                :disabled="!dslrPick.mainBrand"
+                                                @change="applyDslrPixel('main')">
+                                            <option value="">Pick a model</option>
+                                            <template x-for="c in dslrModelsForBrand(dslrPick.mainBrand)" :key="'cm'+c.model">
+                                                <option :value="c.model"
+                                                    x-text="c.model + ' (' + c.pixelSizeUm.toFixed(2) + ' µm)'"></option>
+                                            </template>
+                                        </select>
+                                    </label>
+                                </div>
 
                                 <!-- Cooler controls, astronomy cameras only.
                                      Toggle reflects current state at a
@@ -5975,6 +6001,37 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <input type="number" x-model.number="aux.exposureSec"
                                            @change="saveAuxDebounced()" step="0.5" min="0.05"
                                            class="input-sm" style="width:80px">
+                                </label>
+                            </div>
+                            <!-- Aux pixel size + DSLR picker. Same purpose as the
+                                 main camera: a DSLR on the aux port (gphoto)
+                                 reports pixel size 0, so set it here and Polaris
+                                 pushes it into the aux driver on connect. -->
+                            <div class="equip-meta-row">
+                                <label>Pixel size (µm)
+                                    <input type="number" x-model.number="aux.pixelSizeUm"
+                                           @change="saveAuxDebounced()" step="0.01" min="0"
+                                           class="input-sm" style="width:90px">
+                                </label>
+                                <label>Camera brand
+                                    <select x-model="dslrPick.auxBrand" class="input-sm"
+                                            @change="dslrPick.auxModel = ''">
+                                        <option value="">Pick a brand</option>
+                                        <template x-for="b in dslrBrands" :key="'acb'+b">
+                                            <option :value="b" x-text="b"></option>
+                                        </template>
+                                    </select>
+                                </label>
+                                <label>Model
+                                    <select x-model="dslrPick.auxModel" class="input-sm"
+                                            :disabled="!dslrPick.auxBrand"
+                                            @change="applyDslrPixel('aux')">
+                                        <option value="">Pick a model</option>
+                                        <template x-for="c in dslrModelsForBrand(dslrPick.auxBrand)" :key="'acm'+c.model">
+                                            <option :value="c.model"
+                                                x-text="c.model + ' (' + c.pixelSizeUm.toFixed(2) + ' µm)'"></option>
+                                        </template>
+                                    </select>
                                 </label>
                             </div>
                             <div class="equip-meta-row">
@@ -15955,7 +16012,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260625-pixelsize"></script>
+    <script src="/js/app.js?v=20260625-dslrpicker"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

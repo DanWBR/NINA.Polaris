@@ -38,10 +38,26 @@ public static class AuxEndpoints {
             }
         });
 
-        group.MapPost("/camera/connect", async (EquipmentManager equip, AuxCaptureService aux) => {
+        group.MapPost("/camera/connect", async (EquipmentManager equip, AuxCaptureService aux,
+                ProfileService profileSvc, ILoggerFactory loggerFactory) => {
             if (equip.AuxCamera == null)
                 return Results.BadRequest(new { error = "No aux camera selected. Use POST /api/aux/camera/select/{name} first" });
             await equip.AuxCamera.ConnectAsync();
+            // Per-rig pixel-size fallback for a DSLR on the aux port (gphoto
+            // reports CCD_INFO pixel size as 0). Mirrors the main-camera connect.
+            try {
+                var rigPx = profileSvc.ActiveEquipmentProfile?.AuxCameraPixelSizeUm ?? 0;
+                if (rigPx > 0 && equip.AuxCamera.PixelSizeX <= 0
+                    && equip.AuxCamera is NINA.INDI.Devices.IndiCamera indiCam) {
+                    await indiCam.TrySetPixelSizeAsync(rigPx);
+                    loggerFactory.CreateLogger("Polaris.AuxCamera")
+                        .LogInformation("Pushed rig aux pixel size {Px}µm into {Dev} CCD_INFO " +
+                            "(aux camera reported 0)", rigPx, equip.AuxCamera.DeviceName);
+                }
+            } catch (Exception ex) {
+                loggerFactory.CreateLogger("Polaris.AuxCamera")
+                    .LogDebug(ex, "Aux pixel-size push on connect skipped (non-fatal)");
+            }
             aux.Sync();
             return Results.Ok(new { status = "connected", device = equip.AuxCamera.DeviceName });
         });

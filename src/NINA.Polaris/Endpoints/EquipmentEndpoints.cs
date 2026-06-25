@@ -216,6 +216,9 @@ public static class EquipmentEndpoints {
                     r.GuideFocuserDriver = update.GuideFocuserDriver.Trim().ToLowerInvariant();
                 if (update.AuxFocalLengthMm > 0)
                     r.AuxFocalLengthMm = update.AuxFocalLengthMm;
+                // Aux-camera pixel-size fallback (µm). >=0 so it can be cleared.
+                if (update.AuxCameraPixelSizeUm >= 0)
+                    r.AuxCameraPixelSizeUm = update.AuxCameraPixelSizeUm;
                 if (update.AuxApertureMm >= 0)
                     r.AuxApertureMm = update.AuxApertureMm;
                 r.AuxTelescopeBrand = update.AuxTelescopeBrand;

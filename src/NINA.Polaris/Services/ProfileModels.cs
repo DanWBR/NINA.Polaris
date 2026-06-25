@@ -519,6 +519,12 @@ public class EquipmentProfile {
     /// correct for that train.</summary>
     public double AuxFocalLengthMm { get; set; } = 200;
 
+    /// <summary>Aux-camera pixel size in micrometres. Same role + fallback
+    /// behaviour as <see cref="CameraPixelSizeUm"/> but for the aux camera —
+    /// a DSLR on the aux port (indi_gphoto) reports 0, so Polaris pushes this
+    /// into the aux driver's CCD_INFO on connect. 0 = let the camera report it.</summary>
+    public double AuxCameraPixelSizeUm { get; set; }
+
     /// <summary>Aux optics aperture (mm). Optional, for f-ratio display.</summary>
     public double AuxApertureMm { get; set; }
 

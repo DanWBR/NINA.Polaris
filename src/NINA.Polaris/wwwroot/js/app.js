@@ -954,7 +954,7 @@ function ninaApp() {
         auxFocuserDriver: 'indi',
         auxFocuserVendorDevices: [],
         auxFocuserConnected: false,
-        aux: { focalLengthMm: 200, exposureSec: 5, gain: 0, binning: 1, enabled: false },
+        aux: { focalLengthMm: 200, pixelSizeUm: 0, exposureSec: 5, gain: 0, binning: 1, enabled: false },
         // Aux camera sensor footprint (mm), hydrated from the WS status when
         // the aux camera reports CCD_INFO. Drives the pink aux FOV rect on SKY.
         auxSensorWidthMm: 0, auxSensorHeightMm: 0,
@@ -15978,6 +15978,7 @@ function ninaApp() {
                 try { this.detectGuideFocusers(); } catch (e) {}
             }
             this.aux.focalLengthMm = rig.auxFocalLengthMm || 200;
+            this.aux.pixelSizeUm = rig.auxCameraPixelSizeUm || 0;
             this.aux.exposureSec = (rig.auxExposureMs || 5000) / 1000;
             this.aux.gain = rig.auxGain || 0;
             this.aux.binning = rig.auxBinning || 1;
@@ -16155,23 +16156,26 @@ function ninaApp() {
         async loadOpticsCatalogue() {
             if (this.opticsCatalogue.loaded) return;
             try {
-                const [scopesResp, accResp, guideResp] = await Promise.all([
+                const [scopesResp, accResp, guideResp, dslrResp] = await Promise.all([
                     fetch('/data/telescopes.json'),
                     fetch('/data/optical-accessories.json'),
-                    fetch('/data/guidescopes.json')
+                    fetch('/data/guidescopes.json'),
+                    fetch('/data/dslr-cameras.json')
                 ]);
                 const scopes = await scopesResp.json();
                 const acc = await accResp.json();
                 const guide = await guideResp.json();
+                const dslr = await dslrResp.json();
                 this.opticsCatalogue = {
                     telescopes:  scopes.telescopes  || [],
                     accessories: acc.accessories     || [],
                     guidescopes: guide.guidescopes   || [],
+                    dslrCameras: dslr.cameras        || [],
                     loaded: true
                 };
             } catch (e) {
                 this.toast?.('Failed to load optics catalogue: ' + e.message, 'warn');
-                this.opticsCatalogue = { telescopes: [], accessories: [], guidescopes: [], loaded: true };
+                this.opticsCatalogue = { telescopes: [], accessories: [], guidescopes: [], dslrCameras: [], loaded: true };
             }
             // Re-sync the Main Telescope / Guidescope dropdowns to the
             // active rig's saved brand + model now that the catalogue
@@ -16236,6 +16240,41 @@ function ninaApp() {
             return this.opticsCatalogue.telescopes
                 .filter(t => t.brand === rig.telescopeBrand)
                 .sort((a, b) => a.apertureMm - b.apertureMm);
+        },
+
+        // ---- DSLR camera catalogue (pixel-size auto-fill) ----
+        // Transient brand/model picks used only to look up a pixel size and
+        // write it into the rig's CameraPixelSizeUm / AuxCameraPixelSizeUm.
+        // The picks themselves aren't persisted; the resolved µm value is.
+        dslrPick: { mainBrand: '', mainModel: '', auxBrand: '', auxModel: '' },
+        /// Distinct DSLR brands in the catalogue, sorted.
+        get dslrBrands() {
+            const set = new Set((this.opticsCatalogue.dslrCameras || []).map(c => c.brand));
+            return Array.from(set).sort();
+        },
+        /// Models for the given DSLR brand, sorted by name.
+        dslrModelsForBrand(brand) {
+            return (this.opticsCatalogue.dslrCameras || [])
+                .filter(c => c.brand === brand)
+                .sort((a, b) => a.model.localeCompare(b.model));
+        },
+        /// Resolve the picked brand+model to its pixel size and write it into
+        /// the right field. which = 'main' | 'aux'.
+        applyDslrPixel(which) {
+            const brand = which === 'aux' ? this.dslrPick.auxBrand : this.dslrPick.mainBrand;
+            const model = which === 'aux' ? this.dslrPick.auxModel : this.dslrPick.mainModel;
+            const hit = (this.opticsCatalogue.dslrCameras || [])
+                .find(c => c.brand === brand && c.model === model);
+            if (!hit || !(hit.pixelSizeUm > 0)) return;
+            if (which === 'aux') {
+                this.aux.pixelSizeUm = hit.pixelSizeUm;
+                this.saveAuxDebounced();
+            } else {
+                this.settings.cameraPixelSizeUm = hit.pixelSizeUm;
+                this.saveOpticsDebounced();
+                this.updateFov();
+            }
+            this.toast(hit.brand + ' ' + hit.model + ': ' + hit.pixelSizeUm.toFixed(2) + ' µm', 'ok', 2000);
         },
 
         /// Distinct guide-scope brands in the catalogue, sorted.
@@ -22774,6 +22813,7 @@ function ninaApp() {
         saveAux() {
             this._persistRigSelection({
                 auxFocalLengthMm: Number(this.aux.focalLengthMm) || 0,
+                auxCameraPixelSizeUm: Number(this.aux.pixelSizeUm) || 0,
                 auxExposureMs: Math.round((Number(this.aux.exposureSec) || 0) * 1000),
                 auxGain: Math.max(0, Number(this.aux.gain) || 0),
                 auxBinning: Math.max(1, Number(this.aux.binning) || 1),

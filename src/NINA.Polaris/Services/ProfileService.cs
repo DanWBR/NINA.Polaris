@@ -371,6 +371,7 @@ public class ProfileService {
             // Auxiliary (second) camera + its optics/focuser.
             AuxCamera = src.AuxCamera, AuxCameraDriver = src.AuxCameraDriver,
             AuxFocalLengthMm = src.AuxFocalLengthMm,
+            AuxCameraPixelSizeUm = src.AuxCameraPixelSizeUm,
             AuxApertureMm = src.AuxApertureMm,
             AuxTelescopeBrand = src.AuxTelescopeBrand,
             AuxTelescopeModel = src.AuxTelescopeModel,
