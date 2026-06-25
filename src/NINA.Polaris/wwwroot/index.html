@@ -5324,7 +5324,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                           x-text="equipCameraInfo.coolerOn ? 'ON' : 'OFF'"></strong></span>
                                     <span x-show="!isDslrCamera && equipCameraInfo.binX">Bin: <strong x-text="equipCameraInfo.binX + 'x' + equipCameraInfo.binY"></strong></span>
                                     <span x-show="equipCameraInfo.bitDepth">Depth: <strong x-text="equipCameraInfo.bitDepth + '-bit'"></strong></span>
-                                    <span x-show="isDslrCamera">ISO: <strong x-text="cameraIso"></strong></span>
+                                    <span x-show="isDslrCamera">ISO: <strong x-text="cameraIso.selected || '--'"></strong></span>
                                     <!-- Sensor metadata, only on real CCDs that
                                          report it; DSLRs and Alpaca sims often
                                          leave these zero. -->
@@ -5408,7 +5408,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <div class="equip-inline-controls" x-show="isDslrCamera">
                                     <label class="equip-temp-label">
                                         ISO
-                                        <select class="input-sm" :value="cameraIso" @change="setCameraIso($event.target.value)">
+                                        <select class="input-sm" x-model.number="cameraIso.selected" @change="setIso(cameraIso.selected)">
                                             <template x-for="v in [50,100,200,400,800,1600,3200,6400,12800,25600,51200,102400]" :key="v">
                                                 <option :value="v" x-text="v"></option>
                                             </template>
@@ -6060,6 +6060,27 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                            @change="saveAuxDebounced()" min="1" max="4"
                                            class="input-sm" style="width:60px">
                                 </label>
+                            </div>
+                            <!-- Cooler controls for a cooled astro cam on the
+                                 aux port (SV605CC etc.). Shown only when the aux
+                                 camera actually exposes a cooler. -->
+                            <div class="equip-meta-row" x-show="auxCameraConnected && auxSupportsCooler" x-cloak>
+                                <span class="text-muted" style="font-size:12px"
+                                      x-show="auxTemp !== null">Temp:
+                                    <strong x-text="(auxTemp?.toFixed(1) ?? '--') + ' °C'"></strong></span>
+                                <label class="equip-toggle"
+                                       :title="auxCoolerOn ? 'Turn aux cooler OFF' : 'Turn aux cooler ON'">
+                                    <input type="checkbox" :checked="auxCoolerOn"
+                                           @change="setAuxCooler($event.target.checked, auxCoolerTarget)">
+                                    <span class="equip-toggle-track"></span>
+                                    <span class="equip-toggle-thumb"></span>
+                                </label>
+                                <span class="text-muted" style="font-size:11px">Cooler</span>
+                                <label class="equip-temp-label">Target
+                                    <input type="number" x-model.number="auxCoolerTarget" step="1" min="-40" max="30" class="input-sm" style="width:64px">
+                                    <span>&deg;C</span>
+                                </label>
+                                <button class="btn btn-sm" @click="setAuxCooler(true, auxCoolerTarget)">Set</button>
                             </div>
                             <label style="margin-top:6px;display:flex;gap:8px;align-items:center;font-size:12px">
                                 <input type="checkbox" x-model="aux.enabled" @change="toggleAuxEnabled()">
@@ -16027,7 +16048,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260625-auxdslr"></script>
+    <script src="/js/app.js?v=20260625-auxcooler"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

@@ -874,7 +874,10 @@ public class EquipmentManager : IDisposable {
                 // DSLR signal for the UI: gphoto exposes CCD_ISO, astro cams
                 // don't. Lets the aux card show the DSLR pixel/brand/model
                 // pickers + ISO only when a DSLR is actually on the aux port.
-                supportsIso = AuxCamera.Capabilities.SupportsIso
+                supportsIso = AuxCamera.Capabilities.SupportsIso,
+                // Cooler signal: a cooled astro cam on the aux port (e.g.
+                // SV605CC) should show temperature/cooler controls.
+                supportsCooler = AuxCamera.Capabilities.SupportsCooler
             };
         }
 

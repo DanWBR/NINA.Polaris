@@ -88,6 +88,19 @@ public static class AuxEndpoints {
             return Results.Ok(new { iso = req.Iso });
         });
 
+        // Cooler control for a cooled astro cam on the aux port (e.g. SV605CC).
+        // 501 when the aux camera has no cooler, so the UI can hide the control.
+        group.MapPost("/camera/cooler", async (EquipmentManager equip, AuxCoolerRequest req) => {
+            if (equip.AuxCamera == null || !equip.AuxCamera.IsConnected)
+                return Results.BadRequest(new { error = "No aux camera connected" });
+            if (!equip.AuxCamera.Capabilities.SupportsCooler)
+                return Results.Json(new { error = "Aux camera has no cooler" }, statusCode: 501);
+            await equip.AuxCamera.SetCoolerAsync(req.Enabled);
+            if (req.TargetTemperature.HasValue)
+                await equip.AuxCamera.SetTemperatureAsync(req.TargetTemperature.Value);
+            return Results.Ok(new { coolerOn = req.Enabled, target = req.TargetTemperature });
+        });
+
         // ----- Aux focuser selection + connection + manual jog -----
         group.MapPost("/focuser/select/{deviceName}", (EquipmentManager equip,
                 string deviceName, string? driver) => {
@@ -158,4 +171,5 @@ public static class AuxEndpoints {
 
     public record AuxEnabledRequest(bool Enabled);
     public record AuxIsoRequest(int Iso);
+    public record AuxCoolerRequest(bool Enabled, double? TargetTemperature = null);
 }

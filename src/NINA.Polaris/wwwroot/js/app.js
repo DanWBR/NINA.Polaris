@@ -957,6 +957,11 @@ function ninaApp() {
         // Drives the aux DSLR pixel/brand/model pickers + ISO so they appear
         // wherever the DSLR actually is, never on an astro cam (e.g. SV605CC).
         auxIsDslr: false,
+        // Cooler state for a cooled astro cam on the aux port (e.g. SV605CC).
+        auxSupportsCooler: false,
+        auxTemp: null,
+        auxCoolerOn: false,
+        auxCoolerTarget: 0,
         auxFocuser: '',
         auxFocuserDriver: 'indi',
         auxFocuserVendorDevices: [],
@@ -5087,6 +5092,16 @@ function ninaApp() {
             this.auxIso = v;
             try { await this.apiPost('/api/aux/camera/iso', { iso: v }); }
             catch (e) { this.toast('Aux ISO set failed: ' + (e.message || e), 'warn'); }
+        },
+        // Cooler on/off (+ optional target °C) for a cooled aux astro cam.
+        async setAuxCooler(enabled, target) {
+            this.auxCoolerOn = !!enabled;
+            try {
+                await this.apiPost('/api/aux/camera/cooler', {
+                    enabled: !!enabled,
+                    targetTemperature: (target === undefined || target === null) ? null : Number(target)
+                });
+            } catch (e) { this.toast('Aux cooler failed: ' + (e.message || e), 'warn'); }
         },
         // ----- Per-camera PREVIEW settings memory -----
         // Called from the camera-source <select> @change: load the picked
@@ -26788,11 +26803,21 @@ function ninaApp() {
             try {
                 const data = await this.apiGet('/api/camera/status');
                 if (data.connected) {
+                    // Merge (don't replace): the WS status handler fills the
+                    // richer fields (pixelSizeUm/maxX/sensor/supportsCooler).
+                    // Dropping pixelSizeUm here made the DSLR picker flicker —
+                    // this poll wiped it to 0 (picker shows) and the next WS
+                    // tick restored 3.72 (picker hides), alternating. Keep them.
                     this.equipCameraInfo = {
+                        ...this.equipCameraInfo,
                         coolerOn: data.coolerOn || false,
                         binX: data.binX || 0,
                         binY: data.binY || 0,
-                        bitDepth: data.bitDepth || 0
+                        bitDepth: data.bitDepth || 0,
+                        pixelSizeUm: data.pixelSizeX || 0,
+                        maxX: data.maxX || 0,
+                        maxY: data.maxY || 0,
+                        supportsCooler: !!(data.capabilities && data.capabilities.cooler)
                     };
                     if (data.temperature !== null && data.temperature !== undefined) {
                         this.cameraTemp = data.temperature;
@@ -30072,6 +30097,12 @@ function ninaApp() {
             // DSLR-ness follows the actual aux camera (gphoto exposes ISO), so
             // the DSLR pickers live wherever the DSLR is plugged in.
             this.auxIsDslr = !!(eq.auxCamera && eq.auxCamera.supportsIso);
+            this.auxSupportsCooler = !!(eq.auxCamera && eq.auxCamera.supportsCooler);
+            this.auxCoolerOn = !!(eq.auxCamera && eq.auxCamera.coolerOn);
+            if (eq.auxCamera && eq.auxCamera.temperature !== null
+                && eq.auxCamera.temperature !== undefined) {
+                this.auxTemp = eq.auxCamera.temperature;
+            }
             // Aux sensor footprint (mm) for the pink SKY FOV rectangle.
             // Derived from pixel count × pixel size (µm → mm). Kept on the
             // instance so _pushSkyFovOverlays can size the aux rect from the
