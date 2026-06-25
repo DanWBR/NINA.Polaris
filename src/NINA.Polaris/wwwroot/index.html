@@ -2734,10 +2734,10 @@
                 <div class="panel-header" data-tour="preview-actions">
                     Preview
                     <span class="status-indicator-sm"
-                          :class="preview.busy ? 'warn' : (selectedCamera ? 'ok' : 'error')"
+                          :class="preview.busy ? 'warn' : (previewActiveCameraName() ? 'ok' : 'error')"
                           x-text="preview.busy ? 'EXPOSING'
                                    : (preview.looping ? 'LOOPING'
-                                   : (selectedCamera || 'No camera'))"></span>
+                                   : (previewActiveCameraName() || 'No camera'))"></span>
                 </div>
 
                 <!-- Two-column pane (mirrors .live-pane / .video-pane):
@@ -16012,7 +16012,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260625-dslrpicker"></script>
+    <script src="/js/app.js?v=20260625-previewbadge"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

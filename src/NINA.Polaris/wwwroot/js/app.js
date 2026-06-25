@@ -18632,6 +18632,18 @@ function ninaApp() {
                 default: return 'main';
             }
         },
+        // Device name of the camera the PREVIEW will snap from, reflecting the
+        // Main/Guide/Aux source selector (the badge in the PREVIEW header).
+        // Returns null when that source isn't connected.
+        previewActiveCameraName(src) {
+            switch (src || this.preview.cameraSource || 'main') {
+                case 'guide': return (this.guider && this.guider.guideCameraConnected)
+                    ? (this.guider.guideCameraName || this.guideCamera || 'Guide camera') : null;
+                case 'aux': return this.auxCameraConnected
+                    ? (this.auxCamera || 'Aux camera') : null;
+                default: return this.selectedCamera || null;
+            }
+        },
         async previewTakeSnap() {
             if (this.preview.busy) return;
             const camSrc = this.preview.cameraSource || 'main';
