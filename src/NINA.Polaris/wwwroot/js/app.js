@@ -5039,6 +5039,12 @@ function ninaApp() {
         // ----- Gain ↔ ISO helpers -----
         // True when the active main camera is a DSLR exposing an ISO list.
         cameraUsesIso() { return (this.cameraIso.options || []).length > 0; },
+        // True when the PREVIEW tab should show the ISO dropdown instead of the
+        // numeric Gain field. ISO (cameraIso) reflects the MAIN camera only, so
+        // it only applies when the PREVIEW source is the main camera.
+        previewUsesIso() {
+            return (this.preview.cameraSource || 'main') === 'main' && this.cameraUsesIso();
+        },
         // Select an ISO on the camera (DSLR / indi_gphoto).
         async setIso(iso) {
             const v = Number(iso);

@@ -2839,12 +2839,24 @@
                             <input type="number" x-model.number="preview.exposure"
                                    list="exposure-presets" step="any" min="0" class="input-sm"
                                    :disabled="preview.busy"></label>
-                        <label>Gain
+                        <!-- DSLR (indi_gphoto) main camera: pick ISO from the
+                             camera's list. ISO is a main-camera setting, so it
+                             only replaces Gain when the PREVIEW source is Main. -->
+                        <label x-show="previewUsesIso()" x-cloak>ISO
+                            <select class="input-sm" x-model.number="cameraIso.selected"
+                                    @change="setIso(cameraIso.selected)"
+                                    :disabled="preview.busy">
+                                <template x-for="v in cameraIso.options" :key="'piso'+v">
+                                    <option :value="v" x-text="v"></option>
+                                </template>
+                            </select>
+                        </label>
+                        <label x-show="!previewUsesIso()">Gain
                             <input type="number" x-model.number="preview.gain"
                                    step="10" min="0" class="input-sm"
                                    :disabled="preview.busy">
                         </label>
-                        <span class="zwo-gain-presets" x-show="zwoPresetsForActiveCamera() && !preview.busy">
+                        <span class="zwo-gain-presets" x-show="!previewUsesIso() && zwoPresetsForActiveCamera() && !preview.busy">
                             <button type="button" class="zwo-gain-preset"
                                     :data-active="preview.gain === zwoPresetsForActiveCamera()?.L"
                                     @click="applyGainPreset('preview.gain', zwoPresetsForActiveCamera().L)">L</button>
@@ -15922,7 +15934,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260624-previewsrc"></script>
+    <script src="/js/app.js?v=20260625-previewiso"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
