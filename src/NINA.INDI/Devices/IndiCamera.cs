@@ -691,25 +691,25 @@ public class IndiCamera : ICamera {
     /// element (CCD_PIXEL_SIZE) plus the X/Y pair so the getters above return
     /// the supplied value. Best-effort: drivers that lock CCD_INFO just
     /// ignore the write. Pass um &lt;= 0 to no-op.</summary>
-    public async Task TrySetPixelSizeAsync(double um, CancellationToken ct = default) {
-        if (um <= 0) return;
-        // CRITICAL: do NOT write CCD_INFO while the sensor resolution is still
-        // unknown (Max X/Y == 0). indi_gphoto only learns the resolution after
-        // the first exposure; if we write CCD_INFO before that, the driver flips
-        // CCD_INFO to a "client-provided" state with Max X/Y still 0 and then
-        // REJECTS the exposure with "Please update the CCD Information ... before
-        // proceeding" — i.e. our pixel-size push was breaking capture entirely.
-        // Only push once the driver knows its real geometry (astro cams always
-        // do; DSLRs only after the first frame).
-        if (MaxX <= 0 || MaxY <= 0) return;
-        await _client.SetNumberAsync(DeviceName, "CCD_INFO",
-            new Dictionary<string, double> {
-                ["CCD_MAX_X"] = MaxX,
-                ["CCD_MAX_Y"] = MaxY,
-                ["CCD_PIXEL_SIZE"] = um,
-                ["CCD_PIXEL_SIZE_X"] = um,
-                ["CCD_PIXEL_SIZE_Y"] = um
-            }, ct);
+    public async Task TrySetCcdInfoAsync(int maxX, int maxY, double pixelUm, int bitDepth = 0,
+                                         CancellationToken ct = default) {
+        // indi_gphoto rejects every exposure ("Please update the CCD Information
+        // ... before proceeding") until CCD_INFO carries a non-zero resolution —
+        // a DSLR only learns its geometry after the first frame, so we bootstrap
+        // it from the rig (derived from the DSLR catalogue). Must be COMPLETE:
+        // writing pixel size alone (Max X/Y still 0) is what was breaking
+        // capture. The driver overwrites these with the true values after the
+        // first exposure, so approximate catalogue-derived numbers are fine.
+        if (maxX <= 0 || maxY <= 0 || pixelUm <= 0) return;
+        var payload = new Dictionary<string, double> {
+            ["CCD_MAX_X"] = maxX,
+            ["CCD_MAX_Y"] = maxY,
+            ["CCD_PIXEL_SIZE"] = pixelUm,
+            ["CCD_PIXEL_SIZE_X"] = pixelUm,
+            ["CCD_PIXEL_SIZE_Y"] = pixelUm
+        };
+        if (bitDepth > 0) payload["CCD_BITSPERPIXEL"] = bitDepth;
+        await _client.SetNumberAsync(DeviceName, "CCD_INFO", payload, ct);
     }
 
     /// <summary>Writes CCD_FRAME (X, Y, WIDTH, HEIGHT). Passing w=0 OR

@@ -173,6 +173,9 @@ public static class EquipmentEndpoints {
                 // from a stale client are ignored.
                 if (update.CameraPixelSizeUm >= 0)
                     r.CameraPixelSizeUm = update.CameraPixelSizeUm;
+                if (update.CameraMaxX >= 0) r.CameraMaxX = update.CameraMaxX;
+                if (update.CameraMaxY >= 0) r.CameraMaxY = update.CameraMaxY;
+                if (update.CameraBitDepth >= 0) r.CameraBitDepth = update.CameraBitDepth;
                 // Telescope brand/model picker fields. Only overwrite when
                 // the client actually sends a value; a blank from a stale
                 // form must not wipe the saved scope name.
@@ -219,6 +222,9 @@ public static class EquipmentEndpoints {
                 // Aux-camera pixel-size fallback (µm). >=0 so it can be cleared.
                 if (update.AuxCameraPixelSizeUm >= 0)
                     r.AuxCameraPixelSizeUm = update.AuxCameraPixelSizeUm;
+                if (update.AuxCameraMaxX >= 0) r.AuxCameraMaxX = update.AuxCameraMaxX;
+                if (update.AuxCameraMaxY >= 0) r.AuxCameraMaxY = update.AuxCameraMaxY;
+                if (update.AuxCameraBitDepth >= 0) r.AuxCameraBitDepth = update.AuxCameraBitDepth;
                 if (update.AuxApertureMm >= 0)
                     r.AuxApertureMm = update.AuxApertureMm;
                 r.AuxTelescopeBrand = update.AuxTelescopeBrand;

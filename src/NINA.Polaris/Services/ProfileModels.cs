@@ -478,6 +478,15 @@ public class EquipmentProfile {
     /// post-solve focal-length auto-update all get a correct pixel scale.</summary>
     public double CameraPixelSizeUm { get; set; }
 
+    /// <summary>Main-camera sensor resolution + bit depth, for backends that
+    /// don't report it until/unless told — indi_gphoto rejects every exposure
+    /// ("Please update the CCD Information ...") until CCD_INFO has a non-zero
+    /// Max X/Y. Filled by the DSLR picker (derived from the catalogue) and
+    /// pushed to the driver on connect. 0 = let the camera report it.</summary>
+    public int CameraMaxX { get; set; }
+    public int CameraMaxY { get; set; }
+    public int CameraBitDepth { get; set; }
+
     // Focal length of the guide scope. Used for record-keeping and as a
     // sanity-check reference against PHD2's reported pixel scale. PHD2 itself
     // computes its pixel scale from its own configuration; we just track what
@@ -524,6 +533,13 @@ public class EquipmentProfile {
     /// a DSLR on the aux port (indi_gphoto) reports 0, so Polaris pushes this
     /// into the aux driver's CCD_INFO on connect. 0 = let the camera report it.</summary>
     public double AuxCameraPixelSizeUm { get; set; }
+
+    /// <summary>Aux-camera sensor resolution + bit depth. Same role as the main
+    /// camera's CameraMaxX/Y/BitDepth — needed to bootstrap indi_gphoto's
+    /// CCD_INFO so the aux DSLR's exposures aren't rejected. 0 = camera reports.</summary>
+    public int AuxCameraMaxX { get; set; }
+    public int AuxCameraMaxY { get; set; }
+    public int AuxCameraBitDepth { get; set; }
 
     /// <summary>Aux optics aperture (mm). Optional, for f-ratio display.</summary>
     public double AuxApertureMm { get; set; }

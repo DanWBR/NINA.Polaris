@@ -46,17 +46,20 @@ public static class AuxEndpoints {
             // Per-rig pixel-size fallback for a DSLR on the aux port (gphoto
             // reports CCD_INFO pixel size as 0). Mirrors the main-camera connect.
             try {
-                var rigPx = profileSvc.ActiveEquipmentProfile?.AuxCameraPixelSizeUm ?? 0;
-                if (rigPx > 0 && equip.AuxCamera.PixelSizeX <= 0
+                var rig = profileSvc.ActiveEquipmentProfile;
+                if (rig != null && equip.AuxCamera.MaxX <= 0
+                    && rig.AuxCameraMaxX > 0 && rig.AuxCameraMaxY > 0 && rig.AuxCameraPixelSizeUm > 0
                     && equip.AuxCamera is NINA.INDI.Devices.IndiCamera indiCam) {
-                    await indiCam.TrySetPixelSizeAsync(rigPx);
+                    await indiCam.TrySetCcdInfoAsync(rig.AuxCameraMaxX, rig.AuxCameraMaxY,
+                        rig.AuxCameraPixelSizeUm, rig.AuxCameraBitDepth);
                     loggerFactory.CreateLogger("Polaris.AuxCamera")
-                        .LogInformation("Pushed rig aux pixel size {Px}µm into {Dev} CCD_INFO " +
-                            "(aux camera reported 0)", rigPx, equip.AuxCamera.DeviceName);
+                        .LogInformation("Pushed rig aux CCD_INFO into {Dev}: {X}x{Y} px, {P}µm, {B}-bit " +
+                            "(aux camera reported 0 — DSLR bootstrap)", equip.AuxCamera.DeviceName,
+                            rig.AuxCameraMaxX, rig.AuxCameraMaxY, rig.AuxCameraPixelSizeUm, rig.AuxCameraBitDepth);
                 }
             } catch (Exception ex) {
                 loggerFactory.CreateLogger("Polaris.AuxCamera")
-                    .LogDebug(ex, "Aux pixel-size push on connect skipped (non-fatal)");
+                    .LogDebug(ex, "Aux CCD_INFO push on connect skipped (non-fatal)");
             }
             aux.Sync();
             return Results.Ok(new { status = "connected", device = equip.AuxCamera.DeviceName });

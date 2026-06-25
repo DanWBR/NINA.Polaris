@@ -450,17 +450,20 @@ public static class CameraEndpoints {
             // Only when the rig has a value AND the camera actually reports 0
             // (don't override a camera that knows its own pixel pitch).
             try {
-                var rigPx = profileSvc.ActiveEquipmentProfile?.CameraPixelSizeUm ?? 0;
-                if (rigPx > 0 && equip.Camera.PixelSizeX <= 0
+                var rig = profileSvc.ActiveEquipmentProfile;
+                if (rig != null && equip.Camera.MaxX <= 0
+                    && rig.CameraMaxX > 0 && rig.CameraMaxY > 0 && rig.CameraPixelSizeUm > 0
                     && equip.Camera is NINA.INDI.Devices.IndiCamera indiCam) {
-                    await indiCam.TrySetPixelSizeAsync(rigPx);
+                    await indiCam.TrySetCcdInfoAsync(rig.CameraMaxX, rig.CameraMaxY,
+                        rig.CameraPixelSizeUm, rig.CameraBitDepth);
                     loggerFactory.CreateLogger("Polaris.Camera")
-                        .LogInformation("Pushed rig pixel size {Px}µm into {Dev} CCD_INFO " +
-                            "(camera reported 0)", rigPx, equip.Camera.DeviceName);
+                        .LogInformation("Pushed rig CCD_INFO into {Dev}: {X}x{Y} px, {P}µm, {B}-bit " +
+                            "(camera reported 0 — DSLR bootstrap)", equip.Camera.DeviceName,
+                            rig.CameraMaxX, rig.CameraMaxY, rig.CameraPixelSizeUm, rig.CameraBitDepth);
                 }
             } catch (Exception ex) {
                 loggerFactory.CreateLogger("Polaris.Camera")
-                    .LogDebug(ex, "Pixel-size push on connect skipped (non-fatal)");
+                    .LogDebug(ex, "CCD_INFO push on connect skipped (non-fatal)");
             }
             // The camera's ROI (CCD_FRAME for INDI) is retained by the driver
             // across browser sessions and even reconnects — the INDI server on

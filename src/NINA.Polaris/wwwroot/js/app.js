@@ -813,6 +813,9 @@ function ninaApp() {
             // Main-camera pixel size fallback (µm). 0 = let the camera report
             // it; only needed for backends that don't (indi_gphoto / DSLRs).
             cameraPixelSizeUm: 0,
+            // Main-camera resolution + bit depth, derived from the DSLR catalogue
+            // and pushed to indi_gphoto's CCD_INFO on connect (0 = camera reports).
+            cameraMaxX: 0, cameraMaxY: 0, cameraBitDepth: 0,
             telescopeBrand: '',
             telescopeModel: '',
             accessoryType: '',
@@ -954,7 +957,7 @@ function ninaApp() {
         auxFocuserDriver: 'indi',
         auxFocuserVendorDevices: [],
         auxFocuserConnected: false,
-        aux: { focalLengthMm: 200, pixelSizeUm: 0, exposureSec: 5, gain: 0, binning: 1, enabled: false },
+        aux: { focalLengthMm: 200, pixelSizeUm: 0, maxX: 0, maxY: 0, bitDepth: 0, exposureSec: 5, gain: 0, binning: 1, enabled: false },
         // Aux camera sensor footprint (mm), hydrated from the WS status when
         // the aux camera reports CCD_INFO. Drives the pink aux FOV rect on SKY.
         auxSensorWidthMm: 0, auxSensorHeightMm: 0,
@@ -15984,6 +15987,9 @@ function ninaApp() {
             }
             this.aux.focalLengthMm = rig.auxFocalLengthMm || 200;
             this.aux.pixelSizeUm = rig.auxCameraPixelSizeUm || 0;
+            this.aux.maxX = rig.auxCameraMaxX || 0;
+            this.aux.maxY = rig.auxCameraMaxY || 0;
+            this.aux.bitDepth = rig.auxCameraBitDepth || 0;
             this.aux.exposureSec = (rig.auxExposureMs || 5000) / 1000;
             this.aux.gain = rig.auxGain || 0;
             this.aux.binning = rig.auxBinning || 1;
@@ -16051,6 +16057,9 @@ function ninaApp() {
             // Empty/zero values are fine (the card just shows blanks).
             this.settings.aperture = rig.apertureMm || 0;
             this.settings.cameraPixelSizeUm = rig.cameraPixelSizeUm || 0;
+            this.settings.cameraMaxX = rig.cameraMaxX || 0;
+            this.settings.cameraMaxY = rig.cameraMaxY || 0;
+            this.settings.cameraBitDepth = rig.cameraBitDepth || 0;
             this.settings.telescopeBrand = rig.telescopeBrand || '';
             this.settings.telescopeModel = rig.telescopeModel || '';
             this.settings.accessoryType = rig.accessoryType || '';
@@ -16271,15 +16280,28 @@ function ninaApp() {
             const hit = (this.opticsCatalogue.dslrCameras || [])
                 .find(c => c.brand === brand && c.model === model);
             if (!hit || !(hit.pixelSizeUm > 0)) return;
+            // Derive sensor resolution from the catalogue's sensor size ÷ pixel
+            // pitch (gphoto needs a non-zero CCD_INFO Max X/Y to capture). Exact
+            // resolution isn't critical — the driver corrects it after the first
+            // frame — but it must be non-zero. Bit depth: catalogue or 14 (the
+            // RAW depth of virtually every modern DSLR/mirrorless).
+            const px = hit.pixelSizeUm;
+            const maxX = hit.sensorWidthMm > 0 ? Math.round(hit.sensorWidthMm * 1000 / px) : 0;
+            const maxY = hit.sensorHeightMm > 0 ? Math.round(hit.sensorHeightMm * 1000 / px) : 0;
+            const bits = hit.bitDepth || 14;
             if (which === 'aux') {
-                this.aux.pixelSizeUm = hit.pixelSizeUm;
+                this.aux.pixelSizeUm = px;
+                this.aux.maxX = maxX; this.aux.maxY = maxY; this.aux.bitDepth = bits;
                 this.saveAuxDebounced();
             } else {
-                this.settings.cameraPixelSizeUm = hit.pixelSizeUm;
+                this.settings.cameraPixelSizeUm = px;
+                this.settings.cameraMaxX = maxX; this.settings.cameraMaxY = maxY;
+                this.settings.cameraBitDepth = bits;
                 this.saveOpticsDebounced();
                 this.updateFov();
             }
-            this.toast(hit.brand + ' ' + hit.model + ': ' + hit.pixelSizeUm.toFixed(2) + ' µm', 'ok', 2000);
+            this.toast(hit.brand + ' ' + hit.model + ': ' + px.toFixed(2) + ' µm · '
+                + maxX + '×' + maxY, 'ok', 2200);
         },
 
         /// Distinct guide-scope brands in the catalogue, sorted.
@@ -16752,6 +16774,9 @@ function ninaApp() {
                 // Main-camera pixel size fallback (µm). 0 = let the camera
                 // report it. Used to feed indi_gphoto, which reports 0.
                 cameraPixelSizeUm: Number(this.settings.cameraPixelSizeUm) || 0,
+                cameraMaxX: Number(this.settings.cameraMaxX) || 0,
+                cameraMaxY: Number(this.settings.cameraMaxY) || 0,
+                cameraBitDepth: Number(this.settings.cameraBitDepth) || 0,
                 telescopeBrand: this.settings.telescopeBrand,
                 telescopeModel: this.settings.telescopeModel,
                 accessoryType: this.settings.accessoryType,
@@ -22831,6 +22856,9 @@ function ninaApp() {
             this._persistRigSelection({
                 auxFocalLengthMm: Number(this.aux.focalLengthMm) || 0,
                 auxCameraPixelSizeUm: Number(this.aux.pixelSizeUm) || 0,
+                auxCameraMaxX: Number(this.aux.maxX) || 0,
+                auxCameraMaxY: Number(this.aux.maxY) || 0,
+                auxCameraBitDepth: Number(this.aux.bitDepth) || 0,
                 auxExposureMs: Math.round((Number(this.aux.exposureSec) || 0) * 1000),
                 auxGain: Math.max(0, Number(this.aux.gain) || 0),
                 auxBinning: Math.max(1, Number(this.aux.binning) || 1),
