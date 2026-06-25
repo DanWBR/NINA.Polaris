@@ -67,6 +67,75 @@ public static class AutoStretch {
     }
 
     /// <summary>
+    /// PHD2-faithful guide auto-stretch. Mirrors PHD2's
+    /// <c>usImage::CalcStats</c> + <c>buildGammaLookupTable</c>: a 3x3 median
+    /// filter gives robust black/white points (FiltMin/FiltMax) that ignore
+    /// hot/cold single pixels, then a gamma map between them
+    /// (<c>((v-min)/(max-min))^gamma</c>). gamma=1.0 reproduces PHD2's default
+    /// (linear). Unlike <see cref="ApplyGuide"/> this keeps the real sky
+    /// background visible instead of crushing it to black, and — like PHD2 —
+    /// applies the LUT to the raw pixels, so the median filter only robustifies
+    /// the levels, not the displayed image.
+    /// </summary>
+    public static byte[] ApplyGuidePhd2(ushort[] data, int width, int height,
+                                        int bitDepth = 16, double gamma = 1.0) {
+        int pixelCount = width * height;
+        var result = new byte[pixelCount];
+        if (data.Length < pixelCount || width < 3 || height < 3)
+            return ApplyGuide(data, width, height, bitDepth);   // too small for a 3x3 median
+
+        // FiltMin/FiltMax = min/max of the 3x3 median-filtered image (interior
+        // pixels). Computed without materialising the filtered frame — we only
+        // need the extremes. Parallel per-row reduction.
+        int filtMin = 65535, filtMax = 0;
+        object lk = new object();
+        Parallel.For(1, height - 1, () => (lo: 65535, hi: 0), (y, _, local) => {
+            var w9 = new ushort[9];
+            int lo = local.lo, hi = local.hi;
+            int row = y * width;
+            for (int x = 1; x < width - 1; x++) {
+                int idx = row + x, up = idx - width, dn = idx + width;
+                w9[0] = data[up - 1]; w9[1] = data[up]; w9[2] = data[up + 1];
+                w9[3] = data[idx - 1]; w9[4] = data[idx]; w9[5] = data[idx + 1];
+                w9[6] = data[dn - 1]; w9[7] = data[dn]; w9[8] = data[dn + 1];
+                ushort m = Median9(w9);
+                if (m < lo) lo = m;
+                if (m > hi) hi = m;
+            }
+            return (lo, hi);
+        }, local => { lock (lk) { if (local.lo < filtMin) filtMin = local.lo; if (local.hi > filtMax) filtMax = local.hi; } });
+
+        if (filtMax <= filtMin) filtMax = Math.Min(65535, filtMin + 1);
+
+        // PHD2 buildGammaLookupTable(blevel=filtMin, wlevel=filtMax, power=gamma).
+        var lut = new byte[65536];
+        double range = filtMax - filtMin;
+        for (int i = 0; i <= filtMin; i++) lut[i] = 0;
+        for (int i = filtMin + 1; i < filtMax; i++) {
+            double d = (i - filtMin) / range;
+            lut[i] = (byte)Math.Clamp(Math.Pow(d, gamma) * 255.0, 0, 255);
+        }
+        for (int i = filtMax; i < 65536; i++) lut[i] = 255;
+
+        int n = Math.Min(data.Length, pixelCount);
+        Parallel.ForEach(Partitioner.Create(0, n), rg => {
+            for (int i = rg.Item1; i < rg.Item2; i++) result[i] = lut[data[i]];
+        });
+        return result;
+    }
+
+    // Median of 9 (in-place insertion sort, return the middle element).
+    private static ushort Median9(ushort[] a) {
+        for (int i = 1; i < 9; i++) {
+            ushort key = a[i];
+            int j = i - 1;
+            while (j >= 0 && a[j] > key) { a[j + 1] = a[j]; j--; }
+            a[j + 1] = key;
+        }
+        return a[4];
+    }
+
+    /// <summary>
     /// Compute the guide-preview stretch (see <see cref="ApplyGuide"/>).
     /// <paramref name="blackSigma"/> is how far above the background median (in
     /// MADs) the black point sits — higher crushes more noise to black.

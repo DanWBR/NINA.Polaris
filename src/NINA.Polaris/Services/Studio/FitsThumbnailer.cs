@@ -276,12 +276,11 @@ public static class FitsThumbnailer {
             pixels = ds; width = gw; height = gh;
         }
 
-        // Guide preview only: knock out isolated single-pixel hot/warm pixels
-        // before the stretch. Uncooled guide cams sprinkle the field with bright
-        // specks that survive the dark-background stretch as a constellation of
-        // little white dots over the real stars. Done on a COPY so the camera's
-        // raw buffer (used by star detection) is never mutated.
-        if (guideStretch) pixels = SuppressHotPixels(pixels, width, height);
+        // NOTE: the guide preview no longer pre-suppresses hot pixels — the
+        // PHD2-style stretch (below) already makes its black/white points
+        // robust to them via a 3x3 median, and PHD2 itself shows the raw
+        // pixels, so we match that look. SuppressHotPixels is kept for any
+        // other caller that wants it.
 
         // Auto-stretch lives in NINA.Image (vendored portable copy).
         // GX-12c: when overrideParams is set, skip the auto-stretch
@@ -295,7 +294,7 @@ public static class FitsThumbnailer {
                 pixels, width, height,
                 overrideParams.Black, overrideParams.Mid, overrideParams.White, bitDepth)
             : guideStretch
-                ? NINA.Image.ImageAnalysis.AutoStretch.ApplyGuide(pixels, width, height, bitDepth)
+                ? NINA.Image.ImageAnalysis.AutoStretch.ApplyGuidePhd2(pixels, width, height, bitDepth)
                 : NINA.Image.ImageAnalysis.AutoStretch.Apply(pixels, width, height, bitDepth);
 
         // Wrap the byte[] as a Gray8 SKBitmap, copy so we own the
