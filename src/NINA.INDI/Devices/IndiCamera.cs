@@ -957,8 +957,68 @@ public class IndiCamera : ICamera {
         }
     }
 
+    private string? _lastLocalFilePath;   // dedupe CCD_FILE_PATH updates
+
     private void OnPropertyChanged(string device, IndiProperty prop) {
         if (device != DeviceName) return;
-        // Could raise events for UI updates here
+
+        // UPLOAD_LOCAL fallback. Some indi_gphoto builds refuse UPLOAD_CLIENT
+        // (the switch reverts to UPLOAD_LOCAL even when set manually), so the
+        // captured frame is written to the server's filesystem instead of being
+        // delivered as a BLOB — OnBlobReceived never fires and the capture times
+        // out. When the driver saves locally it reports the absolute path in the
+        // CCD_FILE_PATH text vector; read that file ourselves and complete the
+        // pending exposure. Harmless when UPLOAD_CLIENT works (no FILE_PATH is
+        // sent, and TrySetResult is idempotent if both arrive).
+        if (prop.Name == "CCD_FILE_PATH" && prop is IndiTextProperty t && !_isStreaming) {
+            string? path = null;
+            if (t.Values.TryGetValue("FILE_PATH", out var p) && !string.IsNullOrWhiteSpace(p)) path = p;
+            else foreach (var v in t.Values.Values) { if (!string.IsNullOrWhiteSpace(v)) { path = v; break; } }
+            if (string.IsNullOrWhiteSpace(path) || path == _lastLocalFilePath) return;
+            var tcs = _exposureTcs;
+            if (tcs == null || tcs.Task.IsCompleted) return;
+            _lastLocalFilePath = path;
+            // Read + decode off the INDI read thread so a big CR2 + JPEG decode
+            // doesn't stall property parsing for the rest of the session.
+            _ = Task.Run(() => CompleteFromLocalFile(path!, tcs));
+        }
+    }
+
+    /// <summary>Read a driver-saved capture from disk (UPLOAD_LOCAL path reported
+    /// via CCD_FILE_PATH) and resolve the pending exposure with it. The local
+    /// copy is a transfer artefact — Polaris keeps the bytes (IHasRawFile) and
+    /// writes its own copy when the user asked to save — so we delete it after
+    /// reading to keep the driver's upload dir from filling up.</summary>
+    private void CompleteFromLocalFile(string path, TaskCompletionSource<IImageData> tcs) {
+        try {
+            byte[]? bytes = null;
+            for (int attempt = 0; attempt < 5 && !tcs.Task.IsCompleted; attempt++) {
+                try { bytes = File.ReadAllBytes(path); break; }
+                catch (IOException) { Thread.Sleep(150); }   // still being written / locked
+            }
+            if (bytes == null || bytes.Length == 0) {
+                tcs.TrySetException(new InvalidDataException(
+                    $"INDI {DeviceName} reported a local file but it couldn't be read: {path}"));
+                return;
+            }
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            IImageData? img = (ext is ".fits" or ".fit" or ".fts")
+                ? FITSReader.Read(bytes)
+                : DecodeRawDslrBlob(bytes, string.IsNullOrEmpty(ext) ? ".cr2" : ext);
+            if (img == null || img.Properties.Width <= 0 || img.Properties.Height <= 0) {
+                tcs.TrySetException(new InvalidDataException(
+                    $"INDI {DeviceName} local file '{path}' had no decodable image"));
+                return;
+            }
+            img.MetaData.Camera.Name = DeviceName;
+            img.MetaData.Camera.BinX = (short)BinX;
+            img.MetaData.Camera.BinY = (short)BinY;
+            img.MetaData.Camera.PixelSizeX = PixelSizeX;
+            img.MetaData.Camera.PixelSizeY = PixelSizeY;
+            tcs.TrySetResult(img);
+            try { File.Delete(path); } catch { /* best effort cleanup */ }
+        } catch (Exception ex) {
+            tcs.TrySetException(ex);
+        }
     }
 }
