@@ -3112,6 +3112,11 @@ function ninaApp() {
             this.$watch('exposure', v => { try { localStorage.setItem('polaris.live.exposure', String(v)); } catch (e) {} });
             this.$watch('gain', v => { try { localStorage.setItem('polaris.live.gain', String(v)); } catch (e) {} });
             this.$watch('binning', v => { try { localStorage.setItem('polaris.live.binning', String(v)); } catch (e) {} });
+            // VIDEO: push exposure/gain to a live stream as they change (the
+            // controls stay enabled while streaming), debounced so dragging the
+            // wheel doesn't flood the driver. No-op when not streaming.
+            this.$watch('video.exposure', () => { if (this.cameraStream.running) this._pushVideoLiveParams(); });
+            this.$watch('video.gain', () => { if (this.cameraStream.running) this._pushVideoLiveParams(); });
 
             // Self-update: check on boot, then hourly. No-ops off SBC .deb
             // installs (server reports supported:false → badge stays hidden).
@@ -20670,15 +20675,33 @@ function ninaApp() {
         // _mountWheelPickers $watch syncs the drum), so this matches a
         // scroll. Steps match each wheel's data-step (exp 1ms, gain 1,
         // focus 10). Focus also commits the absolute move like a drag.
+        // Push the current VIDEO exposure/gain to a running stream so the
+        // operator can adjust the live view (ASIAIR-style). Debounced so
+        // dragging the wheel doesn't flood the driver; no-op when idle.
+        _pushVideoLiveParams() {
+            if (this._videoParamsTimer) clearTimeout(this._videoParamsTimer);
+            this._videoParamsTimer = setTimeout(async () => {
+                if (!this.cameraStream.running) return;
+                try {
+                    await this.apiPost('/api/camera/stream/params', {
+                        exposure: this.video.exposure,
+                        gain: this.video.gain
+                    });
+                } catch (e) { /* transient; next change retries */ }
+            }, 250);
+        },
+
         videoWheelNudge(which, dir) {
-            const streaming = this.cameraStream.running || this.videoRecording.recording;
+            // Exposure/gain stay adjustable while streaming (the change is
+            // pushed live via the video.* $watch). Only a running RECORDING
+            // locks them, so the saved SER keeps constant settings.
             if (which === 'exp') {
-                if (streaming) return;
+                if (this.videoRecording.recording) return;
                 let ms = Math.round((this.video.exposure || 0) * 1000) + dir;
                 ms = Math.min(5000, Math.max(1, ms));
                 this.video.exposure = ms / 1000;
             } else if (which === 'gain') {
-                if (streaming) return;
+                if (this.videoRecording.recording) return;
                 let g = (this.video.gain | 0) + dir;
                 this.video.gain = Math.min(600, Math.max(0, g));
             } else if (which === 'focus') {

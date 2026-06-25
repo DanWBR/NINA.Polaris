@@ -3253,7 +3253,7 @@
                         <div class="wheel-picker-group">
                             <div class="wheel-col">
                                 <button class="btn btn-sm wheel-nudge" style="touch-action:none"
-                                        :disabled="cameraStream.running || videoRecording.recording"
+                                        :disabled="videoRecording.recording"
                                         @pointerdown.prevent="startWheelRepeat('exp', -1)"
                                         @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
                                         @pointercancel="stopWheelRepeat()"
@@ -3262,9 +3262,9 @@
                                      data-label="Exposure (ms)"
                                      data-min="1" data-max="5000" data-step="1"
                                      data-bind="video.exposure" data-scale="1000"
-                                     :data-disabled="cameraStream.running || videoRecording.recording"></div>
+                                     :data-disabled="videoRecording.recording"></div>
                                 <button class="btn btn-sm wheel-nudge" style="touch-action:none"
-                                        :disabled="cameraStream.running || videoRecording.recording"
+                                        :disabled="videoRecording.recording"
                                         @pointerdown.prevent="startWheelRepeat('exp', 1)"
                                         @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
                                         @pointercancel="stopWheelRepeat()"
@@ -3272,7 +3272,7 @@
                             </div>
                             <div class="wheel-col">
                                 <button class="btn btn-sm wheel-nudge" style="touch-action:none"
-                                        :disabled="cameraStream.running || videoRecording.recording"
+                                        :disabled="videoRecording.recording"
                                         @pointerdown.prevent="startWheelRepeat('gain', -1)"
                                         @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
                                         @pointercancel="stopWheelRepeat()"
@@ -3281,9 +3281,9 @@
                                      data-label="Gain"
                                      data-min="0" data-max="600" data-step="1"
                                      data-bind="video.gain" data-scale="1"
-                                     :data-disabled="cameraStream.running || videoRecording.recording"></div>
+                                     :data-disabled="videoRecording.recording"></div>
                                 <button class="btn btn-sm wheel-nudge" style="touch-action:none"
-                                        :disabled="cameraStream.running || videoRecording.recording"
+                                        :disabled="videoRecording.recording"
                                         @pointerdown.prevent="startWheelRepeat('gain', 1)"
                                         @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
                                         @pointercancel="stopWheelRepeat()"
@@ -3523,7 +3523,7 @@
                                 <span style="display:inline-flex; align-items:center; gap:4px">
                                     <input type="text" x-model="video.targetName"
                                            class="input-sm" style="width:120px"
-                                           :disabled="videoRecording.recording">
+                                           :disabled="cameraStream.running || videoRecording.recording">
                                     <!-- One-click "what is the mount pointing at?"
                      helper. Queries /api/sky/nearest-planet
                      with mount RA/Dec; if the nearest Moon /
@@ -3542,7 +3542,7 @@
                                 Max duration (s)
                                 <input type="number" x-model.number="video.maxDurationSec"
                                        step="10" min="0" class="input-sm" style="width:80px"
-                                       :disabled="videoRecording.recording">
+                                       :disabled="cameraStream.running || videoRecording.recording">
                             </label>
                         </div>
 
@@ -16048,7 +16048,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260625-dslriso-ws"></script>
+    <script src="/js/app.js?v=20260625-videoliveparams"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

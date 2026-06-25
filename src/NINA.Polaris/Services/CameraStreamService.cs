@@ -182,6 +182,29 @@ public class CameraStreamService : IDisposable {
             FrameCount, FrameCount > 0 ? FrameCount / Math.Max(0.001, (DateTime.UtcNow - _startedAt).TotalSeconds) : 0);
     }
 
+    /// <summary>
+    /// Apply new exposure/gain to a RUNNING stream so the operator can tune the
+    /// live view (the VIDEO controls stay enabled while streaming). In loop mode
+    /// RunLoop reads these fields each frame, so the change takes effect on the
+    /// next exposure. In native mode the driver was configured once at start, so
+    /// the native stream is restarted with the new settings (a brief gap). No-op
+    /// when not running.
+    /// </summary>
+    public async Task UpdateLiveAsync(double? exposureSeconds, int? gain) {
+        bool restartNative;
+        lock (_lock) {
+            if (exposureSeconds is > 0) ExposureSeconds = exposureSeconds.Value;
+            if (gain is >= 0) Gain = gain.Value;
+            if (!IsRunning) return;
+            restartNative = Mode == "native";
+        }
+        if (!restartNative) return;   // loop mode already honors the updated fields
+        double exp; int g, bx, by; FrameKind kind;
+        lock (_lock) { exp = ExposureSeconds; g = Gain; bx = BinX; by = BinY; kind = _broadcastKind; }
+        await StopAsync();
+        Start(new StreamConfig(exp, g, bx, by, ForceLoop: false, Kind: kind));
+    }
+
     private void StartNative(ICamera cam, CancellationToken ct) {
         Mode = "native";
         _nativeSubscription = cam.SubscribeVideoFrames(OnStreamFrame);

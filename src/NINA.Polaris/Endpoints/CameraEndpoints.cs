@@ -520,6 +520,14 @@ public static class CameraEndpoints {
             return Results.Ok(new { running = false, frames = stream.FrameCount });
         });
 
+        // Live exposure/gain tweak for a running stream so the VIDEO controls
+        // stay usable while streaming (ASIAIR-style). Loop mode picks the new
+        // values up on the next frame; native mode is restarted to apply them.
+        group.MapPost("/stream/params", async (CameraStreamService stream, StreamParamsRequest req) => {
+            await stream.UpdateLiveAsync(req.Exposure, req.Gain);
+            return Results.Ok(new { running = stream.IsRunning, exposure = stream.ExposureSeconds, gain = stream.Gain });
+        });
+
         group.MapGet("/stream/status", (CameraStreamService stream, EquipmentManager equip) => Results.Ok(new {
             running = stream.IsRunning,
             mode = stream.Mode,
@@ -631,4 +639,6 @@ public static class CameraEndpoints {
         int? Gain = null,
         int? Binning = null,
         bool? ForceLoop = null);
+
+    public record StreamParamsRequest(double? Exposure = null, int? Gain = null);
 }
