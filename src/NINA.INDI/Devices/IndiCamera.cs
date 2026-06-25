@@ -520,6 +520,18 @@ public class IndiCamera : ICamera {
         // future BLOB delivery. Always re-send after connect so a
         // restarted camera driver still streams FITS frames to us.
         await _client.EnableBlobAsync(DeviceName, ct);
+        // DSLR (indi_gphoto): force capture target → RAM and upload → client
+        // as soon as the driver's property vectors arrive, so it's correct
+        // regardless of which capture path runs first AND visible in the INDI
+        // panel right after connect (the field report: "Upload stays
+        // UPLOAD_LOCAL"). INDI streams defSwitchVector asynchronously after the
+        // connect ack, so poll briefly for the property before writing it.
+        for (int i = 0; i < 20; i++) {
+            if (_client.GetProperty(DeviceName, "UPLOAD_MODE") != null
+                || _client.GetProperty(DeviceName, "CCD_CAPTURE_TARGET") != null) break;
+            try { await Task.Delay(100, ct); } catch { break; }
+        }
+        try { await EnsureClientUploadAsync(ct); } catch { /* best effort */ }
     }
 
     public Task DisconnectAsync(CancellationToken ct = default)
