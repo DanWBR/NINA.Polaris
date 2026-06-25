@@ -109,6 +109,7 @@
         "items": [
           { "name": "Silk.NET", "url": "https://github.com/dotnet/Silk.NET", "note": "the .NET Foundation. OpenCL bindings for the optional SBC GPU compute backend." },
           { "name": "SkiaSharp", "url": "https://github.com/mono/SkiaSharp", "note": "Microsoft, wrapping Google's Skia. Server-side image encoding and rendering." },
+          { "name": "LibRaw", "url": "https://www.libraw.org/", "note": "the LibRaw authors (LGPL-2.1 / CDDL). Optional system shared library, loaded at runtime to decode DSLR/mirrorless RAW (CR2/NEF/ARW) into real 16-bit linear data for the live stack." },
           { "name": "ONNX Runtime (Web)", "url": "https://onnxruntime.ai/", "note": "Microsoft. Runs the GraXpert AI models in the browser." },
           { "name": "YARP", "url": "https://github.com/microsoft/reverse-proxy", "note": "Microsoft. Reverse proxy for the embedded device web UIs." },
           { "name": ".NET Community Toolkit (MVVM)", "url": "https://github.com/CommunityToolkit/dotnet", "note": "the .NET Foundation." },

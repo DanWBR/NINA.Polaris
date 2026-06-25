@@ -883,13 +883,36 @@ public class IndiCamera : ICamera {
     // ---- DSLR native-RAW decode (indi_gphoto FORMAT_NATIVE) ----
 
     /// <summary>Build an IImageData from a camera-native DSLR BLOB (CR2/NEF/ARW
-    /// or JPEG). We don't decode the Bayer RAW itself — we pull out the
-    /// embedded full-res JPEG (every CR2/NEF carries one) and use its luminance
-    /// plane for the on-screen preview, stats and stacking, exactly like the
-    /// vendor-SDK DSLR path. The original RAW bytes are attached via IHasRawFile
-    /// so the save-to-disk path writes the real .cr2. Returns null if no JPEG is
-    /// embedded / decodable.</summary>
+    /// or JPEG). Preferred: decode the real RAW with libraw into a true 16-bit
+    /// linear RGGB Bayer mosaic (full dynamic range for the live stack). If
+    /// libraw is unavailable or fails, fall back to the embedded full-res JPEG
+    /// (every CR2/NEF carries one), re-mosaiced to RGGB for a colour preview —
+    /// the vendor-SDK DSLR behaviour. Either way the original RAW bytes ride on
+    /// IHasRawFile so save-to-disk writes the real .cr2. Returns null if nothing
+    /// decodes.</summary>
     private IImageData? DecodeRawDslrBlob(byte[] data, string ext) {
+        // Preferred path: decode the actual RAW with libraw (when installed) →
+        // true 16-bit linear sensor data, re-mosaiced to RGGB. This is what the
+        // live stack wants (full dynamic range), instead of the 8-bit sRGB
+        // embedded JPEG. Falls through to the JPEG path below if libraw is absent
+        // or the decode fails (e.g. a plain .jpg BLOB, or an unsupported body).
+        if (!LooksLikeJpeg(data)) {
+            try {
+                if (NINA.Image.FileFormat.Raw.LibRawDecoder.TryDecodeToRggb(
+                        data, out int rw, out int rh, out var mosaic) && mosaic != null) {
+                    var rprops = new ImageProperties {
+                        Width = rw, Height = rh, BitDepth = 16,
+                        IsBayered = true, BayerPattern = BayerPatternEnum.RGGB
+                    };
+                    var rmeta = new ImageMetaData { CreationTime = DateTime.UtcNow };
+                    return new BaseImageData(mosaic, rprops, rmeta) {
+                        RawFileBytes = data,
+                        RawFileExtension = ext.StartsWith('.') ? ext : "." + ext
+                    };
+                }
+            } catch { /* fall back to the embedded-JPEG path */ }
+        }
+
         // The whole BLOB might already be a JPEG (gphoto delivering .jpg), else
         // it's a TIFF-based RAW (CR2/NEF/ARW) with one or more embedded JPEGs.
         // Try the candidates largest-first and take the first that actually

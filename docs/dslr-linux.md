@@ -82,7 +82,17 @@ Web Manager UI.
 - **RAW vs JPEG**: `indi_gphoto_ccd` exposes a `CAPTURE_FORMAT` switch.
   Most users want **Native** (the camera's CR2 / NEF / ARW) so the
   Studio panel can demosaic later; set **JPEG** if you just want quick
-  preview frames.
+  preview frames. Polaris always asks the driver for **Native** on a
+  DSLR/mirrorless body and decodes the frame server-side.
+- **RAW decoding (libraw)**: when the `libraw` shared library is present
+  (Debian/RaspiOS package `libraw23`, pulled in automatically by the
+  Polaris `.deb` *Recommends*), Polaris decodes the camera RAW to the
+  **true 16-bit linear sensor data** for the live preview and live
+  stack — full dynamic range, far better than the 8-bit embedded JPEG.
+  If `libraw` is missing it falls back to the embedded full-res JPEG
+  (`sudo apt install libraw23` to enable the real-RAW path). Either way
+  the **untouched RAW file** is what gets saved to disk (`.cr2` / `.nef`
+  / `.arw`), so your subs are always full quality.
 - **Sensor temperature**: most DSLRs don't report a sensor temperature
   to the OS, Polaris shows the field as blank for these cameras. The
   Camera card hides cooler controls accordingly.
