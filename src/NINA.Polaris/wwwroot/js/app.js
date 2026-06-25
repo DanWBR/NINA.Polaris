@@ -1196,6 +1196,9 @@ function ninaApp() {
         // and the UI keeps the numeric Gain control. gainMin/Max drive the
         // gain↔ISO helper tooltip range.
         cameraIso: { options: [], selected: 0, gainMin: 0, gainMax: 0 },
+        // Selected ISO for the aux DSLR (PREVIEW source = Aux). gphoto remembers
+        // it on the camera; this is just the last value we pushed.
+        auxIso: 800,
         videoRecording: {
             recording: false, path: null, frames: 0, bytes: 0,
             durationSec: 0, droppedFrames: 0, lastError: null
@@ -5066,6 +5069,20 @@ function ninaApp() {
         // it only applies when the PREVIEW source is the main camera.
         previewUsesIso() {
             return (this.preview.cameraSource || 'main') === 'main' && this.cameraUsesIso();
+        },
+        // True when the PREVIEW source is the aux camera and that aux is a DSLR
+        // (configured via the DSLR picker, so it has a resolution/pixel size).
+        // gphoto uses ISO, not analogue gain, so show an ISO dropdown instead.
+        previewAuxUsesIso() {
+            return this.preview.cameraSource === 'aux' && !!this.auxCameraConnected
+                && ((this.aux?.maxX > 0) || (this.aux?.pixelSizeUm > 0));
+        },
+        // Push an ISO to the aux DSLR (out-of-band, like the main camera's setIso).
+        async setAuxIso(iso) {
+            const v = Number(iso);
+            this.auxIso = v;
+            try { await this.apiPost('/api/aux/camera/iso', { iso: v }); }
+            catch (e) { this.toast('Aux ISO set failed: ' + (e.message || e), 'warn'); }
         },
         // ----- Per-camera PREVIEW settings memory -----
         // Called from the camera-source <select> @change: load the picked

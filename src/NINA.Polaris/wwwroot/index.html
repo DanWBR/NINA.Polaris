@@ -2852,12 +2852,24 @@
                                 </template>
                             </select>
                         </label>
-                        <label x-show="!previewUsesIso()">Gain
+                        <!-- DSLR on the AUX source: gphoto uses ISO, not gain.
+                             Standard ISO steps; the driver picks the nearest it
+                             supports. Set out-of-band on the aux camera. -->
+                        <label x-show="previewAuxUsesIso()" x-cloak>ISO
+                            <select class="input-sm" x-model.number="auxIso"
+                                    @change="setAuxIso(auxIso)"
+                                    :disabled="preview.busy">
+                                <template x-for="v in [100,200,400,800,1600,3200,6400,12800,25600]" :key="'aiso'+v">
+                                    <option :value="v" x-text="v"></option>
+                                </template>
+                            </select>
+                        </label>
+                        <label x-show="!previewUsesIso() && !previewAuxUsesIso()">Gain
                             <input type="number" x-model.number="preview.gain"
                                    step="10" min="0" class="input-sm"
                                    :disabled="preview.busy">
                         </label>
-                        <span class="zwo-gain-presets" x-show="!previewUsesIso() && zwoPresetsForActiveCamera() && !preview.busy">
+                        <span class="zwo-gain-presets" x-show="!previewUsesIso() && !previewAuxUsesIso() && zwoPresetsForActiveCamera() && !preview.busy">
                             <button type="button" class="zwo-gain-preset"
                                     :data-active="preview.gain === zwoPresetsForActiveCamera()?.L"
                                     @click="applyGainPreset('preview.gain', zwoPresetsForActiveCamera().L)">L</button>
@@ -16012,7 +16024,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260625-ccdinfo"></script>
+    <script src="/js/app.js?v=20260625-dslrcolor-iso"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

@@ -76,6 +76,18 @@ public static class AuxEndpoints {
         group.MapGet("/camera/discover", (EquipmentManager equip, string? driver)
             => Results.Ok(equip.GetDiscoveredCamerasFor(driver ?? "indi")));
 
+        // DSLR ISO selection for the aux camera (indi_gphoto CCD_ISO). 501 when
+        // the aux camera doesn't expose ISO (astro cams use analogue gain).
+        group.MapPost("/camera/iso", async (EquipmentManager equip, AuxIsoRequest req) => {
+            if (equip.AuxCamera == null || !equip.AuxCamera.IsConnected)
+                return Results.BadRequest(new { error = "No aux camera connected" });
+            if (!equip.AuxCamera.Capabilities.SupportsIso)
+                return Results.Json(new { error = "Aux camera does not support ISO" },
+                    statusCode: 501);
+            await equip.AuxCamera.SetIsoAsync(req.Iso);
+            return Results.Ok(new { iso = req.Iso });
+        });
+
         // ----- Aux focuser selection + connection + manual jog -----
         group.MapPost("/focuser/select/{deviceName}", (EquipmentManager equip,
                 string deviceName, string? driver) => {
@@ -145,4 +157,5 @@ public static class AuxEndpoints {
     }
 
     public record AuxEnabledRequest(bool Enabled);
+    public record AuxIsoRequest(int Iso);
 }

@@ -910,20 +910,32 @@ public class IndiCamera : ICamera {
         if (bmp == null || bmp.Width <= 0 || bmp.Height <= 0) { bmp?.Dispose(); return null; }
         int w = bmp.Width, h = bmp.Height;
         var pixels = new ushort[w * h];
+        // The embedded JPEG is already debayered RGB, but Polaris's live relay
+        // only carries a single-channel buffer + a Bayer pattern (the client
+        // WebGL pipeline debayers). To get a COLOUR preview we re-mosaic the RGB
+        // back into an RGGB Bayer grid: each pixel keeps the one channel an RGGB
+        // sensor would sample there. The client then debayers it back to colour,
+        // exactly like a real OSC. Slight quality loss vs the full RGB, but the
+        // authoritative data is the untouched RAW kept on IHasRawFile.
         try {
             var cols = bmp.Pixels;   // SKColor[], color-type agnostic
-            for (int i = 0; i < pixels.Length; i++) {
-                var c = cols[i];
-                // Rec.601 luma, 8-bit → 16-bit so the stretch/histogram pipeline
-                // behaves the same as a FITS frame.
-                double luma = 0.299 * c.Red + 0.587 * c.Green + 0.114 * c.Blue;
-                pixels[i] = (ushort)Math.Clamp(luma * 256, 0, 65535);
+            for (int y = 0; y < h; y++) {
+                int row = y * w;
+                bool evenRow = (y & 1) == 0;
+                for (int x = 0; x < w; x++) {
+                    var c = cols[row + x];
+                    bool evenCol = (x & 1) == 0;
+                    // RGGB: (even,even)=R, (even,odd)=G, (odd,even)=G, (odd,odd)=B
+                    byte ch = evenRow ? (evenCol ? c.Red : c.Green)
+                                      : (evenCol ? c.Green : c.Blue);
+                    pixels[row + x] = (ushort)(ch * 257);   // 8-bit → full 16-bit
+                }
             }
         } finally { bmp.Dispose(); }
 
         var props = new ImageProperties {
             Width = w, Height = h, BitDepth = 16,
-            IsBayered = false, BayerPattern = BayerPatternEnum.None
+            IsBayered = true, BayerPattern = BayerPatternEnum.RGGB
         };
         var meta = new ImageMetaData { CreationTime = DateTime.UtcNow };
         return new BaseImageData(pixels, props, meta) {
