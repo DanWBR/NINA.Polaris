@@ -212,13 +212,13 @@ public sealed partial class NativeGuider {
 
     /// <summary>Encode the latest guide frame as an auto-stretched JPEG for the
     /// PHD2-style camera view. Returns null when no frame is available yet.</summary>
-    public byte[]? EncodeViewJpeg(int maxDim = 600, int quality = 75) {
+    public byte[]? EncodeViewJpeg(int maxDim = 600, int quality = 75, double gamma = 1.0) {
         var vf = _view;
         if (vf == null || vf.Pixels.Length < (long)vf.Width * vf.Height) return null;
         try {
             return NINA.Polaris.Services.Studio.FitsThumbnailer.RenderJpegFromBuffer(
                 vf.Pixels, vf.Width, vf.Height, vf.BitDepth, maxDim, quality,
-                guideStretch: true, bayer: vf.IsBayered);
+                guideStretch: true, bayer: vf.IsBayered, guideGamma: gamma);
         } catch {
             return null;
         }

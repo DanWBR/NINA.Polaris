@@ -248,7 +248,8 @@ public static class FitsThumbnailer {
                                               int bitDepth, int maxDim = 256, int quality = 85,
                                               NINA.Image.ImageAnalysis.AutoStretch.StretchParams? overrideParams = null,
                                               bool guideStretch = false,
-                                              bool bayer = false) {
+                                              bool bayer = false,
+                                              double guideGamma = 1.0) {
         // bayer=true: the buffer is a raw Bayer mosaic (e.g. a colour guide
         // camera). Rendering it as grayscale shows the alternating per-cell
         // sensitivities as a harsh checkerboard once stretched. Collapse each
@@ -276,11 +277,13 @@ public static class FitsThumbnailer {
             pixels = ds; width = gw; height = gh;
         }
 
-        // NOTE: the guide preview no longer pre-suppresses hot pixels — the
-        // PHD2-style stretch (below) already makes its black/white points
-        // robust to them via a 3x3 median, and PHD2 itself shows the raw
-        // pixels, so we match that look. SuppressHotPixels is kept for any
-        // other caller that wants it.
+        // Guide preview: knock out isolated single-pixel hot/warm pixels before
+        // the stretch. The PHD2-style stretch already makes its black/white
+        // points robust to them (3x3 median), but the LUT still maps a raw hot
+        // pixel to white — PHD2 shows those specks; we suppress them so the view
+        // is cleaner than PHD2 without changing the stretch character. Done on a
+        // COPY so the camera's raw buffer (star detection) is never mutated.
+        if (guideStretch) pixels = SuppressHotPixels(pixels, width, height);
 
         // Auto-stretch lives in NINA.Image (vendored portable copy).
         // GX-12c: when overrideParams is set, skip the auto-stretch
@@ -294,7 +297,7 @@ public static class FitsThumbnailer {
                 pixels, width, height,
                 overrideParams.Black, overrideParams.Mid, overrideParams.White, bitDepth)
             : guideStretch
-                ? NINA.Image.ImageAnalysis.AutoStretch.ApplyGuidePhd2(pixels, width, height, bitDepth)
+                ? NINA.Image.ImageAnalysis.AutoStretch.ApplyGuidePhd2(pixels, width, height, bitDepth, guideGamma)
                 : NINA.Image.ImageAnalysis.AutoStretch.Apply(pixels, width, height, bitDepth);
 
         // Wrap the byte[] as a Gray8 SKBitmap, copy so we own the

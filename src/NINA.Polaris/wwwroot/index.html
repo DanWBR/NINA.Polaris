@@ -3939,10 +3939,20 @@
                                        x-model.number="guideView.contrast"
                                        @input="persistGuideView()" @dblclick="guideView.contrast=1; persistGuideView()"
                                        title="Contrast (double-click to reset)">
+                                <!-- PHD2-style display gamma: drives the SERVER
+                                     auto-stretch (FiltMin/FiltMax + gamma), not a
+                                     CSS filter. 1.0 = linear (PHD2 default). -->
+                                <span title="Gamma (PHD2 display)">γ</span>
+                                <input type="range" min="0.1" max="3" step="0.05"
+                                       :value="guideGamma"
+                                       @input="setGuideGamma($event.target.value)"
+                                       @dblclick="setGuideGamma(1.0)"
+                                       title="Gamma (double-click to reset to 1.0 linear)">
                                 <!-- Auto: back to the server's auto-stretched
-                                     baseline (no extra CSS brightness/contrast). -->
-                                <button class="btn btn-xs" @click="guideViewAuto()"
-                                        :disabled="guideView.brightness === 1 && guideView.contrast === 1"
+                                     baseline (no extra CSS brightness/contrast,
+                                     gamma 1.0). -->
+                                <button class="btn btn-xs" @click="guideViewAuto(); setGuideGamma(1.0)"
+                                        :disabled="guideView.brightness === 1 && guideView.contrast === 1 && guideGamma === 1"
                                         title="Reset to the auto-stretched baseline">Auto</button>
                             </div>
                             <div class="phd2-cam-empty text-muted" x-show="!guider.view">Loop or guide to see the guide frame</div>
@@ -16048,7 +16058,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260625-videoliveparams"></script>
+    <script src="/js/app.js?v=20260625-guidegamma"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

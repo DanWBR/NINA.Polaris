@@ -933,6 +933,10 @@ function ninaApp() {
         cameraVendorDevices: [],
         cameraDiscovering: false,
         cameraIso: 800,
+        // PHD2-style display gamma for the native guide preview (0.10–3.00,
+        // 1.0 = linear default). Persisted in localStorage; sent as ?gamma= on
+        // the guide frame.jpg request.
+        guideGamma: 1.0,
 
         // Guider backend selection (native autoguider vs external PHD2).
         // guiderDriver picks which backend the rig uses; guideCamera +
@@ -3108,6 +3112,9 @@ function ninaApp() {
                 if (lg !== null && lg !== '' && !isNaN(parseInt(lg, 10))) this.gain = parseInt(lg, 10);
                 const lb = localStorage.getItem('polaris.live.binning');
                 if (lb) this.binning = lb;
+                const gg = localStorage.getItem('polaris.guide.gamma');
+                if (gg !== null && gg !== '' && !isNaN(parseFloat(gg)))
+                    this.guideGamma = Math.min(3.0, Math.max(0.1, parseFloat(gg)));
             } catch (e) { /* private mode; ignore */ }
             this.$watch('exposure', v => { try { localStorage.setItem('polaris.live.exposure', String(v)); } catch (e) {} });
             this.$watch('gain', v => { try { localStorage.setItem('polaris.live.gain', String(v)); } catch (e) {} });
@@ -15218,8 +15225,21 @@ function ninaApp() {
             if (v && v.frameId !== this._guidePhdFrameId) {
                 this._guidePhdFrameId = v.frameId;
                 const img = this.$refs.guidePhdCamImg;
-                if (img) img.src = this.authUrl(`/api/guider/frame.jpg?id=${v.frameId}`);
+                if (img) img.src = this.authUrl(`/api/guider/frame.jpg?id=${v.frameId}&gamma=${this.guideGamma}`);
             }
+        },
+
+        // PHD2-style display gamma for the native guide preview. Persists and
+        // re-renders the CURRENT frame immediately (so the slider gives live
+        // feedback without waiting for the next exposure).
+        setGuideGamma(v) {
+            const g = Math.min(3.0, Math.max(0.1, Number(v) || 1.0));
+            this.guideGamma = g;
+            try { localStorage.setItem('polaris.guide.gamma', String(g)); } catch (e) {}
+            const fid = this.guider.view?.frameId;
+            const img = this.$refs.guidePhdCamImg;
+            if (img && fid != null)
+                img.src = this.authUrl(`/api/guider/frame.jpg?id=${fid}&gamma=${g}&t=${Date.now()}`);
         },
 
         // Size a canvas to its CSS box at devicePixelRatio. Returns {ctx,w,h}.
