@@ -397,6 +397,43 @@ public class IndiCamera : ICamera {
         } catch { /* driver rejected; non-fatal */ }
     }
 
+    /// <summary>indi_gphoto (DSLR) capture-target + upload-mode safety. When the
+    /// camera is set to save to the SD card (CCD_CAPTURE_TARGET = SD_CARD), the
+    /// exposure fires but the frame lands on the card and NO BLOB is delivered to
+    /// us — PREVIEW stays blank and the capture eventually times out. Force the
+    /// capture target to internal RAM and the upload mode to client so the frame
+    /// streams back to Polaris. Best-effort + idempotent: dedicated astro cameras
+    /// don't expose these properties and just no-op, and we only write when the
+    /// value isn't already correct (so we don't re-poke the driver every frame).</summary>
+    private async Task EnsureClientUploadAsync(CancellationToken ct) {
+        // Capture target → RAM (CCD_CAPTURE_TARGET, elements RAM / SD_CARD).
+        if (_client.GetProperty(DeviceName, "CCD_CAPTURE_TARGET") is IndiSwitchProperty tgt
+                && tgt.Values.Count > 0) {
+            string? ram = null;
+            foreach (var k in tgt.Values.Keys)
+                if (k.ToUpperInvariant().Contains("RAM")) { ram = k; break; }
+            if (ram != null && !(tgt.Values.TryGetValue(ram, out var onRam) && onRam)) {
+                var payload = new Dictionary<string, bool>();
+                foreach (var k in tgt.Values.Keys) payload[k] = (k == ram);
+                try { await _client.SetSwitchAsync(DeviceName, "CCD_CAPTURE_TARGET", payload, ct); }
+                catch { /* driver rejected; non-fatal */ }
+            }
+        }
+        // Upload mode → client (UPLOAD_MODE, elements UPLOAD_CLIENT/_LOCAL/_BOTH).
+        if (_client.GetProperty(DeviceName, "UPLOAD_MODE") is IndiSwitchProperty up
+                && up.Values.Count > 0) {
+            string? client = null;
+            foreach (var k in up.Values.Keys)
+                if (k.ToUpperInvariant().Contains("CLIENT")) { client = k; break; }
+            if (client != null && !(up.Values.TryGetValue(client, out var onCli) && onCli)) {
+                var payload = new Dictionary<string, bool>();
+                foreach (var k in up.Values.Keys) payload[k] = (k == client);
+                try { await _client.SetSwitchAsync(DeviceName, "UPLOAD_MODE", payload, ct); }
+                catch { /* driver rejected; non-fatal */ }
+            }
+        }
+    }
+
     /// <summary>Writes WB_R and WB_B into CCD_CONTROLS. Silent skip if
     /// the driver doesn't have one of the keys.</summary>
     public async Task SetWhiteBalanceAsync(double red, double blue, CancellationToken ct = default) {
@@ -549,6 +586,12 @@ public class IndiCamera : ICamera {
         // hangs forever. Cheap (single small XML packet) so doing it on
         // every capture is fine.
         try { await _client.EnableBlobAsync(DeviceName, ct); } catch { /* best effort */ }
+
+        // DSLR (indi_gphoto): make sure the frame comes back to us instead of
+        // being saved to the SD card. Without this a "Capture Target = SD Card"
+        // setting means the shutter fires but no BLOB ever arrives (blank
+        // PREVIEW + timeout). No-op on cameras without these properties.
+        try { await EnsureClientUploadAsync(ct); } catch { /* best effort */ }
 
         // BIAS / zero-second requests: at exactly 0 s most INDI drivers
         // (incl. indi_svbony_ccd) never start a readout, so no BLOB is
