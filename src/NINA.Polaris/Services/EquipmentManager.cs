@@ -808,6 +808,10 @@ public class EquipmentManager : IDisposable {
                 coolerOn = Camera.CoolerOn,
                 coolerPower = Safe(Camera.CoolerPower),
                 supportsCooler = Camera.Capabilities.SupportsCooler,
+                // DSLR signal (gphoto exposes CCD_ISO) so the UI's isDslrCamera
+                // works from the always-present WS status, not just the
+                // on-demand /api/camera/status capability probe.
+                supportsIso = Camera.Capabilities.SupportsIso,
                 binX = Camera.BinX,
                 binY = Camera.BinY,
                 gain = Camera.Gain,

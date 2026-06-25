@@ -22916,6 +22916,7 @@ function ninaApp() {
             // means the cooler/temperature rows hide and the ISO control shows
             // regardless of which slot (main/aux) the DSLR is plugged into.
             return ['canon-edsdk', 'nikon-sdk', 'sony-sdk'].includes(this.cameraDriver)
+                || this.equipCameraInfo.supportsIso === true
                 || this.cameraCaps.iso === true;
         },
 
@@ -26817,7 +26818,8 @@ function ninaApp() {
                         pixelSizeUm: data.pixelSizeX || 0,
                         maxX: data.maxX || 0,
                         maxY: data.maxY || 0,
-                        supportsCooler: !!(data.capabilities && data.capabilities.cooler)
+                        supportsCooler: !!(data.capabilities && data.capabilities.cooler),
+                        supportsIso: !!(data.capabilities && data.capabilities.iso)
                     };
                     if (data.temperature !== null && data.temperature !== undefined) {
                         this.cameraTemp = data.temperature;
@@ -30043,6 +30045,7 @@ function ninaApp() {
                 this.equipCameraInfo = {
                     coolerOn: coolerOn,
                     supportsCooler: !!eq.camera.supportsCooler,
+                    supportsIso: !!eq.camera.supportsIso,
                     binX: eq.camera.binX || 0,
                     binY: eq.camera.binY || 0,
                     bitDepth: eq.camera.bitDepth || 0,
