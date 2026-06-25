@@ -51,7 +51,9 @@ public static class CameraEndpoints {
                         await equip.AuxCamera.SetBinningAsync(request.Binning, request.Binning);
                     var auxImg = await AuxCameraCaptureGate.RunAsync(async () => {
                         using (captureProgress.Begin("aux", request.Exposure))
-                            return await equip.AuxCamera.CaptureAsync(request.Exposure);
+                            return await equip.AuxCamera.CaptureAsync(request.Exposure,
+                                new NINA.Image.Interfaces.CaptureOptions(
+                                    Gain: request.Gain > 0 ? request.Gain : null, ImageType: "SNAP"));
                     }, acquireTimeout: TimeSpan.FromSeconds(Math.Max(request.Exposure, 1) + 60));
                     // Route to the PREVIEW canvas when the caller asks for it
                     // (kind=preview), else keep the legacy FOCUS-canvas target.
@@ -75,7 +77,9 @@ public static class CameraEndpoints {
                     if (request.Binning > 0)
                         await equip.GuideCamera.SetBinningAsync(request.Binning, request.Binning);
                     using (captureProgress.Begin("guide", request.Exposure)) {
-                        var gImg = await equip.GuideCamera.CaptureAsync(request.Exposure);
+                        var gImg = await equip.GuideCamera.CaptureAsync(request.Exposure,
+                            new NINA.Image.Interfaces.CaptureOptions(
+                                Gain: request.Gain > 0 ? request.Gain : null, ImageType: "SNAP"));
                         await relay.RelayImageAsync(gImg!,
                             string.IsNullOrEmpty(request.Kind) ? FrameKind.Focus : ParseFrameKind(request.Kind));
                         var st = ComputeFocusStats(gImg!);
