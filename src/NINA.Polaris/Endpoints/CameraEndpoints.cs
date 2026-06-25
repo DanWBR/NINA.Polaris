@@ -22,7 +22,7 @@ public static class CameraEndpoints {
 
         group.MapPost("/capture", async (EquipmentManager equip, ImageRelayService relay,
             LiveStackingService liveStack, ImageWriterService imageWriter,
-            CaptureProgressService captureProgress,
+            CaptureProgressService captureProgress, ProfileService profileSvc,
             ILoggerFactory loggerFactory,
             CaptureRequest request) => {
             // Diag log -- helps trace 'preview frame landing on live
@@ -60,7 +60,17 @@ public static class CameraEndpoints {
                     await relay.RelayImageAsync(auxImg!,
                         string.IsNullOrEmpty(request.Kind) ? FrameKind.Focus : ParseFrameKind(request.Kind));
                     var st = ComputeFocusStats(auxImg!);
-                    return Results.Ok(new { status = "captured", stats = st });
+                    // PREVIEW opt-in disk save. Aux frames go to their own aux/
+                    // tree carrying the aux optics' focal length, matching the
+                    // AuxCaptureService archiving layout.
+                    bool auxSaved = false;
+                    if (request.SaveToDisk && auxImg != null) {
+                        var saved = imageWriter.SaveImage(auxImg, targetName: request.TargetName ?? "snap",
+                            imageType: "AUX", gain: request.Gain,
+                            focalLengthMmOverride: profileSvc.ActiveEquipmentProfile?.AuxFocalLengthMm);
+                        auxSaved = saved != null;
+                    }
+                    return Results.Ok(new { status = "captured", stats = st, saved = auxSaved });
                 } catch (Exception ex) {
                     return Results.Json(new { error = ex.Message }, statusCode: 500);
                 }
@@ -83,7 +93,19 @@ public static class CameraEndpoints {
                         await relay.RelayImageAsync(gImg!,
                             string.IsNullOrEmpty(request.Kind) ? FrameKind.Focus : ParseFrameKind(request.Kind));
                         var st = ComputeFocusStats(gImg!);
-                        return Results.Ok(new { status = "captured", stats = st });
+                        // PREVIEW opt-in disk save. Guide-scope snaps go to the
+                        // snaps/ tree with a "guide" target marker (so they're
+                        // distinct from the main camera's snaps) and carry the
+                        // guide scope's focal length for correct FOV metadata.
+                        bool guideSaved = false;
+                        if (request.SaveToDisk && gImg != null) {
+                            var baseName = string.IsNullOrWhiteSpace(request.TargetName) ? "snap" : request.TargetName;
+                            var saved = imageWriter.SaveImage(gImg, targetName: baseName + " guide",
+                                imageType: "SNAP", gain: request.Gain,
+                                focalLengthMmOverride: profileSvc.ActiveEquipmentProfile?.GuiderFocalLengthMm);
+                            guideSaved = saved != null;
+                        }
+                        return Results.Ok(new { status = "captured", stats = st, saved = guideSaved });
                     }
                 } catch (Exception ex) {
                     return Results.Json(new { error = ex.Message }, statusCode: 500);

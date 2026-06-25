@@ -1074,9 +1074,20 @@ function ninaApp() {
             filter: '',          // empty = keep current filter
             saveToDisk: false,
             // Which camera to snap from: 'main' | 'guide' | 'aux'. Aux/guide
-            // snaps relay to the same previewCanvas (kind=preview) but never
-            // feed the live stack or save to disk.
+            // snaps relay to the same previewCanvas (kind=preview) and never
+            // feed the live stack, but CAN opt into disk save (aux → aux/ tree,
+            // guide → snaps/ tree, both with their own focal length).
             cameraSource: 'main',
+            // Per-camera memory of exposure/gain(ISO)/binning. The live
+            // exposure/gain/binning fields above mirror the active source's
+            // slot; switching cameraSource swaps them in. Persisted as a unit
+            // so each camera restores its own last-used values across reloads.
+            bySource: {
+                main:  { exposure: 2.0, gain: 100, binning: 1 },
+                guide: { exposure: 1.0, gain: 200, binning: 1 },
+                aux:   { exposure: 2.0, gain: 100, binning: 1 }
+            },
+            _activeSource: 'main',
             targetName: 'snap',
             busy: false,
             looping: false,
@@ -5044,6 +5055,42 @@ function ninaApp() {
         // it only applies when the PREVIEW source is the main camera.
         previewUsesIso() {
             return (this.preview.cameraSource || 'main') === 'main' && this.cameraUsesIso();
+        },
+        // ----- Per-camera PREVIEW settings memory -----
+        // Called from the camera-source <select> @change: load the picked
+        // camera's remembered exposure/gain/binning into the live fields.
+        // The mirror-watch (installed in _previewInitPerCamera) keeps
+        // bySource[active] up to date as the user edits, so we don't need to
+        // stash here — just point _activeSource at the new slot and load it.
+        previewApplyCameraSource() {
+            const src = this.preview.cameraSource || 'main';
+            this.preview._activeSource = src;
+            const s = this.preview.bySource[src] || {};
+            if (s.exposure != null) this.preview.exposure = s.exposure;
+            if (s.gain != null) this.preview.gain = s.gain;
+            if (s.binning != null) this.preview.binning = s.binning;
+        },
+        // Restore the active source's slot into the live fields after the
+        // persisted state loads, then mirror later edits back into the slot
+        // so every camera keeps its own values.
+        _previewInitPerCamera() {
+            if (!this.preview.bySource) {
+                this.preview.bySource = {
+                    main:  { exposure: 2.0, gain: 100, binning: 1 },
+                    guide: { exposure: 1.0, gain: 200, binning: 1 },
+                    aux:   { exposure: 2.0, gain: 100, binning: 1 }
+                };
+            }
+            this.previewApplyCameraSource();
+            ['exposure', 'gain', 'binning'].forEach((k) => {
+                try {
+                    this.$watch('preview.' + k, (v) => {
+                        const src = this.preview._activeSource || 'main';
+                        if (!this.preview.bySource[src]) this.preview.bySource[src] = {};
+                        this.preview.bySource[src][k] = v;
+                    });
+                } catch (e) { /* unwatchable; skip */ }
+            });
         },
         // Select an ISO on the camera (DSLR / indi_gphoto).
         async setIso(iso) {
@@ -18580,8 +18627,9 @@ function ninaApp() {
                     kind: 'preview',
                     // Which camera to snap from. Main is the default path;
                     // guide/aux capture the secondary cameras and still land
-                    // on previewCanvas (kind=preview) but ignore filter/save/
-                    // live-stack server-side.
+                    // on previewCanvas (kind=preview). They honour saveToDisk
+                    // (aux → aux/ tree, guide → snaps/ tree, each with its own
+                    // focal length) but never feed the live stack or swap filters.
                     cameraSource: camSrc === 'main' ? null : camSrc
                 };
                 // Diag log -- if the user reports 'preview frame ends
@@ -19036,6 +19084,9 @@ function ninaApp() {
                 // PREVIEW
                 'preview.exposure', 'preview.gain', 'preview.binning',
                 'preview.filter', 'preview.saveToDisk',
+                // PREVIEW per-camera memory (exposure/gain/binning per source)
+                // + which camera is currently selected.
+                'preview.cameraSource', 'preview.bySource',
                 // VIDEO capture
                 'video.exposure', 'video.gain', 'video.binning',
                 'video.maxDurationSec', 'video.wbR', 'video.wbB',
@@ -19094,6 +19145,11 @@ function ninaApp() {
         // the server (the watch fires but writes the same value we just read).
         async _initUiPersistence() {
             await this.loadUiState();
+            // PREVIEW per-camera memory: load the restored active source's
+            // slot into the live fields and start mirroring edits. Done before
+            // wiring the generic $watch persistence so the restore doesn't
+            // bounce back to the server.
+            this._previewInitPerCamera();
             for (const p of this._uiStatePaths()) {
                 try { this.$watch(p, () => this._saveUiStateDebounced()); }
                 catch (e) { /* unwatchable path; skip */ }

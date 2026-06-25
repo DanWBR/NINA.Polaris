@@ -2829,6 +2829,7 @@
                         <label x-show="(guider && guider.guideCameraConnected) || auxCameraConnected">
                             Camera
                             <select x-model="preview.cameraSource" class="input-sm"
+                                    @change="previewApplyCameraSource()"
                                     :disabled="preview.busy || preview.looping">
                                 <option value="main">Main</option>
                                 <option value="guide" x-show="guider && guider.guideCameraConnected">Guide</option>
@@ -15934,7 +15935,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260625-previewiso"></script>
+    <script src="/js/app.js?v=20260625-previewpercam"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
