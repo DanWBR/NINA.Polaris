@@ -5329,8 +5329,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <!-- DSLRs don't report sensor temperature
                                          or cooler state, hide both rows
                                          when the active driver is a vendor SDK. -->
-                                    <span x-show="!isDslrCamera && cameraTemp !== null">Temp: <strong x-text="(cameraTemp?.toFixed(1) || '--') + '°C'"></strong></span>
-                                    <span x-show="!isDslrCamera && cameraCaps.cooler !== false">Cooler: <strong :class="equipCameraInfo.coolerOn ? 'text-ok' : 'text-muted'"
+                                    <span x-show="!isDslrCamera && equipCameraInfo.supportsCooler">Temp: <strong x-text="(cameraTemp?.toFixed(1) || '--') + '°C'"></strong></span>
+                                    <span x-show="!isDslrCamera && equipCameraInfo.supportsCooler">Cooler: <strong :class="equipCameraInfo.coolerOn ? 'text-ok' : 'text-muted'"
                                                           x-text="equipCameraInfo.coolerOn ? 'ON' : 'OFF'"></strong></span>
                                     <span x-show="!isDslrCamera && equipCameraInfo.binX">Bin: <strong x-text="equipCameraInfo.binX + 'x' + equipCameraInfo.binY"></strong></span>
                                     <span x-show="equipCameraInfo.bitDepth">Depth: <strong x-text="equipCameraInfo.bitDepth + '-bit'"></strong></span>
@@ -5352,7 +5352,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                      Only shown when the camera doesn't report
                                      its own pixel size. -->
                                 <div class="equip-inline-controls"
-                                     x-show="!(equipCameraInfo.pixelSizeUm > 0)" x-cloak>
+                                     x-show="isDslrCamera" x-cloak>
                                     <label class="equip-temp-label">
                                         Pixel size (µm)
                                         <input type="number" step="0.01" min="0" class="input-sm"
@@ -5366,7 +5366,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                      above from a curated catalogue. Brand+model
                                      aren't persisted; the resolved µm is. -->
                                 <div class="equip-meta-row"
-                                     x-show="!(equipCameraInfo.pixelSizeUm > 0)" x-cloak>
+                                     x-show="isDslrCamera" x-cloak>
                                     <label>Camera brand
                                         <select x-model="dslrPick.mainBrand" class="input-sm"
                                                 @change="dslrPick.mainModel = ''">
@@ -5394,7 +5394,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                      glance (green = ON, red = OFF),
                                      replaces the old "Cooler OFF"
                                      button-with-label that read ambiguously. -->
-                                <div class="equip-inline-controls" x-show="!isDslrCamera && cameraCaps.cooler !== false">
+                                <div class="equip-inline-controls" x-show="!isDslrCamera && equipCameraInfo.supportsCooler">
                                     <label class="equip-toggle"
                                            :title="equipCameraInfo.coolerOn ? 'Turn cooler OFF' : 'Turn cooler ON'">
                                         <input type="checkbox"
@@ -5439,7 +5439,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 </div>
 
                                 <div class="chart-container chart-container-xs"
-                                     x-show="!isDslrCamera && tempHistory.length >= 2">
+                                     x-show="!isDslrCamera && equipCameraInfo.supportsCooler && tempHistory.length >= 2">
                                     <canvas x-ref="tempChart" id="tempChart"></canvas>
                                 </div>
 
@@ -16058,7 +16058,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260625-guidegamma"></script>
+    <script src="/js/app.js?v=20260625-camclass-sticky"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

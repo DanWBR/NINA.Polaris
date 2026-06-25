@@ -3124,6 +3124,17 @@ function ninaApp() {
             // wheel doesn't flood the driver. No-op when not streaming.
             this.$watch('video.exposure', () => { if (this.cameraStream.running) this._pushVideoLiveParams(); });
             this.$watch('video.gain', () => { if (this.cameraStream.running) this._pushVideoLiveParams(); });
+            // Clear the sticky DSLR/cooler classification when the selected
+            // camera (driver or device) changes, so a gphoto→astro swap doesn't
+            // keep stale ISO/temperature controls until the next connect.
+            const _resetMainCaps = () => {
+                this.equipCameraInfo = { ...this.equipCameraInfo, supportsIso: false, supportsCooler: false };
+                this.cameraCaps = Object.assign({}, this.cameraCaps, { iso: false, cooler: undefined });
+            };
+            this.$watch('cameraDriver', _resetMainCaps);
+            this.$watch('equipCameraChoice', _resetMainCaps);
+            this.$watch('auxCamera', () => { this.auxIsDslr = false; this.auxSupportsCooler = false; });
+            this.$watch('auxCameraDriver', () => { this.auxIsDslr = false; this.auxSupportsCooler = false; });
 
             // Self-update: check on boot, then hourly. No-ops off SBC .deb
             // installs (server reports supported:false → badge stays hidden).
@@ -22958,6 +22969,11 @@ function ninaApp() {
             // it by capability, not driver name). Keying off the camera itself
             // means the cooler/temperature rows hide and the ISO control shows
             // regardless of which slot (main/aux) the DSLR is plugged into.
+            // DSLR/mirrorless == a vendor SDK driver OR indi-gphoto. Detected by
+            // driver name + the sticky supportsIso flag (set from a connected
+            // camera's ISO capability or "gphoto" device name, kept across
+            // reconnects). Independent of Main/Aux. cameraCaps.iso kept as a
+            // last-resort fallback for the VIDEO-tab probe.
             return ['canon-edsdk', 'nikon-sdk', 'sony-sdk'].includes(this.cameraDriver)
                 || this.equipCameraInfo.supportsIso === true
                 || this.cameraCaps.iso === true;
@@ -26862,7 +26878,10 @@ function ninaApp() {
                         maxX: data.maxX || 0,
                         maxY: data.maxY || 0,
                         supportsCooler: !!(data.capabilities && data.capabilities.cooler),
+                        // gphoto-over-INDI counts as a DSLR even if the ISO cap
+                        // hasn't loaded yet — match on the device name too.
                         supportsIso: !!(data.capabilities && data.capabilities.iso)
+                                     || /gphoto/i.test(data.deviceName || data.name || '')
                     };
                     if (data.temperature !== null && data.temperature !== undefined) {
                         this.cameraTemp = data.temperature;
@@ -30085,10 +30104,23 @@ function ninaApp() {
                     // Window expired — release the hold, trust the camera.
                     this._coolerPendingValue = null; this._coolerPendingUntil = 0;
                 }
+                // DSLR / cooler classification is STICKY: only (re)learned from a
+                // CONNECTED camera, and kept across transient disconnects/
+                // reconnects so the ISO-vs-temperature controls and the temp
+                // chart don't flap. gphoto-over-INDI counts as a DSLR (it exposes
+                // ISO, and its device name contains "gphoto"). Reset on a
+                // device/driver change (handled by the $watch below).
+                const camConn = !!eq.camera.connected;
+                const prevIso = this.equipCameraInfo ? this.equipCameraInfo.supportsIso : false;
+                const prevCool = this.equipCameraInfo ? this.equipCameraInfo.supportsCooler : false;
+                const isoNow = camConn
+                    ? (!!eq.camera.supportsIso || /gphoto/i.test(eq.camera.name || ''))
+                    : prevIso;
+                const coolNow = camConn ? !!eq.camera.supportsCooler : prevCool;
                 this.equipCameraInfo = {
                     coolerOn: coolerOn,
-                    supportsCooler: !!eq.camera.supportsCooler,
-                    supportsIso: !!eq.camera.supportsIso,
+                    supportsCooler: coolNow,
+                    supportsIso: isoNow,
                     binX: eq.camera.binX || 0,
                     binY: eq.camera.binY || 0,
                     bitDepth: eq.camera.bitDepth || 0,
@@ -30142,8 +30174,14 @@ function ninaApp() {
             this.auxCameraConnected = !!(eq.auxCamera && eq.auxCamera.connected);
             // DSLR-ness follows the actual aux camera (gphoto exposes ISO), so
             // the DSLR pickers live wherever the DSLR is plugged in.
-            this.auxIsDslr = !!(eq.auxCamera && eq.auxCamera.supportsIso);
-            this.auxSupportsCooler = !!(eq.auxCamera && eq.auxCamera.supportsCooler);
+            // Aux DSLR/cooler classification — same sticky rule as the main
+            // camera: only (re)learned from a CONNECTED aux camera, kept across
+            // reconnects; gphoto-over-INDI (ISO cap or "gphoto" name) = DSLR.
+            if (eq.auxCamera && eq.auxCamera.connected) {
+                this.auxIsDslr = !!eq.auxCamera.supportsIso
+                    || /gphoto/i.test(eq.auxCamera.name || '');
+                this.auxSupportsCooler = !!eq.auxCamera.supportsCooler;
+            }
             this.auxCoolerOn = !!(eq.auxCamera && eq.auxCamera.coolerOn);
             if (eq.auxCamera && eq.auxCamera.temperature !== null
                 && eq.auxCamera.temperature !== undefined) {
