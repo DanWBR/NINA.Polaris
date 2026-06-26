@@ -1,7 +1,7 @@
 # Hardware benchmark
 
 Polaris runs on a wide range of computers: Raspberry Pi 4 / 5, Orange Pi
-5 Pro, x86 mini-PCs and PC sticks, and more. They differ a lot in how
+5 Pro, Radxa Dragon Q6A, x86 mini-PCs and PC sticks, and more. They differ a lot in how
 fast they can stack frames and encode the live video stream. The
 **Hardware Benchmark** (Settings → Hardware benchmark) measures your
 machine so you can compare boards and pick the right one for your rig.
@@ -152,6 +152,33 @@ session.
 > power/cooling/config bottleneck — the Mali-G610 OpenCL backend is what lifts
 > the overall score past it (242). Keep the 5V/5A PSU for field stability
 > (NVMe + USB + camera + dew heater peaks), not for compute.
+
+### Radxa Dragon Q6A (8 cores, Qualcomm QCS6490)
+
+Run: 2026-06-26 (2 consecutive runs, 289 / 287; CPU only). Ubuntu 24.04
+(noble) arm64. Kryo cores (Cortex-A78 + A55) with an Adreno 643 GPU (OpenCL
+backend not yet enabled in this run).
+
+| Metric | Value |
+|---|---|
+| **Polaris score** | **289** (CPU only) |
+| Stacking throughput | 3.5 fps · 58.8 Mpx/s (16.78 MP frames) |
+| Stacking detect / align / resample / stats | 71.78 / 0.53 / 78.36 / 134.83 ms |
+| Capture/video throughput | 2.32 fps · 39 Mpx/s |
+| Debayer / JPEG / LZ4 | 47.82 / 368.88 / 13.75 ms (LZ4 2327.2 MB/s) |
+| CPU single / multi-thread | 3296 / 13699 MFLOPS (4.16× scaling) |
+| Memory bandwidth | 13.2 GB/s |
+
+The fastest SBC here by a clear margin — ~2.6× the Raspberry Pi 4 and ~19%
+ahead of the Orange Pi 5 Pro's CPU-only result (and ~19% past its GPU-on 242).
+It leads on raw per-core throughput: the strongest single-thread score of the
+SBCs (3296 MFLOPS) and the lowest stacking detect/resample times, which is what
+drives the 58.8 Mpx/s stacking throughput. Memory bandwidth (13.2 GB/s) sits
+between the RK3588S boards and the Pi 5. This is a **CPU-only** result — the
+Adreno 643 supports OpenCL, so enabling the GPU backend should lift it further
+(unified memory makes offload cheap, as on the Mali boards); GPU-vs-CPU numbers
+to be added once measured. On this SoC the **RKNN/NPU path does not apply**
+(that's Rockchip-only); GPU acceleration here is via OpenCL on the Adreno.
 
 ### x86 desktop — Core i9-13900KF (32 threads)
 
