@@ -31272,6 +31272,11 @@ function ninaApp() {
                 if (k === 'errorBehavior') {
                     kind = 'enum';
                     options = ['AbortRun', 'ContinueOnError', 'SkipBlock'];
+                } else if (k === 'focuserTarget' || k === 'focuserSource') {
+                    // Optical-train selector on the focuser / auto-focus
+                    // instructions: main imaging train, aux, or guide.
+                    kind = 'enum';
+                    options = ['main', 'aux', 'guide'];
                 }
                 out.push({ key: k, kind, options });
             }

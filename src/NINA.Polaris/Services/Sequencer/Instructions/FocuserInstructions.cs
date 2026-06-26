@@ -14,32 +14,57 @@
 
 namespace NINA.Polaris.Services.Sequencer.Instructions;
 
-/// <summary>Move the focuser to an absolute step position and wait for the move to complete.</summary>
+/// <summary>Move a focuser to an absolute step position and wait for the move to
+/// complete. <see cref="FocuserTarget"/> picks which optical train's focuser:
+/// "main" (default), "aux", or "guide".</summary>
 public class MoveFocuserInstruction : SequenceInstruction {
     public override string Type => "MoveFocuser";
     public int Position { get; set; }
 
+    /// <summary>Which focuser to move: "main" (default) / "aux" / "guide".</summary>
+    public string FocuserTarget { get; set; } = "main";
+
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
-        var f = ctx.Equipment.Focuser ?? throw new InvalidOperationException("No focuser connected");
+        var f = FocuserResolver.Resolve(ctx, FocuserTarget);
         await f.MoveAbsoluteAsync(Position, ct);
     }
 }
 
 /// <summary>
 /// Run the V-curve auto-focus routine; the engine waits for it to finish
-/// and bubbles up whatever HFR it landed on.
+/// and bubbles up whatever HFR it landed on. <see cref="FocuserSource"/> picks
+/// the optical train: "main" (default) / "aux" / "guide" — the AutoFocusService
+/// pairs the matching camera + focuser.
 /// </summary>
 public class AutoFocusInstruction : SequenceInstruction {
     public override string Type => "AutoFocus";
 
+    /// <summary>Optical train to focus: "main" (default) / "aux" / "guide".</summary>
+    public string FocuserSource { get; set; } = "main";
+
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
-        ctx.AutoFocus.Start(new AutoFocusRequest());
+        ctx.AutoFocus.Start(new AutoFocusRequest { FocuserSource = FocuserSource });
         while (ctx.AutoFocus.State == AutoFocusState.Running) {
             ct.ThrowIfCancellationRequested();
             await Task.Delay(500, ct);
         }
         if (!string.IsNullOrEmpty(ctx.AutoFocus.LastError))
             throw new InvalidOperationException("Auto-focus failed: " + ctx.AutoFocus.LastError);
+    }
+}
+
+/// <summary>Resolves the main / aux / guide focuser from the context with a
+/// target-specific error message. Shared by the focuser instructions.</summary>
+internal static class FocuserResolver {
+    public static NINA.Image.Interfaces.IFocuser Resolve(SequenceContext ctx, string? target) {
+        var t = (target ?? "main").Trim().ToLowerInvariant();
+        var f = t switch {
+            "aux"   => ctx.Equipment.AuxFocuser,
+            "guide" => ctx.Equipment.GuideFocuser,
+            _       => ctx.Equipment.Focuser
+        };
+        return f ?? throw new InvalidOperationException(
+            t == "main" ? "No focuser connected" : $"No {t} focuser connected");
     }
 }
 

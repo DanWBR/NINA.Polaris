@@ -167,6 +167,62 @@ public class AdvancedSequencerTests {
         Assert.That(exp.Filter, Is.EqualTo("Ha"));
     }
 
+    // Aux / guide optical-train controls: the focuser/auto-focus target and the
+    // new aux-camera instructions must survive the camelCase + $type roundtrip
+    // so the tree editor can drive the aux/guide trains.
+    [Test]
+    public void AuxAndGuide_Instructions_RoundtripTargets() {
+        var doc = new SequenceDocument {
+            Root = new SequentialContainer {
+                Name = "Root",
+                Items = new() {
+                    new MoveFocuserInstruction { Position = 1234, FocuserTarget = "guide" },
+                    new AutoFocusInstruction { FocuserSource = "aux" },
+                    new CoolAuxCameraInstruction { TargetTempC = -5, ToleranceDegC = 0.5 },
+                    new WarmAuxCameraInstruction { TargetTempC = 18 },
+                    new TakeAuxExposureInstruction { ExposureSeconds = 3, Count = 4, Gain = 120, Binning = 2 }
+                }
+            }
+        };
+
+        var back = SequenceJson.Deserialize(SequenceJson.Serialize(doc));
+        var root = back.Root as SequentialContainer;
+        Assert.That(root, Is.Not.Null);
+
+        var mf = root!.Items[0] as MoveFocuserInstruction;
+        Assert.That(mf, Is.Not.Null);
+        Assert.That(mf!.Position, Is.EqualTo(1234));
+        Assert.That(mf.FocuserTarget, Is.EqualTo("guide"));
+
+        var af = root.Items[1] as AutoFocusInstruction;
+        Assert.That(af!.FocuserSource, Is.EqualTo("aux"));
+
+        var cool = root.Items[2] as CoolAuxCameraInstruction;
+        Assert.That(cool!.TargetTempC, Is.EqualTo(-5));
+        Assert.That(cool.ToleranceDegC, Is.EqualTo(0.5));
+
+        var warm = root.Items[3] as WarmAuxCameraInstruction;
+        Assert.That(warm!.TargetTempC, Is.EqualTo(18));
+
+        var aux = root.Items[4] as TakeAuxExposureInstruction;
+        Assert.That(aux!.ExposureSeconds, Is.EqualTo(3));
+        Assert.That(aux.Count, Is.EqualTo(4));
+        Assert.That(aux.Gain, Is.EqualTo(120));
+        Assert.That(aux.Binning, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void MoveFocuser_DefaultsToMainTarget() {
+        Assert.That(new MoveFocuserInstruction().FocuserTarget, Is.EqualTo("main"));
+        Assert.That(new AutoFocusInstruction().FocuserSource, Is.EqualTo("main"));
+        var doc = new SequenceDocument {
+            Root = new SequentialContainer { Items = new() { new MoveFocuserInstruction { Position = 10 } } }
+        };
+        var back = SequenceJson.Deserialize(SequenceJson.Serialize(doc));
+        var mf = (back.Root as SequentialContainer)!.Items[0] as MoveFocuserInstruction;
+        Assert.That(mf!.FocuserTarget, Is.EqualTo("main"));
+    }
+
     [Test]
     public void DefaultParams_TakeExposure_HasCamelCaseScalarsOnly() {
         var defaults = SequenceEntityJsonConverter.DefaultParams("TakeExposure");

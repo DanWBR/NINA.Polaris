@@ -183,3 +183,116 @@ public class WarmCameraInstruction : SequenceInstruction {
         ctx.Logger.LogInformation("Cooler ramped from {Start:0.0}°C to {Target}°C and powered off", start, TargetTempC);
     }
 }
+
+/// <summary>
+/// Cool the AUX camera to a setpoint — same wait/tolerance loop as
+/// <see cref="CoolCameraInstruction"/> but on <c>ctx.Equipment.AuxCamera</c>.
+/// </summary>
+public class CoolAuxCameraInstruction : SequenceInstruction {
+    public override string Type => "CoolAuxCamera";
+    public double TargetTempC { get; set; } = -10;
+    public double ToleranceDegC { get; set; } = 1.0;
+    public int TimeoutSeconds { get; set; } = 600;
+
+    public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
+        var cam = ctx.Equipment.AuxCamera ?? throw new InvalidOperationException("No aux camera connected");
+        await cam.SetCoolerAsync(true, ct);
+        await cam.SetTemperatureAsync(TargetTempC, ct);
+
+        var deadline = DateTime.UtcNow.AddSeconds(TimeoutSeconds);
+        while (DateTime.UtcNow < deadline) {
+            ct.ThrowIfCancellationRequested();
+            if (Math.Abs(cam.Temperature - TargetTempC) <= ToleranceDegC) {
+                ctx.Logger.LogInformation("Aux cooler reached {Target}°C (now {Now:0.0}°C)", TargetTempC, cam.Temperature);
+                return;
+            }
+            await Task.Delay(2000, ct);
+        }
+        throw new TimeoutException($"Aux cooler did not reach {TargetTempC}°C ±{ToleranceDegC} within {TimeoutSeconds}s (last reading {cam.Temperature:0.0}°C)");
+    }
+}
+
+/// <summary>
+/// Warm the AUX camera back to ambient and power off the cooler — same ramp as
+/// <see cref="WarmCameraInstruction"/> but on <c>ctx.Equipment.AuxCamera</c>.
+/// </summary>
+public class WarmAuxCameraInstruction : SequenceInstruction {
+    public override string Type => "WarmAuxCamera";
+    public double TargetTempC { get; set; } = 20;
+    public double RateDegPerMinute { get; set; } = 2.0;
+
+    public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
+        var cam = ctx.Equipment.AuxCamera ?? throw new InvalidOperationException("No aux camera connected");
+        var start = cam.Temperature;
+        var stepC = Math.Max(0.5, RateDegPerMinute / 6); // 10-second steps
+
+        while (cam.Temperature < TargetTempC - 0.5) {
+            ct.ThrowIfCancellationRequested();
+            var next = Math.Min(TargetTempC, cam.Temperature + stepC);
+            await cam.SetTemperatureAsync(next, ct);
+            await Task.Delay(TimeSpan.FromSeconds(10), ct);
+        }
+        await cam.SetCoolerAsync(false, ct);
+        ctx.Logger.LogInformation("Aux cooler ramped from {Start:0.0}°C to {Target}°C and powered off", start, TargetTempC);
+    }
+}
+
+/// <summary>
+/// Capture one or more frames with the AUX camera and save them to the
+/// <c>aux/</c> subtree, mirroring <see cref="AuxCaptureService"/>. Routes through
+/// <see cref="AuxCameraCaptureGate"/> so it never collides with the background
+/// aux loop, and applies the rig's aux focal-length override on the saved FITS.
+/// Defaults (exposure / gain / binning) fall back to the active rig's aux
+/// settings when the instruction leaves them unset.
+/// </summary>
+public class TakeAuxExposureInstruction : SequenceInstruction {
+    public override string Type => "TakeAuxExposure";
+
+    /// <summary>Exposure time in seconds. 0 ⇒ use the rig's aux exposure.</summary>
+    public double ExposureSeconds { get; set; }
+    /// <summary>How many aux frames to capture.</summary>
+    public int Count { get; set; } = 1;
+    /// <summary>Gain in native units; null ⇒ use the rig's aux gain.</summary>
+    public int? Gain { get; set; }
+    /// <summary>Binning; 0 ⇒ use the rig's aux binning.</summary>
+    public int Binning { get; set; }
+
+    public override IReadOnlyList<string> Validate() {
+        var e = new List<string>();
+        if (ExposureSeconds < 0) e.Add("Exposure must be >= 0");
+        if (Count <= 0) e.Add("Count must be positive");
+        if (Binning < 0) e.Add("Binning must be >= 0");
+        return e;
+    }
+
+    public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
+        var cam = ctx.Equipment.AuxCamera ?? throw new InvalidOperationException("No aux camera connected");
+        var rig = ctx.Profiles.ActiveEquipmentProfile;
+
+        var expSec = ExposureSeconds > 0
+            ? ExposureSeconds
+            : Math.Max(0.05, (rig?.AuxExposureMs ?? 5000) / 1000.0);
+        var bin = Math.Clamp(Binning > 0 ? Binning : (rig?.AuxBinning ?? 1), 1, 4);
+        int? gain = Gain ?? (rig?.AuxGain is int g && g > 0 ? g : null);
+
+        try { await cam.SetBinningAsync(bin, bin, ct); } catch { /* best effort */ }
+
+        var opts = new NINA.Image.Interfaces.CaptureOptions(
+            Gain: gain, BinX: bin, BinY: bin, ImageType: "LIGHT");
+
+        for (int i = 0; i < Count; i++) {
+            ct.ThrowIfCancellationRequested();
+            NINA.Image.Interfaces.IImageData image;
+            using (ctx.CaptureProgress.Begin("sequencer-aux", expSec))
+                image = await AuxCameraCaptureGate.RunAsync(
+                    () => cam.CaptureAsync(expSec, opts, ct), ct,
+                    acquireTimeout: TimeSpan.FromSeconds(expSec + 60));
+
+            image.MetaData.Exposure.ExposureTime = expSec;
+            ctx.ImageWriter.SaveImage(image, imageType: "AUX",
+                gain: gain ?? 0, focalLengthMmOverride: rig?.AuxFocalLengthMm);
+            ctx.Logger.LogInformation("Aux frame {N}/{Count} captured ({Exp:0.##}s, gain {Gain}, bin {Bin})",
+                i + 1, Count, expSec, gain?.ToString() ?? "default", bin);
+        }
+    }
+}
