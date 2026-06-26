@@ -4,10 +4,14 @@ Real-time integration of incoming frames into a single growing image.
 For Electronically Assisted Astronomy (EAA), comet hunting, or just
 watching your DSO target build up while you have a beer.
 
-> **Where the math runs**: by default the server (Pi / mini-PC) does
-> the stacking. On underpowered hosts (Pi 2/3) you can flip the
-> Compute dropdown to client-side WASM offload so the browser owns
-> the accumulator, see [client-side compute](client-side-compute.md).
+> **Capture vs. stacking are separate things.** The LIVE *capture loop*
+> always runs on the **server** (the Pi / mini-PC keeps exposing even if
+> your browser is backgrounded, on another tab, or disconnects entirely —
+> you can run two Polaris tabs and switch freely). The **Compute** dropdown
+> (Auto / Server / Client) only chooses *where the per-frame stacking math
+> runs*, not who drives the camera. On underpowered hosts (Pi 2/3) flip it
+> to client-side WASM offload so the browser owns the accumulator — see
+> [client-side compute](client-side-compute.md).
 
 ## How it works
 
@@ -45,7 +49,13 @@ Secondary toggles + buttons:
   saves land in a dedicated `stacked/` subfolder (separate from the
   per-frame light captures) so the integrated result is easy to find.
 - **Compute** (Auto / Server / Client), per-rig override for
-  where the per-frame math runs (server CPU vs client WASM)
+  where the per-frame **stacking math** runs (the capture loop is always
+  server-owned regardless of this setting):
+  - **Server** — stacking on the host CPU.
+  - **Client** — stacking in the browser via WASM (offload).
+  - **Auto** (default) — the server picks based on the WASM handshake:
+    if a WASM-capable browser is connected it offloads to the client,
+    otherwise it stacks on the host.
 
 For one-shot-colour (OSC) cameras, colour live stacking is automatic —
 there is no mono/colour toggle; the stacker debayers and integrates in
