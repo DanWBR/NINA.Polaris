@@ -28419,13 +28419,15 @@ function ninaApp() {
             if (this.mfState && this.mfState !== 'idle') {
                 out.push({
                     id: 'mf', icon: '↔️', kind: 'warn',
+                    onClick: () => { this.tab = 'live'; },
                     label: 'Meridian flip: ' + this.mfState
                 });
             }
 
             // Mount slewing
             if (this.mount?.slewing) {
-                out.push({ id: 'slew', icon: '🔭', kind: 'info', label: 'Slewing' });
+                out.push({ id: 'slew', icon: '🔭', kind: 'info', label: 'Slewing',
+                    onClick: () => { this.tab = 'sky'; } });
             }
 
             // Camera exposing / downloading. The state string comes
@@ -28441,21 +28443,25 @@ function ninaApp() {
 
             // Focuser moving
             if (this.focusMoving) {
-                out.push({ id: 'focuser', icon: '🎯', kind: 'info', label: 'Focuser moving' });
+                out.push({ id: 'focuser', icon: '🎯', kind: 'info', label: 'Focuser moving',
+                    onClick: () => { this.tab = 'focus'; } });
             }
 
             // Filter wheel
             if (this.filterWheel?.moving) {
-                out.push({ id: 'fw', icon: '🎨', kind: 'info', label: 'Filter change' });
+                out.push({ id: 'fw', icon: '🎨', kind: 'info', label: 'Filter change',
+                    onClick: () => { this.tab = 'equip'; } });
             }
 
             // PHD2 transient. Steady-state guiding is NOT shown,
             // that's the normal background hum during a sequence.
             // Only the eventful transitions matter for the chip row.
             if (this.guider.calibrating) {
-                out.push({ id: 'phd2-cal', icon: '🌟', kind: 'warn', label: 'PHD2 calibrating' });
+                out.push({ id: 'phd2-cal', icon: '🌟', kind: 'warn', label: 'PHD2 calibrating',
+                    onClick: () => { this.tab = 'guide'; } });
             } else if (this.guider.settling) {
-                out.push({ id: 'phd2-set', icon: '🌟', kind: 'info', label: 'PHD2 settling' });
+                out.push({ id: 'phd2-set', icon: '🌟', kind: 'info', label: 'PHD2 settling',
+                    onClick: () => { this.tab = 'guide'; } });
             }
 
             // Live stacking — only show the activity chip when frames
@@ -28517,7 +28523,8 @@ function ninaApp() {
                 out.push({
                     id: 'siril-' + j.jobId, icon: '⚡', kind: 'info',
                     label: `Siril: ${(j.scriptName || '').replace(/\.ssf$/i, '')} ${j.stage || ''}`,
-                    progress: j.percentDone || 0
+                    progress: j.percentDone || 0,
+                    onClick: () => { this.tab = 'files'; }
                 });
             }
 
@@ -28531,7 +28538,8 @@ function ninaApp() {
                 out.push({
                     id: 'gx-' + j.jobId, icon: opIcon, kind: 'info',
                     label: `GraXpert ${j.done || 0}/${total}` + (j.failed ? ` (${j.failed} failed)` : ''),
-                    progress: pct
+                    progress: pct,
+                    onClick: () => { this.tab = 'files'; }
                 });
             }
 
