@@ -28398,7 +28398,8 @@ function ninaApp() {
                 out.push({
                     id: 'seq', icon: '📑', kind: 'info',
                     label: `Autorun ${s?.totalFramesCompleted || 0}/${s?.totalFrames || 0}`,
-                    progress: pct
+                    progress: pct,
+                    onClick: () => { this.tab = 'sequence'; }
                 });
             }
 
@@ -28409,7 +28410,8 @@ function ninaApp() {
                 out.push({
                     id: 'af', icon: '🔄', kind: 'info',
                     label: `Auto-focus ${Math.max(0, i + 1)}/${n}`,
-                    progress: n ? Math.round(100 * Math.max(0, i + 1) / n) : 0
+                    progress: n ? Math.round(100 * Math.max(0, i + 1) / n) : 0,
+                    onClick: () => { this.tab = 'focus'; }
                 });
             }
 
@@ -28473,7 +28475,8 @@ function ninaApp() {
                     // diagnosing "is my Pi pegged?".
                     icon: (this.liveStackStatus?.mode === 'metricsonly') ? '🌐' : '🖥',
                     kind: 'info',
-                    label: `Live stack ${this.liveStackFrames || 0}f`
+                    label: `Live stack ${this.liveStackFrames || 0} frames`,
+                    onClick: () => { this.tab = 'live'; }
                 });
             }
 
@@ -28504,7 +28507,8 @@ function ninaApp() {
             if (this.preview && this.preview.busy) {
                 out.push({
                     id: 'snap', icon: '📸', kind: 'info',
-                    label: `Preview ${this.preview.exposure || 0}s`
+                    label: `Preview ${this.preview.exposure || 0}s`,
+                    onClick: () => { this.tab = 'preview'; }
                 });
             }
 

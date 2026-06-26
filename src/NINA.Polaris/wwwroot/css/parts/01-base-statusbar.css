@@ -721,6 +721,9 @@ body {
     gap: 4px;
     font-size: 12px;
     color: var(--text-secondary);
+    /* Both status bars read in all-caps (operator preference) so the
+       chips line up with the INDI/ALPACA/PHD2 indicators. */
+    text-transform: uppercase;
 }
 
 .chip-icon {

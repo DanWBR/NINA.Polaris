@@ -1422,9 +1422,11 @@
 
 .activity-chip-icon { font-size: 12px; }
 .activity-chip-label {
-    max-width: 220px;
+    max-width: 260px;
     overflow: hidden;
     text-overflow: ellipsis;
+    /* Operator preference: activity-bar badges read in all-caps. */
+    text-transform: uppercase;
 }
 
 /* FIELD-6: dismiss × for chips that opt in (under-voltage today).
