@@ -22699,7 +22699,13 @@ function ninaApp() {
             for (const [name, titles] of CATS) {
                 const group = cards.filter(x => titles.includes(x.key));
                 if (!group.length) continue;
-                group.sort((a, b) => a.display.localeCompare(b.display));
+                group.sort((a, b) => {
+                    // Power always sorts last within its category, otherwise
+                    // alphabetical.
+                    if (a.key === 'power') return 1;
+                    if (b.key === 'power') return -1;
+                    return a.display.localeCompare(b.display);
+                });
                 addHeader(name);
                 group.forEach(x => { frag.appendChild(x.card); used.add(x.card); });
             }
