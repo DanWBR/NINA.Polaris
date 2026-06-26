@@ -686,7 +686,14 @@
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 0;
+    /* Bottom padding lives on the section itself (not on > *:last-child):
+       several cards end with a hidden trailing node — an x-show modal
+       overlay (Authentication) or an x-show status line (Auto-push) — so
+       `:last-child` would land the padding on the invisible element and the
+       visible content sat flush against the card bottom. A section-level
+       padding-bottom is independent of which child is last. (Header band /
+       left+right padding still come from the h3 + `h3 ~ *` rules below.) */
+    padding: 0 0 12px;
     /* Uniform 400 px card height so a Hardware card (two checkboxes
        + a hint line) does not look stunted next to a Network card
        that has a status row + four buttons + body text. Matches the
@@ -882,9 +889,10 @@
 .settings-section > div:first-child:not(:has(h3)) {
     padding: 12px 14px;
 }
-.settings-section > *:last-child {
-    padding-bottom: 12px;
-}
+/* Bottom padding now comes from the section's own padding-bottom (above),
+   which is independent of whether the last DOM child is a hidden modal /
+   x-show node. The old `> *:last-child { padding-bottom }` rule is removed
+   to avoid doubling it on cards whose last child IS visible. */
 
 /* ---- FAQ-style accordion (settings cards) ----
    Class-based (NOT <details>) so we never touch the existing card markup
@@ -914,6 +922,11 @@
 /* Hide the card body when collapsed (everything that isn't the header). */
 .settings-accordion .settings-section.is-collapsed > *:not(h3) {
     display: none !important;
+}
+/* Drop the section's body bottom-padding when collapsed so a collapsed card
+   shrinks flush to its header band (no 12px gap under the h3). */
+.settings-accordion .settings-section.is-collapsed {
+    padding-bottom: 0;
 }
 /* Raw solver process output panel (plate-solve result card). */
 .solver-output > pre {
