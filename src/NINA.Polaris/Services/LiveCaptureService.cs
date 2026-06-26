@@ -17,11 +17,13 @@ using NINA.Image.Interfaces;
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// Opt-in server-owned LIVE capture loop (UserProfile.LiveServerLoopEnabled).
-/// The server becomes the orchestrator of the LIVE session: it drives every
-/// exposure and keeps going even if the browser disconnects. The client's
-/// WASM live-stacking is then pure compute offload — it consumes the relayed
-/// frames but no longer controls the cadence.
+/// Server-owned LIVE capture loop — the only LIVE loop. The LIVE shutter always
+/// starts/stops this; the server is the orchestrator of the LIVE session: it
+/// drives every exposure and keeps going even if the browser disconnects or the
+/// tab is backgrounded. The client's WASM live-stacking is then pure compute
+/// offload — it consumes the relayed frames but no longer controls the cadence.
+/// Where stacking runs (server-full vs client-WASM) is the orthogonal
+/// LiveStackComputeMode (auto/server/client); this loop is agnostic to it.
 ///
 /// Frame path is identical to the client-driven <c>POST /api/camera/capture</c>
 /// loop: when the LIVE stacker is running the frame is fed to it

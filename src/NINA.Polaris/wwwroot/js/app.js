@@ -778,9 +778,6 @@ function ninaApp() {
             stellariumHost: 'localhost',
             stellariumPort: 8090,
             preferAdvancedSequencer: false,
-            // Opt-in: run the LIVE capture loop on the server (the client
-            // only offloads WASM stacking). Hydrated from the profile.
-            liveServerLoopEnabled: false,
             // DBGLOG-9: when ON, LogRotatorService flushes every log
             // entry to a JSONL file under {LocalAppData}/NINA.Polaris/logs/.
             // Default OFF; the in-memory ring buffer is enough for most
@@ -3211,11 +3208,6 @@ function ninaApp() {
                     if (document.visibilityState === 'visible') {
                         this._lastStackFrameShown = 0;
                         this._lastImageFrameAt = 0;
-                        // The client-driven LIVE loop can stall while the tab is
-                        // backgrounded/frozen (classic with two Polaris tabs open
-                        // and switching between them) — re-kick it on wake so the
-                        // shutter doesn't sit dead on "capture failed".
-                        this._recoverClientLiveLoop();
                     }
                 });
             }
@@ -8892,7 +8884,6 @@ function ninaApp() {
                     this.settings.imageOutputDir = data.imageOutputDir || '';
                     this.settings.imageNamePattern = data.imageNamePattern || '';
                     this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
-                    this.settings.liveServerLoopEnabled = !!data.liveServerLoopEnabled;
                     this.settings.autoConnectOnStartup = !!data.autoConnectOnStartup;
                     // DBGLOG-9: hydrate the persist-to-disk toggle.
                     this.settings.logToDisk = !!data.logToDisk;
@@ -17770,7 +17761,6 @@ function ninaApp() {
                         imageOutputDir: this.settings.imageOutputDir,
                         imageNamePattern: this.settings.imageNamePattern,
                         preferAdvancedSequencer: this.settings.preferAdvancedSequencer,
-                        liveServerLoopEnabled: this.settings.liveServerLoopEnabled,
                         autoConnectOnStartup: this.settings.autoConnectOnStartup,
                         // DBGLOG-9: opt-in disk persistence.
                         logToDisk: this.settings.logToDisk,
@@ -18035,73 +18025,35 @@ function ninaApp() {
             // stacking toggle). Cooler was just confirmed above, so skip the
             // re-prompt that toggleLiveStack would do.
             await this._autoStartLiveStackIfIdle();
-            // Server-owned loop (opt-in): the server drives every exposure and
-            // keeps going if the browser drops; the client only offloads WASM
-            // stacking. We just ask it to start and reflect state from the WS
-            // `liveCapture` block — no client-side capture() loop.
-            if (this.settings.liveServerLoopEnabled) {
-                this.looping = true;
-                try {
-                    await this.apiPost('/api/livecapture/start', {
-                        exposure: Number(this.exposure) || 1,
-                        gain: this.gain,
-                        binning: parseInt(this.binning) || 1
-                    });
-                } catch (e) {
-                    this.looping = false;
-                    this.toast('Could not start server LIVE loop: ' + e.message, 'error');
-                }
-                return;
-            }
+            // LIVE capture is ALWAYS server-owned: the server (LiveCaptureService)
+            // drives every exposure and keeps going even if the browser drops or
+            // the tab is backgrounded — which is why two Polaris tabs can be
+            // switched freely without the old client-driven loop wedging. The
+            // client only renders the relayed frames and, when the compute mode
+            // routes stacking client-side, offloads the WASM math. We just ask
+            // the server to start and mirror state from the WS `liveCapture`
+            // block. The Auto/Server/Client mode picks ONLY where stacking runs,
+            // not who owns the capture loop.
             this.looping = true;
-            await this.capture();
+            try {
+                await this.apiPost('/api/livecapture/start', {
+                    exposure: Number(this.exposure) || 1,
+                    gain: this.gain,
+                    binning: parseInt(this.binning) || 1
+                });
+            } catch (e) {
+                this.looping = false;
+                this.toast('Could not start LIVE loop: ' + (e?.message || e), 'error');
+            }
         },
 
         async stopCapture() {
-            // Stop the server loop too when it's the one running (opt-in mode).
-            if (this.settings.liveServerLoopEnabled
-                || (this.serverLiveCapture && this.serverLiveCapture.running)) {
-                try { await this.apiPost('/api/livecapture/stop'); } catch (e) { }
-            }
             this.looping = false;
             this.capturing = false;
             this._captureStartedAt = null;
             try { this._liveCaptureAbort?.abort(); } catch (e) { }
+            try { await this.apiPost('/api/livecapture/stop'); } catch (e) { }
             try { await this.apiPost('/api/camera/abort'); } catch (e) { }
-        },
-
-        /// Rescue the client-driven LIVE loop after the tab was hidden.
-        /// A backgrounded/frozen tab throttles timers and can drop the
-        /// in-flight capture or freeze the recursion entirely; on return the
-        /// loop is still marked running (looping=true) but nothing is actually
-        /// firing, so the user sees a dead shutter / "capture failed" that never
-        /// recovers. This is the exact symptom of running two Polaris tabs and
-        /// switching between them. Detect it and restart cleanly. No-op for the
-        /// server-owned loop (it keeps running and rehydrates over the WS).
-        _recoverClientLiveLoop() {
-            if (!this.looping) return;
-            if (this.settings.liveServerLoopEnabled) return;
-            if (this.serverLiveCapture && this.serverLiveCapture.running) return;
-            if (this._captureInFlight) {
-                // Something claims to be in flight. If it's been longer than a
-                // healthy frame would take, it's wedged (orphaned by the freeze)
-                // -> abort it + clear any stuck server-side exposure, then
-                // re-kick once the aborted capture's own finally has released
-                // the in-flight flag.
-                const exp = Number(this._captureExposure) || Number(this.exposure) || 0;
-                const start = this._captureStartedAt || 0;
-                const stale = Date.now() - start > (exp + 45) * 1000;
-                if (!stale) return;   // healthy capture in progress, leave it
-                try { this._liveCaptureAbort?.abort(); } catch (e) { }
-                this.apiPost('/api/camera/abort').catch(() => { });
-                setTimeout(() => {
-                    if (this.looping && !this._captureInFlight) this.capture();
-                }, 600);
-                return;
-            }
-            // Marked running but nothing in flight -> the loop died while the
-            // tab was hidden. Restart it immediately.
-            this.capture();
         },
 
         // ----- SHUT-1: shared shutter component glue -----
@@ -30803,17 +30755,18 @@ function ninaApp() {
             // null/stale). Pass the server "now" so elapsed is measured in
             // server time and re-based onto the local clock.
             this._absorbCaptureProgress(msg.capture, _serverNowMs);
-            // Opt-in server-owned LIVE loop: mirror its running state so the
-            // LIVE shutter shows active (and a reconnecting browser re-adopts a
-            // session that's still going on the server).
+            // Server-owned LIVE loop (now the only LIVE loop): mirror its
+            // running state so the LIVE shutter shows active and a reconnecting/
+            // backgrounded browser re-adopts a session that's still going on the
+            // server.
             if (msg.liveCapture) {
                 this.serverLiveCapture = msg.liveCapture;
                 if (msg.liveCapture.running) {
                     if (!this.looping) this.looping = true;
-                } else if (this.settings.liveServerLoopEnabled && this.looping
+                } else if (this.looping
                            && !(this.serverCapture && this.serverCapture.active)) {
-                    // Server loop ended on its own (e.g. duration cap) — clear
-                    // the client's looping flag so the shutter resets.
+                    // Server loop ended (stopped or hit the duration cap) —
+                    // reset the LIVE shutter so it doesn't look stuck active.
                     this.looping = false;
                 }
             }

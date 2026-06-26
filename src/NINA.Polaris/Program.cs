@@ -145,7 +145,8 @@ builder.Logging.Services.AddSingleton<Microsoft.Extensions.Logging.ILoggerProvid
 builder.Services.AddHostedService<NINA.Polaris.Services.Logging.LogRotatorService>();
 builder.Services.AddSingleton<ImageRelayService>();
 builder.Services.AddSingleton<CameraStreamService>();
-// Opt-in server-owned LIVE capture loop (UserProfile.LiveServerLoopEnabled).
+// Server-owned LIVE capture loop — now the only LIVE loop (the LIVE shutter
+// always starts/stops this; the browser never drives repeated captures).
 builder.Services.AddSingleton<LiveCaptureService>();
 // Auxiliary (second) camera capture+save loop, runs alongside LIVE/AUTORUN.
 builder.Services.AddSingleton<AuxCaptureService>();

@@ -21,11 +21,11 @@ public static class LiveStackEndpoints {
     public static void MapLiveStackEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/livestack");
 
-        // Opt-in server-owned LIVE capture loop. When the operator enabled
-        // UserProfile.LiveServerLoopEnabled, the LIVE shutter starts/stops
-        // this instead of the browser driving repeated /api/camera/capture
-        // calls — so the session keeps capturing even if the client drops,
-        // and client-side WASM stacking is pure compute offload.
+        // Server-owned LIVE capture loop — the only LIVE loop. The LIVE shutter
+        // starts/stops this instead of the browser driving repeated
+        // /api/camera/capture calls, so the session keeps capturing even if the
+        // client drops or the tab is backgrounded, and client-side WASM stacking
+        // is pure compute offload.
         var capGroup = app.MapGroup("/api/livecapture");
         capGroup.MapPost("/start", (LiveCaptureService loop, LiveStartRequest req) => {
             var ok = loop.Start(req?.Exposure ?? 1.0, req?.Gain ?? 0, req?.Binning ?? 1);

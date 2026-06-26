@@ -195,7 +195,6 @@ public static class SystemEndpoints {
                 p.ImageNamePattern = update.ImageNamePattern;
                 p.ImageFormat = update.ImageFormat;
                 p.PreferAdvancedSequencer = update.PreferAdvancedSequencer;
-                p.LiveServerLoopEnabled = update.LiveServerLoopEnabled;
                 // DBGLOG-9: opt-in disk persistence for the debug log.
                 p.LogToDisk = update.LogToDisk;
                 // External-tool path overrides. Empty/null = auto-detect.
