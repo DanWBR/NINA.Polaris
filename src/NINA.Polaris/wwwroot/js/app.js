@@ -2980,7 +2980,11 @@ function ninaApp() {
             // Optical train to auto-focus: 'main' | 'aux' | 'guide'. Pairs the
             // camera + focuser of the same OTA (a V-curve needs the camera that
             // sees through the focuser being moved).
-            focuserSource: 'main'
+            focuserSource: 'main',
+            // ASIAIR-style adaptive sweep: no point count — seed 3 points, detect
+            // direction, grow the V-curve until confident. stepSize is still the
+            // move unit. Default on; uncheck for the fixed Steps×stepSize grid.
+            adaptive: true
         },
         afChartW: 600,
         afChartH: 180,
@@ -19342,7 +19346,7 @@ function ninaApp() {
                 'video.maxDurationSec', 'video.wbR', 'video.wbB',
                 // Auto-focus parameters
                 'afParams.steps', 'afParams.stepSize', 'afParams.exposureSeconds',
-                'afParams.minStars', 'afParams.backlashSteps',
+                'afParams.minStars', 'afParams.backlashSteps', 'afParams.adaptive',
                 // Shared target name
                 'targetName'
             ];
@@ -21648,6 +21652,7 @@ function ninaApp() {
                     minStars: this.afParams.minStars,
                     backlashSteps: this.afParams.backlashSteps,
                     focuserSource: this.afParams.focuserSource || 'main',
+                    adaptive: !!this.afParams.adaptive,
                     takeConfirmationFrame: true
                 });
                 this.toast('Auto-focus started', 'ok');

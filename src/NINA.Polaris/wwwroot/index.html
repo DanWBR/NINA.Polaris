@@ -2635,7 +2635,12 @@
                                     (autoFocus.success === false ? 'FAILED' : 'IDLE'))"></span>
                     </div>
                     <div class="af-params">
-                        <label>Steps
+                        <label style="display:flex; align-items:center; gap:6px" title="ASIAIR-style: no point count — seed 3 points, auto-detect direction, grow the V-curve until the fit is confident, then stop. Uncheck for the fixed Steps×Step-Size grid.">
+                            <input type="checkbox" x-model="afParams.adaptive"
+                                   :disabled="autoFocus.state === 'running'">
+                            Smart (auto V-curve)
+                        </label>
+                        <label x-show="!afParams.adaptive">Steps
                             <input type="number" x-model.number="afParams.steps" min="3" max="25" step="2" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
@@ -16184,7 +16189,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260626-camsrcguard"></script>
+    <script src="/js/app.js?v=20260626-afsmart"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

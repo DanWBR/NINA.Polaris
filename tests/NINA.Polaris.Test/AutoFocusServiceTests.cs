@@ -339,6 +339,60 @@ public class AutoFocusServiceTests {
         Assert.That(fit.RSquared, Is.LessThan(0.7));
     }
 
+    // ---- Adaptive sweep direction/stop decision (NextAdaptiveStep) ----
+
+    [Test]
+    public void NextAdaptiveStep_FewSamples_GrowsSymmetrically() {
+        // Only 2 valid points either side of start=100: not enough to fit, so it
+        // grows outward; with equal counts below/above it picks the left arm.
+        var pts = Pts((90, 3.0), (110, 3.0));
+        var (action, target) = AutoFocusService.NextAdaptiveStep(
+            pts, curMin: 90, curMax: 110, startPosition: 100, step: 10,
+            need: 3, maxPoints: 12, totalSampled: 2);
+        Assert.That(action, Is.EqualTo(AutoFocusService.AdaptiveAction.SampleLeft));
+        Assert.That(target, Is.EqualTo(80));
+    }
+
+    [Test]
+    public void NextAdaptiveStep_VertexAtRightEnd_GrowsRight() {
+        // Descending toward higher positions: the fitted vertex sits at/after the
+        // right end, so the right arm is short -> ask for a sample to the right.
+        var pts = Pts((80, 6.0), (90, 4.5), (100, 3.2), (110, 2.3), (120, 2.0));
+        var (action, target) = AutoFocusService.NextAdaptiveStep(
+            pts, curMin: 80, curMax: 120, startPosition: 100, step: 10,
+            need: 3, maxPoints: 12, totalSampled: 5);
+        Assert.That(action, Is.EqualTo(AutoFocusService.AdaptiveAction.SampleRight));
+        Assert.That(target, Is.EqualTo(130));
+    }
+
+    [Test]
+    public void NextAdaptiveStep_WellSpread_IsDone() {
+        // Symmetric V with >=3 points each side of the vertex (~100): done.
+        var pts = Pts((70, 5.0), (80, 3.8), (90, 2.9), (100, 2.5),
+                      (110, 2.9), (120, 3.8), (130, 5.0));
+        var (action, _) = AutoFocusService.NextAdaptiveStep(
+            pts, curMin: 70, curMax: 130, startPosition: 100, step: 10,
+            need: 3, maxPoints: 12, totalSampled: 7);
+        Assert.That(action, Is.EqualTo(AutoFocusService.AdaptiveAction.Done));
+    }
+
+    [Test]
+    public void NextAdaptiveStep_PointCapReached_IsDone() {
+        var pts = Pts((80, 6.0), (90, 4.5), (100, 3.2));
+        var (action, _) = AutoFocusService.NextAdaptiveStep(
+            pts, curMin: 80, curMax: 100, startPosition: 100, step: 10,
+            need: 3, maxPoints: 3, totalSampled: 3);
+        Assert.That(action, Is.EqualTo(AutoFocusService.AdaptiveAction.Done));
+    }
+
+    [Test]
+    public void AutoFocusRequest_AdaptiveDefaults() {
+        var r = new AutoFocusRequest();
+        Assert.That(r.Adaptive, Is.False);          // manual sweep stays the default
+        Assert.That(r.PointsPerSide, Is.EqualTo(3));
+        Assert.That(r.MaxPoints, Is.EqualTo(12));
+    }
+
     [Test]
     public void ComputeRSquared_ConstantData_IsOne() {
         // SStot == 0 (every HFR identical): treat as a perfect fit rather than
