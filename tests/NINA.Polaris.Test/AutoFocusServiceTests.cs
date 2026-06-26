@@ -302,5 +302,52 @@ public class AutoFocusServiceTests {
         Assert.That(r.MinStars, Is.EqualTo(5));
         Assert.That(r.BacklashSteps, Is.EqualTo(0));
         Assert.That(r.TakeConfirmationFrame, Is.True);
+        // Quality-gate / reattempt defaults (Phase 1).
+        Assert.That(r.RSquaredThreshold, Is.EqualTo(0.7));
+        Assert.That(r.Attempts, Is.EqualTo(2));
+        Assert.That(r.MaxHfrRatio, Is.EqualTo(1.15));
+    }
+
+    // ---- R² quality metric (drives the accept/reattempt gate) ----
+
+    [Test]
+    public void RSquared_CleanVCurve_IsHigh() {
+        // y = 0.01(x-100)² + 2 sampled exactly -> perfect fit, R² == 1.
+        var pts = new List<AutoFocusPoint>();
+        for (int x = 60; x <= 140; x += 10) {
+            double y = 0.01 * (x - 100) * (x - 100) + 2.0;
+            pts.Add(new AutoFocusPoint { Position = x, HFR = y, StarCount = 30 });
+        }
+        var fit = AutoFocusService.FitParabola(pts);
+        Assert.That(fit.RSquared, Is.GreaterThan(0.99));
+    }
+
+    [Test]
+    public void RSquared_NoStructure_IsLow() {
+        // HFR unrelated to position (a cloud rolled through) -> the parabola
+        // explains almost nothing, R² well below the 0.7 accept threshold.
+        var pts = new List<AutoFocusPoint> {
+            new() { Position = 60,  HFR = 4.0, StarCount = 30 },
+            new() { Position = 70,  HFR = 3.9, StarCount = 30 },
+            new() { Position = 80,  HFR = 4.1, StarCount = 30 },
+            new() { Position = 90,  HFR = 3.95, StarCount = 30 },
+            new() { Position = 100, HFR = 4.05, StarCount = 30 },
+            new() { Position = 110, HFR = 3.92, StarCount = 30 },
+            new() { Position = 120, HFR = 4.08, StarCount = 30 },
+        };
+        var fit = AutoFocusService.FitParabola(pts);
+        Assert.That(fit.RSquared, Is.LessThan(0.7));
+    }
+
+    [Test]
+    public void ComputeRSquared_ConstantData_IsOne() {
+        // SStot == 0 (every HFR identical): treat as a perfect fit rather than
+        // dividing by zero / flagging a flat dataset as "bad".
+        var pts = new List<AutoFocusPoint> {
+            new() { Position = 10, HFR = 3.0, StarCount = 30 },
+            new() { Position = 20, HFR = 3.0, StarCount = 30 },
+            new() { Position = 30, HFR = 3.0, StarCount = 30 },
+        };
+        Assert.That(AutoFocusService.ComputeRSquared(pts, 0, 0, 3.0), Is.EqualTo(1.0));
     }
 }

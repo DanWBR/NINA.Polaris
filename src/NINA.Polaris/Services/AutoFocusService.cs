@@ -154,172 +154,180 @@ public class AutoFocusService {
         int half = request.Steps / 2;
 
         try {
-            // Build sweep positions: symmetric around current, lowest first
-            var positions = new List<int>();
-            for (int i = -half; i <= half; i++) {
-                if (positions.Count >= request.Steps) break;
-                positions.Add(startPosition + i * request.StepSize);
-            }
+            // Measure HFR at the start position first so a "successful" run can be
+            // rejected when it ends up WORSE than where it began (parity with
+            // NINA's initial-HFR sanity check). Best-effort: if the scope is so
+            // far out that no stars are found, the ratio check is simply skipped.
+            double initialHfr = 0;
+            try {
+                var img0 = await CaptureGated(source, camera, request.ExposureSeconds, ct);
+                try { await _relay.RelayImageAsync(img0, FrameKind.Focus, ct); } catch { }
+                var h0 = MeasureHFR(img0, request.MinStars);
+                if (h0.medianHfr > 0) initialHfr = h0.medianHfr;
+            } catch (OperationCanceledException) { throw; }
+              catch (Exception ex) { _logger.LogDebug(ex, "AF initial-HFR frame failed (continuing)"); }
 
-            // Optional backlash compensation: overshoot in one direction then move forward
-            if (request.BacklashSteps > 0) {
-                _logger.LogDebug("Backlash compensation: moving below first position by {Backlash} steps",
-                    request.BacklashSteps);
-                await focuser.MoveAbsoluteAsync(positions[0] - request.BacklashSteps, ct);
-                await WaitForFocuserSettle(focuser, ct);
-            }
+            int maxAttempts = Math.Max(1, request.Attempts);
+            string lastReason = "unknown";
 
-            for (int i = 0; i < positions.Count; i++) {
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
                 ct.ThrowIfCancellationRequested();
 
-                int targetPos = positions[i];
-                Progress = Progress with { CurrentSampleIndex = i, CurrentPosition = targetPos };
+                // Fresh attempt: return to the start position and clear the prior
+                // sweep so the chart + fit reflect only this attempt.
+                if (attempt > 1) {
+                    _logger.LogInformation("AF reattempt {N}/{Max} (previous: {Reason})", attempt, maxAttempts, lastReason);
+                    await focuser.MoveAbsoluteAsync(startPosition, ct);
+                    await WaitForFocuserSettle(focuser, ct);
+                    Progress = Progress with {
+                        Points = new List<AutoFocusPoint>(), CurrentSampleIndex = -1, Attempt = attempt
+                    };
+                } else {
+                    Progress = Progress with { Attempt = attempt };
+                }
 
-                _logger.LogDebug("AF sample {I}/{N}: moving to {Pos}", i + 1, positions.Count, targetPos);
-                await focuser.MoveAbsoluteAsync(targetPos, ct);
+                // Build sweep positions: symmetric around start, lowest first.
+                var positions = new List<int>();
+                for (int i = -half; i <= half; i++) {
+                    if (positions.Count >= request.Steps) break;
+                    positions.Add(startPosition + i * request.StepSize);
+                }
+
+                // Optional backlash compensation: overshoot then move forward.
+                if (request.BacklashSteps > 0) {
+                    await focuser.MoveAbsoluteAsync(positions[0] - request.BacklashSteps, ct);
+                    await WaitForFocuserSettle(focuser, ct);
+                }
+
+                for (int i = 0; i < positions.Count; i++) {
+                    ct.ThrowIfCancellationRequested();
+                    int targetPos = positions[i];
+                    Progress = Progress with { CurrentSampleIndex = i, CurrentPosition = targetPos };
+                    await focuser.MoveAbsoluteAsync(targetPos, ct);
+                    await WaitForFocuserSettle(focuser, ct);
+                    int actualPos = focuser.Position;
+                    var image = await CaptureGated(source, camera, request.ExposureSeconds, ct);
+                    // Push each AF frame through the image relay so the Focus tab
+                    // preview canvas can render the sweep as the user watches.
+                    try { await _relay.RelayImageAsync(image, FrameKind.Focus, ct); }
+                    catch (Exception ex) { _logger.LogDebug(ex, "AF frame relay failed (non-fatal)"); }
+                    var hfr = MeasureHFR(image, request.MinStars);
+                    var point = new AutoFocusPoint { Position = actualPos, HFR = hfr.medianHfr, StarCount = hfr.starCount };
+                    Progress.Points.Add(point);
+                    Progress = Progress with { LastHfr = point.HFR, LastStarCount = point.StarCount };
+                    _logger.LogInformation("AF sample {I}/{N}: pos={Pos} stars={Stars} HFR={HFR:F2}",
+                        i + 1, positions.Count, actualPos, point.StarCount, point.HFR);
+                }
+
+                // Fit only points that cleared the min-stars threshold (HFR=0 is
+                // MeasureHFR's "invalid sample" sentinel).
+                var validPoints = Progress.Points
+                    .Where(p => p.StarCount >= request.MinStars && p.HFR > 0)
+                    .ToList();
+                if (validPoints.Count < 3) {
+                    lastReason = $"only {validPoints.Count} valid sample(s)";
+                    if (attempt < maxAttempts) continue;
+                    throw new InvalidOperationException($"Not enough valid samples to fit parabola ({lastReason})");
+                }
+
+                // Drop "low wing" samples (defocused donuts the detector misses,
+                // reading too LOW), trim saturated plateaus, then robust-fit with
+                // sigma-clipping. Rejected points are flagged (not deleted) so the
+                // chart still shows them.
+                var wingClean = RejectLowWingOutliers(validPoints, out var lowWing);
+                if (lowWing.Count > 0)
+                    _logger.LogInformation("AF: dropped {Count} low-HFR wing sample(s) at {Pos}",
+                        lowWing.Count, string.Join(", ", lowWing.Select(p => p.Position)));
+
+                var innerPoints = TrimPlateaus(wingClean);
+                foreach (var p in validPoints) if (!innerPoints.Contains(p)) p.Rejected = true;
+                int trimmedCount = wingClean.Count - innerPoints.Count;
+                if (trimmedCount > 0)
+                    _logger.LogInformation("AF: trimmed {Count} flat plateau point(s) before fitting", trimmedCount);
+
+                var (fit, inliers, rejected) = FitParabolaRobust(innerPoints);
+                foreach (var r in rejected) r.Rejected = true;
+                if (rejected.Count > 0)
+                    _logger.LogInformation("AF: ignored {Count} spurious point(s) at {Positions}",
+                        rejected.Count, string.Join(", ", rejected.Select(p => p.Position)));
+
+                int bestPosition = (int)Math.Round(fit.MinX);
+                int rangeMin = positions.Min(), rangeMax = positions.Max();
+                int padding = request.StepSize * 2;
+                bool inRange = bestPosition >= rangeMin - padding && bestPosition <= rangeMax + padding;
+
+                // Quality gate: the curve must actually look like a V (R² above
+                // threshold) and the vertex must fall within the swept range.
+                // Otherwise reattempt instead of slewing the focuser to a bogus
+                // minimum (the silent-bad-autofocus the fixed single pass had).
+                if (!inRange || (request.RSquaredThreshold > 0 && fit.RSquared < request.RSquaredThreshold)) {
+                    lastReason = !inRange
+                        ? $"vertex {bestPosition} outside swept range [{rangeMin}..{rangeMax}]"
+                        : $"R²={fit.RSquared:F2} < {request.RSquaredThreshold:F2}";
+                    _logger.LogWarning("AF attempt {N}/{Max} unreliable: {Reason}", attempt, maxAttempts, lastReason);
+                    if (attempt < maxAttempts) continue;
+                    throw new InvalidOperationException(
+                        $"Auto-focus curve unreliable ({lastReason}) after {maxAttempts} attempt(s)");
+                }
+
+                // Move to the fitted best (backlash-compensated), settle.
+                if (request.BacklashSteps > 0 && bestPosition < focuser.Position) {
+                    await focuser.MoveAbsoluteAsync(bestPosition - request.BacklashSteps, ct);
+                    await WaitForFocuserSettle(focuser, ct);
+                }
+                await focuser.MoveAbsoluteAsync(bestPosition, ct);
                 await WaitForFocuserSettle(focuser, ct);
+                int finalPosition = focuser.Focuser_ReadCurrentSafely();
 
-                int actualPos = focuser.Position;
-                var image = await CaptureGated(source, camera, request.ExposureSeconds, ct);
-                // Push each AF frame through the image relay so the
-                // Focus tab preview canvas (and the Live canvas) can
-                // render the sweep frames as the user watches the run.
-                try { await _relay.RelayImageAsync(image, FrameKind.Focus, ct); }
-                catch (Exception ex) { _logger.LogDebug(ex, "AF frame relay failed (non-fatal)"); }
-                var hfr = MeasureHFR(image, request.MinStars);
+                // Confirmation frame (records achieved HFR + feeds the worse-than-
+                // start gate).
+                double? finalHfr = null;
+                int? finalStars = null;
+                if (request.TakeConfirmationFrame) {
+                    var image = await CaptureGated(source, camera, request.ExposureSeconds, ct);
+                    try { await _relay.RelayImageAsync(image, FrameKind.Focus, ct); }
+                    catch (Exception ex) { _logger.LogDebug(ex, "AF confirmation frame relay failed (non-fatal)"); }
+                    var hfr = MeasureHFR(image, request.MinStars);
+                    finalHfr = hfr.medianHfr;
+                    finalStars = hfr.starCount;
+                }
 
-                var point = new AutoFocusPoint {
-                    Position = actualPos,
-                    HFR = hfr.medianHfr,
-                    StarCount = hfr.starCount
+                // Reject a run that ended meaningfully worse than it started.
+                if (initialHfr > 0 && finalHfr is > 0 && request.MaxHfrRatio > 0
+                        && finalHfr.Value > initialHfr * request.MaxHfrRatio) {
+                    lastReason = $"final HFR {finalHfr:F2} worse than initial {initialHfr:F2} (>{request.MaxHfrRatio:0.##}x)";
+                    _logger.LogWarning("AF attempt {N}/{Max} rejected: {Reason}", attempt, maxAttempts, lastReason);
+                    if (attempt < maxAttempts) continue;
+                    throw new InvalidOperationException($"Auto-focus result worse than start ({lastReason})");
+                }
+
+                var result = new AutoFocusResult {
+                    Success = true,
+                    StartPosition = startPosition,
+                    BestPosition = bestPosition,
+                    FinalPosition = finalPosition,
+                    BestPredictedHfr = fit.MinY,
+                    FinalMeasuredHfr = finalHfr,
+                    FinalStarCount = finalStars,
+                    Points = new List<AutoFocusPoint>(Progress.Points),
+                    FitA = fit.A, FitB = fit.B, FitC = fit.C,
+                    RSquared = fit.RSquared,
+                    InitialHfr = initialHfr,
+                    Attempts = attempt,
+                    StartedAt = Progress.StartedAt,
+                    CompletedAt = DateTime.UtcNow
                 };
 
-                Progress.Points.Add(point);
-                Progress = Progress with { LastHfr = point.HFR, LastStarCount = point.StarCount };
+                lock (_stateLock) {
+                    LastResult = result;
+                    State = AutoFocusState.Idle;
+                }
 
-                _logger.LogInformation("AF sample {I}/{N}: pos={Pos} stars={Stars} HFR={HFR:F2}",
-                    i + 1, positions.Count, actualPos, point.StarCount, point.HFR);
-            }
-
-            // FIELD2-1: fit parabola only over points that cleared
-            // the operator's min-stars threshold. The earlier filter
-            // `StarCount > 0 && HFR > 0` accepted "I saw 1 noise blob"
-            // points whose HFR was a random small value that yanked
-            // the parabola fit sideways. MeasureHFR sentinels invalid
-            // samples as HFR=0; the `>0` check survives both that and
-            // the rare degenerate-flat-frame case.
-            var validPoints = Progress.Points
-                .Where(p => p.StarCount >= request.MinStars && p.HFR > 0)
-                .ToList();
-
-            if (validPoints.Count < 3) {
-                throw new InvalidOperationException(
-                    $"Not enough valid samples to fit parabola ({validPoints.Count} of {positions.Count})");
-            }
-
-            // Drop "low wing" samples first: a heavily-defocused star is a faint
-            // donut the detector can miss, latching onto noise blobs whose median
-            // HFR reads far too LOW. Physically a V-curve only RISES away from
-            // focus, so a sample whose HFR drops as it defocuses further is bogus
-            // (the operator's exact complaint: low HFR at the fully-defocused ends
-            // wrecking the V). Reject them before the fit so they can't drag the
-            // vertex. Flagged, not deleted, so the chart still shows them.
-            var wingClean = RejectLowWingOutliers(validPoints, out var lowWing);
-            if (lowWing.Count > 0) {
                 _logger.LogInformation(
-                    "AF: dropped {Count} low-HFR wing sample(s) (defocus detection failures) at {Pos}",
-                    lowWing.Count, string.Join(", ", lowWing.Select(p => p.Position)));
+                    "Auto-focus complete: start={Start} best={Best} final={Final} predictedHFR={HFR:F2} R²={R2:F2} attempt={A}/{Max}",
+                    startPosition, bestPosition, finalPosition, fit.MinY, fit.RSquared, attempt, maxAttempts);
+                return;
             }
-
-            // Trim the flat shoulders next: on a fast scope / coarse step the
-            // sweep extremes saturate (HFR stops growing), so the V-curve looks
-            // like a skate ramp with a plateau on each side. Those plateaus are
-            // many consistent points the residual sigma-clip below won't catch,
-            // and they pull the parabola wider/flatter and shift the vertex off
-            // true focus. Fit only the inner V. Dropped points are flagged (not
-            // deleted) so the chart still shows them.
-            var innerPoints = TrimPlateaus(wingClean);
-            foreach (var p in validPoints) {
-                if (!innerPoints.Contains(p)) p.Rejected = true;
-            }
-            int trimmedCount = wingClean.Count - innerPoints.Count;
-            if (trimmedCount > 0) {
-                _logger.LogInformation(
-                    "AF: trimmed {Count} flat plateau point(s) from the V-curve shoulders before fitting",
-                    trimmedCount);
-            }
-
-            // Reject spurious points: a single bad HFR (passing cloud, cosmic
-            // ray, a satellite trail mis-measured as a tight star) sits far off
-            // the V-curve and drags the least-squares parabola sideways, landing
-            // the focuser away from true focus. Iteratively sigma-clip points
-            // whose residual to the fit is an outlier, then refit on the
-            // survivors. The dropped points are flagged (not deleted) so the
-            // chart still shows them.
-            var (fit, inliers, rejected) = FitParabolaRobust(innerPoints);
-            foreach (var r in rejected) r.Rejected = true;
-            if (rejected.Count > 0) {
-                _logger.LogInformation(
-                    "AF: ignored {Count} spurious point(s) at {Positions} (off the V-curve)",
-                    rejected.Count, string.Join(", ", rejected.Select(p => p.Position)));
-            }
-            int bestPosition = (int)Math.Round(fit.MinX);
-
-            // Validate: best position should be inside (or near) the swept range
-            int rangeMin = positions.Min();
-            int rangeMax = positions.Max();
-            int padding = request.StepSize * 2;
-            if (bestPosition < rangeMin - padding || bestPosition > rangeMax + padding) {
-                _logger.LogWarning(
-                    "Fitted best position {Best} is far outside swept range [{Lo}..{Hi}], fit unreliable",
-                    bestPosition, rangeMin, rangeMax);
-            }
-
-            // Backlash compensation again for the final move
-            if (request.BacklashSteps > 0 && bestPosition < focuser.Position) {
-                await focuser.MoveAbsoluteAsync(bestPosition - request.BacklashSteps, ct);
-                await WaitForFocuserSettle(focuser, ct);
-            }
-
-            await focuser.MoveAbsoluteAsync(bestPosition, ct);
-            await WaitForFocuserSettle(focuser, ct);
-
-            int finalPosition = focuser.Focuser_ReadCurrentSafely();
-
-            // Optional: take a confirmation exposure to record the achieved HFR
-            double? finalHfr = null;
-            int? finalStars = null;
-            if (request.TakeConfirmationFrame) {
-                var image = await CaptureGated(source, camera, request.ExposureSeconds, ct);
-                try { await _relay.RelayImageAsync(image, FrameKind.Focus, ct); }
-                catch (Exception ex) { _logger.LogDebug(ex, "AF confirmation frame relay failed (non-fatal)"); }
-                var hfr = MeasureHFR(image, request.MinStars);
-                finalHfr = hfr.medianHfr;
-                finalStars = hfr.starCount;
-            }
-
-            var result = new AutoFocusResult {
-                Success = true,
-                StartPosition = startPosition,
-                BestPosition = bestPosition,
-                FinalPosition = finalPosition,
-                BestPredictedHfr = fit.MinY,
-                FinalMeasuredHfr = finalHfr,
-                FinalStarCount = finalStars,
-                Points = new List<AutoFocusPoint>(Progress.Points),
-                FitA = fit.A, FitB = fit.B, FitC = fit.C,
-                StartedAt = Progress.StartedAt,
-                CompletedAt = DateTime.UtcNow
-            };
-
-            lock (_stateLock) {
-                LastResult = result;
-                State = AutoFocusState.Idle;
-            }
-
-            _logger.LogInformation(
-                "Auto-focus complete: start={Start} best={Best} final={Final} predictedHFR={HFR:F2}",
-                startPosition, bestPosition, finalPosition, fit.MinY);
 
         } catch (OperationCanceledException) {
             _logger.LogInformation("Auto-focus cancelled, restoring start position {Pos}", startPosition);
@@ -446,17 +454,36 @@ public class AutoFocusService {
         var sol = Solve3x3(m, v);
         double c = sol[0], b = sol[1], a = sol[2];
 
+        double rSquared = ComputeRSquared(points, a, b, c);
+
         // Vertex of y = ax² + bx + c is at x = -b/(2a)
         if (Math.Abs(a) < 1e-12) {
             // Degenerate (line), return point of minimum y in sample
             var min = points.OrderBy(p => p.HFR).First();
-            return new ParabolaFit { A = a, B = b, C = c, MinX = min.Position, MinY = min.HFR };
+            return new ParabolaFit { A = a, B = b, C = c, MinX = min.Position, MinY = min.HFR, RSquared = rSquared };
         }
 
         double minX = -b / (2 * a);
         double minY = a * minX * minX + b * minX + c;
 
-        return new ParabolaFit { A = a, B = b, C = c, MinX = minX, MinY = minY };
+        return new ParabolaFit { A = a, B = b, C = c, MinX = minX, MinY = minY, RSquared = rSquared };
+    }
+
+    /// <summary>Coefficient of determination R² of the parabola y=ax²+bx+c over
+    /// the given points: 1 - SSres/SStot. Returns 1 for a (near-)constant data
+    /// set (SStot≈0) so a flat-but-perfectly-fit set isn't flagged as bad.</summary>
+    public static double ComputeRSquared(IReadOnlyList<AutoFocusPoint> points, double a, double b, double c) {
+        if (points.Count == 0) return 0;
+        double meanY = points.Average(p => p.HFR);
+        double ssTot = 0, ssRes = 0;
+        foreach (var p in points) {
+            double pred = a * p.Position * p.Position + b * p.Position + c;
+            ssRes += (p.HFR - pred) * (p.HFR - pred);
+            ssTot += (p.HFR - meanY) * (p.HFR - meanY);
+        }
+        if (ssTot <= 1e-12) return 1.0;
+        double r2 = 1.0 - ssRes / ssTot;
+        return r2 < 0 ? 0 : r2;
     }
 
     /// <summary>
@@ -714,6 +741,21 @@ public class AutoFocusRequest {
     /// focuser). The camera is paired to the focuser since a V-curve needs the
     /// camera looking through the same optics. Defaults to "main".</summary>
     public string FocuserSource { get; set; } = "main";
+
+    /// <summary>Minimum R² (coefficient of determination) the fitted V-curve must
+    /// reach to be accepted. Below this the sweep is considered unreliable and the
+    /// run is reattempted / fails instead of moving to a bogus vertex. 0 disables
+    /// the gate (legacy behaviour). Default 0.7.</summary>
+    public double RSquaredThreshold { get; set; } = 0.7;
+    /// <summary>How many times to run the full sweep before giving up when the
+    /// quality gate fails. Each reattempt returns to the start position first.
+    /// Default 2.</summary>
+    public int Attempts { get; set; } = 2;
+    /// <summary>Reject a run whose confirmation HFR is worse than the starting HFR
+    /// by more than this factor (e.g. 1.15 = "no more than 15% worse"). Only
+    /// applied when both the start and confirmation HFR could be measured and a
+    /// confirmation frame is taken. 0 disables the check. Default 1.15.</summary>
+    public double MaxHfrRatio { get; set; } = 1.15;
 }
 
 public record AutoFocusProgress {
@@ -724,6 +766,9 @@ public record AutoFocusProgress {
     public int LastStarCount { get; init; }
     public List<AutoFocusPoint> Points { get; init; } = new();
     public DateTime StartedAt { get; init; }
+    /// <summary>Current attempt number (1-based) when the quality gate triggers
+    /// a reattempt, so the UI can show "attempt 2/2".</summary>
+    public int Attempt { get; init; } = 1;
 }
 
 public class AutoFocusPoint {
@@ -751,6 +796,13 @@ public class AutoFocusResult {
     public double FitA { get; set; }
     public double FitB { get; set; }
     public double FitC { get; set; }
+    /// <summary>R² of the accepted V-curve fit (quality indicator).</summary>
+    public double RSquared { get; set; }
+    /// <summary>HFR measured at the start position before the sweep (0 if it
+    /// couldn't be measured — too far out of focus).</summary>
+    public double InitialHfr { get; set; }
+    /// <summary>How many sweep attempts it took to land an accepted curve.</summary>
+    public int Attempts { get; set; } = 1;
     public DateTime StartedAt { get; set; }
     public DateTime CompletedAt { get; set; }
     public string? Error { get; set; }
@@ -762,4 +814,8 @@ public class ParabolaFit {
     public double C { get; set; }
     public double MinX { get; set; }
     public double MinY { get; set; }
+    /// <summary>Coefficient of determination (R²) of the fit over the points it
+    /// was computed from: 1 = perfect V, ~0 = no relationship. Drives the
+    /// quality gate that decides whether a sweep is trustworthy.</summary>
+    public double RSquared { get; set; }
 }
