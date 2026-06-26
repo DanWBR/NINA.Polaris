@@ -22679,8 +22679,7 @@ function ninaApp() {
                 ['Network & security',  ['authentication', 'https certificate',
                     'https endpoints (for webgpu + multi-thread wasm)', 'network (wifi)', 'remote terminal',
                     'auto-push to network storage']],
-                ['System & maintenance', ['debug logging', 'hardware benchmark',
-                    'power', 'reset everything to factory defaults']],
+                ['System & maintenance', ['debug logging', 'hardware benchmark', 'reset everything to factory defaults', 'power']],
             ];
             const norm = s => (s || '').replace(/^[^A-Za-z0-9]+/, '').trim().toLowerCase();
             const cards = Array.from(gridEl.querySelectorAll(':scope > .settings-section'))

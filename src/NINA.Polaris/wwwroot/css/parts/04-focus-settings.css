@@ -680,7 +680,7 @@
     padding: 14px 16px;
     /* FAQ-style accordion list: single column, capped width so the
        collapsible cards read as a vertical list rather than a wide grid. */
-    max-width: 820px;
+    max-width: 500px;
 }
 .settings-section {
     background: var(--bg-secondary);
@@ -705,6 +705,7 @@
        scales everything to the same effective rendered size. */
     font-size: 12px;
     transition: border-color var(--transition);
+    max-width: 500px;
 }
 .settings-section:hover {
     border-color: rgba(255, 255, 255, 0.1);
@@ -1026,31 +1027,29 @@
 .settings-accordion .settings-cat-header:first-child {
     margin-top: 0;
 }
-/* Two-column settings when there's room. The accordion is normally a
-   single ~820px column (see .settings-grid); on wide screens flow the
-   cards into two columns so the horizontal space isn't wasted. Category
-   headers span both columns so each group stays a clean full-width
-   separator, and align-items:start keeps each card its natural height
-   (an expanded card doesn't stretch its row-neighbour). Scoped to
+/* Multi-column settings keyed to a fixed 550px card width. auto-fill packs
+   as many 550px columns as the (zoom-adjusted) available width allows, so
+   the layout reflows by real width instead of a hard viewport breakpoint —
+   previously the 1200/1700px min-width media queries fell back to a single
+   column whenever the UI-zoom slider shrank the effective viewport below
+   1200px. Two columns appear as soon as ~1116px of room is free, three on
+   very wide screens. Category headers span the full row so each group stays
+   a clean separator, and align-items:start keeps each card its natural
+   height (an expanded card doesn't stretch its row-neighbour). Scoped to
    .settings-accordion so the nested field .settings-grid inside cards is
    untouched. */
-@media (min-width: 1200px) {
-    .settings-grid.settings-accordion {
-        grid-template-columns: 1fr 1fr;
-        max-width: 1320px;
-        column-gap: 16px;
-        align-items: start;
-    }
-    .settings-accordion .settings-cat-header {
-        grid-column: 1 / -1;
-    }
+.settings-grid.settings-accordion {
+    grid-template-columns: repeat(auto-fill, 550px);
+    justify-content: start;
+    align-items: start;
+    column-gap: 16px;
+    max-width: 1716px;   /* up to three 550px columns + two 16px gaps */
 }
-/* Three columns on very wide screens. */
-@media (min-width: 1700px) {
-    .settings-grid.settings-accordion {
-        grid-template-columns: 1fr 1fr 1fr;
-        max-width: 1900px;
-    }
+.settings-accordion .settings-section {
+    max-width: 550px;    /* fill the 550px grid track */
+}
+.settings-accordion .settings-cat-header {
+    grid-column: 1 / -1;
 }
 /* Explicit body wrapper used by sections whose content lives inside
    <template x-if> branches (Network). The template-rendered children
