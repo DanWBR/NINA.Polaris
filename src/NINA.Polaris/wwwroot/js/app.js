@@ -18003,6 +18003,14 @@ function ninaApp() {
             // Cooler-off pre-flight before starting the LIVE loop (saves frames
             // by default, so warm frames matter here too).
             if (!await this.confirmCoolerForSession('the LIVE loop')) return;
+            // Auto-start stacking when the operator hits the shutter on a fresh,
+            // idle stack (paused with zero frames): the obvious intent is "start
+            // a live stack", so frames actually accumulate instead of looping
+            // un-stacked. A paused stack with frames already (>0) is left alone —
+            // that pause was deliberate (the Resume/Restart choice lives on the
+            // stacking toggle). Cooler was just confirmed above, so skip the
+            // re-prompt that toggleLiveStack would do.
+            await this._autoStartLiveStackIfIdle();
             // Server-owned loop (opt-in): the server drives every exposure and
             // keeps going if the browser drops; the client only offloads WASM
             // stacking. We just ask it to start and reflect state from the WS
@@ -19787,6 +19795,27 @@ function ninaApp() {
                 localStorage.setItem('polaris.guideSideCollapsed',
                     this.guideSideCollapsed ? '1' : '0');
             } catch { /* private-browsing / quota — silent */ }
+        },
+
+        // Start live stacking automatically when it's idle (paused with no
+        // frames yet) — used by the LIVE shutter so pressing capture on a fresh
+        // session also begins the stack. No-op when stacking is already running
+        // or when a paused stack already has frames (respect a deliberate pause).
+        // Assumes the cooler pre-flight was already handled by the caller.
+        async _autoStartLiveStackIfIdle() {
+            if (this.liveStackEnabled) return;
+            if ((this.liveStackFrames || 0) > 0) return;
+            this.liveStackEnabled = true;   // optimistic; rolled back on failure
+            try {
+                const trig = this.liveStackTriggers || {};
+                const url = (trig.refocusOnStart || trig.recenterOnStart)
+                    ? '/api/livestack/start-with-prep' : '/api/livestack/start';
+                await this.apiPost(url);
+                this.toast('Live stacking started', 'ok');
+            } catch (e) {
+                this.liveStackEnabled = false;
+                this.toast('Could not auto-start live stacking: ' + (e?.message || ''), 'warn');
+            }
         },
 
         async toggleLiveStack() {
