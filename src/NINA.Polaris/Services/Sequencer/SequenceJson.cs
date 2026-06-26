@@ -215,6 +215,7 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
         "StopGuiding"    => typeof(StopGuidingInstruction),
         "Dither"         => typeof(DitherInstruction),
         "AutoSelectStar" => typeof(AutoSelectStarInstruction),
+        "SetGuiderGain"  => typeof(SetGuiderGainInstruction),
 
         // Dome
         "OpenShutter"        => typeof(OpenShutterInstruction),
@@ -335,6 +336,7 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
         ("StopGuiding", "Guider", "Instruction"),
         ("Dither", "Guider", "Instruction"),
         ("AutoSelectStar", "Guider", "Instruction"),
+        ("SetGuiderGain", "Guider", "Instruction"),
 
         ("OpenShutter", "Dome", "Instruction"),
         ("CloseShutter", "Dome", "Instruction"),

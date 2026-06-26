@@ -12,6 +12,8 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using Microsoft.Extensions.Logging;
+
 namespace NINA.Polaris.Services.Sequencer.Instructions;
 
 public class StartGuidingInstruction : SequenceInstruction {
@@ -54,5 +56,45 @@ public class AutoSelectStarInstruction : SequenceInstruction {
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
         if (!ctx.PHD2.IsConnected) throw new InvalidOperationException("PHD2 not connected");
         await ctx.PHD2.AutoSelectStarAsync();
+    }
+}
+
+/// <summary>
+/// Change the NATIVE guide camera gain mid-sequence. Writes the active rig's
+/// <c>NativeGuideGain</c> (clamped to the guide camera's real range when one is
+/// connected); the native guide loop reads it on the very next exposure, so the
+/// change takes effect live without restarting guiding.
+///
+/// Only the native guider honours this — when guiding through PHD2 the guide
+/// camera is owned by PHD2, so this only affects the native guider (logged).
+/// </summary>
+public class SetGuiderGainInstruction : SequenceInstruction {
+    public override string Type => "SetGuiderGain";
+
+    /// <summary>Target gain in the guide camera's native units.</summary>
+    public int Gain { get; set; } = 40;
+
+    public override IReadOnlyList<string> Validate() =>
+        Gain < 0 ? new[] { "Gain must be >= 0" } : Array.Empty<string>();
+
+    public override Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
+        var rig = ctx.Profiles.ActiveEquipmentProfile
+            ?? throw new InvalidOperationException("No active rig");
+
+        var gain = Gain;
+        var cam = ctx.Equipment.GuideCamera;
+        if (cam != null && cam.GainMax > cam.GainMin && cam.GainMax > 0)
+            gain = Math.Clamp(gain, cam.GainMin, cam.GainMax);
+
+        ctx.Profiles.UpdateEquipmentProfile(rig.Id, r => r.NativeGuideGain = gain);
+        ctx.Logger.LogInformation(
+            "Guide camera gain set to {Gain} (requested {Requested}); applies on the next guide frame.",
+            gain, Gain);
+
+        if (ctx.PHD2.IsConnected)
+            ctx.Logger.LogWarning(
+                "PHD2 is connected — the guide camera gain is owned by PHD2; this change only "
+                + "affects the native guider.");
+        return Task.CompletedTask;
     }
 }
