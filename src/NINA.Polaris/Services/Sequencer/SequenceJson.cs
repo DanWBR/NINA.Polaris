@@ -185,6 +185,7 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
         // Containers
         "Sequential"     => typeof(SequentialContainer),
         "Parallel"       => typeof(ParallelContainer),
+        "Conditional"    => typeof(ConditionalContainer),
         "DeepSkyObject"  => typeof(DeepSkyObjectContainer),
         "Templated"      => typeof(TemplatedContainer),
 
@@ -260,6 +261,8 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
         "DitherAfterNExposures"   => typeof(DitherAfterNExposuresTrigger),
         "CenterAfterDrift"        => typeof(CenterAfterDriftTrigger),
         "Safety"                  => typeof(SafetyTrigger),
+        "RestoreGuiding"          => typeof(RestoreGuidingTrigger),
+        "ReconnectCamera"         => typeof(ReconnectCameraTrigger),
 
         _ => null
     };
@@ -307,6 +310,7 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
     private static readonly (string Type, string Category, string Class)[] _known = new[] {
         ("Sequential", "Containers", "Container"),
         ("Parallel", "Containers", "Container"),
+        ("Conditional", "Containers", "Container"),
         ("DeepSkyObject", "Containers", "Container"),
         ("Templated", "Containers", "Container"),
 
@@ -370,5 +374,7 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
         ("DitherAfterNExposures", "Triggers", "Trigger"),
         ("CenterAfterDrift", "Triggers", "Trigger"),
         ("Safety", "Triggers", "Trigger"),
+        ("RestoreGuiding", "Triggers", "Trigger"),
+        ("ReconnectCamera", "Triggers", "Trigger"),
     };
 }

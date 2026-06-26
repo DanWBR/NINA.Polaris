@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -213,6 +214,15 @@ public class AdvancedSequencerTests {
         public override Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) { Fired++; return Task.CompletedTask; }
     }
 
+    /// <summary>Test condition: returns queued bools, then a default.</summary>
+    private sealed class ScriptedCondition : SequenceCondition {
+        public override string Type => "TestCond";
+        public readonly Queue<bool> Results = new();
+        public bool Default = true;
+        public override Task<bool> StillTrueAsync(SequenceContext ctx, CancellationToken ct)
+            => Task.FromResult(Results.Count > 0 ? Results.Dequeue() : Default);
+    }
+
     [Test]
     public async Task Attempts_RetriesUntilSuccess() {
         var prev = SequenceContainer.RetryBackoff;
@@ -275,5 +285,40 @@ public class AdvancedSequencerTests {
         // inherits it and evaluates before each of its 2 leaves = 2. Total 3.
         // Without the cascade it would only be 1.
         Assert.That(trig.Fired, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task LoopConditions_GateEveryItem_NotOnlyPerIteration() {
+        // Condition holds before item0, fails before item1 → the loop stops
+        // mid-iteration: item0 ran once, item1 never ran.
+        var i0 = new CountingInstruction();
+        var i1 = new CountingInstruction();
+        var cond = new ScriptedCondition { Default = false };
+        cond.Results.Enqueue(true);   // before item0
+        cond.Results.Enqueue(false);  // before item1 -> stop
+        var root = new SequentialContainer {
+            Name = "Loop", IsLoop = true, Items = { i0, i1 }, Conditions = { cond }
+        };
+        await root.ExecuteAsync(TestCtx(), CancellationToken.None);
+        Assert.That(i0.Runs, Is.EqualTo(1));
+        Assert.That(i1.Runs, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task ConditionalContainer_RunsChildrenWhenPredicateHolds() {
+        var item = new CountingInstruction();
+        var cond = new ScriptedCondition { Default = true };
+        var c = new ConditionalContainer { Name = "If", Items = { item }, Conditions = { cond } };
+        await c.ExecuteAsync(TestCtx(), CancellationToken.None);
+        Assert.That(item.Runs, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task ConditionalContainer_SkipsChildrenWhenPredicateFails() {
+        var item = new CountingInstruction();
+        var cond = new ScriptedCondition { Default = false };
+        var c = new ConditionalContainer { Name = "If", Items = { item }, Conditions = { cond } };
+        await c.ExecuteAsync(TestCtx(), CancellationToken.None);
+        Assert.That(item.Runs, Is.EqualTo(0));
     }
 }

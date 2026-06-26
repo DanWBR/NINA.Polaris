@@ -31266,7 +31266,14 @@ function ninaApp() {
                 let kind = 'string';
                 if (typeof v === 'boolean') kind = 'bool';
                 else if (typeof v === 'number') kind = 'number';
-                out.push({ key: k, kind });
+                // ErrorBehavior is a string enum on every instruction/container;
+                // render it as a dropdown instead of a free-text box.
+                let options = null;
+                if (k === 'errorBehavior') {
+                    kind = 'enum';
+                    options = ['AbortRun', 'ContinueOnError', 'SkipBlock'];
+                }
+                out.push({ key: k, kind, options });
             }
             return out;
         },

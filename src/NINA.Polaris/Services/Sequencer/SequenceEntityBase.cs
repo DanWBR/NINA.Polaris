@@ -220,10 +220,18 @@ public abstract class SequenceContainer : SequenceEntityBase, IErrorHandlingEnti
             ctx.Logger.LogInformation(
                 "Container '{Name}' loops with no exit condition; "
                 + "it will repeat until the sequence is stopped.", Name);
+        var gateConditions = IsLoop && Conditions.Count > 0;
         do {
             for (int i = 0; i < Items.Count; i++) {
                 if (ctx.AbortRequested) return;
                 ct.ThrowIfCancellationRequested();
+
+                // Loop conditions gate EVERY item (NINA parity), so a time /
+                // altitude / safety cut-off stops the block the moment it trips
+                // — including before the first item, instead of only after a
+                // whole pass completes.
+                if (gateConditions && !await AllConditionsHoldAsync(ctx, ct))
+                    return;
 
                 await EvaluateTriggersAsync(ctx, ct);
                 if (ctx.AbortRequested) return;
@@ -232,6 +240,20 @@ public abstract class SequenceContainer : SequenceEntityBase, IErrorHandlingEnti
                     return;
             }
         } while (IsLoop && !ctx.AbortRequested && await AllConditionsHoldAsync(ctx, ct));
+    }
+
+    /// <summary>Run the children exactly once (no loop, no condition gate) with
+    /// triggers + per-step retry/error policy + trigger cascade. Used by the
+    /// conditional container after its predicate passes.</summary>
+    protected async Task RunChildrenOnceAsync(SequenceContext ctx, CancellationToken ct) {
+        for (int i = 0; i < Items.Count; i++) {
+            if (ctx.AbortRequested) return;
+            ct.ThrowIfCancellationRequested();
+            await EvaluateTriggersAsync(ctx, ct);
+            if (ctx.AbortRequested) return;
+            if (await RunChildAsync(Items[i], ctx, ct) == ChildOutcome.StopContainer)
+                return;
+        }
     }
 }
 
