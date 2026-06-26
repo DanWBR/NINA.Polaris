@@ -155,21 +155,22 @@ session.
 
 ### Radxa Dragon Q6A (8 cores, Qualcomm QCS6490)
 
-Run: 2026-06-26 (best 289, CPU only — the production score). Ubuntu 24.04
-(noble) arm64. Kryo cores (Cortex-A78 + A55) with an Adreno 643 GPU.
+Run: 2026-06-26 (best 296, CPU only — the production score; runs vary ~271–296
+on the noisy little A55 cores). Ubuntu 24.04 (noble) arm64. Kryo cores
+(Cortex-A78 + A55) with an Adreno 643 GPU.
 
 | Metric | Value |
 |---|---|
-| **Polaris score** | **289** |
-| Stacking throughput | 3.5 fps · 58.8 Mpx/s (16.78 MP frames) |
-| Stacking detect / align / resample / stats | 71.78 / 0.53 / 78.36 / 134.83 ms |
-| Capture/video throughput | 2.32 fps · 39 Mpx/s |
-| Debayer / JPEG / LZ4 | 47.82 / 368.88 / 13.75 ms (LZ4 2327.2 MB/s) |
-| CPU single / multi-thread | 3296 / 13699 MFLOPS (4.16× scaling) |
-| Memory bandwidth | 13.2 GB/s |
+| **Polaris score** | **296** |
+| Stacking throughput | 3.81 fps · 63.8 Mpx/s (16.78 MP frames) |
+| Stacking detect / align / resample / stats | 61.27 / 1.67 / 67.7 / 132.15 ms |
+| Capture/video throughput | 2.29 fps · 38.5 Mpx/s |
+| Debayer / JPEG / LZ4 | 47.41 / 375.65 / 12.99 ms (LZ4 2462.7 MB/s) |
+| CPU single / multi-thread | 3289 / 13681 MFLOPS (4.16× scaling) |
+| Memory bandwidth | 13.8 GB/s |
 | GPU vs CPU (Adreno 643, OpenCL) | warp 0.69× · debayer 0.34× · blur 2.56× · **overall 0.84×** (geo-mean) |
 
-The fastest SBC here by a clear margin — ~2.6× the Raspberry Pi 4 and ~19%
+The fastest SBC here by a clear margin — ~2.7× the Raspberry Pi 4 and ~22%
 ahead of the Orange Pi 5 Pro (both its CPU-only 227 and GPU-on 242). It leads on
 raw per-core throughput: the strongest single-thread score of the SBCs (3296
 MFLOPS) and the lowest stacking detect/resample times, which is what drives the
@@ -185,8 +186,8 @@ both tried; neither flips warp/debayer above 1× here (the texture path is worse
 still, 0.66× overall, because the input copy + tiling costs more than the cache
 saves). So Polaris's per-op probe correctly offloads **only blur** on the
 Adreno and keeps warp/debayer on the CPU; the score with the GPU enabled (~294)
-matches CPU-only (~289) within run-to-run noise. Recommendation: leave the GPU
-toggle off here — **289 is the board's real score.** The **RKNN/NPU path does
+matches CPU-only (~296) within run-to-run noise. Recommendation: leave the GPU
+toggle off here — **~296 is the board's real score.** The **RKNN/NPU path does
 not apply** on this SoC (Rockchip-only); the Hexagon NPU would need QNN.
 
 ### x86 desktop — Core i9-13900KF (32 threads)
