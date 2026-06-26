@@ -2457,13 +2457,14 @@
                                  own focuser. Shown when an aux or guide camera
                                  is configured. -->
                             <label style="display:flex; align-items:center; gap:6px"
-                                   x-show="auxCamera || guideCamera" x-cloak>
+                                   x-show="auxCameraConnected || (guider && guider.guideCameraConnected)" x-cloak>
                                 Camera
                                 <select class="input-sm" x-model="focusCameraSource"
+                                        x-effect="focusGuardCameraSource()"
                                         :disabled="manualFocus.running" style="width:auto">
                                     <option value="main">Primary</option>
-                                    <option value="aux" x-show="auxCamera">Auxiliary</option>
-                                    <option value="guide" x-show="guideCamera">Guide</option>
+                                    <option value="aux" x-show="auxCameraConnected">Auxiliary</option>
+                                    <option value="guide" x-show="guider && guider.guideCameraConnected">Guide</option>
                                 </select>
                             </label>
                             <label style="display:flex; align-items:center; gap:6px"
@@ -2830,6 +2831,7 @@
                             Camera
                             <select x-model="preview.cameraSource" class="input-sm"
                                     @change="previewApplyCameraSource()"
+                                    x-effect="previewGuardCameraSource()"
                                     :disabled="preview.busy || preview.looping">
                                 <option value="main">Main</option>
                                 <option value="guide" x-show="guider && guider.guideCameraConnected">Guide</option>
@@ -16182,7 +16184,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260626-powerlast"></script>
+    <script src="/js/app.js?v=20260626-camsrcguard"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

@@ -5143,6 +5143,33 @@ function ninaApp() {
             if (s.gain != null) this.preview.gain = s.gain;
             if (s.binning != null) this.preview.binning = s.binning;
         },
+        // True when the named camera source (main/aux/guide) is actually
+        // connected and usable as a capture source right now. Main is always
+        // assumed available (it's the imaging camera the whole UI centres on).
+        _cameraSourceAvailable(src) {
+            if (src === 'aux') return !!this.auxCameraConnected;
+            if (src === 'guide') return !!(this.guider && this.guider.guideCameraConnected);
+            return true; // 'main' (or anything unknown) falls back to main
+        },
+        // Guard the PREVIEW/FOCUS camera pickers: if the previously-selected
+        // source is no longer connected (e.g. the aux camera was disconnected
+        // after it was picked), its <option> is hidden but the x-model value
+        // lingers — the picker shows a stale, un-listed camera and a capture
+        // would target a gone device. Snap back to 'main'. Driven reactively
+        // by x-effect, so it fires the moment the connection flag flips.
+        previewGuardCameraSource() {
+            if (this.preview.cameraSource !== 'main'
+                    && !this._cameraSourceAvailable(this.preview.cameraSource)) {
+                this.preview.cameraSource = 'main';
+                this.previewApplyCameraSource();
+            }
+        },
+        focusGuardCameraSource() {
+            if (this.focusCameraSource !== 'main'
+                    && !this._cameraSourceAvailable(this.focusCameraSource)) {
+                this.focusCameraSource = 'main';
+            }
+        },
         // Restore the active source's slot into the live fields after the
         // persisted state loads, then mirror later edits back into the slot
         // so every camera keeps its own values.
