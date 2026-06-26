@@ -124,6 +124,17 @@
         "highlight": true
       },
       {
+        "device": "Radxa Dragon Q6A (QCS6490)",
+        "url": "https://radxa.com/products/dragon/q6a/",
+        "cores": "8 cores",
+        "score": "296",
+        "stacking": "63.8 Mpx/s",
+        "capture": "38.5 Mpx/s",
+        "memory": "13.8 GB/s",
+        "price": "$80-120",
+        "highlight": false
+      },
+      {
         "device": "Core i9-13900KF + RTX 5070",
         "url": "",
         "cores": "32 threads",
@@ -135,7 +146,7 @@
         "highlight": false
       }
     ],
-    "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. The Orange Pi 5 Pro is shown with the OpenCL GPU backend on (242; 227 CPU only) and the Pi 5 at its best, actively cooled run. Prices are rough street estimates for the board alone (no SD card, power, or case); the Core i9 row is a full desktop build for reference, not an SBC. Full per-device tables and methodology in the benchmark docs.",
+    "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. The Orange Pi 5 Pro is shown with the OpenCL GPU backend on (242; 227 CPU only) and the Pi 5 at its best, actively cooled run. The Radxa Dragon Q6A is the fastest SBC here and runs CPU-only (its Adreno GPU is a net loss). Prices are rough street estimates for the board alone (no SD card, power, or case); the Core i9 row is a full desktop build for reference, not an SBC. Full per-device tables and methodology in the benchmark docs.",
     "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"
   },
   "closing": {
