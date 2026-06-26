@@ -415,6 +415,10 @@ src/NINA.Polaris/wwwroot/graxpert/models/**/*.onnx
 # the same redistribution restriction — keep them local (bundled into the
 # linux-arm64 .deb at publish time) but out of the repo.
 src/NINA.Polaris/wwwroot/graxpert/models/**/*.rknn
+# QNN HTP context binaries (Qualcomm Hexagon, Radxa Dragon Q6A / QCS6490 V68):
+# converted from the same NC GraXpert weights, HTP-arch-specific (model.htp-v68.bin
+# etc.), large + regenerable. Bundled into the arm64 .deb at publish, not the repo.
+src/NINA.Polaris/wwwroot/graxpert/models/qnn/**/*.bin
 nanobanana-output/
 
 # CCALB-3a: bundled APASS DR9 star catalog used by Photometric
