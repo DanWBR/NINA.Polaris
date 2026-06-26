@@ -52,6 +52,19 @@ public class ImageRelayService : IDisposable {
     private IImageData? _latestImageData;
     private byte[]? _latestJpeg;
 
+    // Stabilize a transient CCD_CFA dropout: some drivers momentarily report
+    // BayerPattern=None mid-session, which (without an operator override) would
+    // relay that single frame as mono and flash a grey / raw-mosaic frame on
+    // the client-side debayer — the intermittent "frame não debayerado" report.
+    // Mirrors LiveStackingService._lastGoodBayer, but capped so a genuinely
+    // mono camera (continuous None, e.g. after switching to a mono rig) is not
+    // forced into colour: after a short run of None frames we stop substituting
+    // and let true mono through. Holds the already override/flip-corrected
+    // pattern so it can be reused verbatim.
+    private BayerPatternEnum _lastRelayBayer = BayerPatternEnum.None;
+    private int _bayerDropoutRun;
+    private const int MaxBayerDropoutSubstitutions = 5;
+
     /// <summary>The most recently relayed frame, as a decoded
     /// ushort[] pixel buffer with width/height. Null until the first
     /// capture lands. Consumed by post-processing endpoints (e.g.
@@ -254,6 +267,22 @@ public class ImageRelayService : IDisposable {
         // the shader stays untouched.
         var sourcePattern = sourceData.Properties.BayerPattern;
         var resolved = ResolveBayerOverride(sourcePattern);
+        // Reuse the last good Bayer pattern across a transient CCD_CFA dropout
+        // so one frame whose pattern came back None/Auto doesn't flash mono on
+        // the client. effectiveBayer is what the wire would otherwise carry
+        // (override/flip-corrected when set, else the source pattern).
+        var effectiveBayer = resolved ?? sourcePattern;
+        if (effectiveBayer != BayerPatternEnum.None && effectiveBayer != BayerPatternEnum.Auto) {
+            _lastRelayBayer = effectiveBayer;
+            _bayerDropoutRun = 0;
+        } else if (_lastRelayBayer != BayerPatternEnum.None
+                && _bayerDropoutRun < MaxBayerDropoutSubstitutions) {
+            _bayerDropoutRun++;
+            resolved = _lastRelayBayer;
+            _logger.LogDebug(
+                "Relay: source reported Bayer=None; reusing last good {Pattern} (dropout {N}/{Max})",
+                _lastRelayBayer, _bayerDropoutRun, MaxBayerDropoutSubstitutions);
+        }
         var buffer = ImageBuffer.FromImageData(sourceData, resolved);
         _latestImage = buffer;
         _latestImageData = sourceData;
