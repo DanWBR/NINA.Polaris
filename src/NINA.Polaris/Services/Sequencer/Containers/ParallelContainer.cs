@@ -29,32 +29,20 @@ public class ParallelContainer : SequenceContainer {
 
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var tasks = Items.Select(async item => {
-            if (item is SequenceEntityBase b) b.ResetRuntimeState();
-            item.Status = SequenceEntityStatus.Running;
-            item.StartedAt = DateTime.UtcNow;
             try {
-                await item.ExecuteAsync(ctx, linked.Token);
-                item.Status = SequenceEntityStatus.Completed;
+                // RunChildAsync applies the child's Attempts + ErrorBehavior and
+                // cascades triggers into child containers. ContinueOnError /
+                // SkipBlock are swallowed (siblings keep running); only AbortRun
+                // re-throws, which we use to cancel the other branches.
+                await RunChildAsync(item, ctx, linked.Token);
             } catch (OperationCanceledException) {
-                item.Status = SequenceEntityStatus.Skipped;
                 throw;
-            } catch (Exception ex) {
-                item.Status = SequenceEntityStatus.Failed;
-                item.Error = ex.Message;
-                ctx.Logger.LogWarning(ex, "Parallel child {Name} failed", item.Name);
+            } catch {
                 linked.Cancel(); // make siblings hang up
                 throw;
-            } finally {
-                item.FinishedAt = DateTime.UtcNow;
             }
         }).ToArray();
 
-        try {
-            await Task.WhenAll(tasks);
-        } catch {
-            // First failure already logged on the child; bubble out so the
-            // parent container sees this parallel block as failed.
-            throw;
-        }
+        await Task.WhenAll(tasks);
     }
 }

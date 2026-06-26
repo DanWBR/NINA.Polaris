@@ -22,42 +22,8 @@ namespace NINA.Polaris.Services.Sequencer.Containers;
 public class SequentialContainer : SequenceContainer {
     public override string Type => "Sequential";
 
-    public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
-        // A loop with no conditions runs until the sequence is stopped. That's
-        // a legitimate "shoot until dawn / until I press Stop" pattern, so we
-        // don't treat it as a validation error, but we surface it once in the
-        // log so an accidental IsLoop toggle is diagnosable.
-        if (IsLoop && Conditions.Count == 0)
-            ctx.Logger.LogInformation(
-                "Sequential container '{Name}' loops with no exit condition; "
-                + "it will repeat until the sequence is stopped.", Name);
-        do {
-            for (int i = 0; i < Items.Count; i++) {
-                if (ctx.AbortRequested) return;
-                ct.ThrowIfCancellationRequested();
-
-                await EvaluateTriggersAsync(ctx, ct);
-                if (ctx.AbortRequested) return;
-
-                var item = Items[i];
-                if (item is SequenceEntityBase b) b.ResetRuntimeState();
-                item.Status = SequenceEntityStatus.Running;
-                item.StartedAt = DateTime.UtcNow;
-                try {
-                    await item.ExecuteAsync(ctx, ct);
-                    item.Status = SequenceEntityStatus.Completed;
-                } catch (OperationCanceledException) {
-                    item.Status = SequenceEntityStatus.Skipped;
-                    throw;
-                } catch (Exception ex) {
-                    item.Status = SequenceEntityStatus.Failed;
-                    item.Error = ex.Message;
-                    ctx.Logger.LogWarning(ex, "Sequential step {Name} failed", item.Name);
-                    throw;
-                } finally {
-                    item.FinishedAt = DateTime.UtcNow;
-                }
-            }
-        } while (IsLoop && !ctx.AbortRequested && await AllConditionsHoldAsync(ctx, ct));
-    }
+    public override Task ExecuteAsync(SequenceContext ctx, CancellationToken ct)
+        // Per-step retry/error-policy, parent→child trigger cascade, IsLoop +
+        // conditions all live in the shared base helper.
+        => RunChildrenSequentialAsync(ctx, ct);
 }

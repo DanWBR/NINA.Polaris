@@ -12,6 +12,10 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
 using NINA.Polaris.Services.Sequencer;
 using NINA.Polaris.Services.Sequencer.Conditions;
 using NINA.Polaris.Services.Sequencer.Containers;
@@ -181,5 +185,95 @@ public class AdvancedSequencerTests {
         Assert.That(defaults!.ContainsKey("items"), Is.False);
         Assert.That(defaults.ContainsKey("triggers"), Is.False);
         Assert.That(defaults.ContainsKey("conditions"), Is.False);
+    }
+
+    // ----- Execution semantics: Attempts / ErrorBehavior + trigger cascade -----
+
+    private static SequenceContext TestCtx() => new SequenceContext(
+        null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!,
+        NullLogger.Instance);
+
+    /// <summary>Test instruction: counts runs, optionally throws on the first N.</summary>
+    private sealed class CountingInstruction : SequenceInstruction {
+        public override string Type => "TestCounting";
+        public int Runs;
+        public int FailFirst;   // throw on the first N executions
+        public override Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
+            Runs++;
+            if (Runs <= FailFirst) throw new InvalidOperationException($"boom #{Runs}");
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>Test trigger: always wants to fire; counts how many times it fires.</summary>
+    private sealed class CountingTrigger : SequenceTrigger {
+        public override string Type => "TestTrigger";
+        public int Fired;
+        public override Task<bool> ShouldFireAsync(SequenceContext ctx, CancellationToken ct) => Task.FromResult(true);
+        public override Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) { Fired++; return Task.CompletedTask; }
+    }
+
+    [Test]
+    public async Task Attempts_RetriesUntilSuccess() {
+        var prev = SequenceContainer.RetryBackoff;
+        SequenceContainer.RetryBackoff = TimeSpan.Zero;
+        try {
+            var inst = new CountingInstruction { Attempts = 3, FailFirst = 2 };
+            var root = new SequentialContainer { Name = "Root", Items = { inst } };
+            await root.ExecuteAsync(TestCtx(), CancellationToken.None);
+            Assert.That(inst.Runs, Is.EqualTo(3));
+            Assert.That(inst.Status, Is.EqualTo(SequenceEntityStatus.Completed));
+        } finally { SequenceContainer.RetryBackoff = prev; }
+    }
+
+    [Test]
+    public void AbortRun_StopsTheWholeSequence() {
+        var bad = new CountingInstruction { FailFirst = 1 };   // default ErrorBehavior = AbortRun
+        var next = new CountingInstruction();
+        var root = new SequentialContainer { Name = "Root", Items = { bad, next } };
+        Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await root.ExecuteAsync(TestCtx(), CancellationToken.None));
+        Assert.That(bad.Status, Is.EqualTo(SequenceEntityStatus.Failed));
+        Assert.That(next.Runs, Is.EqualTo(0));   // never reached
+    }
+
+    [Test]
+    public async Task ContinueOnError_RunsTheNextSibling() {
+        var bad = new CountingInstruction { FailFirst = 1, ErrorBehavior = InstructionErrorBehavior.ContinueOnError };
+        var good = new CountingInstruction();
+        var root = new SequentialContainer { Name = "Root", Items = { bad, good } };
+        await root.ExecuteAsync(TestCtx(), CancellationToken.None);   // must not throw
+        Assert.That(bad.Status, Is.EqualTo(SequenceEntityStatus.Failed));
+        Assert.That(good.Runs, Is.EqualTo(1));
+        Assert.That(good.Status, Is.EqualTo(SequenceEntityStatus.Completed));
+    }
+
+    [Test]
+    public async Task SkipBlock_StopsCurrentContainerButParentContinues() {
+        var bad = new CountingInstruction { FailFirst = 1, ErrorBehavior = InstructionErrorBehavior.SkipBlock };
+        var skipped = new CountingInstruction();
+        var inner = new SequentialContainer { Name = "Inner", Items = { bad, skipped } };
+        var afterInner = new CountingInstruction();
+        var root = new SequentialContainer { Name = "Root", Items = { inner, afterInner } };
+        await root.ExecuteAsync(TestCtx(), CancellationToken.None);   // must not throw
+        Assert.That(bad.Status, Is.EqualTo(SequenceEntityStatus.Failed));
+        Assert.That(skipped.Runs, Is.EqualTo(0));       // rest of inner skipped
+        Assert.That(afterInner.Runs, Is.EqualTo(1));    // parent kept going
+    }
+
+    [Test]
+    public async Task ParentTriggerCascadesToNestedChildren() {
+        var trig = new CountingTrigger();
+        var leaf1 = new CountingInstruction();
+        var leaf2 = new CountingInstruction();
+        var inner = new SequentialContainer { Name = "Inner", Items = { leaf1, leaf2 } };
+        var root = new SequentialContainer { Name = "Root", Triggers = { trig }, Items = { inner } };
+
+        await root.ExecuteAsync(TestCtx(), CancellationToken.None);
+
+        // Root evaluates the trigger before its 1 child (inner) = 1; inner
+        // inherits it and evaluates before each of its 2 leaves = 2. Total 3.
+        // Without the cascade it would only be 1.
+        Assert.That(trig.Fired, Is.EqualTo(3));
     }
 }

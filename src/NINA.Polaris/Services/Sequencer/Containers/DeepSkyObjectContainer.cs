@@ -74,35 +74,9 @@ public class DeepSkyObjectContainer : SequenceContainer {
             }
         }
 
-        // From here on it's a sequential container, reuse that logic by
-        // running children inline (we can't easily delegate to the base
-        // because it's abstract; copy the loop).
-        do {
-            for (int i = 0; i < Items.Count; i++) {
-                if (ctx.AbortRequested) return;
-                ct.ThrowIfCancellationRequested();
-
-                await EvaluateTriggersAsync(ctx, ct);
-                if (ctx.AbortRequested) return;
-
-                var item = Items[i];
-                if (item is SequenceEntityBase b) b.ResetRuntimeState();
-                item.Status = SequenceEntityStatus.Running;
-                item.StartedAt = DateTime.UtcNow;
-                try {
-                    await item.ExecuteAsync(ctx, ct);
-                    item.Status = SequenceEntityStatus.Completed;
-                } catch (OperationCanceledException) {
-                    item.Status = SequenceEntityStatus.Skipped;
-                    throw;
-                } catch (Exception ex) {
-                    item.Status = SequenceEntityStatus.Failed;
-                    item.Error = ex.Message;
-                    throw;
-                } finally {
-                    item.FinishedAt = DateTime.UtcNow;
-                }
-            }
-        } while (IsLoop && !ctx.AbortRequested && await AllConditionsHoldAsync(ctx, ct));
+        // From here on it behaves exactly like a sequential container: the
+        // shared helper handles triggers (including ancestor cascade), per-step
+        // retry + error policy, and the IsLoop + conditions loop.
+        await RunChildrenSequentialAsync(ctx, ct);
     }
 }

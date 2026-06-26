@@ -73,3 +73,36 @@ public enum SequenceEntityStatus {
     Failed,
     Skipped
 }
+
+/// <summary>
+/// What to do when an instruction/container still fails after exhausting its
+/// retry <c>Attempts</c>. Mirrors NINA desktop's error-behavior options.
+/// </summary>
+public enum InstructionErrorBehavior {
+    /// <summary>Re-throw, which fails the whole sequence run (the historical
+    /// Polaris behavior and the safe default).</summary>
+    AbortRun,
+
+    /// <summary>Log + mark the step Failed, then carry on with the next
+    /// sibling in the same container.</summary>
+    ContinueOnError,
+
+    /// <summary>Log + mark the step Failed, then stop the rest of the
+    /// CURRENT container (skip its remaining items + stop looping) but let
+    /// the parent container continue.</summary>
+    SkipBlock
+}
+
+/// <summary>
+/// Implemented by entities that run as a step inside a container
+/// (instructions + containers, NOT conditions/triggers). Carries the
+/// per-step retry count and failure policy.
+/// </summary>
+public interface IErrorHandlingEntity {
+    /// <summary>How many times to attempt the step before applying
+    /// <see cref="ErrorBehavior"/>. Minimum 1.</summary>
+    int Attempts { get; set; }
+
+    /// <summary>What to do once all <see cref="Attempts"/> have failed.</summary>
+    InstructionErrorBehavior ErrorBehavior { get; set; }
+}
