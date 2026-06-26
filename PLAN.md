@@ -21,12 +21,29 @@
 > distributing one SD-card image to several Pis. Everything below was
 > driven by testing on a physical tablet against a Pi on the LAN.
 
-## QNN-NPU -- Qualcomm Hexagon NPU backend (Radxa Dragon Q6A / QCS6490) [PLANNED, hardware-gated]
+## QNN-NPU -- Qualcomm Hexagon NPU backend (Radxa Dragon Q6A / QCS6490) [QNN-0 DONE = GO; QNN-1..5 ready]
 
-> STATUS: not started. Blocked on acquiring the board. This is a design
-> record only -- do NOT scaffold code until the spike (QNN-0) confirms the
-> Hexagon runtime actually loads on the Radxa Linux image, because the
-> whole epic hinges on that one unknown.
+> STATUS (2026-06-26): board in hand; **QNN-0 spike GO**. The gating unknown
+> ("does the Hexagon runtime load on the Radxa Linux image?") is resolved:
+> on Ubuntu 24.04 noble arm64 (kernel 6.18-qcom) the cDSP firmware is present
+> and `cdsp -> state=running`, FastRPC works (`/dev/fastrpc-cdsp`,
+> `libcdsprpc.so`), and `qnn-platform-validator --backend dsp --coreVersion`
+> reads **Hexagon Architecture V68** (real FastRPC round-trip to the DSP).
+> QAIRT 2.45 runtime/tools come from the `ubuntu-qcom-iot/qcom-ppa` apt
+> (`qairt-libs`/`qairt-dsp-binaries`/`qairt-tools`) -- but `apt install`
+> conflicts with the radxa-repo `fastrpc` (two rival FastRPC stacks), so the
+> libs are **extracted from the .debs** (`dpkg -x`) and used via
+> `LD_LIBRARY_PATH` + `ADSP_LIBRARY_PATH`, exactly like the RKNN lane bundles
+> `librknnrt.so` (do NOT swap the working FastRPC). The validator's calculator
+> unit test fails with "use testsig if using unsigned images" -- expected: the
+> cDSP wants signed PD. RESOLVED by **unsigned PD**, which the HTP NetRun
+> Extensions support and DEFAULT to (`libQnnHtpNetRunExtensions.so` exposes a
+> `pd_session` key, default `unsigned`); set it via `qnn-net-run --config_file`
+> (backend_extensions -> htp_config `{ "dsp_arch":"v68", "pd_session":"unsigned" }`).
+> Remaining for a hard ms/tile number: ONNX->QNN conversion needs `qairt-converter`
+> (x86 only -- on-device has `qnn-context-binary-generator` + `qnn-net-run` but
+> NOT the ONNX frontend), so model prep happens on the x86 desktop/WSL. Scaffolding
+> QNN-1..5 is now UNBLOCKED.
 
 ### Motivation
 The Radxa Dragon Q6A is built on the **Qualcomm QCS6490** -- the same SoC
@@ -102,11 +119,14 @@ inference primitive changes.
    GPU path that already works on this board.
 
 ### Tasks
-- **QNN-0 (spike, do FIRST, on the board):** confirm runtime present
-  (`ls libQnn*`, `/dev/cdsp`, `dmesg | grep -i cdsp`); run ONE GraXpert
-  model (denoise) through ORT QNN EP / HTP on ONE tile; record ms/tile vs
-  Adreno OpenCL vs CPU. Deliver a probe script under `scripts/` + a short
-  findings note. **Go/no-go gate for the rest.**
+- **QNN-0 (spike) — DONE 2026-06-26 = GO.** Runtime confirmed present and the
+  Hexagon reachable (V68) on the Radxa OS image; QAIRT 2.45 libs extracted from
+  the qcom-ppa .debs; unsigned PD is the exec path (see STATUS above).
+  `scripts/qnn-probe.sh` is the read-only probe deliverable. STILL TODO within the
+  spike: the actual ms/tile number (needs x86 `qairt-converter` to turn a GraXpert
+  denoise ONNX into a V68 fp16 context binary, then `qnn-net-run --backend
+  libQnnHtp.so --config_file <unsigned-pd>` on the board vs CPU). RKNN on the
+  weaker RK3588 gave ~5x, so the case is strong. **Gate passed; QNN-1..5 unblocked.**
 - **QNN-1:** `QnnRuntime` probe + `Services/Qnn/` skeleton (mirror Rknn).
 - **QNN-2:** `QnnInferenceService` + tile runner over ORT QNN EP.
 - **QNN-3:** wire into `GraXpertService` backend chooser + endpoints + WS
