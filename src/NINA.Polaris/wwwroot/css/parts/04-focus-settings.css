@@ -1039,20 +1039,18 @@
    .settings-accordion so the nested field .settings-grid inside cards is
    untouched. */
 .settings-grid.settings-accordion {
-    /* minmax (not a fixed 550px track) so a second column appears as soon as
-       ~1016px of room is free instead of needing a full 1116px (2×550 + gap).
-       Cards flex between 500–550px: at the tipping point each is ~538px, and
-       they grow back to a 550px cap once there's slack. min(100%, 500px)
-       keeps a single column from overflowing on very narrow / high-zoom
-       viewports. */
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 500px), 550px));
+    /* Fixed 500px cards: a second column needs only 1016px (2×500 + 16px gap)
+       of free width, which fits even with the UI-zoom slider raising the
+       effective CSS width. min(100%, 500px) keeps a single column from
+       overflowing on very narrow / high-zoom viewports. */
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 500px), 500px));
     justify-content: start;
     align-items: start;
     column-gap: 16px;
-    max-width: 1716px;   /* up to three 550px columns + two 16px gaps */
+    max-width: 1564px;   /* up to three 500px columns + two 16px gaps */
 }
 .settings-accordion .settings-section {
-    max-width: 550px;    /* never exceed the 550px track */
+    max-width: 500px;    /* never exceed the 500px track */
 }
 .settings-accordion .settings-cat-header {
     grid-column: 1 / -1;
