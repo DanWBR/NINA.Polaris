@@ -39,6 +39,22 @@ public static class UpdateEndpoints {
                 : Results.BadRequest(new { error });
         });
 
+        // List recent GitHub releases (cached 30 min) with this host's arch
+        // asset resolved + each tagged newer/current/older. Powers the rollback
+        // / version-history modal. ?max=N (default 15), ?force=true bypasses cache.
+        group.MapGet("/releases", async (UpdateService svc, int? max, bool? force, CancellationToken ct) =>
+            Results.Ok(await svc.ListReleasesAsync(max ?? 15, force ?? false, ct)));
+
+        // Install (or roll back to) a SPECIFIC release by tag. The asset URL is
+        // resolved server-side from the releases list, never taken from the
+        // caller. No "must be newer" gate — apt runs with --allow-downgrades.
+        group.MapPost("/install-version", async (UpdateService svc, InstallVersionRequest req, CancellationToken ct) => {
+            var (ok, error) = await svc.InstallVersionAsync(req?.Tag ?? "", ct);
+            return ok
+                ? Results.Ok(new { started = true })
+                : Results.BadRequest(new { error });
+        });
+
         // Internet-free host facts (version + dpkg arch) the browser needs to
         // find the right release asset on GitHub for the offline-sideload flow.
         group.MapGet("/local-info", (UpdateService svc) => Results.Ok(svc.LocalInfo()));
@@ -55,11 +71,20 @@ public static class UpdateEndpoints {
             if (req.Headers.TryGetValue("X-Expected-Size", out var sz))
                 long.TryParse(sz.ToString(), out expectedSize);
             var sha = req.Headers.TryGetValue("X-Expected-Sha256", out var h) ? h.ToString() : null;
+            // Explicit rollback opt-in: the offline path normally refuses a
+            // package not newer than the running one; this header allows it for
+            // a deliberate downgrade. Package-name + SHA-256 gates still apply.
+            var allowDowngrade = req.Headers.TryGetValue("X-Allow-Downgrade", out var ad)
+                && string.Equals(ad.ToString().Trim(), "true", StringComparison.OrdinalIgnoreCase);
 
-            var (ok, error) = await svc.InstallFromUploadAsync(req.Body, expectedSize, sha, ct);
+            var (ok, error) = await svc.InstallFromUploadAsync(req.Body, expectedSize, sha, ct, allowDowngrade);
             return ok
                 ? Results.Ok(new { started = true })
                 : Results.BadRequest(new { error });
         });
     }
+
+    /// <summary>Body of POST /api/update/install-version: the release tag to
+    /// install (e.g. "0.84.5" or "v0.84.5"; a leading 'v' is tolerated).</summary>
+    public record InstallVersionRequest(string Tag);
 }

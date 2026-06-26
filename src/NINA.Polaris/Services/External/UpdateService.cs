@@ -131,19 +131,10 @@ public class UpdateService {
             result.HtmlUrl = root.TryGetProperty("html_url", out var h) ? h.GetString() : null;
 
             // Find the .deb asset matching this architecture: polaris_*_<arch>.deb
-            if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array) {
-                foreach (var a in assets.EnumerateArray()) {
-                    var name = a.TryGetProperty("name", out var an) ? an.GetString() : null;
-                    if (string.IsNullOrEmpty(name)) continue;
-                    if (name.EndsWith($"_{DpkgArch}.deb", StringComparison.OrdinalIgnoreCase)
-                            && name.StartsWith("polaris_", StringComparison.OrdinalIgnoreCase)) {
-                        result.AssetName = name;
-                        result.AssetUrl = a.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
-                        result.AssetSize = a.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0;
-                        break;
-                    }
-                }
-            }
+            var (assetName, assetUrl, assetSize) = PickArchAsset(root);
+            result.AssetName = assetName;
+            result.AssetUrl = assetUrl;
+            result.AssetSize = assetSize;
 
             result.UpdateAvailable =
                 Version.TryParse(result.LatestVersion, out var latest)
@@ -178,6 +169,100 @@ public class UpdateService {
     private static string? NormalizeTag(string? tag) =>
         string.IsNullOrEmpty(tag) ? tag
         : (tag.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? tag[1..] : tag);
+
+    /// <summary>Pick the architecture-matched .deb asset (polaris_*_&lt;arch&gt;.deb)
+    /// from a GitHub release JSON element. Returns (null,null,0) when none.
+    /// Shared by the latest-release check and the releases-list (rollback).</summary>
+    private static (string? name, string? url, long size) PickArchAsset(JsonElement release) {
+        if (release.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array) {
+            foreach (var a in assets.EnumerateArray()) {
+                var name = a.TryGetProperty("name", out var an) ? an.GetString() : null;
+                if (string.IsNullOrEmpty(name)) continue;
+                if (name.EndsWith($"_{DpkgArch}.deb", StringComparison.OrdinalIgnoreCase)
+                        && name.StartsWith("polaris_", StringComparison.OrdinalIgnoreCase)) {
+                    var url = a.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
+                    var size = a.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0;
+                    return (name, url, size);
+                }
+            }
+        }
+        return (null, null, 0);
+    }
+
+    private readonly object _releasesCacheLock = new();
+    private List<UpdateRelease>? _cachedReleases;
+    private DateTime _releasesCachedAtUtc = DateTime.MinValue;
+
+    /// <summary>List recent GitHub releases (cached 30 min) with this host's
+    /// architecture asset resolved, so the UI can offer a rollback (or forward
+    /// reinstall) to any of them. Each entry is tagged <c>relation</c>
+    /// (newer/current/older vs. the running version) and <c>installable</c>
+    /// (an arch-matched .deb exists). Never throws; on error returns an empty
+    /// list. Off a .deb install returns empty (the feature is hidden).</summary>
+    public async Task<List<UpdateRelease>> ListReleasesAsync(int max, bool force, CancellationToken ct) {
+        if (!IsSupported) return new();
+        if (max <= 0) max = 15;
+        if (max > 100) max = 100;
+
+        lock (_releasesCacheLock) {
+            if (!force && _cachedReleases != null
+                    && DateTime.UtcNow - _releasesCachedAtUtc < CacheTtl)
+                return _cachedReleases;
+        }
+
+        var list = new List<UpdateRelease>();
+        try {
+            var http = _httpFactory.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(15);
+            var url = $"https://api.github.com/repos/{Repo}/releases?per_page={max}";
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.UserAgent.ParseAdd("NINA.Polaris-Updater");
+            req.Headers.Accept.ParseAdd("application/vnd.github+json");
+            using var resp = await http.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode) return list;   // don't cache a failure
+
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return list;
+
+            var current = CurrentVersion;
+            foreach (var rel in doc.RootElement.EnumerateArray()) {
+                var rawTag = rel.TryGetProperty("tag_name", out var t) ? t.GetString() : null;
+                var tag = NormalizeTag(rawTag);
+                if (string.IsNullOrEmpty(tag)) continue;
+                var (assetName, assetUrl, assetSize) = PickArchAsset(rel);
+
+                string relation = "older";
+                bool isCurrent = false;
+                if (Version.TryParse(tag, out var v)) {
+                    var cmp = v.CompareTo(current);
+                    isCurrent = cmp == 0;
+                    relation = cmp > 0 ? "newer" : (cmp == 0 ? "current" : "older");
+                } else if (string.Equals(tag, CurrentVersionShort, StringComparison.OrdinalIgnoreCase)) {
+                    isCurrent = true; relation = "current";
+                }
+
+                list.Add(new UpdateRelease {
+                    Tag = tag,
+                    Name = rel.TryGetProperty("name", out var n) ? n.GetString() : rawTag,
+                    PublishedAt = rel.TryGetProperty("published_at", out var p) ? p.GetString() : null,
+                    HtmlUrl = rel.TryGetProperty("html_url", out var h) ? h.GetString() : null,
+                    Prerelease = rel.TryGetProperty("prerelease", out var pr) && pr.ValueKind == JsonValueKind.True,
+                    AssetName = assetName,
+                    AssetUrl = assetUrl,
+                    AssetSize = assetSize,
+                    Relation = relation,
+                    IsCurrent = isCurrent,
+                    Installable = !string.IsNullOrEmpty(assetUrl)
+                });
+            }
+            lock (_releasesCacheLock) { _cachedReleases = list; _releasesCachedAtUtc = DateTime.UtcNow; }
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Release list fetch failed");
+        }
+        return list;
+    }
 
     /// <summary>List commits between the installed version's tag and the
     /// release's <paramref name="headTag"/> via the GitHub compare API,
@@ -288,22 +373,58 @@ public class UpdateService {
         if (!check.UpdateAvailable || string.IsNullOrEmpty(check.AssetUrl))
             return (false, check.Error ?? "No update available to install.");
 
-        // 1. Download the .deb to the fixed staging path the updater unit reads.
-        //
-        //    The download is deliberately NOT tied to the request abort token
-        //    (ct): a multi-tens-of-MB .deb over a slow SBC/mobile link easily
-        //    outlasts the browser's fetch timeout, and if the client aborts we
-        //    do not want to kill an in-progress install (it left the staged
-        //    .deb half-written and surfaced a "task was canceled" error). Bound
-        //    the download by its own 10-minute timeout instead so a genuinely
-        //    stuck transfer still fails cleanly.
+        var (dlOk, dlErr) = await DownloadAndStageAsync(check.AssetUrl!, check.AssetName, ct);
+        if (!dlOk) return (false, dlErr);
+
+        // Hand off to the on-demand updater unit (shared with the offline
+        // sideload path below).
+        return await LaunchUpdaterUnitAsync();
+    }
+
+    /// <summary>
+    /// Install a SPECIFIC release by tag — the rollback (or forward-reinstall)
+    /// path. The asset URL is resolved server-side from the releases list (never
+    /// taken from the caller), then downloaded + installed via the same machinery
+    /// as <see cref="InstallAsync"/>. There is intentionally NO "must be newer"
+    /// gate: the installer runs apt with <c>--allow-downgrades</c>, so installing
+    /// an older .deb is exactly how the rollback works.
+    /// </summary>
+    public async Task<(bool ok, string? error)> InstallVersionAsync(string tag, CancellationToken ct) {
+        if (!IsSupported) return (false, "Self-update is only available on a Linux .deb install.");
+        if (string.IsNullOrWhiteSpace(tag)) return (false, "No version specified.");
+
+        var wanted = NormalizeTag(tag.Trim());
+        var releases = await ListReleasesAsync(max: 100, force: true, ct);
+        var target = releases.FirstOrDefault(r =>
+            string.Equals(r.Tag, wanted, StringComparison.OrdinalIgnoreCase));
+        if (target == null)
+            return (false, $"Version {wanted} was not found in the recent releases.");
+        if (string.IsNullOrEmpty(target.AssetUrl))
+            return (false, $"Version {wanted} has no {DpkgArch} package to install.");
+
+        var (dlOk, dlErr) = await DownloadAndStageAsync(target.AssetUrl!, target.AssetName, ct);
+        if (!dlOk) return (false, dlErr);
+
+        _logger.LogInformation("Rollback/reinstall: staging {Asset} for version {Tag}", target.AssetName, wanted);
+        return await LaunchUpdaterUnitAsync();
+    }
+
+    /// <summary>Download a release asset to the fixed staging path the updater
+    /// unit reads. Shared by the latest-update, version-targeted (rollback), and
+    /// — indirectly — offline paths.
+    /// <para>The download is deliberately NOT tied to the request abort token: a
+    /// multi-tens-of-MB .deb over a slow SBC/mobile link easily outlasts the
+    /// browser's fetch timeout, and if the client aborts we do not want to kill
+    /// an in-progress install (it left the staged .deb half-written). Bound it by
+    /// its own 10-minute timeout instead.</para></summary>
+    private async Task<(bool ok, string? error)> DownloadAndStageAsync(string assetUrl, string? assetName, CancellationToken ct) {
         using var dlCts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
         var dlToken = dlCts.Token;
         try {
             Directory.CreateDirectory(CacheDir);
             var http = _httpFactory.CreateClient();
             http.Timeout = TimeSpan.FromMinutes(10);
-            using var dl = new HttpRequestMessage(HttpMethod.Get, check.AssetUrl);
+            using var dl = new HttpRequestMessage(HttpMethod.Get, assetUrl);
             dl.Headers.UserAgent.ParseAdd("NINA.Polaris-Updater");
             using var resp = await http.SendAsync(dl, HttpCompletionOption.ResponseHeadersRead, dlToken);
             if (!resp.IsSuccessStatusCode)
@@ -311,16 +432,13 @@ public class UpdateService {
             await using (var fs = File.Create(DebStagePath))
                 await resp.Content.CopyToAsync(fs, dlToken);
             _logger.LogInformation("Update: downloaded {Asset} ({Bytes} bytes) to {Path}",
-                check.AssetName, new FileInfo(DebStagePath).Length, DebStagePath);
+                assetName, new FileInfo(DebStagePath).Length, DebStagePath);
+            return (true, null);
         } catch (Exception ex) {
             _logger.LogWarning(ex, "Update download failed");
             try { File.Delete(DebStagePath); } catch { }
             return (false, "Download failed: " + ex.Message);
         }
-
-        // 2. Hand off to the on-demand updater unit (shared with the offline
-        //    sideload path below).
-        return await LaunchUpdaterUnitAsync();
     }
 
     /// <summary>
@@ -341,7 +459,8 @@ public class UpdateService {
     /// the SBC itself never reached GitHub.</para>
     /// </summary>
     public async Task<(bool ok, string? error)> InstallFromUploadAsync(
-            Stream deb, long expectedSize, string? expectedSha256Hex, CancellationToken ct) {
+            Stream deb, long expectedSize, string? expectedSha256Hex, CancellationToken ct,
+            bool allowDowngrade = false) {
         if (!IsSupported) return (false, "Self-update is only available on a Linux .deb install.");
         if (string.IsNullOrWhiteSpace(expectedSha256Hex))
             return (false, "Missing the expected SHA-256 digest — cannot verify the package.");
@@ -392,8 +511,9 @@ public class UpdateService {
             return (false, "Checksum mismatch — the uploaded package is corrupt or not the genuine release. Aborted.");
         }
 
-        // 3. dpkg sanity: must be the 'polaris' package, version newer than ours.
-        var (sane, sanityErr) = await VerifyDebPackageAsync(DebStagePath, ct);
+        // 3. dpkg sanity: must be the 'polaris' package; version newer than ours
+        //    UNLESS this is an explicit rollback (allowDowngrade).
+        var (sane, sanityErr) = await VerifyDebPackageAsync(DebStagePath, allowDowngrade, ct);
         if (!sane) {
             try { File.Delete(DebStagePath); } catch { }
             return (false, sanityErr);
@@ -407,17 +527,21 @@ public class UpdateService {
     /// confirm it is the <c>polaris</c> package at a version newer than the one
     /// running. Defence-in-depth behind the SHA-256 check: stops an authenticated
     /// client sideloading an unrelated or downgrade package.</summary>
-    private async Task<(bool ok, string? error)> VerifyDebPackageAsync(string path, CancellationToken ct) {
+    private async Task<(bool ok, string? error)> VerifyDebPackageAsync(string path, bool allowDowngrade, CancellationToken ct) {
         try {
             var pkg = (await RunCaptureAsync("dpkg-deb", new[] { "-f", path, "Package" }, ct)).Trim();
             var ver = (await RunCaptureAsync("dpkg-deb", new[] { "-f", path, "Version" }, ct)).Trim();
             if (!string.Equals(pkg, "polaris", StringComparison.OrdinalIgnoreCase))
                 return (false, $"Uploaded package is '{pkg}', not 'polaris'. Aborted.");
             // Debian versions can carry an epoch / revision; take the upstream
-            // numeric core for a System.Version compare (best-effort).
-            var core = new string(ver.TakeWhile(c => char.IsDigit(c) || c == '.').ToArray());
-            if (Version.TryParse(core, out var v) && v <= CurrentVersion)
-                return (false, $"Uploaded version {ver} is not newer than the installed {CurrentVersion}. Aborted.");
+            // numeric core for a System.Version compare (best-effort). The
+            // "must be newer" gate is skipped for an explicit rollback, where
+            // installing an OLDER version is the whole point.
+            if (!allowDowngrade) {
+                var core = new string(ver.TakeWhile(c => char.IsDigit(c) || c == '.').ToArray());
+                if (Version.TryParse(core, out var v) && v <= CurrentVersion)
+                    return (false, $"Uploaded version {ver} is not newer than the installed {CurrentVersion}. Aborted.");
+            }
             return (true, null);
         } catch (Exception ex) {
             _logger.LogWarning(ex, "dpkg-deb verification failed");
@@ -539,3 +663,21 @@ public class UpdateCheckResult {
 /// first line of the message; <see cref="Body"/> is the rest (trailers like
 /// Co-Authored-By stripped).</summary>
 public record UpdateCommit(string Sha, string Subject, string Body);
+
+/// <summary>One GitHub release in the rollback/version-history list, with the
+/// architecture-matched .deb resolved for this host. <see cref="Relation"/> is
+/// "newer" / "current" / "older" vs. the running version; <see cref="Installable"/>
+/// is false when no arch-matched asset exists (the row is shown but disabled).</summary>
+public class UpdateRelease {
+    public string Tag { get; set; } = "";
+    public string? Name { get; set; }
+    public string? PublishedAt { get; set; }
+    public string? HtmlUrl { get; set; }
+    public bool Prerelease { get; set; }
+    public string? AssetName { get; set; }
+    public string? AssetUrl { get; set; }
+    public long AssetSize { get; set; }
+    public string Relation { get; set; } = "older";
+    public bool IsCurrent { get; set; }
+    public bool Installable { get; set; }
+}

@@ -400,6 +400,9 @@ Global configuration, host management, and connectivity.
   appears when a newer GitHub release exists; one click downloads the
   matching `.deb`, installs it, and reloads on the new version. No password
   needed (authorized via a scoped PolicyKit rule).
+- **Version rollback** — Settings → Power → *Roll back version* lists recent
+  releases and reinstalls any of them (downgrade included), reusing the same
+  install path; works online or offline (relay through your phone).
 
 ---
 

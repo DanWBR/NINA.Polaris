@@ -132,7 +132,13 @@ function ninaApp() {
             relayBusy: false,       // fetching release metadata from GitHub
             relayUploading: false,  // uploading the picked .deb to the SBC
             relayError: '',
-            relayInfo: null         // { latestVersion, assetName, assetSize, assetUrl, sha256 }
+            relayInfo: null,        // { latestVersion, assetName, assetSize, assetUrl, sha256 }
+            // Rollback / version-history (its own modal — the update modal only
+            // appears when a newer version exists). releases: [{ tag, name,
+            // publishedAt, htmlUrl, prerelease, assetName, assetSize, relation,
+            // isCurrent, installable }].
+            rollbackOpen: false, releasesLoading: false, releases: [],
+            rollbackTarget: ''      // tag currently being installed (disables its row)
         },
         // Brightness/contrast for the GUIDE camera frame (CSS filter on the
         // <img>, client-only). Restored from localStorage in init().
@@ -29654,6 +29660,143 @@ function ninaApp() {
             setTimeout(() => this._pollUpdateComplete(oldVersion, startedAt), 4000);
         },
 
+        // ─── Rollback / version history ──────────────────────────────────
+        // Its own modal (the update modal only appears when a newer version
+        // exists). Lists recent releases; the running one is badged, older ones
+        // offer "Roll back", newer ones "Update to this".
+        openRollback() {
+            this.update.rollbackOpen = true;
+            this.update.error = '';
+            this.update.done = false;
+            this.update.installing = false;
+            this.loadReleases();
+        },
+
+        async loadReleases() {
+            this.update.releasesLoading = true;
+            this.update.error = '';
+            try {
+                // Online path: the server lists releases with the arch asset
+                // resolved + each tagged newer/current/older.
+                let list = [];
+                try {
+                    const r = await this.apiFetch('/api/update/releases?max=15');
+                    if (r.ok) list = await r.json();
+                } catch (e) { /* fall through to the browser-relay lookup */ }
+
+                if (Array.isArray(list) && list.length) {
+                    this.update.releases = list;
+                    return;
+                }
+
+                // Offline path: the SBC couldn't reach GitHub, but this browser
+                // might. Fetch the releases list here (CORS-readable JSON) and
+                // mark each entry relayOnly so its action uses the sideload flow.
+                const li = await (await this.apiFetch('/api/update/local-info')).json();
+                if (!li.supported) { this.update.releases = []; return; }
+                const repo = li.repo || 'DanWBR/NINA.Polaris';
+                const arch = (li.arch || '').toLowerCase();
+                const cur = li.currentVersion || this.update.currentVersion || '';
+                const gh = await fetch('https://api.github.com/repos/' + repo + '/releases?per_page=15', {
+                    headers: { 'Accept': 'application/vnd.github+json' }
+                });
+                if (!gh.ok) { this.update.error = 'GitHub returned HTTP ' + gh.status + '. Is this device online?'; this.update.releases = []; return; }
+                const rels = await gh.json();
+                this.update.releases = (Array.isArray(rels) ? rels : []).map(rel => {
+                    const tag = (rel.tag_name || '').replace(/^v/i, '');
+                    const assets = Array.isArray(rel.assets) ? rel.assets : [];
+                    const asset = assets.find(a => {
+                        const n = (a.name || '').toLowerCase();
+                        return n.startsWith('polaris_') && n.endsWith('_' + arch + '.deb');
+                    });
+                    const cmp = this._verCompare(tag, cur);
+                    return {
+                        tag,
+                        name: rel.name || rel.tag_name,
+                        publishedAt: rel.published_at,
+                        htmlUrl: rel.html_url,
+                        prerelease: !!rel.prerelease,
+                        assetName: asset ? asset.name : null,
+                        assetUrl: asset ? asset.browser_download_url : null,
+                        assetSize: asset ? (asset.size || 0) : 0,
+                        sha256: asset ? (asset.digest || '').replace(/^sha256:/i, '') : '',
+                        relation: cmp > 0 ? 'newer' : (cmp === 0 ? 'current' : 'older'),
+                        isCurrent: cmp === 0,
+                        installable: !!asset,
+                        relayOnly: true
+                    };
+                });
+            } catch (e) {
+                this.update.error = 'Could not load the version list: ' + (e.message || e);
+                this.update.releases = [];
+            } finally {
+                this.update.releasesLoading = false;
+            }
+        },
+
+        // Install (or roll back to) a specific release. Online path: the server
+        // downloads the chosen tag's .deb and installs it. relayOnly rows route
+        // to the sideload flow instead (browser downloads, uploads to the SBC).
+        async installVersion(rel) {
+            if (this.update.installing) return;
+            const tag = rel.tag;
+            const isDowngrade = rel.relation === 'older';
+            const verb = isDowngrade ? 'roll back to' : 'switch to';
+            const ok = await this._confirmAsync(
+                `This will ${verb} Polaris ${tag} and restart the service.\n\n` +
+                (isDowngrade
+                    ? 'Heads up: settings or the database written by a newer version may not load on an older one. Consider exporting your profile first.\n\n'
+                    : '') +
+                'Continue?',
+                { title: 'Change version', okLabel: isDowngrade ? 'Roll back' : 'Switch', cancelLabel: 'Cancel' });
+            if (!ok) return;
+
+            // Offline (relayOnly): hand off to the sideload flow with downgrade
+            // allowed for an older target.
+            if (rel.relayOnly) {
+                if (!rel.installable || !rel.sha256) {
+                    this.update.error = 'No installable ' + tag + ' package for this device, or its checksum is unknown.';
+                    return;
+                }
+                this.update.relayInfo = {
+                    latestVersion: tag,
+                    assetName: rel.assetName,
+                    assetSize: rel.assetSize,
+                    assetUrl: rel.assetUrl,
+                    sha256: rel.sha256,
+                    allowDowngrade: isDowngrade
+                };
+                this.update.relayOpen = true;
+                this.update.relayError = '';
+                return;
+            }
+
+            this.update.error = '';
+            this.update.installing = true;
+            this.update.rollbackTarget = tag;
+            this.update.progress = `Downloading and installing ${tag}…`;
+            try {
+                // Server blocks on the (tens-of-MB) download before returning;
+                // allow up to 10 min like installUpdate so the default fetch
+                // timeout doesn't abort the install mid-download.
+                const r = await this.apiPost('/api/update/install-version', { tag }, { timeout: 600000 });
+                if (!r.ok) {
+                    let msg = 'Install failed.';
+                    try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) {}
+                    this.update.error = msg;
+                    this.update.installing = false;
+                    this.update.rollbackTarget = '';
+                    return;
+                }
+                this.update.progress = 'Restarting service and applying…';
+                this._pollUpdateComplete(this.appVersion || '', Date.now());
+            } catch (e) {
+                this.update.error = 'Install request failed: ' + (e.message || e);
+                this.update.installing = false;
+                this.update.rollbackTarget = '';
+            }
+        },
+
         // --- Offline "relay" update (SBC has no internet; the client does) ---
         // Read this SBC's version + dpkg arch (no network), then query the
         // GitHub releases API straight from the browser (api.github.com sends
@@ -29754,14 +29897,18 @@ function ninaApp() {
             this.update.installing = true;
             this.update.progress = 'Uploading the package to your SBC…';
             try {
+                const headers = {
+                    'Content-Type': 'application/octet-stream',
+                    'X-Expected-Size': String(info.assetSize || file.size),
+                    'X-Expected-Sha256': info.sha256
+                };
+                // Explicit rollback: tell the server to accept a package not
+                // newer than the running one (package-name + SHA gates still apply).
+                if (info.allowDowngrade) headers['X-Allow-Downgrade'] = 'true';
                 const r = await this.apiUpload('/api/update/upload-deb', file, {
                     method: 'POST',
-                    label: 'Update package',
-                    headers: {
-                        'Content-Type': 'application/octet-stream',
-                        'X-Expected-Size': String(info.assetSize || file.size),
-                        'X-Expected-Sha256': info.sha256
-                    }
+                    label: info.allowDowngrade ? 'Rollback package' : 'Update package',
+                    headers
                 });
                 if (!r.ok) {
                     let msg = 'Install failed.';

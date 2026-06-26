@@ -11701,6 +11701,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span x-show="!update.checking">⬇ Check for updates</span>
                             <span x-show="update.checking">Checking…</span>
                         </button>
+                        <!-- Roll back to a previous version. Its own button +
+                             modal because the update modal only appears when a
+                             newer version exists. Self-update is .deb-only. -->
+                        <button class="btn btn-sm" x-show="update.supported" x-cloak
+                                @click="openRollback()"
+                                title="Reinstall a previous Polaris release (downgrade)">
+                            ↩ Roll back version
+                        </button>
                     </div>
                     <p class="text-muted" x-show="!power.canReboot && power.loaded"
                        style="font-size:11px; margin-top:8px">
@@ -15874,6 +15882,130 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- Rollback / version-history modal. Its own modal (the update modal only
+         appears when a newer version exists). Lists recent releases; the running
+         one is badged, older ones offer "Roll back", newer ones "Update". The
+         capture loop / install reuses the same machinery as the updater. -->
+    <div class="modal-overlay" x-show="update.rollbackOpen" x-cloak
+         @click.self="!update.installing && (update.rollbackOpen = false)"
+         @keydown.escape.window="!update.installing && (update.rollbackOpen = false)">
+        <div class="modal-card" style="max-width:600px">
+            <div class="modal-head">
+                <span class="modal-icon">↩</span>
+                <h3>Version history &amp; rollback</h3>
+            </div>
+            <p style="opacity:.8;font-size:.85em;margin-bottom:6px">
+                Running <b x-text="update.currentVersion || '?'"></b> ·
+                <span x-text="(update.releases || []).length + ' recent releases'"></span>
+            </p>
+            <p class="hint" style="font-size:.8em;opacity:.7;margin-bottom:10px">
+                ⚠ Rolling back can be incompatible with settings or the database written by a
+                newer version. Consider exporting your profile first.
+            </p>
+
+            <!-- Loading -->
+            <div x-show="update.releasesLoading" style="display:flex;align-items:center;gap:8px;margin:14px 0">
+                <div class="spinner" style="width:16px;height:16px"></div>
+                <span style="font-size:.85em">Loading releases…</span>
+            </div>
+
+            <p class="update-error" x-show="update.error && !update.installing" x-text="update.error"
+               style="color:var(--danger,#f87171);font-size:.82em;margin:8px 0"></p>
+
+            <!-- Release list -->
+            <div x-show="!update.releasesLoading && !update.installing"
+                 style="max-height:320px;overflow:auto;margin-bottom:12px">
+                <template x-for="rel in update.releases" :key="rel.tag">
+                    <div style="display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--border)">
+                        <div style="flex:1;min-width:0">
+                            <div style="display:flex;align-items:center;gap:8px">
+                                <b x-text="'v' + rel.tag"></b>
+                                <span x-show="rel.isCurrent" class="badge"
+                                      style="font-size:.7em;background:var(--accent);color:#fff;padding:1px 6px;border-radius:8px">current</span>
+                                <span x-show="rel.prerelease" class="badge"
+                                      style="font-size:.7em;opacity:.7;border:1px solid var(--border);padding:1px 6px;border-radius:8px">pre</span>
+                            </div>
+                            <div style="opacity:.6;font-size:.75em"
+                                 x-text="rel.publishedAt ? new Date(rel.publishedAt).toLocaleDateString() : ''"></div>
+                            <a x-show="rel.htmlUrl" :href="rel.htmlUrl" target="_blank" rel="noopener"
+                               style="font-size:.75em">changelog ↗</a>
+                        </div>
+                        <div style="flex:none">
+                            <span x-show="rel.isCurrent" style="opacity:.6;font-size:.8em">installed</span>
+                            <button x-show="!rel.isCurrent && rel.installable"
+                                    class="btn btn-sm"
+                                    :class="rel.relation === 'older' ? '' : 'btn-primary'"
+                                    @click="installVersion(rel)"
+                                    x-text="rel.relation === 'older' ? '↩ Roll back' : '⬆ Switch'"></button>
+                            <span x-show="!rel.installable" style="opacity:.5;font-size:.78em"
+                                  title="No package for this device architecture">n/a</span>
+                        </div>
+                    </div>
+                </template>
+                <p x-show="(update.releases || []).length === 0 && !update.error"
+                   class="hint" style="font-size:.82em;opacity:.7;padding:10px 0">
+                    No releases found.
+                </p>
+            </div>
+
+            <!-- Offline relay (relayOnly rows route here): download the chosen
+                 .deb on this device, then pick it to send to the SBC. -->
+            <template x-if="update.relayOpen && update.relayInfo && !update.installing">
+                <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:6px">
+                    <p style="opacity:.85;font-size:.85em;margin-bottom:8px">
+                        This SBC has no internet. Download
+                        <b x-text="'v' + update.relayInfo.latestVersion"></b> on this device,
+                        then pick the file to send it over (the checksum is verified before install).
+                    </p>
+                    <ol style="font-size:.85em;padding-left:20px;margin:0 0 12px">
+                        <li style="margin-bottom:8px">
+                            <a :href="update.relayInfo.assetUrl" target="_blank" rel="noopener"
+                               download class="btn btn-sm btn-primary" style="text-decoration:none">
+                                ⬇ Download <span x-text="update.relayInfo.assetName"></span>
+                            </a>
+                            <span style="opacity:.7"
+                                  x-text="' (' + (update.relayInfo.assetSize/1024/1024).toFixed(1) + ' MB)'"></span>
+                        </li>
+                        <li>
+                            Then pick that downloaded file:
+                            <div style="margin-top:6px">
+                                <input type="file" accept=".deb,application/vnd.debian.binary-package,application/octet-stream"
+                                       @change="relayUploadDeb($event)">
+                            </div>
+                        </li>
+                    </ol>
+                    <p class="update-error" x-show="update.relayError" x-text="update.relayError"
+                       style="color:var(--danger,#f87171);font-size:.82em;margin:8px 0"></p>
+                </div>
+            </template>
+
+            <!-- Installing / progress -->
+            <template x-if="update.installing">
+                <div style="text-align:center;padding:10px 0">
+                    <div class="spinner" style="margin:0 auto 10px"></div>
+                    <p x-text="update.progress || 'Installing…'"></p>
+                    <p style="opacity:.7;font-size:.8em;margin-top:6px">
+                        The service will restart automatically. This page will reload when the
+                        target version is live — don't close it.
+                    </p>
+                </div>
+            </template>
+
+            <!-- Done -->
+            <template x-if="update.done">
+                <div style="text-align:center;padding:10px 0">
+                    <p style="font-size:1.4em">✅</p>
+                    <p>Version changed. Reloading…</p>
+                </div>
+            </template>
+
+            <div class="modal-actions" style="margin-top:6px" x-show="!update.installing && !update.done">
+                <button class="btn btn-sm" @click="update.rollbackOpen = false; update.relayOpen = false">Close</button>
+                <button class="btn btn-sm" @click="loadReleases()" :disabled="update.releasesLoading">Refresh</button>
+            </div>
+        </div>
+    </div>
+
     <div class="term-modal-overlay" x-show="term.modalOpen" x-cloak
          @click.self="term.modalOpen = false">
         <div class="term-window">
@@ -16041,7 +16173,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260625-serverloop"></script>
+    <script src="/js/app.js?v=20260625-rollback"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

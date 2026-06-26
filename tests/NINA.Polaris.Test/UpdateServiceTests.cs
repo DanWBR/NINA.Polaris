@@ -107,6 +107,23 @@ public class UpdateServiceTests {
         Assert.That(error, Is.Not.Null.And.Not.Empty);
     }
 
+    [Test]
+    public async System.Threading.Tasks.Task ListReleasesAsync_returns_empty_off_a_deb_install() {
+        // Off a .deb install the rollback list short-circuits to empty before
+        // any network call (the ThrowingHttpClientFactory would blow up if hit).
+        var svc = Make();
+        var list = await svc.ListReleasesAsync(15, force: true, CancellationToken.None);
+        Assert.That(list, Is.Not.Null.And.Empty);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task InstallVersionAsync_refuses_off_a_deb_install() {
+        var svc = Make();
+        var (ok, error) = await svc.InstallVersionAsync("0.84.5", CancellationToken.None);
+        Assert.That(ok, Is.False);
+        Assert.That(error, Is.Not.Null.And.Not.Empty);
+    }
+
     private sealed class ThrowingHttpClientFactory : IHttpClientFactory {
         public System.Net.Http.HttpClient CreateClient(string name) =>
             throw new InvalidOperationException("network must not be used in this test");

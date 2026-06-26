@@ -76,6 +76,37 @@ before anything is installed, even though the SBC never talked to GitHub itself.
 
 ---
 
+## Rolling back to a previous version
+
+If an update regresses something in the field, you can go back to an earlier
+release without SSH. Open **Settings → Power → ↩ Roll back version** (the button
+is always there on a `.deb` install — unlike the update badge, which only shows
+when a *newer* version exists).
+
+The modal lists the recent GitHub releases with your host's `.deb` resolved:
+
+- The running version is badged **current**.
+- Older releases show **↩ Roll back**; newer ones show **⬆ Switch**.
+- A release with no package for your architecture is shown but disabled.
+
+Pick a version and confirm. The install reuses the exact same machinery as a
+normal update (stage the `.deb` → one-shot root helper → service restart → the
+page reloads on the target version). Downgrades are allowed because the helper
+runs `apt-get install --allow-downgrades`.
+
+> ⚠ **Heads up:** settings or the database written by a *newer* version may not
+> load cleanly on an older one. Export your profile first if you're unsure. The
+> modal shows this warning before any rollback.
+
+**Offline rollback** works the same as the offline update relay: if the SBC
+can't reach GitHub, the version list is read by your phone/tablet's browser
+instead, and the chosen release's `.deb` is downloaded on your device and sent
+over to the SBC (SHA-256 verified). For a deliberate downgrade the upload carries
+an explicit "allow downgrade" flag; the package-name and checksum checks still
+apply.
+
+---
+
 ## Why there's no password prompt
 
 The Polaris service runs as the unprivileged `polaris` system user. The
@@ -109,6 +140,8 @@ The install runs in its own systemd unit (its own cgroup) so it survives the
 - **No badge appears** — you're not on a `.deb` install, you're already on the
   latest version, or there's no internet to query GitHub. The check is cached
   for 30 minutes.
+- **Roll back button missing** — it only appears on a `.deb` install (same as
+  self-update). On Windows/dev there's no rollback.
 
 ---
 
