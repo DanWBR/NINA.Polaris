@@ -18809,8 +18809,14 @@ function ninaApp() {
                 // kind:'preview'. If it doesn't, the browser is
                 // serving stale JS -- hard-refresh (Ctrl+Shift+R).
                 console.log('[Polaris] previewTakeSnap body:', previewBody);
+                // Abortable so previewAbort() can cancel the in-flight request
+                // immediately (otherwise the await — and thus preview.busy —
+                // stays pending until the long exposure+30s timeout, leaving the
+                // shutter spinning "forever" after an abort).
+                this._previewSnapAbort = new AbortController();
                 const resp = await this.apiPost('/api/camera/capture', previewBody, {
-                    timeout: Math.max(15000, (this.preview.exposure + 30) * 1000)
+                    timeout: Math.max(15000, (this.preview.exposure + 30) * 1000),
+                    signal: this._previewSnapAbort.signal
                 });
                 const r = await resp.json();
                 this.preview.lastStats = r?.stats || null;
@@ -18826,11 +18832,15 @@ function ninaApp() {
                         + ' · ' + (r.stats?.starCount ?? '--') + ' stars', 'ok', 2000);
                 }
             } catch (e) {
-                this.toast('Snap failed: ' + (e.message || ''), 'error');
-                // Break the loop on error, don't hammer the camera
+                // Deliberate abort (previewAbort) cancels the request — that's
+                // not an error, just stop quietly.
+                const aborted = e && (e.name === 'AbortError' || /abort/i.test(e.message || ''));
+                if (!aborted) this.toast('Snap failed: ' + (e.message || ''), 'error');
+                // Break the loop on error/abort, don't hammer the camera
                 // with a guaranteed-to-fail sequence of requests.
                 this.preview.looping = false;
             } finally {
+                this._previewSnapAbort = null;
                 this.preview.busy = false;
                 if (!this.preview.looping) {
                     this.preview._snapStartedAt = null;
@@ -19122,6 +19132,14 @@ function ninaApp() {
 
         async previewAbort() {
             this.preview.looping = false;   // stop the chain first
+            // Free the shutter immediately. The in-flight capture request can
+            // take a while to actually return (the server may keep waiting on a
+            // BLOB that never arrives after the driver abort); don't make the
+            // button spin until then. Cancel the request and clear the busy/ring
+            // state now — previewTakeSnap's finally is then a harmless no-op.
+            try { this._previewSnapAbort?.abort(); } catch (e) { }
+            this.preview.busy = false;
+            this.preview._snapStartedAt = null;
             // If a server-side stream is running, take it down too so the
             // Abort button is a true "everything stop" panic switch.
             if (this.cameraStream.running) {
