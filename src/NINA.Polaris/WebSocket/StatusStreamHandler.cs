@@ -387,6 +387,13 @@ public static class StatusStreamHandler {
                             etaFrames = liveStack.LastEta?.RemainingFrames,
                             etaSeconds = liveStack.LastEta?.RemainingSeconds,
                             etaConfidence = liveStack.LastEta?.Confidence,
+                            // Stacking activity + dropped-frame visibility: true
+                            // while a frame is being integrated, plus the running
+                            // dropped count and the reason/time of the last drop.
+                            isStacking = liveStack.IsStacking,
+                            rejectedFrames = liveStack.RejectedFrames,
+                            lastRejectReason = liveStack.LastRejectReason,
+                            lastRejectAt = liveStack.LastRejectAt,
                             // 16-bit luminance histogram + stats of the colour
                             // stack (the broadcast frame is an 8-bit JPEG, so the
                             // client can't compute these itself). Null when not

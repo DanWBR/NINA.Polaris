@@ -222,6 +222,23 @@ public class LiveStackingService {
     public int FrameCount => _frameCount;
     public int Width => _width;
     public int Height => _height;
+
+    /// <summary>True while a frame is actively being detected / aligned /
+    /// integrated (the stacking math is running). Surfaced so the UI can show a
+    /// "Stacking…" indicator instead of leaving the operator guessing whether
+    /// anything is happening between frames.</summary>
+    private volatile bool _isStacking;
+    public bool IsStacking => _isStacking;
+
+    /// <summary>Why the most recent rejected frame was dropped (alignment failed,
+    /// size mismatch, meridian flip in progress, …), null until one is rejected.
+    /// Frames are silently skipped otherwise — this makes the reason visible.</summary>
+    public string? LastRejectReason { get; private set; }
+    /// <summary>UTC time of the last rejected frame (null until one happens).</summary>
+    public DateTime? LastRejectAt { get; private set; }
+    /// <summary>How many frames were dropped this session (not integrated).</summary>
+    public int RejectedFrames { get; private set; }
+
     public double LastFrameMedianHfr { get; private set; }
     public int LastFrameStarCount { get; private set; }
     // SNR-4: background SNR per-frame + cumulative-stack. CumulativeSnr
@@ -464,6 +481,9 @@ public class LiveStackingService {
             LastFrameStarCount = 0;
             LastFrameSnr = 0;
             CumulativeSnr = 0;
+            RejectedFrames = 0;
+            LastRejectReason = null;
+            LastRejectAt = null;
             _snrHistory.Clear();
             LastEta = null;
             // LSPP-3+4: target switch -> drop the master cache so the
@@ -513,6 +533,16 @@ public class LiveStackingService {
         _logger.LogInformation("Live stacking stopped after {Count} frames", _frameCount);
     }
 
+    /// <summary>Record that a frame was dropped (not integrated) with the reason,
+    /// so it surfaces in the WS status + LIVE tab instead of vanishing silently.</summary>
+    private void RecordReject(string reason) {
+        LastRejectReason = reason;
+        LastRejectAt = DateTime.UtcNow;
+        RejectedFrames++;
+        _logger.LogInformation("Live stack: frame rejected — {Reason} (total dropped {N})",
+            reason, RejectedFrames);
+    }
+
     public async Task AddFrameAsync(IImageData imageData, CancellationToken ct = default) {
         // Disk persistence runs INDEPENDENTLY of whether the stacker
         // is currently armed and INDEPENDENTLY of whether the
@@ -542,8 +572,7 @@ public class LiveStackingService {
         // still saved to disk (above) and the first good frame afterwards
         // is re-oriented by the alignment probe in B1.
         if (_meridian != null && _meridian.State != MeridianFlipState.Idle) {
-            _logger.LogDebug("Live stack: meridian flip in progress ({State}), skipping frame",
-                _meridian.State);
+            RecordReject($"meridian flip in progress ({_meridian.State})");
             return;
         }
 
@@ -553,6 +582,12 @@ public class LiveStackingService {
         var mode = Mode;
         _logger.LogInformation("Live stack: processing frame {N} ({W}x{H}), mode={Mode}",
             _frameCount + 1, props.Width, props.Height, mode);
+
+        // Mark the stacking math as active for the whole detect/align/integrate
+        // pass (cleared in the finally below, even on a reject or throw) so the
+        // UI can show a "Stacking…" indicator.
+        _isStacking = true;
+        try {
 
         // LSPP-4: per-frame pre-processing splice. Calibration runs
         // here on the server (or via the client when MetricsOnly is
@@ -649,8 +684,7 @@ public class LiveStackingService {
                     alignedData = data;
                 } else {
                     if (props.Width != _width || props.Height != _height) {
-                        _logger.LogWarning("Frame size mismatch: {W}x{H} vs {ExpW}x{ExpH}",
-                            props.Width, props.Height, _width, _height);
+                        RecordReject($"size mismatch {props.Width}x{props.Height} vs {_width}x{_height}");
                         return;
                     }
 
@@ -669,7 +703,7 @@ public class LiveStackingService {
 
                     alignedData = TryAlignOriented(stars, data, flippedFirst, out bool usedFlipped, out usedTransform);
                     if (alignedData == null) {
-                        _logger.LogWarning("Alignment failed for frame {N}, skipping", _frameCount + 1);
+                        RecordReject($"alignment failed ({stars.Count} stars detected)");
                         return;
                     }
 
@@ -849,6 +883,9 @@ public class LiveStackingService {
                     _logger.LogWarning(ex, "LiveStack frame handler threw (continuing)");
                 }
             }
+        }
+        } finally {
+            _isStacking = false;
         }
     }
 
@@ -1132,7 +1169,11 @@ public class LiveStackingService {
             TargetSnr = TargetSnr,
             EtaFrames = LastEta?.RemainingFrames,
             EtaSeconds = LastEta?.RemainingSeconds,
-            EtaConfidence = LastEta?.Confidence
+            EtaConfidence = LastEta?.Confidence,
+            IsStacking = _isStacking,
+            RejectedFrames = RejectedFrames,
+            LastRejectReason = LastRejectReason,
+            LastRejectAt = LastRejectAt
         };
     }
 
@@ -1183,5 +1224,14 @@ public class LiveStackingService {
         public int? EtaFrames { get; set; }
         public double? EtaSeconds { get; set; }
         public double? EtaConfidence { get; set; }
+        /// <summary>True while a frame is being detected/aligned/integrated right
+        /// now — the UI shows a "Stacking…" indicator.</summary>
+        public bool IsStacking { get; set; }
+        /// <summary>How many frames were dropped (not integrated) this session.</summary>
+        public int RejectedFrames { get; set; }
+        /// <summary>Reason the last frame was dropped (null until one is).</summary>
+        public string? LastRejectReason { get; set; }
+        /// <summary>UTC timestamp of the last dropped frame (null until one is).</summary>
+        public DateTime? LastRejectAt { get; set; }
     }
 }

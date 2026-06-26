@@ -43,7 +43,7 @@
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260625-railwidth">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260623-livefill2">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260626-lsactivity">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260624-connectall">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cfg500col">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-safetyguard">
@@ -971,6 +971,11 @@
                                 <span class="lsq-value"
                                       x-text="formatSnrEta(liveStackStatus)"></span>
                             </div>
+                            <div class="lsq-cell" x-show="(liveStackStatus?.rejectedFrames || 0) > 0">
+                                <span class="lsq-label">Dropped</span>
+                                <span class="lsq-value" style="color:var(--warn,#e0a030)"
+                                      x-text="liveStackStatus?.rejectedFrames ?? 0"></span>
+                            </div>
                             <div class="lsq-target">
                                 <label>Target
                                     <input type="number" class="input-sm" min="0" max="500" step="1"
@@ -979,6 +984,23 @@
                                            @change="saveTargetSnr()">
                                 </label>
                             </div>
+                        </div>
+                        <!-- Stacking activity + last dropped-frame reason. The
+                             "Stacking…" pulse shows the integration is actually
+                             running; the reason line persists so a silent drop
+                             (alignment failed, size mismatch, meridian flip) is
+                             visible instead of leaving the operator guessing. -->
+                        <div class="live-stack-activity" x-show="liveStackStatus?.isRunning" x-cloak>
+                            <span class="ls-stacking" x-show="liveStackStatus?.isStacking" x-cloak>
+                                <span class="ls-pulse"></span> Stacking…
+                            </span>
+                            <span class="ls-idle muted" x-show="!liveStackStatus?.isStacking" x-cloak>
+                                Waiting for next frame…
+                            </span>
+                            <span class="ls-reject" x-show="liveStackStatus?.lastRejectReason" x-cloak
+                                  :title="'Last dropped: ' + (liveStackStatus?.lastRejectReason || '')">
+                                ⚠ Dropped: <span x-text="liveStackStatus?.lastRejectReason"></span>
+                            </span>
                         </div>
 
                         <div class="live-history-overlay-thumbs">

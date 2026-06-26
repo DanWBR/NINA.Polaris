@@ -927,6 +927,42 @@ button,
     min-width: 48px;
 }
 
+/* Live-stack activity row: "Stacking…" pulse + last dropped-frame reason. */
+.live-stack-activity {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    padding: 4px 2px 8px;
+    font-size: 12px;
+}
+.live-stack-activity .ls-stacking {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent, #4ea1ff);
+    font-weight: 600;
+}
+.live-stack-activity .ls-pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent, #4ea1ff);
+    animation: ls-pulse 1s ease-in-out infinite;
+}
+@keyframes ls-pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50%      { opacity: 1;   transform: scale(1.2); }
+}
+.live-stack-activity .ls-reject {
+    color: var(--warn, #e0a030);
+    margin-left: auto;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .live-history-overlay-chart {
     display: flex;
     flex-direction: column;
