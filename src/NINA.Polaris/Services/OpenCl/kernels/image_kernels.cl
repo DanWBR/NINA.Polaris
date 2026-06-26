@@ -75,44 +75,6 @@ __kernel void warp_affine(__global const ushort* src, __global ushort* dst,
     dst[y * width + x] = (ushort)v;
 }
 
-// --- Affine warp, image2d source (Adreno texture-cache path) ----------------
-// Identical math to warp_affine, but the source is sampled through a read-only
-// image2d_t (CL_R / CL_UNSIGNED_INT16) with NEAREST filtering, so reads are
-// EXACT integers (no hardware interpolation -> bit-identical to the buffer
-// kernel) while benefiting from the GPU's 2D texture cache for the scattered
-// gather. Bilinear is still computed in float32 on the host side here. The
-// explicit in-bounds test preserves the "zero outside source" behaviour
-// (CLK_ADDRESS_CLAMP_TO_EDGE would clamp instead, so we gate the reads).
-__constant sampler_t WARP_SMP =
-    CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
-
-__kernel void warp_affine_img(__read_only image2d_t src, __global ushort* dst,
-                              int width, int height,
-                              float i00, float i01, float i10, float i11,
-                              float itx, float ity) {
-    int x = get_global_id(0);
-    int y = get_global_id(1);
-    if (x >= width || y >= height) return;
-    float sx = i00 * x + i01 * y + itx;
-    float sy = i10 * x + i11 * y + ity;
-    int x0 = (int)floor(sx);
-    int y0 = (int)floor(sy);
-    float fx = sx - x0;
-    float fy = sy - y0;
-    float val = 0.0f;
-    if (x0 >= 0 && y0 >= 0 && x0 + 1 < width && y0 + 1 < height) {
-        float p00 = (float)read_imageui(src, WARP_SMP, (int2)(x0,     y0)).x;
-        float p10 = (float)read_imageui(src, WARP_SMP, (int2)(x0 + 1, y0)).x;
-        float p01 = (float)read_imageui(src, WARP_SMP, (int2)(x0,     y0 + 1)).x;
-        float p11 = (float)read_imageui(src, WARP_SMP, (int2)(x0 + 1, y0 + 1)).x;
-        float top = p00 + (p10 - p00) * fx;
-        float bot = p01 + (p11 - p01) * fx;
-        val = top + (bot - top) * fy;
-    }
-    float v = clamp(round(val), 0.0f, 65535.0f);
-    dst[y * width + x] = (ushort)v;
-}
-
 // --- Bilinear debayer (live-stack OSC preprocessing) ------------------------
 // Mirrors BayerDebayer.Bilinear exactly: integer-truncating neighbour averages
 // (sum / count, not rounded), edge handling = average only the in-bounds
@@ -176,78 +138,6 @@ __kernel void debayer_bilinear(__global const ushort* cfa,
         } else {
             r[idx] = (ushort)dbg_avgV(cfa, x, y, width, height);
             b[idx] = (ushort)dbg_avgH(cfa, x, y, width);
-        }
-    }
-}
-
-// --- Bilinear debayer, image2d source (Adreno texture-cache path) -----------
-// Bit-identical to debayer_bilinear (same integer-truncating in-bounds
-// neighbour averages), but the CFA is sampled through a read-only image2d_t so
-// the heavy neighbour gather hits the 2D texture cache. NEAREST sampler =>
-// reads are exact integers. Same explicit in-bounds tests as the buffer helpers.
-__constant sampler_t CFA_SMP =
-    CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
-
-static int dbgi_px(__read_only image2d_t c, int x, int y) {
-    return (int)read_imageui(c, CFA_SMP, (int2)(x, y)).x;
-}
-static int dbgi_avgN4(__read_only image2d_t c, int x, int y, int w, int h) {
-    int sum = 0, n = 0;
-    if (y > 0)     { sum += dbgi_px(c, x, y - 1); n++; }
-    if (y + 1 < h) { sum += dbgi_px(c, x, y + 1); n++; }
-    if (x > 0)     { sum += dbgi_px(c, x - 1, y); n++; }
-    if (x + 1 < w) { sum += dbgi_px(c, x + 1, y); n++; }
-    return n == 0 ? 0 : sum / n;
-}
-static int dbgi_avgDiag4(__read_only image2d_t c, int x, int y, int w, int h) {
-    int sum = 0, n = 0;
-    if (x > 0     && y > 0)     { sum += dbgi_px(c, x - 1, y - 1); n++; }
-    if (x + 1 < w && y > 0)     { sum += dbgi_px(c, x + 1, y - 1); n++; }
-    if (x > 0     && y + 1 < h) { sum += dbgi_px(c, x - 1, y + 1); n++; }
-    if (x + 1 < w && y + 1 < h) { sum += dbgi_px(c, x + 1, y + 1); n++; }
-    return n == 0 ? 0 : sum / n;
-}
-static int dbgi_avgH(__read_only image2d_t c, int x, int y, int w) {
-    int sum = 0, n = 0;
-    if (x > 0)     { sum += dbgi_px(c, x - 1, y); n++; }
-    if (x + 1 < w) { sum += dbgi_px(c, x + 1, y); n++; }
-    return n == 0 ? 0 : sum / n;
-}
-static int dbgi_avgV(__read_only image2d_t c, int x, int y, int w, int h) {
-    int sum = 0, n = 0;
-    if (y > 0)     { sum += dbgi_px(c, x, y - 1); n++; }
-    if (y + 1 < h) { sum += dbgi_px(c, x, y + 1); n++; }
-    return n == 0 ? 0 : sum / n;
-}
-
-__kernel void debayer_bilinear_img(__read_only image2d_t cfa,
-                                   __global ushort* r, __global ushort* g, __global ushort* b,
-                                   int width, int height, int b0, int b1, int b2, int b3) {
-    int x = get_global_id(0);
-    int y = get_global_id(1);
-    if (x >= width || y >= height) return;
-    int idx = y * width + x;
-    int rowBase = (y & 1) << 1;
-    int xp = x & 1;
-    int block[4] = { b0, b1, b2, b3 };
-    int colour = block[rowBase + xp];
-    int raw = dbgi_px(cfa, x, y);
-    if (colour == 0) {            // R site
-        r[idx] = (ushort)raw;
-        g[idx] = (ushort)dbgi_avgN4(cfa, x, y, width, height);
-        b[idx] = (ushort)dbgi_avgDiag4(cfa, x, y, width, height);
-    } else if (colour == 2) {     // B site
-        b[idx] = (ushort)raw;
-        g[idx] = (ushort)dbgi_avgN4(cfa, x, y, width, height);
-        r[idx] = (ushort)dbgi_avgDiag4(cfa, x, y, width, height);
-    } else {                      // G site
-        g[idx] = (ushort)raw;
-        if (block[rowBase + (xp ^ 1)] == 0) { // reds on this row
-            r[idx] = (ushort)dbgi_avgH(cfa, x, y, width);
-            b[idx] = (ushort)dbgi_avgV(cfa, x, y, width, height);
-        } else {
-            r[idx] = (ushort)dbgi_avgV(cfa, x, y, width, height);
-            b[idx] = (ushort)dbgi_avgH(cfa, x, y, width);
         }
     }
 }
