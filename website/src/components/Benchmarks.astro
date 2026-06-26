@@ -15,6 +15,14 @@ const fruitFor = (name: string): 'raspberry' | 'orange' | null => {
   if (t.includes('orange')) return 'orange';
   return null;
 };
+
+// Emoji for non-fruit devices (Radxa Dragon, desktop PC).
+const emojiFor = (name: string): string | null => {
+  const t = (name || '').toLowerCase();
+  if (t.includes('dragon') || t.includes('radxa')) return '🐉';
+  if (t.includes('core i') || t.includes('rtx') || t.includes('pc')) return '🖥️';
+  return null;
+};
 ---
 
 <section id="benchmarks" class="section section-alt">
@@ -43,6 +51,7 @@ const fruitFor = (name: string): 'raspberry' | 'orange' | null => {
               <tr class={r.highlight ? 'is-highlight' : ''}>
                 <td class="left device">
                   {fruitFor(r.device) && <FruitIcon name={fruitFor(r.device)!} />}
+                  {emojiFor(r.device) && <span class="dev-emoji" aria-hidden="true">{emojiFor(r.device)}</span>}
                   {r.url ? (
                     <a href={r.url} target="_blank" rel="noopener">{r.device}</a>
                   ) : (
@@ -109,6 +118,7 @@ const fruitFor = (name: string): 'raspberry' | 'orange' | null => {
   .bench tbody tr:last-child { border-bottom: 0; }
   .bench tbody td { color: var(--text-muted); }
   .device { color: var(--text); font-weight: 600; }
+  .dev-emoji { margin-right: 7px; font-size: 15px; vertical-align: -1px; }
   .bench td.price { color: var(--text); font-weight: 600; font-family: var(--font-mono); white-space: nowrap; }
   .device a { color: var(--text); text-decoration: none; }
   .device a:hover { color: var(--accent); text-decoration: underline; }
