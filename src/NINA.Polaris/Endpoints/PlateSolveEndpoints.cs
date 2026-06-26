@@ -231,7 +231,13 @@ public static class PlateSolveEndpoints {
                     "AUX plate solve: capture {Exp}s gain={Gain} bin={Bin}, hint RA={Ra} Dec={Dec}",
                     exposure, request?.Gain, request?.Binning, hintRa, hintDec);
 
-                var image = await cam.CaptureAsync(exposure, opts, ct);
+                // Serialize with the aux capture loop: both share the aux
+                // camera's single in-flight exposure TCS, so an ungated solve
+                // here racing an aux frame would clobber it and one capture
+                // would time out (~exposure+60s "no BLOB"). Same gate the aux
+                // loop + aux focus use.
+                var image = await AuxCameraCaptureGate.RunAsync(
+                    () => cam.CaptureAsync(exposure, opts, ct), ct);
                 FITSWriter.Write(image, tempFits);
 
                 var options = new PlateSolveOptions {
