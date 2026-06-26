@@ -17931,12 +17931,17 @@ function ninaApp() {
             this._captureExposure = Number(this.exposure) || 0;
             this._startShutterTick();
             try {
+                // Abortable so stopCapture() cancels the in-flight request
+                // immediately (cancels the server-side capture too via the
+                // request's cancellation token) instead of leaving it to run
+                // to the exposure+30s timeout.
+                this._liveCaptureAbort = new AbortController();
                 const resp = await this.apiPost('/api/camera/capture', {
                     exposure: this.exposure,
                     gain: this.gain,
                     binning: parseInt(this.binning),
                     filter: null
-                }, { timeout: (this.exposure + 30) * 1000 });
+                }, { timeout: (this.exposure + 30) * 1000, signal: this._liveCaptureAbort.signal });
 
                 const data = await resp.json();
                 this.liveActive = true;
@@ -17968,7 +17973,10 @@ function ninaApp() {
                     this.capture();
                 }
             } catch (e) {
-                if (this.looping) {
+                const aborted = e && (e.name === 'AbortError' || /abort/i.test(e.message || ''));
+                if (aborted) {
+                    // Deliberate stopCapture() — not an error, don't retry/toast.
+                } else if (this.looping) {
                     this.toast('Capture error, retrying...', 'warn');
                     setTimeout(() => {
                         if (this.looping) this.capture();
@@ -17977,6 +17985,7 @@ function ninaApp() {
                     this.toast('Capture failed: ' + e.message, 'error');
                 }
             } finally {
+                this._liveCaptureAbort = null;
                 if (!this.looping) {
                     this.capturing = false;
                     this._captureStartedAt = null;
@@ -18025,6 +18034,7 @@ function ninaApp() {
             this.looping = false;
             this.capturing = false;
             this._captureStartedAt = null;
+            try { this._liveCaptureAbort?.abort(); } catch (e) { }
             try { await this.apiPost('/api/camera/abort'); } catch (e) { }
         },
 
@@ -21179,6 +21189,9 @@ function ninaApp() {
                 clearTimeout(this._manualFocusTimer);
                 this._manualFocusTimer = null;
             }
+            // Cancel any in-flight focus exposure so it doesn't hang until the
+            // request timeout (the server-side capture cancels with it).
+            try { this._manualFocusAbort?.abort(); } catch (e) { }
         },
         async manualFocusSnap() {
             // Out-of-loop single capture. Same code path as the
@@ -21207,6 +21220,7 @@ function ninaApp() {
         // loop and the Snap-once button.
         async _manualFocusCaptureOnce() {
             try {
+                this._manualFocusAbort = new AbortController();
                 const resp = await this.apiPost('/api/camera/capture', {
                     exposure: this.manualFocus.exposureSec,
                     gain: this.manualFocus.gain,
@@ -21219,7 +21233,7 @@ function ninaApp() {
                     kind: 'focus',
                     // Focus the primary or auxiliary camera.
                     cameraSource: this.focusCameraSource || 'main'
-                });
+                }, { signal: this._manualFocusAbort.signal });
                 const r = await resp.json();
                 // Main path returns status="complete"; aux path "captured".
                 if (r.status !== 'complete' && r.status !== 'captured') {
@@ -21263,8 +21277,13 @@ function ninaApp() {
                     await this._manualFocusBahtinovOnce();
                 }
             } catch (e) {
-                this.manualFocus.lastError = 'Capture failed: '
-                    + (e?.message || String(e));
+                const aborted = e && (e.name === 'AbortError' || /abort/i.test(e.message || ''));
+                if (!aborted) {
+                    this.manualFocus.lastError = 'Capture failed: '
+                        + (e?.message || String(e));
+                }
+            } finally {
+                this._manualFocusAbort = null;
             }
         },
 
