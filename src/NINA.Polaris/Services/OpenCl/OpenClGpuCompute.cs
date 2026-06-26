@@ -47,6 +47,11 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
     /// kernel can execute to be measured) and before init.</summary>
     private volatile GpuOffloadPolicy? _policy;
 
+    /// <summary>Latches true if image2d creation/dispatch ever fails (device lacks
+    /// image support, or the texture kernels won't run), so the warp/debayer
+    /// texture-cache fast path is skipped straight to the buffer path thereafter.</summary>
+    private volatile bool _imagePathUnavailable;
+
     public OpenClGpuCompute(ILogger<OpenClGpuCompute> log) {
         _log = log;
     }
@@ -327,6 +332,33 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
             int n = width * height;
             var cl = ctx.Cl;
             lock (ctx.Gate) {
+                // Adreno texture-cache fast path (unified memory only): the source
+                // is an image2d sampled NEAREST (exact integer reads -> bit-identical
+                // to the buffer kernel) so the scattered bilinear gather hits the 2D
+                // texture cache. Falls through to the buffer path on any failure.
+                if (ctx.HostUnifiedMemory && !_imagePathUnavailable) {
+                    nint imgSrc = 0, bDstI = 0;
+                    try {
+                        imgSrc = CreateImage2DU16(ctx, source, width, height);
+                        bDstI = CreateOutput(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
+                        var ki = ctx.GetKernel("warp_affine_img");
+                        SetMem(cl, ki, 0, imgSrc); SetMem(cl, ki, 1, bDstI);
+                        SetVal(cl, ki, 2, width); SetVal(cl, ki, 3, height);
+                        SetVal(cl, ki, 4, i00); SetVal(cl, ki, 5, i01); SetVal(cl, ki, 6, i10);
+                        SetVal(cl, ki, 7, i11); SetVal(cl, ki, 8, itx); SetVal(cl, ki, 9, ity);
+                        Run2D(ctx, ki, width, height);
+                        var outImg = new ushort[n];
+                        ReadResult(ctx, bDstI, outImg);
+                        result = outImg;
+                        return true;
+                    } catch (Exception ex) {
+                        _imagePathUnavailable = true;
+                        _log.LogInformation("GPU warp image path unavailable, using buffers: {Msg}", ex.Message);
+                    } finally {
+                        if (imgSrc != 0) cl.ReleaseMemObject(imgSrc);
+                        if (bDstI != 0) cl.ReleaseMemObject(bDstI);
+                    }
+                }
                 nint bSrc = CreateInput(ctx, MemFlags.ReadOnly, source);
                 nint bDst = CreateOutput(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
                 try {
@@ -359,6 +391,37 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
             if (cfa.Length < n) return false;
             var cl = ctx.Cl;
             lock (ctx.Gate) {
+                // Adreno texture-cache fast path: the CFA neighbour gather (each
+                // pixel read by several output sites) hits the 2D texture cache;
+                // NEAREST sampling keeps reads exact -> bit-identical to the buffer
+                // kernel. Falls through to the buffer path on any failure.
+                if (ctx.HostUnifiedMemory && !_imagePathUnavailable) {
+                    nint imgCfa = 0, iR = 0, iG = 0, iB = 0;
+                    try {
+                        imgCfa = CreateImage2DU16(ctx, cfa, width, height);
+                        iR = CreateOutput(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
+                        iG = CreateOutput(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
+                        iB = CreateOutput(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
+                        var ki = ctx.GetKernel("debayer_bilinear_img");
+                        SetMem(cl, ki, 0, imgCfa); SetMem(cl, ki, 1, iR); SetMem(cl, ki, 2, iG); SetMem(cl, ki, 3, iB);
+                        SetVal(cl, ki, 4, width); SetVal(cl, ki, 5, height);
+                        SetVal(cl, ki, 6, block[0]); SetVal(cl, ki, 7, block[1]);
+                        SetVal(cl, ki, 8, block[2]); SetVal(cl, ki, 9, block[3]);
+                        Run2D(ctx, ki, width, height);
+                        var rr = new ushort[n]; var gg = new ushort[n]; var bb = new ushort[n];
+                        ReadResult(ctx, iR, rr); ReadResult(ctx, iG, gg); ReadResult(ctx, iB, bb);
+                        result = new BayerDebayer.Channels(rr, gg, bb);
+                        return true;
+                    } catch (Exception ex) {
+                        _imagePathUnavailable = true;
+                        _log.LogInformation("GPU debayer image path unavailable, using buffers: {Msg}", ex.Message);
+                    } finally {
+                        if (imgCfa != 0) cl.ReleaseMemObject(imgCfa);
+                        if (iR != 0) cl.ReleaseMemObject(iR);
+                        if (iG != 0) cl.ReleaseMemObject(iG);
+                        if (iB != 0) cl.ReleaseMemObject(iB);
+                    }
+                }
                 nint bCfa = CreateInput(ctx, MemFlags.ReadOnly, cfa);
                 nint bR = CreateOutput(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
                 nint bG = CreateOutput(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
@@ -460,6 +523,30 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
         nint buf = ctx.Cl.CreateBuffer(ctx.Context, flags, size, null, &err);
         if (err != 0) throw new InvalidOperationException($"CreateBuffer(empty {flags}) failed: {err}");
         return buf;
+    }
+
+    /// <summary>Create a read-only 2D image (single channel, 16-bit unsigned) from
+    /// <paramref name="data"/> for the texture-cache kernels. CopyHostPtr lets the
+    /// driver place it in the device-optimal (tiled) layout the texture cache wants;
+    /// the kernels sample it NEAREST so the values read back are exact integers.</summary>
+    private static nint CreateImage2DU16(OpenClContext ctx, ushort[] data, int width, int height) {
+        var fmt = new ImageFormat {
+            ImageChannelOrder = ChannelOrder.R,
+            ImageChannelDataType = ChannelType.UnsignedInt16
+        };
+        var desc = new ImageDesc {
+            ImageType = MemObjectType.Image2D,
+            ImageWidth = (nuint)width,
+            ImageHeight = (nuint)height
+        };
+        int err;
+        nint img;
+        fixed (ushort* p = data) {
+            img = ctx.Cl.CreateImage(ctx.Context, MemFlags.ReadOnly | MemFlags.CopyHostPtr,
+                                     &fmt, &desc, p, &err);
+        }
+        if (err != 0) throw new InvalidOperationException($"CreateImage(R,U16 {width}x{height}) failed: {err}");
+        return img;
     }
 
     private static void SetMem(CL cl, nint kernel, uint index, nint mem) {
