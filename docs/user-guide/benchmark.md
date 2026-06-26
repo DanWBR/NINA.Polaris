@@ -155,30 +155,39 @@ session.
 
 ### Radxa Dragon Q6A (8 cores, Qualcomm QCS6490)
 
-Run: 2026-06-26 (2 consecutive runs, 289 / 287; CPU only). Ubuntu 24.04
-(noble) arm64. Kryo cores (Cortex-A78 + A55) with an Adreno 643 GPU (OpenCL
-backend not yet enabled in this run).
+Run: 2026-06-26 (best 289, CPU only — the production score). Ubuntu 24.04
+(noble) arm64. Kryo cores (Cortex-A78 + A55) with an Adreno 643 GPU.
 
 | Metric | Value |
 |---|---|
-| **Polaris score** | **289** (CPU only) |
+| **Polaris score** | **289** |
 | Stacking throughput | 3.5 fps · 58.8 Mpx/s (16.78 MP frames) |
 | Stacking detect / align / resample / stats | 71.78 / 0.53 / 78.36 / 134.83 ms |
 | Capture/video throughput | 2.32 fps · 39 Mpx/s |
 | Debayer / JPEG / LZ4 | 47.82 / 368.88 / 13.75 ms (LZ4 2327.2 MB/s) |
 | CPU single / multi-thread | 3296 / 13699 MFLOPS (4.16× scaling) |
 | Memory bandwidth | 13.2 GB/s |
+| GPU vs CPU (Adreno 643, OpenCL) | warp 0.69× · debayer 0.34× · blur 2.56× · **overall 0.84×** (geo-mean) |
 
 The fastest SBC here by a clear margin — ~2.6× the Raspberry Pi 4 and ~19%
-ahead of the Orange Pi 5 Pro's CPU-only result (and ~19% past its GPU-on 242).
-It leads on raw per-core throughput: the strongest single-thread score of the
-SBCs (3296 MFLOPS) and the lowest stacking detect/resample times, which is what
-drives the 58.8 Mpx/s stacking throughput. Memory bandwidth (13.2 GB/s) sits
-between the RK3588S boards and the Pi 5. This is a **CPU-only** result — the
-Adreno 643 supports OpenCL, so enabling the GPU backend should lift it further
-(unified memory makes offload cheap, as on the Mali boards); GPU-vs-CPU numbers
-to be added once measured. On this SoC the **RKNN/NPU path does not apply**
-(that's Rockchip-only); GPU acceleration here is via OpenCL on the Adreno.
+ahead of the Orange Pi 5 Pro (both its CPU-only 227 and GPU-on 242). It leads on
+raw per-core throughput: the strongest single-thread score of the SBCs (3296
+MFLOPS) and the lowest stacking detect/resample times, which is what drives the
+58.8 Mpx/s stacking throughput. Memory bandwidth (13.2 GB/s) sits between the
+RK3588S boards and the Pi 5.
+
+**The GPU is a net loss on this board, unlike the Mali SBCs.** The Adreno 643
+OpenCL stack copies host↔device for ordinary buffers, so the light memory-bound
+kernels measure *slower* than this strong CPU — warp 0.69×, debayer 0.34×
+(overall geo-mean 0.84×); only the heavier blur wins (2.56×). Zero-copy
+(`CL_MEM_ALLOC_HOST_PTR` map/unmap) and a texture-cache (`image2d`) path were
+both tried; neither flips warp/debayer above 1× here (the texture path is worse
+still, 0.66× overall, because the input copy + tiling costs more than the cache
+saves). So Polaris's per-op probe correctly offloads **only blur** on the
+Adreno and keeps warp/debayer on the CPU; the score with the GPU enabled (~294)
+matches CPU-only (~289) within run-to-run noise. Recommendation: leave the GPU
+toggle off here — **289 is the board's real score.** The **RKNN/NPU path does
+not apply** on this SoC (Rockchip-only); the Hexagon NPU would need QNN.
 
 ### x86 desktop — Core i9-13900KF (32 threads)
 
