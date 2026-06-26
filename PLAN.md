@@ -122,11 +122,16 @@ inference primitive changes.
 - **QNN-0 (spike) — DONE 2026-06-26 = GO.** Runtime confirmed present and the
   Hexagon reachable (V68) on the Radxa OS image; QAIRT 2.45 libs extracted from
   the qcom-ppa .debs; unsigned PD is the exec path (see STATUS above).
-  `scripts/qnn-probe.sh` is the read-only probe deliverable. STILL TODO within the
-  spike: the actual ms/tile number (needs x86 `qairt-converter` to turn a GraXpert
-  denoise ONNX into a V68 fp16 context binary, then `qnn-net-run --backend
-  libQnnHtp.so --config_file <unsigned-pd>` on the board vs CPU). RKNN on the
-  weaker RK3588 gave ~5x, so the case is strong. **Gate passed; QNN-1..5 unblocked.**
+  `scripts/qnn-probe.sh` is the read-only probe deliverable. **MEASURED 2026-06-26:
+  Hexagon V68 int8 denoise ≈ 7.3 ms/tile (~130 tiles/s) on a 256×256×3 tile —
+  ~12× the RK3588 NPU (91 ms fp16), tens of× the CPU.** Run via an AI Hub-built
+  int8 context binary (targets the QCS6490, loads on the device's native QAIRT 2.45
+  runtime) + `qnn-net-run --retrieve_context ... --config_file <unsigned-pd>`. NOTE:
+  the public x86 SDK is 2.31 and does NOT interop with the device's 2.45 runtime
+  (.bin/.dlc/libs all version-locked) — so device-matched binaries come from AI Hub
+  OR a matched 2.45 SDK; the Services/Qnn build will BUNDLE the QAIRT 2.45 aarch64
+  runtime in the .deb (like librknnrt.so) to control versions. **Gate passed with a
+  measured number; QNN-1..5 unblocked.**
 - **QNN-1:** `QnnRuntime` probe + `Services/Qnn/` skeleton (mirror Rknn).
 - **QNN-2:** `QnnInferenceService` + tile runner over ORT QNN EP.
 - **QNN-3:** wire into `GraXpertService` backend chooser + endpoints + WS
