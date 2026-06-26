@@ -245,10 +245,10 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
             var kernel = BuildGaussianKernel(radius, sigma <= 0 ? radius / 2.0 : sigma);
             var cl = ctx.Cl;
             lock (ctx.Gate) {
-                nint bSrc = CreateFrom(ctx, MemFlags.ReadOnly | MemFlags.CopyHostPtr, data);
+                nint bSrc = CreateInput(ctx, MemFlags.ReadOnly, data);
                 nint bTmp = CreateEmpty(ctx, MemFlags.ReadWrite, (nuint)(n * sizeof(float)));
-                nint bDst = CreateEmpty(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
-                nint bKern = CreateFrom(ctx, MemFlags.ReadOnly | MemFlags.CopyHostPtr, kernel);
+                nint bDst = CreateOutput(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
+                nint bKern = CreateInput(ctx, MemFlags.ReadOnly, kernel);
                 try {
                     var kh = ctx.GetKernel("blur_h");
                     SetMem(cl, kh, 0, bSrc); SetMem(cl, kh, 1, bTmp); SetMem(cl, kh, 2, bKern);
@@ -261,7 +261,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
                     Run2D(ctx, kv, width, height);
 
                     var outp = new ushort[n];
-                    ReadInto(ctx, bDst, outp);
+                    ReadResult(ctx, bDst, outp);
                     result = outp;
                     return true;
                 } finally {
@@ -282,7 +282,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
             var cl = ctx.Cl;
             lock (ctx.Gate) {
                 // Ping-pong two device buffers; H then V per pass.
-                nint a = CreateFrom(ctx, MemFlags.ReadWrite | MemFlags.CopyHostPtr, src);
+                nint a = CreateInput(ctx, MemFlags.ReadWrite, src);
                 nint b = CreateEmpty(ctx, MemFlags.ReadWrite, (nuint)n);
                 try {
                     var kh = ctx.GetKernel("box_blur_h");
@@ -298,7 +298,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
                         Run2D(ctx, kv, width, height);
                     }
                     var outp = new byte[n];
-                    ReadInto(ctx, a, outp); // result lands back in 'a' after V
+                    ReadResult(ctx, a, outp); // result lands back in 'a' after V
                     result = outp;
                     return true;
                 } finally {
@@ -327,8 +327,8 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
             int n = width * height;
             var cl = ctx.Cl;
             lock (ctx.Gate) {
-                nint bSrc = CreateFrom(ctx, MemFlags.ReadOnly | MemFlags.CopyHostPtr, source);
-                nint bDst = CreateEmpty(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
+                nint bSrc = CreateInput(ctx, MemFlags.ReadOnly, source);
+                nint bDst = CreateOutput(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
                 try {
                     var k = ctx.GetKernel("warp_affine");
                     SetMem(cl, k, 0, bSrc); SetMem(cl, k, 1, bDst);
@@ -337,7 +337,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
                     SetVal(cl, k, 7, i11); SetVal(cl, k, 8, itx); SetVal(cl, k, 9, ity);
                     Run2D(ctx, k, width, height);
                     var outp = new ushort[n];
-                    ReadInto(ctx, bDst, outp);
+                    ReadResult(ctx, bDst, outp);
                     result = outp;
                     return true;
                 } finally {
@@ -359,10 +359,10 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
             if (cfa.Length < n) return false;
             var cl = ctx.Cl;
             lock (ctx.Gate) {
-                nint bCfa = CreateFrom(ctx, MemFlags.ReadOnly | MemFlags.CopyHostPtr, cfa);
-                nint bR = CreateEmpty(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
-                nint bG = CreateEmpty(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
-                nint bB = CreateEmpty(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
+                nint bCfa = CreateInput(ctx, MemFlags.ReadOnly, cfa);
+                nint bR = CreateOutput(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
+                nint bG = CreateOutput(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
+                nint bB = CreateOutput(ctx, MemFlags.WriteOnly, (nuint)(n * sizeof(ushort)));
                 try {
                     var k = ctx.GetKernel("debayer_bilinear");
                     SetMem(cl, k, 0, bCfa); SetMem(cl, k, 1, bR); SetMem(cl, k, 2, bG); SetMem(cl, k, 3, bB);
@@ -371,7 +371,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
                     SetVal(cl, k, 8, block[2]); SetVal(cl, k, 9, block[3]);
                     Run2D(ctx, k, width, height);
                     var r = new ushort[n]; var g = new ushort[n]; var b = new ushort[n];
-                    ReadInto(ctx, bR, r); ReadInto(ctx, bG, g); ReadInto(ctx, bB, b);
+                    ReadResult(ctx, bR, r); ReadResult(ctx, bG, g); ReadResult(ctx, bB, b);
                     result = new BayerDebayer.Channels(r, g, b);
                     return true;
                 } finally {
@@ -399,16 +399,16 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
             int n = data.Length;
             var cl = ctx.Cl;
             lock (ctx.Gate) {
-                nint bSrc = CreateFrom(ctx, MemFlags.ReadOnly | MemFlags.CopyHostPtr, data);
-                nint bLut = CreateFrom(ctx, MemFlags.ReadOnly | MemFlags.CopyHostPtr, lut);
-                nint bDst = CreateEmpty(ctx, MemFlags.WriteOnly, (nuint)n);
+                nint bSrc = CreateInput(ctx, MemFlags.ReadOnly, data);
+                nint bLut = CreateInput(ctx, MemFlags.ReadOnly, lut);
+                nint bDst = CreateOutput(ctx, MemFlags.WriteOnly, (nuint)n);
                 try {
                     var k = ctx.GetKernel("apply_lut8");
                     SetMem(cl, k, 0, bSrc); SetMem(cl, k, 1, bDst); SetMem(cl, k, 2, bLut);
                     SetVal(cl, k, 3, n);
                     Run1D(ctx, k, n);
                     var outp = new byte[n];
-                    ReadInto(ctx, bDst, outp);
+                    ReadResult(ctx, bDst, outp);
                     result = outp;
                     return true;
                 } finally {
@@ -424,16 +424,16 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
         try {
             var cl = ctx.Cl;
             lock (ctx.Gate) {
-                nint bFrame = CreateFrom(ctx, MemFlags.ReadOnly | MemFlags.CopyHostPtr, frame);
-                nint bAccum = CreateFrom(ctx, MemFlags.ReadWrite | MemFlags.CopyHostPtr, accum);
-                nint bCount = CreateFrom(ctx, MemFlags.ReadWrite | MemFlags.CopyHostPtr, count);
+                nint bFrame = CreateInput(ctx, MemFlags.ReadOnly, frame);
+                nint bAccum = CreateInput(ctx, MemFlags.ReadWrite, accum);
+                nint bCount = CreateInput(ctx, MemFlags.ReadWrite, count);
                 try {
                     var k = ctx.GetKernel("accumulate");
                     SetMem(cl, k, 0, bFrame); SetMem(cl, k, 1, bAccum); SetMem(cl, k, 2, bCount);
                     SetVal(cl, k, 3, length);
                     Run1D(ctx, k, length);
-                    ReadInto(ctx, bAccum, accum);
-                    ReadInto(ctx, bCount, count);
+                    ReadResult(ctx, bAccum, accum);
+                    ReadResult(ctx, bCount, count);
                     return true;
                 } finally {
                     cl.ReleaseMemObject(bFrame); cl.ReleaseMemObject(bAccum); cl.ReleaseMemObject(bCount);
@@ -491,6 +491,85 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
             int err = ctx.Cl.EnqueueReadBuffer(ctx.Queue, buffer, true, 0,
                 (nuint)(dest.Length * sizeof(T)), p, 0, null, null);
             if (err != 0) throw new InvalidOperationException($"EnqueueReadBuffer failed: {err}");
+        }
+    }
+
+    // ─── unified-memory zero-copy buffers ──────────────────────────────────
+    //
+    // On a discrete GPU every input must be copied host→device and every result
+    // copied back, so CreateFrom(CopyHostPtr)+ReadInto (real DMA) is correct and
+    // unavoidable. But on a unified-memory device (CL_DEVICE_HOST_UNIFIED_MEMORY)
+    // host and GPU share physical RAM, so those copies are pure waste — yet some
+    // stacks (notably Qualcomm Adreno on the QCS6490) still perform a genuine
+    // memcpy for an ordinary buffer, which is exactly why the light memory-bound
+    // kernels (warp, debayer) measured *slower* than the CPU there.
+    //
+    // The fix: allocate buffers with CL_MEM_ALLOC_HOST_PTR so the driver places
+    // them in host-accessible memory the GPU can read/write in place, and move
+    // data through clEnqueueMapBuffer / clEnqueueUnmapMemObject. On unified memory
+    // the map is a pointer hand-back into the same pages (no transfer); we still do
+    // one plain CPU memcpy to/from the caller's managed array, but the device-side
+    // staging copy — the part the Adreno stack was charging us for — is gone. The
+    // discrete path is left byte-for-byte unchanged (it legitimately needs copies).
+    // Map/unmap doesn't alter any computed value, so CPU-parity stays bit-exact.
+
+    /// <summary>Create a device buffer and fill it from <paramref name="data"/>.
+    /// Unified memory: ALLOC_HOST_PTR + map-write (no host→device staging copy);
+    /// discrete: CopyHostPtr at create time. <paramref name="deviceAccess"/> is the
+    /// kernel's view (ReadOnly / ReadWrite); the host map-write is always allowed.</summary>
+    private static nint CreateInput<T>(OpenClContext ctx, MemFlags deviceAccess, T[] data) where T : unmanaged {
+        if (ctx.HostUnifiedMemory) {
+            nint buf = CreateEmpty(ctx, deviceAccess | MemFlags.AllocHostPtr,
+                (nuint)(data.Length * sizeof(T)));
+            WriteViaMap(ctx, buf, data);
+            return buf;
+        }
+        return CreateFrom(ctx, deviceAccess | MemFlags.CopyHostPtr, data);
+    }
+
+    /// <summary>Create a kernel-output buffer. Unified memory: ALLOC_HOST_PTR so
+    /// the result can be mapped back without a device→host copy; discrete: a plain
+    /// device buffer read back with <see cref="ReadInto"/>.</summary>
+    private static nint CreateOutput(OpenClContext ctx, MemFlags deviceAccess, nuint size) =>
+        CreateEmpty(ctx, ctx.HostUnifiedMemory ? deviceAccess | MemFlags.AllocHostPtr : deviceAccess, size);
+
+    /// <summary>Read a kernel result back into <paramref name="dest"/>: zero-copy
+    /// map on unified memory, blocking EnqueueReadBuffer on a discrete device.</summary>
+    private static void ReadResult<T>(OpenClContext ctx, nint buffer, T[] dest) where T : unmanaged {
+        if (ctx.HostUnifiedMemory) ReadViaMap(ctx, buffer, dest);
+        else ReadInto(ctx, buffer, dest);
+    }
+
+    /// <summary>Map <paramref name="buffer"/> for writing, memcpy <paramref name="data"/>
+    /// in, unmap. Blocking; on the in-order queue the unmap is ordered before any
+    /// kernel that later reads the buffer.</summary>
+    private static void WriteViaMap<T>(OpenClContext ctx, nint buffer, T[] data) where T : unmanaged {
+        long bytes = (long)data.Length * sizeof(T);
+        int err;
+        void* p = ctx.Cl.EnqueueMapBuffer(ctx.Queue, buffer, true, MapFlags.Write, 0,
+            (nuint)bytes, 0, null, null, &err);
+        if (err != 0) throw new InvalidOperationException($"EnqueueMapBuffer(write) failed: {err}");
+        try {
+            fixed (T* s = data) Buffer.MemoryCopy(s, p, bytes, bytes);
+        } finally {
+            int u = ctx.Cl.EnqueueUnmapMemObject(ctx.Queue, buffer, p, 0, null, null);
+            if (u != 0) throw new InvalidOperationException($"EnqueueUnmapMemObject(write) failed: {u}");
+        }
+    }
+
+    /// <summary>Map <paramref name="buffer"/> for reading, memcpy out into
+    /// <paramref name="dest"/>, unmap. Blocking, so the data is valid on return.</summary>
+    private static void ReadViaMap<T>(OpenClContext ctx, nint buffer, T[] dest) where T : unmanaged {
+        long bytes = (long)dest.Length * sizeof(T);
+        int err;
+        void* p = ctx.Cl.EnqueueMapBuffer(ctx.Queue, buffer, true, MapFlags.Read, 0,
+            (nuint)bytes, 0, null, null, &err);
+        if (err != 0) throw new InvalidOperationException($"EnqueueMapBuffer(read) failed: {err}");
+        try {
+            fixed (T* d = dest) Buffer.MemoryCopy(p, d, bytes, bytes);
+        } finally {
+            int u = ctx.Cl.EnqueueUnmapMemObject(ctx.Queue, buffer, p, 0, null, null);
+            if (u != 0) throw new InvalidOperationException($"EnqueueUnmapMemObject(read) failed: {u}");
         }
     }
 
