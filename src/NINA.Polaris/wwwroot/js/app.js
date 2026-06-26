@@ -13924,28 +13924,10 @@ function ninaApp() {
             return [cx + dx * c - dy * s, cy + dx * s + dy * c];
         },
 
-        // Cycle the annotation rotation 0 -> 90 -> 180 -> 270 -> 0 and
-        // re-render whatever overlay is currently showing (LIVE/PREVIEW canvas
-        // and/or the STUDIO OSD overlay), without re-solving.
-        cycleAnnotateRotation() {
-            // LIVE / PREVIEW only — STUDIO has its own knob.
-            this.annotateExtraRot = (this.annotateExtraRot + 90) % 360;
-            try { this.redrawOverlay && this.redrawOverlay(); } catch (e) {}
-            try { this.redrawPreviewOverlay && this.redrawPreviewOverlay(); } catch (e) {}
-            this.toast('Annotation rotation: ' + this.annotateExtraRot + '°', 'info');
-        },
-        cycleStudioAnnotateRotation() {
-            // STUDIO viewer only — independent of the LIVE/PREVIEW knob.
-            this.studioAnnotateExtraRot = (this.studioAnnotateExtraRot + 90) % 360;
-            if (this.studioAnnotate.active) this._renderStudioAnnotations();
-            this.toast('Annotation rotation: ' + this.studioAnnotateExtraRot + '°', 'info');
-        },
-
         // ---- STUDIO (FILES image viewer) annotation -------------------
         // Solve the file currently open in the OpenSeadragon viewer and overlay
         // DSO labels as OSD overlays (so they track zoom/pan). Toggling off
-        // clears them. Use cycleAnnotateRotation() to fix a 90° convention
-        // mismatch live.
+        // clears them.
         async studioAnnotateToggle() {
             if (this.studioAnnotate.active) {
                 this.studioAnnotate.active = false;

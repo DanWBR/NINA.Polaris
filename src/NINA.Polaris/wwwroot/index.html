@@ -882,8 +882,6 @@
                                 title="Annotate — plate-solve and label DSOs in the frame">
                             <svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:middle"><circle cx="8" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 13 L20 4 M15 4 h5 v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </button>
-                        <button x-show="annotate.active" @click="cycleAnnotateRotation()"
-                                :title="'Rotate annotations 90° (now ' + annotateExtraRot + '°)'">⟳ <span x-text="annotateExtraRot + '°'"></span></button>
                     </div>
                     <div class="preview-overlay" x-show="!liveActive">
                         <p x-text="selectedCamera ? 'Ready - ' + selectedCamera : 'No camera connected'"></p>
@@ -2794,8 +2792,6 @@
                                 title="Annotate — plate-solve and label DSOs in the frame">
                             <svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:middle"><circle cx="8" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 13 L20 4 M15 4 h5 v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </button>
-                        <button x-show="annotate.active" @click="cycleAnnotateRotation()"
-                                :title="'Rotate annotations 90° (now ' + annotateExtraRot + '°)'">⟳ <span x-text="annotateExtraRot + '°'"></span></button>
                     </div>
                     <div class="preview-overlay" x-show="!preview.lastSnapAt">
                         <p x-text="selectedCamera
@@ -15175,13 +15171,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <span x-show="!studioAnnotate.busy">✦ Annotate</span>
                     <span x-show="studioAnnotate.busy" x-cloak>Solving…</span>
                 </button>
-                <!-- Rotate the annotation positions in 90° steps to reconcile a
-                     solver rotation-convention mismatch. -->
-                <button class="btn btn-sm"
-                        x-show="imageViewerPath && studioAnnotate.active"
-                        x-cloak
-                        @click="cycleStudioAnnotateRotation()"
-                        :title="'Rotate annotations 90° (now ' + studioAnnotateExtraRot + '°)'">⟳ <span x-text="studioAnnotateExtraRot + '°'"></span></button>
                 <button class="btn btn-sm" @click="reloadImageViewer()" title="Reload">↻</button>
                 <button class="btn btn-sm btn-danger" @click="closeImageViewer()">✕</button>
             </div>
@@ -16211,7 +16200,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260626-chipnav2"></script>
+    <script src="/js/app.js?v=20260626-noannrot"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
