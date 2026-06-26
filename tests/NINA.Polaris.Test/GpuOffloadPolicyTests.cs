@@ -77,6 +77,51 @@ public class GpuOffloadPolicyTests {
     }
 
     [Test]
+    public void FromProbe_unified_memory_Adreno_gates_out_losing_ops() {
+        // Mirrors the measured Radxa Dragon Q6A / Adreno 643 numbers: the OpenCL
+        // device reports unified memory, yet warp (0.69x) and debayer (0.34x) are
+        // SLOWER than the CPU because the Qualcomm stack copies host<->device for
+        // ordinary buffers. Only blur (2.56x) wins. The probe must therefore gate
+        // out warp/debayer even on a unified-memory device — "unified ⇒ everything
+        // wins" is false here. The unified flag is recorded for diagnostics but the
+        // gating is purely by measured speedup.
+        var speedups = new Dictionary<GpuOp, double> {
+            [GpuOp.Warp] = 0.69,
+            [GpuOp.Debayer] = 0.34,
+            [GpuOp.SeparableBlur] = 2.56,
+            [GpuOp.ApplyLut8] = 0.8,
+            [GpuOp.Accumulate] = 0.9,
+        };
+        var p = GpuOffloadPolicy.FromProbe(speedups, unifiedMemory: true);
+
+        Assert.That(p.Probed, Is.True);
+        Assert.That(p.UnifiedMemory, Is.True, "the unified flag is carried for diagnostics");
+        Assert.That(p.Allows(GpuOp.Warp), Is.False);
+        Assert.That(p.Allows(GpuOp.Debayer), Is.False);
+        Assert.That(p.Allows(GpuOp.ApplyLut8), Is.False);
+        Assert.That(p.Allows(GpuOp.Accumulate), Is.False);
+        Assert.That(p.Allows(GpuOp.SeparableBlur), Is.True);
+        Assert.That(p.Allows(GpuOp.BoxBlur8), Is.True);
+        Assert.That(p.AllowedOps, Is.EquivalentTo(new[] { GpuOp.SeparableBlur, GpuOp.BoxBlur8 }));
+    }
+
+    [Test]
+    public void FromProbe_unified_memory_Mali_keeps_everything() {
+        // The Orange Pi 5 Pro / Mali-G610 measured every op as a win, so probing a
+        // unified-memory device there is identical to the old full-offload path.
+        var speedups = new Dictionary<GpuOp, double> {
+            [GpuOp.Warp] = 3.41,
+            [GpuOp.Debayer] = 1.19,
+            [GpuOp.SeparableBlur] = 12.95,
+            [GpuOp.ApplyLut8] = 1.4,
+            [GpuOp.Accumulate] = 1.8,
+        };
+        var p = GpuOffloadPolicy.FromProbe(speedups, unifiedMemory: true);
+        foreach (var op in AllOps)
+            Assert.That(p.Allows(op), Is.True, $"{op} should still offload on Mali (it won)");
+    }
+
+    [Test]
     public void FromProbe_when_everything_wins_offloads_everything() {
         var speedups = new Dictionary<GpuOp, double> {
             [GpuOp.Warp] = 3.4,

@@ -127,25 +127,22 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
                 }
                 var src = LoadKernelSource();
                 _ctx = new OpenClContext(src);
-                // Decide the per-op offload policy. Unified-memory SBCs (the
-                // primary target) keep full offload unchanged; a discrete GPU is
-                // probed so only ops that actually beat the CPU get offloaded
-                // (the light kernels lose to a fast desktop CPU once the PCIe
-                // transfer is counted). _policy stays null across the probe so
-                // each kernel can run to be measured.
-                if (_ctx.HostUnifiedMemory) {
-                    _policy = GpuOffloadPolicy.AllowAll(unifiedMemory: true);
-                    _log.LogInformation(
-                        "OpenCL GPU backend ready: {Device} (unified memory, full offload)",
-                        _ctx.DeviceName);
-                } else {
-                    var policy = ProbeDiscretePolicy();
-                    _policy = policy;
-                    _log.LogInformation(
-                        "OpenCL GPU backend ready: {Device} (discrete GPU; offloading {Ops})",
-                        _ctx.DeviceName,
-                        policy.AllowedOps.Count > 0 ? string.Join(", ", policy.AllowedOps) : "nothing");
-                }
+                // Decide the per-op offload policy by probing each kernel
+                // GPU-vs-CPU on this exact device — for both discrete GPUs and
+                // unified-memory SBCs. "Unified memory ⇒ everything wins" is false
+                // on some stacks (e.g. Qualcomm Adreno copies host↔device for
+                // ordinary buffers, so warp/debayer lose while the same code wins
+                // on Mali), so only ops the probe measured as actually faster get
+                // offloaded; the rest run on the CPU. _policy stays null across the
+                // probe so each kernel can run to be measured.
+                var unified = _ctx.HostUnifiedMemory;
+                var policy = ProbeOffloadPolicy(unified);
+                _policy = policy;
+                _log.LogInformation(
+                    "OpenCL GPU backend ready: {Device} ({Mem} memory; offloading {Ops})",
+                    _ctx.DeviceName,
+                    unified ? "unified" : "discrete",
+                    policy.AllowedOps.Count > 0 ? string.Join(", ", policy.AllowedOps) : "nothing");
                 return _ctx;
             } catch (Exception ex) {
                 _initFailed = true;
@@ -166,7 +163,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
         return File.ReadAllText(path);
     }
 
-    // ─── discrete-GPU offload probe ───────────────────────────────────────
+    // ─── per-op offload probe ─────────────────────────────────────────────
 
     // One representative tile (1 MP). Big enough that the per-op transfer-vs-
     // compute balance resembles a real frame, small enough that the whole probe
@@ -178,12 +175,13 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
 
     /// <summary>
     /// Times each offloadable kernel GPU-vs-CPU once (best-of-N) and returns the
-    /// allow-list. Runs only on a discrete device, inside init, with
-    /// <see cref="_policy"/> still null so the gate lets every kernel execute.
-    /// BoxBlur8 isn't measured (the CPU backend declines it); the policy derives
-    /// it from the separable-blur result.
+    /// allow-list. Runs on both discrete and unified-memory devices, inside init,
+    /// with <see cref="_policy"/> still null so the gate lets every kernel
+    /// execute. BoxBlur8 isn't measured (the CPU backend declines it); the policy
+    /// derives it from the separable-blur result. <paramref name="unifiedMemory"/>
+    /// is recorded on the policy for diagnostics only — the gating is identical.
     /// </summary>
-    private GpuOffloadPolicy ProbeDiscretePolicy() {
+    private GpuOffloadPolicy ProbeOffloadPolicy(bool unifiedMemory) {
         const int w = ProbeDim, h = ProbeDim, n = w * h;
         var cpu = new CpuGpuCompute();
         var data = new ushort[n];
@@ -209,7 +207,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
                 () => { var a = new float[n]; var c = new int[n]; return TryAccumulate(data, a, c, n); },
                 () => { var a = new float[n]; var c = new int[n]; return cpu.TryAccumulate(data, a, c, n); }),
         };
-        return GpuOffloadPolicy.FromProbe(speedups);
+        return GpuOffloadPolicy.FromProbe(speedups, unifiedMemory: unifiedMemory);
     }
 
     /// <summary>GPU/CPU speedup (>1 means the GPU is faster) from the best (min)

@@ -385,8 +385,10 @@ public static class SystemEndpoints {
                 device = ocl.Device;
                 initError = ocl.InitError;
                 unifiedMemory = ocl.HostUnifiedMemory;
-                // On a discrete GPU some light kernels run on the CPU instead
-                // (auto-decided at init); expose which ops actually offload.
+                // Some kernels run on the CPU instead when the per-op probe at
+                // init measured the GPU as slower (true on a discrete GPU, and
+                // also on unified-memory stacks like Adreno that copy buffers);
+                // expose which ops actually offload.
                 offloadedOps = ocl.OffloadedOps.Select(o => o.ToString()).ToArray();
             }
             bool userEnabled = gpu is NINA.Polaris.Services.OpenCl.OpenClGpuCompute o2 ? o2.Enabled : false;
