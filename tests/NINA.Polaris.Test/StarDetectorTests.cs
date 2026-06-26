@@ -124,4 +124,62 @@ public class StarDetectorTests {
         // Detector must not throw and must return an empty list.
         Assert.That(stars, Is.Empty);
     }
+
+    // Paint a defocused-star DONUT: a bright annulus (ring) of given radius and
+    // thickness on a flat background, with a dim/empty centre — exactly the
+    // shape the HFR measurement used to misread as ~1.
+    private static void PaintDonut(ushort[] data, int width, int cx, int cy,
+                                   double radius, double thickness, ushort peak, ushort background) {
+        int r = (int)Math.Ceiling(radius + thickness);
+        for (int dy = -r; dy <= r; dy++) {
+            for (int dx = -r; dx <= r; dx++) {
+                double dist = Math.Sqrt(dx * dx + dy * dy);
+                if (Math.Abs(dist - radius) > thickness) continue; // ring only
+                int x = cx + dx, y = cy + dy;
+                int idx = y * width + x;
+                if (data[idx] < peak) data[idx] = peak;
+            }
+        }
+    }
+
+    [Test]
+    public void CurveOfGrowthHfr_DefocusedDonut_MeasuresLargeRadiusNotOne() {
+        // The core auto-focus failure: a big defocused donut. With the AF-tuned
+        // detector (8-connectivity + curve-of-growth over the bbox) the measured
+        // HFR must land near the ring radius (large), NOT collapse to ~1.
+        const int w = 256, h = 256;
+        var data = MakeFrame(w, h, background: 500);
+        PaintDonut(data, w, 128, 128, radius: 12, thickness: 1.5, peak: 25000, background: 500);
+
+        var af = new StarDetector {
+            EightConnected = true, CurveOfGrowthHfr = true,
+            MaxStarSize = 20000, MaxHfr = 200, MinStarSize = 5
+        };
+        var stars = af.Detect(data, w, h);
+
+        Assert.That(stars.Count, Is.GreaterThanOrEqualTo(1), "the donut should be detected as a star");
+        var hfr = stars[0].HFR;
+        Assert.That(hfr, Is.GreaterThan(8.0),
+            $"donut HFR should be near the ~12px ring radius, was {hfr:0.0}");
+        Assert.That(hfr, Is.LessThan(20.0), $"donut HFR should not blow up, was {hfr:0.0}");
+    }
+
+    [Test]
+    public void CurveOfGrowthHfr_InFocusStar_StaysSmall() {
+        // A tight in-focus star must still measure a small HFR under the same
+        // AF-tuned path (the fix must not inflate good stars).
+        const int w = 128, h = 128;
+        var data = MakeFrame(w, h, background: 500);
+        PaintStar(data, w, 64, 64, radius: 3, peak: 30000, background: 500);
+
+        var af = new StarDetector {
+            EightConnected = true, CurveOfGrowthHfr = true,
+            MaxStarSize = 20000, MaxHfr = 200
+        };
+        var stars = af.Detect(data, w, h);
+
+        Assert.That(stars.Count, Is.GreaterThanOrEqualTo(1));
+        Assert.That(stars[0].HFR, Is.LessThan(3.0),
+            $"in-focus star HFR should stay small, was {stars[0].HFR:0.0}");
+    }
 }

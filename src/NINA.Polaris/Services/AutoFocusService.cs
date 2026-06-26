@@ -555,8 +555,17 @@ public class AutoFocusService {
         // donut as a "star" (we don't care about precise photometry
         // here, only the HFR magnitude that drives the parabola fit).
         var detector = new StarDetector {
-            MaxStarSize = 2000,    // donut on 478 mm + ASI224 sensor ~ 50 px diameter ≈ 2000 px area
-            MaxHfr      = 100      // far-out-of-focus HFR can easily exceed the live default of 50
+            // A heavily-defocused star is a big faint DONUT. Two changes make it
+            // measurable instead of reading HFR~1:
+            //  - EightConnected: keep the faint ring a single blob (4-conn shatters
+            //    it into arcs that each measure ~1 px and the real ring is rejected).
+            //  - CurveOfGrowthHfr: measure the 50%-enclosed-flux radius over the
+            //    blob's padded bbox with local background subtracted (NINA-style),
+            //    so the donut's true (large) radius is reported.
+            EightConnected   = true,
+            CurveOfGrowthHfr = true,
+            MaxStarSize = 20000,   // a large donut ring covers many pixels; don't size-reject it
+            MaxHfr      = 200      // far-out-of-focus HFR can far exceed the live default of 50
         };
         var stars = detector.Detect(image.Data, image.Properties.Width, image.Properties.Height);
 

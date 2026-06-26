@@ -47,6 +47,23 @@ public class StarDetector {
     /// the original guard. Exposed for symmetry with MaxHfr.</summary>
     public double MinHfr { get; set; } = 0.5;
 
+    /// <summary>Use 8-connectivity (include diagonals) in the flood fill.
+    /// Defaults off (4-connectivity) for the live-tracking / alignment case.
+    /// Auto-focus turns this on: a heavily-defocused star is a faint DONUT ring
+    /// whose pixels connect mostly diagonally — 4-connectivity shatters it into
+    /// arcs that each measure HFR≈1 (and the real ring blob is size-rejected),
+    /// which is exactly the "big defocused star reads HFR~1" failure. 8-conn
+    /// keeps the ring a single blob so its true (large) radius is measured.</summary>
+    public bool EightConnected { get; set; } = false;
+
+    /// <summary>Measure HFR with the curve-of-growth half-flux radius over the
+    /// blob's (padded) bounding box with a local background subtracted, instead
+    /// of the flux-weighted mean distance over only the above-threshold pixels.
+    /// This mirrors NINA's measurement and is robust for defocused donuts (the
+    /// enclosed-flux-50% radius lands on the ring → a correctly large HFR).
+    /// Auto-focus turns this on; other callers keep the cheaper first-moment.</summary>
+    public bool CurveOfGrowthHfr { get; set; } = false;
+
     public List<DetectedStar> Detect(ushort[] data, int width, int height) {
         var stats = ComputeStats(data);
         double threshold = stats.median + SigmaThreshold * stats.mad * 1.4826;
@@ -75,7 +92,9 @@ public class StarDetector {
                 var pixels = FloodFill(data, width, height, x, y, threshold, visited);
                 if (pixels.Count < MinStarSize || pixels.Count > MaxStarSize) continue;
 
-                var star = ComputeStarProperties(data, width, pixels);
+                var star = CurveOfGrowthHfr
+                    ? ComputeStarPropertiesCurveOfGrowth(data, width, height, pixels)
+                    : ComputeStarProperties(data, width, pixels);
                 if (star.HFR > MinHfr && star.HFR < MaxHfr)
                     stars.Add(star);
             }
@@ -108,6 +127,12 @@ public class StarDetector {
             stack.Push((px - 1, py));
             stack.Push((px, py + 1));
             stack.Push((px, py - 1));
+            if (EightConnected) {
+                stack.Push((px + 1, py + 1));
+                stack.Push((px - 1, py + 1));
+                stack.Push((px + 1, py - 1));
+                stack.Push((px - 1, py - 1));
+            }
         }
 
         return result;
@@ -178,6 +203,117 @@ public class StarDetector {
             Eccentricity = ecc,
             OrientationRad = orient
         };
+    }
+
+    /// <summary>
+    /// HFR via curve-of-growth (NINA-style), robust for defocused donuts.
+    /// Measures over the blob's bounding box padded by a background margin, with
+    /// a local background estimated from the box border ring subtracted, and
+    /// returns the radius at which the enclosed background-subtracted flux first
+    /// reaches 50% of the total. For a donut the flux sits in the ring, so the
+    /// 50%-enclosed radius lands near the ring radius — a correctly large HFR —
+    /// instead of the ~1 that the above-threshold first-moment yields on the
+    /// shattered arcs.
+    /// </summary>
+    private DetectedStar ComputeStarPropertiesCurveOfGrowth(
+            ushort[] data, int width, int height, List<(int x, int y)> pixels) {
+        int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
+        foreach (var (x, y) in pixels) {
+            if (x < minX) minX = x; if (x > maxX) maxX = x;
+            if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+        int bw = maxX - minX + 1, bh = maxY - minY + 1;
+        // Pad so a background margin surrounds the blob (the ring's hole + faint
+        // wings are already inside the bbox; the pad provides the border ring we
+        // estimate local background from). ~30% of the larger extent, min 3 px.
+        int pad = Math.Max(3, (int)Math.Ceiling(0.3 * Math.Max(bw, bh)));
+        int x0 = Math.Max(0, minX - pad), x1 = Math.Min(width - 1, maxX + pad);
+        int y0 = Math.Max(0, minY - pad), y1 = Math.Min(height - 1, maxY + pad);
+
+        // Local background = median of the padded box's border ring (the star
+        // sits in the interior, so the border samples sky).
+        double background = EstimateBorderBackground(data, width, x0, y0, x1, y1);
+
+        // Flux-weighted centroid over the box (background-subtracted, clamp >=0).
+        double sumX = 0, sumY = 0, sumFlux = 0, peak = 0;
+        for (int y = y0; y <= y1; y++) {
+            int row = y * width;
+            for (int x = x0; x <= x1; x++) {
+                double raw = data[row + x];
+                if (raw > peak) peak = raw;
+                double f = raw - background;
+                if (f <= 0) continue;
+                sumX += x * f; sumY += y * f; sumFlux += f;
+            }
+        }
+        if (sumFlux <= 0) {
+            return new DetectedStar {
+                X = (minX + maxX) / 2.0, Y = (minY + maxY) / 2.0,
+                HFR = 0, Peak = peak, Flux = 0, PixelCount = pixels.Count
+            };
+        }
+        double cx = sumX / sumFlux, cy = sumY / sumFlux;
+
+        // Curve-of-growth: collect (distance, flux) for positive-flux pixels,
+        // plus flux-weighted second moments for eccentricity, in one pass.
+        var samples = new List<(double dist, double flux)>();
+        double total = 0, mxx = 0, myy = 0, mxy = 0;
+        for (int y = y0; y <= y1; y++) {
+            int row = y * width;
+            for (int x = x0; x <= x1; x++) {
+                double f = data[row + x] - background;
+                if (f <= 0) continue;
+                double dx = x - cx, dy = y - cy;
+                samples.Add((Math.Sqrt(dx * dx + dy * dy), f));
+                total += f;
+                mxx += f * dx * dx; myy += f * dy * dy; mxy += f * dx * dy;
+            }
+        }
+        double hfr = HalfFluxRadius(samples, total);
+
+        double ecc = 0, orient = 0;
+        if (total > 0) {
+            mxx /= total; myy /= total; mxy /= total;
+            double trace = mxx + myy, diff = mxx - myy;
+            double disc = Math.Sqrt(Math.Max(0, diff * diff + 4 * mxy * mxy));
+            double l1 = (trace + disc) / 2, l2 = (trace - disc) / 2;
+            if (l1 > 0 && l2 >= 0) ecc = Math.Sqrt(Math.Max(0, 1 - l2 / l1));
+            orient = 0.5 * Math.Atan2(2 * mxy, diff);
+        }
+
+        return new DetectedStar {
+            X = cx, Y = cy, HFR = hfr, Peak = peak, Flux = total,
+            PixelCount = pixels.Count, Eccentricity = ecc, OrientationRad = orient
+        };
+    }
+
+    /// <summary>Median of the 1-px border ring of the box [x0,y0]-[x1,y1] (a
+    /// robust local-sky estimate; the star is in the interior).</summary>
+    private static double EstimateBorderBackground(ushort[] data, int width,
+            int x0, int y0, int x1, int y1) {
+        var border = new List<ushort>();
+        for (int x = x0; x <= x1; x++) { border.Add(data[y0 * width + x]); border.Add(data[y1 * width + x]); }
+        for (int y = y0 + 1; y < y1; y++) { border.Add(data[y * width + x0]); border.Add(data[y * width + x1]); }
+        if (border.Count == 0) return 0;
+        border.Sort();
+        return border[border.Count / 2];
+    }
+
+    /// <summary>Radius enclosing 50% of the total background-subtracted flux,
+    /// linearly interpolated between the bracketing radial samples.</summary>
+    private static double HalfFluxRadius(List<(double dist, double flux)> samples, double total) {
+        if (samples.Count == 0 || total <= 0) return 0;
+        samples.Sort((a, b) => a.dist.CompareTo(b.dist));
+        double target = total / 2.0;
+        double cum = 0, prevCum = 0, prevDist = 0;
+        foreach (var s in samples) {
+            cum += s.flux;
+            if (cum < target) { prevCum = cum; prevDist = s.dist; continue; }
+            if (cum <= prevCum || s.dist <= prevDist) return s.dist;
+            double frac = (target - prevCum) / (cum - prevCum);
+            return prevDist + frac * (s.dist - prevDist);
+        }
+        return samples[samples.Count - 1].dist;
     }
 
     private static (double median, double mad) ComputeStats(ushort[] data) {
