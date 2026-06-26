@@ -123,10 +123,16 @@ inference primitive changes.
   Hexagon reachable (V68) on the Radxa OS image; QAIRT 2.45 libs extracted from
   the qcom-ppa .debs; unsigned PD is the exec path (see STATUS above).
   `scripts/qnn-probe.sh` is the read-only probe deliverable. **MEASURED 2026-06-26:
-  Hexagon V68 int8 denoise ≈ 7.3 ms/tile (~130 tiles/s) on a 256×256×3 tile —
-  ~12× the RK3588 NPU (91 ms fp16), tens of× the CPU.** Run via an AI Hub-built
-  int8 context binary (targets the QCS6490, loads on the device's native QAIRT 2.45
-  runtime) + `qnn-net-run --retrieve_context ... --config_file <unsigned-pd>`. NOTE:
+  Hexagon V68 denoise (256×256×3) ≈ 7.3 ms/tile (~130 tiles/s) at INT8.** Caveat:
+  this is int8, NOT a fair head-to-head with the fp16 RK3588 (91 ms) or fp32 CPU
+  baselines — int8 trades precision for speed, so it's the speed CEILING, not a
+  precision-matched comparison. What's proven: the Hexagon executes GraXpert
+  denoise (the gate). The precision-fair fp16 number (GraXpert's production
+  precision; int8 risks denoise quality) is still TO MEASURE — the local fp16 .bin
+  exists but needs a version-matched (2.45) build to load; rough estimate ~2× int8
+  (~15 ms, unmeasured). Run via an AI Hub-built int8 context binary (targets the
+  QCS6490, loads on the device's native QAIRT 2.45 runtime) +
+  `qnn-net-run --retrieve_context ... --config_file <unsigned-pd>`. NOTE:
   the public x86 SDK is 2.31 and does NOT interop with the device's 2.45 runtime
   (.bin/.dlc/libs all version-locked) — so device-matched binaries come from AI Hub
   OR a matched 2.45 SDK; the Services/Qnn build will BUNDLE the QAIRT 2.45 aarch64
