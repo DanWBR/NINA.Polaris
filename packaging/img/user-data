@@ -1,0 +1,41 @@
+#cloud-config
+# =============================================================================
+# Ubuntu autoinstall (subiquity) config for the Polaris x64 bare-metal image.
+#
+# This is a TEMPLATE. build-img.sh fills the @@...@@ placeholders and drops the
+# rendered copy into the NoCloud seed it feeds to QEMU:
+#
+#   @@PWHASH@@        SHA-512 crypt hash of the polaris password
+#   @@USERNAME@@      default login user
+#   @@HOSTNAME@@      system hostname
+#   @@PROVISION_B64@@ base64 of provision.sh (decoded + run in-target)
+#
+# The subiquity installer handles partitioning + ESP + GRUB (so the image boots
+# on real UEFI mini PCs), then late-commands hand off to provision.sh for the
+# Polaris-specific software stack.
+# =============================================================================
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  # Don't let the installer self-update; keeps the build deterministic + faster.
+  refresh-installer:
+    update: no
+  ssh:
+    install-server: true
+    allow-pw: true
+  identity:
+    realname: Polaris
+    hostname: "@@HOSTNAME@@"
+    username: "@@USERNAME@@"
+    password: "@@PWHASH@@"
+  storage:
+    # Whole-disk layout; on a UEFI target subiquity creates the ESP for us.
+    layout:
+      name: direct
+  # Power off (not reboot) when done so QEMU exits cleanly with -no-reboot.
+  shutdown: poweroff
+  late-commands:
+    - "echo @@PROVISION_B64@@ | base64 -d > /target/root/provision.sh"
+    - "curtin in-target --target=/target -- bash /root/provision.sh"

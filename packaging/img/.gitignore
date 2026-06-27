@@ -1,0 +1,6 @@
+# Build artifacts - never commit these (multi-GB)
+*.iso
+*.img
+*.part
+*.fd
+OVMF_VARS.fd
