@@ -1501,7 +1501,11 @@
     white-space: nowrap;
     font-size: 11px;
     line-height: 1.2;
-    max-width: 260px;
+    /* No fixed max-width: the pill shrink-wraps its content. The label
+       child is capped + ellipsised (140px) so the whole pill stays
+       bounded; a hard cap here clipped the trailing "x MB / y MB" past
+       the rounded right edge when label + bar + bytes exceeded it. */
+    max-width: none;
     /* Same as .activity-chip: don't let the flex row shrink the pill
        below its nowrap text (which spills past the right edge). */
     flex: 0 0 auto;

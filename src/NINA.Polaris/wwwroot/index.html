@@ -14206,10 +14206,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                          && graxpert.modalOp !== 'deconvolution'">
                 <label class="checkbox-label">
                     <input type="checkbox" x-model="graxpert.modalUseNpu">
-                    ⚡ Use NPU (Rockchip RK3588)
+                    ⚡ Use NPU (<span x-text="npuName()"></span>)
                 </label>
                 <p class="hint" style="margin-top:4px">
-                    Runs BGE / Denoise on the board's NPU (~5x faster than the CPU
+                    Runs BGE / Denoise on the board's NPU (much faster than the CPU
                     and frees the cores for stacking). Uncheck to use the GraXpert
                     CLI on the CPU instead.
                 </p>
@@ -16213,7 +16213,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260627-dragonicon"></script>
+    <script src="/js/app.js?v=20260627-npuname"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

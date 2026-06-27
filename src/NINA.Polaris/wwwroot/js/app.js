@@ -28592,6 +28592,24 @@ function ninaApp() {
             return (this.host && this.host.device && this.host.device.shortLabel) || '';
         },
 
+        // Short name of the host NPU for the GraXpert "Use NPU" toggle.
+        // Derived from the server's npuDiagnostics (authoritative — it's the
+        // lane that's actually loaded: Qualcomm Hexagon via QAIRT, or Rockchip
+        // RKNPU2), falling back to the board kind, then a generic label. Keeps
+        // the toggle honest instead of hardcoding "Rockchip RK3588".
+        npuName() {
+            const d = (this.graxpert && this.graxpert.status
+                       && this.graxpert.status.npuDiagnostics || '').toLowerCase();
+            if (d.includes('hexagon') || d.includes('qairt') || d.includes('qualcomm'))
+                return 'Qualcomm Hexagon';
+            if (d.includes('rk3588') || d.includes('rknpu') || d.includes('rockchip'))
+                return 'Rockchip RK3588';
+            const k = (this.host && this.host.device && this.host.device.kind) || '';
+            if (k === 'radxa-dragon') return 'Qualcomm Hexagon';
+            if (k === 'rockpi' || k === 'orangepi') return 'Rockchip RK3588';
+            return 'NPU';
+        },
+
         // --- SIM-6: built-in equipment simulator ---
 
         // Hydrate the persisted settings (autoStart, devices, port)
