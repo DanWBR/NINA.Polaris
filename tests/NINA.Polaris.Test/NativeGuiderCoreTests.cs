@@ -655,4 +655,47 @@ public class NativeGuiderCoreTests {
         Assert.That(proc.Result.BacklashMs,
             Is.EqualTo(slackSteps * (double)pulseMs).Within(2.0 * pulseMs));
     }
+
+    // ---- ZFilter algorithm (PHD2 port) ----
+
+    [Test]
+    public void ZFilter_Factory_CreatesZFilter() {
+        var a = GuideAlgorithmFactory.Create("zfilter", minMove: 0.1, aggression: 0.7,
+                                             hysteresis: 0.1, zfilterExpFactor: 2.0);
+        Assert.That(a, Is.TypeOf<ZFilterAlgorithm>());
+        Assert.That(a.Name, Is.EqualTo("zfilter"));
+    }
+
+    [Test]
+    public void ZFilter_BelowMinMove_IsZero() {
+        // A tiny input on the first call must be gated by minMove.
+        var a = new ZFilterAlgorithm(expFactor: 2.0, minMove: 0.5);
+        Assert.That(a.Result(0.05), Is.EqualTo(0.0));
+    }
+
+    [Test]
+    public void ZFilter_Reset_IsDeterministic() {
+        var a = new ZFilterAlgorithm(expFactor: 2.0, minMove: 0.0);
+        double first = a.Result(1.0);
+        a.Result(1.0); a.Result(1.0);
+        a.Reset();
+        Assert.That(a.Result(1.0), Is.EqualTo(first).Within(1e-12),
+            "after Reset the filter state is cleared, so the first output repeats");
+    }
+
+    [Test]
+    public void ZFilter_ClosedLoop_DrivesResidualToZero() {
+        // Simulate the guiding loop: a true offset of 1px, each issued correction
+        // reduces the next measured residual (input = trueError − totalCorrection).
+        // The low-pass must converge: residual → 0 and the corrections sum → 1px.
+        var a = new ZFilterAlgorithm(expFactor: 2.0, minMove: 0.0);
+        const double trueError = 1.0;
+        double sumCorr = 0.0, input = trueError;
+        for (int i = 0; i < 200; i++) {
+            input = trueError - sumCorr;
+            sumCorr += a.Result(input);
+        }
+        Assert.That(input, Is.EqualTo(0.0).Within(0.02), "residual driven to ~0");
+        Assert.That(sumCorr, Is.EqualTo(trueError).Within(0.02), "corrections sum to the offset");
+    }
 }

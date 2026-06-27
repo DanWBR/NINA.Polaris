@@ -165,7 +165,8 @@ public static class GuideAlgorithmFactory {
                                          double aggression, double hysteresis,
                                          double wormPeriodSec = 0.0,
                                          int predictiveWindow = 256,
-                                         double predictiveBlend = 0.7) {
+                                         double predictiveBlend = 0.7,
+                                         double zfilterExpFactor = 2.0) {
         return (name ?? "").Trim().ToLowerInvariant() switch {
             "hysteresis"  => new HysteresisAlgorithm(hysteresis, aggression, minMove),
             "resistswitch" => new ResistSwitchAlgorithm(minMove, aggression),
@@ -173,6 +174,7 @@ public static class GuideAlgorithmFactory {
             "lowpass2"    => new Lowpass2Algorithm(minMove, Math.Clamp(aggression * 100.0, 1.0, 100.0)),
             "predictive"  => new PredictiveAlgorithm(minMove, aggression, hysteresis,
                                                      wormPeriodSec, predictiveWindow, predictiveBlend),
+            "zfilter"     => new ZFilterAlgorithm(zfilterExpFactor, minMove),
             "identity"    => new IdentityAlgorithm(),
             _             => new IdentityAlgorithm(),
         };

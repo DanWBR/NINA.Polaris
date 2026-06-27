@@ -1046,6 +1046,7 @@ function ninaApp() {
             { id: 'resistswitch', name: 'Resist Switch' },
             { id: 'lowpass', name: 'Lowpass' },
             { id: 'lowpass2', name: 'Lowpass2' },
+            { id: 'zfilter', name: 'ZFilter' },
             { id: 'predictive', name: 'Predictive (PE + drift)' },
             { id: 'identity', name: 'Identity' },
         ],
