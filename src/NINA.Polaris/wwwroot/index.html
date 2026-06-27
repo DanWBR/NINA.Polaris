@@ -14213,6 +14213,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     and frees the cores for stacking). Uncheck to use the GraXpert
                     CLI on the CPU instead.
                 </p>
+                <p class="hint" style="margin-top:4px; color: var(--accent-warn, #f59e0b)"
+                   x-show="graxpert.modalOp === 'denoising' && graxpert.modalUseNpu">
+                    ⚠ Denoise on the NPU runs a quantized model, so the result may be
+                    slightly lower quality than the CPU/browser path (e.g. faint star
+                    artifacts) due to NPU hardware limits. For a final master, uncheck
+                    this to denoise on the CPU/browser (fp16).
+                </p>
             </div>
             <!-- Browser-mode progress (separate from the CLI progress
                  block lower down, that one polls the server job, this
