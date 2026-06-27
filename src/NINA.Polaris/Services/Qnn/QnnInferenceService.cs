@@ -106,6 +106,7 @@ public sealed class QnnInferenceService {
 
         // One NPU batch for the whole image.
         var outs = batch.RunBatch(rec.Inputs);
+        rec.Inputs.Clear();   // recorded inputs are done; free them before replay
         int tiles = outs.Length;
 
         // Pass 2: replay the outputs through the same pipeline for the real result.
@@ -155,6 +156,7 @@ public sealed class QnnInferenceService {
             var rec = new RecordingTileRunner(Tile, ModelChannels);
             RknnPipelines.RunStarRemoval(rec, cur, w, h, channels, passes: 1);
             var outs = batch.RunBatch(rec.Inputs);
+            rec.Inputs.Clear();   // free this pass's recorded inputs before replay
             totalTiles += outs.Length;
             var rep = new ReplayingTileRunner(Tile, ModelChannels, outs);
             (cur, _) = RknnPipelines.RunStarRemoval(rep, cur, w, h, channels, passes: 1);

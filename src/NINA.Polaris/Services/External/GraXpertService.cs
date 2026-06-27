@@ -150,7 +150,7 @@ public class GraXpertService {
         // through to the GraXpert CLI path below.
         if (_rknn != null && _rknn.IsAvailable && opts.UseNpu && IsFitsPath(inputPath)) {
             var npu = TryRunRknn(inputPath, opts, ct, onLog);
-            if (npu != null) return npu;
+            if (npu != null) { ReleaseLargeHeap(); return npu; }
         }
 
         // Same fast path on a Qualcomm Hexagon (QCS6490 / Q6A). Mutually
@@ -158,7 +158,7 @@ public class GraXpertService {
         // through to the GraXpert CLI below.
         if (_qnn != null && _qnn.IsAvailable && opts.UseNpu && IsFitsPath(inputPath)) {
             var npu = TryRunQnn(inputPath, opts, ct, onLog);
-            if (npu != null) return npu;
+            if (npu != null) { ReleaseLargeHeap(); return npu; }
         }
 
         if (!IsAvailable)
@@ -408,6 +408,22 @@ public class GraXpertService {
             onLog?.Invoke($"[NPU] failed ({ex.Message}); falling back to GraXpert CLI");
             return null;
         }
+    }
+
+    /// <summary>
+    /// After a big NPU inference, return the freed memory to the OS. A denoise
+    /// over a full frame allocates hundreds of MB of fp32 tile buffers on the
+    /// Large Object Heap (LOH); .NET keeps the LOH resident by default, so RSS
+    /// stays high after the run (looks like a leak on a memory-tight SBC). A
+    /// one-shot LOH compaction + blocking gen2 collect releases it. Called once
+    /// per file op (the op is seconds long, so a ~tens-of-ms GC is negligible).
+    /// </summary>
+    private static void ReleaseLargeHeap() {
+        try {
+            System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+                System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
+        } catch { /* best-effort memory hygiene; never fail the op over a GC */ }
     }
 
     /// <summary>
