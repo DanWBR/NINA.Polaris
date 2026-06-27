@@ -18,11 +18,13 @@ import torch.nn as nn
 
 
 def conv_block(cin: int, cout: int) -> nn.Sequential:
+    # reflect padding avoids the bright "frame" artifact that zero-padding
+    # produces at tile edges (the conv sees a hard 0 border otherwise).
     return nn.Sequential(
-        nn.Conv2d(cin, cout, 3, padding=1, bias=False),
+        nn.Conv2d(cin, cout, 3, padding=1, padding_mode="reflect", bias=False),
         nn.BatchNorm2d(cout),
         nn.ReLU(inplace=True),
-        nn.Conv2d(cout, cout, 3, padding=1, bias=False),
+        nn.Conv2d(cout, cout, 3, padding=1, padding_mode="reflect", bias=False),
         nn.BatchNorm2d(cout),
         nn.ReLU(inplace=True),
     )

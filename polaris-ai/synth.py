@@ -11,13 +11,19 @@ from __future__ import annotations
 import numpy as np
 from scipy.signal import fftconvolve
 
-from psf import moffat_kernel
+from psf import gaussian_kernel, moffat_kernel, FWHM_TO_SIGMA
 
 # FWHM range (pixels) the model is trained to undo. The condition channel is the
 # FWHM scaled by 1/SIGMA_NORM so it lands in a friendly ~[0,1] range for quant.
 FWHM_MIN = 1.5
 FWHM_MAX = 6.0
 SIGMA_NORM = FWHM_MAX  # condition = fwhm / SIGMA_NORM  -> ~[0.25, 1.0]
+
+# The model restores to a small REFERENCE PSF, not to a literal point source.
+# Asking it to recover a 1-px delta from a blurred blob is ill-posed (pure
+# super-resolution) and makes it hallucinate ringy, fractured stars. A modest
+# diffraction-limited target (~1.3 px FWHM) is a well-posed, stable goal.
+TARGET_FWHM = 1.3
 
 
 def degrade(
@@ -68,11 +74,15 @@ def make_pair(
       y : [1, H, W] float32 -- sharp target
       c : float             -- the normalised condition (for logging)
     """
-    fwhm = sample_fwhm(rng)
+    fwhm = sample_fwhm(rng)                     # seeing of the INPUT (>= 1.5 px)
     beta = float(rng.uniform(*beta_range))
     deg = degrade(sharp, fwhm, beta=beta, rng=rng)
+    # TARGET = the same scene at the small reference PSF (clean, no noise). This
+    # is what makes the restoration well-posed: input(seeing) -> target(ref).
+    ref = gaussian_kernel(TARGET_FWHM * FWHM_TO_SIGMA)
+    target = np.clip(fftconvolve(sharp, ref, mode="same"), 0.0, 1.0).astype(np.float32)
     c = condition_value(fwhm)
     cond = np.full_like(sharp, c, dtype=np.float32)
     x = np.stack([deg, cond], axis=0)          # [2, H, W]
-    y = sharp[None, :, :].astype(np.float32)   # [1, H, W]
+    y = target[None, :, :]                     # [1, H, W]
     return x, y, c
