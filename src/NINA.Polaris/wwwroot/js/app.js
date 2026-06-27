@@ -28577,6 +28577,7 @@ function ninaApp() {
                 case 'raspberry-pi': return '🍓';
                 case 'jetson':       return '🧠';
                 case 'orangepi':     return '🍊';
+                case 'radxa-dragon': return '🐉';
                 case 'rockpi':
                 case 'odroid':
                 case 'mini-pc':      return '🖥️';
