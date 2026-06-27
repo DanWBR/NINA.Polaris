@@ -127,10 +127,13 @@ inference primitive changes.
   this is int8, NOT a fair head-to-head with the fp16 RK3588 (91 ms) or fp32 CPU
   baselines — int8 trades precision for speed, so it's the speed CEILING, not a
   precision-matched comparison. What's proven: the Hexagon executes GraXpert
-  denoise (the gate). The precision-fair fp16 number (GraXpert's production
-  precision; int8 risks denoise quality) is still TO MEASURE — the local fp16 .bin
-  exists but needs a version-matched (2.45) build to load; rough estimate ~2× int8
-  (~15 ms, unmeasured). Run via an AI Hub-built int8 context binary (targets the
+  denoise (the gate). **UPDATE 2026-06-27 — fp16 is IMPOSSIBLE on this NPU.** Per
+  the Qualcomm AI Hub device matrix the QCS6490 **HTP is integer-only: INT8 + INT16,
+  NO FP16** (fp16 on this chip runs on the GPU/CPU, not the Hexagon). So the
+  precision-fair NPU comparison is **int16 (w8a16, ~fp16 quality)**, MEASURED at
+  **≈ 29.5 ms/tile** ((15.101−0.394)/499) — ~4× int8 but ~152× the CPU fp32 4488 ms,
+  at near-fp16 quality. → **int16 is the production NPU path**, int8 is the "turbo"
+  option. Run via an AI Hub-built context binary (targets the
   QCS6490, loads on the device's native QAIRT 2.45 runtime) +
   `qnn-net-run --retrieve_context ... --config_file <unsigned-pd>`. NOTE:
   the public x86 SDK is 2.31 and does NOT interop with the device's 2.45 runtime
@@ -150,10 +153,15 @@ inference primitive changes.
 - **QNN-3 — DONE (commit 9e13d904):** wired into `GraXpertService` (`NpuAvailable`
   OR'd, `TryRunQnn` parallel to `TryRunRknn`, mutually exclusive by hardware) +
   DI. Status flows through the existing `/api/graxpert/status` NpuAvailable.
-- **QNN-4:** model prep — fp16 context binary via the version-matched QAIRT 2.45
-  SDK (the AI Hub path only emits int8 for this device); convert bge + denoise
-  v2/v3, place at `qnn/{family}-ai-models/{ver}/*v68*.bin` (convention set,
-  .gitignored). Also: measure the precision-fair fp16 ms/tile here.
+- **QNN-4 — DONE 2026-06-27 (model prep proven on Q6A):** the QCS6490 HTP is
+  int8/int16-only (no fp16 — hardware limit), so production models are **int16
+  (w8a16)** via AI Hub (compile→onnx, quantize weights=INT8/activations=INT16,
+  compile→qnn_context_binary --quantize_io). denoise_v68_int16.bin built + run on
+  the device = 29.5 ms/tile. `QnnInferenceService.QnnBinaryFor` now prefers
+  fp16→int16→int8 (commit c2d9017a), so int16 `.bin` is picked automatically;
+  fp16 tier kept for future fp16-capable SoCs. Still TODO under QNN-5: build the
+  bge + denoise-v2 int16 binaries and drop them at
+  `qnn/{family}-ai-models/{ver}/*v68_int16*.bin` (convention set, .gitignored).
 - **QNN-5:** packaging — BUNDLE the QAIRT 2.45 aarch64 runtime (libQnnHtp.so +
   V68 skel + qnn-net-run) into the arm64 .deb at POLARIS_QAIRT_ROOT (like
   librknnrt.so), license/attribution, Benchmark NPU column, docs, on-device
