@@ -265,6 +265,41 @@
     flex: 0 0 var(--autorun-list-w, 300px);
     min-width: 0;
 }
+/* AUTORUN Sequence controls order (flex-column children reordered without
+   moving the HTML): run control on top, then +Add/Reset, the estimate, the
+   saved sets, and finally the collapsible Advanced settings (meridian flip /
+   dithering / end events). */
+.autorun-pane > .autorun-list-col > .autorun-run-bar    { order: 1; margin-top: 0; }
+.autorun-pane > .autorun-list-col > .control-row.actions { order: 2; margin-top: 8px !important; }
+.autorun-pane > .autorun-list-col > .seq-estimate       { order: 3; }
+.autorun-pane > .autorun-list-col > .seq-sets           { order: 4; }
+.autorun-pane > .autorun-list-col > .autorun-advanced   { order: 5; margin-top: 10px; }
+
+/* Advanced-settings disclosure: a full-width toggle that reveals the
+   meridian-flip / dither / end-events tab strip. */
+.autorun-adv-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--bg-elevated, rgba(255,255,255,0.04));
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+}
+.autorun-adv-toggle:hover { color: var(--text-primary); border-color: var(--accent); }
+.autorun-adv-toggle.open { border-color: var(--accent); color: var(--text-primary); }
+.autorun-adv-sub {
+    margin-left: auto;
+    font-weight: 400;
+    font-size: 11px;
+    color: var(--text-muted, var(--text-secondary));
+}
 /* Vertical splitter between flex columns (AUTORUN list column <-> cards). A
    thin flex item the user drags to resize the column on its left. */
 .col-splitter {
