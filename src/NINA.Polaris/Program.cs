@@ -328,6 +328,11 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.OnnxFileService>();
 // Injected (optionally) into GraXpertService; no-op when no NPU is present.
 builder.Services.AddSingleton<NINA.Polaris.Services.Rknn.RknnInferenceService>();
 
+// QNN: host-side NPU acceleration for GraXpert AI on the Qualcomm Hexagon
+// (QCS6490 / Radxa Dragon Q6A). Counterpart to the Rockchip path; no-op when
+// the QAIRT runtime / cDSP isn't present. Mutually exclusive by hardware.
+builder.Services.AddSingleton<NINA.Polaris.Services.Qnn.QnnInferenceService>();
+
 // OCL: SBC GPU acceleration for classic image kernels via OpenCL. Resolve the
 // OpenCL backend when the board exposes an OpenCL ICD loader (Adreno on the
 // Radxa Dragon Q6A, Mali on RK3588, ...), else the always-available CPU backend.
