@@ -176,11 +176,19 @@ inference primitive changes.
   over a 1024×1024 synthetic frame and reports backend/model/precision +
   ms/tile + tiles/s (Ran=false off an NPU host, like the GPU row); NpuResult DTO,
   index.html rows, PrecisionFromName unit-tested.
-  REMAINING: (a) build the **bge** + **denoise-v2** int16 binaries (denoise-v3
-  done) and drop them under `qnn/{family}-ai-models/{ver}/*_v68_int16.bin`;
-  (c) on-device end-to-end verify that `GraXpertService` actually dispatches to
-  `Services/Qnn` (not just a standalone `qnn-net-run`) on a real denoise through
-  the UI.
+  DEVICE-VERIFIED 2026-06-27 on the Q6A: bge + denoise **v2 (2.0.0)** int16 run on
+  the Hexagon end-to-end (BGE before/after confirmed clean). **denoise v3 (3.0.2)
+  does NOT run on the QCS6490 V68 HTP** — it uses LayerNorm, which the V68
+  op-package rejects ("_layernorm_0 ... Value 68, expected >= 73"; LayerNorm needs
+  HTP **V73+**), and AI Hub compiled it for a V73 profile (hence the earlier 4 MB
+  VTCM ask, also > the V68 limit). So on this NPU **denoise = v2 only**; for v3
+  quality run fp16 on browser/GPU/CPU. Context binaries must be generated **on the
+  device** from an AI Hub **DLC** (`--target_runtime qnn_dlc --quantize_io` — the
+  `--quantize_io` is required, else a float→ufixed16 input convert forces fp16 the
+  V68 rejects) so the QAIRT version + VTCM match. v2 int16 w8a16 showed per-channel
+  star fringing on OSC (RGB = channel-by-channel + average on the NPU); **w16a16**
+  is the mitigation under test. The V68 HTP limits — int8/int16 only, VTCM < 4 MB,
+  no LayerNorm (needs V73+) — are recorded so v3/LayerNorm isn't re-attempted.
 - **Decon stays CLI-only — DECIDED 2026-06-27, not deferred.** Deconvolution
   (stars/objects) has a fundamentally different model shape than BGE/Denoise:
   **512² tiles** (not 256²), **NCHW mono** `[1,1,512,512]` (one channel per
