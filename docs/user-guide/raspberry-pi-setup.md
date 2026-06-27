@@ -218,8 +218,10 @@ Apt covers most. Two callouts:
 
 - **INDI, PHD2, xpra**: the apt versions on Bookworm lag upstream by
   6 to 18 months. If you want bleeding edge (new camera drivers,
-  PHD2 fixes, xpra protocol updates), compile from source. See
-  [section 4.2](#42-optional-compile-indi-phd2-xpra-from-source).
+  PHD2 fixes, xpra protocol updates), either add the **official PPA**
+  (only if your Pi runs **Ubuntu Server**, not Raspberry Pi OS) or
+  compile from source. See
+  [section 4.2](#42-optional-newer-indi--phd2-ppa-or-source-build).
 - **GraXpert**: no apt package. Download from
   [graxpert.com](https://www.graxpert.com/), extract into a folder
   (the convention used here is `~/graxpert`), point Polaris at it via
@@ -275,16 +277,63 @@ dotnet --info
 Should show `Microsoft.AspNetCore.App 10.x.x`. If not, the install
 script silently fell back; re-run it.
 
-### 4.2. (Optional) compile INDI, PHD2, xpra from source
+### 4.2. (Optional) Newer INDI / PHD2: PPA or source build
 
 Skip this section unless you have a specific reason. Apt versions work
-for most setups. Reasons to compile:
+for most setups. Reasons to want a newer build:
 
 - New camera was released after the apt INDI version froze
   (e.g. ZWO ASI2600MM Pro support).
 - PHD2 has a fix you need that has not made it to Debian yet.
 - xpra HTML5 client needs a newer protocol than apt ships for the
   embedded PHD2 GUI in modern browsers.
+
+#### 4.2.1. Easy path: the official apt repos (Ubuntu only)
+
+INDI and PHD2 each publish an up-to-date apt repository (a Launchpad
+**PPA**). This is far less work than compiling — **but PPAs target
+Ubuntu, not Debian.** Raspberry Pi OS is Debian-based, so
+`add-apt-repository ppa:...` will **not** work there (it adds an
+Ubuntu suite that has no matching packages, and `apt update` errors).
+
+Use the PPA route **only if you flashed Ubuntu Server (24.04+ arm64)**
+on the Pi instead of Raspberry Pi OS. On plain Raspberry Pi OS, jump to
+[4.2.2 (compile from source)](#422-full-control-compile-from-source).
+
+**INDI** — newer `indi-full` + all 3rd-party drivers (the
+`mutlaqja/ppa`, maintained by the INDI/KStars author):
+
+```bash
+# Ubuntu Server on the Pi ONLY -- not Raspberry Pi OS
+sudo apt install -y software-properties-common
+sudo add-apt-repository ppa:mutlaqja/ppa
+sudo apt update
+sudo apt install -y indi-full gsc
+```
+
+**PHD2** — newer build from the OpenPHDGuiding PPA:
+
+```bash
+# Ubuntu Server on the Pi ONLY -- not Raspberry Pi OS
+sudo add-apt-repository ppa:pch/phd2
+sudo apt update
+sudo apt install -y phd2
+```
+
+After adding a PPA, the normal `sudo apt full-upgrade` keeps INDI/PHD2
+current along with the rest of the system. If you later move to Pi OS,
+you must drop the PPAs (`sudo add-apt-repository --remove ppa:...`) and
+compile instead.
+
+> Why no PPA on Raspberry Pi OS? A PPA is built for specific *Ubuntu*
+> release codenames (jammy, noble, ...). Pi OS reports a *Debian*
+> codename (bookworm), so apt finds no matching binaries. Forcing it
+> risks pulling mismatched Ubuntu libc/deps and breaking the system —
+> don't. Compile (below) is the supported way on Pi OS.
+
+#### 4.2.2. Full control: compile from source
+
+The portable option that works on **both** Raspberry Pi OS and Ubuntu.
 
 Build dependencies:
 
