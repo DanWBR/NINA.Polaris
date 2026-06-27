@@ -168,7 +168,11 @@ public sealed class QnnInferenceService {
     /// <summary>
     /// Find the HTP context binary for a given <c>model.onnx</c> in the parallel
     /// <c>qnn/</c> subtree: <c>{root}/qnn/{family}-ai-models/{version}/*{arch}*.bin</c>.
-    /// Prefers an fp16 binary (production precision; int8 risks denoise quality).
+    /// Precision preference is highest-quality-first: <c>fp16</c> → <c>int16</c> →
+    /// <c>int8</c>. NOTE: the QCS6490 HTP (the Q6A) is **integer-only** (INT8/INT16,
+    /// no FP16 — per the Qualcomm AI Hub device matrix), so on that board an fp16
+    /// binary simply won't exist and int16 is the quality choice; the fp16 tier is
+    /// kept for future SoCs whose HTP does support it.
     /// </summary>
     public static string? QnnBinaryFor(string onnxPath) {
         var versionDir = Path.GetDirectoryName(onnxPath);
@@ -185,9 +189,11 @@ public sealed class QnnInferenceService {
             .Where(f => Path.GetFileName(f).Contains(Arch, StringComparison.OrdinalIgnoreCase))
             .ToList();
         if (matches.Count == 0) return null;
-        // Prefer fp16 over int8/other.
-        return matches.FirstOrDefault(f => f.Contains("fp16", StringComparison.OrdinalIgnoreCase))
-               ?? matches[0];
+        foreach (var pref in new[] { "fp16", "int16", "int8" }) {
+            var hit = matches.FirstOrDefault(f => f.Contains(pref, StringComparison.OrdinalIgnoreCase));
+            if (hit != null) return hit;
+        }
+        return matches[0];
     }
 
     /// <summary>Compare "2.0.0" / "3.0.2-fp16" style versions numerically.</summary>
