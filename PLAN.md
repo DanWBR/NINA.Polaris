@@ -138,13 +138,26 @@ inference primitive changes.
   OR a matched 2.45 SDK; the Services/Qnn build will BUNDLE the QAIRT 2.45 aarch64
   runtime in the .deb (like librknnrt.so) to control versions. **Gate passed with a
   measured number; QNN-1..5 unblocked.**
-- **QNN-1:** `QnnRuntime` probe + `Services/Qnn/` skeleton (mirror Rknn).
-- **QNN-2:** `QnnInferenceService` + tile runner over ORT QNN EP.
-- **QNN-3:** wire into `GraXpertService` backend chooser + endpoints + WS
-  status (reuse `NpuAvailable`-style flag).
-- **QNN-4:** model prep/quantization step (fp16/int8 context binaries).
-- **QNN-5:** packaging (Qualcomm libs per-RID), license/attribution,
-  Benchmark NPU column, docs, tests.
+- **QNN-1 — DONE (commit 9e13d904):** `QnnRuntime` probe (Linux+arm64 +
+  /dev/fastrpc-cdsp + bundled QAIRT under POLARIS_QAIRT_ROOT) + `Services/Qnn/`.
+- **QNN-2 — code-complete (commit 9e13d904), pending on-device run:**
+  `QnnInferenceService` reuses the validated `RknnPipelines` tile math UNCHANGED
+  via a record/replay trick (capture tiles → one batched `qnn-net-run` →
+  replay), instead of P/Invoking the QNN interface API. The batched subprocess
+  (`QnnNetRunBatch`, unsigned-PD config) is isolated behind `IQnnTileBatch`;
+  9 unit tests pass incl. 2 GOLD tests proving record/replay == direct pipeline
+  byte-for-byte. Only the `qnn-net-run` I/O remains to validate on the Q6A.
+- **QNN-3 — DONE (commit 9e13d904):** wired into `GraXpertService` (`NpuAvailable`
+  OR'd, `TryRunQnn` parallel to `TryRunRknn`, mutually exclusive by hardware) +
+  DI. Status flows through the existing `/api/graxpert/status` NpuAvailable.
+- **QNN-4:** model prep — fp16 context binary via the version-matched QAIRT 2.45
+  SDK (the AI Hub path only emits int8 for this device); convert bge + denoise
+  v2/v3, place at `qnn/{family}-ai-models/{ver}/*v68*.bin` (convention set,
+  .gitignored). Also: measure the precision-fair fp16 ms/tile here.
+- **QNN-5:** packaging — BUNDLE the QAIRT 2.45 aarch64 runtime (libQnnHtp.so +
+  V68 skel + qnn-net-run) into the arm64 .deb at POLARIS_QAIRT_ROOT (like
+  librknnrt.so), license/attribution, Benchmark NPU column, docs, on-device
+  end-to-end verify.
 
 ### SDK / toolchain references (Qualcomm docs, confirmed 2026-06)
 From https://docs.qualcomm.com/doc/80-63442-10/topic/linux_setup.html
