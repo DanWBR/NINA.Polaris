@@ -77,8 +77,13 @@ First boot: `https://polaris-linux.local:5000`, or
 
 ## Notes / gotchas
 
-- **ASTAP URLs** in `provision.sh` are best-effort. Confirm the current asset
-  names on hnsky.org / SourceForge if a download 404s, and override via
+- **Resilience:** `provision.sh` does not abort on a failed *optional*
+  component. ASTAP / astrometry download failures are collected and printed as
+  a summary at the end; only a failed Polaris `.deb` install fails the build.
+  Re-run `sudo bash provision.sh` on the booted system to retry anything listed.
+- **ASTAP URLs** point at the current SourceForge assets
+  (`astap_amd64.deb`, `astap_command-line_version_Linux_amd64.zip`,
+  `d80_star_database.deb`). If SourceForge renames them, override via
   `ASTAP_GUI_URL` / `ASTAP_CLI_URL` / `ASTAP_D80_URL`.
 - **astrometry indexes** are large. The script installs the wide-field Ubuntu
   packages; pull the narrow-field 4200/4100 series matching your FOV into
