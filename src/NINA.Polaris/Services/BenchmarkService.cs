@@ -17,6 +17,9 @@ using NINA.Core.Enum;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
 using NINA.Image.Interfaces;
+using NINA.Polaris.Services.External;
+using NINA.Polaris.Services.Qnn;
+using NINA.Polaris.Services.Rknn;
 using NINA.Polaris.Services.Studio;
 
 namespace NINA.Polaris.Services;
@@ -87,7 +90,9 @@ public class BenchmarkService {
         CameraStreamService cameraStream,
         LiveStackingService liveStack,
         ProfileService profiles,
-        NINA.Image.Gpu.IGpuCompute? gpu = null) {
+        NINA.Image.Gpu.IGpuCompute? gpu = null,
+        RknnInferenceService? rknn = null,
+        QnnInferenceService? qnn = null) {
         _logger = logger;
         _store = store;
         _equipment = equipment;
@@ -95,8 +100,12 @@ public class BenchmarkService {
         _liveStack = liveStack;
         _profiles = profiles;
         _gpu = gpu ?? new NINA.Image.Gpu.CpuGpuCompute();
+        _rknn = rknn;
+        _qnn = qnn;
     }
     private readonly NINA.Image.Gpu.IGpuCompute _gpu;
+    private readonly RknnInferenceService? _rknn;
+    private readonly QnnInferenceService? _qnn;
 
     public object GetStatus() => new {
         state = State,
@@ -157,6 +166,15 @@ public class BenchmarkService {
             } catch (OperationCanceledException) { throw; }
             catch (Exception ex) { _logger.LogWarning(ex, "GPU benchmark workload failed"); }
 
+            // QNN-5: NPU (AI inference) — times a real GraXpert denoise on the
+            // Hexagon/Rockchip NPU (Ran=false off an NPU host, like the GPU row).
+            NpuResult? npuRes = null;
+            try {
+                Phase = "NPU (AI inference)";
+                npuRes = await Task.Run(() => RunNpuWorkload(ct), ct);
+            } catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { _logger.LogWarning(ex, "NPU benchmark workload failed"); }
+
             CameraResult? camera = null;
             CameraVideoResult? cameraVideo = null;
             if (cam) {
@@ -185,7 +203,8 @@ public class BenchmarkService {
                 CompositeScore: Math.Round(composite, 1),
                 Camera: camera,
                 CameraVideo: cameraVideo,
-                Gpu: gpuRes);
+                Gpu: gpuRes,
+                Npu: npuRes);
 
             try { await _store.SaveResultAsync(result, ct); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist benchmark result"); }
@@ -755,6 +774,79 @@ public class BenchmarkService {
         sw.Stop();
         if (iters == 0 || sw.Elapsed.TotalSeconds <= 0) return 0;
         return iters * mpx / sw.Elapsed.TotalSeconds;
+    }
+
+    // ----- Workload: NPU (GraXpert AI denoise) -----
+
+    /// <summary>
+    /// Time a real GraXpert Denoise on the board's NPU and report per-tile cost.
+    /// Picks the available lane — Qualcomm Hexagon (QAIRT) first, then Rockchip
+    /// RKNPU2 — both of which run the same tiled GraXpert pipeline. Off an NPU
+    /// host, or when no denoise model is bundled, returns <c>Ran=false</c> with a
+    /// reason (same convention as the GPU row). 1024×1024 mono → enough tiles for
+    /// a stable per-tile number without dragging the suite out.
+    /// </summary>
+    private NpuResult RunNpuWorkload(CancellationToken ct) {
+        const int w = 1024, h = 1024;
+        var opts = new GraXpertOptions(Operation: GraXpertOperation.Denoising, DenoiseStrength: 0.5);
+
+        if (_qnn?.IsAvailable == true &&
+            _qnn.CanHandle(GraXpertOperation.Denoising, null, out var qbin, out var qver)) {
+            return MeasureNpu(ct, "Qualcomm Hexagon (QAIRT)", $"denoise/{qver}",
+                PrecisionFromName(qbin), w, h,
+                img => { var r = _qnn.Run(img, opts); return (r.ElapsedMs, r.Tiles); });
+        }
+        if (_rknn?.IsAvailable == true &&
+            _rknn.CanHandle(GraXpertOperation.Denoising, null, out var rbin, out var rver)) {
+            var prec = PrecisionFromName(rbin);
+            return MeasureNpu(ct, "Rockchip RKNPU2", $"denoise/{rver}",
+                string.IsNullOrEmpty(prec) ? "fp16" : prec, w, h,
+                img => { var r = _rknn.Run(img, opts); return (r.ElapsedMs, r.Tiles); });
+        }
+
+        bool present = _qnn?.IsAvailable == true || _rknn?.IsAvailable == true;
+        string diag = present
+            ? "NPU present but no denoise model bundled."
+            : (_qnn?.Diagnostics ?? _rknn?.Diagnostics ?? "No NPU detected.");
+        return new NpuResult(false, "", "", "", 0, 0, 0, 0, 0, diag);
+    }
+
+    private NpuResult MeasureNpu(CancellationToken ct, string backend, string model,
+                                 string precision, int w, int h,
+                                 Func<BaseImageData, (double ms, int tiles)> run) {
+        var data = GenerateStarField(w, h, Seed, 0, 0);
+        var props = new ImageProperties { Width = w, Height = h, BitDepth = 16, Channels = 1 };
+        var img = new BaseImageData(data, props);
+
+        run(img);                       // warmup: model load + DSP spin-up + JIT
+        ct.ThrowIfCancellationRequested();
+
+        var budget = TimeSpan.FromSeconds(2);
+        double totalMs = 0;
+        int tiles = 0, iters = 0;
+        var clock = Stopwatch.StartNew();
+        while (iters < 8 && (iters < 2 || clock.Elapsed < budget)) {
+            ct.ThrowIfCancellationRequested();
+            var (ms, t) = run(img);
+            totalMs += ms; tiles = t; iters++;
+        }
+
+        double n = Math.Max(1, iters);
+        double perImageMs = totalMs / n;
+        double msPerTile = tiles > 0 ? perImageMs / tiles : 0;
+        double tilesPerSec = msPerTile > 0 ? 1000.0 / msPerTile : 0;
+        return new NpuResult(true, backend, model, precision,
+            Math.Round(msPerTile, 2), Math.Round(tilesPerSec, 1), tiles, w, h, null);
+    }
+
+    /// <summary>Infer the model dtype from the artifact filename
+    /// (<c>*_v68_int16.bin</c> etc.). Empty when no recognised tag.</summary>
+    internal static string PrecisionFromName(string? path) {
+        var f = (path ?? "").ToLowerInvariant();
+        if (f.Contains("int16")) return "int16";
+        if (f.Contains("int8")) return "int8";
+        if (f.Contains("fp16")) return "fp16";
+        return "";
     }
 
     /// <summary>Deterministic synthetic star field: uniform background +

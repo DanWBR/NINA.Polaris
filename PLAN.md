@@ -171,11 +171,16 @@ inference primitive changes.
   guarded), build-deb.sh chmods `qairt/bin/qnn-net-run`, `external/qairt/` is
   gitignored, and `licenses/QAIRT-LICENSE.txt` + NOTICE + docs
   (`docs/user-guide/npu-acceleration.md` Qualcomm section) cover attribution.
+  DONE (b): the Benchmark now has an **NPU (AI denoise)** row — BenchmarkService
+  times a real GraXpert denoise on the Hexagon (QAIRT) or Rockchip (RKNN) lane
+  over a 1024×1024 synthetic frame and reports backend/model/precision +
+  ms/tile + tiles/s (Ran=false off an NPU host, like the GPU row); NpuResult DTO,
+  index.html rows, PrecisionFromName unit-tested.
   REMAINING: (a) build the **bge** + **denoise-v2** int16 binaries (denoise-v3
   done) and drop them under `qnn/{family}-ai-models/{ver}/*_v68_int16.bin`;
-  (b) add the NPU column to the Benchmark; (c) on-device end-to-end verify that
-  `GraXpertService` actually dispatches to `Services/Qnn` (not just a standalone
-  `qnn-net-run`) on a real denoise through the UI.
+  (c) on-device end-to-end verify that `GraXpertService` actually dispatches to
+  `Services/Qnn` (not just a standalone `qnn-net-run`) on a real denoise through
+  the UI.
 
 ### SDK / toolchain references (Qualcomm docs, confirmed 2026-06)
 From https://docs.qualcomm.com/doc/80-63442-10/topic/linux_setup.html

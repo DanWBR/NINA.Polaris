@@ -60,6 +60,17 @@ public record GpuResult(
     double BlurCpuMpxPerSec, double BlurGpuMpxPerSec, double BlurSpeedup,
     double OverallSpeedup);
 
+// QNN-5: NPU (AI inference) column. Times a real GraXpert Denoise on the board's
+// NPU — Qualcomm Hexagon (QAIRT) or Rockchip RKNPU2 — over a fixed synthetic
+// frame and reports per-tile cost. Precision is the model's dtype (int16/int8 on
+// the QCS6490 HTP, which is integer-only; fp16 on RKNN). Ran=false off an NPU
+// host or when no denoise model is bundled (Error carries the reason) — same
+// convention as the GPU row.
+public record NpuResult(
+    bool Ran, string Backend, string Model, string Precision,
+    double MsPerTile, double TilesPerSec, int Tiles,
+    int Width, int Height, string? Error);
+
 public record CameraResult(
     int Frames, double MeanCaptureMs, double Fps,
     int Width, int Height, double MBPerSec, string? Error);
@@ -83,4 +94,5 @@ public record BenchmarkResult(
     double CompositeScore,
     CameraResult? Camera,
     CameraVideoResult? CameraVideo = null,
-    GpuResult? Gpu = null);
+    GpuResult? Gpu = null,
+    NpuResult? Npu = null);

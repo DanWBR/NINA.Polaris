@@ -131,6 +131,22 @@ public class BenchmarkServiceTests {
             Is.EqualTo(2.0).Within(0.001));
     }
 
+    // ----- NPU column: model dtype inference -----
+
+    [Test]
+    public void PrecisionFromName_reads_dtype_tag_from_filename() {
+        Assert.That(BenchmarkService.PrecisionFromName("denoise_v68_int16.bin"), Is.EqualTo("int16"));
+        Assert.That(BenchmarkService.PrecisionFromName("/x/y/denoise_v68_int8.bin"), Is.EqualTo("int8"));
+        Assert.That(BenchmarkService.PrecisionFromName("BGE_V68_FP16.bin"), Is.EqualTo("fp16"));
+    }
+
+    [Test]
+    public void PrecisionFromName_is_empty_when_no_tag() {
+        Assert.That(BenchmarkService.PrecisionFromName("model.rknn"), Is.Empty);
+        Assert.That(BenchmarkService.PrecisionFromName(null), Is.Empty);
+        Assert.That(BenchmarkService.PrecisionFromName(""), Is.Empty);
+    }
+
     // ----- results store round-trip -----
 
     private BenchmarkResultsStore NewStore() {

@@ -12189,6 +12189,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <td><strong x-text="bench.lastResult.gpu.overallSpeedup + '×'"></strong></td></tr>
                                 </template>
 
+                                <template x-if="bench.lastResult.npu && bench.lastResult.npu.ran">
+                                    <tr><td colspan="2" style="padding-top:6px"><strong>NPU (AI denoise)</strong>
+                                        <span class="hint" x-text="'(' + bench.lastResult.npu.backend + ')'"></span></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.npu && bench.lastResult.npu.ran">
+                                    <tr><td class="hint" style="padding-left:10px">GraXpert denoise
+                                        (<span x-text="bench.lastResult.npu.model"></span> ·
+                                         <span x-text="bench.lastResult.npu.precision"></span>)</td>
+                                        <td><strong x-text="bench.lastResult.npu.msPerTile"></strong> ms/tile ·
+                                            <span x-text="bench.lastResult.npu.tilesPerSec"></span> tiles/s
+                                            <span class="hint" x-text="'(' + bench.lastResult.npu.width + '×' + bench.lastResult.npu.height + ', ' + bench.lastResult.npu.tiles + ' tiles)'"></span></td></tr>
+                                </template>
+
                                 <template x-if="bench.lastResult.camera">
                                     <tr><td colspan="2" style="padding-top:6px"><strong>Camera</strong>
                                         <span class="hint">(camera-dependent)</span></td></tr>
