@@ -184,4 +184,55 @@ public class QnnLaneTests {
 
         Assert.That(replayed, Is.EqualTo(direct));
     }
+
+    [Test]
+    public void RecordReplay_ReproducesDirectStarRemoval_Exactly() {
+        const int w = 280, h = 200;   // not a stride multiple → exercises padding
+        var plane = Gradient(w, h, 6000, 28000);
+
+        // Direct: identity model run straight through the shared pipeline.
+        using var id = new IdentityRunner();
+        var (directStarless, directStars) = RknnPipelines.RunStarRemovalMono(id, plane, w, h);
+
+        // Record pass: capture the ordered input tensors (output discarded).
+        var rec = new RecordingTileRunner(256, 3);
+        RknnPipelines.RunStarRemovalMono(rec, plane, w, h);
+        var outs = rec.Inputs.ToArray();   // identity "NPU batch" returns the inputs
+
+        // Replay pass: feed those back → must equal the direct identity run.
+        var rep = new ReplayingTileRunner(256, 3, outs);
+        var (replayedStarless, replayedStars) = RknnPipelines.RunStarRemovalMono(rep, plane, w, h);
+
+        Assert.That(replayedStarless, Is.EqualTo(directStarless),
+            "record→replay must reproduce the starless plane byte-for-byte");
+        Assert.That(replayedStars, Is.EqualTo(directStars),
+            "record→replay must reproduce the stars plane byte-for-byte");
+    }
+
+    [Test]
+    public void RecordReplay_PerPassBatching_ReproducesDirectMultiPass() {
+        // Multi-pass star removal feeds each pass's starless back as the next
+        // pass's input, so a single all-passes record/replay is INVALID (the
+        // record pass returns zeros, corrupting pass 2's input). The QNN lane
+        // batches ONE PASS AT A TIME; this models that and proves it reproduces
+        // the direct multi-pass result. (A single all-passes batch is the bug
+        // the per-pass loop in QnnInferenceService.RunStarRemoval avoids.)
+        const int w = 260, h = 260, passes = 2;
+        var plane = Gradient(w, h, 4000, 32000);
+
+        using var id = new IdentityRunner();
+        var (directStarless, _) = RknnPipelines.RunStarRemovalMono(id, plane, w, h, passes);
+
+        ushort[] cur = plane;
+        for (int p = 0; p < passes; p++) {
+            var rec = new RecordingTileRunner(256, 3);
+            RknnPipelines.RunStarRemovalMono(rec, cur, w, h, passes: 1);
+            var outs = rec.Inputs.ToArray();          // identity batch = the inputs
+            var rep = new ReplayingTileRunner(256, 3, outs);
+            (cur, _) = RknnPipelines.RunStarRemovalMono(rep, cur, w, h, passes: 1);
+        }
+
+        Assert.That(cur, Is.EqualTo(directStarless),
+            "per-pass record→replay must reproduce the direct multi-pass result");
+    }
 }

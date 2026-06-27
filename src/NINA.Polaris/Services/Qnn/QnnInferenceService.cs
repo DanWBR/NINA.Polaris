@@ -122,6 +122,59 @@ public sealed class QnnInferenceService {
         return new QnnResult(outImage, bgImage, sw.Elapsed.TotalMilliseconds, tiles, version);
     }
 
+    /// <summary>
+    /// Run StarNet v1 star removal on the Hexagon NPU. Resolves the <c>starnet</c>
+    /// family (single-input 256³ contract) and runs it through the same record →
+    /// batch → replay path as <see cref="Run"/>, reusing
+    /// <see cref="RknnPipelines.RunStarRemoval"/> unchanged. Returns the starless
+    /// image (<see cref="QnnResult.Image"/>) + the auto-derived stars-only image
+    /// (<see cref="QnnResult.Background"/> = clamp(original − starless, 0)).
+    /// Throws on failure so the caller can fall back to the browser ONNX path.
+    /// </summary>
+    public QnnResult RunStarRemoval(BaseImageData img, int passes = 1) {
+        var (binPath, version) = ResolveModel("starnet", null)
+            ?? throw new QnnException($"no QNN context binary for starnet ({Arch})");
+
+        int w = img.Properties.Width, h = img.Properties.Height;
+        int channels = img.Properties.Channels >= 3 ? 3 : 1;
+        passes = Math.Clamp(passes, 1, 3);
+        var original = img.Data;
+        var sw = Stopwatch.StartNew();
+
+        using var batch = _batchFactory(binPath, Tile, ModelChannels);
+
+        // Batch ONE PASS AT A TIME. Multi-pass star removal feeds each pass's
+        // starless back as the next pass's input, so a tile's input DOES depend
+        // on the previous pass's output — which would break a single all-passes
+        // record/replay (the record pass returns zeros). Within a single pass,
+        // tile inputs are independent, so each pass is a valid record → batch →
+        // replay. Stars are derived against the ORIGINAL after the last pass.
+        var cur = original;
+        int totalTiles = 0;
+        for (int p = 0; p < passes; p++) {
+            var rec = new RecordingTileRunner(Tile, ModelChannels);
+            RknnPipelines.RunStarRemoval(rec, cur, w, h, channels, passes: 1);
+            var outs = batch.RunBatch(rec.Inputs);
+            totalTiles += outs.Length;
+            var rep = new ReplayingTileRunner(Tile, ModelChannels, outs);
+            (cur, _) = RknnPipelines.RunStarRemoval(rep, cur, w, h, channels, passes: 1);
+        }
+
+        var stars = new ushort[original.Length];
+        for (int i = 0; i < original.Length; i++) {
+            int d = original[i] - cur[i];
+            stars[i] = d > 0 ? (ushort)d : (ushort)0;
+        }
+
+        sw.Stop();
+        _logger.LogInformation("QNN StarRemoval starnet/{Ver} {Arch} {W}x{H}c{Ch} {Tiles} tiles ({Passes}p) in {Ms} ms",
+            version, Arch, w, h, channels, totalTiles, passes, sw.ElapsedMilliseconds);
+        return new QnnResult(
+            new BaseImageData(cur, img.Properties, img.MetaData),
+            new BaseImageData(stars, img.Properties, img.MetaData),
+            sw.Elapsed.TotalMilliseconds, totalTiles, version);
+    }
+
     /// <summary>Run the shared GraXpert pipeline with the given tile runner.</summary>
     private static ushort[] RunPipeline(IRknnTileRunner runner, BaseImageData img,
                                         GraXpertOptions opts, int channels, string version,

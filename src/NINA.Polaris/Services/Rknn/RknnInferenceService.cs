@@ -115,6 +115,36 @@ public sealed class RknnInferenceService : IDisposable {
         return new RknnResult(outImage, bgImage, sw.Elapsed.TotalMilliseconds, tiles, version);
     }
 
+    /// <summary>
+    /// Run StarNet v1 star removal on the NPU. Resolves the <c>starnet</c> family
+    /// (single-input 256³ contract, same as Denoise) and returns the starless
+    /// image (<see cref="RknnResult.Image"/>) plus the auto-derived stars-only
+    /// image (<see cref="RknnResult.Background"/> = clamp(original − starless, 0)),
+    /// ready for the Image Blend tool. Throws on NPU failure so the caller can
+    /// fall back to the browser ONNX path.
+    /// </summary>
+    public RknnResult RunStarRemoval(BaseImageData img, int passes = 1) {
+        var resolved = ResolveModel("starnet", null)
+            ?? throw new RknnException("no model.rknn for starnet");
+        var (rknnPath, version) = resolved;
+        var session = GetSession(rknnPath);
+        int w = img.Properties.Width, h = img.Properties.Height;
+        int channels = img.Properties.Channels >= 3 ? 3 : 1;
+
+        var sw = Stopwatch.StartNew();
+        var (starless, stars) = RknnPipelines.RunStarRemoval(session, img.Data, w, h, channels, passes);
+        sw.Stop();
+
+        int stride = session.TileSize * 3 / 8;
+        int tiles = (int)Math.Ceiling((double)w / stride) * (int)Math.Ceiling((double)h / stride) * passes;
+        _logger.LogInformation("RKNN StarRemoval starnet/{Ver} {W}x{H}c{Ch} {Tiles} tiles ({Passes}p) in {Ms} ms",
+            version, w, h, channels, tiles, passes, sw.ElapsedMilliseconds);
+        return new RknnResult(
+            new BaseImageData(starless, img.Properties, img.MetaData),
+            new BaseImageData(stars, img.Properties, img.MetaData),
+            sw.Elapsed.TotalMilliseconds, tiles, version);
+    }
+
     // ─── helpers ────────────────────────────────────────────────────────
 
     private static bool TryFamily(GraXpertOperation op, out string family) {

@@ -269,4 +269,152 @@ internal static class RknnPipelines {
     public static ushort[] RunDenoiseMono(IRknnTileRunner runner, ushort[] plane, int width, int height,
                                           double strength, double clip)
         => RunDenoise(runner, plane, width, height, 1, strength, clip);
+
+    /// <summary>
+    /// StarNet v1 star removal on the NPU. Single inference per tile over a
+    /// <c>[1,256,256,3]</c> NHWC tensor — the SAME single-input/single-output
+    /// contract as <see cref="RunDenoise"/>/<see cref="RunBge"/>, so it runs on
+    /// both the RKNN and QNN lanes (record/replay) unchanged. Faithful port of the
+    /// browser <c>StarRemovalPipeline</c> (starnet profile):
+    /// <list type="bullet">
+    /// <item>MTF-autostretch each channel into the network's trained (non-linear)
+    /// domain ("15% bg, 3σ"), run, then INVERSE-stretch the output back to the
+    /// source's linear range — without this, linear stacks come out with black
+    /// holes where bright stars were.</item>
+    /// <item>The model output IS the starless image (the graph emits
+    /// <c>input − ReLU(decoder)</c>); hard inner-tile extraction at stride 96
+    /// (80px context margin per edge), margins discarded.</item>
+    /// <item>Mono replicates the plane to 3 input channels and averages the 3
+    /// outputs; RGB runs all three together in one inference.</item>
+    /// </list>
+    /// Optional multi-pass (≤3) feeds the starless back through the net to clean
+    /// residual halos; each pass recomputes its own autostretch. Returns
+    /// <c>(starless, stars)</c> where <c>stars = clamp(original − starless, 0)</c>,
+    /// both in the same channel layout as the input — ready for the Image Blend
+    /// tool (starless = base, stars = blend).
+    /// </summary>
+    public static (ushort[] starless, ushort[] stars) RunStarRemoval(
+            IRknnTileRunner runner, ushort[] pixels, int width, int height, int channels,
+            int passes = 1, double stretchTarget = 0.15, bool autoStretch = true) {
+        int tile = runner.TileSize;                        // 256
+        int stride = Math.Clamp(tile * 3 / 8, 32, tile);   // 96 for tile 256
+        int margin = (tile - stride) / 2;                  // 80
+        int nc = channels >= 3 ? 3 : 1;
+        int planeLen = width * height;
+        const double inv = 1.0 / 65535.0;
+        passes = Math.Clamp(passes, 1, 3);
+        double target = Math.Clamp(stretchTarget, 0.02, 0.6);
+
+        // MTF (midtones transfer function); its inverse is MTF with midtone 1−m.
+        static double Mtf(double x, double m) {
+            if (x <= 0) return 0; if (x >= 1) return 1;
+            if (m <= 0) return 1; if (m >= 1) return 0;
+            return ((m - 1) * x) / ((2 * m - 1) * x - m);
+        }
+
+        int itw = (int)Math.Ceiling((double)width / stride);
+        int ith = (int)Math.Ceiling((double)height / stride);
+        int padW = itw * stride + 2 * margin;
+        int padH = ith * stride + 2 * margin;
+        int offsetX = (padW - width) / 2;
+        int offsetY = (padH - height) / 2;
+
+        var cur = (ushort[])pixels.Clone();   // this pass's (linear) input
+        var sh = new double[nc]; var scl = new double[nc]; var mid = new double[nc];
+        var tensor = new float[tile * tile * 3];
+
+        for (int pass = 0; pass < passes; pass++) {
+            // Per-channel stretch params from THIS pass's input (GraXpert 15% bg, 3σ).
+            for (int c = 0; c < nc; c++) {
+                if (!autoStretch) { sh[c] = 0; scl[c] = 1; mid[c] = 0.5; continue; }
+                var (median, mad) = RknnImageMath.MedianMadSampledU16(cur.AsSpan(c * planeLen, planeLen));
+                double s = Math.Max(0, median - 3.0 * mad);
+                double denom = Math.Max(1e-6, 1 - s);
+                double xMed = Math.Clamp((median - s) / denom, 0, 1);
+                double m = Math.Clamp(Mtf(xMed, target), 0.001, 0.999);
+                sh[c] = s; scl[c] = 1.0 / denom; mid[c] = m;
+            }
+            double StretchVal(double v, int c) {
+                if (!autoStretch) return v;
+                double x = (v - sh[c]) * scl[c];
+                if (x < 0) x = 0; else if (x > 1) x = 1;
+                return Mtf(x, mid[c]);
+            }
+            double UnstretchVal(double s, int c) {
+                if (!autoStretch) return s;
+                if (s < 0) s = 0; else if (s > 1) s = 1;
+                double x = Mtf(s, 1 - mid[c]);
+                double v = sh[c] + x * (1 - sh[c]);
+                return v < 0 ? 0 : (v > 1 ? 1 : v);
+            }
+            float PaddedRead(int chan, int px, int py) {
+                int x = px - offsetX; int y = py - offsetY;
+                if (x < 0) x = 0; else if (x >= width) x = width - 1;
+                if (y < 0) y = 0; else if (y >= height) y = height - 1;
+                return (float)(cur[chan * planeLen + y * width + x] * inv);
+            }
+
+            var starless = new ushort[cur.Length];
+            for (int ty = 0; ty < ith; ty++) {
+                for (int tx = 0; tx < itw; tx++) {
+                    int sx = tx * stride, sy = ty * stride;
+                    for (int y = 0; y < tile; y++) {
+                        int py = sy + y;
+                        int rowBase = y * tile;
+                        for (int x = 0; x < tile; x++) {
+                            int b = (rowBase + x) * 3;
+                            if (nc == 3) {
+                                tensor[b]     = (float)StretchVal(PaddedRead(0, sx + x, py), 0);
+                                tensor[b + 1] = (float)StretchVal(PaddedRead(1, sx + x, py), 1);
+                                tensor[b + 2] = (float)StretchVal(PaddedRead(2, sx + x, py), 2);
+                            } else {
+                                float v = (float)StretchVal(PaddedRead(0, sx + x, py), 0);
+                                tensor[b] = v; tensor[b + 1] = v; tensor[b + 2] = v;
+                            }
+                        }
+                    }
+
+                    var outData = runner.RunTile(tensor);
+
+                    for (int y = 0; y < stride; y++) {
+                        int rawY = sy + margin + y - offsetY;
+                        if (rawY < 0 || rawY >= height) continue;
+                        int tileRow = (margin + y) * tile + margin;
+                        int rawRow = rawY * width;
+                        for (int x = 0; x < stride; x++) {
+                            int rawX = sx + margin + x - offsetX;
+                            if (rawX < 0 || rawX >= width) continue;
+                            int p = (tileRow + x) * 3;
+                            if (nc == 3) {
+                                for (int c = 0; c < 3; c++) {
+                                    double sv = UnstretchVal(outData[p + c], c);
+                                    starless[c * planeLen + rawRow + rawX] =
+                                        (ushort)Math.Clamp(Math.Round(sv * 65535.0), 0, 65535);
+                                }
+                            } else {
+                                double avg = (outData[p] + outData[p + 1] + outData[p + 2]) / 3.0;
+                                double sv = UnstretchVal(avg, 0);
+                                starless[rawRow + rawX] =
+                                    (ushort)Math.Clamp(Math.Round(sv * 65535.0), 0, 65535);
+                            }
+                        }
+                    }
+                }
+            }
+            cur = starless;   // feed forward for the next pass
+        }
+
+        // stars = clamp(original − final starless, 0).
+        var stars = new ushort[pixels.Length];
+        for (int i = 0; i < pixels.Length; i++) {
+            int d = pixels[i] - cur[i];
+            stars[i] = d > 0 ? (ushort)d : (ushort)0;
+        }
+        return (cur, stars);
+    }
+
+    /// <summary>Mono convenience wrapper over <see cref="RunStarRemoval"/> (tests).</summary>
+    public static (ushort[] starless, ushort[] stars) RunStarRemovalMono(
+            IRknnTileRunner runner, ushort[] plane, int width, int height, int passes = 1)
+        => RunStarRemoval(runner, plane, width, height, 1, passes);
 }

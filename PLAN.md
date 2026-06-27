@@ -193,6 +193,35 @@ inference primitive changes.
   be a separate epic (decon pipeline + multi-input batch in QnnNetRunBatch +
   quantized two-input model). Not planned.
 
+### SNNPU — Star removal on the NPU (epic, in progress)
+
+Star removal (StarNet v1) on the NPU. Only **starnet** fits the shared lane: it
+is single-input `[1,256,256,3]` NHWC, one inference per tile — the SAME contract
+as Denoise/BGE — so it reuses `RknnPipelines` + the QNN record/replay unchanged.
+(`starrem2k13` = 512²/mono single-input, `nox-color/gray` = 512² — different
+shapes, deferred; they'd need a 512 pipeline.)
+
+- **SNNPU-1 — DONE.** `RknnPipelines.RunStarRemoval` (+ `RunStarRemovalMono`):
+  faithful port of the browser starnet pipeline — MTF autostretch ("15% bg, 3σ")
+  into the trained domain, tile (stride 96 / 80px margin), model output IS the
+  starless, inverse-stretch back, mono replicate+average / RGB together, optional
+  ≤3 passes; returns `(starless, stars=clamp(orig−starless,0))`.
+- **SNNPU-2 — DONE.** `RknnInferenceService.RunStarRemoval` (real per-tile
+  session) + `QnnInferenceService.RunStarRemoval` (record→batch→replay). KEY:
+  multi-pass must batch **one pass at a time** — a tile's input in pass N depends
+  on pass N−1's output, so a single all-passes record/replay corrupts later
+  passes (record returns zeros). The QNN path loops per pass; RKNN (real session)
+  is naturally fine. 3 gold tests prove record/replay == direct (single + per-pass
+  multi-pass), 11/11 QnnLaneTests green.
+- **SNNPU-3 — TODO:** server-side `StarRemovalService` + endpoint. Star removal is
+  currently **browser-only** (`StarRemovalPipeline` in onnx-pipelines.js); the
+  RKNN/QNN lanes are wired only into `GraXpertService` (bge/denoise/decon), which
+  has no star-removal op. Need a service that loads a FITS, calls the NPU
+  RunStarRemoval, writes starless + stars siblings, + an endpoint + DI.
+- **SNNPU-4 — TODO:** UI — offer "remove stars on server/NPU" (today the FILES
+  button runs in-browser); chain to the Image Blend tool. Model `.bin`:
+  `qnn/starnet-ai-models/{ver}/starnet_v68_int16.bin` (resolver already handles it).
+
 ### SDK / toolchain references (Qualcomm docs, confirmed 2026-06)
 From https://docs.qualcomm.com/doc/80-63442-10/topic/linux_setup.html
 (Qualcomm AI Engine Direct, now branded **QAIRT**):
