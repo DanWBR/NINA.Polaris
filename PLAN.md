@@ -13255,6 +13255,20 @@ and risks denoise quality. fp16 5x is the clean baseline.
 
 ## OCL — OpenCL GPU compute backend for classic image math (epic, in progress)
 
+> **Live stacking on GPU (OpenCL/Vulkan) — ANALYZED 2026-06-27: not worth it on
+> the Q6A; no further work.** LiveStackingService already routes warp
+> (LiveStackingService.cs:948) + accumulate (:750) through `IGpuCompute`, so the
+> per-op `GpuOffloadPolicy` already gates them and runs them on CPU on the Adreno
+> (where they lose). Reasons GPU live-stack is a dead end here: (1) the stack's
+> heavy ops are the ones the Adreno loses — warp 0.5×, debayer 0.26×, accumulate =
+> pure bandwidth (loses on unified memory), overall 0.67×; (2) live stacking isn't
+> the bottleneck — ~57.9 Mpx/s ≈ 0.29 s/frame at 16.78 MP vs 30–180 s subs (<1% of
+> the time), and the cores are free during the exposure anyway; (3) Vulkan/Turnip's
+> ~1.58 TFLOPS fp16 is ALU, but warp/accumulate are bandwidth-bound on unified
+> memory, so it can't help, and the zero-copy/texture route already regressed. GPU
+> live-stack would only win on a discrete-GPU desktop (own VRAM). Do NOT build a
+> Vulkan-compute backend or a GPU-resident live-stack rewrite for the Q6A.
+
 ### Why
 Polaris runs all classic image math on the SBC CPU (Parallel.ForEach in
 `NINA.Image.Portable`). On a board whose GPU exposes OpenCL the GPU sits idle.
