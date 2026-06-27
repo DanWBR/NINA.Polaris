@@ -78,7 +78,7 @@ def main():
         print("resumed from", args.resume)
     opt = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=1e-5)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
-    scaler = torch.cuda.amp.GradScaler(enabled=(dev == "cuda"))
+    scaler = torch.amp.GradScaler("cuda", enabled=(dev == "cuda"))
 
     best = float("inf")
     for ep in range(args.epochs):
@@ -87,7 +87,7 @@ def main():
         for x, y in tqdm(tl, desc=f"epoch {ep+1}/{args.epochs}"):
             x, y = x.to(dev), y.to(dev)
             opt.zero_grad(set_to_none=True)
-            with torch.cuda.amp.autocast(enabled=(dev == "cuda")):
+            with torch.amp.autocast("cuda", enabled=(dev == "cuda")):
                 p = net(x)
                 loss = (charbonnier(p, y)
                         + args.w_grad * grad_loss(p, y)

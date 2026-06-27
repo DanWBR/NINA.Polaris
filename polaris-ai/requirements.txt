@@ -1,5 +1,8 @@
-# Training stack. Install a CUDA-matched torch separately if needed:
-#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+# Training stack. Install a CUDA-matched torch separately — match your GPU:
+#   RTX 50-series (Blackwell, sm_120): CUDA 12.8 wheels
+#     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+#     (if unavailable on stable, use the nightly cu128 channel)
+#   Older GPUs: cu124/cu121 as appropriate. CPU-only `pip install torch` = no GPU.
 torch>=2.2
 torchvision>=0.17
 numpy>=1.24
