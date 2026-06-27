@@ -73,6 +73,22 @@ python quantize.py ptq  --ckpt checkpoints/decon/best.pt --tiles data/tiles --ou
 python quantize.py qat  --tiles data/tiles --resume checkpoints/decon/best.pt --out checkpoints/decon_qat  # int8, no-compromise
 ```
 
+## Model size
+
+Capacity is set by `--base` / `--depth` / `--blocks` (residual blocks per stage
+are the main dial). Probe any config before a long train:
+
+```bash
+python model.py --base 96 --blocks 3      # prints params + fp32/fp16/int8 MB
+```
+
+Defaults (`base=96 depth=4 blocks=3`) land in GraXpert-class territory
+(~hundreds of MB fp32). Bump `--blocks`/`--base` for more capacity, lower them
+for a lean SBC/NPU variant. **Keep `--base`/`--depth`/`--blocks` identical
+between `train.py` and `export.py`** or the checkpoint won't load. A big model is
+fine for GPU/CPU/ORT-Web; for the Hexagon NPU you'll likely want a smaller
+variant (VTCM + context-binary limits), so consider training two sizes.
+
 ## Data sources (ground truth)
 
 Prefer **diffraction-limited** (little/no atmosphere) or **synthetic**:

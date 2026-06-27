@@ -1,15 +1,21 @@
 """ConditionedUNet -- an NPU/quantization-friendly residual U-Net for astro
-deconvolution.
+deconvolution, now with stackable residual blocks per stage so capacity scales
+to GraXpert-class sizes (tens of millions of params / hundreds of MB).
 
 Design constraints (so int8/int16/fp16 exports run everywhere without surgery):
-  * only Conv2d / BatchNorm2d / ReLU / nearest Upsample / concat / add
+  * only Conv2d / BatchNorm2d / ReLU / MaxPool / nearest Upsample / concat / add
   * NO LayerNorm (Hexagon V68 rejects it), NO Inverse / ReduceSumSquare
-  * nearest-upsample + 1x1 conv instead of ConvTranspose (no checkerboard)
+  * reflect padding (no bright tile-edge frame), nearest-upsample (no checkerboard)
   * single input tensor: channel 0 = image, channels 1.. = condition map(s)
-  * residual output: out = image + delta  (easier to learn, stays well-scaled)
+  * residual output: out = image + delta
 
-BatchNorm folds into the preceding conv at inference, so it is free on-device and
-helps keep activation ranges tight for clean quantization.
+Capacity knobs:
+  base   -- channels at the top level (channels double each level)
+  depth  -- number of resolution levels
+  blocks -- residual blocks per stage  (the main capacity dial)
+
+Param count grows ~ base^2 * blocks. Run `python model.py --base 96 --blocks 3`
+to print params + fp32 MB for any config before committing to a long train.
 """
 from __future__ import annotations
 
@@ -17,72 +23,98 @@ import torch
 import torch.nn as nn
 
 
-def conv_block(cin: int, cout: int) -> nn.Sequential:
-    # reflect padding avoids the bright "frame" artifact that zero-padding
-    # produces at tile edges (the conv sees a hard 0 border otherwise).
+def cbr(cin: int, cout: int) -> nn.Sequential:
+    """conv(3x3, reflect) -> BN -> ReLU."""
     return nn.Sequential(
         nn.Conv2d(cin, cout, 3, padding=1, padding_mode="reflect", bias=False),
-        nn.BatchNorm2d(cout),
-        nn.ReLU(inplace=True),
-        nn.Conv2d(cout, cout, 3, padding=1, padding_mode="reflect", bias=False),
         nn.BatchNorm2d(cout),
         nn.ReLU(inplace=True),
     )
 
 
-class Down(nn.Module):
-    def __init__(self, cin: int, cout: int):
+class ResBlock(nn.Module):
+    """Pre-activation-free residual block: keeps channel count, adds a learned
+    correction. Quantizes cleanly (conv/BN/ReLU/add only)."""
+
+    def __init__(self, c: int):
         super().__init__()
-        self.pool = nn.MaxPool2d(2)
-        self.block = conv_block(cin, cout)
+        self.c1 = nn.Conv2d(c, c, 3, padding=1, padding_mode="reflect", bias=False)
+        self.b1 = nn.BatchNorm2d(c)
+        self.c2 = nn.Conv2d(c, c, 3, padding=1, padding_mode="reflect", bias=False)
+        self.b2 = nn.BatchNorm2d(c)
+        self.act = nn.ReLU(inplace=True)
 
     def forward(self, x):
-        return self.block(self.pool(x))
+        h = self.act(self.b1(self.c1(x)))
+        h = self.b2(self.c2(h))
+        return self.act(x + h)
+
+
+def res_stage(c: int, blocks: int) -> nn.Sequential:
+    return nn.Sequential(*[ResBlock(c) for _ in range(blocks)])
 
 
 class Up(nn.Module):
-    """Nearest upsample -> 1x1 channel reduce -> concat skip -> conv block."""
+    """Nearest upsample -> 1x1 channel reduce -> concat skip -> fuse -> res stage."""
 
-    def __init__(self, cin: int, cskip: int, cout: int):
+    def __init__(self, cin: int, cskip: int, cout: int, blocks: int):
         super().__init__()
         self.up = nn.Upsample(scale_factor=2, mode="nearest")
         self.reduce = nn.Conv2d(cin, cout, 1, bias=False)
-        self.block = conv_block(cout + cskip, cout)
+        self.fuse = cbr(cout + cskip, cout)
+        self.stage = res_stage(cout, blocks)
 
     def forward(self, x, skip):
         x = self.reduce(self.up(x))
         x = torch.cat([x, skip], dim=1)
-        return self.block(x)
+        return self.stage(self.fuse(x))
 
 
 class ConditionedUNet(nn.Module):
-    def __init__(self, in_channels: int = 2, base: int = 48, depth: int = 4):
+    def __init__(self, in_channels: int = 2, base: int = 96, depth: int = 4,
+                 blocks: int = 3):
         super().__init__()
-        assert depth >= 2
+        assert depth >= 2 and blocks >= 1
         self.in_channels = in_channels
-        chs = [base * (2 ** i) for i in range(depth)]   # e.g. 48,96,192,384
-        self.inc = conv_block(in_channels, chs[0])
-        self.downs = nn.ModuleList(Down(chs[i], chs[i + 1]) for i in range(depth - 1))
+        chs = [base * (2 ** i) for i in range(depth)]
+
+        self.inc = cbr(in_channels, chs[0])
+        self.enc = nn.ModuleList(res_stage(chs[i], blocks) for i in range(depth))
+        self.downs = nn.ModuleList(cbr(chs[i], chs[i + 1]) for i in range(depth - 1))
+        self.pool = nn.MaxPool2d(2)
         self.ups = nn.ModuleList(
-            Up(chs[i], chs[i - 1], chs[i - 1]) for i in range(depth - 1, 0, -1)
+            Up(chs[i], chs[i - 1], chs[i - 1], blocks) for i in range(depth - 1, 0, -1)
         )
         self.outc = nn.Conv2d(chs[0], 1, 1)
 
     def forward(self, x):
-        img = x[:, :1]                # channel 0 is the image
-        skips = [self.inc(x)]
-        for down in self.downs:
-            skips.append(down(skips[-1]))
-        h = skips[-1]
-        for i, up in enumerate(self.ups):
-            h = up(h, skips[-2 - i])
-        return img + self.outc(h)     # residual
+        img = x[:, :1]
+        h = self.inc(x)
+        skips = []
+        depth = len(self.enc)
+        for i in range(depth):
+            h = self.enc[i](h)
+            if i < depth - 1:
+                skips.append(h)
+                h = self.downs[i](self.pool(h))
+        for j, up in enumerate(self.ups):
+            h = up(h, skips[-1 - j])
+        return img + self.outc(h)
 
 
 if __name__ == "__main__":
-    # quick shape sanity check
-    m = ConditionedUNet()
-    x = torch.randn(2, 2, 256, 256)
-    y = m(x)
+    import argparse
+
+    ap = argparse.ArgumentParser(description="probe model size for a config")
+    ap.add_argument("--base", type=int, default=96)
+    ap.add_argument("--depth", type=int, default=4)
+    ap.add_argument("--blocks", type=int, default=3)
+    a = ap.parse_args()
+
+    m = ConditionedUNet(in_channels=2, base=a.base, depth=a.depth, blocks=a.blocks)
     n = sum(p.numel() for p in m.parameters())
-    print("output", tuple(y.shape), "| params", f"{n/1e6:.2f}M")
+    y = m(torch.randn(1, 2, 256, 256))
+    print(f"base={a.base} depth={a.depth} blocks={a.blocks}")
+    print(f"  params : {n/1e6:.1f}M")
+    print(f"  fp32   : {n*4/1e6:.0f} MB   (fp16 ~{n*2/1e6:.0f} MB, int8 ~{n/1e6:.0f} MB)")
+    print(f"  output : {tuple(y.shape)}")

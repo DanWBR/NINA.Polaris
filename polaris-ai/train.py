@@ -48,8 +48,9 @@ def main():
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--tile", type=int, default=256)
     ap.add_argument("--lr", type=float, default=2e-4)
-    ap.add_argument("--base", type=int, default=48)
+    ap.add_argument("--base", type=int, default=96)
     ap.add_argument("--depth", type=int, default=4)
+    ap.add_argument("--blocks", type=int, default=3, help="residual blocks per stage (capacity dial)")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--val-frac", type=float, default=0.05)
     ap.add_argument("--w-grad", type=float, default=0.5)
@@ -72,7 +73,11 @@ def main():
                     num_workers=args.workers, pin_memory=(dev == "cuda"))
     print(f"tiles: {len(full)} (train {n_tr}, val {n_val})")
 
-    net = ConditionedUNet(in_channels=2, base=args.base, depth=args.depth).to(dev)
+    net = ConditionedUNet(in_channels=2, base=args.base, depth=args.depth,
+                          blocks=args.blocks).to(dev)
+    nparams = sum(p.numel() for p in net.parameters())
+    print(f"model: base={args.base} depth={args.depth} blocks={args.blocks} "
+          f"-> {nparams/1e6:.1f}M params (~{nparams*4/1e6:.0f} MB fp32)")
     if args.resume and os.path.isfile(args.resume):
         net.load_state_dict(torch.load(args.resume, map_location=dev))
         print("resumed from", args.resume)

@@ -39,14 +39,15 @@ def main():
     ap.add_argument("--ckpt", required=True)
     ap.add_argument("--out", default="models")
     ap.add_argument("--size", type=int, default=256)
-    ap.add_argument("--base", type=int, default=48)
+    ap.add_argument("--base", type=int, default=96)
     ap.add_argument("--depth", type=int, default=4)
+    ap.add_argument("--blocks", type=int, default=3)
     ap.add_argument("--opset", type=int, default=17)
     ap.add_argument("--no-fp16", action="store_true")
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
-    net = ConditionedUNet(in_channels=2, base=args.base, depth=args.depth)
+    net = ConditionedUNet(in_channels=2, base=args.base, depth=args.depth, blocks=args.blocks)
     net.load_state_dict(torch.load(args.ckpt, map_location="cpu"))
     net.eval()
 
