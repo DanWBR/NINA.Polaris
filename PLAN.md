@@ -181,6 +181,17 @@ inference primitive changes.
   (c) on-device end-to-end verify that `GraXpertService` actually dispatches to
   `Services/Qnn` (not just a standalone `qnn-net-run`) on a real denoise through
   the UI.
+- **Decon stays CLI-only — DECIDED 2026-06-27, not deferred.** Deconvolution
+  (stars/objects) has a fundamentally different model shape than BGE/Denoise:
+  **512² tiles** (not 256²), **NCHW mono** `[1,1,512,512]` (one channel per
+  inference, not NHWC RGB), and **two input tensors** (pixels + a params tensor
+  `[1,2]` = `[sigma, strength]` from the PSF FWHM→σ mapping). The shared
+  `RknnPipelines` record/replay contract is single-input / single-output /
+  256×256×3, so decon doesn't fit it — `TryFamily` returns false for
+  Deconvolution on BOTH the RKNN and QNN lanes and it runs on the GraXpert CLI.
+  This mirrors the Rockchip choice and is intentional; accelerating decon would
+  be a separate epic (decon pipeline + multi-input batch in QnnNetRunBatch +
+  quantized two-input model). Not planned.
 
 ### SDK / toolchain references (Qualcomm docs, confirmed 2026-06)
 From https://docs.qualcomm.com/doc/80-63442-10/topic/linux_setup.html
