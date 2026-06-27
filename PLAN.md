@@ -213,14 +213,22 @@ shapes, deferred; they'd need a 512 pipeline.)
   passes (record returns zeros). The QNN path loops per pass; RKNN (real session)
   is naturally fine. 3 gold tests prove record/replay == direct (single + per-pass
   multi-pass), 11/11 QnnLaneTests green.
-- **SNNPU-3 — TODO:** server-side `StarRemovalService` + endpoint. Star removal is
-  currently **browser-only** (`StarRemovalPipeline` in onnx-pipelines.js); the
-  RKNN/QNN lanes are wired only into `GraXpertService` (bge/denoise/decon), which
-  has no star-removal op. Need a service that loads a FITS, calls the NPU
-  RunStarRemoval, writes starless + stars siblings, + an endpoint + DI.
-- **SNNPU-4 — TODO:** UI — offer "remove stars on server/NPU" (today the FILES
-  button runs in-browser); chain to the Image Blend tool. Model `.bin`:
-  `qnn/starnet-ai-models/{ver}/starnet_v68_int16.bin` (resolver already handles it).
+- **SNNPU-3/4 — PARKED 2026-06-27: star removal stays browser/CPU on this HW.**
+  The starnet ONNX does NOT convert to a QCS6490 HTP context binary: its op set
+  includes `ReduceMean` + `ReduceSumSquare` → `Sub`/`Div` (variance computed at
+  RUNTIME) plus training-mode `BatchNormalization` — i.e. StarNet normalizes with
+  per-tile statistics computed on the fly. The QAIRT/HTP converter can't lower
+  runtime-statistics normalization (AI Hub compile + int8/int16 quantize both
+  succeed; the final qnn_context_binary convert fails with "exit 255"). At
+  batch=1 that normalization is mathematically InstanceNormalization (which the
+  HTP supports), so a re-export collapsing it to `InstanceNormalization` (or
+  folding BN to constant mean/var) WOULD convert — but the user opted not to
+  re-export. Decision: **star removal runs browser/CPU (as today); NPU is for
+  denoise/BGE only on the Q6A.** SNNPU-3 (server `StarRemovalService` + endpoint)
+  and SNNPU-4 (UI) are NOT pursued. The SNNPU-1/2 `RunStarRemoval` lane stays as
+  dormant, tested infrastructure — it plugs in unchanged if a foldable-BN starnet
+  export (`qnn/starnet-ai-models/{ver}/starnet_v68_int16.bin`) or another SoC ever
+  appears; no wiring references it today.
 
 ### SDK / toolchain references (Qualcomm docs, confirmed 2026-06)
 From https://docs.qualcomm.com/doc/80-63442-10/topic/linux_setup.html
