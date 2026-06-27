@@ -72,3 +72,9 @@ license files. Notable copyleft / restricted components:
                                       acceleration on RK3588, fetched at build
                                       time, NOT committed; see
                                       licenses/RKNPU-LICENSE.txt)
+  * Qualcomm AI Runtime (QAIRT) .... proprietary Qualcomm SDK license
+                                      (qnn-net-run + libQnnHtp*.so + Hexagon
+                                      V68 skel; optional NPU acceleration on
+                                      Qualcomm SBCs / QCS6490, device-version-
+                                      locked, assembled at build time, NOT
+                                      committed; see licenses/QAIRT-LICENSE.txt)

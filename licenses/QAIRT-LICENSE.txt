@@ -1,0 +1,46 @@
+Qualcomm AI Runtime (QAIRT / QNN) runtime
+=========================================
+
+N.I.N.A. Polaris can optionally accelerate the GraXpert AI models
+(background extraction, denoise) on the Hexagon NPU (HTP) of Qualcomm
+SBCs — the Radxa Dragon Q6A (QCS6490 / QCM6490, Hexagon V68) and similar
+— using the Qualcomm AI Runtime (QAIRT, formerly the Qualcomm Neural
+Network SDK, "QNN"). The accelerated path uses the QAIRT user-space
+runtime: the `qnn-net-run` tool, the HTP backend `libQnnHtp.so` and its
+companion libraries, and the Hexagon DSP skel `libQnnHtpV68Skel.so`.
+
+Proprietary vendor code — NOT redistributed in this repository
+--------------------------------------------------------------
+The QAIRT runtime is proprietary Qualcomm software, licensed under the
+Qualcomm AI Engine Direct / QAIRT SDK license (the "Qualcomm Technologies,
+Inc. Software License Agreement" accompanying the SDK). It is NOT open
+source and is NOT committed to this source tree.
+
+It is also version-locked to the device firmware: the only public x86 SDK
+(QAIRT 2.31) does not interoperate with the runtime shipped on the board
+(2.45) — context binaries, DLCs and libraries all fail to load across that
+boundary. The device-matched 2.45 aarch64 runtime therefore comes from the
+board itself (the Qualcomm apt packages already installed on the Radxa OS
+image) or from the matching 2.45 SDK obtained from Qualcomm under their
+license.
+
+How Polaris uses it
+-------------------
+`scripts/fetch-qairt.sh` (or `.ps1`) assembles the needed aarch64 files
+from a QAIRT source root YOU provide into `external/qairt/aarch64/`. The
+`linux-arm64` publish then bundles that tree at `/opt/polaris/qairt`, where
+`QnnRuntime` locates it (override with `POLARIS_QAIRT_ROOT`). On any other
+platform, and on an arm64 board without a Qualcomm NPU, the runtime is
+absent and unused — `QnnRuntime` falls back to the GraXpert CLI / browser
+ONNX path. Distributors who package the `.deb` with the bundled runtime are
+responsible for complying with the Qualcomm SDK license that governs it.
+
+The HTP context binaries converted for the NPU (`*_v68_int16.bin` /
+`*_v68_int8.bin`) are produced from the same GraXpert AI ONNX weights and
+are subject to the GraXpert AI model license noted in NOTICE (CC BY-NC-SA
+4.0, distributed as an optional separate download, not part of this AGPL
+work). NOTE: the QCS6490 HTP is integer-only (INT8 / INT16, no FP16), so
+these binaries are quantized (int16 = production quality, int8 = faster).
+
+Reference: Qualcomm AI Engine Direct / QAIRT documentation,
+https://docs.qualcomm.com/ (Qualcomm AI Engine Direct SDK).

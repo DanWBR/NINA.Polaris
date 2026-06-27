@@ -447,6 +447,11 @@ scripts/.apass-cache/
 # fetched at build time by scripts/fetch-librknnrt.sh, not committed.
 /external/rknpu/
 
+# QNN/QAIRT: Qualcomm AI Runtime (qnn-net-run + libQnnHtp*.so + V68 skel) is a
+# proprietary, device-version-locked vendor runtime assembled at build time by
+# scripts/fetch-qairt.sh into external/qairt/aarch64/, not committed.
+/external/qairt/
+
 # --- Vendored camera SDK native libraries (force-tracked) ---
 # The generic `x64/` and `[Aa][Rr][Mm]64/` build-output ignores above also
 # match the vendored SDK arch folders under camera_sdk/ (e.g.

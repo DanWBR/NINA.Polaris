@@ -162,10 +162,20 @@ inference primitive changes.
   fp16 tier kept for future fp16-capable SoCs. Still TODO under QNN-5: build the
   bge + denoise-v2 int16 binaries and drop them at
   `qnn/{family}-ai-models/{ver}/*v68_int16*.bin` (convention set, .gitignored).
-- **QNN-5:** packaging — BUNDLE the QAIRT 2.45 aarch64 runtime (libQnnHtp.so +
-  V68 skel + qnn-net-run) into the arm64 .deb at POLARIS_QAIRT_ROOT (like
-  librknnrt.so), license/attribution, Benchmark NPU column, docs, on-device
-  end-to-end verify.
+- **QNN-5 — packaging in progress.** DONE: the arm64 .deb now bundles the QAIRT
+  2.45 aarch64 runtime at `/opt/polaris/qairt` (the default `POLARIS_QAIRT_ROOT`),
+  mirroring the librknnrt.so pattern — `scripts/fetch-qairt.{sh,ps1}` assemble
+  `external/qairt/aarch64/{bin,lib,dsp}` from a device/SDK source (no public
+  download: 2.31 SDK is version-locked, so it COPIES from a provided 2.45 root),
+  the csproj recursively copies that tree into the publish (Exists+linux-arm64
+  guarded), build-deb.sh chmods `qairt/bin/qnn-net-run`, `external/qairt/` is
+  gitignored, and `licenses/QAIRT-LICENSE.txt` + NOTICE + docs
+  (`docs/user-guide/npu-acceleration.md` Qualcomm section) cover attribution.
+  REMAINING: (a) build the **bge** + **denoise-v2** int16 binaries (denoise-v3
+  done) and drop them under `qnn/{family}-ai-models/{ver}/*_v68_int16.bin`;
+  (b) add the NPU column to the Benchmark; (c) on-device end-to-end verify that
+  `GraXpertService` actually dispatches to `Services/Qnn` (not just a standalone
+  `qnn-net-run`) on a real denoise through the UI.
 
 ### SDK / toolchain references (Qualcomm docs, confirmed 2026-06)
 From https://docs.qualcomm.com/doc/80-63442-10/topic/linux_setup.html

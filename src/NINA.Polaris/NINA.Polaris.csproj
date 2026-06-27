@@ -210,4 +210,21 @@
     </Content>
   </ItemGroup>
 
+  <!-- QNN/QAIRT: Qualcomm AI Runtime for GraXpert AI acceleration on the
+       Hexagon NPU (HTP) of Qualcomm SBCs (Radxa Dragon Q6A / QCS6490, V68).
+       Assemble the aarch64 runtime tree (bin/lib/dsp) into
+       external/qairt/aarch64/ via scripts/fetch-qairt.sh so the linux-arm64
+       publish bundles it at /opt/polaris/qairt — the default QairtRoot that
+       QnnRuntime probes. The recursive copy preserves the bin/lib/dsp layout.
+       Exists()-guarded so a dev box without the runtime (and every non-arm64
+       build) just skips it; QnnRuntime gates actual use at runtime. The
+       runtime is proprietary Qualcomm vendor code (licenses/QAIRT-LICENSE.txt)
+       and is NOT committed. -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64' And Exists('$(MSBuildThisFileDirectory)..\..\external\qairt\aarch64')">
+    <Content Include="$(MSBuildThisFileDirectory)..\..\external\qairt\aarch64\**\*">
+      <Link>qairt\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

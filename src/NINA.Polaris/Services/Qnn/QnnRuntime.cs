@@ -24,7 +24,8 @@ namespace NINA.Polaris.Services.Qnn;
 /// Rockchip path. Like that path the gate is deliberately conservative: it must
 /// look like a Qualcomm SBC (Linux + arm64) with the cDSP FastRPC bridge up
 /// (<c>/dev/fastrpc-cdsp</c>) and the QAIRT runtime present (the
-/// <c>qnn-net-run</c> tool + <c>libQnnHtp.so</c>).
+/// <c>qnn-net-run</c> tool + <c>libQnnHtp.so</c>). NOTE: this board's HTP is
+/// integer-only (INT8/INT16, no FP16), so the bundled models are quantized.
 ///
 /// The real authority is whether a <see cref="QnnSession"/> actually runs a
 /// model; the inference service always falls back to the GraXpert CLI on any

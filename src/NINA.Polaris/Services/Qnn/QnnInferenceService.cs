@@ -25,8 +25,9 @@ namespace NINA.Polaris.Services.Qnn;
 /// Hexagon counterpart to <see cref="RknnInferenceService"/>. When the board is
 /// a Qualcomm SBC (<see cref="QnnRuntime.IsAvailable"/>) and a pre-built HTP
 /// context binary exists for the requested family/version + Hexagon arch
-/// (e.g. <c>qnn/denoise-ai-models/3.0.2/denoise_v68_fp16.bin</c>), the model
-/// runs on the NPU; otherwise the caller falls back to the GraXpert CLI.
+/// (e.g. <c>qnn/denoise-ai-models/3.0.2/denoise_v68_int16.bin</c> — the QCS6490
+/// HTP is integer-only, int16 is the production precision), the model runs on
+/// the NPU; otherwise the caller falls back to the GraXpert CLI.
 ///
 /// The tiling / normalization / artifact-correction math is the canonical
 /// <see cref="RknnPipelines"/> (shared GraXpert-NPU logic), reused unchanged via

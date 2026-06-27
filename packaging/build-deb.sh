@@ -144,6 +144,11 @@ chmod 0755 "$BUILD_DIR/opt/polaris/NINA.Polaris"
 # .so files need exec
 find "$BUILD_DIR/opt/polaris" -name "*.so" -exec chmod 0755 {} \;
 find "$BUILD_DIR/opt/polaris" -name "*.so.*" -exec chmod 0755 {} \;
+# Bundled QAIRT (Qualcomm NPU) runtime tools must be executable — the .so chmod
+# above misses the bare tool name (qnn-net-run). Skip cleanly if not bundled.
+if [ -d "$BUILD_DIR/opt/polaris/qairt/bin" ]; then
+    chmod 0755 "$BUILD_DIR/opt/polaris/qairt/bin/"* 2>/dev/null || true
+fi
 
 # Systemd units + config
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris.service"
