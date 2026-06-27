@@ -1,0 +1,15 @@
+# datasets and training artifacts — never commit these
+data/
+checkpoints/
+models/
+*.onnx
+*.pt
+*.pth
+*.npy
+*.fits
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
