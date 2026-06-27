@@ -659,6 +659,12 @@ public class EquipmentProfile {
     /// predicted per-frame change on top of the reactive baseline. Default 0.7.</summary>
     public double NativePredictiveBlend { get; set; } = 0.7;
 
+    /// <summary>ZFilter algorithm: exposure factor. The equivalent post-filter
+    /// exposure time ≈ this × the guide exposure; higher = smoother/slower (sets the
+    /// low-pass corner). <c>0 = use the PHD2 default 2.0</c>; otherwise clamped to
+    /// [1, 20]. 0-as-default lets partial rig saves skip it without clobbering.</summary>
+    public double NativeZFilterExpFactor { get; set; } = 0.0;
+
     /// <summary>Apply Dec backlash compensation (the amount is auto-measured
     /// during calibration). Off by default — an over-large value oscillates
     /// worse than no compensation.</summary>

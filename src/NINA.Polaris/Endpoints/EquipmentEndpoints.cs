@@ -269,6 +269,10 @@ public static class EquipmentEndpoints {
                     r.NativeRaAlgorithm = update.NativeRaAlgorithm.Trim().ToLowerInvariant();
                 if (!string.IsNullOrWhiteSpace(update.NativeDecAlgorithm))
                     r.NativeDecAlgorithm = update.NativeDecAlgorithm.Trim().ToLowerInvariant();
+                // ZFilter exposure factor: 0 means "not provided" (partial saves),
+                // so only apply a real value and clamp it to the valid range.
+                if (update.NativeZFilterExpFactor > 0)
+                    r.NativeZFilterExpFactor = Math.Clamp(update.NativeZFilterExpFactor, 1.0, 20.0);
                 r.NativeBacklashComp = update.NativeBacklashComp;
                 if (update.NativeBacklashMaxMs >= 0)
                     r.NativeBacklashMaxMs = update.NativeBacklashMaxMs;

@@ -36,18 +36,22 @@ public sealed partial class NativeGuider {
         double wormSec = Math.Max(0.0, Rig.NativePredictiveWormPeriodSec);
         int predWin = Rig.NativePredictiveWindowSamples;
         double predBlend = Math.Clamp(Rig.NativePredictiveBlend, 0.0, 1.0);
+        // ZFilter exposure factor: 0 = use the PHD2 default (2.0); else clamp [1,20].
+        double zExp = Rig.NativeZFilterExpFactor >= 1.0 ? Math.Min(Rig.NativeZFilterExpFactor, 20.0) : 2.0;
         _raAlgo = GuideAlgorithmFactory.Create(
             string.IsNullOrWhiteSpace(Rig.NativeRaAlgorithm) ? "hysteresis" : Rig.NativeRaAlgorithm,
             minMove: Math.Max(0.0, Rig.NativeMinMoveRaPx),
             aggression: Math.Clamp(Rig.NativeRaAggression, 0.0, 2.0),
             hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99),
-            wormPeriodSec: wormSec, predictiveWindow: predWin, predictiveBlend: predBlend);
+            wormPeriodSec: wormSec, predictiveWindow: predWin, predictiveBlend: predBlend,
+            zfilterExpFactor: zExp);
         _decAlgo = GuideAlgorithmFactory.Create(
             string.IsNullOrWhiteSpace(Rig.NativeDecAlgorithm) ? "resistswitch" : Rig.NativeDecAlgorithm,
             minMove: Math.Max(0.0, Rig.NativeMinMoveDecPx),
             aggression: Math.Clamp(Rig.NativeDecAggression, 0.0, 2.0),
             hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99),
-            wormPeriodSec: wormSec, predictiveWindow: predWin, predictiveBlend: predBlend);
+            wormPeriodSec: wormSec, predictiveWindow: predWin, predictiveBlend: predBlend,
+            zfilterExpFactor: zExp);
         _raAlgo.Reset();
         _decAlgo.Reset();
         _lastGuideMs = 0;

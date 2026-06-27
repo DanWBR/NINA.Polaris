@@ -1041,6 +1041,7 @@ function ninaApp() {
         nativePredictiveWormPeriodSec: 0,   // 0 = auto-estimate
         nativePredictiveWindowSamples: 256,
         nativePredictiveBlend: 0.7,
+        nativeZFilterExpFactor: 2.0,        // ZFilter exposure factor (PHD2 default)
         nativeGuideAlgorithms: [
             { id: 'hysteresis', name: 'Hysteresis' },
             { id: 'resistswitch', name: 'Resist Switch' },
@@ -16092,6 +16093,8 @@ function ninaApp() {
             this.nativePredictiveWormPeriodSec = rig.nativePredictiveWormPeriodSec || 0;
             this.nativePredictiveWindowSamples = rig.nativePredictiveWindowSamples || 256;
             this.nativePredictiveBlend = (rig.nativePredictiveBlend ?? 0.7);
+            this.nativeZFilterExpFactor = (rig.nativeZFilterExpFactor && rig.nativeZFilterExpFactor >= 1)
+                ? rig.nativeZFilterExpFactor : 2.0;
             this.nativePierSideHandling = rig.nativePierSideHandling || 'mirror';
             this.nativeReverseDecAfterFlip = !!rig.nativeReverseDecAfterFlip;
             this.equipMountChoice = rig.telescope || '';
@@ -16855,6 +16858,7 @@ function ninaApp() {
                 nativePredictiveWormPeriodSec: this.nativePredictiveWormPeriodSec ?? rig.nativePredictiveWormPeriodSec ?? 0,
                 nativePredictiveWindowSamples: this.nativePredictiveWindowSamples || rig.nativePredictiveWindowSamples || 256,
                 nativePredictiveBlend: this.nativePredictiveBlend ?? rig.nativePredictiveBlend ?? 0.7,
+                nativeZFilterExpFactor: this.nativeZFilterExpFactor || rig.nativeZFilterExpFactor || 2.0,
                 telescope: this.equipMountChoice || rig.telescope,
                 telescopeDriver: this.mountDriver || rig.telescopeDriver || 'indi',
                 focuser: this.equipFocuserChoice || rig.focuser,
@@ -22592,6 +22596,16 @@ function ninaApp() {
                     })
                 });
             } catch (e) { /* guider may be disconnected; the rig save still persists */ }
+        },
+
+        // ZFilter exposure factor. Persists to the rig (applied when the native
+        // guider next (re)configures, like the algorithm choice itself).
+        setNativeZFilterExpFactor(value) {
+            let v = Number(value);
+            if (!isFinite(v)) v = 2.0;
+            v = Math.max(1.0, Math.min(20.0, v));
+            this.nativeZFilterExpFactor = v;
+            this._persistRigSelection({ nativeZFilterExpFactor: v });
         },
 
         // Set the guide-camera exposure (ms) on the active guider. Works for both
