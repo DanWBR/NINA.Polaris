@@ -11,9 +11,27 @@ from __future__ import annotations
 import argparse
 import os
 
+import glob
+
 import torch
 
 from model import ConditionedUNet
+
+
+def inline_onnx(path: str) -> None:
+    """Re-save an ONNX file with all weights embedded (single self-contained
+    file) and remove any sibling external-data blobs. The torch dynamo exporter
+    writes weights to a separate .onnx.data by default, which is fragile for the
+    NPU converters and breaks single-file serving in ORT-Web."""
+    import onnx
+
+    m = onnx.load(path, load_external_data=True)   # pulls the .data into memory
+    onnx.save(m, path, save_as_external_data=False)
+    for blob in glob.glob(path + ".data") + glob.glob(path + "_data"):
+        try:
+            os.remove(blob)
+        except OSError:
+            pass
 
 
 def main():
@@ -39,6 +57,7 @@ def main():
         input_names=["input"], output_names=["output"],
         dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
     )
+    inline_onnx(fp32)
     print("wrote", fp32)
 
     # also a fixed-shape (static batch=1) graph -- friendliest for NPU converters
@@ -47,6 +66,7 @@ def main():
         net, dummy, fp32_static, opset_version=args.opset,
         input_names=["input"], output_names=["output"],
     )
+    inline_onnx(fp32_static)
     print("wrote", fp32_static)
 
     if not args.no_fp16:
