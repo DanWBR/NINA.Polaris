@@ -13321,3 +13321,42 @@ zero-copy buffers (the win that makes per-op offload viable on an SBC).
   Settings benchmark card ("GPU vs CPU (OpenCL)"). Skipped when no GPU /
   toggle off. Tests green (13). DONE. Pending: record real SBC speedup
   numbers in benchmark memory once run on the Q6A / OPi5.
+
+## NCNN-GPU — open Vulkan GPU lane for AI models (proposed, not started)
+
+The home for the AI models the **Hexagon HTP can't run** (denoise v3 / LayerNorm,
+deconvolution, star removal) and for fp16-quality runs without int quantization.
+This **replaces the parked `libQnnGpu` idea** (Qualcomm SDK, op-coverage unknown,
+spike GO but shelved 2026-06-27 as "complicado demais") with an **open,
+vendor-neutral** path.
+
+**Why ncnn (Tencent, BSD-3):** pure C++, no deps, tiny binary, ARM-NEON CPU +
+**Vulkan compute GPU**. Vulkan runs on the **Adreno 643 (Q6A, via Turnip)**, Mali,
+Intel, etc. — one framework, any Vulkan GPU, no per-vendor SDK. Fits the
+all-open direction (our own models in `polaris-ai/` are open too). Supports
+fp16 + int8.
+
+**Scope (mirrors the RKNN lane):**
+- `NCNN-1`: native binding (P/Invoke `libncnn` like `librknnrt`), `NcnnRuntime`
+  probe (Vulkan device present + lib loadable; `POLARIS_DISABLE_NPU`/new
+  `POLARIS_DISABLE_NCNN` to force off).
+- `NCNN-2`: `NcnnInferenceService` reusing the `RknnPipelines` tiling math via the
+  same record/replay trick (or a direct tile runner).
+- `NCNN-3`: model conversion — **PyTorch → ncnn via `pnnx`** (the author's tool,
+  more robust than the old `onnx2ncnn`); our `polaris-ai` decon model is PyTorch,
+  so pnnx is the clean route. fp16 by default; int8 with a calibration set.
+- `NCNN-4`: wire into `GraXpertService` chooser (HTP for BGE+denoise-v2, **ncnn-
+  Vulkan for v3/decon/star-removal + fp16-quality runs**, CPU fallback);
+  packaging (bundle `libncnn` + Vulkan loader on linux-arm64), licenses, docs.
+
+**Boundaries / honesty:** ncnn does NOT use the Hexagon NPU (no QNN/HTP backend);
+it covers CPU (NEON) + GPU (Vulkan). So it complements, not replaces, the RKNN/QNN
+NPU lanes. Same caveat as before: Vulkan `shader-f16` maturity on Turnip/Adreno is
+the risk to validate first — but ncnn is widely deployed on Adreno phones, so it's
+a much safer bet than the ORT-Web WebGPU path that died on Adreno fp16. Spike
+first: convert one `polaris-ai` decon tile via pnnx → ncnn-Vulkan on the Q6A, time
+GPU vs CPU, confirm fp16 runs, before building the lane.
+
+Related: `polaris-ai/` (the open models this serves), the QNN-NPU section above
+(HTP limits + the parked libQnnGpu spike), and the OCL section (classic-math
+OpenCL, a separate concern — that's image math, this is AI inference).
