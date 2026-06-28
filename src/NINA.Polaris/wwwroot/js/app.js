@@ -119,7 +119,7 @@ function ninaApp() {
             commits: [],   // changelog: [{ sha, subject, body }] since installed version
             assetName: '', assetSize: 0,
             installing: false, done: false,
-            progress: '', error: '',
+            progress: '', error: '', pct: 0, phase: '',  // pct/phase drive the install progress bar
             // Offline "relay" update: SBC has no internet but the client
             // (phone on 4G/5G) does. The browser reads the release metadata
             // from GitHub (CORS-allowed JSON), the user downloads the .deb on
@@ -29733,11 +29733,36 @@ function ninaApp() {
             if (inCode) html += '</code></pre>';
             return html;
         },
+        // ─── Install progress bar ────────────────────────────────────────
+        // The server gives no real percentage: it blocks on the apt download,
+        // installs, then the service restarts and we poll for the version to
+        // change. So we drive an *eased* bar with two ceilings — it creeps
+        // toward 50% during download/install, toward 95% once the restart/poll
+        // phase begins, then snaps to 100% on success. It always moves (so it
+        // doesn't look hung) without ever claiming progress we can't verify.
+        _updProgStart() {
+            if (this._updProgTimer) clearInterval(this._updProgTimer);
+            this.update.pct = 2;
+            this.update._restarting = false;
+            this._updProgTimer = setInterval(() => {
+                if (!this.update.installing) { this._updProgStop(); return; }
+                const cap = this.update._restarting ? 95 : 50;
+                // Ease toward the ceiling, slowing as it approaches.
+                this.update.pct = Math.min(cap,
+                    this.update.pct + Math.max(0.25, (cap - this.update.pct) * 0.05));
+            }, 500);
+        },
+        _updProgRestart() { this.update._restarting = true; },
+        _updProgDone() { this._updProgStop(); this.update.pct = 100; },
+        _updProgStop() {
+            if (this._updProgTimer) { clearInterval(this._updProgTimer); this._updProgTimer = null; }
+        },
         async installUpdate() {
             if (this.update.installing) return;
             this.update.error = '';
             this.update.installing = true;
             this.update.progress = 'Downloading and installing the new package…';
+            this._updProgStart();
             try {
                 // The server blocks on downloading the (tens-of-MB) .deb before
                 // it returns, which easily outlasts the default 15s apiFetch
@@ -29751,6 +29776,7 @@ function ninaApp() {
                     try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) {}
                     this.update.error = msg;
                     this.update.installing = false;
+                    this._updProgStop();
                     return;
                 }
                 // The install runs in a transient systemd scope; polaris.service
@@ -29759,10 +29785,12 @@ function ninaApp() {
                 // (Comparing against the old version is scheme-agnostic — the
                 // status 'version' string need not equal the GitHub tag.)
                 this.update.progress = 'Restarting service and applying update…';
+                this._updProgRestart();
                 this._pollUpdateComplete(this.appVersion || '', Date.now());
             } catch (e) {
                 this.update.error = 'Install request failed: ' + (e.message || e);
                 this.update.installing = false;
+                this._updProgStop();
             }
         },
         async _pollUpdateComplete(oldVersion, startedAt) {
@@ -29772,6 +29800,7 @@ function ninaApp() {
             const elapsed = Date.now() - startedAt;
             if (elapsed > 3 * 60 * 1000) {
                 this.update.installing = false;
+                this._updProgStop();
                 this.update.error = 'Update is taking longer than expected. '
                     + 'It may still be installing — reload the page in a moment.';
                 return;
@@ -29787,6 +29816,7 @@ function ninaApp() {
                     if (elapsed > 8000 && v && v !== oldVersion) {
                         this.update.installing = false;
                         this.update.done = true;
+                        this._updProgDone();
                         setTimeout(() => window.location.reload(), 1500);
                         return;
                     }
@@ -29910,6 +29940,7 @@ function ninaApp() {
             this.update.installing = true;
             this.update.rollbackTarget = tag;
             this.update.progress = `Downloading and installing ${tag}…`;
+            this._updProgStart();
             try {
                 // Server blocks on the (tens-of-MB) download before returning;
                 // allow up to 10 min like installUpdate so the default fetch
@@ -29921,14 +29952,17 @@ function ninaApp() {
                     this.update.error = msg;
                     this.update.installing = false;
                     this.update.rollbackTarget = '';
+                    this._updProgStop();
                     return;
                 }
                 this.update.progress = 'Restarting service and applying…';
+                this._updProgRestart();
                 this._pollUpdateComplete(this.appVersion || '', Date.now());
             } catch (e) {
                 this.update.error = 'Install request failed: ' + (e.message || e);
                 this.update.installing = false;
                 this.update.rollbackTarget = '';
+                this._updProgStop();
             }
         },
 
@@ -30031,6 +30065,7 @@ function ninaApp() {
             this.update.error = '';
             this.update.installing = true;
             this.update.progress = 'Uploading the package to your SBC…';
+            this._updProgStart();
             try {
                 const headers = {
                     'Content-Type': 'application/octet-stream',
@@ -30050,15 +30085,18 @@ function ninaApp() {
                     try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) {}
                     this.update.error = msg;
                     this.update.installing = false;
+                    this._updProgStop();
                     return;
                 }
                 this.update.progress = 'Restarting service and applying update…';
+                this._updProgRestart();
                 this._pollUpdateComplete(this.appVersion || '', Date.now());
             } catch (e) {
                 let msg = 'Upload failed: ' + (e.message || e);
                 if (e && e.body) { try { const j = JSON.parse(e.body); if (j.error) msg = j.error; } catch (_) {} }
                 this.update.error = msg;
                 this.update.installing = false;
+                this._updProgStop();
             } finally {
                 this.update.relayUploading = false;
             }

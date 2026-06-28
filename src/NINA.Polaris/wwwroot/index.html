@@ -15992,9 +15992,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <!-- Installing / progress -->
             <template x-if="update.installing">
                 <div style="text-align:center;padding:10px 0">
-                    <div class="spinner" style="margin:0 auto 10px"></div>
-                    <p x-text="update.progress || 'Installing update…'"></p>
-                    <p style="opacity:.7;font-size:.8em;margin-top:6px">
+                    <p x-text="update.progress || 'Installing update…'" style="margin-bottom:8px"></p>
+                    <div class="siril-modal-progress-bar">
+                        <div class="siril-modal-progress-fill"
+                             :style="'width:' + Math.round(update.pct) + '%'"></div>
+                    </div>
+                    <p style="opacity:.7;font-size:.8em;margin-top:8px">
                         The service will restart automatically. This page will reload when the
                         new version is live — don't close it.
                     </p>
@@ -16111,9 +16114,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <!-- Installing / progress -->
             <template x-if="update.installing">
                 <div style="text-align:center;padding:10px 0">
-                    <div class="spinner" style="margin:0 auto 10px"></div>
-                    <p x-text="update.progress || 'Installing…'"></p>
-                    <p style="opacity:.7;font-size:.8em;margin-top:6px">
+                    <p x-text="update.progress || 'Installing…'" style="margin-bottom:8px"></p>
+                    <div class="siril-modal-progress-bar">
+                        <div class="siril-modal-progress-fill"
+                             :style="'width:' + Math.round(update.pct) + '%'"></div>
+                    </div>
+                    <p style="opacity:.7;font-size:.8em;margin-top:8px">
                         The service will restart automatically. This page will reload when the
                         target version is live — don't close it.
                     </p>
@@ -16302,7 +16308,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260628-starcolor3"></script>
+    <script src="/js/app.js?v=20260628-updateprogress"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
