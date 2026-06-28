@@ -10062,7 +10062,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             @click="starColorOpenModal(files.selectedPaths[0])"
                             title="Star colour repair (SVBony debayer fringe). Select one OSC frame; run before BGE."
                             aria-label="Star colour repair">
-                        <span class="files-icon" x-text="starColor.busy ? '⏳' : '✨'"></span>
+                        <span class="files-icon" x-text="starColor.busy ? '⏳' : '🔘'"></span>
                     </button>
                     <button class="btn btn-sm btn-icon"
                             x-show="graxpert.status?.available
@@ -10743,7 +10743,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     :disabled="!editorState.session || !editorState.sourcePath"
                                     @click="starColorOpenModal(editorState.sourcePath)"
                                     title="Repair bright-star colour/dark fringe (SVBony debayer artifact). Run this FIRST.">
-                                ✨ Star color
+                                🔘 Star color
                             </button>
                             <button class="btn btn-sm"
                                     x-show="graxpert.status?.available
@@ -15769,7 +15769,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          @keydown.escape.window="if(!starColor.busy) starColor.modalOpen=false">
         <div class="modal-card">
             <div class="modal-head">
-                <span class="modal-icon">✨</span>
+                <span class="modal-icon">🔘</span>
                 <h3>Star colour repair</h3>
             </div>
             <p style="font-size:13px">
