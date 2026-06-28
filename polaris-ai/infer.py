@@ -66,6 +66,8 @@ def main():
     ap.add_argument("--size", type=int, default=256)
     ap.add_argument("--out", default="infer_check.png")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--no-degrade", action="store_true",
+                    help="run on the tile AS-IS (real image; no synthetic blur, no PSNR)")
     args = ap.parse_args()
 
     import onnxruntime as ort
@@ -73,13 +75,26 @@ def main():
 
     rng = np.random.default_rng(args.seed)
     sharp = _load_sharp(args, rng)
-    blurred = synth.degrade(sharp, args.fwhm, rng=rng)
-
-    cond = np.full_like(sharp, synth.condition_value(args.fwhm), dtype=np.float32)
-    x = np.stack([blurred, cond], axis=0)[None, ...].astype(np.float32)  # [1,2,H,W]
-
     sess = ort.InferenceSession(args.onnx, providers=["CPUExecutionProvider"])
     iname = sess.get_inputs()[0].name
+
+    if args.no_degrade:
+        # REAL-IMAGE test: feed the tile straight in (it's already seeing-blurred);
+        # the model deconvolves it. No ground truth -> visual comparison only.
+        img = np.clip(sharp, 0.0, 1.0).astype(np.float32)
+        cond = np.full_like(img, synth.condition_value(args.fwhm), dtype=np.float32)
+        x = np.stack([img, cond], axis=0)[None, ...].astype(np.float32)
+        out = sess.run(None, {iname: x})[0]
+        decon = np.clip(out[0, 0], 0.0, 1.0)
+        panel = np.concatenate([_stretch(img), _stretch(decon)], axis=1)
+        Image.fromarray(panel).save(args.out)
+        print(f"wrote {args.out}  (left: real input | right: deconvolved @ fwhm={args.fwhm})")
+        print("no ground truth on real data -> judge by eye (tighter stars, no rings/halos)")
+        return
+
+    blurred = synth.degrade(sharp, args.fwhm, rng=rng)
+    cond = np.full_like(sharp, synth.condition_value(args.fwhm), dtype=np.float32)
+    x = np.stack([blurred, cond], axis=0)[None, ...].astype(np.float32)  # [1,2,H,W]
     out = sess.run(None, {iname: x})[0]
     decon = np.clip(out[0, 0], 0.0, 1.0)
 
