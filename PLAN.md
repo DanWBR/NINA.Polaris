@@ -13322,7 +13322,18 @@ zero-copy buffers (the win that makes per-op offload viable on an SBC).
   toggle off. Tests green (13). DONE. Pending: record real SBC speedup
   numbers in benchmark memory once run on the Q6A / OPi5.
 
-## NCNN-GPU — open Vulkan GPU lane for AI models (proposed, not started)
+## NCNN-GPU — open Vulkan GPU lane for AI models (spike done 2026-06-28, lane not built)
+
+**Spike result (`polaris-ai/ncnn/`, see its README):** the conversion route
+`onnx --onnxsim--> --pnnx--> .ncnn.param/.bin` works. ONNX-Runtime parity on the
+converted graphs: **BGE 9.1e-04, denoise v2 1.5e-03, denoise v3 7.5e-04 (all PASS)**
+— including denoise v3, the LayerNorm/transformer model the HTP NPU can't run.
+**decon object 1.8e-02 (close), decon stars 4.1e-01 (not faithful yet)** — the
+Swin-style window partition (Reshape/Slice/Gather) + ConvTranspose is the fragile
+part; keep decon on ORT/NPU for now. ncnn's pip wheel has Vulkan, so `bench.py`
+runs CPU-vs-Vulkan on the Q6A with no C++ build. **Pending: the on-Q6A GPU timing
+run** (dev-box dGPU numbers aren't representative). Verdict: BGE+denoise lane is
+worth building; decon needs op-level work first.
 
 The home for the AI models the **Hexagon HTP can't run** (denoise v3 / LayerNorm,
 deconvolution, star removal) and for fp16-quality runs without int quantization.
