@@ -452,10 +452,6 @@ scripts/.apass-cache/
 # scripts/fetch-qairt.sh into external/qairt/aarch64/, not committed.
 /external/qairt/
 
-# NCNN: the Vulkan-GPU runtime (libncnn.so, BSD-3) is a separately-built native
-# binary staged into external/ncnn/aarch64/ by scripts/fetch-ncnn.sh, not committed.
-/external/ncnn/
-
 # --- Vendored camera SDK native libraries (force-tracked) ---
 # The generic `x64/` and `[Aa][Rr][Mm]64/` build-output ignores above also
 # match the vendored SDK arch folders under camera_sdk/ (e.g.
