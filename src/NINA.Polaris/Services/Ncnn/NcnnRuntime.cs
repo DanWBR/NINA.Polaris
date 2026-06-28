@@ -63,10 +63,23 @@ public static class NcnnRuntime {
 
     private static bool CanLoad(params string[] candidates) {
         foreach (var c in candidates) {
+            // 1. default OS search (LD_LIBRARY_PATH, /etc/ld.so.cache, /usr/lib …) —
+            //    finds system libs like libvulkan.so.1.
             if (NativeLibrary.TryLoad(c, out var h)) {
                 try { NativeLibrary.Free(h); } catch { }
                 return true;
             }
+            // 2. the app's own directory. The .deb installs libncnn.so next to the
+            //    app (/opt/polaris), which is NOT on the default dlopen path — the
+            //    real [DllImport("ncnn")] resolves it via the .NET native search
+            //    dirs, but a bare TryLoad doesn't, so probe the absolute path too.
+            try {
+                var p = Path.Combine(AppContext.BaseDirectory, c);
+                if (File.Exists(p) && NativeLibrary.TryLoad(p, out var h2)) {
+                    try { NativeLibrary.Free(h2); } catch { }
+                    return true;
+                }
+            } catch { /* not present in app dir → keep probing */ }
         }
         return false;
     }
