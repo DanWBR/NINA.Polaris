@@ -19632,19 +19632,18 @@ function ninaApp() {
         // via the FileBrowserService API and offers them in the dropdown.
         async loadVideoSerList() {
             try {
-                // Walk the planetary subtree. Files endpoint gives us
-                // recursive directory listings.
-                const root = (this.settings.imageOutputDir || '') + '/planetary';
-                const list = await this.apiGet(`/api/files/list?path=${encodeURIComponent(root)}&recursive=true`);
-                this.video.serList = (list.entries || [])
-                    .filter(e => !e.isDir && e.name.toLowerCase().endsWith('.ser'))
-                    .map(e => ({
-                        path: e.path,
-                        label: e.name + ' (' + ((e.sizeBytes / 1048576) | 0) + ' MB)'
-                    }));
+                // Authoritative server-side recursive listing of *.ser under
+                // {ImageOutputDir}/planetary. The old path used the generic
+                // /api/files/list (non-recursive + different field names), so it
+                // never saw the recordings nested in planetary/<target>/.
+                const r = await this.apiGet('/api/video/recordings');
+                this.video.serList = (r.recordings || []).map(e => ({
+                    path: e.path,
+                    label: (e.target ? e.target + '/' : '') + e.name
+                         + ' (' + ((e.sizeBytes / 1048576) | 0) + ' MB)'
+                }));
             } catch (e) {
-                // FilesEndpoint may return 4xx if dir doesn't exist yet
-                // (no recordings made). Leave list empty; no toast spam.
+                // No recordings yet (dir absent) → empty list, no toast spam.
                 this.video.serList = [];
             }
         },

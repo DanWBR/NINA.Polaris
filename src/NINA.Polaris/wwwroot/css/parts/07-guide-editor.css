@@ -180,6 +180,22 @@
     overflow: hidden;
     position: relative;
 }
+/* VIDEO → Process: a plain scrollable vertical form (no canvas/sidebar).
+   Without this it inherited .video-pane's flex-row and the control rows
+   stacked horizontally in the middle of the pane. */
+.video-process-pane {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+    padding: 12px;
+    align-items: stretch;
+}
+.video-process-pane .control-row {
+    flex: 0 0 auto;
+}
 .video-pane .preview-area {
     flex: 1;
     min-width: 0;

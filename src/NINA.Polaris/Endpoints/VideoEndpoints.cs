@@ -59,6 +59,35 @@ public static class VideoEndpoints {
             lastError = rec.LastError
         }));
 
+        // ----- Recorded files (process picker) -----
+
+        // List every *.ser recording under {ImageOutputDir}/planetary, newest
+        // first. Authoritative + recursive: the generic /api/files/list is
+        // non-recursive and the recordings live one level down in
+        // planetary/<target>/, so the old client-side walk found nothing.
+        group.MapGet("/recordings", (ProfileService profiles) => {
+            var root = Path.Combine(profiles.Active.ImageOutputDir ?? "", "planetary");
+            if (string.IsNullOrWhiteSpace(profiles.Active.ImageOutputDir) || !Directory.Exists(root))
+                return Results.Ok(new { recordings = Array.Empty<object>() });
+            try {
+                var recordings = Directory
+                    .EnumerateFiles(root, "*.ser", SearchOption.AllDirectories)
+                    .Select(p => new FileInfo(p))
+                    .OrderByDescending(fi => fi.LastWriteTimeUtc)
+                    .Select(fi => new {
+                        path = fi.FullName,
+                        name = fi.Name,
+                        target = fi.Directory?.Name ?? "",
+                        sizeBytes = fi.Length,
+                        modifiedUtc = fi.LastWriteTimeUtc
+                    })
+                    .ToList();
+                return Results.Ok(new { recordings });
+            } catch (Exception ex) {
+                return Results.Ok(new { recordings = Array.Empty<object>(), error = ex.Message });
+            }
+        });
+
         // ----- Stacking (process) -----
 
         group.MapPost("/stack/start", (PlanetaryStackerService stacker,

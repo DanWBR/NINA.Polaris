@@ -48,7 +48,7 @@
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-safetyguard">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260626-chipupper">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260620-dl1">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260628-vidprocess">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260624-untestedwarn">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260620-mobile1">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260620-density1">
@@ -3682,8 +3682,10 @@
                 </div>
 
                 <!-- ===== Tab 2: Process (lucky imaging stack) ===== -->
-                <div x-show="videoTab === 'process'" class="video-pane"
-                     :class="{ 'controls-collapsed': quickControlsCollapsed }">
+                <!-- Process is a plain vertical form, NOT the two-column
+                     canvas+sidebar layout of .video-pane (which is flex-row and
+                     would lay these control rows out side-by-side / centred). -->
+                <div x-show="videoTab === 'process'" class="video-process-pane">
                     <div class="control-row" style="margin-bottom:10px">
                         <label style="flex:1">SER file
                             <select x-model="video.processSerPath" class="input-sm">
@@ -16321,7 +16323,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260628-afmode"></script>
+    <script src="/js/app.js?v=20260628-serlist"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
