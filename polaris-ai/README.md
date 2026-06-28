@@ -60,6 +60,9 @@ pip install -r requirements.txt
 python download.py synth --out data/tiles --count 4000 --size 256
 #    (optional) add real diffraction-limited cutouts as extra "objects":
 python download.py skyview --out data/tiles --survey "DSS2 Red" --count 500 --size 256
+#    (optional) slice YOUR hand-picked real images (Hubble etc; FITS or bitmaps)
+#    into tiles -- lands under data/tiles/real so training picks them up:
+python download.py ingest --src ~/hubble_picks --out data/tiles/real --size 256 --stride 192
 
 # 2. Train (fp32) on your GPU:
 python train.py --tiles data/tiles --epochs 60 --batch 16 --out checkpoints/decon
