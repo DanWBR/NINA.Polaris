@@ -25801,7 +25801,7 @@ function ninaApp() {
                 }
                 const { jobId } = await r.json();
                 // poll
-                let out = null;
+                let done = null;
                 for (let i = 0; i < 600; i++) {
                     await new Promise(res => setTimeout(res, 500));
                     const sr = await this.apiFetch('/api/studio/starcolor/' + jobId);
@@ -25810,16 +25810,24 @@ function ninaApp() {
                     this.starColor.stage = p.stage || '';
                     if (!p.inProgress) {
                         if (p.error) throw new Error(p.error);
-                        out = p.outputPath;
+                        done = p;
                         break;
                     }
                 }
-                if (!out) throw new Error('Timed out waiting for the job.');
+                if (!done || !done.outputPath) throw new Error('Timed out waiting for the job.');
                 this.starColor.busy = false;
                 this.starColor.modalOpen = false;
                 try { this.filesReload?.(); } catch { /* non-fatal */ }
-                // before/after comparator (reuses the GraXpert compare modal)
-                this.graxpertOpenCompare([{ src, out }], 0, 'gx', 'star-color');
+                // Comparator: lead with the brightest-stars montage (where the
+                // fringe is actually visible), then the full frame. Falls back to
+                // the full frame if the montage wasn't produced.
+                const pairs = [];
+                if (done.starsBeforePath && done.starsAfterPath) {
+                    pairs.push({ src: done.starsBeforePath, out: done.starsAfterPath,
+                                 label: 'Brightest stars' });
+                }
+                pairs.push({ src, out: done.outputPath, label: 'Full frame' });
+                this.graxpertOpenCompare(pairs, 0, 'gx', 'star-color');
             } catch (e) {
                 this.starColor.busy = false;
                 this.starColor.error = (e && e.message) ? e.message : String(e);

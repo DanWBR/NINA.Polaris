@@ -90,6 +90,11 @@ public sealed class StarColorRepairService {
             _jobs[jobId] = _jobs[jobId] with { Stage = "detecting" };
             var stars = DetectBrightStars(R, G, B, W, H);
 
+            // Pick the largest/brightest stars for the before/after montage and
+            // snapshot their ORIGINAL crops now (before align/repair mutate R/B).
+            var montStars = PickMontageStars(stars, W, H);
+            var beforeCrops = montStars.Select(s => ExtractCropRgb(R, G, B, W, s.x, s.y)).ToList();
+
             if (req.Align && agg > 0) {
                 _jobs[jobId] = _jobs[jobId] with { Stage = "aligning" };
                 AlignChannels(R, G, B, W, H, stars, agg);
@@ -113,12 +118,22 @@ public sealed class StarColorRepairService {
                 new("SFAGG", agg.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)),
             });
 
+            // Largest-stars before/after montages (same layout) for the comparator,
+            // since the fringe is invisible at full-frame scale.
+            string? beforePath = null, afterPath = null;
+            if (montStars.Count > 0) {
+                var afterCrops = montStars.Select(s => ExtractCropRgb(R, G, B, W, s.x, s.y)).ToList();
+                beforePath = WriteMontage(beforeCrops, SiblingPath(req.FramePath, "starcolor_stars_before"), img);
+                afterPath  = WriteMontage(afterCrops,  SiblingPath(req.FramePath, "starcolor_stars_after"),  img);
+            }
+
             _logger.LogInformation("Star colour repair {Job}: {N} stars, agg={Agg}, wrote {Path}",
                 jobId, stars.Count, agg, outPath);
             _ = Task.Run(() => _library.RescanAsync());
 
             _jobs[jobId] = _jobs[jobId] with {
                 InProgress = false, Stage = "done", StarCount = stars.Count, OutputPath = outPath,
+                StarsBeforePath = beforePath, StarsAfterPath = afterPath,
             };
         } catch (Exception ex) {
             _logger.LogError(ex, "Star colour repair job {JobId} failed", jobId);
@@ -310,6 +325,68 @@ public sealed class StarColorRepairService {
     private static ushort Clamp16(double v)
         => (ushort)Math.Clamp(Math.Round(v), 0, 65535);
 
+    // ── largest-stars before/after montage ────────────────────────────────────
+    private const int CropPx = 48;        // crop side per star
+    private const int MontCols = 4;       // montage columns
+    private const int MontMax = 12;       // up to N largest stars
+
+    private static List<(int x, int y)> PickMontageStars(List<(int x, int y)> stars, int W, int H) {
+        int half = CropPx / 2;
+        var outl = new List<(int x, int y)>();
+        foreach (var s in stars) {            // stars[] already brightest-first
+            if (s.x >= half && s.y >= half && s.x < W - half && s.y < H - half) {
+                outl.Add(s);
+                if (outl.Count >= MontMax) break;
+            }
+        }
+        return outl;
+    }
+
+    /// <summary>Plane-sequential ushort RGB crop (CropPx²) centred on a star.</summary>
+    private static ushort[] ExtractCropRgb(double[] R, double[] G, double[] B, int W, int cx, int cy) {
+        int half = CropPx / 2, cp = CropPx * CropPx;
+        var crop = new ushort[cp * 3];
+        for (int yy = 0; yy < CropPx; yy++) {
+            int sy = cy - half + yy, drow = yy * CropPx;
+            int srow = sy * W + (cx - half);
+            for (int xx = 0; xx < CropPx; xx++) {
+                int d = drow + xx, s = srow + xx;
+                crop[d] = Clamp16(R[s]); crop[cp + d] = Clamp16(G[s]); crop[2 * cp + d] = Clamp16(B[s]);
+            }
+        }
+        return crop;
+    }
+
+    private string WriteMontage(List<ushort[]> crops, string outPath, BaseImageData template) {
+        int n = crops.Count;
+        int cols = Math.Min(MontCols, n);
+        int rows = (int)Math.Ceiling(n / (double)cols);
+        int gap = 4;
+        int mw = cols * CropPx + (cols - 1) * gap;
+        int mh = rows * CropPx + (rows - 1) * gap;
+        int mplane = mw * mh, cp = CropPx * CropPx;
+        var data = new ushort[mplane * 3];   // plane-sequential RGB, black background
+        for (int k = 0; k < n; k++) {
+            int gc = k % cols, gr = k / cols;
+            int ox = gc * (CropPx + gap), oy = gr * (CropPx + gap);
+            var crop = crops[k];
+            for (int yy = 0; yy < CropPx; yy++) {
+                int mrow = (oy + yy) * mw + ox, crow = yy * CropPx;
+                for (int xx = 0; xx < CropPx; xx++) {
+                    int m = mrow + xx, c = crow + xx;
+                    data[m] = crop[c]; data[mplane + m] = crop[cp + c]; data[2 * mplane + m] = crop[2 * cp + c];
+                }
+            }
+        }
+        var props = new NINA.Image.ImageData.ImageProperties {
+            Width = mw, Height = mh, BitDepth = 16,
+            BayerPattern = NINA.Core.Enum.BayerPatternEnum.None, IsBayered = false, Channels = 3,
+        };
+        var meta = new NINA.Image.ImageData.ImageMetaData();
+        FITSWriter.Write(new BaseImageData(data, props, meta), outPath);
+        return outPath;
+    }
+
     private static string SiblingPath(string srcPath, string suffix) {
         var dir = Path.GetDirectoryName(srcPath) ?? ".";
         var stem = Path.GetFileNameWithoutExtension(srcPath);
@@ -328,5 +405,7 @@ public sealed record StarColorRepairProgress {
     public string Stage { get; init; } = "";
     public int StarCount { get; init; }
     public string? OutputPath { get; init; }
+    public string? StarsBeforePath { get; init; }
+    public string? StarsAfterPath { get; init; }
     public string? Error { get; init; }
 }
