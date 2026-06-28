@@ -425,8 +425,20 @@ sudo apt install -y python3-venv python3-pip
 mkdir -p ~/GraXpert && cd ~/GraXpert
 python3 -m venv graxpert
 ./graxpert/bin/pip install --upgrade pip
-./graxpert/bin/pip install graxpert
+./graxpert/bin/pip install graxpert onnxruntime
 ```
+
+> **Install `onnxruntime` too** (as shown above). GraXpert runs its AI models
+> (BGE / Denoise / Decon) through ONNX Runtime, but the PyPI `graxpert`
+> package does **not** pull it in automatically on aarch64 — without it the
+> CLI fails with `No module named 'onnxruntime'` / "(AI library) package is
+> misconfigured". PyPI has aarch64 wheels, so `pip install onnxruntime` in the
+> venv just works. (On a board with an NPU/GPU you can also pick that
+> accelerator in the run modal and skip the CLI entirely — but Decon still
+> needs the CLI, so install onnxruntime regardless.)
+>
+> Already installed GraXpert without it? Just add it to the same venv:
+> `~/GraXpert/graxpert/bin/pip install onnxruntime`
 
 That gives you `/home/polaris/GraXpert/graxpert/bin/python` with the
 `graxpert` module installed. Polaris auto-detects this layout (no
