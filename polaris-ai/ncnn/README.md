@@ -33,23 +33,32 @@ them from the scripts.
 
 ## Spike result (2026-06-28)
 
-Conversion + ONNX-Runtime parity (random input; CPU; the Vulkan run uses the same
-graph/weights):
+Two things must both hold: the converted graph must match ORT **and** it must
+still be correct on the **Vulkan** compute path (some ops are fine on ncnn-CPU but
+break on Vulkan). Plus the Q6A Adreno-643 timing.
 
-| model | result | max\|Δ\| vs ORT | bin | notes |
-|-------|--------|-----------------|-----|-------|
-| **bge** (background extraction) | ✅ PASS | 9.1e-04 | 109 MB | NHWC 256³ U-Net |
-| **denoise v2** | ✅ PASS | 1.5e-03 | 149 MB | + SE/attention |
-| **denoise v3** | ✅ PASS | 7.5e-04 | 239 MB | **LayerNorm/transformer — the model the NPU can't run** |
-| **decon object** | 🟡 CLOSE | 1.8e-02 | 139 MB | windowed-attention; visually check |
-| **decon stars** | 🔴 DIFF | 4.1e-01 | 139 MB | same arch, weights expose a fragile op — needs work |
+| model | CPU parity | **Vulkan** parity | Adreno fp16 speedup | verdict |
+|-------|-----------|-------------------|---------------------|---------|
+| **bge** | 9.1e-04 | ✅ ok (fp16 ~0.07 max) | **5.1×** | ✅ usable |
+| **denoise v2** | 1.5e-03 | ✅ ok (fp16 4e-3) | ~similar (untimed) | ✅ usable |
+| **denoise v3** | 7.5e-04 | 🔴 **NaN** (fp32 & fp16) | — | ❌ broken on GPU |
+| **decon object** | 1.8e-02 | not pursued | — | ❌ CPU parity weak |
+| **decon stars** | 4.1e-01 | not pursued | — | ❌ not faithful |
 
-**Verdict:** BGE + both denoise models convert with essentially lossless parity
-(≤1.5e-3). That alone makes the ncnn-Vulkan lane worthwhile — notably **denoise v3
-runs**, which the Hexagon NPU can't. The **decon** family converts structurally
-but isn't numerically faithful yet (the Swin-style window partition via
-Reshape/Slice/Gather + ConvTranspose is the fragile part); leave decon on the
-existing ORT/NPU path until that's chased down.
+**Verdict:** the ncnn-Vulkan lane is real **for BGE + denoise v2** — both convert
+losslessly *and* run correctly on Vulkan, ~5× faster in fp16 on the Adreno 643.
+fp16 ≈ 2× over fp32 and is the production mode.
+
+**Caveats found the hard way:**
+- **denoise v3 outputs NaN on the Vulkan path** (its LayerNorm/ReduceMean/Div/Sqrt
+  chain) even though ncnn-CPU is perfect. So the model the NPU can't run *also*
+  can't run on Vulkan as-converted — `bench.py` will time it but the output is
+  garbage. (`bench.py` now flags NaN output.) v3 would need the offending op
+  replaced/patched on ncnn's Vulkan backend before it's usable.
+- **decon** isn't numerically faithful even on CPU (Swin window partition +
+  ConvTranspose); keep it on the ORT/NPU path.
+- Q6A CPU baselines vary run-to-run (thermal throttling under sustained load), so
+  trust the **ratios**, not the absolute CPU ms.
 
 The decon models take **two inputs**: `gen_input_image` (1×1×512×512) and `params`
 (1×2, the strength/bg vector) — both must be fed (ncnn blobs `in0` and `in1`).

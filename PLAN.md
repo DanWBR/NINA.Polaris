@@ -13324,16 +13324,24 @@ zero-copy buffers (the win that makes per-op offload viable on an SBC).
 
 ## NCNN-GPU — open Vulkan GPU lane for AI models (spike done 2026-06-28, lane not built)
 
-**Spike result (`polaris-ai/ncnn/`, see its README):** the conversion route
-`onnx --onnxsim--> --pnnx--> .ncnn.param/.bin` works. ONNX-Runtime parity on the
-converted graphs: **BGE 9.1e-04, denoise v2 1.5e-03, denoise v3 7.5e-04 (all PASS)**
-— including denoise v3, the LayerNorm/transformer model the HTP NPU can't run.
-**decon object 1.8e-02 (close), decon stars 4.1e-01 (not faithful yet)** — the
-Swin-style window partition (Reshape/Slice/Gather) + ConvTranspose is the fragile
-part; keep decon on ORT/NPU for now. ncnn's pip wheel has Vulkan, so `bench.py`
-runs CPU-vs-Vulkan on the Q6A with no C++ build. **Pending: the on-Q6A GPU timing
-run** (dev-box dGPU numbers aren't representative). Verdict: BGE+denoise lane is
-worth building; decon needs op-level work first.
+**Spike result (`polaris-ai/ncnn/`, see its README) — done incl. on-Q6A:** the
+route `onnx --onnxsim--> --pnnx--> .ncnn.param/.bin` works, and ncnn's pip wheel
+has Vulkan so it ran on the Adreno 643 (Turnip) with no C++ build. Two gates
+matter — ORT parity AND Vulkan-path correctness (some ops are fine on ncnn-CPU but
+NaN on Vulkan):
+- **BGE**: converts (9.1e-04), Vulkan ✅, **5.1× fp16** on the Adreno → usable.
+- **denoise v2**: converts (1.5e-03), Vulkan ✅ (fp16 4e-3) → usable.
+- **denoise v3**: CPU parity 7.5e-04 BUT **NaN on the Vulkan path** (its LayerNorm/
+  Div/Sqrt chain). So the model the NPU can't run also can't run on Vulkan
+  as-converted — not usable without patching the op.
+- **decon stars/object**: not numerically faithful even on CPU (Swin window
+  partition + ConvTranspose) → stay on ORT/NPU.
+
+fp16 ≈ 2× over fp32 and is the production mode (`bench.py` now also flags NaN
+output so a fast-but-broken run isn't mistaken for a win). **Verdict: a real lane
+exists for BGE + denoise v2 (fp16, ~5×); v3 needs a Vulkan-op fix, decon needs
+conversion work.** Lane (C# P/Invoke etc.) still NOT built — decide whether BGE+v2
+alone justify it.
 
 The home for the AI models the **Hexagon HTP can't run** (denoise v3 / LayerNorm,
 deconvolution, star removal) and for fp16-quality runs without int quantization.

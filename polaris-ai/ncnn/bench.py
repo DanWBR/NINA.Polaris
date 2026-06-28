@@ -43,7 +43,12 @@ def bench(stem, shape, use_vulkan, loops, threads, extra_inputs, fp16=False, gpu
         _, out = ex.extract("out0")
         return np.asarray(out)
 
-    once()  # warmup (shader compile / allocation)
+    warm = once()  # warmup (shader compile / allocation)
+    # A timing number is meaningless if the model produced garbage — some ops
+    # (e.g. LayerNorm/Div/Sqrt in denoise v3) yield NaN on the Vulkan path even
+    # though they're fine on CPU. Flag it so we don't trust a fast-but-broken run.
+    if not np.all(np.isfinite(warm)):
+        print("            !! output has NaN/Inf — this backend does NOT run this model correctly")
     once()
     t0 = time.perf_counter()
     for _ in range(loops):
