@@ -88,7 +88,14 @@ public sealed class SerFileWriter : IDisposable {
         var dir = System.IO.Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
-        _fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+        // Large write buffer (4 MB) batches the per-frame writes into big
+        // sequential I/Os: at 40 fps the default 4 KB buffer issued thousands
+        // of tiny write() syscalls/sec, and the writer thread fell behind
+        // during GC pauses → the recorder's bounded queue overflowed and
+        // dropped frames partway through a long capture. SequentialScan hints
+        // the kernel for streaming writes.
+        _fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read,
+            bufferSize: 4 * 1024 * 1024, FileOptions.SequentialScan);
         WriteHeader(frameCount: 0);    // patched on Dispose
     }
 

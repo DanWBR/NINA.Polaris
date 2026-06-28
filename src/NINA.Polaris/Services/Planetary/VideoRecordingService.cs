@@ -110,10 +110,12 @@ public class VideoRecordingService : IDisposable {
             IsRecording = true;
 
             // Bounded queue: when full, TryAdd returns false and the frame is
-            // dropped (counted) rather than blocking the camera stream. 32
-            // frames of headroom absorbs disk write-back stalls; at
-            // 640×480×16-bit that's ~19 MB of buffering.
-            var queue = new BlockingCollection<QueueItem>(boundedCapacity: 32);
+            // dropped (counted) rather than blocking the camera stream. 128
+            // frames of headroom (~3 s at 40 fps) rides out GC pauses and disk
+            // write-back hiccups that otherwise dropped frames partway through a
+            // long high-fps capture; at 640×480×16-bit that's ~75 MB of
+            // buffering. Planetary ROIs are small, so the RAM cost is modest.
+            var queue = new BlockingCollection<QueueItem>(boundedCapacity: 128);
             _queue = queue;
             _writerThread = new Thread(() => WriterLoop(path, instrument, telescope, queue)) {
                 IsBackground = true,

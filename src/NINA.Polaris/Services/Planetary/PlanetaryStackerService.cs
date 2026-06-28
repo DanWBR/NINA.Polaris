@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Collections.Concurrent;
+using NINA.Core.Enum;
 using NINA.Image.FileFormat.FITS;
 using NINA.Image.ImageData;
 
@@ -169,15 +170,23 @@ public class PlanetaryStackerService {
             Directory.CreateDirectory(job.Config.OutputDir);
             var outName = $"{job.Config.OutputName}_{DateTime.UtcNow:yyyy-MM-ddTHH-mm-ss}.fits";
             var outPath = Path.Combine(job.Config.OutputDir, outName);
+            // Carry the SER's Bayer mosaic into the stacked FITS. The stack is
+            // still a raw CFA frame (we mean-combine the mosaic, no debayer), so
+            // downstream tools must know the pattern to debayer it — otherwise it
+            // opens as mono. The FITS writer stamps BAYERPAT from
+            // MetaData.Camera.BayerPattern, so set BOTH that and props.
+            var bayer = SerColorToBayer(reader.ColorMode);
             var imageData = new BaseImageData(stacked16,
                 new ImageProperties {
                     Width = reader.Width,
                     Height = reader.Height,
                     BitDepth = 16,
-                    IsBayered = reader.ColorMode != SerColorMode.Mono
+                    IsBayered = bayer != BayerPatternEnum.None,
+                    BayerPattern = bayer
                 },
                 new ImageMetaData());
             imageData.MetaData.Camera.Name = reader.Instrument;
+            imageData.MetaData.Camera.BayerPattern = bayer;
             imageData.MetaData.Telescope.Name = reader.Telescope;
             // FITSWriter is sync; offload to thread pool so the cancellation
             // token still flows through the surrounding loop.
@@ -212,6 +221,14 @@ public class PlanetaryStackerService {
     private void Notify(StackJob job) {
         try { JobUpdated?.Invoke(job); } catch { }
     }
+
+    private static BayerPatternEnum SerColorToBayer(SerColorMode m) => m switch {
+        SerColorMode.BayerRGGB => BayerPatternEnum.RGGB,
+        SerColorMode.BayerGRBG => BayerPatternEnum.GRBG,
+        SerColorMode.BayerGBRG => BayerPatternEnum.GBRG,
+        SerColorMode.BayerBGGR => BayerPatternEnum.BGGR,
+        _ => BayerPatternEnum.None
+    };
 }
 
 public record StackConfig(
