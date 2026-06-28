@@ -13,11 +13,11 @@ from scipy.signal import fftconvolve
 
 from psf import gaussian_kernel, moffat_kernel, FWHM_TO_SIGMA
 
-# FWHM range (pixels) the model is trained to undo. The condition channel is the
-# FWHM scaled by 1/SIGMA_NORM so it lands in a friendly ~[0,1] range for quant.
+# FWHM range (pixels) the model is trained to undo. Real survey/CMOS stars are
+# often 4-8 px, so the range goes wider than the first synthetic-only model.
 FWHM_MIN = 1.5
-FWHM_MAX = 6.0
-SIGMA_NORM = FWHM_MAX  # condition = fwhm / SIGMA_NORM  -> ~[0.25, 1.0]
+FWHM_MAX = 9.0
+SIGMA_NORM = FWHM_MAX  # condition = fwhm / SIGMA_NORM  -> ~[0.17, 1.0]
 
 # The model restores to a small REFERENCE PSF, not to a literal point source.
 # Asking it to recover a 1-px delta from a blurred blob is ill-posed (pure
@@ -76,7 +76,13 @@ def make_pair(
     """
     fwhm = sample_fwhm(rng)                     # seeing of the INPUT (>= 1.5 px)
     beta = float(rng.uniform(*beta_range))
-    deg = degrade(sharp, fwhm, beta=beta, rng=rng)
+    # DOMAIN RANDOMIZATION: vary SNR widely so the model learns to NOT amplify
+    # noise (the failure mode on real data -- it sharpened the noise floor into
+    # speckles). Random read noise + full-well (shot noise) per sample.
+    read_noise = float(rng.uniform(1.0, 25.0))
+    full_well = float(rng.uniform(8000.0, 100000.0))
+    deg = degrade(sharp, fwhm, beta=beta, rng=rng,
+                  read_noise_e=read_noise, full_well_scale=full_well)
     # TARGET = the same scene at the small reference PSF (clean, no noise). This
     # is what makes the restoration well-posed: input(seeing) -> target(ref).
     ref = gaussian_kernel(TARGET_FWHM * FWHM_TO_SIGMA)
