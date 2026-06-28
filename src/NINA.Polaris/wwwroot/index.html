@@ -12068,7 +12068,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         stretch, editor blur, live-stack integration) to the SBC
                         GPU when the board exposes OpenCL (e.g. Mali on RK3588,
                         Adreno on QCS6490). Falls back to the CPU automatically
-                        per operation; AI inference is separate (below).
+                        per operation. This is for classic math only — GraXpert
+                        AI inference uses a separate accelerator path (an NPU, or
+                        the GPU via Vulkan/ncnn), shown in the GraXpert section below.
                     </p>
                     <template x-if="gpuInfo && gpuInfo.loaderPresent && gpuInfo.hardware">
                         <div>
@@ -12404,7 +12406,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span class="external-tool-status ok"
                                   x-show="graxpert.status?.npuAvailable"
                                   :title="graxpert.status?.npuDiagnostics || ''"
-                                  x-text="'⚡ NPU (BGE + Denoise accelerated)'"></span>
+                                  x-text="((graxpert.status?.npuDiagnostics || '').match(/ncnn|vulkan/i)
+                                           ? '⚡ GPU' : '⚡ NPU') + ' (BGE + Denoise accelerated)'"></span>
                             <button class="btn btn-sm" @click="graxpertRedetect()">Re-detect</button>
                         </div>
                         <div class="external-tool-body">
