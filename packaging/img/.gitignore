@@ -3,5 +3,8 @@
 *.img
 *.part
 *.fd
+*.xz
+*.gz
 OVMF_VARS.fd
 payload/
+pishrink.sh

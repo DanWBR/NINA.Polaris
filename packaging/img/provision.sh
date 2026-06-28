@@ -103,7 +103,8 @@ install_deb() {
 # ---------------------------------------------------------------------------
 banner "Base tools"
 apt-get update || note_fail "apt update (base)"
-apt_try software-properties-common wget ca-certificates curl gnupg unzip
+apt_try software-properties-common wget ca-certificates curl gnupg unzip \
+        cloud-guest-utils gdisk
 
 # ---------------------------------------------------------------------------
 # 1. Local config first (no network - always succeeds)
@@ -149,6 +150,47 @@ HandleSuspendKey=ignore
 HandleHibernateKey=ignore
 IdleAction=ignore
 EOF
+
+# ---------------------------------------------------------------------------
+# 1b. First-boot grow-root (for PiShrink'd images + flashing to a bigger SSD)
+# ---------------------------------------------------------------------------
+# A raw/shrunk image keeps the root partition at its build/shrunk size; this
+# oneshot grows it to fill the actual disk on the first boot, then never runs
+# again. growpart resizes the GPT partition, resize2fs grows the mounted ext4
+# online (same approach cloud-init uses). Idempotent + self-disabling.
+banner "First-boot grow-root service"
+cat >/usr/local/sbin/polaris-growroot.sh <<'EOF'
+#!/bin/bash
+set -e
+marker=/var/lib/polaris-growroot.done
+[ -f "$marker" ] && exit 0
+rootpart="$(findmnt -no SOURCE /)"
+[ -n "$rootpart" ] || exit 0
+disk="/dev/$(lsblk -no PKNAME "$rootpart")"
+partnum="$(basename "$rootpart" | grep -o '[0-9]*$')"
+if [ -n "$disk" ] && [ -n "$partnum" ]; then
+    growpart "$disk" "$partnum" || true     # non-zero when already full
+    resize2fs "$rootpart" || true
+fi
+mkdir -p /var/lib && touch "$marker"
+EOF
+chmod 0755 /usr/local/sbin/polaris-growroot.sh
+cat >/etc/systemd/system/polaris-growroot.service <<'EOF'
+[Unit]
+Description=Grow Polaris root filesystem to fill the disk (first boot)
+After=local-fs.target
+Before=polaris.service
+ConditionPathExists=!/var/lib/polaris-growroot.done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/polaris-growroot.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl enable polaris-growroot.service || note_fail "enable growroot service"
 
 # ---------------------------------------------------------------------------
 # 2. PPAs: INDI (+ 3rd party drivers) and PHD2

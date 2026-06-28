@@ -62,7 +62,16 @@ POLARIS_VERSION=0.89.6 DISK_SIZE=48G ./build-img.sh
 
 # Already have an ISO downloaded:
 ISO=~/Downloads/ubuntu-24.04.4-live-server-amd64.iso ./build-img.sh
+
+# Shrink the finished image for distribution (raw is a fixed 40G of mostly
+# zeros). Produces polaris-linux-x64-shrunk.img.xz (~a few GB). Needs sudo +
+# parted/e2fsprogs/gdisk/xz-utils:
+SHRINK=1 ./build-img.sh          # xz (smallest); SHRINK=gz or SHRINK=raw also work
 ```
+
+The image auto-grows its root filesystem to fill the real disk on first boot
+(a self-disabling `polaris-growroot.service` runs `growpart` + `resize2fs`), so
+a shrunk image flashed onto a big SSD still uses the whole drive.
 
 By default the script scrapes `releases.ubuntu.com/<release>/` for the latest
 live-server point release, so it won't 404 when Ubuntu rotates them. Pin an
