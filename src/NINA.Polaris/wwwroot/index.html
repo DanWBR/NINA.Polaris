@@ -2653,6 +2653,10 @@
                         }" x-text="autoFocus.state === 'running' ? 'RUNNING' :
                                    (autoFocus.success === true ? 'OK' :
                                     (autoFocus.success === false ? 'FAILED' : 'IDLE'))"></span>
+                        <!-- Which sweep is actually running, straight from the server,
+                             so a mismatch with the Smart checkbox is obvious at a glance. -->
+                        <span x-show="autoFocus.state === 'running'" class="status-indicator-sm"
+                              x-text="autoFocus.mode === 'adaptive' ? 'SMART' : 'GRID'"></span>
                     </div>
                     <div class="af-params">
                         <label style="display:flex; align-items:center; gap:6px" title="ASIAIR-style: no point count — seed 3 points, auto-detect direction, grow the V-curve until the fit is confident, then stop. Uncheck for the fixed Steps×Step-Size grid.">
@@ -16317,7 +16321,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260628-accelpick"></script>
+    <script src="/js/app.js?v=20260628-afmode"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

@@ -129,13 +129,18 @@ public class AutoFocusService {
             Progress = new AutoFocusProgress {
                 Steps = request.Steps,
                 Points = new List<AutoFocusPoint>(),
-                StartedAt = DateTime.UtcNow
+                StartedAt = DateTime.UtcNow,
+                Mode = request.Adaptive ? "adaptive" : "grid"
             };
         }
 
         _runTask = Task.Run(() => RunAsync(request, _cts!.Token));
+        // Log the resolved mode explicitly so a "smart ran with the box
+        // unchecked" report can be confirmed against what the server actually
+        // received (the UI sends adaptive=<checkbox>; the server never forces it).
         _logger.LogInformation(
-            "Auto-focus started: source={Source} steps={Steps} stepSize={StepSize} exposure={Exp}s",
+            "Auto-focus started: mode={Mode} source={Source} steps={Steps} stepSize={StepSize} exposure={Exp}s",
+            request.Adaptive ? "adaptive" : "grid",
             (request.FocuserSource ?? "main").ToLowerInvariant(),
             request.Steps, request.StepSize, request.ExposureSeconds);
     }
@@ -1019,6 +1024,10 @@ public record AutoFocusProgress {
     /// <summary>Current attempt number (1-based) when the quality gate triggers
     /// a reattempt, so the UI can show "attempt 2/2".</summary>
     public int Attempt { get; init; } = 1;
+    /// <summary>Which sweep actually ran: "grid" (fixed Steps×StepSize) or
+    /// "adaptive" (Smart). Surfaced in status so the UI can show the running
+    /// mode and the operator can immediately see it match the Smart checkbox.</summary>
+    public string Mode { get; init; } = "grid";
 }
 
 public class AutoFocusPoint {

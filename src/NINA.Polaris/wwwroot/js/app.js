@@ -2918,7 +2918,8 @@ function ninaApp() {
             points: [],
             bestPosition: null,
             bestHfr: null,
-            success: null
+            success: null,
+            mode: 'grid'
         },
         // PA-4: TPPA polar alignment state. Mirrors the WS payload's
         // polarAlignment sub-object. completedOk + isActive are
@@ -30832,7 +30833,8 @@ function ninaApp() {
                     points: af.points || [],
                     bestPosition: af.bestPosition ?? null,
                     bestHfr: af.bestHfr ?? null,
-                    success: af.success ?? null
+                    success: af.success ?? null,
+                    mode: af.mode || 'grid'
                 };
             }
             if (msg.guider) {

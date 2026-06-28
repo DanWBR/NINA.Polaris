@@ -30,7 +30,8 @@ public static class AutoFocusEndpoints {
                     lastHfr = af.Progress.LastHfr,
                     lastStarCount = af.Progress.LastStarCount,
                     points = af.Progress.Points,
-                    startedAt = af.Progress.StartedAt
+                    startedAt = af.Progress.StartedAt,
+                    mode = af.Progress.Mode
                 },
                 lastError = af.LastError
             });

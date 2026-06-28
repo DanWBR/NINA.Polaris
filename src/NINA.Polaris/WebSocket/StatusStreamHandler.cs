@@ -298,7 +298,8 @@ public static class StatusStreamHandler {
                         points = autoFocus.Progress.Points,
                         bestPosition = autoFocus.LastResult?.BestPosition,
                         bestHfr = autoFocus.LastResult?.BestPredictedHfr,
-                        success = autoFocus.LastResult?.Success
+                        success = autoFocus.LastResult?.Success,
+                        mode = autoFocus.Progress.Mode
                     };
 
                     // Compact summaries for the activity bar. Full job
