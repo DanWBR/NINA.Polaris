@@ -32,11 +32,14 @@
 #   POLARIS_VERSION  "latest" or e.g. 0.89.6   (default latest)
 #   POLARIS_USER / POLARIS_PASS / HOSTNAME_NAME
 #   SKIP_PAYLOAD=1 don't pre-download/inject; let the guest fetch everything
-#   SHRINK         shrink the finished image with PiShrink (needs sudo):
-#                    SHRINK=1 / xz -> *-shrunk.img.xz   (smallest, default)
-#                    SHRINK=gz       -> *-shrunk.img.gz
-#                    SHRINK=raw      -> *-shrunk.img     (shrink only, no compress)
 #   QEMU_MEM / QEMU_CPUS
+#
+# Distribution: keep DISK_SIZE modest and just compress the raw .img (7z / xz /
+# zstd) - the unused space is zeros and compresses away to a few GB. Do NOT use
+# PiShrink: it truncates this GPT/UEFI image too tightly to leave room for the
+# 33-sector GPT backup table, producing a non-bootable, unrepairable image. The
+# polaris-growroot.service (baked in by provision.sh) expands the root fs to
+# fill the real disk on first boot.
 # =============================================================================
 set -euo pipefail
 
@@ -52,14 +55,13 @@ ISO="${ISO:-ubuntu-live-server-amd64.iso}"
 UBUNTU_RELEASE="${UBUNTU_RELEASE:-24.04}"
 ISO_URL="${ISO_URL:-}"
 OUTPUT="${OUTPUT:-polaris-linux-x64.img}"
-DISK_SIZE="${DISK_SIZE:-40G}"
+DISK_SIZE="${DISK_SIZE:-20G}"
 POLARIS_VERSION="${POLARIS_VERSION:-latest}"
 POLARIS_USER="${POLARIS_USER:-polaris}"
 POLARIS_PASS="${POLARIS_PASS:-polaris}"
 HOSTNAME_NAME="${HOSTNAME_NAME:-polaris-linux}"
 POLARIS_REPO="${POLARIS_REPO:-DanWBR/NINA.Polaris}"
 SKIP_PAYLOAD="${SKIP_PAYLOAD:-}"
-SHRINK="${SHRINK:-}"
 PAYLOAD_DIR="${PAYLOAD_DIR:-$SCRIPT_DIR/payload}"
 QEMU_MEM="${QEMU_MEM:-4096}"
 QEMU_CPUS="${QEMU_CPUS:-4}"
@@ -83,18 +85,6 @@ need bsdtar              "apt install libarchive-tools"
 need genisoimage         "apt install genisoimage"
 need openssl             "apt install openssl"
 need wget                "apt install wget"
-
-if [ -n "$SHRINK" ]; then
-    need parted   "apt install parted"
-    need resize2fs "apt install e2fsprogs"
-    need sgdisk   "apt install gdisk"          # PiShrink needs sgdisk for GPT
-    need losetup  "apt install util-linux"
-    case "$SHRINK" in
-        gz|z) need pigz "apt install pigz";;          # -a uses pigz for parallel gzip
-        raw)  : ;;
-        *)    need xz   "apt install xz-utils";;       # -a uses xz -T0 (built in)
-    esac
-fi
 
 [ -e /dev/kvm ] || warn "/dev/kvm not present - QEMU will fall back to slow TCG emulation. \
 On WSL2 enable nested virtualization, or run this on a Linux host with KVM."
@@ -245,55 +235,14 @@ qemu-system-x86_64 \
     -no-reboot -nographic
 
 # ---------------------------------------------------------------------------
-# Optional: shrink with PiShrink. Loop devices don't work on drvfs (/mnt/c),
-# so we operate on an ext4-backed copy under $WORK and move the result back.
-# ---------------------------------------------------------------------------
-SHRUNK_OUT=""
-if [ -n "$SHRINK" ]; then
-    info "Shrinking image with PiShrink (this uses sudo)"
-    PISHRINK="$SCRIPT_DIR/pishrink.sh"
-    if [ ! -f "$PISHRINK" ]; then
-        info "Fetching pishrink.sh"
-        wget -qO "$PISHRINK" https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh \
-            || die "could not download pishrink.sh"
-    fi
-    chmod +x "$PISHRINK"
-
-    SH_WORK="$WORK/shrink.img"
-    info "Copying image to ext4 scratch for loop access"
-    cp "$OUTPUT" "$SH_WORK"
-
-    case "$SHRINK" in
-        gz|z) SHFLAG=(-z) ;;
-        raw)  SHFLAG=() ;;
-        *)    SHFLAG=(-Z) ;;   # default: xz
-    esac
-    # -a = compress in parallel (xz -T0 / pigz). Single-threaded xz on a
-    # ~12G image is painfully slow; this uses every core.
-    sudo "$PISHRINK" -a "${SHFLAG[@]}" "$SH_WORK" || die "pishrink failed"
-
-    PRODUCED=""
-    for f in "${SH_WORK}.xz" "${SH_WORK}.gz" "$SH_WORK"; do
-        [ -f "$f" ] && PRODUCED="$f" && break
-    done
-    [ -n "$PRODUCED" ] || die "pishrink produced no output"
-
-    BASE="$(dirname "$OUTPUT")/$(basename "${OUTPUT%.img}")-shrunk.img"
-    case "$PRODUCED" in
-        *.xz) SHRUNK_OUT="${BASE}.xz" ;;
-        *.gz) SHRUNK_OUT="${BASE}.gz" ;;
-        *)    SHRUNK_OUT="${BASE}" ;;
-    esac
-    mv "$PRODUCED" "$SHRUNK_OUT"
-    info "Shrunk image: $SHRUNK_OUT ($(du -h "$SHRUNK_OUT" | cut -f1))"
-fi
-
-# ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------
 echo ""
-info "Image built: $OUTPUT"
-[ -n "$SHRUNK_OUT" ] && info "Shrunk + compressed: $SHRUNK_OUT (flash this one; balenaEtcher reads .xz/.gz directly)"
+info "Image built: $OUTPUT ($(du -h "$OUTPUT" | cut -f1))"
+echo ""
+echo "  To distribute, compress the raw image (free space is zeros):"
+echo "    7z a polaris.7z $OUTPUT      # or: zstd -T0 $OUTPUT   /   xz -T0 $OUTPUT"
+echo "  Root grows to fill the disk on first boot (polaris-growroot.service)."
 echo ""
 echo "  Boot-test it (no install media this time):"
 echo "    qemu-system-x86_64 -enable-kvm -m 4096 -machine q35 \\"

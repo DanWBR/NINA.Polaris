@@ -62,16 +62,25 @@ POLARIS_VERSION=0.89.6 DISK_SIZE=48G ./build-img.sh
 
 # Already have an ISO downloaded:
 ISO=~/Downloads/ubuntu-24.04.4-live-server-amd64.iso ./build-img.sh
-
-# Shrink the finished image for distribution (raw is a fixed 40G of mostly
-# zeros). Produces polaris-linux-x64-shrunk.img.xz (~a few GB). Needs sudo +
-# parted/e2fsprogs/gdisk/xz-utils:
-SHRINK=1 ./build-img.sh          # xz (smallest); SHRINK=gz or SHRINK=raw also work
 ```
 
-The image auto-grows its root filesystem to fill the real disk on first boot
-(a self-disabling `polaris-growroot.service` runs `growpart` + `resize2fs`), so
-a shrunk image flashed onto a big SSD still uses the whole drive.
+### Distributing the image (don't use PiShrink)
+
+The raw image is `DISK_SIZE` (default 20G) of mostly zeros, so just **compress
+it** - the free space disappears:
+
+```bash
+7z a polaris.7z polaris-linux-x64.img      # or: zstd -T0 ...  /  xz -T0 ...
+```
+
+The root filesystem auto-grows to fill the real disk on first boot (a
+self-disabling `polaris-growroot.service` runs `growpart` + `resize2fs`), so a
+20G image flashed onto a big SSD still uses the whole drive.
+
+> **Why not PiShrink?** It truncates this GPT/UEFI image too tightly to leave
+> room for the 33-sector GPT backup table, producing a non-bootable image that
+> drops to an initramfs prompt (`UUID=... does not exist`). Compressing a
+> modest-sized raw image is simpler and actually boots.
 
 By default the script scrapes `releases.ubuntu.com/<release>/` for the latest
 live-server point release, so it won't 404 when Ubuntu rotates them. Pin an
@@ -90,9 +99,9 @@ All knobs: `ISO`, `ISO_URL`, `UBUNTU_RELEASE`, `OUTPUT`, `DISK_SIZE`,
 First boot: `https://polaris-linux.local:5000`, or
 `ssh polaris@polaris-linux.local` (password `polaris`).
 
-> The raw image is fixed-size; after first boot grow the root partition to fill
-> the disk with `sudo growpart /dev/sdaX N && sudo resize2fs /dev/sdaXN`, or
-> just build with a larger `DISK_SIZE`.
+> Root auto-grows to fill the target disk on first boot
+> (`polaris-growroot.service`), so flashing a 20G image onto a 256G SSD uses
+> the whole drive. No manual `growpart` needed.
 
 ## Notes / gotchas
 

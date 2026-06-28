@@ -5,6 +5,8 @@
 *.fd
 *.xz
 *.gz
+*.7z
+*.zst
 OVMF_VARS.fd
 payload/
 pishrink.sh
