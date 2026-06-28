@@ -184,8 +184,7 @@ public class AutoFocusService {
                 // sweep so the chart + fit reflect only this attempt.
                 if (attempt > 1) {
                     _logger.LogInformation("AF reattempt {N}/{Max} (previous: {Reason})", attempt, maxAttempts, lastReason);
-                    await focuser.MoveAbsoluteAsync(startPosition, ct);
-                    await WaitForFocuserSettle(focuser, ct);
+                    await MoveAndSettleAsync(focuser, startPosition, ct);
                     Progress = Progress with {
                         Points = new List<AutoFocusPoint>(), CurrentSampleIndex = -1, Attempt = attempt
                     };
@@ -202,16 +201,14 @@ public class AutoFocusService {
 
                 // Optional backlash compensation: overshoot then move forward.
                 if (request.BacklashSteps > 0) {
-                    await focuser.MoveAbsoluteAsync(positions[0] - request.BacklashSteps, ct);
-                    await WaitForFocuserSettle(focuser, ct);
+                    await MoveAndSettleAsync(focuser, positions[0] - request.BacklashSteps, ct);
                 }
 
                 for (int i = 0; i < positions.Count; i++) {
                     ct.ThrowIfCancellationRequested();
                     int targetPos = positions[i];
                     Progress = Progress with { CurrentSampleIndex = i, CurrentPosition = targetPos };
-                    await focuser.MoveAbsoluteAsync(targetPos, ct);
-                    await WaitForFocuserSettle(focuser, ct);
+                    await MoveAndSettleAsync(focuser, targetPos, ct);
                     int actualPos = focuser.Position;
                     var image = await CaptureGated(source, camera, request.ExposureSeconds, ct);
                     // Push each AF frame through the image relay so the Focus tab
@@ -279,11 +276,9 @@ public class AutoFocusService {
 
                 // Move to the fitted best (backlash-compensated), settle.
                 if (request.BacklashSteps > 0 && bestPosition < focuser.Position) {
-                    await focuser.MoveAbsoluteAsync(bestPosition - request.BacklashSteps, ct);
-                    await WaitForFocuserSettle(focuser, ct);
+                    await MoveAndSettleAsync(focuser, bestPosition - request.BacklashSteps, ct);
                 }
-                await focuser.MoveAbsoluteAsync(bestPosition, ct);
-                await WaitForFocuserSettle(focuser, ct);
+                await MoveAndSettleAsync(focuser, bestPosition, ct);
                 int finalPosition = focuser.Focuser_ReadCurrentSafely();
 
                 // Confirmation frame (records achieved HFR + feeds the worse-than-
@@ -401,8 +396,7 @@ public class AutoFocusService {
         // Progress so the live V-curve chart grows point by point.
         async Task SampleAt(int pos) {
             ct.ThrowIfCancellationRequested();
-            await focuser.MoveAbsoluteAsync(pos, ct);
-            await WaitForFocuserSettle(focuser, ct);
+            await MoveAndSettleAsync(focuser, pos, ct);
             int actual = focuser.Position;
             var image = await CaptureGated(source, camera, request.ExposureSeconds, ct);
             try { await _relay.RelayImageAsync(image, FrameKind.Focus, ct); }
@@ -425,8 +419,7 @@ public class AutoFocusService {
             if (attempt > 1) {
                 _logger.LogInformation("AF(adaptive) reattempt {N}/{Max} (previous: {Reason}); step now {Step}",
                     attempt, maxAttempts, lastReason, step);
-                await focuser.MoveAbsoluteAsync(startPosition, ct);
-                await WaitForFocuserSettle(focuser, ct);
+                await MoveAndSettleAsync(focuser, startPosition, ct);
             }
             Progress = Progress with { Points = new List<AutoFocusPoint>(), CurrentSampleIndex = -1, Attempt = attempt };
 
@@ -480,11 +473,9 @@ public class AutoFocusService {
             }
 
             if (request.BacklashSteps > 0 && bestPosition < focuser.Position) {
-                await focuser.MoveAbsoluteAsync(bestPosition - request.BacklashSteps, ct);
-                await WaitForFocuserSettle(focuser, ct);
+                await MoveAndSettleAsync(focuser, bestPosition - request.BacklashSteps, ct);
             }
-            await focuser.MoveAbsoluteAsync(bestPosition, ct);
-            await WaitForFocuserSettle(focuser, ct);
+            await MoveAndSettleAsync(focuser, bestPosition, ct);
             int finalPosition = focuser.Focuser_ReadCurrentSafely();
 
             double? finalHfr = null;
@@ -530,18 +521,46 @@ public class AutoFocusService {
         }
     }
 
-    private async Task WaitForFocuserSettle(IFocuser focuser, CancellationToken ct) {
-        // Wait up to 30s for IsMoving to clear
-        for (int i = 0; i < 60; i++) {
+    // Settle delay (ms) after the focuser reports it reached the target, to let
+    // the optics/mechanics come to rest before the measurement exposure.
+    private const int FocuserSettleMs = 300;
+
+    /// <summary>Move the focuser to <paramref name="target"/> and do NOT return
+    /// until it has actually arrived there and stopped.</summary>
+    /// <remarks>
+    /// The bug this fixes: INDI flips ABS_FOCUS_POSITION to Busy
+    /// *asynchronously*, so polling <c>IsMoving</c> immediately after the move
+    /// command reads the stale Idle state and returns while the motor is still
+    /// travelling. The measurement then ran mid-move and the position read came
+    /// back stale, so two consecutive samples landed at nearly the same motor
+    /// position — wrecking the V-curve. Gating on "reached the requested
+    /// position AND not moving" is deterministic regardless of how the driver
+    /// sequences its Busy/Idle transitions or how fast the move completes.
+    /// </remarks>
+    private async Task MoveAndSettleAsync(IFocuser focuser, int target, CancellationToken ct) {
+        await focuser.MoveAbsoluteAsync(target, ct);
+        await WaitForFocuserReached(focuser, target, ct);
+    }
+
+    private async Task WaitForFocuserReached(IFocuser focuser, int target, CancellationToken ct) {
+        // Drivers may settle a step or two off the exact request; don't spin
+        // forever chasing a position the hardware will never report verbatim.
+        const int toleranceSteps = 2;
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+        while (DateTime.UtcNow < deadline) {
             ct.ThrowIfCancellationRequested();
-            if (!focuser.IsMoving) {
-                // small settle delay
-                await Task.Delay(300, ct);
-                return;
+            bool reached = Math.Abs(focuser.Position - target) <= toleranceSteps;
+            if (reached && !focuser.IsMoving) {
+                await Task.Delay(FocuserSettleMs, ct);
+                // Re-confirm after the settle: some drivers briefly report Idle
+                // mid-travel, so a single "not moving" reading isn't enough.
+                if (!focuser.IsMoving && Math.Abs(focuser.Position - target) <= toleranceSteps)
+                    return;
             }
-            await Task.Delay(500, ct);
+            await Task.Delay(150, ct);
         }
-        _logger.LogWarning("Focuser did not stop moving within 30s");
+        _logger.LogWarning("Focuser did not reach {Target} (now {Pos}, moving={Moving}) within 60s",
+            target, focuser.Position, focuser.IsMoving);
     }
 
     private (double medianHfr, int starCount) MeasureHFR(IImageData image, int minStars) {
