@@ -121,14 +121,14 @@
         "note": ""
       },
       {
-        "device": "PC Stick",
+        "device": "x86-64 PC / mini PC",
         "badge": "x86-64",
         "color": "#8b5cf6",
-        "url": "",
-        "os": "",
-        "polaris": "",
-        "size": "",
-        "note": "x86 board: flash to USB or write to the internal eMMC, not an SD card."
+        "url": "https://drive.google.com/uc?export=download&id=1Rb81wMslv7Z7HXDrKP1RmhEbs9feYS-3",
+        "os": "Ubuntu 24.04.4 LTS (x86-64)",
+        "polaris": "0.89.6",
+        "size": "3.8 GB (.7z)",
+        "note": "For any 64-bit PC, mini PC, or stick. 7-Zip archive; extract, then flash to a USB drive or write to the internal storage (not an SD card) and boot."
       }
     ],
     "update": {
