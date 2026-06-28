@@ -223,13 +223,22 @@
   },
   "platforms": [
     {
-      "name": "Raspberry Pi 4 / 5",
+      "name": "Raspberry Pi & arm64 SBCs",
       "badge": ".deb",
       "icon": "chip",
       "color": "#e11d6b",
-      "summary": "The recommended path. The .deb creates the user, a systemd unit, the indi-web venv, apt dependencies, and a self-signed HTTPS cert.",
+      "summary": "The recommended path for any Debian or Ubuntu arm64 board: Raspberry Pi, Orange Pi, Radxa, and similar. The .deb creates the user, a systemd unit, the indi-web venv, apt dependencies, and a self-signed HTTPS cert.",
       "steps": "wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb\nsudo apt install ./polaris_arm64.deb",
       "notes": "Running at https://<hostname>.local:5000 in about 30 seconds. Manage it with: sudo systemctl status polaris, sudo journalctl -u polaris -f, sudo systemctl restart polaris."
+    },
+    {
+      "name": "x86-64 PC (Debian / Ubuntu)",
+      "badge": ".deb",
+      "icon": "chip",
+      "color": "#8b5cf6",
+      "summary": "The same one-command install for any 64-bit Intel or AMD PC or mini PC running Debian or Ubuntu. Sets up the user, systemd unit, indi-web, dependencies, and HTTPS cert, exactly like the SBC build.",
+      "steps": "wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_amd64.deb\nsudo apt install ./polaris_amd64.deb",
+      "notes": "Running at https://<hostname>.local:5000 in about 30 seconds, managed by systemd; same status, journalctl, and restart commands as the arm64 build."
     },
     {
       "name": "Other Linux (portable)",

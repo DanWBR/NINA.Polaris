@@ -239,7 +239,7 @@
       "icon": "🚀", "color": "#ff7043", "title": "Platform & deployment", "tag": "Run it your way",
       "intro": "Run it where it suits you.",
       "items": [
-        { "label": "One-command Pi install", "text": "the .deb package handles every dependency, systemd unit, indi-web, and user setup." },
+        { "label": "One-command .deb install", "text": "for Debian and Ubuntu on arm64 SBCs (Raspberry Pi, Orange Pi, Radxa) and on x86-64 PCs; the package handles every dependency, the systemd unit, indi-web, and user setup." },
         { "label": "Windows and Linux", "text": "hosts both supported." },
         { "label": "Docker image and compose", "text": "for containerized deployment." },
         { "label": "Plate-solving", "text": "via ASTAP and other solver backends." },

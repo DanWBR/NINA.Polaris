@@ -438,8 +438,10 @@ Features present across every panel.
 
 ## Platform & Deployment
 
-- **One-command Pi install** — `.deb` package handles every dependency,
-  systemd unit, indi-web, and user setup. → [raspberry-pi-setup.md](user-guide/raspberry-pi-setup.md)
+- **One-command `.deb` install** — for Debian/Ubuntu on arm64 SBCs (Raspberry
+  Pi, Orange Pi, Radxa) and on x86-64 PCs; the package handles every
+  dependency, the systemd unit, indi-web, and user setup.
+  → [raspberry-pi-setup.md](user-guide/raspberry-pi-setup.md)
 - **Windows and Linux** hosts both supported. → [installation.md](user-guide/installation.md)
 - **Docker image + compose** for containerized deployment.
 - **Plate-solving** via ASTAP and other solver backends.
