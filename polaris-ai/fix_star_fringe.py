@@ -39,7 +39,11 @@ def bright_stars(lum, thr_frac=0.20, sep=24, nmax=4000):
 
 
 def repair_symmetry(crop, win):
-    """crop: (2win,2win,3). Return colour-symmetrised crop (luminance preserved)."""
+    """crop: (2win,2win,3). Enforce RADIAL symmetry of BOTH colour and luminance
+    so a star's one-sided fringe (blue colour edge + dark notch) inherits the
+    other edges. Colour: rebuild from per-ring median ratio. Luminance: FILL the
+    dark side up to the per-ring median (never lower it). Bright outliers
+    (companion stars) are protected. The whole star stays put, just symmetrised."""
     R, G, B = crop[..., 0], crop[..., 1], crop[..., 2]
     L = (R + G + B) / 3.0 + 1e-6
     yy, xx = np.mgrid[-win:win, -win:win].astype(np.float64)
@@ -51,17 +55,21 @@ def repair_symmetry(crop, win):
     ri = np.clip(np.round(r).astype(int), 0, None)
     rmax = int(ri.max())
 
-    def medprof(ratio):
+    def medprof(a):
         m = np.zeros(rmax + 1)
-        flat = ratio.ravel(); idx = ri.ravel()
+        flat = a.ravel(); idx = ri.ravel()
         for rr in range(rmax + 1):
             sel = flat[idx == rr]
             if sel.size:
                 m[rr] = np.median(sel)
         return m
 
+    Lmed = medprof(L)[ri]
     mR, mG, mB = medprof(R / L), medprof(G / L), medprof(B / L)
-    sym = np.stack([L * mR[ri], L * mG[ri], L * mB[ri]], axis=-1)
+    companion = L > (Lmed * 1.8 + 0.02)      # protect neighbour stars
+    Lout = np.maximum(L, Lmed)               # fill the dark-side notch
+    sym = np.stack([Lout * mR[ri], Lout * mG[ri], Lout * mB[ri]], axis=-1)
+    sym = np.where(companion[..., None], crop, sym)
     # feather so the patch blends into the surrounding pixels (no seam)
     w = np.clip((win * 0.85 - r) / (win * 0.2), 0, 1)[..., None]
     return crop * (1 - w) + sym * w
