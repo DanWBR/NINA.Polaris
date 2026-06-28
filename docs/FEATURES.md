@@ -164,6 +164,8 @@ Keep stars round during long exposures. Two interchangeable backends.
     until it stays under tolerance).
   - Star-lost detection and a watchdog that keeps the UI responsive.
   - Predictive algorithm option (periodic-error + drift modeling).
+  - ZFilter option — a low-pass algorithm ported from PHD2 that smooths noise
+    and seeing while still chasing drift, with a per-rig exposure-factor tuning.
   - Meridian-flip aware (pauses/resumes around the flip).
 - **PHD2 integration** — full control of an external PHD2.
   → [guide-phd2.md](user-guide/guide-phd2.md)
@@ -300,6 +302,10 @@ Browse, calibrate, and integrate your captured frames on the host.
   → [color-calibration.md](user-guide/color-calibration.md)
 - **Quick processing** — debayer, background extraction, noise reduction,
   and sharpening passes.
+- **Star colour repair** — fixes the one-sided colour fringe (a blue/magenta
+  cast with a dark notch) some OSC cameras leave on bright stars, via sub-pixel
+  channel alignment and radial colour/luminance symmetry repair. Neighbour-aware
+  for crowded fields, with a before/after montage of the brightest stars.
 - **Crop tool** with a drag picker.
 
 ---
@@ -351,8 +357,14 @@ cloud calls. → [onnx-inference.md](user-guide/onnx-inference.md)
   → [client-side-compute.md](user-guide/client-side-compute.md)
 - **Server-side CLI** fallback (GraXpert) when you prefer the host to do it.
   → [graxpert-setup.md](graxpert-setup.md)
-- **NPU acceleration** — on Rockchip RK3588 boards the models run on the NPU
-  for a large speed-up. → [npu-acceleration.md](user-guide/npu-acceleration.md)
+- **NPU acceleration** — on Rockchip RK3588 boards (RKNPU2, e.g. Orange Pi 5
+  Pro) and Qualcomm Hexagon boards (QAIRT, e.g. Radxa Dragon Q6A), BGE and
+  denoise run on the NPU about 5x faster than the CPU, freeing cores for live
+  stacking; automatic, with a CPU fallback.
+  → [npu-acceleration.md](user-guide/npu-acceleration.md)
+- **Accelerator selector** — choose Auto / NPU / GPU / CPU for the GraXpert AI
+  ops; on boards with more than one accelerator a Vulkan GPU lane (via ncnn)
+  runs alongside the NPU.
 - **OpenCL GPU backend** — image math can offload to the SBC GPU where
   available.
 - **RGB FITS support** throughout the AI pipelines.
@@ -394,8 +406,9 @@ Global configuration, host management, and connectivity.
   wheel that renders real stars at the simulated position, so plate solve,
   auto-focus, and live stacking all work without hardware.
   → [simulator-mode.md](user-guide/simulator-mode.md)
-- **Benchmark** — synthetic workloads to compare hardware (and GPU vs CPU)
-  with a saved results history. → [benchmark.md](user-guide/benchmark.md)
+- **Benchmark** — synthetic workloads to compare hardware (CPU, GPU, and a
+  GraXpert denoise pass on the board's NPU) with a saved results history.
+  → [benchmark.md](user-guide/benchmark.md)
 - **Software self-update** — on Pi/SBC `.deb` installs, a status-bar badge
   appears when a newer GitHub release exists; one click downloads the
   matching `.deb`, installs it, and reloads on the new version. No password

@@ -28,7 +28,7 @@
         { "label": "Per-role device cards", "text": "Main Telescope, Camera, Mount, Focuser, Filter Wheel, Guidescope, Guide Camera, Guide Focuser, Rotator, Flat Panel, Dome, and Weather, each with connect/disconnect and live status." },
         { "label": "Auxiliary camera and focuser", "text": "a second imaging camera on the same mount with its own optics, exposure, and gain, captured in parallel into a separate aux folder and focusable from the FOCUS tab (manual or Auto V-curve)." },
         { "label": "Gain and ISO aware", "text": "astronomy cameras show analogue gain with an ISO explainer; DSLR and mirrorless bodies (gphoto on Linux) get a real ISO dropdown." },
-        { "label": "Connection backends in one place", "text": "INDI (TCP/XML) full native client; ASCOM Alpaca (HTTP) auto-discovery and connect; ASCOM Platform (COM) Windows-only direct driver access; native vendor SDKs (ZWO ASI, Svbony, Player One, ToupTek-alike) driven directly; DSLR via Canon, Nikon, and Sony on Windows, gphoto2 on Linux." },
+        { "label": "Connection backends in one place", "text": "INDI (TCP/XML) full native client; ASCOM Alpaca (HTTP) auto-discovery and connect; ASCOM Platform (COM) Windows-only direct driver access; native vendor SDKs (ZWO ASI, Svbony, Player One, ToupTek, and Altair) driven directly; DSLR via Canon, Nikon, and Sony on Windows, gphoto2 on Linux." },
         { "label": "Per-rig optical data", "text": "main and guider focal length (auto-updated from plate solves), a filter offsets table, and per-camera quirk overrides (Bayer pattern, vertical flip) for cameras that report wrong metadata." },
         { "label": "Robust INDI handling", "text": "ack-based property writes, configurable per-device pre-connect delays, and idempotent connect logic." },
         { "label": "Embedded INDI Drivers Manager", "text": "the indi-web UI inside the panel, so you can add or remove INDI drivers and start or stop the indiserver without SSH." },
@@ -78,6 +78,7 @@
       "intro": "Keep stars round during long exposures, with two interchangeable backends.",
       "items": [
         { "label": "Native guider", "text": "PHD2's guiding math ported to C#, driving the rig's guide camera and mount directly with no external PHD2 process. Multi-star guiding, per-equipment calibration save and restore, dithering with ASIAIR-style settle readout, star-lost detection with a responsive watchdog, a predictive algorithm option (periodic-error and drift modeling), and meridian-flip awareness." },
+        { "label": "ZFilter algorithm", "text": "a low-pass guide algorithm ported from PHD2 that smooths guide noise and seeing while still chasing slow drift, with a per-rig exposure-factor tuning to dial in responsiveness for your gear." },
         { "label": "PHD2 integration", "text": "full control of an external PHD2. Connect, manage profiles and equipment, set exposure, launch and shutdown, smart calibration orchestration, guiding-algorithm presets, and the embedded PHD2 GUI in the browser via xpra (Linux) or noVNC." },
         { "label": "Live guiding telemetry", "text": "RA/Dec error graph, RMS, and dither/settle state surfaced in the top status bar." }
       ]
@@ -160,6 +161,7 @@
         { "label": "Channel combine", "text": "merge per-filter masters into one RGB image, with RGB compose (no luminance needed), LRGB (Lab or ratio combine when you have a luminance master), and PixelMath for narrowband palettes (HOO, SHO)." },
         { "label": "Color calibration", "text": "Siril-style and plate-solve-driven: background neutralization (zero-config), manual (background patch and white-reference patch), and PCC, Photometric Color Calibration against the bundled APASS DR10 star catalog for science-grade color." },
         { "label": "Quick processing", "text": "debayer, background extraction, noise reduction, and sharpening passes." },
+        { "label": "Star colour repair", "text": "fix the one-sided colour fringe (a blue or magenta cast with a dark notch) that some one-shot-colour cameras leave on bright stars, using sub-pixel channel alignment and radial colour and luminance symmetry repair. Neighbour-aware for crowded fields, with a before/after montage of the brightest stars." },
         { "label": "Crop tool", "text": "with a drag picker." }
       ]
     },
@@ -185,7 +187,8 @@
         { "label": "On-device model downloader", "text": "pull ready-made .onnx models onto the device from the bundled SourceForge catalogue or your own bucket, with SHA-256 verification and no Docker or Python on the host (Settings, AI inference, Download models)." },
         { "label": "In-browser inference", "text": "onnxruntime-web uses the client device's GPU (WebGPU) or WASM SIMD; the server just hosts the .onnx files." },
         { "label": "Server-side CLI fallback", "text": "GraXpert on the host, when you prefer the host to do it." },
-        { "label": "NPU acceleration", "text": "on Rockchip RK3588 boards the models run on the NPU for a large speed-up." },
+        { "label": "NPU acceleration", "text": "on Rockchip RK3588 boards (RKNPU2, e.g. the Orange Pi 5 Pro) and Qualcomm Hexagon boards (QAIRT, e.g. the Radxa Dragon Q6A), the background-extraction and denoise models run on the NPU about 5x faster than the CPU, freeing cores for live stacking. Automatic, with a CPU fallback." },
+        { "label": "Pick your accelerator", "text": "choose Auto, NPU, GPU, or CPU for the GraXpert AI ops. On boards with more than one accelerator, a Vulkan GPU lane (via ncnn) runs alongside the NPU." },
         { "label": "OpenCL GPU backend", "text": "image math can offload to the SBC GPU where available." },
         { "label": "RGB FITS support", "text": "throughout the AI pipelines." }
       ]
@@ -211,8 +214,9 @@
         { "label": "Remote terminal", "text": "embedded SSH terminal (xterm.js) to manage a headless host from the browser, with a one-click launcher for the native raspi-config or armbian-config tool." },
         { "label": "Clock sync", "text": "push the browser's UTC to a Pi without an RTC." },
         { "label": "Equipment simulator", "text": "built-in fake telescope, camera, focuser, and filter wheel that renders real stars at the simulated position, so plate solve, auto-focus, and live stacking all work without hardware." },
-        { "label": "Benchmark", "text": "synthetic workloads to compare hardware (and GPU vs CPU) with a saved results history." },
-        { "label": "Software self-update", "text": "on Pi/SBC .deb installs, a status-bar badge appears when a newer GitHub release exists; one click downloads the matching .deb, installs it, and reloads on the new version. No password needed, authorized via a scoped PolicyKit rule." }
+        { "label": "Benchmark", "text": "synthetic workloads to compare hardware (CPU, GPU, and a GraXpert denoise pass on the board's NPU) with a saved results history." },
+        { "label": "Software self-update", "text": "on Pi/SBC .deb installs, a status-bar badge appears when a newer GitHub release exists; one click downloads the matching .deb, installs it, and reloads on the new version. No password needed, authorized via a scoped PolicyKit rule." },
+        { "label": "Version rollback", "text": "Settings, Power, Roll back version reinstalls any recent release over the running one (downgrade included), online or offline through the relay; handy if an update misbehaves." }
       ]
     },
     {
