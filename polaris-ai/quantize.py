@@ -54,9 +54,15 @@ def cmd_calib(args):
 
 
 # --------------------------------------------------------------------------- #
-# ONNX Runtime static int8 (QDQ) -- CPU sanity baseline
+# ONNX Runtime static quantization (QDQ) -- CPU sanity baseline
 # --------------------------------------------------------------------------- #
-def cmd_int8(args):
+# Precision matters a LOT for deconvolution: the model learns a small residual
+# (out = image + delta), and int8's 256 levels round the high-frequency delta
+# away -> garbage (PSNR collapses below the blurred input). int16 (or w8a16 =
+# int8 weights + int16 activations, the AI-Hub production recipe) preserves the
+# residual and lands near fp16. So int8 is "turbo, lossy"; int16/w8a16 is the
+# real quantized path.
+def _quant(args, act, weight):
     from onnxruntime.quantization import (CalibrationDataReader, QuantFormat,
                                           QuantType, quantize_static)
 
@@ -79,16 +85,35 @@ def cmd_int8(args):
 
     import onnx
     input_name = onnx.load(args.onnx).graph.input[0].name
+    is16 = QuantType.QInt16 in (act, weight)
     quantize_static(
         args.onnx, args.out,
         calibration_data_reader=Reader(files, input_name),
         quant_format=QuantFormat.QDQ,
-        activation_type=QuantType.QInt8,
-        weight_type=QuantType.QInt8,
+        activation_type=act,
+        weight_type=weight,
         per_channel=True,
+        # 16-bit QDQ uses the com.microsoft contrib ops unless opset>=21; this
+        # keeps the CPU sanity check runnable.
+        extra_options={"UseQDQContribOps": True} if is16 else None,
     )
     print("wrote", args.out)
     print("test on CPU with onnxruntime; compare PSNR/FWHM vs the fp32 model.")
+
+
+def cmd_int8(args):
+    from onnxruntime.quantization import QuantType
+    _quant(args, QuantType.QInt8, QuantType.QInt8)
+
+
+def cmd_int16(args):
+    from onnxruntime.quantization import QuantType
+    _quant(args, QuantType.QInt16, QuantType.QInt16)
+
+
+def cmd_w8a16(args):
+    from onnxruntime.quantization import QuantType
+    _quant(args, QuantType.QInt16, QuantType.QInt8)   # int16 activations, int8 weights
 
 
 def main():
@@ -102,11 +127,16 @@ def main():
     c.add_argument("--size", type=int, default=256)
     c.set_defaults(func=cmd_calib)
 
-    q = sub.add_parser("int8", help="ONNX Runtime static int8 (QDQ) baseline")
-    q.add_argument("--onnx", required=True)
-    q.add_argument("--calib", default="models/calib")
-    q.add_argument("--out", default="models/decon_int8.onnx")
-    q.set_defaults(func=cmd_int8)
+    def _add_quant(name, fn, default_out):
+        q = sub.add_parser(name, help=f"ONNX Runtime static {name} (QDQ)")
+        q.add_argument("--onnx", required=True)
+        q.add_argument("--calib", default="models/calib")
+        q.add_argument("--out", default=default_out)
+        q.set_defaults(func=fn)
+
+    _add_quant("int8", cmd_int8, "models/decon_int8.onnx")     # turbo, lossy -- avoid for decon
+    _add_quant("int16", cmd_int16, "models/decon_int16.onnx")  # ~fp16 quality (recommended)
+    _add_quant("w8a16", cmd_w8a16, "models/decon_w8a16.onnx")  # int8 weights + int16 acts
 
     args = ap.parse_args()
     args.func(args)
