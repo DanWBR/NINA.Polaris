@@ -49,6 +49,43 @@ def _psnr(a, b):
     return 99.0 if mse <= 1e-12 else 10.0 * np.log10(1.0 / mse)
 
 
+def _star_fwhm(img, n=60, win=6):
+    """Approximate mean stellar FWHM (px) from the brightest stars: find local
+    maxima, then an intensity-weighted second-moment radius per star. Relative
+    before/after is what matters (lower = tighter = sharper)."""
+    h, w = img.shape
+    thr = np.percentile(img, 99.5)
+    # local maxima above threshold (3x3)
+    ys, xs = np.where(img > thr)
+    cand = []
+    for y, x in zip(ys, xs):
+        if y < win or x < win or y >= h - win or x >= w - win:
+            continue
+        p = img[y, x]
+        if p >= img[y - 1:y + 2, x - 1:x + 2].max():
+            cand.append((p, y, x))
+    cand.sort(reverse=True)
+    fwhms = []
+    used = []
+    for p, y, x in cand:
+        if any(abs(y - yy) < win and abs(x - xx) < win for yy, xx in used):
+            continue
+        used.append((y, x))
+        patch = img[y - win:y + win + 1, x - win:x + win + 1].astype(np.float64)
+        patch = np.clip(patch - np.median(patch), 0, None)
+        s = patch.sum()
+        if s <= 0:
+            continue
+        ax = np.arange(-win, win + 1)
+        xx, yy = np.meshgrid(ax, ax)
+        r2 = (patch * (xx ** 2 + yy ** 2)).sum() / s
+        sigma = np.sqrt(max(r2, 1e-6) / 2.0)        # 2D second moment -> per-axis sigma
+        fwhms.append(2.3548 * sigma)
+        if len(fwhms) >= n:
+            break
+    return (float(np.median(fwhms)) if fwhms else float("nan")), len(fwhms)
+
+
 def _stretch(a):
     """Asinh display stretch so faint structure + stars are both visible."""
     lo, hi = np.percentile(a, 5.0), np.percentile(a, 99.8)
@@ -86,10 +123,14 @@ def main():
         x = np.stack([img, cond], axis=0)[None, ...].astype(np.float32)
         out = sess.run(None, {iname: x})[0]
         decon = np.clip(out[0, 0], 0.0, 1.0)
+        fin, nin = _star_fwhm(img)
+        fout, nout = _star_fwhm(decon)
+        print(f"mean star FWHM  input : {fin:.2f} px  ({nin} stars)")
+        print(f"mean star FWHM  decon : {fout:.2f} px  ({nout} stars)  "
+              f"(lower = tighter = sharper)")
         panel = np.concatenate([_stretch(img), _stretch(decon)], axis=1)
         Image.fromarray(panel).save(args.out)
         print(f"wrote {args.out}  (left: real input | right: deconvolved @ fwhm={args.fwhm})")
-        print("no ground truth on real data -> judge by eye (tighter stars, no rings/halos)")
         return
 
     blurred = synth.degrade(sharp, args.fwhm, rng=rng)
