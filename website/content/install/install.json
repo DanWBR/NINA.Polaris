@@ -3,9 +3,9 @@
   "lede": "Flash a ready-made image, or download the release for your platform and run the install steps. Then add only the optional components for the features you want; Polaris detects what is installed at runtime and hides the UI for anything missing.",
   "requirements": {
     "title": "System requirements",
-    "sub": "The main limiting factor is RAM. Everything else is comfortable on a modern SBC, and the recommended board adds GPU and NPU acceleration.",
+    "sub": "The main limiting factor is RAM. Everything else is comfortable on a modern SBC, and several boards add GPU and NPU acceleration for the AI tools.",
     "ramNote": "Polaris uses 0.7 to 1.7 GB of RAM on average, so 2 GB is the practical floor. A Raspberry Pi 4 with 2 GB still runs the app, with client-side WASM offloading the heavy live-stack math.",
-    "recommendedNote": "Recommended board: the Orange Pi 5 Pro with 4 GB or more. It runs the whole app end to end, with OpenCL acceleration on the GPU and GraXpert AI on the NPU. More boards are on the test bench: two Orange Pi 4 Pro (4 GB), a Celeron PC stick, and a Radxa Dragon Q6A (expected to be the most powerful of the lot).",
+    "recommendedNote": "Recommended board: the Radxa Dragon Q6A with 4 GB or more. Its strong Qualcomm CPU posts the highest Polaris score of every SBC tested so far. If you lean on the AI tools, the Orange Pi 5 Pro is the proven alternative, adding OpenCL on the GPU and GraXpert AI on the NPU. More units are on the test bench: two Orange Pi 4 Pro (4 GB).",
     "rows": [
       {
         "host": "Raspberry Pi 3",
@@ -30,27 +30,24 @@
         "ram": "2+ GB",
         "status": "Testing",
         "highlight": true,
+        "tag": "GPU + NPU",
         "notes": "Two units incoming. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, up to 2.0 GHz), Imagination BXM-4-64 GPU, 3 TOPS NPU, LPDDR5. Same GPU-plus-NPU story as the 5 Pro: OpenCL on the GPU and GraXpert on the NPU, pending validation."
       },
       {
         "host": "Orange Pi 5 Pro",
         "ram": "2+ GB",
-        "status": "Recommended",
+        "status": "Great",
         "highlight": true,
-        "notes": "Proven daily driver. RK3588S (4x Cortex-A76 + 4x Cortex-A55), Mali-G610 GPU, 6 TOPS NPU. Full experience: OpenCL on the GPU and GraXpert AI on the NPU."
+        "tag": "GPU + NPU",
+        "notes": "Proven daily driver, and the pick if you want AI acceleration. RK3588S (4x Cortex-A76 + 4x Cortex-A55), Mali-G610 GPU, 6 TOPS NPU. Full experience: OpenCL on the GPU and GraXpert AI on the NPU."
       },
       {
         "host": "Radxa Dragon Q6A",
         "ram": "4+ GB",
-        "status": "Testing",
+        "status": "Recommended",
         "highlight": true,
-        "notes": "Qualcomm QCS6490 (octa-core Kryo: 1x 2.7 GHz + 3x 2.4 GHz + 4x 1.9 GHz), Adreno 643 GPU (OpenCL), Hexagon NPU up to 12 TOPS, LPDDR5. Incoming, expected to be the most powerful board tested so far, pending validation."
-      },
-      {
-        "host": "Celeron PC stick",
-        "ram": "4+ GB",
-        "status": "Testing",
-        "notes": "Intel Celeron J4105 (4 cores, up to 2.5 GHz), Intel UHD 600 GPU (OpenCL), 8 GB LPDDR4, 128 GB eMMC, Gigabit LAN. Ships with Windows 11 Pro. Incoming, results to follow."
+        "tag": "Top score",
+        "notes": "The fastest SBC tested so far (Polaris score 296), on the strength of its CPU. Qualcomm QCS6490 (octa-core Kryo: 1x 2.7 GHz + 3x 2.4 GHz + 4x 1.9 GHz), LPDDR5. Polaris runs it CPU-only here: the Adreno 643 GPU is a net loss and the Hexagon NPU is not used (the AI path is Rockchip-only), so the AI tools run on the CPU."
       },
       {
         "host": "Windows mini PC / desktop / laptop",
@@ -69,6 +66,7 @@
         "device": "x86-64 PC / mini PC",
         "badge": "x86-64",
         "color": "#8b5cf6",
+        "emoji": "🖥️",
         "url": "https://drive.google.com/uc?export=download&id=1Rb81wMslv7Z7HXDrKP1RmhEbs9feYS-3",
         "os": "Ubuntu 24.04.4 LTS (x86-64)",
         "polaris": "0.89.6 (2026-06-26)",
@@ -125,6 +123,7 @@
         "device": "Radxa Dragon Q6A",
         "badge": "arm64",
         "color": "#10b981",
+        "emoji": "🐉",
         "url": "",
         "os": "",
         "polaris": "",

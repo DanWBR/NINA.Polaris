@@ -53,7 +53,11 @@ const statusClass = (s: string) => {
               <header>
                 <div class="img-id">
                   <span class="sq-icon" style={it.color ? `--ic: ${it.color}` : undefined}>
-                    <Icon name={it.badge === 'x86-64' ? 'usb' : 'chip'} />
+                    {it.emoji ? (
+                      <span class="sq-emoji" aria-hidden="true">{it.emoji}</span>
+                    ) : (
+                      <Icon name={it.badge === 'x86-64' ? 'usb' : 'chip'} />
+                    )}
                   </span>
                   <h3>{it.device}</h3>
                 </div>
@@ -219,7 +223,7 @@ const statusClass = (s: string) => {
                   <td class="left rowlabel">
                     {fruitFor(r.host) && <FruitIcon name={fruitFor(r.host)!} />}
                     {r.host}
-                    {r.highlight && <span class="gpu-tag">GPU + NPU</span>}
+                    {r.tag && <span class="gpu-tag">{r.tag}</span>}
                   </td>
                   <td class="nowrap">{r.ram}</td>
                   <td><span class={`status ${statusClass(r.status)}`}>{r.status}</span></td>
@@ -585,6 +589,7 @@ const statusClass = (s: string) => {
   }
   .img-card h3 { font-size: 16px; font-weight: 700; }
   .img-id { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .sq-emoji { font-size: 20px; line-height: 1; }
   .sq-icon {
     --ic: var(--accent);
     width: 36px;
