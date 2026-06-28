@@ -18,8 +18,8 @@ application to install. Everything below runs from a single web UI.
 - **Browser-native** — no app to install on the client; works on phones,
   tablets, and laptops over WiFi.
 - **Hardware-agnostic** — INDI, ASCOM Alpaca, ASCOM Platform (Windows COM),
-  and native vendor SDKs (ZWO, Svbony, Player One, ToupTek, Canon/Nikon/Sony
-  DSLR) all in one app.
+  and native vendor SDKs (ZWO, Svbony, Player One, ToupTek, Altair,
+  Canon/Nikon/Sony DSLR) all in one app.
 - **Acquire and process in one place** — from polar alignment through
   capture, live stacking, calibration, integration, AI cleanup, and a final
   non-destructive editor pass with JPEG/PNG/TIFF export.
@@ -63,7 +63,7 @@ between them in one click. → [rigs.md](user-guide/rigs.md)
   - **ASCOM Alpaca** (HTTP) — auto-discovery + connect for Alpaca devices.
   - **ASCOM Platform (COM)** — Windows-only direct driver access.
     → [ascom-com.md](user-guide/ascom-com.md)
-  - **Native vendor SDKs** — ZWO ASI, Svbony, Player One, ToupTek-alike
+  - **Native vendor SDKs** — ZWO ASI, Svbony, Player One, ToupTek and Altair
     cameras driven directly. → [native-camera-sdk.md](user-guide/native-camera-sdk.md)
   - **DSLR** — Canon, Nikon, and Sony bodies on Windows; gphoto2 on Linux.
 - **Per-rig optical data** — main + guider focal length (auto-updated from

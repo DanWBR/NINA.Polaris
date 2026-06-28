@@ -12902,6 +12902,33 @@ vendored under `camera_sdk/`:
   empty, constructors safe) — 9 pass. All four SDK projects + NINA.Polaris
   build clean.
 
+### NATIVESDK follow-up: Altair backend
+
+Altair Astro is a ToupTek OEM rebrand, so its SDK (vendored under
+`camera_sdk/Altair`, `libaltaircam`/`altaircam.dll`) exposes the same API as
+ToupTek with the `Altaircam_`/`Altaircam` prefix. Mirrored the ToupTek project:
+
+- src/NINA.Camera.AltairSdk: vendors the official cross-platform binding
+  (camera_sdk/Altair/dotnet/altaircam.cs) compiled in directly, same `<Using>`
+  for System.Runtime.ConstrainedExecution + LINUX symbol for linux RIDs as
+  ToupTek. AltairRegistry/Discovery + AltairSdkCamera : ICamera, identical
+  pull-mode (StartPullModeWithCallback → PullImage → FrameInfoV4) flow. The
+  newer binding (vs the older vendored toupcam.cs) ships an unguarded
+  System.Drawing.Bitmap helper + usings; guarded behind the binding's own
+  `#if !(NETFX_CORE || NETCOREAPP || WINDOWS_UWP)` so it compiles cross-platform
+  with no new managed dependency. Linux arm64(glibc)/x64 + Windows x64 packaged
+  (the drop also ships musl/armel/armhf/ostl/x86/mac variants).
+- EquipmentManager: SelectCamera "altair-sdk" + CreateAltairCamera, discovery
+  entry + dispatch gated on AltairRegistry.IsAvailable. Referenced from
+  NINA.Polaris.csproj; project added to NINA.Polaris.slnx.
+- Packaging: per-RID native libs copied to output (arm64-glibc/x64/win-x64);
+  udev rule 99-polaris-altair.rules (vendor vids 04b4/0547/16d0, mirrors the
+  SDK's own rules); postinst comment updated. The build-packaged native libs
+  are force-tracked per the camera_sdk gitignore convention.
+- Docs: native-camera-sdk user guide, FEATURES.md, README.md (incl. SDK
+  license list) + in-app About license list updated. AltairSdk + NINA.Polaris
+  build clean.
+
 ## NATIVE GUIDER: in-process C# autoguider (drop-in PHD2 alternative)
 
 A native autoguider that runs inside Polaris, ported from PHD2's core

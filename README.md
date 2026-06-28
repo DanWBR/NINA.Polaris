@@ -44,8 +44,8 @@ acquisition, guiding, focusing, planning, live stacking, and a full
 post-processing suite with in-browser AI. Highlights:
 
 - **Equipment** — INDI (400+ Linux drivers), ASCOM/Alpaca over the network,
-  direct ASCOM COM on Windows, and native ZWO / SVBony / Player One / ToupTek
-  camera SDKs. DSLR/mirrorless (Canon, Nikon, Sony). Multi-rig profiles, an
+  direct ASCOM COM on Windows, and native ZWO / SVBony / Player One / ToupTek /
+  Altair camera SDKs. DSLR/mirrorless (Canon, Nikon, Sony). Multi-rig profiles, an
   INDI property browser, and a one-click equipment simulator for hardware-free
   testing.
 - **Acquisition** — real-time image streaming (LZ4 raw or JPEG, adaptive),
@@ -395,6 +395,7 @@ the [`licenses/`](licenses/) folder, and the bundled `3rd-party-licenses` notice
 - [SVBony SDK](https://www.svbony.com/) - SVBONY.
 - [Player One SDK](https://player-one-astronomy.com/) - Player One Astronomy.
 - [ToupTek SDK](https://www.touptek-astro.com/) - ToupTek Astro.
+- [Altair SDK](https://www.altairastro.com/) - Altair Astro (altaircam, a ToupTek OEM SDK).
 - [Nikon SDK](https://sdk.nikonimaging.com/) - Nikon Corporation. Nikon DSLR / mirrorless support.
 - [Canon EDSDK](https://developercommunity.usa.canon.com/) - Canon Inc. Canon EOS DSLR / mirrorless support on Windows.
 - [Sony Camera Remote SDK](https://support.d-imaging.sony.co.jp/app/sdk/en/index.html) - Sony Corporation. Sony Alpha camera support on Windows.
