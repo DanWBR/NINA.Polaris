@@ -2,7 +2,6 @@
 # Set default behavior to automatically normalize line endings.
 ###############################################################################
 * text=auto
-
 ###############################################################################
 # Shell scripts must stay LF even on Windows checkouts. bash (running
 # inside Docker containers or WSL) reads CRLF as a literal \r in the
@@ -10,7 +9,6 @@
 # path and fails with a misleading "No such file or directory".
 ###############################################################################
 *.sh text eol=lf
-
 ###############################################################################
 # stellarium-web-engine submodule: keep upstream line endings verbatim.
 # It's a Unix project — checking it out with CRLF on Windows breaks the
@@ -22,7 +20,6 @@
 # files arrive on the filesystem exactly as upstream stored them.
 ###############################################################################
 external/stellarium-web-engine/** -text
-
 ###############################################################################
 # Stellarium Web HiPS skydata bundle (copied from the submodule's
 # apps/test-skydata/ at SWE-3-bugfix). Keep byte-identical to upstream
@@ -32,7 +29,6 @@ external/stellarium-web-engine/** -text
 # fetch and silently disable the data source.
 ###############################################################################
 src/NINA.Polaris/wwwroot/sky/data/skydata/** -text
-
 ###############################################################################
 # Offline sky imagery (DSS Color HiPS background + curated DSO preview
 # thumbnails) is large binary (tens to hundreds of MB depending on the
@@ -46,7 +42,6 @@ src/NINA.Polaris/wwwroot/sky/data/skydata/** -text
 ###############################################################################
 src/NINA.Polaris/wwwroot/sky/data/skydata/surveys/dss/** filter=lfs diff=lfs merge=lfs -text
 src/NINA.Polaris/wwwroot/sky/data/skydata/dso-thumbs/** filter=lfs diff=lfs merge=lfs -text
-
 ###############################################################################
 # Set default behavior for command prompt diff.
 #
@@ -55,7 +50,6 @@ src/NINA.Polaris/wwwroot/sky/data/skydata/dso-thumbs/** filter=lfs diff=lfs merg
 # Note: This is only used by command line
 ###############################################################################
 #*.cs     diff=csharp
-
 ###############################################################################
 # Set the merge driver for project and solution files
 #
@@ -78,7 +72,6 @@ src/NINA.Polaris/wwwroot/sky/data/skydata/dso-thumbs/** filter=lfs diff=lfs merg
 #*.modelproj merge=binary
 #*.sqlproj   merge=binary
 #*.wwaproj   merge=binary
-
 ###############################################################################
 # behavior for image files
 #
@@ -87,7 +80,6 @@ src/NINA.Polaris/wwwroot/sky/data/skydata/dso-thumbs/** filter=lfs diff=lfs merg
 #*.jpg   binary
 #*.png   binary
 #*.gif   binary
-
 ###############################################################################
 # diff behavior for common document formats
 # 
@@ -105,3 +97,4 @@ src/NINA.Polaris/wwwroot/sky/data/skydata/dso-thumbs/** filter=lfs diff=lfs merg
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+src/NINA.Polaris/wwwroot/graxpert/models/ncnn/**/*.bin filter=lfs diff=lfs merge=lfs -text
