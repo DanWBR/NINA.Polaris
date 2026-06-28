@@ -4,3 +4,4 @@
 *.part
 *.fd
 OVMF_VARS.fd
+payload/

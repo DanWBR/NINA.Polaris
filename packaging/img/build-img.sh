@@ -11,8 +11,14 @@
 #
 # Prerequisites (Debian/Ubuntu host or WSL2):
 #   sudo apt install qemu-system-x86 ovmf cloud-image-utils \
-#                    libarchive-tools whois openssl wget
-#   ( libarchive-tools provides bsdtar; whois provides mkpasswd as a fallback )
+#                    libarchive-tools genisoimage openssl wget
+#   ( libarchive-tools provides bsdtar; genisoimage builds the payload iso )
+#
+# The big/critical artifacts (Polaris + ASTAP debs + d80 database) are
+# pre-downloaded HERE on the host, where the network is reliable, and handed to
+# the guest as an iso labelled POLARIS. The guest installs them from that local
+# mount instead of fighting QEMU's emulated NAT for gigabytes (github/fastly +
+# sourceforge time out badly under TCG). Cached under ./payload/ between runs.
 #
 # Usage:
 #   ./build-img.sh
@@ -20,10 +26,12 @@
 # Environment overrides:
 #   ISO            path to an Ubuntu live-server ISO (downloaded if missing)
 #   ISO_URL        where to fetch the ISO when ISO is absent
+#   UBUNTU_RELEASE point release series to auto-discover (default 24.04)
 #   OUTPUT         output image path           (default polaris-linux-x64.img)
-#   DISK_SIZE      virtual disk size           (default 24G)
-#   POLARIS_VERSION  "latest" or e.g. 1.0.0    (default latest)
+#   DISK_SIZE      virtual disk size           (default 40G)
+#   POLARIS_VERSION  "latest" or e.g. 0.89.6   (default latest)
 #   POLARIS_USER / POLARIS_PASS / HOSTNAME_NAME
+#   SKIP_PAYLOAD=1 don't pre-download/inject; let the guest fetch everything
 #   QEMU_MEM / QEMU_CPUS
 # =============================================================================
 set -euo pipefail
@@ -40,13 +48,18 @@ ISO="${ISO:-ubuntu-live-server-amd64.iso}"
 UBUNTU_RELEASE="${UBUNTU_RELEASE:-24.04}"
 ISO_URL="${ISO_URL:-}"
 OUTPUT="${OUTPUT:-polaris-linux-x64.img}"
-DISK_SIZE="${DISK_SIZE:-24G}"
+DISK_SIZE="${DISK_SIZE:-40G}"
 POLARIS_VERSION="${POLARIS_VERSION:-latest}"
 POLARIS_USER="${POLARIS_USER:-polaris}"
 POLARIS_PASS="${POLARIS_PASS:-polaris}"
 HOSTNAME_NAME="${HOSTNAME_NAME:-polaris-linux}"
+POLARIS_REPO="${POLARIS_REPO:-DanWBR/NINA.Polaris}"
+SKIP_PAYLOAD="${SKIP_PAYLOAD:-}"
+PAYLOAD_DIR="${PAYLOAD_DIR:-$SCRIPT_DIR/payload}"
 QEMU_MEM="${QEMU_MEM:-4096}"
 QEMU_CPUS="${QEMU_CPUS:-4}"
+
+SF="https://downloads.sourceforge.net/project/astap-program"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -62,6 +75,7 @@ need() { command -v "$1" >/dev/null 2>&1 || die "missing '$1' - $2"; }
 need qemu-system-x86_64 "apt install qemu-system-x86"
 need cloud-localds       "apt install cloud-image-utils"
 need bsdtar              "apt install libarchive-tools"
+need genisoimage         "apt install genisoimage"
 need openssl             "apt install openssl"
 need wget                "apt install wget"
 
@@ -145,6 +159,45 @@ cp "$SCRIPT_DIR/meta-data" "$WORK/meta-data"
 cloud-localds "$WORK/seed.iso" "$WORK/user-data" "$WORK/meta-data"
 
 # ---------------------------------------------------------------------------
+# Pre-download the heavy/critical artifacts on the host and pack them into an
+# iso labelled POLARIS. provision.sh installs from this mount first, falling
+# back to in-guest downloads only if a file is missing.
+# ---------------------------------------------------------------------------
+PAYLOAD_ARGS=()
+if [ -z "$SKIP_PAYLOAD" ]; then
+    mkdir -p "$PAYLOAD_DIR"
+    # dl URL OUTNAME REQUIRED  -> cached, IPv4, .part-then-promote
+    dl() {
+        local url="$1" out="$2" required="${3:-0}"
+        if [ -s "$PAYLOAD_DIR/$out" ]; then info "payload cached: $out"; return 0; fi
+        info "payload download: $out"
+        if wget -4 --tries=3 --retry-connrefused -O "$PAYLOAD_DIR/$out.part" "$url"; then
+            mv "$PAYLOAD_DIR/$out.part" "$PAYLOAD_DIR/$out"
+        else
+            rm -f "$PAYLOAD_DIR/$out.part"
+            if [ "$required" = "1" ]; then
+                die "could not download required artifact $out from $url"
+            fi
+            warn "optional artifact $out failed to download - guest will retry it"
+        fi
+    }
+
+    if [ "$POLARIS_VERSION" = "latest" ]; then
+        P_URL="https://github.com/${POLARIS_REPO}/releases/latest/download/polaris_amd64.deb"
+    else
+        P_URL="https://github.com/${POLARIS_REPO}/releases/download/v${POLARIS_VERSION}/polaris_${POLARIS_VERSION}_amd64.deb"
+    fi
+    dl "$P_URL" "polaris_amd64.deb" 1
+    dl "${SF}/linux_installer/astap_amd64.deb" "astap_amd64.deb" 0
+    dl "${SF}/linux_installer/astap_command-line_version_Linux_amd64.zip" "astap_cli.zip" 0
+    dl "${SF}/star_databases/d80_star_database.deb" "d80_star_database.deb" 0
+
+    info "Building payload iso (label POLARIS)"
+    genisoimage -quiet -V POLARIS -J -r -o "$WORK/payload.iso" "$PAYLOAD_DIR"
+    PAYLOAD_ARGS=(-drive file="$WORK/payload.iso",media=cdrom)
+fi
+
+# ---------------------------------------------------------------------------
 # Create the target disk
 # ---------------------------------------------------------------------------
 info "Creating target disk $OUTPUT ($DISK_SIZE)"
@@ -167,6 +220,7 @@ qemu-system-x86_64 \
     -drive file="$OUTPUT",format=raw,if=virtio,cache=writeback \
     -drive file="$ISO",media=cdrom \
     -drive file="$WORK/seed.iso",media=cdrom \
+    "${PAYLOAD_ARGS[@]}" \
     -kernel "$WORK/casper/vmlinuz" \
     -initrd "$WORK/casper/initrd" \
     -append "autoinstall ds=nocloud console=ttyS0,115200n8 ---" \
