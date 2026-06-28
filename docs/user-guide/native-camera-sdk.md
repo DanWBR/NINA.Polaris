@@ -1,7 +1,7 @@
-# Native camera SDK backends (SVBony, ZWO, PlayerOne, ToupTek) — high-fps planetary video
+# Native camera SDK backends (SVBony, ZWO, PlayerOne, ToupTek, Altair) — high-fps planetary video
 
-Polaris can talk to **SVBony**, **ZWO ASI**, **PlayerOne** and **ToupTek**
-cameras through their native USB SDKs, bypassing the INDI server entirely.
+Polaris can talk to **SVBony**, **ZWO ASI**, **PlayerOne**, **ToupTek** and
+**Altair** cameras through their native USB SDKs, bypassing the INDI server entirely.
 This is the fast path for high-frame-rate planetary video: the INDI route
 does a full per-exposure round-trip per frame (often ~1 fps for a
 non-streaming driver), whereas the native SDK streams continuously straight
@@ -23,8 +23,8 @@ off USB.
 ## Selecting the backend
 
 RIGS → camera driver picker lists **"SVBony (SDK, native)"**,
-**"ZWO ASI (SDK, native)"**, **"PlayerOne (SDK, native)"** and
-**"ToupTek (SDK, native)"** whenever the matching native library loads on
+**"ZWO ASI (SDK, native)"**, **"PlayerOne (SDK, native)"**,
+**"ToupTek (SDK, native)"** and **"Altair (SDK, native)"** whenever the matching native library loads on
 the host. Choose it, Discover, and connect like any other camera. All camera
 operations (capture, gain, cooler, ROI, and live video) go through the SDK
 while it's the active driver.
@@ -37,7 +37,7 @@ while it's the active driver.
   (PlayerOne additionally ships arm32/x86 `.so` in the SDK, though Polaris
   packages arm64/x64.)
 - On Linux the `.deb` installs udev rules
-  (`/lib/udev/rules.d/99-polaris-{svbony,asi,playerone,touptek}.rules`) so
+  (`/lib/udev/rules.d/99-polaris-{svbony,asi,playerone,touptek,altair}.rules`) so
   the `polaris` service user can open the camera without root, and bumps
   `usbfs_memory_mb` for high-fps USB3 streaming. The postinst reloads udev
   automatically; replug the camera once after install.
@@ -59,8 +59,9 @@ to compare capture fps, transmit fps, record fps and dropped frames.
 | ZWO ASI   | Linux arm64/x64, Windows x64   | not yet               |
 | PlayerOne | Linux arm64/arm32/x64/x86, Win x64 | not yet           |
 | ToupTek   | Linux arm64/x64, Windows x64   | not yet               |
+| Altair    | Linux arm64(glibc)/x64, Windows x64 | not yet          |
 
-The ZWO, PlayerOne and ToupTek backends are written to the vendor SDKs and
+The ZWO, PlayerOne, ToupTek and Altair backends are written to the vendor SDKs and
 compile + pass managed smoke tests, but have **not** been exercised on real
 cameras yet. Treat the first connect/capture/stream as a shakedown. If you
 hit a bug, capture the Polaris log (`journalctl -u polaris.service -f` on the
@@ -81,9 +82,14 @@ in. Documented so whoever debugs the first session knows where to start.
 - **ToupTek — live ROI.** `put_Roi` is applied without stopping pull mode and
   the frame buffer re-sizes from `get_Size` per frame. On sensors that won't
   change ROI live, this may need a stop/restart-pull around `ApplyRoi`.
-- **ToupTek — OEM rebadges.** Altair / Omegon / RisingCam etc. are ToupTek-
+- **ToupTek — OEM rebadges.** Omegon / RisingCam etc. are ToupTek-
   based and enumerate under the same SDK, but only genuine ToupTek units are
   expected to work as-is; OEM PIDs may need adding to the udev rule.
+- **Altair — dedicated backend.** Altair Astro cameras have their own
+  vendor SDK drop (`camera_sdk/Altair`, `libaltaircam`) and a dedicated
+  "Altair (SDK, native)" picker entry, separate from ToupTek. It is the same
+  ToupTek-derived API surface (Altair is a ToupTek OEM), so the same ROI /
+  raw-format / pull-mode notes apply. Vendor udev IDs `04b4`/`0547`/`16d0`.
 - **PlayerOne — config-value union.** `POAConfigValue` (a C `union` of
   `long`/`double`/`POABool`) is marshalled via an explicit-layout struct
   overlapping `int`/`double` at offset 0. If gain, exposure or temperature

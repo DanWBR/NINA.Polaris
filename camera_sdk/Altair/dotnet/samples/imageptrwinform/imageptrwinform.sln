@@ -1,0 +1,19 @@
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "demowinformcs", "demowinformcs.csproj", "{AA5B2412-0B75-46F3-AD5E-6C06D6707FBC}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AA5B2412-0B75-46F3-AD5E-6C06D6707FBC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AA5B2412-0B75-46F3-AD5E-6C06D6707FBC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AA5B2412-0B75-46F3-AD5E-6C06D6707FBC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AA5B2412-0B75-46F3-AD5E-6C06D6707FBC}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

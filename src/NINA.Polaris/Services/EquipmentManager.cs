@@ -118,6 +118,7 @@ public class EquipmentManager : IDisposable {
             "zwo-sdk"     => CreateZwoCamera(deviceId),
             "playerone-sdk" => CreatePlayerOneCamera(deviceId),
             "touptek-sdk"   => CreateToupTekCamera(deviceId),
+            "altair-sdk"    => CreateAltairCamera(deviceId),
             "ascom-com"   => CreateAscomCamera(deviceId),
             "alpaca"      => AlpacaCamera.FromDeviceId(deviceId),
             "sim"         => new SimGuideCamera(_simGear),
@@ -282,6 +283,20 @@ public class EquipmentManager : IDisposable {
         }
     }
 
+    /// <summary>Altair camera over the native altaircam SDK (a ToupTek-family
+    /// OEM rebrand: same API, different prefix/lib). Cross-platform (Linux
+    /// arm64/x64 + Windows x64); native lib bundled per-RID. High-fps path for
+    /// Altair planetary cameras.</summary>
+    private static ICamera CreateAltairCamera(string deviceId) {
+        try {
+            return new NINA.Camera.AltairSdk.AltairSdkCamera(deviceId);
+        } catch (DllNotFoundException ex) {
+            throw new NotSupportedException(
+                "Altair SDK native library not found for this platform/arch. " +
+                "Reinstall the Polaris package, or use the INDI driver instead.", ex);
+        }
+    }
+
     /// <summary>List of camera driver kinds the host can offer. Always
     /// includes <c>indi</c>; vendor SDK drivers are listed only when
     /// the matching native dependency is present on the current OS.</summary>
@@ -354,6 +369,12 @@ public class EquipmentManager : IDisposable {
         list.Add(new("touptek-sdk", "ToupTek (SDK, native)",
             Available: NINA.Camera.ToupTekSdk.ToupTekRegistry.IsAvailable,
             Description: "ToupTek cameras via the native toupcam SDK. " +
+                "Direct, low-overhead path for high-fps video (bypasses INDI)."));
+        // Altair native SDK (ToupTek-family OEM rebrand). Same cross-platform
+        // coverage; high-fps path for Altair planetary cameras.
+        list.Add(new("altair-sdk", "Altair (SDK, native)",
+            Available: NINA.Camera.AltairSdk.AltairRegistry.IsAvailable,
+            Description: "Altair cameras via the native altaircam SDK. " +
                 "Direct, low-overhead path for high-fps video (bypasses INDI)."));
         return list;
     }
@@ -466,6 +487,16 @@ public class EquipmentManager : IDisposable {
                     .ToList();
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "ToupTek SDK discovery failed");
+                return Array.Empty<DiscoveredCamera>();
+            }
+        }
+        if (driver == "altair-sdk") {
+            try {
+                return NINA.Camera.AltairSdk.AltairDiscovery.Enumerate()
+                    .Select(e => new DiscoveredCamera(e.Id, e.Model, e.Info))
+                    .ToList();
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Altair SDK discovery failed");
                 return Array.Empty<DiscoveredCamera>();
             }
         }

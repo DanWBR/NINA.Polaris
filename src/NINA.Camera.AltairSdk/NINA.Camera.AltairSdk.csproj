@@ -1,0 +1,81 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NINA.Camera.AltairSdk</RootNamespace>
+    <AssemblyName>NINA.Camera.AltairSdk</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- The vendored binding (compiled in below) predates nullable reference
+         types and triggers a large volume of CS86xx nullability warnings that
+         are not actionable in third-party code. Suppress them project-wide;
+         our own thin wrapper files are written nullable-clean. -->
+    <NoWarn>$(NoWarn);CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8625;CS8765;CS8767</NoWarn>
+    <!-- Altair SDK ships native binaries for Windows (x64/arm64), Linux
+         (arm64/armhf/armel/x64/x86), macOS and Android. net10.0, no OS
+         attribute: compiles cross-platform, AltairRegistry probes at
+         runtime. The official cross-platform binding (camera_sdk/Altair/
+         dotnet/altaircam.cs) is compiled in directly; it selects the native
+         lib name (libaltaircam.so vs altaircam.dll) at compile time via the
+         LINUX symbol, so we define it for linux RIDs below. The per-RID
+         native lib is copied into the app output by the items below. -->
+  </PropertyGroup>
+
+  <!-- The official binding gates its native-lib name + string marshalling on
+       the LINUX compile symbol. Define it when publishing for a linux RID;
+       the default (dev) build targets the Windows branch, which is correct
+       on the Windows dev box. -->
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+    <DefineConstants>$(DefineConstants);LINUX</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NINA.Core.Portable\NINA.Core.Portable.csproj" />
+    <ProjectReference Include="..\NINA.Image.Portable\NINA.Image.Portable.csproj" />
+  </ItemGroup>
+
+  <!-- The vendored binding guards its `using System.Runtime.ConstrainedExecution;`
+       behind `#if !NETCOREAPP`, but applies a [ReliabilityContract] attribute
+       from that namespace unconditionally. Bring the namespace into scope for
+       all files (incl. the compiled-in binding) so Consistency/Cer resolve;
+       ReliabilityContractAttribute itself is shimmed in AltairCompat.cs.
+       The [SecurityPermission] attribute is #if-excluded on NETCOREAPP, so no
+       System.Security.Permissions reference is needed. -->
+  <ItemGroup>
+    <Using Include="System.Runtime.ConstrainedExecution" />
+  </ItemGroup>
+
+  <!-- Vendored official C# binding, compiled in place (kept in sync with the
+       SDK drop under camera_sdk/Altair). -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)..\..\camera_sdk\Altair\dotnet\altaircam.cs">
+      <Link>altaircam.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <AltairSdk>$(MSBuildThisFileDirectory)..\..\camera_sdk\Altair</AltairSdk>
+  </PropertyGroup>
+  <!-- Altair splits arm64 into glibc/ and musl/ (ToupTek shipped a flat
+       arm64/). The Q6A is Debian (glibc); use that build. -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">
+    <Content Include="$(AltairSdk)\linux\arm64\glibc\libaltaircam.so">
+      <Link>libaltaircam.so</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
+    <Content Include="$(AltairSdk)\linux\x64\libaltaircam.so">
+      <Link>libaltaircam.so</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <Content Include="$(AltairSdk)\win\x64\altaircam.dll">
+      <Link>altaircam.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,9 @@
+# N.I.N.A. Polaris — Altair Astro camera USB access (from the altaircam SDK).
+# Grants non-root read/write so the polaris service user can open the
+# camera over libusb. Altair (a ToupTek OEM rebrand) cameras enumerate under
+# Cypress vendor ids 0x04b4 / 0x0547 and MCS vendor id 0x16d0. Mirrors the
+# vendor-shipped camera_sdk/Altair/linux/udev/99-altaircam.rules. Reloaded by
+# the package postinst.
+SUBSYSTEMS=="usb", ATTR{idVendor}=="04b4", MODE="0666"
+SUBSYSTEMS=="usb", ATTR{idVendor}=="0547", MODE="0666"
+SUBSYSTEMS=="usb", ATTR{idVendor}=="16d0", MODE="0666"
