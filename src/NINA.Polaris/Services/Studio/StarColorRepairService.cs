@@ -101,7 +101,7 @@ public sealed class StarColorRepairService {
             }
             if (req.Fringe && agg > 0) {
                 _jobs[jobId] = _jobs[jobId] with { Stage = "repairing" };
-                foreach (var (sx, sy) in stars) RepairStar(R, G, B, W, H, sx, sy, 22, agg);
+                foreach (var (sx, sy) in stars) RepairStar(R, G, B, W, H, sx, sy, 22, agg, stars);
             }
 
             _jobs[jobId] = _jobs[jobId] with { Stage = "writing" };
@@ -242,13 +242,37 @@ public sealed class StarColorRepairService {
     }
 
     // ── stage 2: radial colour + luminance symmetry per star ──────────────────
+    // Neighbour-aware: when bright stars are close, the window overlaps them, so
+    // we (1) refine the centre only in the core (neighbours don't pull it),
+    // (2) EXCLUDE neighbour pixels from the per-ring medians, and (3) don't
+    // rewrite neighbour pixels (each star is handled by its own call).
     private static void RepairStar(double[] R, double[] G, double[] B, int W, int H,
-                                   int cx, int cy, int win, double agg) {
+                                   int cx, int cy, int win, double agg,
+                                   List<(int x, int y)> allStars) {
         if (cx < win || cy < win || cx >= W - win || cy >= H - win) return;
-        int n = 2 * win + 1;
+        int n = 2 * win + 1, nn = n * n;
+
+        // neighbour centres in window-local coords (exclude self)
+        var neigh = new List<(double x, double y)>();
+        foreach (var s in allStars) {
+            if (s.x == cx && s.y == cy) continue;
+            double lx = s.x - cx, ly = s.y - cy;
+            if (Math.Abs(lx) <= win + 8 && Math.Abs(ly) <= win + 8) neigh.Add((lx, ly));
+        }
+        const double excl = 9.0; double excl2 = excl * excl;
+        var isNeigh = new bool[nn];
+        if (neigh.Count > 0)
+            for (int yy = 0; yy < n; yy++)
+                for (int xx = 0; xx < n; xx++) {
+                    double lx = xx - win, ly = yy - win;
+                    foreach (var nb in neigh) {
+                        double dx = lx - nb.x, dy = ly - nb.y;
+                        if (dx * dx + dy * dy < excl2) { isNeigh[yy * n + xx] = true; break; }
+                    }
+                }
+
         // gather window
-        var lr = new double[n * n]; var lg = new double[n * n]; var lb = new double[n * n];
-        var L = new double[n * n];
+        var lr = new double[nn]; var lg = new double[nn]; var lb = new double[nn]; var L = new double[nn];
         for (int yy = 0; yy < n; yy++) {
             int row = (cy - win + yy) * W + (cx - win);
             for (int xx = 0; xx < n; xx++) {
@@ -257,42 +281,49 @@ public sealed class StarColorRepairService {
                 lr[k] = r; lg[k] = g; lb[k] = b; L[k] = (r + g + b) / 3.0 + 1e-6;
             }
         }
-        // sub-pixel centre via luminance centroid (background = window median)
+
+        // sub-pixel centre: only the core (r<=6 of the detected peak), neighbours excluded
         double bg = Median(L);
         double sw = 0, scx = 0, scy = 0;
         for (int yy = 0; yy < n; yy++)
             for (int xx = 0; xx < n; xx++) {
-                double w = L[yy * n + xx] - bg; if (w <= 0) continue;
-                sw += w; scx += w * (xx - win); scy += w * (yy - win);
+                int k = yy * n + xx;
+                if (isNeigh[k]) continue;
+                double lx = xx - win, ly = yy - win;
+                if (lx * lx + ly * ly > 36) continue;        // core only
+                double w = L[k] - bg; if (w <= 0) continue;
+                sw += w; scx += w * lx; scy += w * ly;
             }
         double ccx = sw > 0 ? scx / sw : 0, ccy = sw > 0 ? scy / sw : 0;
 
-        // radius per pixel + ring stats
-        var ri = new int[n * n]; int rmax = 0;
+        // radius per pixel
+        var ri = new int[nn]; int rmax = 0;
         for (int yy = 0; yy < n; yy++)
             for (int xx = 0; xx < n; xx++) {
                 double dx = (xx - win) - ccx, dy = (yy - win) - ccy;
                 int r = (int)Math.Round(Math.Sqrt(dx * dx + dy * dy));
                 ri[yy * n + xx] = r; if (r > rmax) rmax = r;
             }
-        double[] medL = RingMedian(L, ri, rmax);
-        // ratio channel/L per ring
-        var ratR = new double[n * n]; var ratG = new double[n * n]; var ratB = new double[n * n];
-        for (int k = 0; k < n * n; k++) { ratR[k] = lr[k] / L[k]; ratG[k] = lg[k] / L[k]; ratB[k] = lb[k] / L[k]; }
-        double[] medRR = RingMedian(ratR, ri, rmax);
-        double[] medRG = RingMedian(ratG, ri, rmax);
-        double[] medRB = RingMedian(ratB, ri, rmax);
 
-        // rebuild + write back with feather (scaled by aggressiveness)
+        // per-ring medians, EXCLUDING neighbour pixels (count<3 => invalid)
+        var ratR = new double[nn]; var ratG = new double[nn]; var ratB = new double[nn];
+        for (int k = 0; k < nn; k++) { ratR[k] = lr[k] / L[k]; ratG[k] = lg[k] / L[k]; ratB[k] = lb[k] / L[k]; }
+        var (medL, ok) = RingMedian(L, ri, rmax, isNeigh);
+        var (medRR, _) = RingMedian(ratR, ri, rmax, isNeigh);
+        var (medRG, _) = RingMedian(ratG, ri, rmax, isNeigh);
+        var (medRB, _) = RingMedian(ratB, ri, rmax, isNeigh);
+
+        // rebuild + write back
         for (int yy = 0; yy < n; yy++) {
             for (int xx = 0; xx < n; xx++) {
                 int k = yy * n + xx, r = ri[k];
+                if (isNeigh[k] || !ok[r]) continue;          // leave neighbours/invalid rings
                 double lm = medL[r];
-                bool companion = L[k] > lm * 1.8 + 0.02 * 65535.0;   // protect neighbour stars
+                bool companion = L[k] > lm * 1.8 + 0.02 * 65535.0;
                 double rr, gg, bb;
                 if (companion) { rr = lr[k]; gg = lg[k]; bb = lb[k]; }
                 else {
-                    double lout = Math.Max(L[k], lm);                // fill dark side
+                    double lout = Math.Max(L[k], lm);
                     rr = lout * medRR[r]; gg = lout * medRG[r]; bb = lout * medRB[r];
                 }
                 double dx = (xx - win) - ccx, dy = (yy - win) - ccy;
@@ -306,13 +337,17 @@ public sealed class StarColorRepairService {
         }
     }
 
-    private static double[] RingMedian(double[] vals, int[] ri, int rmax) {
-        var med = new double[rmax + 1];
+    /// <summary>Per-ring median ignoring masked pixels; ok[r]=false if a ring had
+    /// fewer than 3 valid samples (can't trust a symmetric estimate there).</summary>
+    private static (double[] med, bool[] ok) RingMedian(double[] vals, int[] ri, int rmax, bool[] mask) {
         var buckets = new List<double>[rmax + 1];
         for (int r = 0; r <= rmax; r++) buckets[r] = new List<double>();
-        for (int k = 0; k < vals.Length; k++) buckets[ri[k]].Add(vals[k]);
-        for (int r = 0; r <= rmax; r++) med[r] = buckets[r].Count > 0 ? Median(buckets[r]) : 0;
-        return med;
+        for (int k = 0; k < vals.Length; k++) if (!mask[k]) buckets[ri[k]].Add(vals[k]);
+        var med = new double[rmax + 1]; var ok = new bool[rmax + 1];
+        for (int r = 0; r <= rmax; r++) {
+            if (buckets[r].Count >= 3) { med[r] = Median(buckets[r]); ok[r] = true; }
+        }
+        return (med, ok);
     }
 
     private static double Median(IReadOnlyList<double> v) {
