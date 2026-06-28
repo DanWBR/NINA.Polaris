@@ -2721,7 +2721,7 @@ function ninaApp() {
         // Star colour/fringe repair (SVBony debayer artifact) — run first.
         starColor: {
             modalOpen: false, busy: false, framePath: '', aggressiveness: 1.0,
-            stage: '', error: '',
+            exclusionRadius: 9, stage: '', error: '',
         },
 
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
@@ -25792,6 +25792,7 @@ function ninaApp() {
                     body: JSON.stringify({
                         framePath: src,
                         aggressiveness: this.starColor.aggressiveness,
+                        exclusionRadius: this.starColor.exclusionRadius,
                         align: true, fringe: true,
                     }),
                 });

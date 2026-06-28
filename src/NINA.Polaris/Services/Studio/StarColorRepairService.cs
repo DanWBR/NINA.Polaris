@@ -52,7 +52,8 @@ public sealed class StarColorRepairService {
 
     public record StarColorRepairRequest(
         string FramePath,
-        double Aggressiveness = 1.0,   // 0..1
+        double Aggressiveness = 1.0,    // 0..1
+        double ExclusionRadius = 9.0,   // px; how close a neighbour star is "masked off"
         bool Align = true,
         bool Fringe = true);
 
@@ -101,7 +102,8 @@ public sealed class StarColorRepairService {
             }
             if (req.Fringe && agg > 0) {
                 _jobs[jobId] = _jobs[jobId] with { Stage = "repairing" };
-                foreach (var (sx, sy) in stars) RepairStar(R, G, B, W, H, sx, sy, 22, agg, stars);
+                double excl = Math.Clamp(req.ExclusionRadius, 3.0, 20.0);
+                foreach (var (sx, sy) in stars) RepairStar(R, G, B, W, H, sx, sy, 22, agg, stars, excl);
             }
 
             _jobs[jobId] = _jobs[jobId] with { Stage = "writing" };
@@ -248,18 +250,19 @@ public sealed class StarColorRepairService {
     // rewrite neighbour pixels (each star is handled by its own call).
     private static void RepairStar(double[] R, double[] G, double[] B, int W, int H,
                                    int cx, int cy, int win, double agg,
-                                   List<(int x, int y)> allStars) {
+                                   List<(int x, int y)> allStars, double excl) {
         if (cx < win || cy < win || cx >= W - win || cy >= H - win) return;
         int n = 2 * win + 1, nn = n * n;
 
         // neighbour centres in window-local coords (exclude self)
         var neigh = new List<(double x, double y)>();
+        double inc = win + excl;
         foreach (var s in allStars) {
             if (s.x == cx && s.y == cy) continue;
             double lx = s.x - cx, ly = s.y - cy;
-            if (Math.Abs(lx) <= win + 8 && Math.Abs(ly) <= win + 8) neigh.Add((lx, ly));
+            if (Math.Abs(lx) <= inc && Math.Abs(ly) <= inc) neigh.Add((lx, ly));
         }
-        const double excl = 9.0; double excl2 = excl * excl;
+        double excl2 = excl * excl;
         var isNeigh = new bool[nn];
         if (neigh.Count > 0)
             for (int yy = 0; yy < n; yy++)
