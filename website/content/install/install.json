@@ -128,6 +128,7 @@
         "os": "Ubuntu 24.04.4 LTS (x86-64)",
         "polaris": "0.89.6 (2026-06-26)",
         "size": "3.8 GB (.7z)",
+        "access": "https://polaris-linux.local:5000/",
         "note": "For any 64-bit PC, mini PC, or stick. 7-Zip archive; extract, then flash to a USB drive or write to the internal storage (not an SD card) and boot."
       }
     ],
