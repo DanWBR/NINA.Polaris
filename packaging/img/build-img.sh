@@ -89,7 +89,11 @@ if [ -n "$SHRINK" ]; then
     need resize2fs "apt install e2fsprogs"
     need sgdisk   "apt install gdisk"          # PiShrink needs sgdisk for GPT
     need losetup  "apt install util-linux"
-    case "$SHRINK" in gz|z) need gzip "apt install gzip";; raw) :;; *) need xz "apt install xz-utils";; esac
+    case "$SHRINK" in
+        gz|z) need pigz "apt install pigz";;          # -a uses pigz for parallel gzip
+        raw)  : ;;
+        *)    need xz   "apt install xz-utils";;       # -a uses xz -T0 (built in)
+    esac
 fi
 
 [ -e /dev/kvm ] || warn "/dev/kvm not present - QEMU will fall back to slow TCG emulation. \
@@ -264,7 +268,9 @@ if [ -n "$SHRINK" ]; then
         raw)  SHFLAG=() ;;
         *)    SHFLAG=(-Z) ;;   # default: xz
     esac
-    sudo "$PISHRINK" "${SHFLAG[@]}" "$SH_WORK" || die "pishrink failed"
+    # -a = compress in parallel (xz -T0 / pigz). Single-threaded xz on a
+    # ~12G image is painfully slow; this uses every core.
+    sudo "$PISHRINK" -a "${SHFLAG[@]}" "$SH_WORK" || die "pishrink failed"
 
     PRODUCED=""
     for f in "${SH_WORK}.xz" "${SH_WORK}.gz" "$SH_WORK"; do
