@@ -55,6 +55,13 @@ public sealed class SvbonySdkCamera : ICamera {
     private Thread? _streamThread;
     private CancellationTokenSource? _streamCts;
     private readonly object _gate = new();
+    // The SVBony SDK is NOT thread-safe per camera handle: a control read from
+    // the WS status tick (Temperature/Cooler) concurrent with the pull thread's
+    // SVBGetVideoData crashes the native lib a few seconds into a stream. This
+    // lock serialises every individual SDK call so get/set/grab never overlap.
+    // Held only for the duration of one native call (incl. the blocking
+    // GetVideoData, which has its own short waitMs), never across the loop.
+    private readonly object _sdk = new();
 
     public SvbonySdkCamera(string deviceId) {
         SvbonyRegistry.EnsureResolver();
@@ -177,14 +184,16 @@ public sealed class SvbonySdkCamera : ICamera {
 
     public Task SetTemperatureAsync(double temperature, CancellationToken ct = default) {
         if (_supportsCooler)
-            SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_TARGET_TEMPERATURE,
-                new CLong((nint)Math.Round(temperature * 10)), 0);
+            lock (_sdk)
+                SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_TARGET_TEMPERATURE,
+                    new CLong((nint)Math.Round(temperature * 10)), 0);
         return Task.CompletedTask;
     }
 
     public Task SetCoolerAsync(bool on, CancellationToken ct = default) {
         if (_supportsCooler)
-            SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_COOLER_ENABLE, new CLong(on ? 1 : 0), 0);
+            lock (_sdk)
+                SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_COOLER_ENABLE, new CLong(on ? 1 : 0), 0);
         return Task.CompletedTask;
     }
 
@@ -250,7 +259,8 @@ public sealed class SvbonySdkCamera : ICamera {
                     // Let the mode + exposure value latch before triggering.
                     Thread.Sleep(20);
                     Check(SVBSendSoftTrigger(_cameraId), "SVBSendSoftTrigger");
-                    var err = SVBGetVideoData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
+                    SVB_ERROR_CODE err;
+                    lock (_sdk) err = SVBGetVideoData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
                     Check(err, "SVBGetVideoData");
                 } finally {
                     try { SVBStopVideoCapture(_cameraId); } catch { }
@@ -275,7 +285,8 @@ public sealed class SvbonySdkCamera : ICamera {
                     for (int attempt = 1; ; attempt++) {
                         ct.ThrowIfCancellationRequested();
                         long t0 = Environment.TickCount64;
-                        var err = SVBGetVideoData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
+                        SVB_ERROR_CODE err;
+                        lock (_sdk) err = SVBGetVideoData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
                         Check(err, "SVBGetVideoData");
                         long elapsedMs = Environment.TickCount64 - t0;
                         if (exposureSeconds <= 0.05 || elapsedMs >= minIntegrationMs || attempt >= 3)
@@ -340,7 +351,8 @@ public sealed class SvbonySdkCamera : ICamera {
         var buf = new byte[(long)w * h * BytesPerPixel()];
         int waitMs = (int)(_exposureSec * 1000 * 2 + 500);
         while (!ct.IsCancellationRequested && _streaming) {
-            var err = SVBGetVideoData(_cameraId, buf, new CLong(buf.Length), waitMs);
+            SVB_ERROR_CODE err;
+            lock (_sdk) err = SVBGetVideoData(_cameraId, buf, new CLong(buf.Length), waitMs);
             if (err == SVB_ERROR_CODE.SVB_ERROR_TIMEOUT) continue;
             if (err != SVB_ERROR_CODE.SVB_SUCCESS) continue;
             IImageData frame;
@@ -361,12 +373,16 @@ public sealed class SvbonySdkCamera : ICamera {
         double effExp = exposureSeconds >= 0 ? exposureSeconds : _exposureSec;
         if (exposureSeconds > 0) _exposureSec = exposureSeconds;
         long us = Math.Max(1, (long)Math.Round(effExp * 1_000_000)); // ≥1 µs
-        SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_EXPOSURE, new CLong((nint)us), 0); // microseconds
         if (gainOverride is int g) _gain = g;
-        SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_GAIN, new CLong(_gain), 0);
-        if (offsetOverride is int o) {
-            _offset = o;
-            SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_BLACK_LEVEL, new CLong(_offset), 0);
+        if (offsetOverride is int o) _offset = o;
+        // Serialise the control writes against the streaming pull thread / status
+        // reads (see _sdk note): live exposure/gain tuning during a stream would
+        // otherwise race SVBGetVideoData.
+        lock (_sdk) {
+            SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_EXPOSURE, new CLong((nint)us), 0); // microseconds
+            SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_GAIN, new CLong(_gain), 0);
+            if (offsetOverride is int)
+                SVBSetControlValue(_cameraId, SVB_CONTROL_TYPE.SVB_BLACK_LEVEL, new CLong(_offset), 0);
         }
     }
 
@@ -412,8 +428,11 @@ public sealed class SvbonySdkCamera : ICamera {
 
     private int ReadControl(SVB_CONTROL_TYPE t) {
         try {
-            if (SVBGetControlValue(_cameraId, t, out var v, out _) == SVB_ERROR_CODE.SVB_SUCCESS)
-                return (int)v.Value;
+            // Serialise against the streaming pull thread (see _sdk note).
+            lock (_sdk) {
+                if (SVBGetControlValue(_cameraId, t, out var v, out _) == SVB_ERROR_CODE.SVB_SUCCESS)
+                    return (int)v.Value;
+            }
         } catch { }
         return 0;
     }

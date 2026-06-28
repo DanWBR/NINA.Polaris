@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Threading.Channels;
+using NINA.Core.Enum;
 using NINA.Image.Interfaces;
 
 namespace NINA.Polaris.Services.Planetary;
@@ -50,7 +51,8 @@ public class VideoRecordingService : IDisposable {
     private Task? _writerTask;
     private long _enqueued;
 
-    private readonly record struct QueueItem(ushort[] Pixels, int ByteLen, DateTime Utc);
+    private readonly record struct QueueItem(ushort[] Pixels, int ByteLen,
+        int Width, int Height, SerColorMode Color, DateTime Utc);
 
     public bool IsRecording { get; private set; }
     public string? OutputPath => _writer?.Path;
@@ -80,21 +82,22 @@ public class VideoRecordingService : IDisposable {
                 throw new InvalidOperationException(
                     "Camera stream not running, start the stream first via /api/camera/stream/start");
 
-            // Pick frame geometry from the camera's current state. SER's
-            // header is locked at open time, so the user must not change
-            // ROI/binning while recording.
-            var w = cam.MaxX > 0 ? cam.MaxX : 1024;
-            var h = cam.MaxY > 0 ? cam.MaxY : 1024;
-            var bitDepth = cam.BitDepth > 0 ? cam.BitDepth : 16;
-            var colorMode = cfg.ColorMode ?? SerColorMode.Mono;
+            // SER geometry is taken from the FIRST streamed frame, not from the
+            // camera's MaxX/MaxY/BitDepth. With an ROI/binning set for high-fps
+            // video (the whole point of planetary capture) the streamed frames
+            // are smaller than the full sensor, and the streamed buffer is
+            // always a 16-bit ushort[] regardless of the camera's 8/16-bit
+            // readout. Sizing the writer from the camera's full-frame/native
+            // bit-depth state made every frame fail the size check in the writer
+            // loop -> all frames dropped, empty file (the field-test symptom on
+            // both the native SVBony and INDI drivers). The writer is opened
+            // lazily in WriterLoopAsync from the real frame size; here we only
+            // settle the output path + config.
             var target = SanitizeFolder(string.IsNullOrWhiteSpace(cfg.TargetName) ? "planet" : cfg.TargetName);
             var baseDir = Path.Combine(_profiles.Active.ImageOutputDir, "planetary", target);
             var path = Path.Combine(baseDir, $"{DateTime.UtcNow:yyyy-MM-ddTHH-mm-ss}.ser");
-
-            _writer = new SerFileWriter(path, w, h, bitDepth, colorMode,
-                observer: "Polaris",
-                instrument: cam.DeviceName,
-                telescope: _equip.Telescope?.DeviceName ?? "");
+            var instrument = cam.DeviceName;
+            var telescope = _equip.Telescope?.DeviceName ?? "";
             _activeConfig = cfg;
             _startedAt = DateTime.UtcNow;
             _droppedFrames = 0;
@@ -106,22 +109,21 @@ public class VideoRecordingService : IDisposable {
             // frame is dropped (counted) rather than blocking the camera
             // stream. 32 frames of headroom absorbs disk write-back stalls;
             // at 640×480×16-bit that's ~19 MB of buffering.
-            var writer = _writer;
             _channel = Channel.CreateBounded<QueueItem>(new BoundedChannelOptions(32) {
                 FullMode = BoundedChannelFullMode.Wait,
                 SingleReader = true,
                 SingleWriter = false
             });
             var reader = _channel.Reader;
-            _writerTask = Task.Run(() => WriterLoopAsync(writer, reader));
+            _writerTask = Task.Run(() => WriterLoopAsync(path, instrument, telescope, reader));
 
             _subscription = _stream.SubscribeFrames(OnFrame);
-            _logger.LogInformation("Recording started → {Path} ({W}×{H}×{Bits})", path, w, h, bitDepth);
+            _logger.LogInformation("Recording started → {Path} (geometry locked on first frame)", path);
         }
     }
 
     public async Task StopAsync() {
-        SerFileWriter? writer;
+        SerFileWriter? writer = null;
         IDisposable? sub;
         Channel<QueueItem>? channel;
         Task? writerTask;
@@ -131,7 +133,6 @@ public class VideoRecordingService : IDisposable {
             sub = _subscription; _subscription = null;
             channel = _channel; _channel = null;
             writerTask = _writerTask; _writerTask = null;
-            writer = _writer; _writer = null;
             _activeConfig = null;
         }
 
@@ -141,6 +142,11 @@ public class VideoRecordingService : IDisposable {
         try { sub?.Dispose(); } catch { }
         channel?.Writer.TryComplete();
         if (writerTask != null) { try { await writerTask; } catch { } }
+
+        // Capture the writer AFTER the loop finished: it's opened lazily on the
+        // first frame, so reading it before the drain could miss an instance
+        // created while a queued frame was still in flight (unfinalised SER).
+        lock (_lock) { writer = _writer; _writer = null; }
 
         var path = writer?.Path;
         var frames = writer?.FrameCount ?? 0;
@@ -153,13 +159,35 @@ public class VideoRecordingService : IDisposable {
     /// <summary>Background drain: ushort->byte LE encode into a single
     /// reused scratch buffer + SER write, off the camera delivery thread.
     /// Runs until the channel is completed (StopAsync) and fully drained.</summary>
-    private async Task WriterLoopAsync(SerFileWriter? writer, ChannelReader<QueueItem> reader) {
-        if (writer == null) return;
-        var scratch = new byte[writer.BytesPerFrame];
+    private async Task WriterLoopAsync(string path, string instrument, string telescope,
+                                       ChannelReader<QueueItem> reader) {
+        SerFileWriter? writer = null;
+        byte[]? scratch = null;
         try {
             await foreach (var item in reader.ReadAllAsync()) {
                 try {
-                    if (item.ByteLen != scratch.Length) {
+                    // Open the SER lazily on the first frame, sized from the
+                    // ACTUAL streamed geometry: always 16-bit, single plane (the
+                    // stream delivers a ushort[] mosaic). This is what makes
+                    // recording robust to ROI/binning and 8/16-bit cameras —
+                    // sizing from cam.MaxX/MaxY/BitDepth dropped every frame.
+                    if (writer == null) {
+                        if (item.Width <= 0 || item.Height <= 0
+                                || item.ByteLen != (long)item.Width * item.Height * 2) {
+                            Interlocked.Increment(ref _droppedFrames);
+                            continue;
+                        }
+                        var colorMode = _activeConfig?.ColorMode ?? item.Color;
+                        writer = new SerFileWriter(path, item.Width, item.Height, 16, colorMode,
+                            observer: "Polaris", instrument: instrument, telescope: telescope);
+                        scratch = new byte[writer.BytesPerFrame];
+                        lock (_lock) { _writer = writer; }
+                        _logger.LogInformation("Recording geometry locked → {W}×{H}×16 ({Color})",
+                            item.Width, item.Height, colorMode);
+                    }
+                    // Header geometry is now fixed; a frame whose size changed
+                    // mid-recording (e.g. ROI edit) can't be appended.
+                    if (item.ByteLen != scratch!.Length) {
                         Interlocked.Increment(ref _droppedFrames);
                         continue;
                     }
@@ -176,6 +204,14 @@ public class VideoRecordingService : IDisposable {
             LastError = ex.Message;
         }
     }
+
+    private static SerColorMode MapBayerToSer(BayerPatternEnum p) => p switch {
+        BayerPatternEnum.RGGB => SerColorMode.BayerRGGB,
+        BayerPatternEnum.BGGR => SerColorMode.BayerBGGR,
+        BayerPatternEnum.GRBG => SerColorMode.BayerGRBG,
+        BayerPatternEnum.GBRG => SerColorMode.BayerGBRG,
+        _ => SerColorMode.Mono
+    };
 
     private void OnFrame(IImageData frame) {
         RecordingConfig? cfg;
@@ -204,7 +240,11 @@ public class VideoRecordingService : IDisposable {
         // the reference until the writer drains it is safe. TryWrite returns
         // false only when the bounded queue is full (disk can't keep up),
         // in which case we drop this frame instead of blocking capture.
-        var item = new QueueItem(frame.Data, frame.Data.Length * 2, DateTime.UtcNow);
+        var props = frame.Properties;
+        var color = cfg.ColorMode
+            ?? (props.IsBayered ? MapBayerToSer(props.BayerPattern) : SerColorMode.Mono);
+        var item = new QueueItem(frame.Data, frame.Data.Length * 2,
+            props.Width, props.Height, color, DateTime.UtcNow);
         if (channel.Writer.TryWrite(item)) {
             Interlocked.Increment(ref _enqueued);
         } else {
