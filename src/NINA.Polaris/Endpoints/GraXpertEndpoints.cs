@@ -37,7 +37,10 @@ public static class GraXpertEndpoints {
             // RKNN: NPU acceleration for BGE/Denoise on RK3588. When true the
             // host can run those even without the GraXpert CLI installed.
             npuAvailable = gx.NpuAvailable,
-            npuDiagnostics = gx.NpuDiagnostics
+            npuDiagnostics = gx.NpuDiagnostics,
+            // Every accelerator available here ({ kind:"npu"|"gpu", name, diagnostics }),
+            // so the UI can offer a picker when a board has both (NPU + Vulkan GPU).
+            accelerators = gx.AvailableAccelerators
         }));
 
         g.MapGet("/diagnostic", (GraXpertService gx) => Results.Ok(new {
@@ -55,7 +58,11 @@ public static class GraXpertEndpoints {
             // The NPU path can serve BGE/Denoise even without the GraXpert CLI.
             // Decon always needs the CLI. The user can force the CLI by sending
             // UseNpu=false (e.g. to compare, or when NPU quality isn't wanted).
-            bool useNpu = req.UseNpu ?? true;
+            // Accelerator selector takes precedence: "cpu" forces the CLI,
+            // "npu"/"gpu" pick a specific backend, null/"auto" keeps the old
+            // UseNpu behaviour (try the default order).
+            var accel = (req.Accelerator ?? "").Trim().ToLowerInvariant();
+            bool useNpu = accel == "cpu" ? false : (req.UseNpu ?? true);
             bool canNpu = gx.NpuAvailable && useNpu &&
                 (op == GraXpertOperation.BackgroundExtraction || op == GraXpertOperation.Denoising);
             if (!gx.IsAvailable && !canNpu)
@@ -83,7 +90,8 @@ public static class GraXpertEndpoints {
                 // it. Null is fine: the service falls back to the newest
                 // version it can find locally for this operation.
                 AiVersion: req.AiVersion,
-                UseNpu: useNpu);
+                UseNpu: useNpu,
+                Accelerator: string.IsNullOrEmpty(accel) ? null : accel);
             var job = gx.StartBatch(new GraXpertBatchRequest(
                 req.Paths, opts, req.Concurrency ?? 1));
             return Results.Accepted(value: new { jobId = job.JobId });
@@ -168,5 +176,9 @@ public static class GraXpertEndpoints {
         // RKNN: when the host has an NPU (RK3588), use it for BGE/Denoise.
         // Null/true = use the NPU when available; false = force the GraXpert
         // CLI (CPU) instead. Only meaningful when npuAvailable.
-        bool? UseNpu);
+        bool? UseNpu,
+        // Which accelerator to use when more than one is available:
+        // "npu" (RKNN/QNN), "gpu" (ncnn-Vulkan), "cpu" (force CLI), or
+        // null/"auto" = default order. Takes precedence over UseNpu.
+        string? Accelerator);
 }

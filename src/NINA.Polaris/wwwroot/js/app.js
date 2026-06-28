@@ -2481,6 +2481,7 @@ function ninaApp() {
             // RKNN: use the host NPU (RK3588) for BGE/Denoise host-side runs.
             // Only surfaced when graxpert.status.npuAvailable; default on.
             modalUseNpu: true,
+            modalAccelerator: 'auto',   // 'auto' | 'npu' | 'gpu' | 'cpu' (accelerator picker)
             browserActive: false,
             // Set by graxpertAbortRun() to signal the browser-mode
             // loop to break out at its next safe checkpoint. The
@@ -25407,9 +25408,12 @@ function ninaApp() {
                         // passes -ai_version (stripping any -fp16/-int8
                         // suffix GraXpert doesn't recognise).
                         aiVersion: this._graxpertSelectedVersion(),
-                        // RKNN: false forces the GraXpert CLI (CPU) even on an
-                        // RK3588 host. Only meaningful when npuAvailable.
-                        useNpu: this.graxpert.modalUseNpu !== false
+                        // Accelerator picker: 'auto' | 'npu' | 'gpu' | 'cpu'.
+                        // 'cpu' forces the GraXpert CLI; npu/gpu pick a backend
+                        // when the board has more than one. useNpu kept for
+                        // back-compat (server derives it from accelerator).
+                        accelerator: this.graxpert.modalAccelerator || 'auto',
+                        useNpu: (this.graxpert.modalAccelerator || 'auto') !== 'cpu'
                 });
                 // apiPost returns the raw Response — parse the body to get
                 // the jobId (reading resp.jobId directly gave "undefined").
@@ -28677,23 +28681,6 @@ function ninaApp() {
             return (this.host && this.host.device && this.host.device.shortLabel) || '';
         },
 
-        // Short name of the host NPU for the GraXpert "Use NPU" toggle.
-        // Derived from the server's npuDiagnostics (authoritative — it's the
-        // lane that's actually loaded: Qualcomm Hexagon via QAIRT, or Rockchip
-        // RKNPU2), falling back to the board kind, then a generic label. Keeps
-        // the toggle honest instead of hardcoding "Rockchip RK3588".
-        npuName() {
-            const d = (this.graxpert && this.graxpert.status
-                       && this.graxpert.status.npuDiagnostics || '').toLowerCase();
-            if (d.includes('hexagon') || d.includes('qairt') || d.includes('qualcomm'))
-                return 'Qualcomm Hexagon';
-            if (d.includes('rk3588') || d.includes('rknpu') || d.includes('rockchip'))
-                return 'Rockchip RK3588';
-            const k = (this.host && this.host.device && this.host.device.kind) || '';
-            if (k === 'radxa-dragon') return 'Qualcomm Hexagon';
-            if (k === 'rockpi' || k === 'orangepi') return 'Rockchip RK3588';
-            return 'NPU';
-        },
 
         // --- SIM-6: built-in equipment simulator ---
 

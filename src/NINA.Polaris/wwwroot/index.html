@@ -14244,21 +14244,24 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                  x-show="graxpert.status?.npuAvailable
                          && !(graxpert.modalRunInBrowser && onnxAvailableForOp(graxpert.modalOp))
                          && graxpert.modalOp !== 'deconvolution'">
-                <label class="checkbox-label">
-                    <input type="checkbox" x-model="graxpert.modalUseNpu">
-                    ⚡ Use NPU (<span x-text="npuName()"></span>)
-                </label>
+                <label style="display:block;font-size:.85em;opacity:.85;margin-bottom:4px">⚡ Accelerator</label>
+                <select class="input-sm" x-model="graxpert.modalAccelerator">
+                    <option value="auto">Auto (fastest available)</option>
+                    <template x-for="a in (graxpert.status?.accelerators || [])" :key="a.name">
+                        <option :value="a.kind" x-text="(a.kind === 'gpu' ? '⚡ ' : '⚡ ') + a.name"></option>
+                    </template>
+                    <option value="cpu">CPU (GraXpert CLI)</option>
+                </select>
                 <p class="hint" style="margin-top:4px">
-                    Runs BGE / Denoise on the board's NPU (much faster than the CPU
-                    and frees the cores for stacking). Uncheck to use the GraXpert
-                    CLI on the CPU instead.
+                    Where BGE / Denoise runs. NPU and GPU (Vulkan) are much faster than
+                    the CPU and free the cores for stacking. CPU uses the GraXpert CLI.
                 </p>
                 <p class="hint" style="margin-top:4px; color: var(--accent-warn, #f59e0b)"
-                   x-show="graxpert.modalOp === 'denoising' && graxpert.modalUseNpu">
+                   x-show="graxpert.modalOp === 'denoising' && graxpert.modalAccelerator === 'npu'">
                     ⚠ Denoise on the NPU runs a quantized model, so the result may be
-                    slightly lower quality than the CPU/browser path (e.g. faint star
-                    artifacts) due to NPU hardware limits. For a final master, uncheck
-                    this to denoise on the CPU/browser (fp16).
+                    slightly lower quality than the CPU/GPU/browser path (e.g. faint star
+                    artifacts) due to NPU hardware limits. For a final master, pick the
+                    GPU (fp16) or CPU instead.
                 </p>
             </div>
             <!-- Browser-mode progress (separate from the CLI progress
@@ -16311,7 +16314,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260628-updateprogress"></script>
+    <script src="/js/app.js?v=20260628-accelpick"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

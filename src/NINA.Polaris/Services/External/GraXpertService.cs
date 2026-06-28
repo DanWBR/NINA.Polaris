@@ -80,6 +80,27 @@ public class GraXpertService {
         : _ncnn?.IsAvailable == true ? _ncnn.Diagnostics
         : _rknn?.Diagnostics ?? _qnn?.Diagnostics ?? _ncnn?.Diagnostics ?? "NPU support not built";
 
+    /// <summary>
+    /// Every hardware accelerator actually available on this host for GraXpert AI,
+    /// so the UI can offer a picker when a board has more than one (e.g. the Q6A
+    /// has both a Qualcomm Hexagon NPU and an Adreno GPU via Vulkan/ncnn). Kind is
+    /// "npu" or "gpu"; the run request sends the chosen kind back as Accelerator.
+    /// </summary>
+    public IReadOnlyList<GraXpertAccelerator> AvailableAccelerators {
+        get {
+            var list = new List<GraXpertAccelerator>();
+            if (_rknn?.IsAvailable == true) list.Add(new("npu", "Rockchip NPU", _rknn.Diagnostics));
+            if (_qnn?.IsAvailable == true) list.Add(new("npu", "Qualcomm Hexagon NPU", _qnn.Diagnostics));
+            if (_ncnn?.IsAvailable == true) list.Add(new("gpu", "GPU (Vulkan)", _ncnn.Diagnostics));
+            return list;
+        }
+    }
+
+    /// <summary>Whether a fast-path block may run, given the requested accelerator
+    /// preference. Empty/"auto" allows any; otherwise the kind must match.</summary>
+    private static bool AccelAllows(GraXpertOptions o, string kind) =>
+        string.IsNullOrEmpty(o.Accelerator) || o.Accelerator == "auto" || o.Accelerator == kind;
+
     public string? BinaryPath => Locate();
     public bool IsAvailable => !string.IsNullOrEmpty(BinaryPath);
 
@@ -153,7 +174,7 @@ public class GraXpertService {
         // than the CPU and it frees the cores for stacking. Works even when the
         // GraXpert CLI isn't installed. FITS input only; any failure falls
         // through to the GraXpert CLI path below.
-        if (_rknn != null && _rknn.IsAvailable && opts.UseNpu && IsFitsPath(inputPath)) {
+        if (_rknn != null && _rknn.IsAvailable && opts.UseNpu && AccelAllows(opts, "npu") && IsFitsPath(inputPath)) {
             var npu = TryRunRknn(inputPath, opts, ct, onLog);
             if (npu != null) { ReleaseLargeHeap(); return npu; }
         }
@@ -161,7 +182,7 @@ public class GraXpertService {
         // Same fast path on a Qualcomm Hexagon (QCS6490 / Q6A). Mutually
         // exclusive with the Rockchip path by hardware; any failure falls
         // through to the GraXpert CLI below.
-        if (_qnn != null && _qnn.IsAvailable && opts.UseNpu && IsFitsPath(inputPath)) {
+        if (_qnn != null && _qnn.IsAvailable && opts.UseNpu && AccelAllows(opts, "npu") && IsFitsPath(inputPath)) {
             var npu = TryRunQnn(inputPath, opts, ct, onLog);
             if (npu != null) { ReleaseLargeHeap(); return npu; }
         }
@@ -169,7 +190,7 @@ public class GraXpertService {
         // Open Vulkan-GPU path (ncnn): BGE/Denoise-v2 on any Vulkan GPU (Adreno
         // via Turnip, Mali, …) when neither NPU served it. ~5x faster than CPU in
         // fp16 and frees the cores; any failure falls through to the CLI below.
-        if (_ncnn != null && _ncnn.IsAvailable && opts.UseNpu && IsFitsPath(inputPath)) {
+        if (_ncnn != null && _ncnn.IsAvailable && opts.UseNpu && AccelAllows(opts, "gpu") && IsFitsPath(inputPath)) {
             var gpu = TryRunNcnn(inputPath, opts, ct, onLog);
             if (gpu != null) { ReleaseLargeHeap(); return gpu; }
         }
@@ -995,7 +1016,15 @@ public sealed record GraXpertOptions(
     string? AiVersion = null,
     // RKNN: use the Rockchip NPU for BGE/Denoise when available. False forces
     // the GraXpert CLI (CPU) even on an RK3588 host.
-    bool UseNpu = true);
+    bool UseNpu = true,
+    // Which hardware accelerator to use when more than one is available:
+    // "npu" (RKNN/QNN), "gpu" (ncnn-Vulkan), "cpu" (force CLI), or null/"auto"
+    // = try them in the default order. Lets a board with both an NPU and a
+    // Vulkan GPU pick one instead of always taking the NPU.
+    string? Accelerator = null);
+
+/// <summary>A hardware accelerator available on this host for GraXpert AI.</summary>
+public sealed record GraXpertAccelerator(string Kind, string Name, string Diagnostics);
 
 public sealed record GraXpertResult(string OutputPath, string? BackgroundPath,
                                      GraXpertOperation Operation,
