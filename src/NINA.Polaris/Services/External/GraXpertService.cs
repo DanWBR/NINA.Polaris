@@ -41,6 +41,7 @@ public class GraXpertService {
     private readonly Onnx.OnnxModelRegistry? _models;
     private readonly Rknn.RknnInferenceService? _rknn;
     private readonly Qnn.QnnInferenceService? _qnn;
+    private readonly Ncnn.NcnnInferenceService? _ncnn;
 
     private readonly ConcurrentDictionary<string, GraXpertBatchJob> _jobs = new();
     private readonly object _versionLock = new();
@@ -51,13 +52,15 @@ public class GraXpertService {
                             ILogger<GraXpertService> logger,
                             Onnx.OnnxModelRegistry? models = null,
                             Rknn.RknnInferenceService? rknn = null,
-                            Qnn.QnnInferenceService? qnn = null) {
+                            Qnn.QnnInferenceService? qnn = null,
+                            Ncnn.NcnnInferenceService? ncnn = null) {
         _config = config;
         _profile = profile;
         _logger = logger;
         _models = models;
         _rknn = rknn;
         _qnn = qnn;
+        _ncnn = ncnn;
     }
 
     /// <summary>
@@ -67,13 +70,15 @@ public class GraXpertService {
     /// two are mutually exclusive by hardware. Surfaced in the GraXpert status so
     /// the UI can show an "NPU" chip. Works even without the GraXpert CLI.
     /// </summary>
-    public bool NpuAvailable => _rknn?.IsAvailable == true || _qnn?.IsAvailable == true;
+    public bool NpuAvailable => _rknn?.IsAvailable == true || _qnn?.IsAvailable == true
+                                || _ncnn?.IsAvailable == true;
 
-    /// <summary>One-line NPU probe description (for status/diagnostics).</summary>
+    /// <summary>One-line accelerator probe description (for status/diagnostics).</summary>
     public string NpuDiagnostics =>
         _rknn?.IsAvailable == true ? _rknn.Diagnostics
         : _qnn?.IsAvailable == true ? _qnn.Diagnostics
-        : _rknn?.Diagnostics ?? _qnn?.Diagnostics ?? "NPU support not built";
+        : _ncnn?.IsAvailable == true ? _ncnn.Diagnostics
+        : _rknn?.Diagnostics ?? _qnn?.Diagnostics ?? _ncnn?.Diagnostics ?? "NPU support not built";
 
     public string? BinaryPath => Locate();
     public bool IsAvailable => !string.IsNullOrEmpty(BinaryPath);
@@ -159,6 +164,14 @@ public class GraXpertService {
         if (_qnn != null && _qnn.IsAvailable && opts.UseNpu && IsFitsPath(inputPath)) {
             var npu = TryRunQnn(inputPath, opts, ct, onLog);
             if (npu != null) { ReleaseLargeHeap(); return npu; }
+        }
+
+        // Open Vulkan-GPU path (ncnn): BGE/Denoise-v2 on any Vulkan GPU (Adreno
+        // via Turnip, Mali, …) when neither NPU served it. ~5x faster than CPU in
+        // fp16 and frees the cores; any failure falls through to the CLI below.
+        if (_ncnn != null && _ncnn.IsAvailable && opts.UseNpu && IsFitsPath(inputPath)) {
+            var gpu = TryRunNcnn(inputPath, opts, ct, onLog);
+            if (gpu != null) { ReleaseLargeHeap(); return gpu; }
         }
 
         if (!IsAvailable)
@@ -356,6 +369,55 @@ public class GraXpertService {
             _logger.LogWarning(ex, "RKNN NPU path failed for {Op}; falling back to GraXpert CLI",
                 opts.Operation);
             onLog?.Invoke($"[NPU] failed ({ex.Message}); falling back to GraXpert CLI");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Run BGE/Denoise-v2 on a Vulkan GPU via ncnn — the open counterpart of
+    /// <see cref="TryRunRknn"/> for boards without a supported NPU (e.g. the Q6A's
+    /// Adreno 643). Reads the FITS input, runs the converted ncnn model on the
+    /// GPU, writes a FITS output, and falls back to the CLI on any failure.
+    /// </summary>
+    private GraXpertResult? TryRunNcnn(string inputPath, GraXpertOptions opts,
+                                       CancellationToken ct, Action<string>? onLog) {
+        try {
+            if (!_ncnn!.CanHandle(opts.Operation, opts.AiVersion, out _, out var ver))
+                return null;
+
+            onLog?.Invoke($"[GPU] running {opts.Operation} on the Vulkan GPU (ncnn {ver})");
+            var sw = Stopwatch.StartNew();
+
+            BaseImageData img;
+            using (var fs = File.OpenRead(inputPath)) img = FITSReader.Read(fs);
+            ct.ThrowIfCancellationRequested();
+
+            var res = _ncnn.Run(img, opts);
+
+            var outputPath = DefaultOutputPath(inputPath, opts);
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+            FITSWriter.Write(res.Image, outputPath);
+
+            string? bgPath = null;
+            if (opts.Operation == GraXpertOperation.BackgroundExtraction
+                && opts.SaveBackground && res.Background != null) {
+                bgPath = Path.ChangeExtension(outputPath, null) + "_bg" + Path.GetExtension(outputPath);
+                FITSWriter.Write(res.Background, bgPath);
+            }
+
+            sw.Stop();
+            onLog?.Invoke(FormattableString.Invariant(
+                $"[GPU] done in {sw.Elapsed.TotalSeconds:0.0}s ({res.Tiles} tiles)"));
+            _logger.LogInformation("FileOp ncnn {Op} {In} -> {Out} ({Ms} ms)",
+                opts.Operation, inputPath, outputPath, (long)res.ElapsedMs);
+            return new GraXpertResult(outputPath, bgPath, opts.Operation,
+                sw.Elapsed.TotalSeconds, null);
+        } catch (OperationCanceledException) {
+            return new GraXpertResult("", null, opts.Operation, 0, "Cancelled");
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "ncnn GPU path failed for {Op}; falling back to GraXpert CLI",
+                opts.Operation);
+            onLog?.Invoke($"[GPU] failed ({ex.Message}); falling back to GraXpert CLI");
             return null;
         }
     }

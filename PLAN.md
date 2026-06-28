@@ -13322,7 +13322,30 @@ zero-copy buffers (the win that makes per-op offload viable on an SBC).
   toggle off. Tests green (13). DONE. Pending: record real SBC speedup
   numbers in benchmark memory once run on the Q6A / OPi5.
 
-## NCNN-GPU — open Vulkan GPU lane for AI models (spike done 2026-06-28, lane not built)
+## NCNN-GPU — open Vulkan GPU lane for AI models (lane built 2026-06-28, BGE + denoise v2)
+
+**Lane built (C# side, mirrors the RKNN lane):** `src/NINA.Polaris/Services/Ncnn/`
+— `NcnnNative` (P/Invoke to ncnn's stable C API), `NcnnRuntime` (probe: Linux +
+libncnn + libvulkan; `POLARIS_DISABLE_NCNN`), `NcnnSession` (implements the shared
+`IRknnTileRunner`, Vulkan + fp16, `in0`/`out0`), `NcnnInferenceService` (reuses
+`RknnPipelines` tiling math; **BGE + denoise v2 only** — v3 excluded as NaN-on-
+Vulkan, decon excluded). Wired into `GraXpertService` as a fast path after RKNN/QNN
+(`TryRunNcnn`, GPU→CLI fallback) + `NpuAvailable`/diagnostics; DI in `Program.cs`;
+csproj bundles `external/ncnn/aarch64/*.so` for linux-arm64; `scripts/fetch-ncnn.sh`
+stages libncnn; `licenses/NCNN-LICENSE.txt` (BSD-3). Build: 0 errors.
+
+**Still needed to run on the Q6A (native, can't be done from the dev box):**
+1. `libncnn.so` built with `NCNN_VULKAN=ON NCNN_SHARED_LIB=ON NCNN_C_API=ON` →
+   `external/ncnn/aarch64/` (see fetch-ncnn.sh) + `libvulkan1`/`mesa-vulkan-drivers`
+   on the device.
+2. converted models at `wwwroot/graxpert/models/ncnn/{family}-ai-models/{version}/
+   model.ncnn.{param,bin}` (from `polaris-ai/ncnn/convert_graxpert.py`; BGE +
+   denoise v2 only). Then validate end-to-end on the Adreno.
+
+---
+
+(original spike notes below)
+
 
 **Spike result (`polaris-ai/ncnn/`, see its README) — done incl. on-Q6A:** the
 route `onnx --onnxsim--> --pnnx--> .ncnn.param/.bin` works, and ncnn's pip wheel

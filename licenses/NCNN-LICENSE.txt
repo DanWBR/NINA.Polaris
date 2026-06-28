@@ -1,0 +1,46 @@
+ncnn (libncnn.so)
+=================
+
+N.I.N.A. Polaris can optionally accelerate the GraXpert AI models
+(background extraction, denoise v2) on any Vulkan GPU — e.g. the Adreno
+643 of the Radxa Dragon Q6A via the Turnip driver, or Mali/Intel GPUs —
+through Tencent's ncnn inference framework (Vulkan compute backend).
+
+ncnn is an optional, separately-provided native runtime (libncnn.so,
+staged via scripts/fetch-ncnn.sh). It is NOT committed to this repository
+and is NOT part of the N.I.N.A. Polaris source. It is distributed by
+Tencent under the BSD 3-Clause License, reproduced below.
+
+The Vulkan loader (libvulkan.so.1) and the GPU driver (e.g. Mesa/Turnip)
+come from the operating system and are licensed under their own terms
+(typically MIT for the Vulkan-Loader and MIT for Mesa).
+
+--------------------------------------------------------------------------
+
+Copyright (c) 2017 THL A29 Limited, a Tencent company. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

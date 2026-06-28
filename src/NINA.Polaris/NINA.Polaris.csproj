@@ -210,6 +210,20 @@
     </Content>
   </ItemGroup>
 
+  <!-- NCNN: open Vulkan-GPU runtime for GraXpert AI (BGE + denoise v2) on any
+       Vulkan GPU (Adreno 643 / Q6A via Turnip, Mali, …). Stage libncnn.so (built
+       with NCNN_C_API=ON + NCNN_VULKAN=ON) plus any sibling .so it needs into
+       external/ncnn/aarch64/ via scripts/fetch-ncnn.sh. The Vulkan loader itself
+       (libvulkan.so.1) comes from the system (mesa-vulkan-drivers / libvulkan1),
+       not bundled. Exists()-guarded so dev boxes / non-arm64 builds skip it;
+       NcnnRuntime gates actual use at runtime. -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64' And Exists('$(MSBuildThisFileDirectory)..\..\external\ncnn\aarch64')">
+    <Content Include="$(MSBuildThisFileDirectory)..\..\external\ncnn\aarch64\*.so*">
+      <Link>%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
   <!-- QNN/QAIRT: Qualcomm AI Runtime for GraXpert AI acceleration on the
        Hexagon NPU (HTP) of Qualcomm SBCs (Radxa Dragon Q6A / QCS6490, V68).
        Assemble the aarch64 runtime tree (bin/lib/dsp) into

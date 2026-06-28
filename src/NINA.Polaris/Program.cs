@@ -334,6 +334,11 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Rknn.RknnInferenceService>()
 // the QAIRT runtime / cDSP isn't present. Mutually exclusive by hardware.
 builder.Services.AddSingleton<NINA.Polaris.Services.Qnn.QnnInferenceService>();
 
+// NCNN: open, vendor-neutral Vulkan-GPU acceleration for GraXpert AI (BGE +
+// denoise v2). Runs on the Adreno 643 (Q6A / Turnip), Mali, etc. Injected
+// (optionally) into GraXpertService; no-op when libncnn/Vulkan aren't present.
+builder.Services.AddSingleton<NINA.Polaris.Services.Ncnn.NcnnInferenceService>();
+
 // OCL: SBC GPU acceleration for classic image kernels via OpenCL. Resolve the
 // OpenCL backend when the board exposes an OpenCL ICD loader (Adreno on the
 // Radxa Dragon Q6A, Mali on RK3588, ...), else the always-available CPU backend.
