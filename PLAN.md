@@ -13222,7 +13222,7 @@ licensing and project-hygiene work.
   License and upstream NINA is not "Incompatible With Secondary Licenses").
 - `LICENSE.txt` -> AGPL-3.0; `licenses/MPL-2.0.txt`; `NOTICE`;
   `licenses/LINKING-EXCEPTION.txt` (camera vendor SDKs + plugins);
-  `RELICENSING.md`; per-file headers stamped via `scripts/apply-license-headers.*`
+  per-file headers stamped via `scripts/apply-license-headers.*`
   (AGPL on original files, MPL on the `*.Portable` libs); README + in-app license
   text updated. GraXpert NC models confirmed not redistributed (.onnx gitignored).
 
