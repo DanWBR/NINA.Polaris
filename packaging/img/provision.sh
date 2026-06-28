@@ -117,6 +117,16 @@ echo "${POLARIS_USER}:${POLARIS_PASS}" | chpasswd || note_fail "set password"
 echo "${POLARIS_USER} ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/${POLARIS_USER}"
 chmod 440 "/etc/sudoers.d/${POLARIS_USER}"
 
+# CRITICAL: .NET's Environment.GetFolderPath(LocalApplicationData) returns an
+# EMPTY string when ~/.local/share does not exist. Polaris then resolves its
+# cert / profile / log / cache paths RELATIVE to its WorkingDirectory
+# (/opt/polaris) and crash-loops (it tries to mkdir under the NINA.Polaris
+# executable file). The .deb postinst creates ~/.config but NOT ~/.local/share,
+# so create it here. (Also fixed upstream in the deb postinst.)
+PHOME="$(getent passwd "$POLARIS_USER" | cut -d: -f6)"
+PHOME="${PHOME:-/home/$POLARIS_USER}"
+install -d -o "$POLARIS_USER" -g "$POLARIS_USER" "$PHOME/.local/share" "$PHOME/.config"
+
 mkdir -p /etc/systemd/system/getty@tty1.service.d
 cat >/etc/systemd/system/getty@tty1.service.d/autologin.conf <<EOF
 [Service]

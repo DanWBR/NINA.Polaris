@@ -87,6 +87,13 @@ First boot: `https://polaris-linux.local:5000`, or
 
 ## Notes / gotchas
 
+- **`~/.local/share` must exist (Polaris startup):** .NET's
+  `Environment.GetFolderPath(LocalApplicationData)` returns an *empty string*
+  when `~/.local/share` doesn't exist, which makes Polaris resolve its TLS
+  cert / profile / log paths relative to `/opt/polaris` and crash-loop. The
+  `--system` polaris user gets no skel, so `provision.sh` creates the dir (and
+  the deb postinst now does too). If you ever see Polaris failing with
+  `DirectoryNotFoundException: .../NINA.Polaris/cert`, this is why.
 - **Resilience:** `provision.sh` does not use `set -e`. A failed *optional*
   component (ASTAP, astrometry, a PPA) is collected, the apt state is repaired
   so it can't cascade, and a summary is printed at the end. Only a missing

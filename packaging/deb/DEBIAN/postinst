@@ -62,6 +62,19 @@ case "$1" in
             chown -R $POLARIS_USER:$POLARIS_GROUP $POLARIS_HOME/.config
         fi
 
+        # ---- 3b. XDG data dir (~/.local/share) ----
+        # CRITICAL: .NET's Environment.GetFolderPath(LocalApplicationData)
+        # returns an EMPTY string when ~/.local/share does not exist. Polaris
+        # then resolves its TLS cert (SelfSignedCertService), profiles
+        # (ProfileService), logs and caches RELATIVE to its WorkingDirectory
+        # (/opt/polaris) and crash-loops on startup (it tries to mkdir under
+        # the NINA.Polaris executable file). A --system user gets no skel, so
+        # this dir is otherwise never created. Must exist before first launch.
+        if [ ! -d $POLARIS_HOME/.local/share ]; then
+            mkdir -p $POLARIS_HOME/.local/share
+            chown -R $POLARIS_USER:$POLARIS_GROUP $POLARIS_HOME/.local
+        fi
+
         # ---- 4. indi-web venv ----
         # One-time install. If user upgrades Polaris we leave the venv
         # alone; they can refresh indiweb manually with:
