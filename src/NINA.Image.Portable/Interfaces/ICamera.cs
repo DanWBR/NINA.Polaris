@@ -156,6 +156,15 @@ public interface ICamera {
 
     /// <summary>Close the driver's video stream. No-op when not streaming.</summary>
     Task StopVideoStreamAsync(CancellationToken ct = default) => Task.CompletedTask;
+
+    /// <summary>Apply new exposure/gain to an ALREADY-RUNNING native stream in
+    /// place, without stopping and restarting the capture. Returns true if the
+    /// change was applied live; false if unsupported (the caller then falls back
+    /// to a stop/start restart). Default: false. Restarting some native SDKs
+    /// (e.g. SVBony) just to retune exposure can hang the driver, so backends
+    /// that can set controls during streaming should override this.</summary>
+    Task<bool> UpdateVideoStreamAsync(VideoStreamOptions opts, CancellationToken ct = default)
+        => Task.FromResult(false);
 }
 
 internal sealed class NoopDisposable : IDisposable { public void Dispose() { } }

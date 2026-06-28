@@ -12,7 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
-using System.Threading.Channels;
+using System.Collections.Concurrent;
 using NINA.Core.Enum;
 using NINA.Image.Interfaces;
 
@@ -42,13 +42,17 @@ public class VideoRecordingService : IDisposable {
 
     // #362: background writer queue. OnFrame (on the camera stream's
     // delivery thread) only enqueues a frame reference into a bounded
-    // channel; a dedicated writer task drains it and does the ushort->byte
-    // LE encode into a single reused scratch buffer + the SER write. This
-    // keeps the capture/delivery thread free (one TryWrite, no copy, no
-    // alloc) and isolates disk write-back stalls to the writer thread, so a
-    // hiccup only costs queued slots instead of dropping on the hot path.
-    private Channel<QueueItem>? _channel;
-    private Task? _writerTask;
+    // collection; a DEDICATED OS THREAD drains it and does the ushort->byte
+    // LE encode into a single reused scratch buffer + the SER write.
+    //
+    // The drain runs on its own Thread (not the thread pool): a slow eMMC/SD
+    // write-back blocks in a write() syscall, and on the pool that would tie
+    // up a worker the runtime only replaces ~1/sec, starving the HTTP/WS
+    // handlers — exactly the field symptom where recording stalled at a few
+    // hundred MB and the whole UI froze. A dedicated thread absorbs the stall
+    // in isolation; the bounded queue just drops frames while it catches up.
+    private BlockingCollection<QueueItem>? _queue;
+    private Thread? _writerThread;
     private long _enqueued;
 
     private readonly record struct QueueItem(ushort[] Pixels, int ByteLen,
@@ -105,17 +109,17 @@ public class VideoRecordingService : IDisposable {
             LastError = null;
             IsRecording = true;
 
-            // Bounded queue: when full, TryWrite returns false and the
-            // frame is dropped (counted) rather than blocking the camera
-            // stream. 32 frames of headroom absorbs disk write-back stalls;
-            // at 640×480×16-bit that's ~19 MB of buffering.
-            _channel = Channel.CreateBounded<QueueItem>(new BoundedChannelOptions(32) {
-                FullMode = BoundedChannelFullMode.Wait,
-                SingleReader = true,
-                SingleWriter = false
-            });
-            var reader = _channel.Reader;
-            _writerTask = Task.Run(() => WriterLoopAsync(path, instrument, telescope, reader));
+            // Bounded queue: when full, TryAdd returns false and the frame is
+            // dropped (counted) rather than blocking the camera stream. 32
+            // frames of headroom absorbs disk write-back stalls; at
+            // 640×480×16-bit that's ~19 MB of buffering.
+            var queue = new BlockingCollection<QueueItem>(boundedCapacity: 32);
+            _queue = queue;
+            _writerThread = new Thread(() => WriterLoop(path, instrument, telescope, queue)) {
+                IsBackground = true,
+                Name = "polaris-ser-writer"
+            };
+            _writerThread.Start();
 
             _subscription = _stream.SubscribeFrames(OnFrame);
             _logger.LogInformation("Recording started → {Path} (geometry locked on first frame)", path);
@@ -125,23 +129,28 @@ public class VideoRecordingService : IDisposable {
     public async Task StopAsync() {
         SerFileWriter? writer = null;
         IDisposable? sub;
-        Channel<QueueItem>? channel;
-        Task? writerTask;
+        BlockingCollection<QueueItem>? queue;
+        Thread? writerThread;
         lock (_lock) {
             if (!IsRecording) return;
             IsRecording = false;
             sub = _subscription; _subscription = null;
-            channel = _channel; _channel = null;
-            writerTask = _writerTask; _writerTask = null;
+            queue = _queue; _queue = null;
+            writerThread = _writerThread; _writerThread = null;
             _activeConfig = null;
         }
 
         // Unsubscribe first so no more frames are enqueued, then signal the
-        // writer loop to drain the queue and exit, then close the SER file
+        // writer thread to drain the queue and exit, then close the SER file
         // (header frame-count patch + timestamp trailer happen on Dispose).
+        // Join off the caller thread so a final disk flush can't block the
+        // request handler.
         try { sub?.Dispose(); } catch { }
-        channel?.Writer.TryComplete();
-        if (writerTask != null) { try { await writerTask; } catch { } }
+        try { queue?.CompleteAdding(); } catch { }
+        if (writerThread != null) {
+            try { await Task.Run(() => writerThread.Join(TimeSpan.FromSeconds(15))); } catch { }
+        }
+        try { queue?.Dispose(); } catch { }
 
         // Capture the writer AFTER the loop finished: it's opened lazily on the
         // first frame, so reading it before the drain could miss an instance
@@ -159,12 +168,12 @@ public class VideoRecordingService : IDisposable {
     /// <summary>Background drain: ushort->byte LE encode into a single
     /// reused scratch buffer + SER write, off the camera delivery thread.
     /// Runs until the channel is completed (StopAsync) and fully drained.</summary>
-    private async Task WriterLoopAsync(string path, string instrument, string telescope,
-                                       ChannelReader<QueueItem> reader) {
+    private void WriterLoop(string path, string instrument, string telescope,
+                            BlockingCollection<QueueItem> queue) {
         SerFileWriter? writer = null;
         byte[]? scratch = null;
         try {
-            await foreach (var item in reader.ReadAllAsync()) {
+            foreach (var item in queue.GetConsumingEnumerable()) {
                 try {
                     // Open the SER lazily on the first frame, sized from the
                     // ACTUAL streamed geometry: always 16-bit, single plane (the
@@ -215,11 +224,11 @@ public class VideoRecordingService : IDisposable {
 
     private void OnFrame(IImageData frame) {
         RecordingConfig? cfg;
-        Channel<QueueItem>? channel;
+        BlockingCollection<QueueItem>? queue;
         lock (_lock) {
             cfg = _activeConfig;
-            channel = _channel;
-            if (channel == null || cfg == null) return;
+            queue = _queue;
+            if (queue == null || cfg == null) return;
         }
 
         // Auto-stop: max frames (counted by frames enqueued, not yet
@@ -245,7 +254,12 @@ public class VideoRecordingService : IDisposable {
             ?? (props.IsBayered ? MapBayerToSer(props.BayerPattern) : SerColorMode.Mono);
         var item = new QueueItem(frame.Data, frame.Data.Length * 2,
             props.Width, props.Height, color, DateTime.UtcNow);
-        if (channel.Writer.TryWrite(item)) {
+        // Non-blocking add: drop (counted) when the bounded queue is full so a
+        // disk write-back stall never back-pressures the camera delivery thread.
+        bool added;
+        try { added = queue.TryAdd(item); }
+        catch (InvalidOperationException) { return; }   // CompleteAdding raced Stop
+        if (added) {
             Interlocked.Increment(ref _enqueued);
         } else {
             Interlocked.Increment(ref _droppedFrames);

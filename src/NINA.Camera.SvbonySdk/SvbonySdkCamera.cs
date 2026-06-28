@@ -332,6 +332,18 @@ public sealed class SvbonySdkCamera : ICamera {
 
     public Task StopVideoStreamAsync(CancellationToken ct = default) => Task.Run(StopStreamCore, ct);
 
+    /// <summary>Retune exposure/gain on the running stream WITHOUT a stop/start.
+    /// Restarting SVBStartVideoCapture just to change exposure could hang the
+    /// driver (field-reported "changed exposure → froze"); the SDK accepts
+    /// SVBSetControlValue while capturing, so apply it live under the SDK lock.
+    /// PullLoop recomputes its wait timeout from the new exposure each iteration.</summary>
+    public Task<bool> UpdateVideoStreamAsync(VideoStreamOptions opts, CancellationToken ct = default)
+        => Task.Run(() => {
+            if (!_streaming) return false;
+            ApplyExposureGain(opts?.ExposureSeconds ?? _exposureSec, opts?.Gain);
+            return true;
+        }, ct);
+
     private void StopStreamCore() {
         Thread? t;
         lock (_gate) {
@@ -349,8 +361,11 @@ public sealed class SvbonySdkCamera : ICamera {
     private void PullLoop(CancellationToken ct) {
         GetRoi(out var w, out var h);
         var buf = new byte[(long)w * h * BytesPerPixel()];
-        int waitMs = (int)(_exposureSec * 1000 * 2 + 500);
         while (!ct.IsCancellationRequested && _streaming) {
+            // Recompute the wait each iteration so a live exposure change
+            // (UpdateVideoStreamAsync) doesn't leave the timeout stale and
+            // starve longer exposures into perpetual timeouts.
+            int waitMs = (int)(_exposureSec * 1000 * 2 + 500);
             SVB_ERROR_CODE err;
             lock (_sdk) err = SVBGetVideoData(_cameraId, buf, new CLong(buf.Length), waitMs);
             if (err == SVB_ERROR_CODE.SVB_ERROR_TIMEOUT) continue;

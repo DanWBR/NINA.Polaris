@@ -201,6 +201,23 @@ public class CameraStreamService : IDisposable {
         if (!restartNative) return;   // loop mode already honors the updated fields
         double exp; int g, bx, by; FrameKind kind;
         lock (_lock) { exp = ExposureSeconds; g = Gain; bx = BinX; by = BinY; kind = _broadcastKind; }
+
+        // Prefer a live, in-place retune: stopping+restarting the native capture
+        // just to change exposure can hang some SDKs (SVBony). If the backend
+        // can apply it live, do that and skip the restart entirely.
+        var cam = _equip.Camera;
+        if (cam != null) {
+            try {
+                if (await cam.UpdateVideoStreamAsync(
+                        new VideoStreamOptions(ExposureSeconds: exp, Gain: g, BinX: bx, BinY: by))) {
+                    _logger.LogDebug("Native stream retuned live (exp={Exp}s gain={Gain})", exp, g);
+                    return;
+                }
+            } catch (Exception ex) {
+                _logger.LogDebug(ex, "Live stream retune failed; falling back to restart");
+            }
+        }
+
         await StopAsync();
         Start(new StreamConfig(exp, g, bx, by, ForceLoop: false, Kind: kind));
     }
