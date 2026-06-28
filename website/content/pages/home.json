@@ -177,7 +177,8 @@
       { "image": "/assets/screenshots/live-ic4605.jpg", "caption": "Live stacking IC 4605 with the live histogram and stretch handles" },
       { "image": "/assets/screenshots/live-lbn43.jpg", "caption": "Live stacking LBN 43 from a browser over the local network" },
       { "image": "/assets/screenshots/live-lbn1110.jpg", "caption": "Live stacking LBN 1110, building up frame by frame" },
-      { "image": "/assets/screenshots/live-saturn.jpg", "caption": "Live stacking the Saturn Nebula (NGC 7009)" }
+      { "image": "/assets/screenshots/live-saturn.jpg", "caption": "Live stacking the Saturn Nebula (NGC 7009)" },
+      { "image": "/assets/screenshots/star-color.jpg", "caption": "Star colour repair: before/after montage of the brightest stars" }
     ]
   }
 }
