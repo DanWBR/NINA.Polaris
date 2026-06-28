@@ -310,6 +310,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Studio.MasterFrameService>()
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.CalibrationService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.BatchStackingService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.ChannelCombineService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Studio.StarColorRepairService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.ColorCalibrationService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Sky.ApassCatalog>();
 // CAT-2: bundled expanded DSO catalog (NGC/IC/M/C/Arp/Sh2/HCG/AGC,

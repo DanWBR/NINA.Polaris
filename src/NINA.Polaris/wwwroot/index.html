@@ -10058,6 +10058,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon" x-text="starRemoval.busy ? '⏳' : '🌠'"></span>
                     </button>
                     <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1"
+                            @click="starColorOpenModal(files.selectedPaths[0])"
+                            title="Star colour repair (SVBony debayer fringe). Select one OSC frame; run before BGE."
+                            aria-label="Star colour repair">
+                        <span class="files-icon" x-text="starColor.busy ? '⏳' : '✨'"></span>
+                    </button>
+                    <button class="btn btn-sm btn-icon"
                             x-show="graxpert.status?.available
                                    || onnxAvailableForOp('background-extraction')"
                             :disabled="files.selectedPaths.length === 0"
@@ -10732,6 +10739,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                  when EITHER the CLI is installed OR the
                                  matching ONNX model is in the manifest,
                                  same gating as the FILES toolbar. -->
+                            <button class="btn btn-sm"
+                                    :disabled="!editorState.session || !editorState.sourcePath"
+                                    @click="starColorOpenModal(editorState.sourcePath)"
+                                    title="Repair bright-star colour/dark fringe (SVBony debayer artifact). Run this FIRST.">
+                                ✨ Star color
+                            </button>
                             <button class="btn btn-sm"
                                     x-show="graxpert.status?.available
                                            || onnxAvailableForOp('background-extraction')"
@@ -15750,6 +15763,43 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     </div>
 
     <!-- PLAN: host-shutdown risk confirmation -->
+    <!-- Star colour repair (SVBony debayer fringe) run modal -->
+    <div class="modal-overlay" x-show="starColor.modalOpen" x-cloak
+         @click.self="if(!starColor.busy) starColor.modalOpen=false"
+         @keydown.escape.window="if(!starColor.busy) starColor.modalOpen=false">
+        <div class="modal-card">
+            <div class="modal-head">
+                <span class="modal-icon">✨</span>
+                <h3>Star colour repair</h3>
+            </div>
+            <p style="font-size:13px">
+                Fixes the one-sided blue/magenta + dark fringe OSC cameras (e.g. SVBony)
+                leave on bright stars — channel alignment + radial colour/luminance
+                symmetry. Run this <b>first</b>, before background extraction. Writes a new
+                FITS; the original is kept.
+            </p>
+            <label class="editor-slider-row" style="display:flex;align-items:center;gap:8px;margin:10px 0">
+                <span style="min-width:130px">Aggressiveness</span>
+                <input type="range" min="0.2" max="1" step="0.1" style="flex:1"
+                       :value="starColor.aggressiveness"
+                       @input="starColor.aggressiveness=+$event.target.value">
+                <span x-text="starColor.aggressiveness.toFixed(1)" style="min-width:28px;text-align:right"></span>
+            </label>
+            <p x-show="starColor.busy" class="text-muted" style="font-size:12px"
+               x-text="'Working… ' + (starColor.stage || '')"></p>
+            <p x-show="starColor.error" style="color:var(--danger,#e66);font-size:12px"
+               x-text="starColor.error"></p>
+            <div class="modal-actions">
+                <button class="btn btn-sm" :disabled="starColor.busy"
+                        @click="starColor.modalOpen=false">Cancel</button>
+                <button class="btn btn-sm btn-primary" :disabled="starColor.busy"
+                        @click="starColorRun()">
+                    <span x-text="starColor.busy ? 'Running…' : 'Run'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay" x-show="planShutdownConfirm" x-cloak @click.self="planShutdownConfirm = false"
          @keydown.escape.window="planShutdownConfirm = false">
         <div class="modal-card danger">
@@ -16244,7 +16294,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260627-zfilterexp"></script>
+    <script src="/js/app.js?v=20260628-starcolor"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

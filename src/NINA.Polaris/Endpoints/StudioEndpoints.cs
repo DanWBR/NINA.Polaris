@@ -229,6 +229,26 @@ public static class StudioEndpoints {
             return p == null ? Results.NotFound() : Results.Ok(p);
         });
 
+        // --- Star colour/fringe repair (SVBony debayer artifact) ------
+        // Fix the one-sided blue/magenta + dark fringe on bright stars
+        // that OSC debayering leaves (channel align + radial colour/
+        // luminance symmetry). Meant to run first on SVBony stacks.
+        // Body: { framePath, aggressiveness (0..1), align?, fringe? }
+        g.MapPost("/starcolor", (StarColorRepairService svc,
+                                 StarColorRepairService.StarColorRepairRequest req) => {
+            try {
+                var jobId = svc.StartJob(req);
+                return Results.Accepted(value: new { jobId });
+            } catch (ArgumentException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        g.MapGet("/starcolor/{jobId}", (StarColorRepairService svc, string jobId) => {
+            var p = svc.GetStatus(jobId);
+            return p == null ? Results.NotFound() : Results.Ok(p);
+        });
+
         // --- CCALB-1/2/3: Siril-style color calibration ---------------
         // Calibrate an RGB FITS so the background is neutral grey
         // (BgNeutral) and / or the chosen reference is neutral white

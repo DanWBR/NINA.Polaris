@@ -2718,6 +2718,11 @@ function ninaApp() {
             // re-opens star-removal options for this source path.
             starRetryPath: null,
         },
+        // Star colour/fringe repair (SVBony debayer artifact) — run first.
+        starColor: {
+            modalOpen: false, busy: false, framePath: '', aggressiveness: 1.0,
+            stage: '', error: '',
+        },
 
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
         // Always renders the live sky from the observer's location at the
@@ -25764,6 +25769,62 @@ function ninaApp() {
         // clipped via clip-path to the right of the drag handle so
         // moving the handle left reveals the source underneath.
         // pairs: [{ src, out, label }]; index picks which pair to show.
+
+        // ── Star colour repair (SVBony debayer fringe) ──────────────────
+        starColorOpenModal(framePath) {
+            if (!framePath) { this.toast?.('Select one frame first'); return; }
+            this.starColor.framePath = framePath;
+            this.starColor.busy = false;
+            this.starColor.stage = '';
+            this.starColor.error = '';
+            this.starColor.modalOpen = true;
+        },
+        async starColorRun() {
+            const src = this.starColor.framePath;
+            if (!src) return;
+            this.starColor.busy = true;
+            this.starColor.error = '';
+            this.starColor.stage = 'starting';
+            try {
+                const r = await this.apiFetch('/api/studio/starcolor', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        framePath: src,
+                        aggressiveness: this.starColor.aggressiveness,
+                        align: true, fringe: true,
+                    }),
+                });
+                if (!r.ok) {
+                    const e = await r.json().catch(() => ({}));
+                    throw new Error(e.error || ('HTTP ' + r.status));
+                }
+                const { jobId } = await r.json();
+                // poll
+                let out = null;
+                for (let i = 0; i < 600; i++) {
+                    await new Promise(res => setTimeout(res, 500));
+                    const sr = await this.apiFetch('/api/studio/starcolor/' + jobId);
+                    if (!sr.ok) continue;
+                    const p = await sr.json();
+                    this.starColor.stage = p.stage || '';
+                    if (!p.inProgress) {
+                        if (p.error) throw new Error(p.error);
+                        out = p.outputPath;
+                        break;
+                    }
+                }
+                if (!out) throw new Error('Timed out waiting for the job.');
+                this.starColor.busy = false;
+                this.starColor.modalOpen = false;
+                try { this.filesReload?.(); } catch { /* non-fatal */ }
+                // before/after comparator (reuses the GraXpert compare modal)
+                this.graxpertOpenCompare([{ src, out }], 0, 'gx', 'star-color');
+            } catch (e) {
+                this.starColor.busy = false;
+                this.starColor.error = (e && e.message) ? e.message : String(e);
+            }
+        },
 
         graxpertOpenCompare(pairs, index, mode, op) {
             this.graxpertCompare.pairs = pairs;
