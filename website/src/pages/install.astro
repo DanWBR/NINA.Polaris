@@ -55,6 +55,8 @@ const statusClass = (s: string) => {
                   <span class="sq-icon" style={it.color ? `--ic: ${it.color}` : undefined}>
                     {it.emoji ? (
                       <span class="sq-emoji" aria-hidden="true">{it.emoji}</span>
+                    ) : fruitFor(it.device) ? (
+                      <FruitIcon name={fruitFor(it.device)!} size={20} />
                     ) : (
                       <Icon name={it.badge === 'x86-64' ? 'usb' : 'chip'} />
                     )}
@@ -590,6 +592,8 @@ const statusClass = (s: string) => {
   .img-card h3 { font-size: 16px; font-weight: 700; }
   .img-id { display: flex; align-items: center; gap: 11px; min-width: 0; }
   .sq-emoji { font-size: 20px; line-height: 1; }
+  /* FruitIcon ships an inline margin for use before text; center it in the square. */
+  .sq-icon :global(.fruit) { margin-right: 0; vertical-align: 0; }
   .sq-icon {
     --ic: var(--accent);
     width: 36px;
