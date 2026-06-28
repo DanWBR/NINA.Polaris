@@ -54,6 +54,12 @@ public class VideoRecordingService : IDisposable {
     private BlockingCollection<QueueItem>? _queue;
     private Thread? _writerThread;
     private long _enqueued;
+    // The queue is bounded by a RAM budget (bytes in flight), not a frame
+    // count, so the headroom is the same whether the ROI is 640×480 or larger.
+    // 256 MB rides out multi-second GC/write-back stalls at high fps and is safe
+    // on the SBCs Polaris targets (≥4 GB). When over budget OnFrame drops.
+    private const long MaxQueuedBytes = 256L * 1024 * 1024;
+    private long _queuedBytes;
 
     private readonly record struct QueueItem(ushort[] Pixels, int ByteLen,
         int Width, int Height, SerColorMode Color, DateTime Utc);
@@ -109,13 +115,12 @@ public class VideoRecordingService : IDisposable {
             LastError = null;
             IsRecording = true;
 
-            // Bounded queue: when full, TryAdd returns false and the frame is
-            // dropped (counted) rather than blocking the camera stream. 128
-            // frames of headroom (~3 s at 40 fps) rides out GC pauses and disk
-            // write-back hiccups that otherwise dropped frames partway through a
-            // long high-fps capture; at 640×480×16-bit that's ~75 MB of
-            // buffering. Planetary ROIs are small, so the RAM cost is modest.
-            var queue = new BlockingCollection<QueueItem>(boundedCapacity: 128);
+            // Unbounded collection gated by a RAM budget (MaxQueuedBytes):
+            // OnFrame drops once the in-flight bytes exceed the budget, so a GC
+            // pause or disk write-back hiccup no longer drops mid-capture until
+            // ~256 MB is queued. Count-bounding instead would vary with ROI.
+            Interlocked.Exchange(ref _queuedBytes, 0);
+            var queue = new BlockingCollection<QueueItem>();
             _queue = queue;
             _writerThread = new Thread(() => WriterLoop(path, instrument, telescope, queue)) {
                 IsBackground = true,
@@ -176,6 +181,8 @@ public class VideoRecordingService : IDisposable {
         byte[]? scratch = null;
         try {
             foreach (var item in queue.GetConsumingEnumerable()) {
+                // Item has left the queue → release its bytes from the budget.
+                Interlocked.Add(ref _queuedBytes, -item.ByteLen);
                 try {
                     // Open the SER lazily on the first frame, sized from the
                     // ACTUAL streamed geometry: always 16-bit, single plane (the
@@ -256,12 +263,18 @@ public class VideoRecordingService : IDisposable {
             ?? (props.IsBayered ? MapBayerToSer(props.BayerPattern) : SerColorMode.Mono);
         var item = new QueueItem(frame.Data, frame.Data.Length * 2,
             props.Width, props.Height, color, DateTime.UtcNow);
-        // Non-blocking add: drop (counted) when the bounded queue is full so a
-        // disk write-back stall never back-pressures the camera delivery thread.
+        // Drop (counted) when the in-flight RAM budget is exceeded, so a disk
+        // write-back stall never back-pressures the camera delivery thread or
+        // grows memory without bound.
+        if (Interlocked.Read(ref _queuedBytes) + item.ByteLen > MaxQueuedBytes) {
+            Interlocked.Increment(ref _droppedFrames);
+            return;
+        }
         bool added;
         try { added = queue.TryAdd(item); }
         catch (InvalidOperationException) { return; }   // CompleteAdding raced Stop
         if (added) {
+            Interlocked.Add(ref _queuedBytes, item.ByteLen);
             Interlocked.Increment(ref _enqueued);
         } else {
             Interlocked.Increment(ref _droppedFrames);
