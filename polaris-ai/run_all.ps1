@@ -29,6 +29,7 @@
 #>
 param(
     [int]$Gpu = -1,
+    [switch]$Cpu,
     [string[]]$Tasks = @(),
     [switch]$Prep,
     [switch]$NoQat,
@@ -42,7 +43,11 @@ param(
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 $env:PYTHONIOENCODING = "utf-8"
-if ($Gpu -ge 0) {
+if ($Cpu) {
+    # Hide every GPU so torch falls back to CPU (slow, but works when the GPUs
+    # are busy/unstable). Training is heavy on CPU -- prefer a small net.
+    $env:CUDA_VISIBLE_DEVICES = ""
+} elseif ($Gpu -ge 0) {
     # Match CUDA indices to nvidia-smi order so -Gpu N selects the card you expect
     # (default CUDA order is by speed, not PCI bus).
     $env:CUDA_DEVICE_ORDER = "PCI_BUS_ID"
@@ -107,11 +112,15 @@ if ($Prep) {
 
 # Verify the requested GPU is actually usable -- fail loudly instead of silently
 # training on CPU (e.g. a 'GPU is lost' card, wrong index, or no driver).
-$gpuName = & python -c "import torch; print(torch.cuda.get_device_name(0)) if torch.cuda.is_available() else print('NO_CUDA')"
-if ($Gpu -ge 0 -and $gpuName -eq "NO_CUDA") {
-    throw "Requested -Gpu $Gpu but CUDA is not available for it (device lost / not present / wrong index). Check 'nvidia-smi'. Aborting instead of training on CPU."
+if ($Cpu) {
+    Write-Host "Using device: CPU (GPUs hidden)" -ForegroundColor Green
+} else {
+    $gpuName = & python -c "import torch; print(torch.cuda.get_device_name(0)) if torch.cuda.is_available() else print('NO_CUDA')"
+    if ($Gpu -ge 0 -and $gpuName -eq "NO_CUDA") {
+        throw "Requested -Gpu $Gpu but CUDA is not available for it (device lost / not present / wrong index). Check 'nvidia-smi'. Aborting instead of training on CPU."
+    }
+    Write-Host "Using device: $gpuName" -ForegroundColor Green
 }
-Write-Host "Using device: $gpuName" -ForegroundColor Green
 
 $fpBatch = if ($Batch -gt 0) { $Batch } else { 8 }
 $qatBatch = if ($Batch -gt 0) { $Batch } else { 6 }
