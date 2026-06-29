@@ -53,7 +53,7 @@
       "icon": "🎥",
       "title": "Video recording + processing",
       "body": "Record high-frame-rate video for planetary, lunar, and solar work, then process it on the spot for lucky-imaging results.",
-      "image": "/assets/screenshots/video.png"
+      "image": "/assets/screenshots/video.jpg"
     },
     {
       "icon": "🌲",
@@ -178,7 +178,8 @@
       { "image": "/assets/screenshots/live-lbn43.jpg", "caption": "Live stacking LBN 43 from a browser over the local network" },
       { "image": "/assets/screenshots/live-lbn1110.jpg", "caption": "Live stacking LBN 1110, building up frame by frame" },
       { "image": "/assets/screenshots/live-saturn.jpg", "caption": "Live stacking the Saturn Nebula (NGC 7009)" },
-      { "image": "/assets/screenshots/star-color.jpg", "caption": "Star colour repair: before/after montage of the brightest stars" }
+      { "image": "/assets/screenshots/star-color.jpg", "caption": "Star colour repair: before/after montage of the brightest stars" },
+      { "image": "/assets/screenshots/video.jpg", "caption": "VIDEO: high-frame-rate lunar capture with live stream stats and mount jog" }
     ]
   }
 }
