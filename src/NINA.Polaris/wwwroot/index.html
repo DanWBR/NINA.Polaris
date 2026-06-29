@@ -2659,7 +2659,7 @@
                               x-text="autoFocus.mode === 'adaptive' ? 'SMART' : 'GRID'"></span>
                     </div>
                     <div class="af-params">
-                        <label style="display:flex; align-items:center; gap:6px" title="ASIAIR-style: no point count — seed 3 points, auto-detect direction, grow the V-curve until the fit is confident, then stop. Uncheck for the fixed Steps×Step-Size grid.">
+                        <label style="display:flex; flex-direction:row; align-items:center; gap:6px" title="ASIAIR-style: no point count — seed 3 points, auto-detect direction, grow the V-curve until the fit is confident, then stop. Uncheck for the fixed Steps×Step-Size grid.">
                             <input type="checkbox" x-model="afParams.adaptive"
                                    :disabled="autoFocus.state === 'running'">
                             Smart (auto V-curve)
@@ -16361,7 +16361,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260628-smbchip"></script>
+    <script src="/js/app.js?v=20260628-afcheckbox"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
