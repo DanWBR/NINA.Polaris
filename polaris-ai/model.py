@@ -71,11 +71,26 @@ class Up(nn.Module):
 
 
 class ConditionedUNet(nn.Module):
+    """Residual U-Net used for all three Polaris tasks.
+
+    * decon   : in_channels=2 (image + sigma map), out_channels=1, img_channels=1
+    * denoise : in_channels=3 (RGB),               out_channels=3, img_channels=3
+    * bge     : in_channels=3 (RGB),               out_channels=3, img_channels=3
+
+    ``img_channels`` is how many leading input channels form the image the
+    residual is added back to (``out = img + delta``); it must equal
+    ``out_channels``. Defaults keep the original decon contract unchanged.
+    """
+
     def __init__(self, in_channels: int = 2, base: int = 96, depth: int = 4,
-                 blocks: int = 3):
+                 blocks: int = 3, out_channels: int = 1,
+                 img_channels: int | None = None):
         super().__init__()
         assert depth >= 2 and blocks >= 1
         self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.img_channels = out_channels if img_channels is None else img_channels
+        assert self.img_channels == out_channels, "img_channels must equal out_channels"
         chs = [base * (2 ** i) for i in range(depth)]
 
         self.inc = cbr(in_channels, chs[0])
@@ -85,10 +100,10 @@ class ConditionedUNet(nn.Module):
         self.ups = nn.ModuleList(
             Up(chs[i], chs[i - 1], chs[i - 1], blocks) for i in range(depth - 1, 0, -1)
         )
-        self.outc = nn.Conv2d(chs[0], 1, 1)
+        self.outc = nn.Conv2d(chs[0], out_channels, 1)
 
     def forward(self, x):
-        img = x[:, :1]
+        img = x[:, :self.img_channels]
         h = self.inc(x)
         skips = []
         depth = len(self.enc)
@@ -109,12 +124,15 @@ if __name__ == "__main__":
     ap.add_argument("--base", type=int, default=96)
     ap.add_argument("--depth", type=int, default=4)
     ap.add_argument("--blocks", type=int, default=3)
+    ap.add_argument("--in-ch", type=int, default=2)
+    ap.add_argument("--out-ch", type=int, default=1)
     a = ap.parse_args()
 
-    m = ConditionedUNet(in_channels=2, base=a.base, depth=a.depth, blocks=a.blocks)
+    m = ConditionedUNet(in_channels=a.in_ch, base=a.base, depth=a.depth,
+                        blocks=a.blocks, out_channels=a.out_ch)
     n = sum(p.numel() for p in m.parameters())
-    y = m(torch.randn(1, 2, 256, 256))
-    print(f"base={a.base} depth={a.depth} blocks={a.blocks}")
+    y = m(torch.randn(1, a.in_ch, 256, 256))
+    print(f"base={a.base} depth={a.depth} blocks={a.blocks} in={a.in_ch} out={a.out_ch}")
     print(f"  params : {n/1e6:.1f}M")
     print(f"  fp32   : {n*4/1e6:.0f} MB   (fp16 ~{n*2/1e6:.0f} MB, int8 ~{n/1e6:.0f} MB)")
     print(f"  output : {tuple(y.shape)}")

@@ -30,27 +30,40 @@ import numpy as np
 
 
 # --------------------------------------------------------------------------- #
-# Calibration set: representative [2,H,W] inputs (image + sigma map)
+# Calibration set: representative model inputs.
+#   decon          -> NCHW [2,H,W] (image + sigma map)
+#   denoise / bge  -> NHWC [H,W,3] (matches the wrapped ONNX I/O)
+# The saved .npy layout MUST match the exported ONNX so quantize_static feeds it
+# correctly (the Reader just prepends a batch dim).
 # --------------------------------------------------------------------------- #
 def cmd_calib(args):
-    import torch
-    from dataset import DeconDataset
-
     os.makedirs(args.out, exist_ok=True)
-    ds = DeconDataset(args.tiles, tile=args.size, augment=False)
-    idxs = np.random.default_rng(0).choice(len(ds), size=min(args.count, len(ds)),
-                                           replace=False)
+    nhwc_task = args.task in ("denoise", "bge")
+
+    if args.task == "decon":
+        from dataset import DeconDataset
+        ds = DeconDataset(args.tiles, tile=args.size, augment=False)
+        get = lambda i: ds[int(i)][0].numpy().astype(np.float32)   # [2,H,W]
+        n = len(ds)
+    else:
+        from paired_dataset import PairedTileDataset
+        ds = PairedTileDataset(args.pairs or args.tiles, augment=False)
+        get = lambda i: ds[int(i)][0].numpy().astype(np.float32)   # [3,H,W]
+        n = len(ds)
+
+    idxs = np.random.default_rng(0).choice(n, size=min(args.count, n), replace=False)
     listf = open(os.path.join(args.out, "list.txt"), "w")
     for j, i in enumerate(idxs):
-        x, _ = ds[int(i)]                  # x: [2,H,W] float32
-        arr = x.numpy().astype(np.float32)
+        arr = get(i)
+        if nhwc_task:
+            arr = np.transpose(arr, (1, 2, 0)).copy()              # [H,W,3] NHWC
         np.save(os.path.join(args.out, f"calib_{j:04d}.npy"), arr)
-        # also a NHWC .raw for qnn-style calibration (qairt/AI Hub want raw)
-        nhwc = np.transpose(arr, (1, 2, 0)).copy()
-        nhwc.tofile(os.path.join(args.out, f"calib_{j:04d}.raw"))
+        # vendor tools (qairt/AI Hub) want raw NHWC
+        raw = arr if nhwc_task else np.transpose(arr, (1, 2, 0)).copy()
+        raw.tofile(os.path.join(args.out, f"calib_{j:04d}.raw"))
         listf.write(os.path.join(args.out, f"calib_{j:04d}.raw") + "\n")
     listf.close()
-    print(f"wrote {len(idxs)} calibration tiles -> {args.out}")
+    print(f"wrote {len(idxs)} {args.task} calibration tiles -> {args.out}")
 
 
 # --------------------------------------------------------------------------- #
@@ -121,7 +134,9 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     c = sub.add_parser("calib", help="dump a calibration set from training tiles")
-    c.add_argument("--tiles", required=True)
+    c.add_argument("--task", default="decon", choices=["decon", "denoise", "bge"])
+    c.add_argument("--tiles", default="", help="(decon) sharp-tile dir for DeconDataset")
+    c.add_argument("--pairs", default="", help="(denoise/bge) paired-tile root")
     c.add_argument("--out", default="models/calib")
     c.add_argument("--count", type=int, default=300)
     c.add_argument("--size", type=int, default=256)

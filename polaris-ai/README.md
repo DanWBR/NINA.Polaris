@@ -122,8 +122,102 @@ Polaris builds channel 1 from the decon strength/sigma slider and tiles the fram
 - **fp16**: train fp32 → `export.py` converts. Near-lossless. (GPU/CPU/ORT-Web;
   not the Hexagon HTP, which is int-only.)
 - **int16**: PTQ with a calibration set ≈ fp16 quality → production NPU path.
-- **int8**: **QAT** (fake-quant during training) — required to keep stars/edges
-  clean. PTQ int8 alone will ring/blur.
+- **int8**: ORT QDQ PTQ for ORT/CPU, or the vendor toolchain's calibrated int8
+  on-device (RKNN/QNN). Residual-heavy decon can ring under int8 — prefer int16
+  there. (Native torch QAT→ONNX isn't exportable on the current torch build; see
+  the BGE/denoise/decon section below.)
 
 Always validate int8 vs int16 vs fp16 vs fp32 side by side: PSNR/SSIM, **stellar
 FWHM** before/after, and a visual halo/ring check around bright stars.
+
+---
+
+# Three Polaris models from our own data (BGE / denoise / decon)
+
+Beyond the synthetic decon pipeline above, we train **our own** background
+extraction, denoise and deconvolution models from the hand-curated linear RGB
+FITS in `data/own/raw/` — so Polaris ships models it fully owns. The originals
+(`originals/`) plus the processed outputs (`bge/`, `decon/`, `denoised/`) are
+real ground-truth pairs; we degrade the *clean* output to synthesize many more.
+
+## Model contracts (drop-in for `onnx-pipelines.js`)
+
+| Task    | Layout | In→Out | Domain | Predicts |
+|---------|--------|--------|--------|----------|
+| BGE     | NHWC `[1,256,256,3]` | 3→3 | per-channel MAD `(v−med)/mad×0.04`, clip ±1 | the **background plane** (whole frame, 256² downsample) |
+| Denoise | NHWC `[1,256,256,3]` | 3→3 | per-channel MAD, clip ±10 | the **clean** image (tiled 256², 64-px margin) |
+| Decon   | NCHW `[1,2,H,W]` | 2→1 | per-tile 1–99.9% linear + sigma channel | residual `out = img + delta` (unchanged) |
+
+The same `ConditionedUNet` backs all three (`--out-ch`/`--in-ch`); BGE/denoise are
+exported through an NHWC permute wrapper so the existing JS/C# pipelines run them
+unchanged.
+
+## 1. Build the datasets (degrade the clean image)
+
+```bash
+python data_prep/make_noise.py       --per-image 3     # denoise: denoised/ + noise
+python data_prep/make_gradients.py   --per-image 40    # bge:     bge/ + synthetic gradient
+python data_prep/make_distortions.py --previews 3      # decon:   sharp tiles for DeconDataset
+```
+
+Writes preview FITS to `data/own/raw/originals+{noise,distortions,gradients}/`,
+train tiles to `data/own/{denoise,bge,decon}_tiles/`, and held-out **real** val
+pairs to `data/own/{denoise,bge}_val/` + `data/own/decon_tiles_val/`.
+
+## 2. Train (from scratch, on this PC's NVIDIA GPU)
+
+```bash
+python train_denoise.py --pairs data/own/denoise_tiles --val-pairs data/own/denoise_val --epochs 80
+python train_bge.py     --pairs data/own/bge_tiles     --val-pairs data/own/bge_val     --epochs 120
+python train.py         --tiles data/own/decon_tiles                                    --epochs 60
+# (train_task.py --task ... is the shared engine behind the wrappers)
+```
+
+## 3. Export fp16 + int16 + int8
+
+```bash
+for T in denoise bge decon; do
+  python export.py   --task $T --ckpt checkpoints/$T/best.pt --out models           # fp32 + fp16
+  python quantize.py calib --task $T --pairs data/own/${T}_tiles --out models/calib_$T   # (decon: --tiles)
+  python quantize.py int16 --onnx models/${T}_fp32_256.onnx --calib models/calib_$T \
+         --out models/${T}_int16_256.onnx                                            # int16 PTQ ≈ fp16
+  python quantize.py int8  --onnx models/${T}_fp32_256.onnx --calib models/calib_$T \
+         --out models/${T}_int8_256.onnx                                             # int8 PTQ (QDQ)
+done
+```
+
+`fp16` is a near-lossless cast; `int16` PTQ already ≈ fp16. For **int8**, full-image
+models (BGE, denoise) tolerate PTQ well; the residual-learning **decon** is the one
+that can ring under int8 — prefer **int16 for decon** (lossless), and measure int8
+per task with `eval_models.py` before shipping it.
+
+### int8 / QAT status
+
+True **quantization-aware training → ONNX** is *not* exportable on the current
+torch build: fake-quant (`fused_moving_avg_obs_fake_quant`) and `convert_fx`
+(`quantized::conv2d`) ops don't lower through either the legacy or dynamo ONNX
+exporter. So 8-bit lands two ways:
+
+- **ORT QDQ (PTQ)** above — the portable int8 for ORT/ORT-Web/CPU, measured by
+  `eval_models.py`.
+- **Vendor toolchain calibrated int8** — RKNN `build(do_quantization=True,
+  dataset=models/calib_*/list.txt)` or Qualcomm AI Hub `w8a16`, which run their
+  own calibration from the fp32 model. This is the real on-device 8-bit path and
+  needs no torch QAT.
+
+If PTQ int8 proves lossy for a task after real training, the QAT route is a
+follow-up via NVIDIA `pytorch-quantization` or the torch **PT2E** export flow
+(neither is wired here yet).
+
+## 4. Measure "no quantization degradation"
+
+```bash
+python eval_models.py --task denoise --models models --val-pairs data/own/denoise_val
+python eval_models.py --task bge     --models models --val-pairs data/own/bge_val
+python eval_models.py --task decon   --models models --tiles-val data/own/decon_tiles_val
+```
+
+Prints mean PSNR/SSIM per precision; int8-QAT should land within a small delta of
+fp16/fp32. Deploy fp16 to RKNN/ncnn (`scripts/convert_rknn_models.py`,
+`ncnn/deploy_ncnn_models.py`); int8/int16 to ORT and the NPU vendor toolchains
+with `models/calib_*`.
