@@ -29,7 +29,7 @@
 #>
 param(
     [int]$Gpu = -1,
-    [string]$Tasks = "",
+    [string[]]$Tasks = @(),
     [switch]$Prep,
     [switch]$NoQat,
     [int]$Workers = 4,
@@ -78,12 +78,14 @@ function Get-DataArgs($c, [bool]$withVal) {
     return $a
 }
 
-# Resolve the task list.
-if ([string]::IsNullOrWhiteSpace($Tasks)) {
+# Resolve the task list. Accept any of: -Tasks bge,decon | -Tasks "bge,decon"
+# | -Tasks bge decon (PowerShell binds comma-lists as an array, so also split
+# each element on commas/whitespace to be forgiving).
+if ($Tasks.Count -eq 0) {
     if ($Prep) { $list = @("denoise", "bge", "decon", "upscale") }
     else { throw "Specify -Tasks (e.g. -Tasks bge,decon) or use -Prep." }
 } else {
-    $list = $Tasks.Split(",") | ForEach-Object { $_.Trim().ToLower() } | Where-Object { $_ }
+    $list = $Tasks | ForEach-Object { $_ -split '[,\s]+' } | Where-Object { $_ } | ForEach-Object { $_.Trim().ToLower() }
 }
 foreach ($t in $list) { if (-not $cfg.ContainsKey($t)) { throw "Unknown task '$t' (bge|denoise|decon|upscale)." } }
 
