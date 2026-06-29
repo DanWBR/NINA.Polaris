@@ -316,8 +316,11 @@ def add_star_halos_rgb(clean: np.ndarray, rng: np.random.Generator,
         kind = "disk" if r < 0.6 else ("glow" if r < 0.85 else "ring")
         soft = float(rng.uniform(0.18, 0.45))                  # edge softness
         # fainter / more transparent than before (was 0.01-0.10)
-        # very transparent halos (user pick); intensity_scale tweaks it further
-        base = max(1e-4, peak) * float(rng.uniform(0.001, 0.011)) * intensity_scale
+        # Spread faint -> moderate so training has real signal (an all-ultra-faint
+        # set makes "do nothing" near-optimal and the net barely learns to remove
+        # halos). The range still includes very faint cases, so it generalizes to
+        # the subtle real ones. intensity_scale tweaks it further.
+        base = max(1e-4, peak) * float(rng.uniform(0.003, 0.05)) * intensity_scale
         color = _star_color(clean, cy, cx)                     # same colour as star
         pp = _halo_profile(cy, cx, radius, kind, out.shape[1:], soft=soft)
         if pp is None:
