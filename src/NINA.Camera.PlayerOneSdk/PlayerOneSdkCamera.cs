@@ -51,6 +51,13 @@ public sealed class PlayerOneSdkCamera : ICamera {
     private Thread? _streamThread;
     private CancellationTokenSource? _streamCts;
     private readonly object _gate = new();
+    // The PlayerOne (POA) SDK is NOT thread-safe per camera handle: a control
+    // read from the WS status tick (Temperature/Cooler) concurrent with the pull
+    // thread's POAGetImageData wedges/crashes the native lib a few seconds into a
+    // stream. This lock serialises every individual SDK call so get/set/grab
+    // never overlap. Held only for the duration of one native call (incl. the
+    // blocking POAGetImageData, which has its own waitMs), never across the loop.
+    private readonly object _sdk = new();
 
     public PlayerOneSdkCamera(string deviceId) {
         PlayerOneRegistry.EnsureResolver();
@@ -142,20 +149,22 @@ public sealed class PlayerOneSdkCamera : ICamera {
 
     public Task SetTemperatureAsync(double temperature, CancellationToken ct = default) {
         if (_supportsCooler)
-            POASetConfig(_cameraId, POAConfig.POA_TARGET_TEMP, POAConfigValue.Int((int)Math.Round(temperature)), POABool.POA_FALSE);
+            lock (_sdk)
+                POASetConfig(_cameraId, POAConfig.POA_TARGET_TEMP, POAConfigValue.Int((int)Math.Round(temperature)), POABool.POA_FALSE);
         return Task.CompletedTask;
     }
 
     public Task SetCoolerAsync(bool on, CancellationToken ct = default) {
         if (_supportsCooler)
-            POASetConfig(_cameraId, POAConfig.POA_COOLER, POAConfigValue.Bool(on), POABool.POA_FALSE);
+            lock (_sdk)
+                POASetConfig(_cameraId, POAConfig.POA_COOLER, POAConfigValue.Bool(on), POABool.POA_FALSE);
         return Task.CompletedTask;
     }
 
     public Task SetIsoAsync(int iso, CancellationToken ct = default) => Task.CompletedTask;
 
     public Task AbortExposureAsync(CancellationToken ct = default) {
-        try { POAStopExposure(_cameraId); } catch { }
+        lock (_sdk) { try { POAStopExposure(_cameraId); } catch { } }
         State = CameraStates.Idle;
         return Task.CompletedTask;
     }
@@ -169,12 +178,19 @@ public sealed class PlayerOneSdkCamera : ICamera {
 
     private void ApplyRoi() {
         if (!_connected) return;
+        // PlayerOne forbids changing ROI/format DURING capture (the exposure must
+        // be stopped). While a stream is running just stash the fields; they take
+        // effect on the next StartVideoStreamAsync, which re-applies ROI while
+        // stopped.
+        if (_streaming) return;
         // PlayerOne wants width % 4 == 0 and height % 2 == 0 (post-bin).
         int w = Math.Max(4, (_roiW / _bin) & ~3);
         int h = Math.Max(2, (_roiH / _bin) & ~1);
-        POASetImageBin(_cameraId, _bin);
-        POASetImageSize(_cameraId, w, h);
-        POASetImageStartPos(_cameraId, _roiX / _bin, _roiY / _bin);
+        lock (_sdk) {
+            POASetImageBin(_cameraId, _bin);
+            POASetImageSize(_cameraId, w, h);
+            POASetImageStartPos(_cameraId, _roiX / _bin, _roiY / _bin);
+        }
     }
 
     public Task<IImageData> CaptureAsync(double exposureSeconds, CaptureOptions? opts = null,
@@ -185,17 +201,19 @@ public sealed class PlayerOneSdkCamera : ICamera {
             // SVBony native path. We own the SDK handle exclusively so it can't
             // be flipped to RAW8 like an external INDI driver can, but this
             // keeps the native backends consistent + future-proof.
-            POASetImageFormat(_cameraId, _imgFormat);
+            lock (_sdk) POASetImageFormat(_cameraId, _imgFormat);
             ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
             GetRoi(out var w, out var h);
             var bytes = new byte[(long)w * h * BytesPerPixel()];
             int waitMs = (int)(exposureSeconds * 1000 * 2 + 500);
             State = CameraStates.Exposing;
-            Check(POAStartExposure(_cameraId, POABool.POA_TRUE), "POAStartExposure");
+            lock (_sdk) Check(POAStartExposure(_cameraId, POABool.POA_TRUE), "POAStartExposure");
             try {
-                Check(POAGetImageData(_cameraId, bytes, new CLong(bytes.Length), waitMs), "POAGetImageData");
+                POAErrors err;
+                lock (_sdk) err = POAGetImageData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
+                Check(err, "POAGetImageData");
             } finally {
-                try { POAStopExposure(_cameraId); } catch { }
+                lock (_sdk) { try { POAStopExposure(_cameraId); } catch { } }
                 State = CameraStates.Idle;
             }
             return WrapFrame(bytes, w, h);
@@ -214,12 +232,25 @@ public sealed class PlayerOneSdkCamera : ICamera {
         => Task.Run(() => {
             lock (_gate) {
                 if (_streaming) return;
+                if (opts?.BinX is int b) _bin = Math.Max(1, b);
                 ApplyExposureGain(opts?.ExposureSeconds ?? _exposureSec, opts?.Gain);
-                if (opts?.BinX is int b && b != _bin) { _bin = Math.Max(1, b); ApplyRoi(); }
+                // Re-apply ROI + output format while STOPPED (PlayerOne forbids
+                // changing them during capture). This also picks up any ROI set
+                // via SetSubframe while a previous stream was running (ApplyRoi
+                // defers the SDK write during capture). _streaming is still false
+                // here, so ApplyRoi runs.
+                ApplyRoi();
+                lock (_sdk) {
+                    POASetImageFormat(_cameraId, _imgFormat);
+                    // Defensive: if a previous session didn't stop cleanly the SDK
+                    // is still "exposing", and a second POAStartExposure then wedges
+                    // the driver. A stop on an idle camera is a harmless no-op.
+                    try { POAStopExposure(_cameraId); } catch { }
+                    Check(POAStartExposure(_cameraId, POABool.POA_FALSE), "POAStartExposure");
+                }
                 _streamCts = new CancellationTokenSource();
                 _streaming = true;
                 State = CameraStates.Exposing;
-                Check(POAStartExposure(_cameraId, POABool.POA_FALSE), "POAStartExposure");
                 _streamThread = new Thread(() => PullLoop(_streamCts.Token)) {
                     IsBackground = true, Name = "PlayerOne-stream"
                 };
@@ -237,8 +268,12 @@ public sealed class PlayerOneSdkCamera : ICamera {
             _streamCts?.Cancel();
             t = _streamThread; _streamThread = null;
         }
-        try { t?.Join(2000); } catch { }
-        try { POAStopExposure(_cameraId); } catch { }
+        // Join the pull thread BEFORE touching the SDK so its in-flight
+        // POAGetImageData (holding _sdk) has finished — then POAStopExposure under
+        // _sdk can't run concurrently with it. Generous timeout so a long-exposure
+        // GetImageData can return first.
+        try { t?.Join(5000); } catch { }
+        lock (_sdk) { try { POAStopExposure(_cameraId); } catch { } }
         State = CameraStates.Idle;
     }
 
@@ -247,7 +282,8 @@ public sealed class PlayerOneSdkCamera : ICamera {
         var buf = new byte[(long)w * h * BytesPerPixel()];
         int waitMs = (int)(_exposureSec * 1000 * 2 + 500);
         while (!ct.IsCancellationRequested && _streaming) {
-            var err = POAGetImageData(_cameraId, buf, new CLong(buf.Length), waitMs);
+            POAErrors err;
+            lock (_sdk) err = POAGetImageData(_cameraId, buf, new CLong(buf.Length), waitMs);
             if (err == POAErrors.POA_ERROR_TIMEOUT) continue;
             if (err != POAErrors.POA_OK) continue;
             IImageData frame;
@@ -258,20 +294,26 @@ public sealed class PlayerOneSdkCamera : ICamera {
 
     private void ApplyExposureGain(double exposureSeconds, int? gainOverride, int? offsetOverride = null) {
         _exposureSec = exposureSeconds > 0 ? exposureSeconds : _exposureSec;
-        POASetConfig(_cameraId, POAConfig.POA_EXPOSURE,
-            POAConfigValue.Int((int)Math.Round(_exposureSec * 1_000_000)), POABool.POA_FALSE);
         if (gainOverride is int g) _gain = g;
-        POASetConfig(_cameraId, POAConfig.POA_GAIN, POAConfigValue.Int(_gain), POABool.POA_FALSE);
-        if (offsetOverride is int o) {
-            _offset = o;
-            POASetConfig(_cameraId, POAConfig.POA_OFFSET, POAConfigValue.Int(_offset), POABool.POA_FALSE);
+        if (offsetOverride is int o) _offset = o;
+        // Serialise the control writes against the streaming pull thread / status
+        // reads (see _sdk note): live exposure/gain tuning during a stream would
+        // otherwise race POAGetImageData.
+        lock (_sdk) {
+            POASetConfig(_cameraId, POAConfig.POA_EXPOSURE,
+                POAConfigValue.Int((int)Math.Round(_exposureSec * 1_000_000)), POABool.POA_FALSE);
+            POASetConfig(_cameraId, POAConfig.POA_GAIN, POAConfigValue.Int(_gain), POABool.POA_FALSE);
+            if (offsetOverride is int)
+                POASetConfig(_cameraId, POAConfig.POA_OFFSET, POAConfigValue.Int(_offset), POABool.POA_FALSE);
         }
     }
 
     private int BytesPerPixel() => _imgFormat == POAImgFormat.POA_RAW16 ? 2 : 1;
 
     private void GetRoi(out int w, out int h) {
-        if (POAGetImageSize(_cameraId, out var rw, out var rh) == POAErrors.POA_OK && rw > 0 && rh > 0) {
+        POAErrors rc; int rw, rh;
+        lock (_sdk) rc = POAGetImageSize(_cameraId, out rw, out rh);
+        if (rc == POAErrors.POA_OK && rw > 0 && rh > 0) {
             w = rw; h = rh;
         } else {
             w = _roiW > 0 ? _roiW / _bin : _maxX;
@@ -304,7 +346,9 @@ public sealed class PlayerOneSdkCamera : ICamera {
     private int ReadInt(POAConfig c) {
         try {
             var v = new POAConfigValue(); var a = POABool.POA_FALSE;
-            if (POAGetConfig(_cameraId, c, ref v, ref a) == POAErrors.POA_OK) return v.intValue;
+            // Serialise against the streaming pull thread (see _sdk note).
+            lock (_sdk)
+                if (POAGetConfig(_cameraId, c, ref v, ref a) == POAErrors.POA_OK) return v.intValue;
         } catch { }
         return 0;
     }
@@ -312,7 +356,9 @@ public sealed class PlayerOneSdkCamera : ICamera {
     private double ReadFloat(POAConfig c) {
         try {
             var v = new POAConfigValue(); var a = POABool.POA_FALSE;
-            if (POAGetConfig(_cameraId, c, ref v, ref a) == POAErrors.POA_OK) return v.floatValue;
+            // Serialise against the streaming pull thread (see _sdk note).
+            lock (_sdk)
+                if (POAGetConfig(_cameraId, c, ref v, ref a) == POAErrors.POA_OK) return v.floatValue;
         } catch { }
         return double.NaN;
     }

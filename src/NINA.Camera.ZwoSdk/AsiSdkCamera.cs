@@ -52,6 +52,13 @@ public sealed class AsiSdkCamera : ICamera {
     private Thread? _streamThread;
     private CancellationTokenSource? _streamCts;
     private readonly object _gate = new();
+    // The ASI SDK is NOT thread-safe per camera handle: a control read from the
+    // WS status tick (Temperature/Cooler) concurrent with the pull thread's
+    // ASIGetVideoData wedges/crashes the native lib. This lock serialises every
+    // individual SDK call so get/set/grab never overlap. Held only for the
+    // duration of one native call (incl. the blocking ASIGetVideoData, which has
+    // its own waitMs), never across the loop.
+    private readonly object _sdk = new();
 
     public AsiSdkCamera(string deviceId) {
         ZwoRegistry.EnsureResolver();
@@ -153,20 +160,22 @@ public sealed class AsiSdkCamera : ICamera {
 
     public Task SetTemperatureAsync(double temperature, CancellationToken ct = default) {
         if (_supportsCooler)
-            ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_TARGET_TEMP, new CLong((nint)Math.Round(temperature)), 0);
+            lock (_sdk)
+                ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_TARGET_TEMP, new CLong((nint)Math.Round(temperature)), 0);
         return Task.CompletedTask;
     }
 
     public Task SetCoolerAsync(bool on, CancellationToken ct = default) {
         if (_supportsCooler)
-            ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_COOLER_ON, new CLong(on ? 1 : 0), 0);
+            lock (_sdk)
+                ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_COOLER_ON, new CLong(on ? 1 : 0), 0);
         return Task.CompletedTask;
     }
 
     public Task SetIsoAsync(int iso, CancellationToken ct = default) => Task.CompletedTask;
 
     public Task AbortExposureAsync(CancellationToken ct = default) {
-        try { ASIStopVideoCapture(_cameraId); } catch { }
+        lock (_sdk) { try { ASIStopVideoCapture(_cameraId); } catch { } }
         State = CameraStates.Idle;
         return Task.CompletedTask;
     }
@@ -180,10 +189,17 @@ public sealed class AsiSdkCamera : ICamera {
 
     private void ApplyRoi() {
         if (!_connected) return;
+        // ASI forbids changing ROI/format DURING capture — doing so wedges the
+        // driver. While a stream is running just stash the fields; they take
+        // effect on the next StartVideoStreamAsync, which re-applies ROI while
+        // stopped.
+        if (_streaming) return;
         int w = Math.Max(8, (_roiW / _bin) & ~7); // ASI requires width % 8 == 0
         int h = Math.Max(2, (_roiH / _bin) & ~1); // and height % 2 == 0
-        ASISetROIFormat(_cameraId, w, h, _bin, _imgType);
-        ASISetStartPos(_cameraId, _roiX / _bin, _roiY / _bin);
+        lock (_sdk) {
+            ASISetROIFormat(_cameraId, w, h, _bin, _imgType);
+            ASISetStartPos(_cameraId, _roiX / _bin, _roiY / _bin);
+        }
     }
 
     public Task<IImageData> CaptureAsync(double exposureSeconds, CaptureOptions? opts = null,
@@ -207,12 +223,13 @@ public sealed class AsiSdkCamera : ICamera {
             // frame already in flight, so long subs (15s/60s) came back early
             // instead of integrating the requested time. bIsDark=0 (ASI has no
             // mechanical shutter; the flag is informational).
-            Check(ASIStartExposure(_cameraId, 0), "ASIStartExposure");
+            lock (_sdk) Check(ASIStartExposure(_cameraId, 0), "ASIStartExposure");
             try {
                 long deadline = Environment.TickCount64 + (long)(exposureSeconds * 1000) + 8000;
                 while (true) {
                     ct.ThrowIfCancellationRequested();
-                    Check(ASIGetExpStatus(_cameraId, out var st), "ASIGetExpStatus");
+                    ASI_EXPOSURE_STATUS st;
+                    lock (_sdk) Check(ASIGetExpStatus(_cameraId, out st), "ASIGetExpStatus");
                     if (st == ASI_EXPOSURE_STATUS.ASI_EXP_SUCCESS) break;
                     if (st == ASI_EXPOSURE_STATUS.ASI_EXP_FAILED)
                         throw new InvalidOperationException("ASI exposure failed.");
@@ -221,9 +238,9 @@ public sealed class AsiSdkCamera : ICamera {
                     // Poll coarse while integrating, fine once it should be done.
                     Thread.Sleep(st == ASI_EXPOSURE_STATUS.ASI_EXP_WORKING ? 50 : 5);
                 }
-                Check(ASIGetDataAfterExp(_cameraId, bytes, new CLong(bytes.Length)), "ASIGetDataAfterExp");
+                lock (_sdk) Check(ASIGetDataAfterExp(_cameraId, bytes, new CLong(bytes.Length)), "ASIGetDataAfterExp");
             } finally {
-                try { ASIStopExposure(_cameraId); } catch { }
+                lock (_sdk) { try { ASIStopExposure(_cameraId); } catch { } }
                 State = CameraStates.Idle;
             }
             return WrapFrame(bytes, w, h);
@@ -242,12 +259,25 @@ public sealed class AsiSdkCamera : ICamera {
         => Task.Run(() => {
             lock (_gate) {
                 if (_streaming) return;
+                if (opts?.BinX is int b) _bin = Math.Max(1, b);
                 ApplyExposureGain(opts?.ExposureSeconds ?? _exposureSec, opts?.Gain);
-                if (opts?.BinX is int b && b != _bin) { _bin = Math.Max(1, b); ApplyRoi(); }
+                // Re-apply ROI + output format while STOPPED (ASI forbids
+                // changing them during capture). This also picks up any ROI set
+                // via SetSubframe while a previous stream was running (ApplyRoi
+                // defers the SDK write during capture). _streaming is still false
+                // here, so ApplyRoi runs.
+                ApplyRoi();
+                lock (_sdk) {
+                    // Defensive: if a previous session didn't stop cleanly the SDK
+                    // is still "capturing", and a second ASIStartVideoCapture then
+                    // wedges the driver. A stop on an idle camera is a harmless
+                    // no-op.
+                    try { ASIStopVideoCapture(_cameraId); } catch { }
+                    Check(ASIStartVideoCapture(_cameraId), "ASIStartVideoCapture");
+                }
                 _streamCts = new CancellationTokenSource();
                 _streaming = true;
                 State = CameraStates.Exposing;
-                Check(ASIStartVideoCapture(_cameraId), "ASIStartVideoCapture");
                 _streamThread = new Thread(() => PullLoop(_streamCts.Token)) {
                     IsBackground = true, Name = "ASI-stream"
                 };
@@ -265,8 +295,12 @@ public sealed class AsiSdkCamera : ICamera {
             _streamCts?.Cancel();
             t = _streamThread; _streamThread = null;
         }
-        try { t?.Join(2000); } catch { }
-        try { ASIStopVideoCapture(_cameraId); } catch { }
+        // Join the pull thread BEFORE touching the SDK so its in-flight
+        // ASIGetVideoData (holding _sdk) has finished — then ASIStopVideoCapture
+        // under _sdk can't run concurrently with it. Generous timeout so a
+        // long-exposure GetVideoData can return first.
+        try { t?.Join(5000); } catch { }
+        lock (_sdk) { try { ASIStopVideoCapture(_cameraId); } catch { } }
         State = CameraStates.Idle;
     }
 
@@ -275,7 +309,8 @@ public sealed class AsiSdkCamera : ICamera {
         var buf = new byte[(long)w * h * BytesPerPixel()];
         int waitMs = (int)(_exposureSec * 1000 * 2 + 500);
         while (!ct.IsCancellationRequested && _streaming) {
-            var err = ASIGetVideoData(_cameraId, buf, new CLong(buf.Length), waitMs);
+            ASI_ERROR_CODE err;
+            lock (_sdk) err = ASIGetVideoData(_cameraId, buf, new CLong(buf.Length), waitMs);
             if (err == ASI_ERROR_CODE.ASI_ERROR_TIMEOUT) continue;
             if (err != ASI_ERROR_CODE.ASI_SUCCESS) continue;
             IImageData frame;
@@ -286,21 +321,26 @@ public sealed class AsiSdkCamera : ICamera {
 
     private void ApplyExposureGain(double exposureSeconds, int? gainOverride, int? offsetOverride = null) {
         _exposureSec = exposureSeconds > 0 ? exposureSeconds : _exposureSec;
-        ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_EXPOSURE,
-            new CLong((nint)Math.Round(_exposureSec * 1_000_000)), 0);
         if (gainOverride is int g) _gain = g;
-        ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_GAIN, new CLong(_gain), 0);
-        if (offsetOverride is int o) {
-            _offset = o;
-            ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_OFFSET, new CLong(_offset), 0);
+        if (offsetOverride is int o) _offset = o;
+        // Serialise the control writes against the streaming pull thread / status
+        // reads (see _sdk note): live exposure/gain tuning during a stream would
+        // otherwise race ASIGetVideoData.
+        lock (_sdk) {
+            ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_EXPOSURE,
+                new CLong((nint)Math.Round(_exposureSec * 1_000_000)), 0);
+            ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_GAIN, new CLong(_gain), 0);
+            if (offsetOverride is int)
+                ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_OFFSET, new CLong(_offset), 0);
         }
     }
 
     private int BytesPerPixel() => _imgType == ASI_IMG_TYPE.ASI_IMG_RAW16 ? 2 : 1;
 
     private void GetRoi(out int w, out int h) {
-        if (ASIGetROIFormat(_cameraId, out var rw, out var rh, out _, out _) == ASI_ERROR_CODE.ASI_SUCCESS
-                && rw > 0 && rh > 0) { w = rw; h = rh; }
+        ASI_ERROR_CODE rc; int rw, rh;
+        lock (_sdk) rc = ASIGetROIFormat(_cameraId, out rw, out rh, out _, out _);
+        if (rc == ASI_ERROR_CODE.ASI_SUCCESS && rw > 0 && rh > 0) { w = rw; h = rh; }
         else { w = _roiW > 0 ? _roiW / _bin : _maxX; h = _roiH > 0 ? _roiH / _bin : _maxY; }
     }
 
@@ -325,8 +365,11 @@ public sealed class AsiSdkCamera : ICamera {
 
     private int ReadControl(ASI_CONTROL_TYPE t) {
         try {
-            if (ASIGetControlValue(_cameraId, t, out var v, out _) == ASI_ERROR_CODE.ASI_SUCCESS)
-                return (int)v.Value;
+            // Serialise against the streaming pull thread (see _sdk note).
+            lock (_sdk) {
+                if (ASIGetControlValue(_cameraId, t, out var v, out _) == ASI_ERROR_CODE.ASI_SUCCESS)
+                    return (int)v.Value;
+            }
         } catch { }
         return 0;
     }
