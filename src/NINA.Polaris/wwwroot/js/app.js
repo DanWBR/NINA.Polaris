@@ -11409,16 +11409,20 @@ function ninaApp() {
                                   || '2.0.0',
                         };
                         break;
-                    case 'deconvolution':
+                    case 'deconvolution': {
                         kind = 'decon';
+                        // Same unified model selection as the FILES modal
+                        // (GraXpert stars/objects or Polaris Detail Enhancer).
+                        const sel = this._deconSelection();
                         runOpts = {
                             strength: this.settings.graxpertDeconStrength,
                             psfPixels: this.settings.graxpertDeconPsfSize,
-                            // GX-12h: parity with GraXpert UI, let the
-                            // user pick Stars-only vs Object-only here too.
-                            target: this.graxpert?.modalDeconTarget || 'stars',
+                            family: sel.family,
+                            target: sel.target,
+                            version: sel.version || undefined,
                         };
                         break;
+                    }
                     case 'halo-removal':
                         kind = 'haloremoval';
                         runOpts = {
@@ -24004,8 +24008,10 @@ function ninaApp() {
             // pick first -- fp16 first on iOS, otherwise non-quantized).
             const bgeChoices = this.modelChoices('bge');
             this.graxpert.modalBgeVersion = (bgeChoices[0] && bgeChoices[0].version) || '1.0.1';
-            const deconChoices = this.modelChoices(this.deconFamily());
-            this.graxpert.modalDeconVersion = (deconChoices[0] && deconChoices[0].version) || '';
+            // Unified decon/sharpen model selection (GraXpert stars/objects +
+            // Polaris Detail Enhancer), composite "family::version" key.
+            const deconChoices = this.deconModelChoices();
+            this.graxpert.modalDeconModel = (deconChoices[0] && deconChoices[0].key) || '';
             // Polaris's own halo-removal + upscaling models.
             const haloChoices = this.modelChoices('halo');
             this.graxpert.modalHaloVersion = (haloChoices[0] && haloChoices[0].version) || '';
@@ -25384,6 +25390,43 @@ function ninaApp() {
                 ? 'decon-objects' : 'decon-stars';
         },
 
+        // Unified "AI Sharpen / Detail" model list: GraXpert's Stars + Objects
+        // models AND Polaris's own Detail Enhancer (family "detail"), merged
+        // into a single dropdown. Each entry carries the family + target it
+        // maps to and a composite key ("family::version") used as the <select>
+        // value, since x-model can only bind a scalar.
+        deconModelChoices() {
+            const out = [];
+            for (const fam of ['decon-stars', 'decon-objects', 'detail']) {
+                for (const m of this.modelChoices(fam)) {
+                    out.push(Object.assign({}, m, {
+                        family: fam,
+                        target: fam === 'decon-objects' ? 'objects' : 'stars',
+                        key: fam + '::' + m.version,
+                    }));
+                }
+            }
+            return out;
+        },
+
+        // Resolve the current decon model selection (composite key) into
+        // { family, version, target }. Falls back to the first available
+        // choice when nothing is selected yet (e.g. editor path, modal never
+        // opened).
+        _deconSelection() {
+            let key = this.graxpert.modalDeconModel;
+            if (!key) {
+                const first = this.deconModelChoices()[0];
+                key = first ? first.key : 'decon-stars::';
+            }
+            const [family, version] = key.split('::');
+            return {
+                family: family || 'decon-stars',
+                version: version || '',
+                target: family === 'decon-objects' ? 'objects' : 'stars',
+            };
+        },
+
         // Numeric (semver-ish) version compare. A plain string compare
         // (localeCompare) is WRONG for dotted versions: "0.84.10" sorts
         // BEFORE "0.84.8" because '1' < '8' lexicographically. Split on '.'
@@ -25403,14 +25446,43 @@ function ninaApp() {
             return 0;
         },
 
-        // Generic version picker for any GraXpert family (bge / denoise /
-        // decon-stars / decon-objects). Lists every version in the
-        // manifest (incl. -fp16 / -int8 siblings) with on-disk size, so
-        // the user can pick a lighter model on a low-RAM device.
+        // Friendly, provider-aware product name for a model. GraXpert's
+        // vendored models read "GraXpert <Op> v<ver>"; Polaris's own models
+        // (polaris-ai) read "Polaris <Product> v<ver>". Provider is inferred
+        // from the version folder (a "polaris-" prefix) or from a Polaris-only
+        // family (halo / upscale / detail). The version is cleaned of the
+        // "polaris-" prefix and any -fp16/-int8 quant suffix for display.
+        _modelDisplayName(family, version) {
+            const v = String(version || '');
+            const isPolaris = /^polaris[-_]?/i.test(v)
+                || family === 'halo' || family === 'upscale' || family === 'detail';
+            const clean = (v.replace(/^polaris[-_]?/i, '')
+                            .replace(/[-_](fp16|int8|int16)$/i, '')) || '1.0';
+            const polarisNames = {
+                bge: 'Polaris BGE', denoise: 'Polaris Denoiser',
+                halo: 'Polaris Halo Remover', upscale: 'Polaris Upscaler',
+                detail: 'Polaris Detail Enhancer',
+                'decon-stars': 'Polaris Detail Enhancer',
+                'decon-objects': 'Polaris Detail Enhancer',
+            };
+            const graxNames = {
+                bge: 'GraXpert BGE', denoise: 'GraXpert Denoise',
+                'decon-stars': 'GraXpert Stars', 'decon-objects': 'GraXpert Objects',
+            };
+            const base = isPolaris ? (polarisNames[family] || 'Polaris')
+                                   : (graxNames[family] || family);
+            return `${base} v${clean}`;
+        },
+
+        // Generic version picker for any AI family (bge / denoise /
+        // decon-stars / decon-objects / detail / halo / upscale). Lists every
+        // version in the manifest (incl. -fp16 / -int8 siblings) with the
+        // product name + on-disk size, so the user can tell GraXpert from
+        // Polaris and pick a lighter model on a low-RAM device.
         modelChoices(family) {
             const models = (this.onnx?.manifest?.models || [])
                 .filter(m => m.family === family);
-            // Build label: "<version>, <sizeMB> MB"
+            // Build label: "<Provider Product vX> — <sizeMB> MB [(FP16)]"
             const choices = models.map(m => {
                 const mb = m.sizeBytes
                     ? (m.sizeBytes / (1024 * 1024)).toFixed(0)
@@ -25420,7 +25492,7 @@ function ninaApp() {
                 else if (m.version.endsWith('-int8')) tag = ' (INT8)';
                 return {
                     version: m.version,
-                    label: `v${m.version}, ${mb} MB${tag}`,
+                    label: `${this._modelDisplayName(family, m.version)} — ${mb} MB${tag}`,
                     sizeBytes: m.sizeBytes || 0,
                     isQuantized: tag !== '',
                 };
@@ -25461,16 +25533,24 @@ function ninaApp() {
             // rescanned yet), keep the original built-in choices so
             // the UI doesn't go blank.
             if (choices.length === 0) {
+                // Built-in GraXpert versions, shown before the server's first
+                // manifest rescan. Labels go through _modelDisplayName so they
+                // read the same product-name way as live entries.
                 const fb = {
                     denoise: [
-                        { version: '2.0.0', label: 'v2.0.0, ~284 MB', sizeBytes: 284e6, isQuantized: false },
-                        { version: '3.0.2', label: 'v3.0.2, ~456 MB', sizeBytes: 456e6, isQuantized: false },
+                        { version: '2.0.0', sizeBytes: 284e6 },
+                        { version: '3.0.2', sizeBytes: 456e6 },
                     ],
-                    bge: [ { version: '1.0.1', label: 'v1.0.1, ~208 MB', sizeBytes: 208e6, isQuantized: false } ],
-                    'decon-stars': [ { version: '1.0.0', label: 'v1.0.0, ~266 MB', sizeBytes: 266e6, isQuantized: false } ],
-                    'decon-objects': [ { version: '1.0.1', label: 'v1.0.1, ~266 MB', sizeBytes: 266e6, isQuantized: false } ],
+                    bge: [ { version: '1.0.1', sizeBytes: 208e6 } ],
+                    'decon-stars': [ { version: '1.0.0', sizeBytes: 266e6 } ],
+                    'decon-objects': [ { version: '1.0.1', sizeBytes: 266e6 } ],
                 };
-                return fb[family] || [];
+                return (fb[family] || []).map(c => ({
+                    version: c.version,
+                    label: `${this._modelDisplayName(family, c.version)} — ~${(c.sizeBytes / 1e6).toFixed(0)} MB`,
+                    sizeBytes: c.sizeBytes,
+                    isQuantized: false,
+                }));
             }
             return choices;
         },
@@ -25482,7 +25562,18 @@ function ninaApp() {
             // the same source doesn't collide and the user can see at a
             // glance which model produced each output.
             if (op === 'deconvolution') {
-                const t = (runOpts && runOpts.target) || 'stars';
+                // Family decides the suffix: Polaris detail -> _detail,
+                // GraXpert -> _decon_stars / _decon_objects. When called
+                // without runOpts (the modal output preview), fall back to
+                // the current dropdown selection.
+                let fam = runOpts && runOpts.family;
+                let t = runOpts && runOpts.target;
+                if (!fam) {
+                    const sel = this._deconSelection();
+                    fam = sel.family; t = sel.target;
+                }
+                if (fam === 'detail') return '_detail';
+                if (!t) t = fam === 'decon-objects' ? 'objects' : 'stars';
                 return t === 'objects' ? '_decon_objects' : '_decon_stars';
             }
             if (op === 'upscaling') {
@@ -25527,6 +25618,13 @@ function ninaApp() {
                 }
                 return this._graxpertRunInBrowser();
             }
+            // Same for the Polaris Detail Enhancer (family "detail"): it lives
+            // in the unified Sharpen dropdown but has no GraXpert CLI, so force
+            // the browser path when it's the selected decon model.
+            if (this.graxpert.modalOp === 'deconvolution'
+                && this._deconSelection().family === 'detail') {
+                return this._graxpertRunInBrowser();
+            }
             try {
                 const resp = await this.apiPost('/api/graxpert/run', {
                         paths: this.graxpert.modalPaths,
@@ -25541,7 +25639,8 @@ function ninaApp() {
                         // GX-12i: stars vs objects picks the GraXpert
                         // CLI subcommand (deconv-stellar / deconv-obj)
                         // and the output suffix (_decon_stars / _decon_objects).
-                        deconTarget: this.graxpert.modalDeconTarget || 'stars',
+                        // Derived from the unified model dropdown selection.
+                        deconTarget: this._deconSelection().target,
                         denoiseStrength: this.graxpert.modalDenoiseStrength,
                         // Forward the picked model version for ALL ops so
                         // the host CLI runs the same AI variant the browser
@@ -25580,7 +25679,7 @@ function ninaApp() {
                 case 'background-extraction':
                     return this.graxpert.modalBgeVersion || null;
                 case 'deconvolution':
-                    return this.graxpert.modalDeconVersion || null;
+                    return this._deconSelection().version || null;
                 default:
                     return null;
             }
@@ -25599,7 +25698,8 @@ function ninaApp() {
                     return models.some(m => m.family === 'denoise');
                 case 'deconvolution':
                     return models.some(m => m.family === 'decon-stars'
-                                          || m.family === 'decon-objects');
+                                          || m.family === 'decon-objects'
+                                          || m.family === 'detail');
                 case 'halo-removal':
                     return models.some(m => m.family === 'halo');
                 case 'upscaling':
@@ -25667,20 +25767,22 @@ function ninaApp() {
                             useGpu: !!this.graxpert.modalUseGpu,
                         };
                         break;
-                    case 'deconvolution':
+                    case 'deconvolution': {
                         kind = 'decon';
-                        // GX-12h: target now comes from the modal
-                        // dropdown, Stars-only picks decon-stars,
-                        // Object-only picks decon-objects ONNX models.
+                        // Unified model picker: the selected entry carries its
+                        // own family (decon-stars / decon-objects / detail),
+                        // version + target. The pipeline honours opts.family.
+                        const sel = this._deconSelection();
                         runOpts = {
                             strength: this.graxpert.modalDeconStrength,
                             psfPixels: this.graxpert.modalDeconPsfSize,
-                            target: this.graxpert.modalDeconTarget || 'stars',
-                            // Per-run model version from the modal dropdown.
-                            version: this.graxpert.modalDeconVersion || undefined,
+                            family: sel.family,
+                            target: sel.target,
+                            version: sel.version || undefined,
                             useGpu: !!this.graxpert.modalUseGpu,
                         };
                         break;
+                    }
                     case 'halo-removal':
                         kind = 'haloremoval';
                         runOpts = {

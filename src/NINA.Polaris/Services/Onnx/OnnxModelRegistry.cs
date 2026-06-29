@@ -93,8 +93,12 @@ public class OnnxModelRegistry {
             ["nox-gray-ai-models"] = "nox-gray",
             // Polaris's own models (polaris-ai). Drop the .onnx under
             // {family}-ai-models/{version}/ and it auto-registers on rescan.
+            // "detail" is the Polaris Detail Enhancer (decon-style luminance+
+            // sigma model); it shows up in the deconvolution / "AI Sharpen"
+            // model dropdown alongside GraXpert's stars/objects models.
             ["halo-ai-models"] = "halo",
             ["upscale-ai-models"] = "upscale",
+            ["detail-ai-models"] = "detail",
         };
 
     // Semver-ish (major.minor.patch) + optional quantization suffix.

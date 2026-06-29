@@ -1338,7 +1338,12 @@
         }
         async _runMono(pixels, width, height, opts = {}) {
             const target = opts.target || 'stars';   // 'stars' | 'objects'
-            const family = target === 'objects' ? 'decon-objects' : 'decon-stars';
+            // family is normally derived from the target, but the unified
+            // "AI Sharpen / Detail" model picker can select Polaris's own
+            // "detail" model (a decon-style luminance+sigma net), so an
+            // explicit opts.family wins when present.
+            const family = opts.family
+                || (target === 'objects' ? 'decon-objects' : 'decon-stars');
             const requestedVersion = opts.version
                 || (target === 'objects' ? '1.0.1' : '1.0.0');
             // GX-12o: on iOS, auto-prefer the -fp16 sibling if the

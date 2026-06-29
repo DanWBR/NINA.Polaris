@@ -816,7 +816,7 @@
                         <button class="home-quick-card" @click="tab = 'files'">
                             <span class="home-quick-icon">🪄</span>
                             <strong>Process images</strong>
-                            <p>Files &amp; editor · GraXpert AI denoise / deconvolution / background, PCC, channel combine, crop.</p>
+                            <p>Files &amp; editor · AI denoise / sharpen / background / halo / upscale, PCC, channel combine, crop.</p>
                         </button>
                     </div>
                 </section>
@@ -10105,7 +10105,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             :disabled="files.selectedPaths.length === 0"
                             @click="graxpertOpenModal('background-extraction')"
                             data-tour="studio-bge"
-                            title="Background extraction (BGE): remove gradient with GraXpert (browser ONNX or CLI)"
+                            title="AI Background Extraction: remove gradients (GraXpert or Polaris model, in-browser or CLI)"
                             aria-label="Background extraction">
                         <span class="files-icon">🌃</span>
                     </button>
@@ -10115,8 +10115,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             :disabled="files.selectedPaths.length === 0"
                             @click="graxpertOpenModal('deconvolution')"
                             data-tour="studio-decon"
-                            title="Deconvolution: sharpen with GraXpert"
-                            aria-label="Deconvolution">
+                            title="AI Sharpen / Detail: deconvolution &amp; detail enhancement (GraXpert or Polaris model)"
+                            aria-label="Sharpen / Detail">
                         <span class="files-icon">🌌</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
@@ -10125,7 +10125,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             :disabled="files.selectedPaths.length === 0"
                             @click="graxpertOpenModal('denoising')"
                             data-tour="studio-denoise"
-                            title="Denoise: reduce noise with GraXpert"
+                            title="AI Denoise: reduce noise (GraXpert or Polaris model)"
                             aria-label="Denoise">
                         <span class="files-icon">🫧</span>
                     </button>
@@ -10929,8 +10929,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         x-show="onnxAvailableForOp('deconvolution')"
                                         :disabled="editorAi.busy"
                                         @click="editorRunAi('deconvolution')"
-                                        title="Deconvolution, sharpen stars / objects">
-                                    🌌 Deconvolve
+                                        title="Sharpen / detail enhancement (deconvolution)">
+                                    🌌 Sharpen / Detail
                                 </button>
                                 <button class="btn btn-sm"
                                         x-show="onnxAvailableForOp('halo-removal')"
@@ -14288,10 +14288,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          @keydown.escape.window="graxpertIsRunning() || graxpertCloseModal()">
         <div class="siril-modal-frame">
             <h2>
-                <span x-show="graxpert.modalOp === 'background-extraction'">🌃 GraXpert Background Gradient Removal</span>
-                <span x-show="graxpert.modalOp === 'deconvolution'">🌌 GraXpert Deconvolution</span>
-                <span x-show="graxpert.modalOp === 'denoising'">☄ GraXpert Denoise</span>
-                <span x-show="graxpert.modalOp === 'halo-removal'">✨ Halo Removal</span>
+                <span x-show="graxpert.modalOp === 'background-extraction'">🌃 AI Background Extraction</span>
+                <span x-show="graxpert.modalOp === 'deconvolution'">🌌 AI Sharpen / Detail</span>
+                <span x-show="graxpert.modalOp === 'denoising'">☄ AI Denoise</span>
+                <span x-show="graxpert.modalOp === 'halo-removal'">✨ AI Halo Removal</span>
                 <span x-show="graxpert.modalOp === 'upscaling'">📈 AI Upscale</span>
             </h2>
 
@@ -14415,24 +14415,16 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 </label>
             </div>
 
-            <!-- Decon controls, labels + range match GraXpert's UI
-                 (Method + Deconvolution Strength + Image FWHM in
-                 pixels) so a user switching back and forth between
-                 the two tools gets the same numbers in the same
-                 places. -->
+            <!-- Sharpen / Detail controls. The model picker is unified:
+                 it lists GraXpert's Stars + Objects models AND Polaris's
+                 own Detail Enhancer in one dropdown (the old Stars/Objects
+                 "Method" selector collapsed into this list). Strength +
+                 Image FWHM keep GraXpert's ranges/labels. -->
             <div class="siril-modal-row" x-show="graxpert.modalOp === 'deconvolution'">
-                <label>Method
-                    <select class="input-sm"
-                            x-model="graxpert.modalDeconTarget"
-                            @change="graxpert.modalDeconVersion = (modelChoices(deconFamily())[0]||{}).version || ''">
-                        <option value="stars">Stars-only</option>
-                        <option value="objects">Object-only</option>
-                    </select>
-                </label>
                 <label>AI model
-                    <select class="input-sm" x-model="graxpert.modalDeconVersion">
-                        <template x-for="m in modelChoices(deconFamily())" :key="m.version">
-                            <option :value="m.version" x-text="m.label"></option>
+                    <select class="input-sm" x-model="graxpert.modalDeconModel">
+                        <template x-for="m in deconModelChoices()" :key="m.key">
+                            <option :value="m.key" x-text="m.label"></option>
                         </template>
                     </select>
                 </label>
@@ -15768,7 +15760,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          build fed the model 100× off inputs → garbage residuals →
          visible tile seams in the output. Also handles object v1.0.0's
          3-input signature (sigma + strenght separate). -->
-    <script src="/js/onnx-pipelines.js?v=20260629-aitools"></script>
+    <script src="/js/onnx-pipelines.js?v=20260629-ainames"></script>
     <!-- On-screen keyboard (tablet). Self-contained, no framework dep; loads
          before Alpine so its focus delegation is live from first paint. -->
     <script src="/js/virtual-keyboard.js?v=20260620-vkbd-ios"></script>
@@ -16462,7 +16454,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260629-aitools"></script>
+    <script src="/js/app.js?v=20260629-ainames"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
