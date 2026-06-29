@@ -36,7 +36,12 @@ param(
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 $env:PYTHONIOENCODING = "utf-8"
-if ($Gpu -ge 0) { $env:CUDA_VISIBLE_DEVICES = "$Gpu" }
+if ($Gpu -ge 0) {
+    # Match CUDA indices to nvidia-smi order so -Gpu N selects the card you expect
+    # (default CUDA order is by speed, not PCI bus).
+    $env:CUDA_DEVICE_ORDER = "PCI_BUS_ID"
+    $env:CUDA_VISIBLE_DEVICES = "$Gpu"
+}
 
 # Per-task config. kind=tiles -> DeconDataset (--tiles); kind=pairs ->
 # PairedTileDataset (--pairs/--val-pairs). size = exported ONNX spatial size
@@ -89,6 +94,14 @@ if ($Prep) {
     Write-Host "Prep done. Now launch training lanes, e.g. -Gpu 0 -Tasks denoise." -ForegroundColor Green
     return
 }
+
+# Verify the requested GPU is actually usable -- fail loudly instead of silently
+# training on CPU (e.g. a 'GPU is lost' card, wrong index, or no driver).
+$gpuName = & python -c "import torch; print(torch.cuda.get_device_name(0)) if torch.cuda.is_available() else print('NO_CUDA')"
+if ($Gpu -ge 0 -and $gpuName -eq "NO_CUDA") {
+    throw "Requested -Gpu $Gpu but CUDA is not available for it (device lost / not present / wrong index). Check 'nvidia-smi'. Aborting instead of training on CPU."
+}
+Write-Host "Using device: $gpuName" -ForegroundColor Green
 
 $fpBatch = if ($Batch -gt 0) { $Batch } else { 8 }
 $qatBatch = if ($Batch -gt 0) { $Batch } else { 6 }
