@@ -387,6 +387,11 @@ public class AutoFocusService {
         int maxPoints = Math.Max(need * 2 + 1, request.MaxPoints);
         int maxAttempts = Math.Max(1, request.Attempts);
 
+        // Adaptive mode grows the curve dynamically up to the maxPoints cap, so the
+        // progress denominator is that cap — NOT the grid "Steps" value (which is
+        // meaningless here and made the bar read e.g. "11/10").
+        Progress = Progress with { Steps = maxPoints };
+
         // Start-position HFR for the worse-than-start guard (best-effort).
         double initialHfr = 0;
         try {
