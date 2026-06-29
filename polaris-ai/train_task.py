@@ -28,13 +28,14 @@ import torch
 from torch.utils.data import ConcatDataset, DataLoader, random_split
 from tqdm import tqdm
 
-from model import ConditionedUNet
+from model import ConditionedUNet, UpscaleNet
 from train import charbonnier, grad_loss, star_protect
 
 TASKS = {
     "decon":   {"in": 2, "out": 1},
     "denoise": {"in": 3, "out": 3},
     "bge":     {"in": 3, "out": 3},
+    "upscale": {"in": 3, "out": 3},
 }
 
 
@@ -60,9 +61,17 @@ def build_dataset(args):
 def task_loss(task, p, y, w_grad, w_star):
     if task == "decon":
         return charbonnier(p, y) + w_grad * grad_loss(p, y) + w_star * star_protect(p, y)
-    if task == "denoise":
+    if task in ("denoise", "upscale"):
         return charbonnier(p, y) + w_grad * grad_loss(p, y)
     return charbonnier(p, y)  # bge: smooth background, plain robust L1
+
+
+def make_net(args, spec):
+    if args.task == "upscale":
+        return UpscaleNet(scale=args.scale, base=args.base, depth=args.depth,
+                          blocks=args.blocks)
+    return ConditionedUNet(in_channels=spec["in"], base=args.base, depth=args.depth,
+                           blocks=args.blocks, out_channels=spec["out"])
 
 
 def main():
@@ -94,6 +103,8 @@ def main():
                     help="quantization-aware training: STE fake-quant so int8/int16 "
                          "export is near-lossless (best fine-tuned from an fp32 --resume)")
     ap.add_argument("--qat-bits", type=int, default=8, choices=[8, 16])
+    ap.add_argument("--scale", type=int, default=2, choices=[2, 3, 4],
+                    help="(upscale) super-resolution factor")
     args = ap.parse_args()
 
     out = args.out or f"checkpoints/{args.task}"
@@ -115,8 +126,7 @@ def main():
     print(f"samples: train {len(tr)} | val {len(va)}")
 
     spec = TASKS[args.task]
-    net = ConditionedUNet(in_channels=spec["in"], base=args.base, depth=args.depth,
-                          blocks=args.blocks, out_channels=spec["out"]).to(dev)
+    net = make_net(args, spec).to(dev)
     nparams = sum(p.numel() for p in net.parameters())
     print(f"model: base={args.base} depth={args.depth} blocks={args.blocks} "
           f"in={spec['in']} out={spec['out']} -> {nparams/1e6:.1f}M params "

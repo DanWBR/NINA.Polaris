@@ -20,13 +20,14 @@ import os
 import torch
 import torch.nn as nn
 
-from model import ConditionedUNet
+from model import ConditionedUNet, UpscaleNet
 
 # in/out channels + tensor layout per task
 TASKS = {
     "decon":   {"in": 2, "out": 1, "layout": "nchw"},
     "denoise": {"in": 3, "out": 3, "layout": "nhwc"},
     "bge":     {"in": 3, "out": 3, "layout": "nhwc"},
+    "upscale": {"in": 3, "out": 3, "layout": "nhwc"},
 }
 
 
@@ -67,13 +68,19 @@ def main():
     ap.add_argument("--depth", type=int, default=4)
     ap.add_argument("--blocks", type=int, default=3)
     ap.add_argument("--opset", type=int, default=17)
+    ap.add_argument("--scale", type=int, default=2, choices=[2, 3, 4],
+                    help="(upscale) super-resolution factor; --size is the LR input size")
     ap.add_argument("--no-fp16", action="store_true")
     args = ap.parse_args()
 
     spec = TASKS[args.task]
     os.makedirs(args.out, exist_ok=True)
-    net = ConditionedUNet(in_channels=spec["in"], base=args.base, depth=args.depth,
-                          blocks=args.blocks, out_channels=spec["out"])
+    if args.task == "upscale":
+        net = UpscaleNet(scale=args.scale, base=args.base, depth=args.depth,
+                         blocks=args.blocks)
+    else:
+        net = ConditionedUNet(in_channels=spec["in"], base=args.base, depth=args.depth,
+                              blocks=args.blocks, out_channels=spec["out"])
     net.load_state_dict(torch.load(args.ckpt, map_location="cpu"))
     net.eval()
 

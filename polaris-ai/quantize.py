@@ -38,7 +38,7 @@ import numpy as np
 # --------------------------------------------------------------------------- #
 def cmd_calib(args):
     os.makedirs(args.out, exist_ok=True)
-    nhwc_task = args.task in ("denoise", "bge")
+    nhwc_task = args.task in ("denoise", "bge", "upscale")
 
     if args.task == "decon":
         from dataset import DeconDataset
@@ -134,9 +134,10 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     c = sub.add_parser("calib", help="dump a calibration set from training tiles")
-    c.add_argument("--task", default="decon", choices=["decon", "denoise", "bge"])
+    c.add_argument("--task", default="decon",
+                   choices=["decon", "denoise", "bge", "upscale"])
     c.add_argument("--tiles", default="", help="(decon) sharp-tile dir for DeconDataset")
-    c.add_argument("--pairs", default="", help="(denoise/bge) paired-tile root")
+    c.add_argument("--pairs", default="", help="(denoise/bge/upscale) paired-tile root")
     c.add_argument("--out", default="models/calib")
     c.add_argument("--count", type=int, default=300)
     c.add_argument("--size", type=int, default=256)

@@ -117,6 +117,27 @@ class ConditionedUNet(nn.Module):
         return img + self.outc(h)
 
 
+class UpscaleNet(nn.Module):
+    """Pre-upsampling super-resolution: nearest-upscale the LR input by ``scale``,
+    then refine with a ConditionedUNet that learns a residual on the upscaled
+    image (``HR = upsample(LR) + delta``). Keeps the NPU-safe op set (nearest
+    upsample is already used in the decoder) and reuses the whole training/export
+    stack -- only the spatial size changes.
+
+    Input  [N, 3, h, w]  ->  output [N, 3, h*scale, w*scale]  (RGB)."""
+
+    def __init__(self, scale: int = 2, base: int = 64, depth: int = 4,
+                 blocks: int = 2):
+        super().__init__()
+        self.scale = scale
+        self.up = nn.Upsample(scale_factor=scale, mode="nearest")
+        self.net = ConditionedUNet(in_channels=3, base=base, depth=depth,
+                                   blocks=blocks, out_channels=3)
+
+    def forward(self, x):
+        return self.net(self.up(x))
+
+
 if __name__ == "__main__":
     import argparse
 

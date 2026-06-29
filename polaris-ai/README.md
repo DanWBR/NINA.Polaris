@@ -222,6 +222,39 @@ already ≈ fp16). On-device 8-bit is still produced by the **vendor toolchain**
 (RKNN `build(do_quantization=True, dataset=models/calib_*/list.txt)` or Qualcomm
 AI Hub `w8a16`) from the same fp32 — the QAT-baked weights make that lossless too.
 
+---
+
+# Our own upscaler (`--task upscale`)
+
+A domain-correct super-resolution model — instead of a generic photo upscaler
+(Real-ESRGAN/Upscayl), which is AGPL and hallucinates texture / mangles star PSFs
+on linear astro data. Approach: **pre-upsampling SR** (`UpscaleNet` = nearest
+upscale ×scale → ConditionedUNet residual), so it stays in the NPU-safe op set
+and reuses the whole stack. RGB, NHWC, learns to recover real detail from a
+downscaled capture (the LR is the clean master blurred + downscaled + mild noise).
+
+```bash
+# 1. pairs: clean HR (denoised/) -> blurred+downscaled LR
+python data_prep/make_upscale.py --scale 2 --hr-dir denoised
+# 2. train (lighter net is plenty: base 64, blocks 2). Add --qat for int8.
+python train_upscale.py --pairs data/own/upscale_tiles --val-pairs data/own/upscale_val \
+    --scale 2 --base 64 --blocks 2 --epochs 100 --batch 8 --out checkpoints/upscale
+# 3. export (--size is the LR input size; output is size*scale) + quantize + eval
+python export.py --task upscale --ckpt checkpoints/upscale/best.pt \
+    --scale 2 --size 128 --base 64 --blocks 2 --out models
+python quantize.py calib --task upscale --pairs data/own/upscale_tiles --out models/calib_upscale
+python quantize.py int16 --onnx models/upscale_fp32_128.onnx --calib models/calib_upscale \
+    --out models/upscale_int16_128.onnx
+python quantize.py int8  --onnx models/upscale_fp32_128.onnx --calib models/calib_upscale \
+    --out models/upscale_int8_128.onnx
+python eval_models.py --task upscale --models models --val-pairs data/own/upscale_val --size 128
+```
+
+Note: SR beyond the optical/sampling limit is interpolation, not new physical
+detail — for genuine sharpening use the **decon** model. This upscaler is for more
+pixels (undersampled/planetary frames, export/print) without the artifacts a
+natural-image upscaler introduces.
+
 ## 4. Measure "no quantization degradation"
 
 ```bash
