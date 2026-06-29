@@ -90,6 +90,10 @@ def main():
     ap.add_argument("--w-grad", type=float, default=0.5)
     ap.add_argument("--w-star", type=float, default=0.25)
     ap.add_argument("--resume", default="")
+    ap.add_argument("--qat", action="store_true",
+                    help="quantization-aware training: STE fake-quant so int8/int16 "
+                         "export is near-lossless (best fine-tuned from an fp32 --resume)")
+    ap.add_argument("--qat-bits", type=int, default=8, choices=[8, 16])
     args = ap.parse_args()
 
     out = args.out or f"checkpoints/{args.task}"
@@ -121,9 +125,19 @@ def main():
         net.load_state_dict(torch.load(args.resume, map_location=dev))
         print("resumed from", args.resume)
 
+    # QAT: insert STE fake-quant (after loading fp32 weights, so it fine-tunes).
+    # AMP is disabled under QAT for numerical stability.
+    if args.qat:
+        from quant_layers import apply_qat, bake_qat
+        apply_qat(net, args.qat_bits)
+        net.to(dev)   # move the newly-added activation observers onto the device
+        print(f"QAT enabled: STE fake-quant, {args.qat_bits}-bit "
+              f"(per-channel weights, per-tensor activations)")
+    amp_on = (dev == "cuda" and not args.qat)
+
     opt = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=1e-5)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
-    scaler = torch.amp.GradScaler("cuda", enabled=(dev == "cuda"))
+    scaler = torch.amp.GradScaler("cuda", enabled=amp_on)
 
     best = float("inf")
     for ep in range(args.epochs):
@@ -132,7 +146,7 @@ def main():
         for x, y in tqdm(tl, desc=f"epoch {ep+1}/{args.epochs}"):
             x, y = x.to(dev), y.to(dev)
             opt.zero_grad(set_to_none=True)
-            with torch.amp.autocast("cuda", enabled=(dev == "cuda")):
+            with torch.amp.autocast("cuda", enabled=amp_on):
                 p = net(x)
                 loss = task_loss(args.task, p, y, args.w_grad, args.w_star)
             scaler.scale(loss).backward()
@@ -151,11 +165,29 @@ def main():
         print(f"  train {run/max(1,len(tl)):.5f} | val {vloss:.5f} "
               f"| lr {sched.get_last_lr()[0]:.2e}")
 
-        torch.save(net.state_dict(), os.path.join(out, "last.pt"))
+        # Under QAT the live model carries parametrizations/observers, so its
+        # state_dict won't load into a plain net. Save those to *_qat.pt for
+        # resume; the export-ready (baked) best.pt is written after training.
+        best_name = "best_qat.pt" if args.qat else "best.pt"
+        torch.save(net.state_dict(), os.path.join(out, "last_qat.pt" if args.qat else "last.pt"))
         if vloss < best:
             best = vloss
-            torch.save(net.state_dict(), os.path.join(out, "best.pt"))
-            print("  -> new best, saved best.pt")
+            torch.save(net.state_dict(), os.path.join(out, best_name))
+            print(f"  -> new best, saved {best_name}")
+
+    if args.qat:
+        # Reload best, bake the rounded weights into plain Conv2d.weight, drop the
+        # observers/hooks, and save a clean best.pt that export.py loads unchanged.
+        from quant_layers import bake_qat
+        bp = os.path.join(out, "best_qat.pt")
+        if os.path.isfile(bp):
+            net.load_state_dict(torch.load(bp, map_location=dev))
+        bake_qat(net)
+        clean = ConditionedUNet(in_channels=spec["in"], base=args.base, depth=args.depth,
+                                blocks=args.blocks, out_channels=spec["out"])
+        clean.load_state_dict(net.state_dict())   # structural match after bake
+        torch.save(clean.state_dict(), os.path.join(out, "best.pt"))
+        print("baked QAT weights -> best.pt (fp32, int-grid-ready for export+PTQ)")
 
     print("done. best val:", best)
 

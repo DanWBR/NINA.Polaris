@@ -122,10 +122,11 @@ Polaris builds channel 1 from the decon strength/sigma slider and tiles the fram
 - **fp16**: train fp32 → `export.py` converts. Near-lossless. (GPU/CPU/ORT-Web;
   not the Hexagon HTP, which is int-only.)
 - **int16**: PTQ with a calibration set ≈ fp16 quality → production NPU path.
-- **int8**: ORT QDQ PTQ for ORT/CPU, or the vendor toolchain's calibrated int8
-  on-device (RKNN/QNN). Residual-heavy decon can ring under int8 — prefer int16
-  there. (Native torch QAT→ONNX isn't exportable on the current torch build; see
-  the BGE/denoise/decon section below.)
+- **int8**: train it from scratch with in-house QAT (`train_task.py --qat`, STE
+  fake-quant) so the 8-bit model keeps fp16-class quality, then ORT QDQ for
+  ORT/CPU or the vendor toolchain's calibrated int8 on-device (RKNN/QNN). Plain
+  PTQ int8 (no QAT) can ring on residual-heavy decon — use `--qat` or int16
+  there. (See the BGE/denoise/decon section below.)
 
 Always validate int8 vs int16 vs fp16 vs fp32 side by side: PSNR/SSIM, **stellar
 FWHM** before/after, and a visual halo/ring check around bright stars.
@@ -191,23 +192,35 @@ models (BGE, denoise) tolerate PTQ well; the residual-learning **decon** is the 
 that can ring under int8 — prefer **int16 for decon** (lossless), and measure int8
 per task with `eval_models.py` before shipping it.
 
-### int8 / QAT status
+### int8 from scratch — in-house QAT (`--qat`)
 
-True **quantization-aware training → ONNX** is *not* exportable on the current
-torch build: fake-quant (`fused_moving_avg_obs_fake_quant`) and `convert_fx`
-(`quantized::conv2d`) ops don't lower through either the legacy or dynamo ONNX
-exporter. So 8-bit lands two ways:
+We DO train int8/int16 "from scratch", via our own straight-through-estimator
+fake-quant (`quant_layers.py`) — not torch.ao FX QAT (whose graph doesn't export
+to ONNX on this torch build: `fused_moving_avg_obs_fake_quant` / `quantized::conv2d`
+don't lower through the legacy or dynamo exporter).
 
-- **ORT QDQ (PTQ)** above — the portable int8 for ORT/ORT-Web/CPU, measured by
-  `eval_models.py`.
-- **Vendor toolchain calibrated int8** — RKNN `build(do_quantization=True,
-  dataset=models/calib_*/list.txt)` or Qualcomm AI Hub `w8a16`, which run their
-  own calibration from the fp32 model. This is the real on-device 8-bit path and
-  needs no torch QAT.
+How it works: `--qat` inserts per-channel symmetric weight fake-quant +
+per-tensor activation fake-quant on every conv (STE backward, so gradients pass
+through). The network learns weights that sit on the int grid. After training we
+**bake** the rounded weights into plain `Conv2d.weight`, drop the observers, and
+save a clean fp32 `best.pt` — so `export.py` is unchanged and `quantize.py int8`
+(ORT QDQ) reproduces those grid points near-losslessly.
 
-If PTQ int8 proves lossy for a task after real training, the QAT route is a
-follow-up via NVIDIA `pytorch-quantization` or the torch **PT2E** export flow
-(neither is wired here yet).
+```bash
+# fine-tune from the fp32 best (recommended), then export + int8:
+python train_task.py --task decon --tiles data/own/decon_tiles \
+    --qat --resume checkpoints/decon/best.pt --lr 5e-5 --epochs 15 \
+    --out checkpoints/decon_qat
+python export.py   --task decon --ckpt checkpoints/decon_qat/best.pt --out models
+python quantize.py int8 --onnx models/decon_fp32_256.onnx \
+    --calib models/calib_decon --out models/decon_int8_256.onnx
+python eval_models.py --task decon --models models --tiles-val data/own/decon_tiles_val
+```
+
+`--qat-bits 16` does the same on the int16 grid (rarely needed — int16 PTQ is
+already ≈ fp16). On-device 8-bit is still produced by the **vendor toolchain**
+(RKNN `build(do_quantization=True, dataset=models/calib_*/list.txt)` or Qualcomm
+AI Hub `w8a16`) from the same fp32 — the QAT-baked weights make that lossless too.
 
 ## 4. Measure "no quantization degradation"
 
