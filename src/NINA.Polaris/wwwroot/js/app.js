@@ -1197,7 +1197,12 @@ function ninaApp() {
             processSerPath: '',
             serList: [],          // [{ path, label }]
             keepPercent: 50,
-            outputName: 'stack'
+            outputName: 'stack',
+            // Per-frame quality scores for the current/last stack job, fetched
+            // once from /api/video/stack/{id}/qualities after analysis. Drives
+            // the lucky-imaging quality graph in the Process panel.
+            qualities: [],
+            qualitiesJobId: null
         },
         // Per-camera capability flags loaded from /api/camera/status on
         // tab open. Drives WB-slider visibility + ROI / cooler / ISO
@@ -19663,6 +19668,80 @@ function ninaApp() {
             try { await this.apiPost(`/api/video/stack/${this.videoStack.id}/abort`); }
             catch (e) { this.toast('Abort failed: ' + e.message, 'warn'); }
         },
+        // Fetch the per-frame quality scores once per job, as soon as the
+        // analysis phase has produced them (phase past Analyzing). The scores
+        // are omitted from the WS status (can be 10k+ doubles), so they come
+        // from the dedicated endpoint. Cleared when the job goes away / changes.
+        async _maybeFetchStackQualities() {
+            const j = this.videoStack;
+            if (!j || !j.id) {
+                if (this.video.qualities.length) { this.video.qualities = []; this.video.qualitiesJobId = null; }
+                return;
+            }
+            if (this.video.qualitiesJobId === j.id) return;   // already have them
+            // Quality scores exist once analysis is complete.
+            const analysisDone = j.phase && j.phase !== 'Reading' && j.phase !== 'Analyzing';
+            if (!analysisDone) return;
+            this.video.qualitiesJobId = j.id;                 // claim before await (no double-fetch)
+            try {
+                const r = await this.apiGet(`/api/video/stack/${j.id}/qualities`);
+                this.video.qualities = r.qualities || [];
+                this.$nextTick(() => this.drawVideoQualityChart());
+            } catch (e) {
+                this.video.qualitiesJobId = null;             // allow a retry on the next tick
+            }
+        },
+        // Lucky-imaging quality graph: one bar per recorded frame in capture
+        // order, height = Laplacian-variance quality. Bars at/above the
+        // keep-top-X% cutoff are drawn in the accent colour (kept), the rest
+        // muted (dropped); a dashed line marks the cutoff. Lets the operator
+        // see how good the run was and where the sharp frames landed.
+        drawVideoQualityChart() {
+            const cv = document.getElementById('videoQualityChart');
+            const q = this.video.qualities;
+            if (!cv || !q || q.length === 0) return;
+            const dpr = window.devicePixelRatio || 1;
+            const cssW = cv.clientWidth || 600, cssH = cv.clientHeight || 120;
+            cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
+            const ctx = cv.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, cssW, cssH);
+
+            const css = getComputedStyle(document.documentElement);
+            const accent = (css.getPropertyValue('--accent') || '#4ea1ff').trim();
+            const muted = (css.getPropertyValue('--text-muted') || '#888').trim();
+            const border = (css.getPropertyValue('--border') || '#444').trim();
+
+            const n = q.length;
+            const max = Math.max(...q, 1e-9);
+            // Cutoff value for "keep top X%": the (keep%)-th highest score.
+            const keep = Math.min(100, Math.max(1, this.video.keepPercent || 50));
+            const sorted = [...q].sort((a, b) => b - a);
+            const cutIdx = Math.max(0, Math.min(n - 1, Math.ceil(n * keep / 100) - 1));
+            const cutoff = sorted[cutIdx];
+
+            const padB = 14;                       // room for the count axis label
+            const plotH = cssH - padB;
+            const bw = cssW / n;
+            for (let i = 0; i < n; i++) {
+                const h = (q[i] / max) * (plotH - 2);
+                ctx.fillStyle = q[i] >= cutoff ? accent : muted;
+                ctx.globalAlpha = q[i] >= cutoff ? 0.9 : 0.45;
+                ctx.fillRect(i * bw, plotH - h, Math.max(1, bw - 0.5), h);
+            }
+            ctx.globalAlpha = 1;
+            // Cutoff line.
+            const cy = plotH - (cutoff / max) * (plotH - 2);
+            ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+            ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(cssW, cy); ctx.stroke();
+            ctx.setLineDash([]);
+            // Axis baseline + frame-count label.
+            ctx.strokeStyle = border; ctx.beginPath();
+            ctx.moveTo(0, plotH + 0.5); ctx.lineTo(cssW, plotH + 0.5); ctx.stroke();
+            ctx.fillStyle = muted; ctx.font = '10px sans-serif'; ctx.textBaseline = 'bottom';
+            ctx.fillText('frame 1', 2, cssH);
+            ctx.textAlign = 'right'; ctx.fillText('#' + n, cssW - 2, cssH); ctx.textAlign = 'left';
+        },
         videoStackPercent() {
             const j = this.videoStack;
             if (!j) return 0;
@@ -31120,7 +31199,10 @@ function ninaApp() {
             // instantly to a Stop initiated from another tab.
             if (msg.keepCentered) this.keepCentered = msg.keepCentered;
             if (msg.videoRecording) this.videoRecording = msg.videoRecording;
-            if (msg.videoStack !== undefined) this.videoStack = msg.videoStack;  // null when idle
+            if (msg.videoStack !== undefined) {
+                this.videoStack = msg.videoStack;  // null when idle
+                this._maybeFetchStackQualities();
+            }
             if (msg.slewPreview) this.slewPreview = msg.slewPreview;
             // Auto-push to network storage: live counters for the Settings card.
             // Kept separate from the storagePush config-form object.

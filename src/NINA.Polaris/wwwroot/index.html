@@ -3212,7 +3212,7 @@
                     <button class="video-tab" :class="{ active: videoTab === 'capture' }"
                             @click="videoTab = 'capture'">Capture</button>
                     <button class="video-tab" :class="{ active: videoTab === 'process' }"
-                            @click="videoTab = 'process'; loadVideoSerList()">Process</button>
+                            @click="videoTab = 'process'; loadVideoSerList(); $nextTick(() => drawVideoQualityChart())">Process</button>
                 </div>
 
                 <!-- ===== Tab 1: Capture ===== -->
@@ -3738,6 +3738,18 @@
                                 Stacked: <strong x-text="videoStack?.framesStacked"></strong>
                             </span>
                         </div>
+                    </div>
+
+                    <!-- Lucky-imaging quality graph: per-frame sharpness with the
+                         keep-top-X% cutoff, so the operator sees how the run went
+                         and which frames were stacked. Appears once analysis is done. -->
+                    <div x-show="video.qualities.length > 0" style="margin-top:12px">
+                        <div class="hint" style="display:flex; justify-content:space-between; align-items:baseline; gap:8px">
+                            <span>Frame quality (sharpness)</span>
+                            <span>kept top <strong x-text="video.keepPercent"></strong>% of
+                                  <strong x-text="video.qualities.length"></strong></span>
+                        </div>
+                        <canvas id="videoQualityChart" style="width:100%; height:120px; display:block"></canvas>
                     </div>
 
                     <div class="stats-bar" x-show="videoStack?.phase === 'Ok'" style="margin-top:10px">
@@ -16323,7 +16335,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260628-serlist"></script>
+    <script src="/js/app.js?v=20260628-qualgraph"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
