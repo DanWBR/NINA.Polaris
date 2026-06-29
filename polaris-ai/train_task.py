@@ -36,6 +36,7 @@ TASKS = {
     "denoise": {"in": 3, "out": 3},
     "bge":     {"in": 3, "out": 3},
     "upscale": {"in": 3, "out": 3},
+    "halo":    {"in": 3, "out": 3},
 }
 
 
@@ -59,7 +60,9 @@ def build_dataset(args):
 
 
 def task_loss(task, p, y, w_grad, w_star):
-    if task == "decon":
+    # halo removal protects bright cores (star_protect) so it only touches the
+    # faint halo, like decon.
+    if task in ("decon", "halo"):
         return charbonnier(p, y) + w_grad * grad_loss(p, y) + w_star * star_protect(p, y)
     if task in ("denoise", "upscale"):
         return charbonnier(p, y) + w_grad * grad_loss(p, y)

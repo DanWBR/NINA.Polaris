@@ -255,6 +255,34 @@ detail — for genuine sharpening use the **decon** model. This upscaler is for 
 pixels (undersampled/planetary frames, export/print) without the artifacts a
 natural-image upscaler introduces.
 
+---
+
+# Star-halo removal (`--task halo`)
+
+Removes reflection-style halos (broad glows / thin rings) around bright stars.
+Same RGB paired recipe as denoise/bge: **target = clean image, input = clean +
+synthetic halos** of varying size, intensity and colour, anchored on the
+brightest stars (`common.add_star_halos_rgb` + `find_bright_stars`). The loss
+keeps bright cores faithful (star-protect), so the net learns to subtract only
+the faint halo.
+
+```bash
+python data_prep/make_halos.py --per-image 4 --clean-dir denoised
+python train_halo.py --pairs data/own/halo_tiles --val-pairs data/own/halo_val \
+    --epochs 90 --batch 8 --out checkpoints/halo
+# QAT int8: add --qat --resume checkpoints/halo/best.pt --lr 5e-5 --epochs 20
+python export.py   --task halo --ckpt checkpoints/halo/best.pt --out models
+python quantize.py calib --task halo --pairs data/own/halo_tiles --out models/calib_halo
+python quantize.py int16 --onnx models/halo_fp32_256.onnx --calib models/calib_halo \
+    --out models/halo_int16_256.onnx
+python quantize.py int8  --onnx models/halo_fp32_256.onnx --calib models/calib_halo \
+    --out models/halo_int8_256.onnx
+python eval_models.py --task halo --models models --val-pairs data/own/halo_val
+```
+
+(Or the orchestrator: `./run_all.ps1 -Prep -Tasks halo` then
+`./run_all.ps1 -Gpu 0 -Tasks halo`.)
+
 ## 4. Measure "no quantization degradation"
 
 ```bash

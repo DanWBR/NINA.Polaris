@@ -57,6 +57,7 @@ $cfg = @{
     denoise = @{ kind = "pairs"; data = "data/own/denoise_tiles"; val = "data/own/denoise_val";    base = 96; blocks = 3; fp = 80;  qat = 20; size = 256 }
     bge     = @{ kind = "pairs"; data = "data/own/bge_tiles";     val = "data/own/bge_val";        base = 96; blocks = 3; fp = 120; qat = 25; size = 256 }
     upscale = @{ kind = "pairs"; data = "data/own/upscale_tiles"; val = "data/own/upscale_val";    base = 64; blocks = 2; fp = 100; qat = 20; size = 128; scale = 2 }
+    halo    = @{ kind = "pairs"; data = "data/own/halo_tiles";    val = "data/own/halo_val";       base = 96; blocks = 3; fp = 90;  qat = 20; size = 256 }
 }
 
 function Invoke-Step([string]$desc, [string[]]$pyArgs) {
@@ -82,7 +83,7 @@ function Get-DataArgs($c, [bool]$withVal) {
 # | -Tasks bge decon (PowerShell binds comma-lists as an array, so also split
 # each element on commas/whitespace to be forgiving).
 if ($Tasks.Count -eq 0) {
-    if ($Prep) { $list = @("denoise", "bge", "decon", "upscale") }
+    if ($Prep) { $list = @("denoise", "bge", "decon", "upscale", "halo") }
     else { throw "Specify -Tasks (e.g. -Tasks bge,decon) or use -Prep." }
 } else {
     $list = $Tasks | ForEach-Object { $_ -split '[,\s]+' } | Where-Object { $_ } | ForEach-Object { $_.Trim().ToLower() }
@@ -97,6 +98,7 @@ if ($Prep) {
             "denoise" { Invoke-Step "prep denoise" @("data_prep/make_noise.py", "--per-image", "3") }
             "bge"     { Invoke-Step "prep bge"     @("data_prep/make_gradients.py", "--per-image", "40") }
             "upscale" { Invoke-Step "prep upscale" @("data_prep/make_upscale.py", "--scale", "2", "--hr-dir", "denoised") }
+            "halo"    { Invoke-Step "prep halo"    @("data_prep/make_halos.py", "--per-image", "4", "--clean-dir", "denoised") }
         }
     }
     Write-Host "Prep done. Now launch training lanes, e.g. -Gpu 0 -Tasks denoise." -ForegroundColor Green

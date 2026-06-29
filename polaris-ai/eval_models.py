@@ -75,7 +75,8 @@ def _to_chw(out, task):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--task", required=True, choices=["decon", "denoise", "bge", "upscale"])
+    ap.add_argument("--task", required=True,
+                    choices=["decon", "denoise", "bge", "upscale", "halo"])
     ap.add_argument("--models", default="models")
     ap.add_argument("--val-pairs", default="")
     ap.add_argument("--tiles-val", default="")

@@ -28,6 +28,7 @@ TASKS = {
     "denoise": {"in": 3, "out": 3, "layout": "nhwc"},
     "bge":     {"in": 3, "out": 3, "layout": "nhwc"},
     "upscale": {"in": 3, "out": 3, "layout": "nhwc"},
+    "halo":    {"in": 3, "out": 3, "layout": "nhwc"},
 }
 
 
