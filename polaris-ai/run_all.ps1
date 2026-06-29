@@ -22,6 +22,10 @@
 .EXAMPLE
   ./run_all.ps1 -Gpu 0 -Tasks decon -NoQat -Batch 4
   # skip QAT (PTQ only), override batch size
+
+.EXAMPLE
+  ./run_all.ps1 -Gpu 1 -Tasks bge -Base 48 -Blocks 2 -Batch 4
+  # lighter net + smaller batch -> less power, for a flaky second GPU
 #>
 param(
     [int]$Gpu = -1,
@@ -30,6 +34,8 @@ param(
     [switch]$NoQat,
     [int]$Workers = 4,
     [int]$Batch = 0,            # 0 = per-phase defaults (8 fp32 / 6 qat)
+    [int]$Base = 0,             # 0 = per-task default; override for a lighter net
+    [int]$Blocks = 0,           # 0 = per-task default; lower = fewer params / less power
     [string]$Models = "models"
 )
 
@@ -111,11 +117,16 @@ foreach ($t in $list) {
     $c = $cfg[$t]
     if (-not (Test-Path $c.data)) { throw "Missing $($c.data) -- run './run_all.ps1 -Prep -Tasks $t' first." }
 
+    # net size: per-task defaults unless overridden (a smaller net draws less
+    # power -- handy for a flaky second GPU). export uses the same values.
+    $nBase = if ($Base -gt 0) { $Base } else { $c.base }
+    $nBlocks = if ($Blocks -gt 0) { $Blocks } else { $c.blocks }
+
     # fp32
     $tr = @("train_task.py", "--task", $t, "--epochs", "$($c.fp)", "--batch", "$fpBatch",
-        "--workers", "$Workers", "--base", "$($c.base)", "--blocks", "$($c.blocks)",
+        "--workers", "$Workers", "--base", "$nBase", "--blocks", "$nBlocks",
         "--out", "checkpoints/$t") + (Get-DataArgs $c $true)
-    Invoke-Step "train $t fp32 $($c.fp)ep" $tr
+    Invoke-Step "train $t fp32 $($c.fp)ep (base=$nBase blocks=$nBlocks)" $tr
 
     $ckpt = "checkpoints/$t/best.pt"
 
@@ -123,15 +134,15 @@ foreach ($t in $list) {
     if (-not $NoQat) {
         $qa = @("train_task.py", "--task", $t, "--qat", "--resume", "checkpoints/$t/best.pt",
             "--lr", "5e-5", "--epochs", "$($c.qat)", "--batch", "$qatBatch",
-            "--workers", "$Workers", "--base", "$($c.base)", "--blocks", "$($c.blocks)",
+            "--workers", "$Workers", "--base", "$nBase", "--blocks", "$nBlocks",
             "--out", "checkpoints/${t}_qat") + (Get-DataArgs $c $true)
         Invoke-Step "train $t qat $($c.qat)ep" $qa
         $ckpt = "checkpoints/${t}_qat/best.pt"
     }
 
     # export fp32 + fp16
-    $ex = @("export.py", "--task", $t, "--ckpt", $ckpt, "--base", "$($c.base)",
-        "--blocks", "$($c.blocks)", "--size", "$($c.size)", "--out", $Models)
+    $ex = @("export.py", "--task", $t, "--ckpt", $ckpt, "--base", "$nBase",
+        "--blocks", "$nBlocks", "--size", "$($c.size)", "--out", $Models)
     if ($c.ContainsKey("scale")) { $ex += @("--scale", "$($c.scale)") }
     Invoke-Step "export $t" $ex
 
