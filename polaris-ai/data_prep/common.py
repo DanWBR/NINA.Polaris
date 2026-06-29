@@ -272,9 +272,10 @@ def _halo_profile(cy: int, cx: int, radius: float, kind: str, shape,
     else:  # disk: bright centre + soft-edged fill + faint rim
         t = np.clip((rr - (radius - sw)) / (2.0 * sw), 0.0, 1.0)
         fill = 1.0 - (t * t * (3.0 - 2.0 * t))                      # smoothstep 1->0
-        center = np.exp(-(rr ** 2) / (2.0 * (radius * 0.5) ** 2))   # central concentration
+        center = np.exp(-(rr ** 2) / (2.0 * (radius * 0.55) ** 2))  # gentle central concentration
         rim = np.exp(-((rr - radius) ** 2) / (2.0 * (sw * 0.9) ** 2))
-        prof = 0.45 * fill + 0.45 * center + 0.22 * rim
+        # flatter, more translucent veil (less of a bright central blob)
+        prof = 0.6 * fill + 0.25 * center + 0.18 * rim
         prof = prof / float(prof.max())
     return (slice(y0, y1), slice(x0, x1), prof.astype(np.float32))
 
@@ -306,13 +307,15 @@ def add_star_halos_rgb(clean: np.ndarray, rng: np.random.Generator,
     nch = clean.shape[0]
     n_halo = int(rng.integers(max(1, len(stars) // 4), len(stars) + 1))
     for (cy, cx, peak) in stars[:n_halo]:
-        radius = float(rng.uniform(8.0, 70.0))                 # different sizes
+        # wide spread of diameters (small ~12 px up to ~240 px across)
+        radius = float(rng.uniform(6.0, 120.0))
         # disk (filled, soft edge) dominates -- matches real reflection halos;
         # glow / ring add variety.
         r = rng.random()
         kind = "disk" if r < 0.6 else ("glow" if r < 0.85 else "ring")
-        soft = float(rng.uniform(0.18, 0.40))                  # edge softness
-        base = max(1e-4, peak) * float(rng.uniform(0.01, 0.10))
+        soft = float(rng.uniform(0.18, 0.45))                  # edge softness
+        # fainter / more transparent than before (was 0.01-0.10)
+        base = max(1e-4, peak) * float(rng.uniform(0.004, 0.045))
         color = _star_color(clean, cy, cx)                     # same colour as star
         pp = _halo_profile(cy, cx, radius, kind, out.shape[1:], soft=soft)
         if pp is None:
