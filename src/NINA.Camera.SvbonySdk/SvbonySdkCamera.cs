@@ -200,7 +200,7 @@ public sealed class SvbonySdkCamera : ICamera {
     public Task SetIsoAsync(int iso, CancellationToken ct = default) => Task.CompletedTask;
 
     public Task AbortExposureAsync(CancellationToken ct = default) {
-        try { SVBStopVideoCapture(_cameraId); } catch { }
+        lock (_sdk) { try { SVBStopVideoCapture(_cameraId); } catch { } }
         State = CameraStates.Idle;
         return Task.CompletedTask;
     }
@@ -214,10 +214,15 @@ public sealed class SvbonySdkCamera : ICamera {
 
     private void ApplyRoi() {
         if (!_connected) return;
+        // SVBony forbids changing ROI/format DURING capture — doing so wedges
+        // the driver. While a stream is running just stash the fields; they take
+        // effect on the next StartVideoStreamAsync, which re-applies ROI while
+        // stopped.
+        if (_streaming) return;
         // SVB wants output (post-bin) dims rounded to multiples of 8.
         int w = Math.Max(8, (_roiW / _bin) & ~7);
         int h = Math.Max(2, (_roiH / _bin) & ~1);
-        SVBSetROIFormat(_cameraId, _roiX, _roiY, w, h, _bin);
+        lock (_sdk) SVBSetROIFormat(_cameraId, _roiX, _roiY, w, h, _bin);
     }
 
     // ----- still capture -----
@@ -228,7 +233,7 @@ public sealed class SvbonySdkCamera : ICamera {
             if (_streaming) throw new InvalidOperationException(
                 "Stop the video stream before taking a still exposure.");
             ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
-            SVBSetOutputImageType(_cameraId, _imgType);
+            lock (_sdk) SVBSetOutputImageType(_cameraId, _imgType);
 
             GetRoi(out var w, out var h);
             var bytes = new byte[(long)w * h * BytesPerPixel()];
@@ -247,9 +252,11 @@ public sealed class SvbonySdkCamera : ICamera {
                 // SVBGetVideoData block until a single full-length exposure
                 // completes. Mode is restored to NORMAL afterwards so the
                 // video-stream path keeps working.
-                Check(SVBSetCameraMode(_cameraId, SVB_CAMERA_MODE.SVB_MODE_TRIG_SOFT),
-                    "SVBSetCameraMode(TRIG_SOFT)");
-                Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
+                lock (_sdk) {
+                    Check(SVBSetCameraMode(_cameraId, SVB_CAMERA_MODE.SVB_MODE_TRIG_SOFT),
+                        "SVBSetCameraMode(TRIG_SOFT)");
+                    Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
+                }
                 try {
                     // Re-apply the exposure AFTER the mode switch: some SVBony
                     // bodies reset the exposure control when the camera mode
@@ -258,13 +265,15 @@ public sealed class SvbonySdkCamera : ICamera {
                     ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
                     // Let the mode + exposure value latch before triggering.
                     Thread.Sleep(20);
-                    Check(SVBSendSoftTrigger(_cameraId), "SVBSendSoftTrigger");
+                    lock (_sdk) Check(SVBSendSoftTrigger(_cameraId), "SVBSendSoftTrigger");
                     SVB_ERROR_CODE err;
                     lock (_sdk) err = SVBGetVideoData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
                     Check(err, "SVBGetVideoData");
                 } finally {
-                    try { SVBStopVideoCapture(_cameraId); } catch { }
-                    try { SVBSetCameraMode(_cameraId, SVB_CAMERA_MODE.SVB_MODE_NORMAL); } catch { }
+                    lock (_sdk) {
+                        try { SVBStopVideoCapture(_cameraId); } catch { }
+                        try { SVBSetCameraMode(_cameraId, SVB_CAMERA_MODE.SVB_MODE_NORMAL); } catch { }
+                    }
                     State = CameraStates.Idle;
                 }
             } else {
@@ -279,7 +288,7 @@ public sealed class SvbonySdkCamera : ICamera {
                 // a full-length one (capped so an oddly-reporting camera can't
                 // loop forever). Skipped for ~zero exposures (bias) where the
                 // first frame is already correct.
-                Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
+                lock (_sdk) Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
                 try {
                     double minIntegrationMs = exposureSeconds * 1000.0 * 0.6;
                     for (int attempt = 1; ; attempt++) {
@@ -293,7 +302,7 @@ public sealed class SvbonySdkCamera : ICamera {
                             break;
                     }
                 } finally {
-                    try { SVBStopVideoCapture(_cameraId); } catch { }
+                    lock (_sdk) { try { SVBStopVideoCapture(_cameraId); } catch { } }
                     State = CameraStates.Idle;
                 }
             }
@@ -315,14 +324,27 @@ public sealed class SvbonySdkCamera : ICamera {
         => Task.Run(() => {
             lock (_gate) {
                 if (_streaming) return;
+                if (opts?.BinX is int b) _bin = Math.Max(1, b);
                 ApplyExposureGain(opts?.ExposureSeconds ?? _exposureSec, opts?.Gain);
-                if (opts?.BinX is int b && b != _bin) { _bin = Math.Max(1, b); ApplyRoi(); }
-                SVBSetOutputImageType(_cameraId, _imgType);
-
+                // Re-apply ROI + output format while STOPPED (SVBony forbids
+                // changing them during capture). This also picks up any ROI set
+                // via SetSubframe while a previous stream was running (ApplyRoi
+                // defers the SDK write during capture). _streaming is still false
+                // here, so ApplyRoi runs.
+                ApplyRoi();
+                lock (_sdk) {
+                    SVBSetOutputImageType(_cameraId, _imgType);
+                    // Defensive: if a previous session didn't stop cleanly the SDK
+                    // is still "capturing", and a second SVBStartVideoCapture then
+                    // wedges the driver (field: "can't record two videos in a row
+                    // without reconnecting"). A stop on an idle camera is a
+                    // harmless no-op.
+                    try { SVBStopVideoCapture(_cameraId); } catch { }
+                    Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
+                }
                 _streamCts = new CancellationTokenSource();
                 _streaming = true;
                 State = CameraStates.Exposing;
-                Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
                 _streamThread = new Thread(() => PullLoop(_streamCts.Token)) {
                     IsBackground = true, Name = "SVBony-stream"
                 };
@@ -353,8 +375,12 @@ public sealed class SvbonySdkCamera : ICamera {
             t = _streamThread;
             _streamThread = null;
         }
-        try { t?.Join(2000); } catch { }
-        try { SVBStopVideoCapture(_cameraId); } catch { }
+        // Join the pull thread BEFORE touching the SDK so its in-flight
+        // SVBGetVideoData (holding _sdk) has finished — then SVBStopVideoCapture
+        // under _sdk can't run concurrently with it. Generous timeout so a
+        // long-exposure GetVideoData can return first.
+        try { t?.Join(5000); } catch { }
+        lock (_sdk) { try { SVBStopVideoCapture(_cameraId); } catch { } }
         State = CameraStates.Idle;
     }
 
@@ -404,8 +430,9 @@ public sealed class SvbonySdkCamera : ICamera {
     private int BytesPerPixel() => _imgType == SVB_IMG_TYPE.SVB_IMG_RAW16 ? 2 : 1;
 
     private void GetRoi(out int w, out int h) {
-        if (SVBGetROIFormat(_cameraId, out _, out _, out var rw, out var rh, out _) == SVB_ERROR_CODE.SVB_SUCCESS
-                && rw > 0 && rh > 0) {
+        SVB_ERROR_CODE rc; int rw, rh;
+        lock (_sdk) rc = SVBGetROIFormat(_cameraId, out _, out _, out rw, out rh, out _);
+        if (rc == SVB_ERROR_CODE.SVB_SUCCESS && rw > 0 && rh > 0) {
             w = rw; h = rh;
         } else {
             w = _roiW > 0 ? _roiW / _bin : _maxX;
