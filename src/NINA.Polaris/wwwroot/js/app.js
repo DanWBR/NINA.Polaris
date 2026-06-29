@@ -25430,11 +25430,17 @@ function ninaApp() {
         // Numeric (semver-ish) version compare. A plain string compare
         // (localeCompare) is WRONG for dotted versions: "0.84.10" sorts
         // BEFORE "0.84.8" because '1' < '8' lexicographically. Split on '.'
-        // and compare each component as an integer; any non-numeric suffix
-        // (e.g. "-fp16") is stripped first. Returns <0, 0, >0 like compareTo.
+        // and compare each component as an integer. The provider prefix
+        // ("polaris-") and the quant suffix (-fp16 / -int8 / -int16) are
+        // stripped first so Polaris's own versions (polaris-1.0, polaris-2.0,
+        // ...) order numerically as they improve over time — NOT all collapse
+        // to 0 (which an over-greedy "drop everything after the first dash"
+        // did, leaving every Polaris model tied + sorted behind GraXpert).
+        // Returns <0, 0, >0 like compareTo.
         _compareVersions(a, b) {
             const parts = (v) => String(v || '')
-                .replace(/[-+].*$/, '')        // drop -fp16 / -int8 / build suffix
+                .replace(/^polaris[-_]?/i, '')          // drop provider prefix
+                .replace(/[-_](fp16|int8|int16)$/i, '') // drop quant suffix
                 .split('.')
                 .map(n => parseInt(n, 10) || 0);
             const pa = parts(a), pb = parts(b);
