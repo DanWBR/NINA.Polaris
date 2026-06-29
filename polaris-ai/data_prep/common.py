@@ -242,15 +242,14 @@ def find_bright_stars(lum: np.ndarray, max_stars: int = 150,
     return picked
 
 
-def _stamp_halo(plane: np.ndarray, cy: int, cx: int, radius: float,
-                intensity: float, kind: str) -> None:
-    """Add a faint halo (broad glow or thin ring) around (cy, cx) in place."""
-    h, w = plane.shape
+def _halo_profile(cy: int, cx: int, radius: float, kind: str, shape):
+    """Return ``(slice_y, slice_x, profile)`` for a halo centred at (cy, cx)."""
+    h, w = shape
     R = int(radius * 2.6) + 2
     y0, y1 = max(0, cy - R), min(h, cy + R + 1)
     x0, x1 = max(0, cx - R), min(w, cx + R + 1)
     if y1 <= y0 or x1 <= x0:
-        return
+        return None
     yy = np.arange(y0, y1)[:, None] - cy
     xx = np.arange(x0, x1)[None, :] - cx
     rr = np.sqrt(yy * yy + xx * xx).astype(np.float32)
@@ -260,29 +259,49 @@ def _stamp_halo(plane: np.ndarray, cy: int, cx: int, radius: float,
     else:  # diffuse glow, hollow-ish core so it reads as a halo not a blob
         prof = np.exp(-(rr ** 2) / (2.0 * (radius * 0.6) ** 2))
         prof = prof * (1.0 - np.exp(-(rr ** 2) / (2.0 * (radius * 0.18) ** 2)))
-    plane[y0:y1, x0:x1] += (intensity * prof).astype(np.float32)
+    return (slice(y0, y1), slice(x0, x1), prof.astype(np.float32))
+
+
+def _star_color(clean: np.ndarray, cy: int, cx: int, win: int = 4):
+    """Per-channel colour ratios of the star core (brightest channel = 1.0), so a
+    halo can be tinted the same colour as its star."""
+    h, w = clean.shape[1:]
+    y0, y1 = max(0, cy - win), min(h, cy + win + 1)
+    x0, x1 = max(0, cx - win), min(w, cx + win + 1)
+    core = clean[:, y0:y1, x0:x1].reshape(clean.shape[0], -1).mean(axis=1)
+    m = float(core.max())
+    if m <= 1e-6:
+        return np.ones(clean.shape[0], dtype=np.float32)
+    return (core / m).astype(np.float32)
 
 
 def add_star_halos_rgb(clean: np.ndarray, rng: np.random.Generator,
                        max_stars: int = 120):
-    """Add synthetic reflection-style halos of varying size / intensity / colour
-    around the brightest stars of a clean image. Returns the haloed image; the
-    clean image is the removal **target**."""
+    """Add synthetic halos of varying size/intensity around the brightest stars.
+    Halos take the **star's own colour** and composite **semi-transparently**
+    (add only into the remaining headroom), like real reflection halos. Returns
+    the haloed image; the clean image is the removal **target**."""
     lum = to_luminance(clean)
     stars = find_bright_stars(lum, max_stars=max_stars)
     if not stars:
         return clean.astype(np.float32).copy()
     out = clean.astype(np.float32).copy()
+    nch = clean.shape[0]
     n_halo = int(rng.integers(max(1, len(stars) // 4), len(stars) + 1))
-    chosen = stars[:n_halo]
-    for (cy, cx, peak) in chosen:
-        radius = float(rng.uniform(6.0, 60.0))             # "different sizes"
+    for (cy, cx, peak) in stars[:n_halo]:
+        radius = float(rng.uniform(6.0, 60.0))                 # different sizes
         kind = "ring" if rng.random() < 0.45 else "glow"
         base = max(1e-4, peak) * float(rng.uniform(0.01, 0.12))
-        # per-channel tint so halos can be coloured (filter/reflection halos)
-        tint = rng.uniform(0.6, 1.4, size=clean.shape[0]).astype(np.float32)
-        for ch in range(clean.shape[0]):
-            _stamp_halo(out[ch], cy, cx, radius, base * float(tint[ch]), kind)
+        color = _star_color(clean, cy, cx)                     # same colour as star
+        pp = _halo_profile(cy, cx, radius, kind, out.shape[1:])
+        if pp is None:
+            continue
+        sy, sx, prof = pp
+        for ch in range(nch):
+            region = out[ch, sy, sx]
+            add = (base * float(color[ch])) * prof
+            # semi-transparent "over" composite: only fill remaining headroom
+            region += add * (1.0 - np.clip(region, 0.0, 1.0))
     return np.clip(out, 0.0, 1.0).astype(np.float32)
 
 
