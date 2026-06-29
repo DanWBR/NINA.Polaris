@@ -294,11 +294,12 @@ def _star_color(clean: np.ndarray, cy: int, cx: int, win: int = 4):
 
 
 def add_star_halos_rgb(clean: np.ndarray, rng: np.random.Generator,
-                       max_stars: int = 120):
+                       max_stars: int = 120, intensity_scale: float = 1.0):
     """Add synthetic halos of varying size/intensity around the brightest stars.
     Halos take the **star's own colour** and composite **semi-transparently**
-    (add only into the remaining headroom), like real reflection halos. Returns
-    the haloed image; the clean image is the removal **target**."""
+    (add only into the remaining headroom), like real reflection halos.
+    ``intensity_scale`` globally scales halo opacity (smaller = more transparent).
+    Returns the haloed image; the clean image is the removal **target**."""
     lum = to_luminance(clean)
     stars = find_bright_stars(lum, max_stars=max_stars)
     if not stars:
@@ -315,7 +316,8 @@ def add_star_halos_rgb(clean: np.ndarray, rng: np.random.Generator,
         kind = "disk" if r < 0.6 else ("glow" if r < 0.85 else "ring")
         soft = float(rng.uniform(0.18, 0.45))                  # edge softness
         # fainter / more transparent than before (was 0.01-0.10)
-        base = max(1e-4, peak) * float(rng.uniform(0.004, 0.045))
+        # very transparent halos (user pick); intensity_scale tweaks it further
+        base = max(1e-4, peak) * float(rng.uniform(0.001, 0.011)) * intensity_scale
         color = _star_color(clean, cy, cx)                     # same colour as star
         pp = _halo_profile(cy, cx, radius, kind, out.shape[1:], soft=soft)
         if pp is None:
