@@ -47,7 +47,7 @@
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260624-connectall">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-safetyguard">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260626-chipupper">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260628-smbchip">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260628-vidprocess">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260624-untestedwarn">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260620-mobile1">
@@ -13591,6 +13591,32 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             </template>
         </div>
 
+        <!-- Auto-push to network storage (SMB / SFTP / mounted path). Shows the
+             upload queue + last result so the operator sees files leaving the
+             SBC without opening Settings. Only present when the feature is on.
+             Click jumps to Settings. -->
+        <div class="activity-storage" x-show="storagePushStatus.enabled" x-cloak
+             :class="{
+                 'activity-storage-busy': (storagePushStatus.queued > 0 || !!storagePushStatus.currentFile),
+                 'activity-storage-error': !storagePushStatus.connected
+                     || (!!storagePushStatus.lastError && storagePushStatus.queued === 0 && !storagePushStatus.currentFile)
+             }"
+             :title="storagePushTooltip()"
+             @click="tab = 'settings'" style="cursor:pointer">
+            <span class="activity-storage-icon"
+                  x-text="!storagePushStatus.connected ? '⚠' : ((storagePushStatus.queued > 0 || storagePushStatus.currentFile) ? '↑' : '🗄')"></span>
+            <span class="activity-storage-label" x-text="(storagePushStatus.kind || 'smb').toUpperCase()"></span>
+            <!-- Uploading: show the remaining queue depth. -->
+            <span x-show="storagePushStatus.queued > 0 || storagePushStatus.currentFile"
+                  x-text="storagePushStatus.queued"></span>
+            <!-- Idle + all sent: a quiet check. -->
+            <span x-show="storagePushStatus.connected && storagePushStatus.queued === 0 && !storagePushStatus.currentFile && storagePushStatus.uploaded > 0"
+                  class="text-ok">✓</span>
+            <!-- Any failures this session. -->
+            <span x-show="storagePushStatus.failed > 0" class="text-err"
+                  x-text="'✗' + storagePushStatus.failed"></span>
+        </div>
+
         <!-- NET-1: client↔server traffic. Two stacked rows (↓ rx, ↑ tx)
              with auto-scaled units. Pulse class lights up briefly when
              bytes arrive, gives an LED-style "data flowing" hint that's
@@ -16335,7 +16361,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260628-stackopen"></script>
+    <script src="/js/app.js?v=20260628-smbchip"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

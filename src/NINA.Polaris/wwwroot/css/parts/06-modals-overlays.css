@@ -1613,6 +1613,36 @@
     color: var(--text-muted);
     min-width: 78px;
 }
+/* Auto-push to network storage (SMB/SFTP) chip in the activity bar. */
+.activity-storage {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 10px;
+    padding: 1px 7px;
+    flex-shrink: 0;
+    font-size: 11px;
+    line-height: 1.4;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    white-space: nowrap;
+}
+.activity-storage-icon { font-size: 11px; }
+.activity-storage-label { font-weight: 600; letter-spacing: 0.3px; }
+/* Uploading: tint accent + gentle pulse so it reads as "active". */
+.activity-storage.activity-storage-busy {
+    color: var(--accent);
+    border-color: var(--accent);
+    animation: activity-storage-pulse 1.4s ease-in-out infinite;
+}
+/* Not connected / last upload errored: red. */
+.activity-storage.activity-storage-error {
+    color: var(--danger, #e25555);
+    border-color: var(--danger, #e25555);
+}
+@keyframes activity-storage-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
 .activity-net-row {
     display: inline-flex;
     align-items: center;

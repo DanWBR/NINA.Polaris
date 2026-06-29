@@ -30465,6 +30465,23 @@ function ninaApp() {
         },
 
         // Tooltip, cumulative session totals + the current window.
+        // Tooltip for the activity-bar network-storage chip (SMB/SFTP push).
+        storagePushTooltip() {
+            const s = this.storagePushStatus;
+            const kind = (s.kind || 'smb').toUpperCase();
+            if (!s.connected) {
+                return `${kind} push: not connected`
+                    + (s.lastError ? `\n${s.lastError}` : '\nClick to check Settings');
+            }
+            const lines = [`${kind} push — connected`];
+            if (s.currentFile) lines.push(`Uploading: ${s.currentFile.split(/[\\/]/).pop()}`);
+            if (s.queued > 0) lines.push(`Queued: ${s.queued}`);
+            if (s.queued === 0 && !s.currentFile) lines.push('Idle (queue empty)');
+            lines.push(`Uploaded: ${s.uploaded}${s.failed ? ` · Failed: ${s.failed}` : ''}`);
+            if (s.lastError) lines.push(`Last error: ${s.lastError}`);
+            lines.push('Click to open Settings');
+            return lines.join('\n');
+        },
         netTooltip() {
             const fmtTotal = (b) => {
                 if (b < 1024) return b + ' B';
