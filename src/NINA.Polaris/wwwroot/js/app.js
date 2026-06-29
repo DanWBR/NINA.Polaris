@@ -1227,6 +1227,7 @@ function ninaApp() {
             durationSec: 0, droppedFrames: 0, lastError: null
         },
         videoStack: null,         // { id, phase, framesAnalyzed, ..., done }
+        _stackDonePromptedId: null, // job id we've already offered to open in Studio
 
         // Auto slew-preview state. SlewPreviewService streams its
         // decision flags here so the SKY tab inset can fade itself in
@@ -19691,6 +19692,25 @@ function ninaApp() {
                 this.video.qualitiesJobId = null;             // allow a retry on the next tick
             }
         },
+        // When a stack finishes OK, offer (once per job) to open the generated
+        // FITS in the Studio editor (FILES → Edit). One-shot via the job id so
+        // repeated status ticks don't re-prompt.
+        async _maybePromptStackDone() {
+            const j = this.videoStack;
+            if (!j || j.phase !== 'Ok' || !j.outputPath) return;
+            if (this._stackDonePromptedId === j.id) return;
+            this._stackDonePromptedId = j.id;
+            const name = (j.outputPath.split(/[\\/]/).pop()) || j.outputPath;
+            const ok = await this._confirmAsync(
+                `Stacked image saved:\n\n${name}\n\nOpen it in the Studio editor?`,
+                { title: 'Stack complete', okLabel: 'Open in Studio', cancelLabel: 'Not now' });
+            if (!ok) return;
+            this.tab = 'files';
+            this.setFilesSubTab('edit');
+            await this.$nextTick();
+            try { await this.editorLoad(j.outputPath); }
+            catch (e) { this.toast('Could not open in Studio: ' + e.message, 'error'); }
+        },
         // Lucky-imaging quality graph: one bar per recorded frame in capture
         // order, height = Laplacian-variance quality. Bars at/above the
         // keep-top-X% cutoff are drawn in the accent colour (kept), the rest
@@ -31202,6 +31222,7 @@ function ninaApp() {
             if (msg.videoStack !== undefined) {
                 this.videoStack = msg.videoStack;  // null when idle
                 this._maybeFetchStackQualities();
+                this._maybePromptStackDone();
             }
             if (msg.slewPreview) this.slewPreview = msg.slewPreview;
             // Auto-push to network storage: live counters for the Settings card.
