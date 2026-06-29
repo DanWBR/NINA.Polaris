@@ -1221,6 +1221,24 @@
     opacity: 0.6;
 }
 
+/* AI Tools — dedicated second toolbar row directly under the main FILES
+   toolbar. Visually distinct (subtle accent-tinted background + a leading
+   label) so the in-browser ONNX/AI model tools read as their own group. */
+.files-ai-toolbar {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    background: color-mix(in srgb, var(--accent) 7%, var(--bg-secondary));
+}
+.files-ai-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-right: 4px;
+    user-select: none;
+}
+
 /* The list itself fills the rest of the panel and scrolls. */
 .files-list-wrap {
     flex: 1 1 auto;

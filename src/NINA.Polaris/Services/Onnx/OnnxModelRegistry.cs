@@ -91,6 +91,10 @@ public class OnnxModelRegistry {
             ["starrem2k13-ai-models"] = "starrem2k13",
             ["nox-color-ai-models"] = "nox-color",
             ["nox-gray-ai-models"] = "nox-gray",
+            // Polaris's own models (polaris-ai). Drop the .onnx under
+            // {family}-ai-models/{version}/ and it auto-registers on rescan.
+            ["halo-ai-models"] = "halo",
+            ["upscale-ai-models"] = "upscale",
         };
 
     // Semver-ish (major.minor.patch) + optional quantization suffix.

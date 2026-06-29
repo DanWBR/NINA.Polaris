@@ -2465,6 +2465,13 @@ function ninaApp() {
             // -fp16 model on low-RAM devices).
             modalBgeVersion: '',
             modalDeconVersion: '',
+            // Polaris's own AI tools (polaris-ai models). Halo removal reuses
+            // the denoise recipe (strength blend); upscaling outputs a
+            // scale×-larger image. Versions hydrate from the manifest on open.
+            modalHaloStrength: 0.8,
+            modalHaloVersion: '',
+            modalUpscaleScale: 2,
+            modalUpscaleVersion: '',
             // Per-run "Use GPU" toggle (native app only): routes inference
             // to NNAPI (GPU/NPU) instead of XNNPACK (CPU).
             modalUseGpu: false,
@@ -11410,6 +11417,21 @@ function ninaApp() {
                             // GX-12h: parity with GraXpert UI, let the
                             // user pick Stars-only vs Object-only here too.
                             target: this.graxpert?.modalDeconTarget || 'stars',
+                        };
+                        break;
+                    case 'halo-removal':
+                        kind = 'haloremoval';
+                        runOpts = {
+                            strength: this.graxpert?.modalHaloStrength != null
+                                ? this.graxpert.modalHaloStrength : 0.8,
+                            version: this.graxpert?.modalHaloVersion || undefined,
+                        };
+                        break;
+                    case 'upscaling':
+                        kind = 'upscale';
+                        runOpts = {
+                            scale: this.graxpert?.modalUpscaleScale || 2,
+                            version: this.graxpert?.modalUpscaleVersion || undefined,
                         };
                         break;
                     default:
@@ -23984,6 +24006,11 @@ function ninaApp() {
             this.graxpert.modalBgeVersion = (bgeChoices[0] && bgeChoices[0].version) || '1.0.1';
             const deconChoices = this.modelChoices(this.deconFamily());
             this.graxpert.modalDeconVersion = (deconChoices[0] && deconChoices[0].version) || '';
+            // Polaris's own halo-removal + upscaling models.
+            const haloChoices = this.modelChoices('halo');
+            this.graxpert.modalHaloVersion = (haloChoices[0] && haloChoices[0].version) || '';
+            const upscaleChoices = this.modelChoices('upscale');
+            this.graxpert.modalUpscaleVersion = (upscaleChoices[0] && upscaleChoices[0].version) || '';
             // GX-7: default depends on the user's preference + per-op
             // availability. Force browser-off when there's no model
             // even if the user prefers browser (CLI is the only path).
@@ -25458,8 +25485,13 @@ function ninaApp() {
                 const t = (runOpts && runOpts.target) || 'stars';
                 return t === 'objects' ? '_decon_objects' : '_decon_stars';
             }
+            if (op === 'upscaling') {
+                const s = (runOpts && runOpts.scale) || 2;
+                return '_upscale' + s + 'x';
+            }
             return op === 'background-extraction' ? '_bge'
                  : op === 'denoising'            ? '_denoise'
+                 : op === 'halo-removal'         ? '_halo'
                  : '_gx';
         },
 
@@ -25482,6 +25514,17 @@ function ninaApp() {
             // having to think about it.
             if (this.graxpert.modalRunInBrowser
                 && this.onnxAvailableForOp(this.graxpert.modalOp)) {
+                return this._graxpertRunInBrowser();
+            }
+            // Halo removal + upscaling are Polaris-only models with no GraXpert
+            // CLI equivalent, so they always run in-browser (never fall through
+            // to the subprocess path below, which can't service them).
+            if (this.graxpert.modalOp === 'halo-removal'
+                || this.graxpert.modalOp === 'upscaling') {
+                if (!this.onnxAvailableForOp(this.graxpert.modalOp)) {
+                    this.toast('No AI model installed for this tool', 'warn');
+                    return;
+                }
                 return this._graxpertRunInBrowser();
             }
             try {
@@ -25557,6 +25600,10 @@ function ninaApp() {
                 case 'deconvolution':
                     return models.some(m => m.family === 'decon-stars'
                                           || m.family === 'decon-objects');
+                case 'halo-removal':
+                    return models.some(m => m.family === 'halo');
+                case 'upscaling':
+                    return models.some(m => m.family === 'upscale');
                 default:
                     return false;
             }
@@ -25631,6 +25678,22 @@ function ninaApp() {
                             target: this.graxpert.modalDeconTarget || 'stars',
                             // Per-run model version from the modal dropdown.
                             version: this.graxpert.modalDeconVersion || undefined,
+                            useGpu: !!this.graxpert.modalUseGpu,
+                        };
+                        break;
+                    case 'halo-removal':
+                        kind = 'haloremoval';
+                        runOpts = {
+                            strength: this.graxpert.modalHaloStrength,
+                            version: this.graxpert.modalHaloVersion || undefined,
+                            useGpu: !!this.graxpert.modalUseGpu,
+                        };
+                        break;
+                    case 'upscaling':
+                        kind = 'upscale';
+                        runOpts = {
+                            scale: this.graxpert.modalUpscaleScale || 2,
+                            version: this.graxpert.modalUpscaleVersion || undefined,
                             useGpu: !!this.graxpert.modalUseGpu,
                         };
                         break;

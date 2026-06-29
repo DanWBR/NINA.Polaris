@@ -44,7 +44,7 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260626-uppercase">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260627-autorunreorg">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260624-connectall">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260629-aitools">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-safetyguard">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260628-smbchip">
@@ -10046,25 +10046,47 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon" x-show="!filesSolveBusy">🎯</span>
                         <span class="files-icon" x-show="filesSolveBusy">⏳</span>
                     </button>
-                    <!-- GraXpert dropdown, visible when EITHER the CLI
-                         is installed on the host OR the matching ONNX
-                         model is detected by the server. The modal's
-                         Run-in-browser toggle picks the path; GX-7 lets
-                         the user override the default in Settings. -->
-                    <template x-if="graxpert.status?.available
-                                    || onnxAvailableForOp('background-extraction')
-                                    || onnxAvailableForOp('denoising')
-                                    || onnxAvailableForOp('deconvolution')">
-                        <span class="files-actions-sep" aria-hidden="true"></span>
-                    </template>
-                    <!-- REMOVE STARS — StarNet++ (ONNX) star removal, runs in
-                         the browser like GraXpert. Writes {stem}_starless +
-                         {stem}_stars siblings, then opens the before/after
-                         comparator (original vs starless). Recombine is left
-                         to the user (✨ Image Blend). One file at a time. Only
-                         shown once the converted starnet model is installed
-                         (scripts/convert-starnet-onnx.ps1). Sits just left of
-                         BGE so the star-removal + GraXpert ops group together.-->
+                    <!-- Star colour repair (SVBony debayer fringe) stays on the
+                         main toolbar: it's a CFA/debayer fix, not an AI model.
+                         Every ONNX/AI tool (StarNet remove-stars + GraXpert
+                         BGE/decon/denoise + Polaris halo removal & upscaling)
+                         now lives on the dedicated "AI Tools" bar just below. -->
+                    <span class="files-actions-sep" aria-hidden="true"></span>
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1"
+                            @click="starColorOpenModal(files.selectedPaths[0])"
+                            title="Star colour repair (SVBony debayer fringe). Select one OSC frame; run before BGE."
+                            aria-label="Star colour repair">
+                        <span class="files-icon" x-text="starColor.busy ? '⏳' : '🔘'"></span>
+                    </button>
+                    <span style="flex:1"></span>
+                    <button class="btn btn-sm btn-icon btn-primary"
+                            @click="filesSetStudioRoot()"
+                            :disabled="!filesSelectedDir()"
+                            :title="filesSelectedDir() ? 'Set this folder as the Studio scan root' : 'Set as Studio root (select a single folder first)'"
+                            aria-label="Set as Studio root">
+                        <span class="files-icon">⭐</span>
+                    </button>
+                </div>
+
+                <!-- AI Tools — dedicated second toolbar grouping every
+                     in-browser ONNX model tool: StarNet remove-stars,
+                     GraXpert BGE / deconvolution / denoise, and Polaris's
+                     own halo removal + upscaling. Each button stays hidden
+                     until its model is installed (onnxAvailableForOp /
+                     onnxStarnetAvailable), so the whole bar only appears
+                     once at least one AI model is present. -->
+                <div class="files-actions files-actions-icons files-ai-toolbar"
+                     x-show="onnxStarnetAvailable()
+                             || graxpert.status?.available
+                             || onnxAvailableForOp('background-extraction')
+                             || onnxAvailableForOp('denoising')
+                             || onnxAvailableForOp('deconvolution')
+                             || onnxAvailableForOp('halo-removal')
+                             || onnxAvailableForOp('upscaling')">
+                    <span class="files-ai-label" aria-hidden="true">AI Tools</span>
+                    <!-- Remove stars (StarNet++) — writes _starless + _stars,
+                         then opens the before/after comparator. One file. -->
                     <button class="btn btn-sm btn-icon" data-tour="studio-starremoval"
                             x-show="onnxStarnetAvailable()"
                             :disabled="files.selectedPaths.length !== 1
@@ -10075,13 +10097,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             aria-label="Remove stars">
                         <span class="files-icon" x-text="starRemoval.busy ? '⏳' : '🌠'"></span>
                     </button>
-                    <button class="btn btn-sm btn-icon"
-                            :disabled="files.selectedPaths.length !== 1"
-                            @click="starColorOpenModal(files.selectedPaths[0])"
-                            title="Star colour repair (SVBony debayer fringe). Select one OSC frame; run before BGE."
-                            aria-label="Star colour repair">
-                        <span class="files-icon" x-text="starColor.busy ? '⏳' : '🔘'"></span>
-                    </button>
+                    <span class="files-actions-sep" aria-hidden="true"></span>
+                    <!-- GraXpert ONNX/CLI ops: BGE / decon / denoise. -->
                     <button class="btn btn-sm btn-icon"
                             x-show="graxpert.status?.available
                                    || onnxAvailableForOp('background-extraction')"
@@ -10112,13 +10129,27 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             aria-label="Denoise">
                         <span class="files-icon">🫧</span>
                     </button>
-                    <span style="flex:1"></span>
-                    <button class="btn btn-sm btn-icon btn-primary"
-                            @click="filesSetStudioRoot()"
-                            :disabled="!filesSelectedDir()"
-                            :title="filesSelectedDir() ? 'Set this folder as the Studio scan root' : 'Set as Studio root (select a single folder first)'"
-                            aria-label="Set as Studio root">
-                        <span class="files-icon">⭐</span>
+                    <span class="files-actions-sep" aria-hidden="true"
+                          x-show="onnxAvailableForOp('halo-removal')
+                                  || onnxAvailableForOp('upscaling')"></span>
+                    <!-- Polaris's own models (polaris-ai): halo removal + upscale. -->
+                    <button class="btn btn-sm btn-icon"
+                            x-show="onnxAvailableForOp('halo-removal')"
+                            :disabled="files.selectedPaths.length === 0"
+                            @click="graxpertOpenModal('halo-removal')"
+                            data-tour="studio-halo"
+                            title="Halo removal: remove reflection halos around bright stars (Polaris AI)"
+                            aria-label="Halo removal">
+                        <span class="files-icon">✨</span>
+                    </button>
+                    <button class="btn btn-sm btn-icon"
+                            x-show="onnxAvailableForOp('upscaling')"
+                            :disabled="files.selectedPaths.length === 0"
+                            @click="graxpertOpenModal('upscaling')"
+                            data-tour="studio-upscale"
+                            title="Upscale: AI super-resolution (2× / 4×, Polaris AI)"
+                            aria-label="Upscale">
+                        <span class="files-icon">📈</span>
                     </button>
                 </div>
 
@@ -10875,8 +10906,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <details class="editor-section"
                                  x-show="onnxAvailableForOp('background-extraction')
                                        || onnxAvailableForOp('denoising')
-                                       || onnxAvailableForOp('deconvolution')">
-                            <summary>AI (GraXpert)</summary>
+                                       || onnxAvailableForOp('deconvolution')
+                                       || onnxAvailableForOp('halo-removal')
+                                       || onnxAvailableForOp('upscaling')">
+                            <summary>AI Tools</summary>
                             <div class="editor-ai-buttons">
                                 <button class="btn btn-sm"
                                         x-show="onnxAvailableForOp('background-extraction')"
@@ -10898,6 +10931,20 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         @click="editorRunAi('deconvolution')"
                                         title="Deconvolution, sharpen stars / objects">
                                     🌌 Deconvolve
+                                </button>
+                                <button class="btn btn-sm"
+                                        x-show="onnxAvailableForOp('halo-removal')"
+                                        :disabled="editorAi.busy"
+                                        @click="editorRunAi('halo-removal')"
+                                        title="Halo removal, remove reflection halos around bright stars (Polaris AI)">
+                                    ✨ Halo removal
+                                </button>
+                                <button class="btn btn-sm"
+                                        x-show="onnxAvailableForOp('upscaling')"
+                                        :disabled="editorAi.busy"
+                                        @click="editorRunAi('upscaling')"
+                                        title="Upscale, AI super-resolution (Polaris AI). Reloads the editor on the larger image.">
+                                    📈 Upscale
                                 </button>
                             </div>
                             <p class="hint" x-show="editorAi.busy"
@@ -14244,6 +14291,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <span x-show="graxpert.modalOp === 'background-extraction'">🌃 GraXpert Background Gradient Removal</span>
                 <span x-show="graxpert.modalOp === 'deconvolution'">🌌 GraXpert Deconvolution</span>
                 <span x-show="graxpert.modalOp === 'denoising'">☄ GraXpert Denoise</span>
+                <span x-show="graxpert.modalOp === 'halo-removal'">✨ Halo Removal</span>
+                <span x-show="graxpert.modalOp === 'upscaling'">📈 AI Upscale</span>
             </h2>
 
             <p class="hint">
@@ -14447,6 +14496,58 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <label class="seq-dither-checkbox" style="align-self:end"
                        x-show="!!window.__polarisIsNativeApp"
                        title="Run on the device GPU/NPU (NNAPI). Faster on powerful tablets; uses more memory.">
+                    <input type="checkbox" x-model="graxpert.modalUseGpu">
+                    Use GPU
+                </label>
+            </div>
+
+            <!-- Halo removal (Polaris AI). Mirrors the denoise recipe: a single
+                 strength blend between the original and the de-haloed output. -->
+            <div class="siril-modal-row" x-show="graxpert.modalOp === 'halo-removal'">
+                <label x-show="modelChoices('halo').length > 1">AI model
+                    <select class="input-sm" x-model="graxpert.modalHaloVersion">
+                        <template x-for="m in modelChoices('halo')" :key="m.version">
+                            <option :value="m.version" x-text="m.label"></option>
+                        </template>
+                    </select>
+                </label>
+                <label>Strength
+                    <span class="graxpert-strength-row">
+                        <input type="range" class="graxpert-strength-slider"
+                               step="0.05" min="0" max="1"
+                               x-model.number="graxpert.modalHaloStrength">
+                        <span class="graxpert-strength-value"
+                              x-text="graxpert.modalHaloStrength.toFixed(2)"></span>
+                    </span>
+                </label>
+                <label class="seq-dither-checkbox" style="align-self:end"
+                       x-show="!!window.__polarisIsNativeApp"
+                       title="Run on the device GPU/NPU (NNAPI).">
+                    <input type="checkbox" x-model="graxpert.modalUseGpu">
+                    Use GPU
+                </label>
+            </div>
+
+            <!-- AI upscale (Polaris AI). Output is scale× larger; the model is
+                 trained at a fixed factor, so the dropdown only offers what the
+                 installed model supports (2× by default). -->
+            <div class="siril-modal-row" x-show="graxpert.modalOp === 'upscaling'">
+                <label x-show="modelChoices('upscale').length > 1">AI model
+                    <select class="input-sm" x-model="graxpert.modalUpscaleVersion">
+                        <template x-for="m in modelChoices('upscale')" :key="m.version">
+                            <option :value="m.version" x-text="m.label"></option>
+                        </template>
+                    </select>
+                </label>
+                <label>Scale
+                    <select class="input-sm" x-model.number="graxpert.modalUpscaleScale">
+                        <option :value="2">2×</option>
+                        <option :value="4">4×</option>
+                    </select>
+                </label>
+                <label class="seq-dither-checkbox" style="align-self:end"
+                       x-show="!!window.__polarisIsNativeApp"
+                       title="Run on the device GPU/NPU (NNAPI).">
                     <input type="checkbox" x-model="graxpert.modalUseGpu">
                     Use GPU
                 </label>
@@ -15667,7 +15768,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          build fed the model 100× off inputs → garbage residuals →
          visible tile seams in the output. Also handles object v1.0.0's
          3-input signature (sigma + strenght separate). -->
-    <script src="/js/onnx-pipelines.js?v=20260622-onnxworker1"></script>
+    <script src="/js/onnx-pipelines.js?v=20260629-aitools"></script>
     <!-- On-screen keyboard (tablet). Self-contained, no framework dep; loads
          before Alpine so its focus delegation is live from first paint. -->
     <script src="/js/virtual-keyboard.js?v=20260620-vkbd-ios"></script>
@@ -16361,7 +16462,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260628-afcheckbox"></script>
+    <script src="/js/app.js?v=20260629-aitools"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

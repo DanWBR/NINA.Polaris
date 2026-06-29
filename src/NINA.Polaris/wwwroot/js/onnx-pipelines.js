@@ -1060,8 +1060,10 @@
             return this._runMono(pixels, width, height, o);
         }
         async _runRgb(pixels, width, height, opts = {}) {
-            const family = 'denoise';
-            const version = opts.version || '2.0.0';
+            // Reused by halo removal (same RGB tiled + MAD-normalize + strength
+            // blend recipe), so the family/version are overridable.
+            const family = opts.family || 'denoise';
+            const version = opts.version || (family === 'denoise' ? '2.0.0' : '1.0.0');
             const strength = Math.max(0, Math.min(1, opts.strength != null ? opts.strength : 0.5));
             const TILE = 256, STRIDE = 128, MARGIN = (TILE - STRIDE) / 2;
             const CLIP = version.startsWith('3.') ? 1.0 : 10.0;
@@ -1154,8 +1156,8 @@
             };
         }
         async _runMono(pixels, width, height, opts = {}) {
-            const family = 'denoise';
-            const version = opts.version || '2.0.0';
+            const family = opts.family || 'denoise';
+            const version = opts.version || (family === 'denoise' ? '2.0.0' : '1.0.0');
             const strength = Math.max(0, Math.min(1,
                 opts.strength != null ? opts.strength : 0.5));
             const TILE = 256;
@@ -2061,11 +2063,113 @@
         }
     }
 
+    // ─── Star-halo removal (Polaris's own model) ────────────────────
+    // Same RGB tiled / per-channel MAD-normalize / strength-blend recipe as
+    // denoise; the model maps haloed -> clean. Just point at the 'halo' family.
+    class HaloRemovalPipeline {
+        run(pixels, width, height, opts = {}) {
+            const o = Object.assign({}, opts,
+                { family: 'halo', version: opts.version || '1.0.0' });
+            return new DenoisePipeline().run(pixels, width, height, o);
+        }
+    }
+
+    // ─── Super-resolution / upscaling (Polaris's own model) ──────────
+    // Pre-upsampling SR: the LR input is tiled (128² with a 16px margin), each
+    // tile is run through the NHWC model (LR -> HR x scale), and the inner region
+    // is stitched into a scale×-larger canvas. Per-channel MAD-normalize like the
+    // other RGB models. RGB or mono (mono replicates to 3 in / averages out).
+    class UpscalePipeline {
+        async run(pixels, width, height, opts = {}) {
+            const ort = await loadOrtWeb();
+            const family = 'upscale';
+            const version = opts.version || '1.0.0';
+            const scale = Math.max(2, Math.min(4, Math.round(opts.scale || 2)));
+            const channels = opts.channels === 3 ? 3 : 1;
+            const TILE = 128, MARGIN = 16, STRIDE = TILE - 2 * MARGIN;  // 96 LR
+            const CLIP = 10.0, INV = 1 / 65535;
+            const planeLen = width * height;
+            if (opts.onProgress) opts.onProgress('preparing', null);
+
+            const session = await loadSession(family, version, opts.onProgress, opts.useGpu);
+            const inName = session.inputNames[0];
+            const outName = session.outputNames[0];
+
+            // per-channel robust stats from the input (LR)
+            const med = [], mad = [];
+            for (let c = 0; c < 3; c++) {
+                const src = channels === 3
+                    ? pixels.subarray(c * planeLen, (c + 1) * planeLen) : pixels;
+                const st = medianMadSampledFromUint16(src);
+                med.push(st.median); mad.push(st.mad);
+            }
+
+            const OW = width * scale, OH = height * scale;
+            const dst = new Uint16Array(OW * OH * channels);   // plane-sequential
+            const itw = Math.ceil(width / STRIDE), ith = Math.ceil(height / STRIDE);
+
+            function rd(c, px, py) {            // edge-clamped read, normalized [0,1]
+                let x = px, y = py;
+                if (x < 0) x = 0; else if (x >= width) x = width - 1;
+                if (y < 0) y = 0; else if (y >= height) y = height - 1;
+                const base = channels === 3 ? c * planeLen : 0;
+                return pixels[base + y * width + x] * INV;
+            }
+
+            const tensor = new Float32Array(TILE * TILE * 3);
+            const total = itw * ith; let processed = 0;
+            const t0 = performance.now();
+            const HT = TILE * scale, HM = MARGIN * scale, HS = STRIDE * scale;
+
+            for (let ty = 0; ty < ith; ty++) {
+                for (let tx = 0; tx < itw; tx++) {
+                    const sx = tx * STRIDE - MARGIN, sy = ty * STRIDE - MARGIN;
+                    for (let y = 0; y < TILE; y++) {
+                        for (let x = 0; x < TILE; x++) {
+                            const b = (y * TILE + x) * 3;
+                            for (let c = 0; c < 3; c++) {
+                                const v = (rd(c, sx + x, sy + y) - med[c]) / mad[c] * 0.04;
+                                tensor[b + c] = v > CLIP ? CLIP : (v < -CLIP ? -CLIP : v);
+                            }
+                        }
+                    }
+                    const res = await session.run({
+                        [inName]: new ort.Tensor('float32', tensor, [1, TILE, TILE, 3]),
+                    });
+                    const od = res[outName].data;     // [1, HT, HT, 3]
+                    for (let y = 0; y < HS; y++) {
+                        const oy = ty * HS + y; if (oy >= OH) continue;
+                        const row = (HM + y) * HT;
+                        for (let x = 0; x < HS; x++) {
+                            const ox = tx * HS + x; if (ox >= OW) continue;
+                            const i3 = (row + HM + x) * 3;
+                            for (let c = 0; c < channels; c++) {
+                                const cc = channels === 3 ? c : 0;
+                                const on = channels === 3
+                                    ? od[i3 + c] : (od[i3] + od[i3 + 1] + od[i3 + 2]) / 3;
+                                const dn = on / 0.04 * mad[cc] + med[cc];
+                                let u = (dn * 65535 + 0.5) | 0;
+                                dst[c * OW * OH + oy * OW + ox] = u < 0 ? 0 : (u > 65535 ? 65535 : u);
+                            }
+                        }
+                    }
+                    processed++;
+                    if (opts.onProgress) opts.onProgress('tiles', processed / total);
+                }
+            }
+            return {
+                pixels: dst, width: OW, height: OH, channels,
+                stats: { scale, version, totalTiles: total, inferenceMs: performance.now() - t0 },
+            };
+        }
+    }
+
     // ─── One-shot worker orchestration (memory reclaim) ─────────────
     function _runInPage(kind, pixels, width, height, opts) {
         const map = {
             bge: BgePipeline, denoise: DenoisePipeline,
-            decon: DeconPipeline, starnet: StarRemovalPipeline
+            decon: DeconPipeline, starnet: StarRemovalPipeline,
+            haloremoval: HaloRemovalPipeline, upscale: UpscalePipeline
         };
         const P = map[kind];
         if (!P) return Promise.reject(new Error('unknown pipeline: ' + kind));
@@ -2178,6 +2282,8 @@
         DenoisePipeline,
         DeconPipeline,
         StarRemovalPipeline,
+        HaloRemovalPipeline,
+        UpscalePipeline,
         // One-shot runner with post-run memory reclaim (WASM backend).
         runOneShot,
     };
