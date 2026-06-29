@@ -242,10 +242,22 @@ def find_bright_stars(lum: np.ndarray, max_stars: int = 150,
     return picked
 
 
-def _halo_profile(cy: int, cx: int, radius: float, kind: str, shape):
-    """Return ``(slice_y, slice_x, profile)`` for a halo centred at (cy, cx)."""
+def _halo_profile(cy: int, cx: int, radius: float, kind: str, shape,
+                  soft: float = 0.25):
+    """Return ``(slice_y, slice_x, profile)`` for a halo centred at (cy, cx).
+
+    Shapes match real reflection halos (see references): a **filled disk**
+    brightest at the centre, fading out with a soft-but-defined circular edge
+    (smoothstep) plus a subtle rim; a broad **glow**; or a thin **ring**. ``soft``
+    is the edge transition width as a fraction of ``radius`` (bigger = softer).
+    The bounding box always extends past the falloff so there is no hard cutoff."""
     h, w = shape
-    R = int(radius * 2.6) + 2
+    sw = max(1.5, radius * soft)
+    if kind == "glow":
+        sigma = radius * 0.8
+        R = int(sigma * 3.4) + 2
+    else:  # disk / ring
+        R = int(radius + 4.0 * sw) + 2
     y0, y1 = max(0, cy - R), min(h, cy + R + 1)
     x0, x1 = max(0, cx - R), min(w, cx + R + 1)
     if y1 <= y0 or x1 <= x0:
@@ -254,11 +266,16 @@ def _halo_profile(cy: int, cx: int, radius: float, kind: str, shape):
     xx = np.arange(x0, x1)[None, :] - cx
     rr = np.sqrt(yy * yy + xx * xx).astype(np.float32)
     if kind == "ring":
-        width = max(1.0, radius * 0.22)
-        prof = np.exp(-((rr - radius) ** 2) / (2.0 * width * width))
-    else:  # diffuse glow, hollow-ish core so it reads as a halo not a blob
-        prof = np.exp(-(rr ** 2) / (2.0 * (radius * 0.6) ** 2))
-        prof = prof * (1.0 - np.exp(-(rr ** 2) / (2.0 * (radius * 0.18) ** 2)))
+        prof = np.exp(-((rr - radius) ** 2) / (2.0 * sw * sw))
+    elif kind == "glow":
+        prof = np.exp(-(rr ** 2) / (2.0 * (radius * 0.8) ** 2))
+    else:  # disk: bright centre + soft-edged fill + faint rim
+        t = np.clip((rr - (radius - sw)) / (2.0 * sw), 0.0, 1.0)
+        fill = 1.0 - (t * t * (3.0 - 2.0 * t))                      # smoothstep 1->0
+        center = np.exp(-(rr ** 2) / (2.0 * (radius * 0.5) ** 2))   # central concentration
+        rim = np.exp(-((rr - radius) ** 2) / (2.0 * (sw * 0.9) ** 2))
+        prof = 0.45 * fill + 0.45 * center + 0.22 * rim
+        prof = prof / float(prof.max())
     return (slice(y0, y1), slice(x0, x1), prof.astype(np.float32))
 
 
@@ -289,11 +306,15 @@ def add_star_halos_rgb(clean: np.ndarray, rng: np.random.Generator,
     nch = clean.shape[0]
     n_halo = int(rng.integers(max(1, len(stars) // 4), len(stars) + 1))
     for (cy, cx, peak) in stars[:n_halo]:
-        radius = float(rng.uniform(6.0, 60.0))                 # different sizes
-        kind = "ring" if rng.random() < 0.45 else "glow"
-        base = max(1e-4, peak) * float(rng.uniform(0.01, 0.12))
+        radius = float(rng.uniform(8.0, 70.0))                 # different sizes
+        # disk (filled, soft edge) dominates -- matches real reflection halos;
+        # glow / ring add variety.
+        r = rng.random()
+        kind = "disk" if r < 0.6 else ("glow" if r < 0.85 else "ring")
+        soft = float(rng.uniform(0.18, 0.40))                  # edge softness
+        base = max(1e-4, peak) * float(rng.uniform(0.01, 0.10))
         color = _star_color(clean, cy, cx)                     # same colour as star
-        pp = _halo_profile(cy, cx, radius, kind, out.shape[1:])
+        pp = _halo_profile(cy, cx, radius, kind, out.shape[1:], soft=soft)
         if pp is None:
             continue
         sy, sx, prof = pp
