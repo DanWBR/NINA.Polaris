@@ -38,7 +38,8 @@ public class FieldDeconvolution {
     public bool UseFft { get; set; } = false;
 
     public float[] Deconvolve(float[] image, int width, int height, PsfField field,
-                              float[] supportMask = null, float[] noiseSigma = null) {
+                              float[] supportMask = null, float[] noiseSigma = null,
+                              Action<int, int> tileProgress = null) {
         if (image == null) throw new ArgumentNullException(nameof(image));
         if (field == null) throw new ArgumentNullException(nameof(field));
         if (image.Length != (long)width * height)
@@ -50,6 +51,8 @@ public class FieldDeconvolution {
         int n = image.Length;
         var acc = new float[n];
         var wsum = new float[n];
+        int tilesTotal = field.GridX * field.GridY, tilesDone = 0;
+        tileProgress?.Invoke(0, tilesTotal);
 
         var rl = new RichardsonLucyDeconvolution {
             Iterations = Iterations, TvLambda = TvLambda, ConserveFlux = false,
@@ -105,6 +108,7 @@ public class FieldDeconvolution {
                         wsum[gi] += (float)w;
                     }
                 }
+                tileProgress?.Invoke(++tilesDone, tilesTotal);
             }
         }
 

@@ -31,23 +31,36 @@ public static class Fft {
     /// <summary>In-place 1-D FFT (forward when <paramref name="inverse"/> is
     /// false). Length must be a power of two. No 1/N scaling — applied once in
     /// the 2-D inverse.</summary>
-    public static void Transform1D(float[] re, float[] im, bool inverse) {
-        int n = re.Length;
+    public static void Transform1D(float[] re, float[] im, bool inverse)
+        => Transform1D(re, im, 0, 1, re.Length, inverse);
+
+    /// <summary>
+    /// In-place strided 1-D FFT over <paramref name="n"/> samples starting at
+    /// <paramref name="offset"/> with the given <paramref name="stride"/>
+    /// (stride 1 = a contiguous row; stride = width = a column). Operating in
+    /// place avoids the per-row/column allocations that otherwise dominate a
+    /// large 2-D transform. Length must be a power of two.
+    /// </summary>
+    public static void Transform1D(float[] re, float[] im, int offset, int stride, int n, bool inverse) {
         // bit-reversal permutation
         for (int i = 1, j = 0; i < n; i++) {
             int bit = n >> 1;
             for (; (j & bit) != 0; bit >>= 1) j ^= bit;
             j ^= bit;
-            if (i < j) { (re[i], re[j]) = (re[j], re[i]); (im[i], im[j]) = (im[j], im[i]); }
+            if (i < j) {
+                int ai = offset + i * stride, aj = offset + j * stride;
+                (re[ai], re[aj]) = (re[aj], re[ai]);
+                (im[ai], im[aj]) = (im[aj], im[ai]);
+            }
         }
         for (int len = 2; len <= n; len <<= 1) {
             double ang = 2 * Math.PI / len * (inverse ? 1 : -1);
             float wr = (float)Math.Cos(ang), wi = (float)Math.Sin(ang);
+            int half = len >> 1;
             for (int i = 0; i < n; i += len) {
                 float cr = 1f, ci = 0f;
-                int half = len >> 1;
                 for (int k = 0; k < half; k++) {
-                    int a = i + k, b = i + k + half;
+                    int a = offset + (i + k) * stride, b = offset + (i + k + half) * stride;
                     float xr = re[b] * cr - im[b] * ci;
                     float xi = re[b] * ci + im[b] * cr;
                     re[b] = re[a] - xr; im[b] = im[a] - xi;
@@ -63,23 +76,12 @@ public static class Fft {
     /// In-place 2-D FFT on row-major buffers of length <paramref name="w"/>×
     /// <paramref name="h"/> (both powers of two). The inverse applies the
     /// 1/(w·h) normalization so forward→inverse round-trips to identity.
+    /// Allocation-free: rows and columns are transformed in place via strided
+    /// 1-D FFTs.
     /// </summary>
     public static void Transform2D(float[] re, float[] im, int w, int h, bool inverse) {
-        // rows
-        Parallel.For(0, h, y => {
-            int off = y * w;
-            var rr = new float[w]; var ii = new float[w];
-            Array.Copy(re, off, rr, 0, w); Array.Copy(im, off, ii, 0, w);
-            Transform1D(rr, ii, inverse);
-            Array.Copy(rr, 0, re, off, w); Array.Copy(ii, 0, im, off, w);
-        });
-        // columns
-        Parallel.For(0, w, x => {
-            var rr = new float[h]; var ii = new float[h];
-            for (int y = 0; y < h; y++) { rr[y] = re[y * w + x]; ii[y] = im[y * w + x]; }
-            Transform1D(rr, ii, inverse);
-            for (int y = 0; y < h; y++) { re[y * w + x] = rr[y]; im[y * w + x] = ii[y]; }
-        });
+        Parallel.For(0, h, y => Transform1D(re, im, y * w, 1, w, inverse));   // rows
+        Parallel.For(0, w, x => Transform1D(re, im, x, w, h, inverse));       // columns
         if (inverse) {
             float s = 1f / ((long)w * h);
             for (int i = 0; i < re.Length; i++) { re[i] *= s; im[i] *= s; }

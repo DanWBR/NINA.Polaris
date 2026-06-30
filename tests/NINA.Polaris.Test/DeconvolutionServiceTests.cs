@@ -76,7 +76,7 @@ public class DeconvolutionServiceTests {
             var props = new ImageProperties { Width = W, Height = H, BitDepth = 16, Channels = 1 };
             FITSWriter.Write(new BaseImageData(u, props), srcPath);
 
-            var svc = new DeconvolutionService(NullLogger<DeconvolutionService>.Instance);
+            var svc = new DeconvolutionService(NullLogger<DeconvolutionService>.Instance, new DeconProgressService());
             var res = svc.RichardsonLucy(srcPath, strength: 0.7);
 
             Assert.That(File.Exists(res.OutputPath), Is.True, "should write _rl.fits sibling");
@@ -137,7 +137,7 @@ public class DeconvolutionServiceTests {
         try {
             var props = new ImageProperties { Width = W, Height = H, BitDepth = 16, Channels = 1 };
             FITSWriter.Write(new BaseImageData(u, props), srcPath);
-            var svc = new DeconvolutionService(NullLogger<DeconvolutionService>.Instance);
+            var svc = new DeconvolutionService(NullLogger<DeconvolutionService>.Instance, new DeconProgressService());
             var res = svc.RichardsonLucy(srcPath, strength: 0.7);
 
             ushort[] outU;
@@ -174,7 +174,7 @@ public class DeconvolutionServiceTests {
             var props = new ImageProperties { Width = W, Height = H, BitDepth = 16, Channels = 1 };
             FITSWriter.Write(new BaseImageData(u, props), srcPath);
 
-            var svc = new DeconvolutionService(NullLogger<DeconvolutionService>.Instance);
+            var svc = new DeconvolutionService(NullLogger<DeconvolutionService>.Instance, new DeconProgressService());
             var res = svc.RichardsonLucy(srcPath, strength: 0.7, noiseAdaptive: true);
 
             Assert.That(File.Exists(res.OutputPath), Is.True);

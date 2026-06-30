@@ -202,6 +202,8 @@ builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.PlateSolveProgr
 // Server-authoritative current-exposure tracker so the per-frame countdown
 // ("Xs of Ys") survives a client reconnect across every capture context.
 builder.Services.AddSingleton<CaptureProgressService>();
+// Server-side progress + ETA for the tiled classical RL deconvolution.
+builder.Services.AddSingleton<DeconProgressService>();
 builder.Services.AddSingleton<SlewCenterService>();
 // "Center on Sun/Moon/planet" — solve-near-and-offset (Mode A) for
 // solar-system objects plate solving can't handle directly.

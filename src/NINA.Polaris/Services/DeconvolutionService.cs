@@ -33,9 +33,11 @@ namespace NINA.Polaris.Services;
 /// </summary>
 public class DeconvolutionService {
     private readonly ILogger<DeconvolutionService> _logger;
+    private readonly DeconProgressService _progress;
 
-    public DeconvolutionService(ILogger<DeconvolutionService> logger) {
+    public DeconvolutionService(ILogger<DeconvolutionService> logger, DeconProgressService progress) {
         _logger = logger;
+        _progress = progress;
     }
 
     public sealed record DeconResult(
@@ -137,22 +139,39 @@ public class DeconvolutionService {
             RichardsonLucyDeconvolution.ApplySaturationGuard(mask, lumF, w, h, satLevel, satDilate, feather);
         }
 
-        // FFT convolution keeps the per-iteration cost independent of the
-        // measured PSF stamp size — essential at full resolution / on an SBC.
-        var rl = field ? null : new RichardsonLucyDeconvolution {
+        // Everything runs through the tiled field engine — even the "global"
+        // (single measured PSF) path uses a uniform PSF over a tile grid so the
+        // FFT works on bounded ~512 px tiles (low, predictable memory on an SBC)
+        // and reports per-tile progress. FFT keeps the per-iteration cost
+        // independent of the measured PSF stamp size.
+        PsfField runField;
+        if (field) {
+            runField = psfField;
+        } else {
+            const int tile = 512;
+            int gx = Math.Max(1, (w + tile - 1) / tile);
+            int gy = Math.Max(1, (h + tile - 1) / tile);
+            var cells = new PsfModel[gx * gy];
+            for (int i = 0; i < cells.Length; i++) cells[i] = psf;
+            runField = new PsfField(gx, gy, w, h, cells, psf);
+        }
+        var fd = new FieldDeconvolution {
             Iterations = iters, TvLambda = tvLambda, DampingThreshold = dampingThreshold, UseFft = true
         };
-        var fd = field ? new FieldDeconvolution {
-            Iterations = iters, TvLambda = tvLambda, DampingThreshold = dampingThreshold, UseFft = true
-        } : null;
+
+        using var prog = _progress.Begin(field
+            ? "measuring per-region PSF + deconvolving"
+            : "measuring PSF + deconvolving");
+
         var outData = new ushort[src.Data.Length];
         var planeF = new float[plane];
         for (int c = 0; c < channels; c++) {
             long baseIdx = (long)c * plane;
             for (long i = 0; i < plane; i++) planeF[i] = src.Data[baseIdx + i];
-            var dec = field
-                ? fd.Deconvolve(planeF, w, h, psfField, mask, sigmaMap)
-                : rl.Deconvolve(planeF, w, h, psf, mask, sigmaMap);
+            int channelBase = c;
+            var dec = fd.Deconvolve(planeF, w, h, runField, mask, sigmaMap,
+                (done, total) => _progress.Report(
+                    (channelBase * (double)total + done) / (channels * (double)total)));
             for (long i = 0; i < plane; i++) {
                 int v = (int)(dec[i] + 0.5f);
                 outData[baseIdx + i] = (ushort)(v < 0 ? 0 : (v > 65535 ? 65535 : v));

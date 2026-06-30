@@ -25634,6 +25634,13 @@ function ninaApp() {
         // (POST /api/decon/rl): the host measures the frame's PSF from its own
         // stars and runs TV-regularized RL, writing a {stem}_rl.fits sibling.
         // Reuses the GraXpert modal's progress + completion UX.
+        _fmtEta(seconds) {
+            seconds = Math.max(0, Math.round(seconds));
+            if (seconds < 60) return seconds + 's';
+            const m = Math.floor(seconds / 60), s = seconds % 60;
+            return s ? `${m}m ${s}s` : `${m}m`;
+        },
+
         async _runClassicalRl() {
             const paths = [...this.graxpert.modalPaths];
             this.graxpert.browserActive = true;
@@ -31447,6 +31454,20 @@ function ninaApp() {
             // null/stale). Pass the server "now" so elapsed is measured in
             // server time and re-based onto the local clock.
             this._absorbCaptureProgress(msg.capture, _serverNowMs);
+            // Server-side classical-RL deconvolution progress + ETA. While a
+            // server RL runs, mirror it into the AI-Sharpen modal's progress bar
+            // (the work is on the server, so the client has no per-tile signal
+            // of its own).
+            if (msg.decon && msg.decon.active && this.graxpert?.browserActive) {
+                const d = msg.decon;
+                this.graxpert.browserProgress = d.fraction || 0;
+                let phase = (d.phase || 'deconvolving') + '… ' +
+                    Math.round((d.fraction || 0) * 100) + '%';
+                if (d.etaSeconds != null && d.etaSeconds > 0) {
+                    phase += ' · ~' + this._fmtEta(d.etaSeconds) + ' left';
+                }
+                this.graxpert.browserPhase = phase;
+            }
             // Server-owned LIVE loop (now the only LIVE loop): mirror its
             // running state so the LIVE shutter shows active and a reconnecting/
             // backgrounded browser re-adopts a session that's still going on the

@@ -85,6 +85,7 @@ public static class StatusStreamHandler {
         var plateSolveProgress = context.RequestServices
             .GetRequiredService<NINA.Polaris.Services.PlateSolving.PlateSolveProgressService>();
         var captureProgress = context.RequestServices.GetRequiredService<CaptureProgressService>();
+        var deconProgress = context.RequestServices.GetRequiredService<DeconProgressService>();
         var liveCapture = context.RequestServices.GetRequiredService<LiveCaptureService>();
         var auxCapture = context.RequestServices.GetRequiredService<AuxCaptureService>();
         var logService = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Logging.LogService>();
@@ -666,6 +667,7 @@ public static class StatusStreamHandler {
                         // let the client compute elapsed without trusting its
                         // own (possibly skewed / freshly reloaded) clock.
                         capture = BuildCapturePayload(captureProgress),
+                        decon = BuildDeconPayload(deconProgress),
                         // Opt-in server-owned LIVE loop state. running=true means
                         // the server is driving the LIVE session (the client only
                         // offloads stacking); the LIVE shutter binds to this so a
@@ -773,6 +775,23 @@ public static class StatusStreamHandler {
         } catch {
             return new { runId = 0L, active = false, source = (string?)null,
                          exposureSeconds = 0.0, startedUtc = (string?)null };
+        }
+    }
+
+    private static object BuildDeconPayload(DeconProgressService svc) {
+        try {
+            var s = svc.Snapshot();
+            return new {
+                runId = s.RunId,
+                active = s.Active,
+                phase = s.Phase,
+                fraction = s.Fraction,
+                elapsedSeconds = s.ElapsedSeconds,
+                etaSeconds = s.EtaSeconds
+            };
+        } catch {
+            return new { runId = 0L, active = false, phase = (string?)null,
+                         fraction = 0.0, elapsedSeconds = 0.0, etaSeconds = (double?)null };
         }
     }
 
