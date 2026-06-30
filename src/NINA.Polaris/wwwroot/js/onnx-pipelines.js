@@ -1379,11 +1379,25 @@
                 }
                 return Math.max(0.05, Math.min(0.95, v));
             })();
-            const TILE = 512;
-            const STRIDE = 448;
-            const MARGIN = (TILE - STRIDE) / 2;   // 32
-
             const session = await loadSession(family, version, opts.onProgress, opts.useGpu);
+            const ort = await loadOrtWeb();
+            const inputNames = session.inputNames;
+            const outputName = session.outputNames[0];
+            // Input layout depends on the model:
+            //   • Stars v1.0.0 + Objects v1.0.1: image + "params" [B,2]
+            //   • Objects v1.0.0: image + "sigma" + "strenght" (sic) [B,1] each
+            //   • Polaris detail: single input gen_input_image [B,2,H,W] packed
+            const inputImageName = inputNames.find(n => n.includes('image')) || inputNames[0];
+            const hasSigma = inputNames.includes('sigma');
+            const hasStrenght = inputNames.includes('strenght');
+            const useThreeInputs = hasSigma && hasStrenght;
+            // Polaris detail model: single input [B,2,H,W] packing image+sigma.
+            // Detected by having only one input name (implies 256px tile).
+            const usePacked2ch = inputNames.length === 1 && !useThreeInputs;
+            // GraXpert decon models use 512px tiles; Polaris detail uses 256px.
+            const TILE = usePacked2ch ? 256 : 512;
+            const STRIDE = usePacked2ch ? 192 : 448;
+            const MARGIN = (TILE - STRIDE) / 2;   // 32 either way
 
             // GX-9 (UX): yield before the multi-MB padding + normalize
             // burst so the browser repaints between model-load and
@@ -1403,24 +1417,9 @@
             await _yieldToBrowser();
 
             const out = new Float32Array(padded.length);
-            const ort = await loadOrtWeb();
-            const inputNames = session.inputNames;
-            const outputName = session.outputNames[0];
             // Strength gets the 0.95 cap GraXpert applies (TODO note in
             // GraXpert source: strength=1.0 produces no result).
             const effStrength = strength * 0.95;
-            // Input layout depends on the model:
-            //   • Stars v1.0.0 + Objects v1.0.1: image + "params" [B,2]
-            //   • Objects v1.0.0: image + "sigma" + "strenght" (sic) [B,1] each
-            // Detect by the input-name set rather than versions strings
-            // so future model versions can pick whichever convention.
-            const inputImageName = inputNames.find(n => n.includes('image')) || inputNames[0];
-            const hasSigma = inputNames.includes('sigma');
-            const hasStrenght = inputNames.includes('strenght');
-            const useThreeInputs = hasSigma && hasStrenght;
-            // Polaris detail model: single input [B,2,H,W] packing image+sigma.
-            // Detected by having only one input name.
-            const usePacked2ch = inputNames.length === 1 && !useThreeInputs;
             let extraInputs;
             if (useThreeInputs) {
                 extraInputs = {
