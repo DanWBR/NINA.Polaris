@@ -26,12 +26,20 @@ def psnr(a, b):
 
 
 def ssim(a, b):
-    """Global Gaussian-window SSIM (single scale), numpy + scipy."""
+    """Global Gaussian-window SSIM (single scale), numpy + scipy.
+
+    SSIM's stabilization constants scale with the data range L (C1=(0.01L)^2,
+    C2=(0.03L)^2). Our tensors live in the MAD-normalized domain (roughly
+    +/-10, NOT 0..1), so hardcoding L=1 mis-scales C1/C2 and collapses the
+    score (e.g. 0.49 alongside a 51 dB PSNR). Derive L from the data, like
+    psnr() does, so the number is meaningful and comparable across precisions.
+    """
     from scipy.ndimage import uniform_filter
 
     a = a.astype(np.float64)
     b = b.astype(np.float64)
-    C1, C2 = (0.01 * 1) ** 2, (0.03 * 1) ** 2
+    L = float(max(a.max(), b.max()) - min(a.min(), b.min())) or 1.0
+    C1, C2 = (0.01 * L) ** 2, (0.03 * L) ** 2
     mu_a = uniform_filter(a, 7)
     mu_b = uniform_filter(b, 7)
     va = uniform_filter(a * a, 7) - mu_a ** 2
