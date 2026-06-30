@@ -1418,6 +1418,9 @@
             const hasSigma = inputNames.includes('sigma');
             const hasStrenght = inputNames.includes('strenght');
             const useThreeInputs = hasSigma && hasStrenght;
+            // Polaris detail model: single input [B,2,H,W] packing image+sigma.
+            // Detected by having only one input name.
+            const usePacked2ch = inputNames.length === 1 && !useThreeInputs;
             let extraInputs;
             if (useThreeInputs) {
                 extraInputs = {
@@ -1426,13 +1429,15 @@
                     strenght: new ort.Tensor('float32',
                         new Float32Array([effStrength]), [1, 1]),
                 };
-            } else {
+            } else if (!usePacked2ch) {
                 const inputParamsName = inputNames.find(n => n !== inputImageName) || inputNames[1];
                 extraInputs = {
                     [inputParamsName]: new ort.Tensor('float32',
                         new Float32Array([sigmaNormalized, effStrength]),
                         [1, 2]),
                 };
+            } else {
+                extraInputs = {};  // packed below in tile loop
             }
             const totalTiles = itw * ith;
             let processed = 0;
@@ -1481,8 +1486,16 @@
                         tensorData[i] = (tile[i] - mean) * invStd10;
                     }
 
-                    const inputTensor = new ort.Tensor('float32',
-                        tensorData, [1, 1, TILE, TILE]);
+                    let inputTensor;
+                    if (usePacked2ch) {
+                        // Polaris detail model: [B, 2, H, W] — ch0=image, ch1=sigma.
+                        const packed = new Float32Array(2 * TILE * TILE);
+                        packed.set(tensorData, 0);
+                        packed.fill(sigmaNormalized, TILE * TILE);
+                        inputTensor = new ort.Tensor('float32', packed, [1, 2, TILE, TILE]);
+                    } else {
+                        inputTensor = new ort.Tensor('float32', tensorData, [1, 1, TILE, TILE]);
+                    }
                     const result = await session.run({
                         [inputImageName]: inputTensor,
                         ...extraInputs,
