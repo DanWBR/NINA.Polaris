@@ -14411,7 +14411,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </select>
                 </label>
             </div>
-            <div class="siril-modal-row" x-show="graxpert.modalOp === 'deconvolution'">
+            <!-- Strength + FWHM share one row, bottom-aligned so the slider and
+                 the number input line up regardless of label height. -->
+            <div class="siril-modal-row" x-show="graxpert.modalOp === 'deconvolution'"
+                 style="align-items:flex-end">
                 <label>Deconvolution Strength
                     <!-- GX-12p: slider + numeric readout. Touch-friendly
                          on iPhone (the type=number stepper is tiny + the
@@ -14430,17 +14433,23 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <input type="number" class="input-sm" step="0.1" min="0.5" max="20"
                            x-model.number="graxpert.modalDeconPsfSize">
                 </label>
+            </div>
+            <!-- Toggles on their own row, left-aligned, so they don't fight the
+                 stacked label+control heights above. -->
+            <div class="siril-modal-row" x-show="graxpert.modalOp === 'deconvolution'
+                       && (_deconSelection().family === 'rl' || !!window.__polarisIsNativeApp)"
+                 style="gap:18px">
                 <!-- NM-2: classical measured-PSF RL only. Ramps the support
                      mask on measured local SNR (photon-transfer σ map) instead
                      of a flat background threshold, so shot noise on bright
                      nebulosity is respected and faint signal isn't over-held. -->
-                <label class="seq-dither-checkbox" style="align-self:end"
+                <label class="seq-dither-checkbox" style="flex:0 0 auto"
                        x-show="_deconSelection().family === 'rl'"
                        title="Restrict sharpening by measured local signal-to-noise (photon-transfer σ map) rather than a flat background-noise threshold.">
                     <input type="checkbox" x-model="graxpert.modalDeconNoiseAdaptive">
                     Noise-adaptive (measured σ)
                 </label>
-                <label class="seq-dither-checkbox" style="align-self:end"
+                <label class="seq-dither-checkbox" style="flex:0 0 auto"
                        x-show="!!window.__polarisIsNativeApp"
                        title="Run on the device GPU/NPU (NNAPI). Faster on powerful tablets; uses more memory.">
                     <input type="checkbox" x-model="graxpert.modalUseGpu">
