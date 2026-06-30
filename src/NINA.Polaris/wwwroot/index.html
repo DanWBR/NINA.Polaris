@@ -14450,6 +14450,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     Noise-adaptive (measured σ)
                 </label>
                 <label class="seq-dither-checkbox" style="flex:0 0 auto"
+                       x-show="_deconSelection().family === 'rl'"
+                       title="Keep every detected star as the original pixel data — only the diffuse signal (nebula/galaxy) is deconvolved. Prevents dark halos on stars. Disable if you have corrected colour fringing upstream and want the stars sharpened too.">
+                    <input type="checkbox" x-model="graxpert.modalDeconProtectStars">
+                    Protect stars
+                </label>
+                <label class="seq-dither-checkbox" style="flex:0 0 auto"
                        x-show="!!window.__polarisIsNativeApp"
                        title="Run on the device GPU/NPU (NNAPI). Faster on powerful tablets; uses more memory.">
                     <input type="checkbox" x-model="graxpert.modalUseGpu">
@@ -16457,7 +16463,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260630-deconprogress"></script>
+    <script src="/js/app.js?v=20260630-staroption"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

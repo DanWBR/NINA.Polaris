@@ -2451,6 +2451,7 @@ function ninaApp() {
             // SNR (photon-transfer σ map) instead of a flat background noise
             // threshold, so shot noise on bright nebulosity is respected.
             modalDeconNoiseAdaptive: false,
+            modalDeconProtectStars: true,
             // GX-12h: parity with GraXpert UI, pick the dedicated
             // decon-stars or decon-objects ONNX model. Browser path
             // forwards as opts.target; CLI path tags the family in
@@ -25658,6 +25659,7 @@ function ninaApp() {
                     strength: this.graxpert.modalDeconStrength,
                     supportMask: true,
                     noiseAdaptive: !!this.graxpert.modalDeconNoiseAdaptive,
+                    protectStars: !!this.graxpert.modalDeconProtectStars,
                     field,
                     grid: 3
                 }, { timeout: 1800000 });   // RL on a full master is slow on CPU

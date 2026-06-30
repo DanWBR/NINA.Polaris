@@ -57,7 +57,7 @@ public class DeconvolutionService {
     public DeconResult RichardsonLucy(string sourcePath, double strength = 0.5,
                                       double tvLambda = 0.002, bool supportMask = true,
                                       bool field = false, int grid = 3,
-                                      bool noiseAdaptive = false) {
+                                      bool noiseAdaptive = false, bool protectStars = true) {
         if (string.IsNullOrWhiteSpace(sourcePath))
             throw new ArgumentException("sourcePath is required", nameof(sourcePath));
         if (!File.Exists(sourcePath))
@@ -124,10 +124,43 @@ public class DeconvolutionService {
             for (long i = 0; i < plane; i++) mask[i] = 1f;
         }
 
-        // Saturation guard: keep the original over genuinely clipped star cores
-        // (and a PSF-sized halo) so they don't ring. Only engage when the frame
-        // actually reaches near the 16-bit ceiling — i.e. there IS clipping;
-        // otherwise every bright (but unclipped) star would be wrongly frozen.
+        // Star guard (optional): protect every detected star from RL so only
+        // the diffuse signal (nebula/galaxy) is deconvolved. Eliminates dark
+        // rings on stars caused by PSF residuals, at the cost of not sharpening
+        // the stars themselves. When off, RL runs on the full frame (stars +
+        // diffuse) — correct if colour fringing / debayer artefacts are fixed
+        // upstream, as those are what RL amplifies into the visible dark crescent.
+        if (protectStars) try {
+            // MaxStarSize bounded so genuinely extended structure (nebula /
+            // galaxy) is NOT classified as a star and protected — big saturated
+            // star cores are still caught here, and the saturation guard below
+            // is the fallback for anything larger.
+            var det = new StarDetector {
+                MaxStarSize = 5000,
+                MinHfr = 0.3, SigmaThreshold = 4.0, BorderExclusion = 0, MaxStars = 2000
+            };
+            var stars = det.Detect(lum, w, h);
+            if (stars.Count > 0) {
+                var sx = new double[stars.Count];
+                var sy = new double[stars.Count];
+                var sr = new double[stars.Count];
+                double hfrSum = 0;
+                for (int i = 0; i < stars.Count; i++) {
+                    sx[i] = stars[i].X; sy[i] = stars[i].Y;
+                    double hfr = stars[i].HFR > 0 ? stars[i].HFR : 2.0;
+                    sr[i] = Math.Clamp(3.0 * hfr + 2, 5, 60);   // cover wings + ring zone
+                    hfrSum += hfr;
+                }
+                int feather = (int)Math.Clamp(2.0 * (hfrSum / stars.Count), 4, 24);
+                RichardsonLucyDeconvolution.ApplyStarGuard(mask, w, h, sx, sy, sr, feather);
+            }
+        } catch (Exception sgEx) {
+            _logger.LogWarning(sgEx, "RL star guard: star detection failed; proceeding without it");
+        } // end if (protectStars)
+
+        // Saturation guard: belt-and-braces over any clipped cores the star
+        // detector might miss. Only engage when the frame actually reaches near
+        // the 16-bit ceiling — i.e. there IS clipping.
         const double ceiling = 65535.0;
         ushort maxLum = 0;
         for (long i = 0; i < plane; i++) if (lum[i] > maxLum) maxLum = lum[i];
