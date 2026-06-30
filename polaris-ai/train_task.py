@@ -106,6 +106,10 @@ def main():
                     help="quantization-aware training: STE fake-quant so int8/int16 "
                          "export is near-lossless (best fine-tuned from an fp32 --resume)")
     ap.add_argument("--qat-bits", type=int, default=8, choices=[8, 16])
+    ap.add_argument("--qat-batch", type=int, default=0,
+                    help="batch size override for QAT (0 = auto: batch//4, or batch//8 "
+                         "for upscale which 2×-upsamples the input before the UNet). "
+                         "Ignored unless --qat is set.")
     ap.add_argument("--scale", type=int, default=2, choices=[2, 3, 4],
                     help="(upscale) super-resolution factor")
     args = ap.parse_args()
@@ -113,6 +117,30 @@ def main():
     out = args.out or f"checkpoints/{args.task}"
     os.makedirs(out, exist_ok=True)
     dev = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # QAT fake-quant hooks materialise extra activation copies for each
+    # Conv that stay alive for backward, multiplying peak memory. To avoid
+    # OOM and Windows TDR (GPU watchdog killing a kernel that runs >~2s),
+    # auto-scale the batch down when --qat is active.
+    # Upscale is doubly expensive: UpscaleNet runs self.up(x) BEFORE the
+    # UNet, so the network sees (scale×tile)² tiles internally → 4× memory
+    # vs a same-sized standard tile, hence the extra halving.
+    if args.qat:
+        import os as _os
+        # Reduce CUDA memory fragmentation (recommended by PyTorch OOM messages).
+        if dev == "cuda":
+            _os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+        if args.qat_batch > 0:
+            eff_batch = args.qat_batch
+        elif args.task == "upscale":
+            eff_batch = max(1, args.batch // 8)
+        else:
+            eff_batch = max(1, args.batch // 4)
+        if eff_batch != args.batch:
+            print(f"QAT: auto-scaling batch {args.batch} → {eff_batch} "
+                  f"(fake-quant hooks multiply activation memory; use --qat-batch N to override)")
+        args.batch = eff_batch
+
     print("device:", dev, "| task:", args.task)
 
     full, val_ds = build_dataset(args)

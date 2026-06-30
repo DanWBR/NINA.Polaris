@@ -34,7 +34,7 @@ param(
     [switch]$Prep,
     [switch]$NoQat,
     [int]$Workers = 4,
-    [int]$Batch = 0,            # 0 = per-phase defaults (8 fp32 / 6 qat)
+    [int]$Batch = 0,            # 0 = per-phase default (8); QAT auto-scales further in train_task.py
     [int]$Base = 0,             # 0 = per-task default; override for a lighter net
     [int]$Blocks = 0,           # 0 = per-task default; lower = fewer params / less power
     [string]$Models = "models"
@@ -123,7 +123,9 @@ if ($Cpu) {
 }
 
 $fpBatch = if ($Batch -gt 0) { $Batch } else { 8 }
-$qatBatch = if ($Batch -gt 0) { $Batch } else { 6 }
+# QAT batch is NOT set here; train_task.py auto-scales --batch down (÷4 for
+# most tasks, ÷8 for upscale) when --qat is active, to compensate for the extra
+# activation tensor copies from fake-quant hooks.  Pass $fpBatch and let it scale.
 Write-Host ("GPU={0} tasks={1} qat={2}" -f $Gpu, ($list -join ","), (-not $NoQat)) -ForegroundColor Yellow
 
 foreach ($t in $list) {
@@ -144,9 +146,11 @@ foreach ($t in $list) {
     $ckpt = "checkpoints/$t/best.pt"
 
     # QAT (int8 from scratch, fine-tuned from fp32)
+    # Pass $fpBatch; train_task.py auto-scales it down (÷4 or ÷8 for upscale)
+    # to stay within GPU memory when fake-quant hooks are active.
     if (-not $NoQat) {
         $qa = @("train_task.py", "--task", $t, "--qat", "--resume", "checkpoints/$t/best.pt",
-            "--lr", "5e-5", "--epochs", "$($c.qat)", "--batch", "$qatBatch",
+            "--lr", "5e-5", "--epochs", "$($c.qat)", "--batch", "$fpBatch",
             "--workers", "$Workers", "--base", "$nBase", "--blocks", "$nBlocks",
             "--out", "checkpoints/${t}_qat") + (Get-DataArgs $c $true)
         Invoke-Step "train $t qat $($c.qat)ep" $qa
