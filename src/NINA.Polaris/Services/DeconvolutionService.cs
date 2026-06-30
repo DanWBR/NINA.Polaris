@@ -99,33 +99,58 @@ public class DeconvolutionService {
         int iters = RichardsonLucyDeconvolution.IterationsFromStrength(strength);
         if (iters <= 0) iters = 1;
 
-        // Background support mask from luminance (built once, reused per channel).
-        // noiseAdaptive ramps on local SNR using a measured photon-transfer σ map
-        // (NoiseMap) so shot noise on bright nebulosity is respected per pixel;
-        // otherwise a flat background-noise threshold is used.
-        float[] mask = null;
+        // Measured photon-transfer noise map (σ per pixel) from luminance. It
+        // drives damped Richardson-Lucy (White 1994) so the iteration doesn't
+        // amplify noise or ring around stars — the main cause of the dark halos
+        // vanilla RL produces — and optionally the noise-adaptive support mask.
+        var (bg, noise) = PsfExtractor.EstimateBackgroundNoise(lum);
+        var sigmaMap = NoiseMap.Estimate(lum, w, h, out _);
+        const double dampingThreshold = 2.5;  // σ units
+
+        // Support mask from luminance (built once, reused per channel). Even
+        // when the signal support mask is off we still build an all-pass mask so
+        // the saturation guard can protect clipped-star cores + halos.
+        var lumF = new float[plane];
+        for (long i = 0; i < plane; i++) lumF[i] = lum[i];
+        float[] mask;
         if (supportMask) {
-            var (bg, noise) = PsfExtractor.EstimateBackgroundNoise(lum);
-            var lumF = new float[plane];
-            for (long i = 0; i < plane; i++) lumF[i] = lum[i];
-            if (noiseAdaptive) {
-                var sigmaMap = NoiseMap.Estimate(lum, w, h, out _);
-                mask = RichardsonLucyDeconvolution.BuildNoiseAdaptiveSupportMask(lumF, sigmaMap, bg);
-            } else {
-                mask = RichardsonLucyDeconvolution.BuildSupportMask(lumF, w, h, bg, noise);
-            }
+            mask = noiseAdaptive
+                ? RichardsonLucyDeconvolution.BuildNoiseAdaptiveSupportMask(lumF, sigmaMap, bg)
+                : RichardsonLucyDeconvolution.BuildSupportMask(lumF, w, h, bg, noise);
+        } else {
+            mask = new float[plane];
+            for (long i = 0; i < plane; i++) mask[i] = 1f;
         }
 
-        var rl = field ? null : new RichardsonLucyDeconvolution { Iterations = iters, TvLambda = tvLambda };
-        var fd = field ? new FieldDeconvolution { Iterations = iters, TvLambda = tvLambda } : null;
+        // Saturation guard: keep the original over genuinely clipped star cores
+        // (and a PSF-sized halo) so they don't ring. Only engage when the frame
+        // actually reaches near the 16-bit ceiling — i.e. there IS clipping;
+        // otherwise every bright (but unclipped) star would be wrongly frozen.
+        const double ceiling = 65535.0;
+        ushort maxLum = 0;
+        for (long i = 0; i < plane; i++) if (lum[i] > maxLum) maxLum = lum[i];
+        if (maxLum >= 0.90 * ceiling) {
+            double satLevel = 0.97 * ceiling;
+            int satDilate = (field ? psfField.Global.Radius : psf.Radius) + 3;
+            RichardsonLucyDeconvolution.ApplySaturationGuard(mask, lumF, w, h, satLevel, satDilate);
+        }
+
+        // FFT convolution keeps the per-iteration cost independent of the
+        // measured PSF stamp size — essential at full resolution / on an SBC.
+        var rl = field ? null : new RichardsonLucyDeconvolution {
+            Iterations = iters, TvLambda = tvLambda, DampingThreshold = dampingThreshold, UseFft = true
+        };
+        var fd = field ? new FieldDeconvolution {
+            Iterations = iters, TvLambda = tvLambda, DampingThreshold = dampingThreshold, UseFft = true
+        } : null;
         var outData = new ushort[src.Data.Length];
         var planeF = new float[plane];
         for (int c = 0; c < channels; c++) {
             long baseIdx = (long)c * plane;
             for (long i = 0; i < plane; i++) planeF[i] = src.Data[baseIdx + i];
             var dec = field
-                ? fd.Deconvolve(planeF, w, h, psfField, mask)
-                : rl.Deconvolve(planeF, w, h, psf, mask);
+                ? fd.Deconvolve(planeF, w, h, psfField, mask, sigmaMap)
+                : rl.Deconvolve(planeF, w, h, psf, mask, sigmaMap);
             for (long i = 0; i < plane; i++) {
                 int v = (int)(dec[i] + 0.5f);
                 outData[baseIdx + i] = (ushort)(v < 0 ? 0 : (v > 65535 ? 65535 : v));

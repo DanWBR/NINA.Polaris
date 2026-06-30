@@ -97,6 +97,69 @@ public class DeconvolutionServiceTests {
         }
     }
 
+    // Plants a saturated (clipped) bright star on a noisy background — the case
+    // that makes vanilla RL ring a dark halo. With damping + the saturation
+    // guard the deconvolved frame must not dig a deep black ring (pixels driven
+    // well below the background) around that star.
+    private static ushort[] SaturatedStarField(int w, int h, double bg, int seed = 7) {
+        var rng = new Random(seed);
+        var img = new ushort[w * h];
+        for (int i = 0; i < img.Length; i++)
+            img[i] = (ushort)Math.Clamp((int)Math.Round(bg + Gaussian(rng) * 10), 0, 65535);
+        // a regular grid of well-separated, unsaturated round stars so the PSF
+        // can be measured (≥8 clean probes), plus ONE saturated star at the
+        // centre (200,200) — the one whose ring we check.
+        void Plant(int cx, int cy, double amp) {
+            for (int y = -8; y <= 8; y++)
+                for (int x = -8; x <= 8; x++) {
+                    int ix = cx + x, iy = cy + y;
+                    if (ix < 0 || iy < 0 || ix >= w || iy >= h) continue;
+                    double v = img[iy * w + ix] + amp * Math.Exp(-(x * x + y * y) / (2 * 1.6 * 1.6));
+                    img[iy * w + ix] = (ushort)Math.Clamp((int)Math.Round(v), 0, 65535);
+                }
+        }
+        for (int cy = 50; cy <= 350; cy += 60)
+            for (int cx = 50; cx <= 350; cx += 60) {
+                if (Math.Abs(cx - 200) <= 30 && Math.Abs(cy - 200) <= 30) continue; // leave centre
+                Plant(cx, cy, 9000 + (rng.NextDouble() - 0.5) * 1500);
+            }
+        Plant(200, 200, 300000);   // saturates → clipped at 65535
+        return img;
+    }
+
+    [Test]
+    public void RichardsonLucy_SaturatedStar_NoDarkRing() {
+        const int W = 400, H = 400; const double bg = 800;
+        var u = SaturatedStarField(W, H, bg);
+        var dir = Path.Combine(Path.GetTempPath(), "polaris_rlsat_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var srcPath = Path.Combine(dir, "sat.fits");
+        try {
+            var props = new ImageProperties { Width = W, Height = H, BitDepth = 16, Channels = 1 };
+            FITSWriter.Write(new BaseImageData(u, props), srcPath);
+            var svc = new DeconvolutionService(NullLogger<DeconvolutionService>.Instance);
+            var res = svc.RichardsonLucy(srcPath, strength: 0.7);
+
+            ushort[] outU;
+            using (var fs = File.OpenRead(res.OutputPath)) outU = FITSReader.Read(fs).Data;
+
+            // Scan the annulus around the saturated star (centre 200,200) for the
+            // darkest pixel — it must not be dug far below the background.
+            double minRing = double.MaxValue;
+            for (int y = 200 - 14; y <= 200 + 14; y++)
+                for (int x = 200 - 14; x <= 200 + 14; x++) {
+                    int r2 = (x - 200) * (x - 200) + (y - 200) * (y - 200);
+                    if (r2 < 8 * 8 || r2 > 14 * 14) continue;     // ring band
+                    if (outU[y * W + x] < minRing) minRing = outU[y * W + x];
+                }
+            TestContext.WriteLine($"darkest ring pixel = {minRing} (bg {bg})");
+            Assert.That(minRing, Is.GreaterThan(bg * 0.5),
+                "saturated star must not be ringed by a deep black halo");
+        } finally {
+            try { Directory.Delete(dir, true); } catch { /* best-effort */ }
+        }
+    }
+
     [Test]
     public void RichardsonLucy_NoiseAdaptive_WritesAndSharpens() {
         // NM-2: the measured-σ support mask path must run end-to-end (build the

@@ -44,6 +44,25 @@ public class RichardsonLucyDeconvolution {
     /// the small residual drift from boundary handling.</summary>
     public bool ConserveFlux { get; set; } = true;
 
+    /// <summary>
+    /// Use FFT-based convolution instead of the spatial path. Cost becomes
+    /// O(N log N) independent of the PSF stamp size — essential for full-res
+    /// frames with large measured PSFs on a low-power SBC. Numerically
+    /// equivalent to the spatial path in the interior (zero-padded linear
+    /// convolution with edge replication).
+    /// </summary>
+    public bool UseFft { get; set; } = false;
+
+    /// <summary>
+    /// Damping threshold T (in units of the measured noise σ) for damped
+    /// Richardson-Lucy (White 1994). When &gt; 0 AND a per-pixel σ map is
+    /// supplied, the RL correction is suppressed wherever the re-blurred model
+    /// already matches the data to within ~T·σ — this is what kills the
+    /// noise amplification and the dark over/under-shoot rings around stars
+    /// that plague vanilla RL. 0 disables damping (classic RL).
+    /// </summary>
+    public double DampingThreshold { get; set; } = 0;
+
     private const float Eps = 1e-6f;
 
     /// <summary>Map a 0..1 UI strength to an iteration count (0 = no-op).</summary>
@@ -53,11 +72,11 @@ public class RichardsonLucyDeconvolution {
     }
 
     public float[] Deconvolve(ushort[] image, int width, int height, PsfModel psf,
-                              float[] supportMask = null) {
+                              float[] supportMask = null, float[] noiseSigma = null) {
         if (image == null) throw new ArgumentNullException(nameof(image));
         var f = new float[image.Length];
         for (int i = 0; i < image.Length; i++) f[i] = image[i];
-        return Deconvolve(f, width, height, psf, supportMask);
+        return Deconvolve(f, width, height, psf, supportMask, noiseSigma);
     }
 
     /// <summary>
@@ -67,13 +86,17 @@ public class RichardsonLucyDeconvolution {
     /// deconvolution is used.
     /// </summary>
     public float[] Deconvolve(float[] image, int width, int height, PsfModel psf,
-                              float[] supportMask = null) {
+                              float[] supportMask = null, float[] noiseSigma = null) {
         if (image == null) throw new ArgumentNullException(nameof(image));
         if (psf == null) throw new ArgumentNullException(nameof(psf));
         if (image.Length != (long)width * height)
             throw new ArgumentException("image length != width*height", nameof(image));
         if (supportMask != null && supportMask.Length != image.Length)
             throw new ArgumentException("mask length != image length", nameof(supportMask));
+        if (noiseSigma != null && noiseSigma.Length != image.Length)
+            throw new ArgumentException("sigma length != image length", nameof(noiseSigma));
+
+        bool damp = DampingThreshold > 0 && noiseSigma != null;
 
         int n = image.Length;
         int ks = psf.Size, kr = ks / 2;
@@ -93,9 +116,33 @@ public class RichardsonLucyDeconvolution {
         var corr = new float[n];
         float[] tv = TvLambda > 0 ? new float[n] : null;
 
+        // FFT engine (built once from the PSF) when enabled — convolution cost
+        // then no longer scales with the kernel size.
+        var fft = UseFft ? new FftConvolver(h, ks, width, height) : null;
+
+        float dampT = (float)DampingThreshold;
         for (int it = 0; it < Iterations; it++) {
-            Correlate(est, width, height, flipH, ks, kr, blur);      // H·e
-            for (int i = 0; i < n; i++) ratio[i] = obs[i] / (blur[i] + Eps);
+            if (fft != null) { var b = fft.Convolve(est); Array.Copy(b, blur, n); }  // H·e
+            else Correlate(est, width, height, flipH, ks, kr, blur);                 // H·e
+            if (damp) {
+                // Damped RL (White 1994): suppress the correction where the
+                // re-blurred model already fits the data to within ~T·σ. The
+                // raw ratio r = d/(H·e) is pulled toward 1 by a factor U that
+                // ramps 0→1 as the residual |d − H·e| grows from 0 to T·σ, so
+                // sub-noise corrections (noise speckle, over/under-shoot rings)
+                // are not amplified, while genuine under-fit structure still
+                // gets the full RL push.
+                for (int i = 0; i < n; i++) {
+                    float r = obs[i] / (blur[i] + Eps);
+                    float sig = noiseSigma[i] > Eps ? noiseSigma[i] : Eps;
+                    float z = Math.Abs(obs[i] - blur[i]) / (dampT * sig);
+                    if (z > 1f) z = 1f;
+                    float u = z * z * (3f - 2f * z);                 // smoothstep
+                    ratio[i] = 1f + u * (r - 1f);
+                }
+            } else {
+                for (int i = 0; i < n; i++) ratio[i] = obs[i] / (blur[i] + Eps);
+            }
             Correlate(ratio, width, height, h, ks, kr, corr);        // Hᵀ·(d / H·e)
 
             if (tv != null) {
@@ -178,6 +225,45 @@ public class RichardsonLucyDeconvolution {
             mask[i] = (float)(t * t * (3 - 2 * t));
         }
         return mask;
+    }
+
+    /// <summary>
+    /// Zero the support <paramref name="mask"/> within <paramref name="dilate"/>
+    /// pixels of any saturated pixel (≥ <paramref name="satLevel"/>). The cores
+    /// of saturated stars are clipped — the PSF can't reconcile a flat-topped
+    /// peak, so RL drives the surrounding wing pixels down and rings them with a
+    /// dark halo. Keeping the original over those stars (and a halo the size of
+    /// the PSF) removes that artifact; they can't be honestly deconvolved
+    /// anyway. No-op when nothing is saturated.
+    /// </summary>
+    public static void ApplySaturationGuard(float[] mask, float[] image, int width, int height,
+                                            double satLevel, int dilate) {
+        if (mask == null || image == null || dilate < 0) return;
+        int n = image.Length;
+        var sat = new bool[n];
+        bool any = false;
+        for (int i = 0; i < n; i++) if (image[i] >= satLevel) { sat[i] = true; any = true; }
+        if (!any) return;
+
+        // Separable box dilation of the saturated set by `dilate` px each axis.
+        var rowD = new bool[n];
+        Parallel.For(0, height, y => {
+            int row = y * width;
+            for (int x = 0; x < width; x++) {
+                bool hit = false;
+                int x0 = Math.Max(0, x - dilate), x1 = Math.Min(width - 1, x + dilate);
+                for (int xx = x0; xx <= x1 && !hit; xx++) if (sat[row + xx]) hit = true;
+                rowD[row + x] = hit;
+            }
+        });
+        Parallel.For(0, width, x => {
+            for (int y = 0; y < height; y++) {
+                bool hit = false;
+                int y0 = Math.Max(0, y - dilate), y1 = Math.Min(height - 1, y + dilate);
+                for (int yy = y0; yy <= y1 && !hit; yy++) if (rowD[yy * width + x]) hit = true;
+                if (hit) mask[y * width + x] = 0f;
+            }
+        });
     }
 
     // ── spatial cross-correlation with reflect borders (parallel over rows) ──

@@ -120,6 +120,35 @@ public class RichardsonLucyTests {
         Assert.That(after, Is.GreaterThan(2.0), "but not collapse below the true sharp width");
     }
 
+    // ── FFT convolution path matches the spatial path in the interior ───────
+    [Test]
+    public void FftMatchesSpatial() {
+        const int W = 256, H = 256;
+        var sharp = MakeSharpField(W, H, 1.0, 30000, seed: 4);
+        var psf = PsfModel.Gaussian(21, 2.0);
+        var blurred = Convolve(sharp, W, H, psf);
+        AddNoise(blurred, 8, seed: 2);
+
+        var spatial = new RichardsonLucyDeconvolution {
+            Iterations = 15, TvLambda = 0.001, UseFft = false
+        }.Deconvolve((float[])blurred.Clone(), W, H, psf);
+        var fft = new RichardsonLucyDeconvolution {
+            Iterations = 15, TvLambda = 0.001, UseFft = true
+        }.Deconvolve((float[])blurred.Clone(), W, H, psf);
+
+        // Compare the interior (avoid the few-px border where padding differs).
+        double maxRel = 0, refMax = 0;
+        for (int y = 24; y < H - 24; y++)
+            for (int x = 24; x < W - 24; x++) {
+                int i = y * W + x;
+                refMax = Math.Max(refMax, Math.Abs(spatial[i]));
+                maxRel = Math.Max(maxRel, Math.Abs(spatial[i] - fft[i]));
+            }
+        double rel = maxRel / Math.Max(1, refMax);
+        TestContext.WriteLine($"max interior |spatial-fft| = {maxRel:F2} ({100 * rel:F2}% of peak)");
+        Assert.That(rel, Is.LessThan(0.02), "FFT path must match the spatial path");
+    }
+
     // ── photometric safety: total flux preserved ────────────────────────────
     [Test]
     public void ConservesFlux() {

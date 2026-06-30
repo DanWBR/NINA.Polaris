@@ -29,12 +29,22 @@ public class FieldDeconvolution {
     public double TvLambda { get; set; } = 0.002;
     public bool ConserveFlux { get; set; } = true;
 
+    /// <summary>Damped-RL threshold (σ units) forwarded to each tile; see
+    /// <see cref="RichardsonLucyDeconvolution.DampingThreshold"/>.</summary>
+    public double DampingThreshold { get; set; } = 0;
+
+    /// <summary>Forward FFT convolution to each tile's RL (kernel-size
+    /// independent cost); see <see cref="RichardsonLucyDeconvolution.UseFft"/>.</summary>
+    public bool UseFft { get; set; } = false;
+
     public float[] Deconvolve(float[] image, int width, int height, PsfField field,
-                              float[] supportMask = null) {
+                              float[] supportMask = null, float[] noiseSigma = null) {
         if (image == null) throw new ArgumentNullException(nameof(image));
         if (field == null) throw new ArgumentNullException(nameof(field));
         if (image.Length != (long)width * height)
             throw new ArgumentException("image length != width*height", nameof(image));
+        if (noiseSigma != null && noiseSigma.Length != image.Length)
+            throw new ArgumentException("sigma length != image length", nameof(noiseSigma));
         if (Iterations <= 0) return (float[])image.Clone();
 
         int n = image.Length;
@@ -42,7 +52,8 @@ public class FieldDeconvolution {
         var wsum = new float[n];
 
         var rl = new RichardsonLucyDeconvolution {
-            Iterations = Iterations, TvLambda = TvLambda, ConserveFlux = false
+            Iterations = Iterations, TvLambda = TvLambda, ConserveFlux = false,
+            DampingThreshold = DampingThreshold, UseFft = UseFft
         };
 
         double cellW = (double)width / field.GridX;
@@ -69,9 +80,13 @@ public class FieldDeconvolution {
 
                 // Extract tile, deconvolve with this cell's PSF.
                 var tile = new float[tw * th];
-                for (int y = 0; y < th; y++)
+                float[] sigTile = noiseSigma != null ? new float[tw * th] : null;
+                for (int y = 0; y < th; y++) {
                     Array.Copy(image, (long)(ty0 + y) * width + tx0, tile, (long)y * tw, tw);
-                var dec = rl.Deconvolve(tile, tw, th, psf);
+                    if (sigTile != null)
+                        Array.Copy(noiseSigma, (long)(ty0 + y) * width + tx0, sigTile, (long)y * tw, tw);
+                }
+                var dec = rl.Deconvolve(tile, tw, th, psf, null, sigTile);
 
                 bool featherL = cx0 > 0, featherR = cx1 < width;
                 bool featherT = cy0 > 0, featherB = cy1 < height;
