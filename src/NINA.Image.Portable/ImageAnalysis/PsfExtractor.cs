@@ -114,19 +114,86 @@ public class PsfExtractor {
             .ToList();
 
         if (probes.Count < MinStars) return null;
+        return BuildPsf(data, width, height, probes, r, size, CombineSigma, MinStars);
+    }
 
-        // Build aligned, background-subtracted, normalized stamps.
+    /// <summary>
+    /// Measure a spatially-varying PSF: split the frame into a
+    /// <paramref name="gridX"/>×<paramref name="gridY"/> grid and fit a PSF per
+    /// cell from the stars in (a margin-expanded) cell, falling back to the
+    /// global PSF where a cell is too star-poor. This is what lets the
+    /// deconvolution treat corners differently from the centre — field
+    /// curvature / coma / tilt make the PSF vary across the frame, and almost
+    /// no consumer tool models that. Returns null when even the global PSF
+    /// can't be measured.
+    /// </summary>
+    public PsfField ExtractField(ushort[] data, int width, int height,
+                                 int gridX = 3, int gridY = 3,
+                                 IList<DetectedStar> stars = null) {
+        if (data == null) throw new ArgumentNullException(nameof(data));
+        gridX = Math.Max(1, gridX); gridY = Math.Max(1, gridY);
+
+        stars ??= _detector.Detect(data, width, height);
+        if (stars == null || stars.Count == 0) return null;
+
+        (double bg, double noise) = EstimateBackgroundNoise(data);
+        if (noise <= 0) noise = 1;
+        double medHfr = Median(stars.Select(s => s.HFR).Where(h => h > 0).ToArray());
+        if (double.IsNaN(medHfr) || medHfr <= 0) medHfr = 2.0;
+        int r = (int)Math.Ceiling(StampHfrMultiplier * medHfr);
+        r = Math.Max(MinStampRadius, Math.Min(MaxStampRadius, r));
+        int size = 2 * r + 1;
+        double satLevel = SaturationFraction * FullScale;
+        double isoDist = IsolationMultiplier * r;
+
+        // Clean, isolated probes once (the same set the global fit uses).
+        var probes = stars
+            .Where(s => s.X >= r + 1 && s.Y >= r + 1 && s.X < width - r - 1 && s.Y < height - r - 1
+                        && s.Peak < satLevel && (s.Peak - bg) / noise >= MinSnr
+                        && s.Eccentricity <= MaxEccentricity)
+            .Where(c => !stars.Any(o => !ReferenceEquals(o, c) && c.DistanceTo(o) < isoDist))
+            .ToList();
+
+        var global = probes.Count >= MinStars
+            ? BuildPsf(data, width, height, probes.OrderByDescending(p => p.Peak).Take(MaxStars).ToList(),
+                       r, size, CombineSigma, MinStars)
+            : null;
+        if (global == null) return null;
+
+        double cellW = (double)width / gridX, cellH = (double)height / gridY;
+        // Collect probes from a region grown by the stamp radius so cells stay
+        // populated near their borders; lower per-cell floor than the global one.
+        int cellMin = Math.Max(4, MinStars / 2);
+        var cells = new PsfModel[gridX * gridY];
+        for (int gy = 0; gy < gridY; gy++) {
+            for (int gx = 0; gx < gridX; gx++) {
+                double x0 = gx * cellW - r, x1 = (gx + 1) * cellW + r;
+                double y0 = gy * cellH - r, y1 = (gy + 1) * cellH + r;
+                var local = probes
+                    .Where(p => p.X >= x0 && p.X < x1 && p.Y >= y0 && p.Y < y1)
+                    .OrderByDescending(p => p.Peak).Take(MaxStars).ToList();
+                PsfModel m = local.Count >= cellMin
+                    ? BuildPsf(data, width, height, local, r, size, CombineSigma, cellMin)
+                    : null;
+                cells[gy * gridX + gx] = m ?? global;   // fall back to global
+            }
+        }
+        return new PsfField(gridX, gridY, width, height, cells, global);
+    }
+
+    // Build a normalized empirical PSF from a probe list (shared by the global
+    // and per-cell paths).
+    private static PsfModel BuildPsf(ushort[] data, int width, int height,
+                                     List<DetectedStar> probes, int r, int size,
+                                     double combineSigma, int minStars) {
         var stamps = new List<float[]>(probes.Count);
         foreach (var p in probes) {
             var stamp = BuildAlignedStamp(data, width, height, p, r, size);
             if (stamp != null) stamps.Add(stamp);
         }
-        if (stamps.Count < MinStars) return null;
+        if (stamps.Count < minStars) return null;
 
-        // Per-pixel sigma-clipped mean -> empirical PSF.
-        var kernel = SigmaClippedMean(stamps, size * size, CombineSigma);
-
-        // Clamp negatives (background over-subtraction wings) and renormalize.
+        var kernel = SigmaClippedMean(stamps, size * size, combineSigma);
         double sum = 0;
         for (int i = 0; i < kernel.Length; i++) { if (kernel[i] < 0) kernel[i] = 0; sum += kernel[i]; }
         if (sum <= 0) return null;
