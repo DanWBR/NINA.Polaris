@@ -10081,7 +10081,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                              || graxpert.status?.available
                              || onnxAvailableForOp('background-extraction')
                              || onnxAvailableForOp('denoising')
-                             || onnxAvailableForOp('deconvolution')
+                             || deconAvailable()
                              || onnxAvailableForOp('halo-removal')
                              || onnxAvailableForOp('upscaling')">
                     <span class="files-ai-label" aria-hidden="true">AI Tools</span>
@@ -10110,12 +10110,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon">🌃</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
-                            x-show="graxpert.status?.supportsDeconvolution
-                                   || onnxAvailableForOp('deconvolution')"
+                            x-show="deconAvailable()"
                             :disabled="files.selectedPaths.length === 0"
                             @click="graxpertOpenModal('deconvolution')"
                             data-tour="studio-decon"
-                            title="AI Sharpen / Detail: deconvolution &amp; detail enhancement (GraXpert or Polaris model)"
+                            title="AI Sharpen / Detail: deconvolution &amp; detail enhancement (GraXpert/Polaris model or classical measured-PSF Richardson-Lucy)"
                             aria-label="Sharpen / Detail">
                         <span class="files-icon">🌌</span>
                     </button>
@@ -10929,7 +10928,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         x-show="onnxAvailableForOp('deconvolution')"
                                         :disabled="editorAi.busy"
                                         @click="editorRunAi('deconvolution')"
-                                        title="Sharpen / detail enhancement (deconvolution)">
+                                        title="Sharpen / detail enhancement (deconvolution AI model)">
                                     🌌 Sharpen / Detail
                                 </button>
                                 <button class="btn btn-sm"
@@ -16461,7 +16460,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260629-ainames2"></script>
+    <script src="/js/app.js?v=20260630-classicalrl"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

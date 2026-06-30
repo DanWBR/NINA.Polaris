@@ -238,7 +238,10 @@ public class PsfExtractor {
     }
 
     // ── small robust-stat helpers ───────────────────────────────────────────
-    private static (double bg, double noise) EstimateBackgroundNoise(ushort[] data) {
+    /// <summary>Robust background (median) and noise (1.4826·MAD) from a
+    /// sampled subset. Public so callers (e.g. deconvolution support masks)
+    /// reuse the exact same estimate the extractor used.</summary>
+    public static (double bg, double noise) EstimateBackgroundNoise(ushort[] data) {
         // Sample (cap cost on huge frames) then median + MAD→σ (1.4826·MAD).
         int step = Math.Max(1, data.Length / 200_000);
         var sample = new List<float>(data.Length / step + 1);

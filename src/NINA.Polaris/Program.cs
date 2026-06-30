@@ -362,6 +362,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.External.GraXpertService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.UpdateService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.CropService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.DeconvolutionService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameAnalysisService>();
 // TLS-2: DuckDNS HTTP client for setting TXT records during ACME
 // DNS-01 challenge. Used by LetsEncryptService (TLS-4); also exposed
@@ -1088,6 +1089,7 @@ app.MapDssEndpoints();
 app.MapGraXpertEndpoints();
 app.MapUpdateEndpoints();
 app.MapCropEndpoints();
+app.MapDeconEndpoints();
 app.MapAnalysisEndpoints();
 
 // GX-1: kick off an initial walk of the configured Onnx:ModelsPath

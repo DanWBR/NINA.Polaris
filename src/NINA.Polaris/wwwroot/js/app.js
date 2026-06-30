@@ -23962,7 +23962,10 @@ function ninaApp() {
             // Block only when both are unavailable.
             const cliOk     = !!this.graxpert.status?.available;
             const browserOk = this.onnxAvailableForOp(operation);
-            if (!cliOk && !browserOk) {
+            // Deconvolution is always runnable via the server-side classical
+            // RL path, even with no AI model / CLI installed.
+            const serverOk  = operation === 'deconvolution';
+            if (!cliOk && !browserOk && !serverOk) {
                 this.toast('GraXpert unavailable: install the CLI or '
                          + 'configure Onnx:ModelsPath in Settings', 'warn');
                 return;
@@ -25406,7 +25409,23 @@ function ninaApp() {
                     }));
                 }
             }
+            // Classical, measured-PSF Richardson-Lucy — always available
+            // (server-side math, no model file). Listed last so an installed
+            // AI model stays the default pick.
+            out.push({
+                family: 'rl', version: 'measured', target: 'rl',
+                key: 'rl::measured',
+                label: 'Classical RL — measured PSF (server)',
+                sizeBytes: 0, isQuantized: false,
+            });
             return out;
+        },
+
+        // The Sharpen / Detail tool is always available because the classical
+        // Richardson-Lucy path runs server-side without any model file. AI
+        // models (GraXpert/Polaris) just add more options to the dropdown.
+        deconAvailable() {
+            return true;
         },
 
         // Resolve the current decon model selection (composite key) into
@@ -25578,6 +25597,7 @@ function ninaApp() {
                     const sel = this._deconSelection();
                     fam = sel.family; t = sel.target;
                 }
+                if (fam === 'rl') return '_rl';
                 if (fam === 'detail') return '_detail';
                 if (!t) t = fam === 'decon-objects' ? 'objects' : 'stars';
                 return t === 'objects' ? '_decon_objects' : '_decon_stars';
@@ -25598,10 +25618,66 @@ function ninaApp() {
             return Math.min(100, Math.round(100 * (j.done + j.failed) / j.total));
         },
 
+        // Classical, measured-PSF Richardson-Lucy deconvolution. Server-side
+        // (POST /api/decon/rl): the host measures the frame's PSF from its own
+        // stars and runs TV-regularized RL, writing a {stem}_rl.fits sibling.
+        // Reuses the GraXpert modal's progress + completion UX.
+        async _runClassicalRl() {
+            const paths = [...this.graxpert.modalPaths];
+            this.graxpert.browserActive = true;
+            this.graxpert.browserAbortRequested = false;
+            this.graxpert.browserDone = 0;
+            this.graxpert.browserTotal = paths.length;
+            this.graxpert.browserPhase = 'measuring PSF + deconvolving on the server…';
+            this.graxpert.browserProgress = 0;
+            try {
+                const resp = await this.apiPost('/api/decon/rl', {
+                    paths,
+                    strength: this.graxpert.modalDeconStrength,
+                    supportMask: true
+                });
+                const r = await resp.json();
+                const results = r.results || [];
+                const failures = r.failures || [];
+                const written = results.map(x => x.outputPath);
+                const pairs = results.map(x => ({
+                    src: x.sourcePath, out: x.outputPath,
+                    label: (x.sourcePath.split(/[\\/]+/).pop())
+                }));
+                if (results[0]) {
+                    const s = results[0];
+                    this.toast(
+                        `Classical RL: PSF FWHM ${(+s.fwhmPx).toFixed(2)}px · ` +
+                        `${s.starsUsed} stars · ${s.iterations} iters · ` +
+                        `${written.length}/${paths.length} written`, 'ok', 6000);
+                }
+                for (const f of failures) {
+                    this.toast('RL failed on ' + (f.sourcePath.split(/[\\/]+/).pop())
+                        + ': ' + f.error, 'error', 7000);
+                }
+                this.graxpert.browserPhase = 'done';
+                this.graxpert.browserDone = written.length;
+                await this._graxpertHandleCompletion(
+                    written, paths.length - written.length, pairs);
+            } catch (e) {
+                const msg = (e && (e.message || e.errorMessage)) || String(e);
+                this.graxpert.browserPhase = 'failed: ' + msg;
+                this.toast('Classical RL failed: ' + msg, 'error', 6000);
+            } finally {
+                this.graxpert.browserActive = false;
+            }
+        },
+
         async graxpertStartRun() {
             if (this.graxpert.modalPaths.length === 0) {
                 this.toast('No files selected', 'warn');
                 return;
+            }
+            // Classical RL (measured PSF) is server-side math, not a browser
+            // ONNX model — intercept before any browser/CLI branch.
+            if (this.graxpert.modalOp === 'deconvolution'
+                && this._deconSelection().family === 'rl') {
+                return this._runClassicalRl();
             }
             // GX-2: branch on the in-browser toggle. When the operation
             // has an ONNX model available + the user hasn't opted out,
