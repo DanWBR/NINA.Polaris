@@ -10078,7 +10078,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             :disabled="files.selectedPaths.length === 0"
                             @click="graxpertOpenModal('deconvolution')"
                             data-tour="studio-decon"
-                            title="AI Sharpen / Detail: deconvolution &amp; detail enhancement (GraXpert/Polaris model or classical measured-PSF Richardson-Lucy)"
+                            title="Image Sharpen / Detail: deconvolution &amp; detail enhancement (GraXpert/Polaris model or classical measured-PSF Richardson-Lucy)"
                             aria-label="Sharpen / Detail">
                         <span class="files-icon">🌌</span>
                     </button>
@@ -14264,10 +14264,11 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <div class="siril-modal" x-transition.opacity.duration.200ms x-show="graxpert.modalOpen" x-cloak
          @click.self="graxpertIsRunning() || graxpertCloseModal()"
          @keydown.escape.window="graxpertIsRunning() || graxpertCloseModal()">
-        <div class="siril-modal-frame">
+        <div class="siril-modal-frame"
+             :style="graxpert.modalOp === 'deconvolution' ? 'max-width:780px' : ''">
             <h2>
                 <span x-show="graxpert.modalOp === 'background-extraction'">🌃 AI Background Extraction</span>
-                <span x-show="graxpert.modalOp === 'deconvolution'">🌌 AI Sharpen / Detail</span>
+                <span x-show="graxpert.modalOp === 'deconvolution'">🌌 Image Sharpen / Detail</span>
                 <span x-show="graxpert.modalOp === 'denoising'">☄ AI Denoise</span>
                 <span x-show="graxpert.modalOp === 'halo-removal'">✨ AI Halo Removal</span>
                 <span x-show="graxpert.modalOp === 'upscaling'">📈 AI Upscale</span>
@@ -14398,14 +14399,19 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                  own Detail Enhancer in one dropdown (the old Stars/Objects
                  "Method" selector collapsed into this list). Strength +
                  Image FWHM keep GraXpert's ranges/labels. -->
+            <!-- Model selector on its own full-width row so the long
+                 product-name labels (GraXpert/Polaris + size, or the
+                 classical RL options) never get clipped. -->
             <div class="siril-modal-row" x-show="graxpert.modalOp === 'deconvolution'">
-                <label>AI model
-                    <select class="input-sm" x-model="graxpert.modalDeconModel">
+                <label>Model
+                    <select class="input-sm" style="width:100%" x-model="graxpert.modalDeconModel">
                         <template x-for="m in deconModelChoices()" :key="m.key">
                             <option :value="m.key" x-text="m.label"></option>
                         </template>
                     </select>
                 </label>
+            </div>
+            <div class="siril-modal-row" x-show="graxpert.modalOp === 'deconvolution'">
                 <label>Deconvolution Strength
                     <!-- GX-12p: slider + numeric readout. Touch-friendly
                          on iPhone (the type=number stepper is tiny + the
