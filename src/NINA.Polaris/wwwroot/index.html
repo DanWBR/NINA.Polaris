@@ -14424,6 +14424,16 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <input type="number" class="input-sm" step="0.1" min="0.5" max="20"
                            x-model.number="graxpert.modalDeconPsfSize">
                 </label>
+                <!-- NM-2: classical measured-PSF RL only. Ramps the support
+                     mask on measured local SNR (photon-transfer σ map) instead
+                     of a flat background threshold, so shot noise on bright
+                     nebulosity is respected and faint signal isn't over-held. -->
+                <label class="seq-dither-checkbox" style="align-self:end"
+                       x-show="_deconSelection().family === 'rl'"
+                       title="Restrict sharpening by measured local signal-to-noise (photon-transfer σ map) rather than a flat background-noise threshold.">
+                    <input type="checkbox" x-model="graxpert.modalDeconNoiseAdaptive">
+                    Noise-adaptive (measured σ)
+                </label>
                 <label class="seq-dither-checkbox" style="align-self:end"
                        x-show="!!window.__polarisIsNativeApp"
                        title="Run on the device GPU/NPU (NNAPI). Faster on powerful tablets; uses more memory.">
@@ -16432,7 +16442,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260630-toolbars"></script>
+    <script src="/js/app.js?v=20260630-noiseadaptive"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

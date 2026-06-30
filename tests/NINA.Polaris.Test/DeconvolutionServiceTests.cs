@@ -96,4 +96,37 @@ public class DeconvolutionServiceTests {
             try { Directory.Delete(dir, true); } catch { /* best-effort */ }
         }
     }
+
+    [Test]
+    public void RichardsonLucy_NoiseAdaptive_WritesAndSharpens() {
+        // NM-2: the measured-σ support mask path must run end-to-end (build the
+        // photon-transfer σ map, ramp the mask on local SNR) and still sharpen.
+        const int W = 420, H = 420;
+        var u = BlurredField(W, H, 1.0, 2.0, 40000);
+
+        var dir = Path.Combine(Path.GetTempPath(), "polaris_rlna_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var srcPath = Path.Combine(dir, "blurred.fits");
+        try {
+            var props = new ImageProperties { Width = W, Height = H, BitDepth = 16, Channels = 1 };
+            FITSWriter.Write(new BaseImageData(u, props), srcPath);
+
+            var svc = new DeconvolutionService(NullLogger<DeconvolutionService>.Instance);
+            var res = svc.RichardsonLucy(srcPath, strength: 0.7, noiseAdaptive: true);
+
+            Assert.That(File.Exists(res.OutputPath), Is.True);
+            Assert.That(res.StarsUsed, Is.GreaterThanOrEqualTo(8));
+
+            ushort[] outU;
+            using (var fs = File.OpenRead(res.OutputPath)) outU = FITSReader.Read(fs).Data;
+
+            double before = Fwhm(u, W, 240, 240, 10, 800);
+            double after = Fwhm(outU, W, 240, 240, 10, 800);
+            TestContext.WriteLine($"noise-adaptive FWHM {before:F2} → {after:F2}");
+            Assert.That(after, Is.LessThan(before * 0.9),
+                "noise-adaptive RL should still sharpen over real signal");
+        } finally {
+            try { Directory.Delete(dir, true); } catch { /* best-effort */ }
+        }
+    }
 }

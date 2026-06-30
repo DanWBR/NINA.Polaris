@@ -44,6 +44,7 @@ public static class DeconEndpoints {
             bool mask = req.SupportMask ?? true;
             bool field = req.Field ?? false;
             int grid = req.Grid is >= 2 and <= 8 ? req.Grid!.Value : 3;
+            bool noiseAdaptive = req.NoiseAdaptive ?? false;
 
             var results = new List<object>();
             var failures = new List<object>();
@@ -51,7 +52,7 @@ public static class DeconEndpoints {
                 try {
                     // RL is CPU-heavy; keep the request thread free.
                     var r = await Task.Run(() =>
-                        svc.RichardsonLucy(path, strength, tv, mask, field, grid));
+                        svc.RichardsonLucy(path, strength, tv, mask, field, grid, noiseAdaptive));
                     results.Add(new {
                         sourcePath = path,
                         outputPath = r.OutputPath,
@@ -81,5 +82,5 @@ public static class DeconEndpoints {
     public record DeconRequest(
         string[] Paths, double? Strength = null,
         double? TvLambda = null, bool? SupportMask = null,
-        bool? Field = null, int? Grid = null);
+        bool? Field = null, int? Grid = null, bool? NoiseAdaptive = null);
 }

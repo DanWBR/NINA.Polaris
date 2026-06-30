@@ -54,7 +54,8 @@ public class DeconvolutionService {
     /// </summary>
     public DeconResult RichardsonLucy(string sourcePath, double strength = 0.5,
                                       double tvLambda = 0.002, bool supportMask = true,
-                                      bool field = false, int grid = 3) {
+                                      bool field = false, int grid = 3,
+                                      bool noiseAdaptive = false) {
         if (string.IsNullOrWhiteSpace(sourcePath))
             throw new ArgumentException("sourcePath is required", nameof(sourcePath));
         if (!File.Exists(sourcePath))
@@ -99,12 +100,20 @@ public class DeconvolutionService {
         if (iters <= 0) iters = 1;
 
         // Background support mask from luminance (built once, reused per channel).
+        // noiseAdaptive ramps on local SNR using a measured photon-transfer σ map
+        // (NoiseMap) so shot noise on bright nebulosity is respected per pixel;
+        // otherwise a flat background-noise threshold is used.
         float[] mask = null;
         if (supportMask) {
             var (bg, noise) = PsfExtractor.EstimateBackgroundNoise(lum);
             var lumF = new float[plane];
             for (long i = 0; i < plane; i++) lumF[i] = lum[i];
-            mask = RichardsonLucyDeconvolution.BuildSupportMask(lumF, w, h, bg, noise);
+            if (noiseAdaptive) {
+                var sigmaMap = NoiseMap.Estimate(lum, w, h, out _);
+                mask = RichardsonLucyDeconvolution.BuildNoiseAdaptiveSupportMask(lumF, sigmaMap, bg);
+            } else {
+                mask = RichardsonLucyDeconvolution.BuildSupportMask(lumF, w, h, bg, noise);
+            }
         }
 
         var rl = field ? null : new RichardsonLucyDeconvolution { Iterations = iters, TvLambda = tvLambda };

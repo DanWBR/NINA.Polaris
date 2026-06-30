@@ -153,6 +153,33 @@ public class RichardsonLucyDeconvolution {
         return mask;
     }
 
+    /// <summary>
+    /// Build a support mask that ramps on the local <em>signal-to-noise ratio</em>
+    /// using a measured per-pixel σ map (<see cref="NoiseMap"/>) instead of a
+    /// single flat background noise. Because astronomical noise grows with signal
+    /// (shot noise), a flat threshold either over-sharpens noisy bright
+    /// nebulosity or holds back faint signal where the read floor is low. Here
+    /// SNRᵢ = (imageᵢ − background)/σᵢ ramps from <paramref name="lowSnr"/> (mask 0)
+    /// to <paramref name="highSnr"/> (mask 1), so sharpening tracks real SNR per
+    /// pixel.
+    /// </summary>
+    public static float[] BuildNoiseAdaptiveSupportMask(float[] image, float[] sigmaMap,
+                                                        double background,
+                                                        double lowSnr = 2.0,
+                                                        double highSnr = 8.0) {
+        int n = image.Length;
+        var mask = new float[n];
+        double span = Math.Max(1e-6, highSnr - lowSnr);
+        for (int i = 0; i < n; i++) {
+            double sigma = (sigmaMap != null && i < sigmaMap.Length) ? sigmaMap[i] : 0;
+            if (sigma < 1e-6) sigma = 1e-6;
+            double snr = (image[i] - background) / sigma;
+            double t = Math.Clamp((snr - lowSnr) / span, 0, 1);   // smoothstep ramp
+            mask[i] = (float)(t * t * (3 - 2 * t));
+        }
+        return mask;
+    }
+
     // ── spatial cross-correlation with reflect borders (parallel over rows) ──
     private static void Correlate(float[] src, int w, int h, float[] ker, int ks, int kr,
                                   float[] dst) {
