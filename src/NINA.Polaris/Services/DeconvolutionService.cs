@@ -129,10 +129,12 @@ public class DeconvolutionService {
         const double ceiling = 65535.0;
         ushort maxLum = 0;
         for (long i = 0; i < plane; i++) if (lum[i] > maxLum) maxLum = lum[i];
-        if (maxLum >= 0.90 * ceiling) {
-            double satLevel = 0.97 * ceiling;
-            int satDilate = (field ? psfField.Global.Radius : psf.Radius) + 3;
-            RichardsonLucyDeconvolution.ApplySaturationGuard(mask, lumF, w, h, satLevel, satDilate);
+        if (maxLum >= 0.85 * ceiling) {
+            double satLevel = 0.90 * ceiling;
+            int psfR = field ? psfField.Global.Radius : psf.Radius;
+            int satDilate = psfR + 3;
+            int feather = Math.Max(4, psfR);   // smooth the kept↔deconvolved edge
+            RichardsonLucyDeconvolution.ApplySaturationGuard(mask, lumF, w, h, satLevel, satDilate, feather);
         }
 
         // FFT convolution keeps the per-iteration cost independent of the

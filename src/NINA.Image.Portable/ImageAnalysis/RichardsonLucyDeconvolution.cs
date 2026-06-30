@@ -237,7 +237,7 @@ public class RichardsonLucyDeconvolution {
     /// anyway. No-op when nothing is saturated.
     /// </summary>
     public static void ApplySaturationGuard(float[] mask, float[] image, int width, int height,
-                                            double satLevel, int dilate) {
+                                            double satLevel, int dilate, int feather = 0) {
         if (mask == null || image == null || dilate < 0) return;
         int n = image.Length;
         var sat = new bool[n];
@@ -245,7 +245,8 @@ public class RichardsonLucyDeconvolution {
         for (int i = 0; i < n; i++) if (image[i] >= satLevel) { sat[i] = true; any = true; }
         if (!any) return;
 
-        // Separable box dilation of the saturated set by `dilate` px each axis.
+        // Binary protect region = saturated set dilated by `dilate` px (the core
+        // + a PSF-sized halo we keep as the original).
         var rowD = new bool[n];
         Parallel.For(0, height, y => {
             int row = y * width;
@@ -256,12 +257,51 @@ public class RichardsonLucyDeconvolution {
                 rowD[row + x] = hit;
             }
         });
+        var protect = new float[n];
         Parallel.For(0, width, x => {
             for (int y = 0; y < height; y++) {
                 bool hit = false;
                 int y0 = Math.Max(0, y - dilate), y1 = Math.Min(height - 1, y + dilate);
                 for (int yy = y0; yy <= y1 && !hit; yy++) if (rowD[yy * width + x]) hit = true;
-                if (hit) mask[y * width + x] = 0f;
+                if (hit) protect[y * width + x] = 1f;
+            }
+        });
+
+        // Feather the protect edge (separable box blur) so the mask ramps
+        // smoothly 1→0 instead of stepping — a hard edge leaves a dark crescent
+        // where the kept-original region meets the deconvolved region.
+        if (feather > 0) {
+            BoxBlur(protect, width, height, feather);
+        }
+        for (int i = 0; i < n; i++) {
+            float keep = protect[i]; if (keep > 1f) keep = 1f;
+            mask[i] *= 1f - keep;     // keep≈1 over stars → mask→0 (keep original)
+        }
+    }
+
+    // Separable normalized box blur (radius r), used to feather the guard.
+    private static void BoxBlur(float[] buf, int width, int height, int r) {
+        int n = buf.Length;
+        var tmp = new float[n];
+        float norm = 1f / (2 * r + 1);
+        Parallel.For(0, height, y => {
+            int row = y * width; float acc = 0;
+            for (int x = -r; x <= r; x++) acc += buf[row + Math.Clamp(x, 0, width - 1)];
+            for (int x = 0; x < width; x++) {
+                tmp[row + x] = acc * norm;
+                int add = Math.Clamp(x + r + 1, 0, width - 1);
+                int sub = Math.Clamp(x - r, 0, width - 1);
+                acc += buf[row + add] - buf[row + sub];
+            }
+        });
+        Parallel.For(0, width, x => {
+            float acc = 0;
+            for (int y = -r; y <= r; y++) acc += tmp[Math.Clamp(y, 0, height - 1) * width + x];
+            for (int y = 0; y < height; y++) {
+                buf[y * width + x] = acc * norm;
+                int add = Math.Clamp(y + r + 1, 0, height - 1);
+                int sub = Math.Clamp(y - r, 0, height - 1);
+                acc += tmp[add * width + x] - tmp[sub * width + x];
             }
         });
     }
