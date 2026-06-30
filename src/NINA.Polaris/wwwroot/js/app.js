@@ -25648,7 +25648,8 @@ function ninaApp() {
                     supportMask: true,
                     field,
                     grid: 3
-                });
+                }, { timeout: 1800000 });   // RL on a full master is slow on CPU
+                                            // (no GPU path yet) — allow up to 30 min
                 const r = await resp.json();
                 const results = r.results || [];
                 const failures = r.failures || [];

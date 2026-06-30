@@ -9899,6 +9899,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      separated by thin `files-actions-sep` dividers
                      so the toolbar stays scannable at a glance. -->
                 <div class="files-actions files-actions-icons">
+                    <span class="files-ai-label" aria-hidden="true">FILE TOOLS</span>
                     <!-- File ops -->
                     <button class="btn btn-sm btn-icon"
                             @click="filesMkdir()"
@@ -9976,97 +9977,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             aria-label="Compare">
                         <span class="files-icon">↔</span>
                     </button>
-                    <!-- IMAGE BLEND — recombine two images (e.g. a stretched
-                         starless + the stars-only image) with independent
-                         per-image blackpoint/midtones/highlights + a Screen
-                         blend + opacity. The in-app ImageBlend tool; the
-                         finishing step of the starless workflow. Select the
-                         starless first (base), then the stars image (blend). -->
-                    <button class="btn btn-sm btn-icon"
-                            :disabled="files.selectedPaths.length !== 2
-                                       || filesSelectionHasDir()"
-                            @click="blendOpenForSelection()"
-                            title="Image Blend: recombine two images (e.g. starless + stars) with independent stretch + Screen blend"
-                            aria-label="Image Blend">
-                        <span class="files-icon">🎚️</span>
-                    </button>
-                    <!-- Open the selected file in the Lightroom-style editor.
-                         Disabled unless exactly one file is selected, the
-                         editor opens one frame at a time. Supported types
-                         (FITS/XISF/PNG/JPG/TIFF) aren't gated here; the
-                         server's /api/editor/load rejects unsupported
-                         extensions with a clear error toast. -->
-                    <button class="btn btn-sm btn-icon" data-tour="studio-editor"
-                            :disabled="files.selectedPaths.length !== 1
-                                       || filesSelectedDir() != null"
-                            @click="filesOpenInEditor()"
-                            title="Open this file in the Lightroom-style editor"
-                            aria-label="Edit">
-                        <span class="files-icon">🎨</span>
-                    </button>
-                    <!-- CROP — quick crop before BGE/Decon/Denoise.
-                         Pre-processing step the user normally does in
-                         GraXpert; pull it into FILES so they can stay
-                         in Polaris for the trim → BGE → decon → denoise
-                         chain. One file at a time (the picker is a
-                         single-image overlay). -->
-                    <button class="btn btn-sm btn-icon"
-                            :disabled="files.selectedPaths.length !== 1
-                                       || filesSelectedDir() != null"
-                            @click="cropOpenForFile(files.selectedPaths[0])"
-                            title="Crop a rectangle from this image (saves as _crop.fits)"
-                            aria-label="Crop">
-                        <span class="files-icon">⌗</span>
-                    </button>
-                    <!-- ANALYZE — read-only optical diagnostics (tilt +
-                         aberration) on one FITS. Nothing is written; opens
-                         a modal with star-shape overlay + zone heatmap. -->
-                    <button class="btn btn-sm btn-icon"
-                            :disabled="files.selectedPaths.length !== 1
-                                       || filesSelectedDir() != null"
-                            @click="analyzeOpenForFile(files.selectedPaths[0])"
-                            title="Analyze tilt &amp; aberrations in this image"
-                            aria-label="Analyze">
-                        <span class="files-icon">🔬</span>
-                    </button>
-                    <!-- Plate solve: solve the selected FITS to get RA/Dec/
-                         rotation/scale. Result card appears below the
-                         file list with Sync mount + Slew & Center
-                         buttons when the mount is connected. -->
-                    <span class="files-actions-sep" aria-hidden="true"></span>
-                    <button class="btn btn-sm btn-icon"
-                            :disabled="files.selectedPaths.length !== 1
-                                       || filesSelectedDir() != null
-                                       || filesSolveBusy"
-                            @click="filesOpenSolveModal(files.selectedPaths[0])"
-                            :title="filesSolveBusy
-                                ? 'Plate solve in progress...'
-                                : 'Plate solve: identify RA/Dec/rotation from this FITS'"
-                            aria-label="Plate solve">
-                        <span class="files-icon" x-show="!filesSolveBusy">🎯</span>
-                        <span class="files-icon" x-show="filesSolveBusy">⏳</span>
-                    </button>
-                    <!-- Star colour repair (SVBony debayer fringe) stays on the
-                         main toolbar: it's a CFA/debayer fix, not an AI model.
-                         Every ONNX/AI tool (StarNet remove-stars + GraXpert
-                         BGE/decon/denoise + Polaris halo removal & upscaling)
-                         now lives on the dedicated "AI Tools" bar just below. -->
-                    <span class="files-actions-sep" aria-hidden="true"></span>
-                    <button class="btn btn-sm btn-icon"
-                            :disabled="files.selectedPaths.length !== 1"
-                            @click="starColorOpenModal(files.selectedPaths[0])"
-                            title="Star colour repair (SVBony debayer fringe). Select one OSC frame; run before BGE."
-                            aria-label="Star colour repair">
-                        <span class="files-icon" x-text="starColor.busy ? '⏳' : '🔘'"></span>
-                    </button>
-                    <span style="flex:1"></span>
-                    <button class="btn btn-sm btn-icon btn-primary"
-                            @click="filesSetStudioRoot()"
-                            :disabled="!filesSelectedDir()"
-                            :title="filesSelectedDir() ? 'Set this folder as the Studio scan root' : 'Set as Studio root (select a single folder first)'"
-                            aria-label="Set as Studio root">
-                        <span class="files-icon">⭐</span>
-                    </button>
                 </div>
 
                 <!-- AI Tools — dedicated second toolbar grouping every
@@ -10084,7 +9994,61 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                              || deconAvailable()
                              || onnxAvailableForOp('halo-removal')
                              || onnxAvailableForOp('upscaling')">
-                    <span class="files-ai-label" aria-hidden="true">AI Tools</span>
+                    <span class="files-ai-label" aria-hidden="true">PROCESSING TOOLS</span>
+                    <!-- Edit / analysis tools (moved off the file bar). -->
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 2
+                                       || filesSelectionHasDir()"
+                            @click="blendOpenForSelection()"
+                            title="Image Blend: recombine two images (e.g. starless + stars) with independent stretch + Screen blend"
+                            aria-label="Image Blend">
+                        <span class="files-icon">🎚️</span>
+                    </button>
+                    <button class="btn btn-sm btn-icon" data-tour="studio-editor"
+                            :disabled="files.selectedPaths.length !== 1
+                                       || filesSelectedDir() != null"
+                            @click="filesOpenInEditor()"
+                            title="Open this file in the Lightroom-style editor"
+                            aria-label="Edit">
+                        <span class="files-icon">🎨</span>
+                    </button>
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1
+                                       || filesSelectedDir() != null"
+                            @click="cropOpenForFile(files.selectedPaths[0])"
+                            title="Crop a rectangle from this image (saves as _crop.fits)"
+                            aria-label="Crop">
+                        <span class="files-icon">⌗</span>
+                    </button>
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1
+                                       || filesSelectedDir() != null"
+                            @click="analyzeOpenForFile(files.selectedPaths[0])"
+                            title="Analyze tilt &amp; aberrations in this image"
+                            aria-label="Analyze">
+                        <span class="files-icon">🔬</span>
+                    </button>
+                    <span class="files-actions-sep" aria-hidden="true"></span>
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1
+                                       || filesSelectedDir() != null
+                                       || filesSolveBusy"
+                            @click="filesOpenSolveModal(files.selectedPaths[0])"
+                            :title="filesSolveBusy
+                                ? 'Plate solve in progress...'
+                                : 'Plate solve: identify RA/Dec/rotation from this FITS'"
+                            aria-label="Plate solve">
+                        <span class="files-icon" x-show="!filesSolveBusy">🎯</span>
+                        <span class="files-icon" x-show="filesSolveBusy">⏳</span>
+                    </button>
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1"
+                            @click="starColorOpenModal(files.selectedPaths[0])"
+                            title="Star colour repair (SVBony debayer fringe). Select one OSC frame; run before BGE."
+                            aria-label="Star colour repair">
+                        <span class="files-icon" x-text="starColor.busy ? '⏳' : '🔘'"></span>
+                    </button>
+                    <span class="files-actions-sep" aria-hidden="true"></span>
                     <!-- Remove stars (StarNet++) — writes _starless + _stars,
                          then opens the before/after comparator. One file. -->
                     <button class="btn btn-sm btn-icon" data-tour="studio-starremoval"
@@ -10149,6 +10113,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Upscale: AI super-resolution (2× / 4×, Polaris AI)"
                             aria-label="Upscale">
                         <span class="files-icon">📈</span>
+                    </button>
+                    <span style="flex:1"></span>
+                    <button class="btn btn-sm btn-icon btn-primary"
+                            @click="filesSetStudioRoot()"
+                            :disabled="!filesSelectedDir()"
+                            :title="filesSelectedDir() ? 'Set this folder as the Studio scan root' : 'Set as Studio root (select a single folder first)'"
+                            aria-label="Set as Studio root">
+                        <span class="files-icon">⭐</span>
                     </button>
                 </div>
 
@@ -16460,7 +16432,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260630-fieldrl"></script>
+    <script src="/js/app.js?v=20260630-toolbars"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
