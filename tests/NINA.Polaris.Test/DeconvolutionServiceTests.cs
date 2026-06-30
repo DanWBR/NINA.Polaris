@@ -91,7 +91,10 @@ public class DeconvolutionServiceTests {
             double before = Fwhm(u, W, 240, 240, 10, 800);
             double after = Fwhm(outU, W, 240, 240, 10, 800);
             TestContext.WriteLine($"FWHM {before:F2} → {after:F2} | PSF {res.FwhmPx:F2} stars {res.StarsUsed} iters {res.Iterations}");
-            Assert.That(after, Is.LessThan(before * 0.9), "RL should sharpen the written frame");
+            // Stars are protected (deconvolution only touches the diffuse signal),
+            // so a planted star must be preserved, not sharpened or ringed.
+            Assert.That(after, Is.EqualTo(before).Within(before * 0.15),
+                "protected star should be preserved (not sharpened/ringed)");
         } finally {
             try { Directory.Delete(dir, true); } catch { /* best-effort */ }
         }
@@ -186,8 +189,8 @@ public class DeconvolutionServiceTests {
             double before = Fwhm(u, W, 240, 240, 10, 800);
             double after = Fwhm(outU, W, 240, 240, 10, 800);
             TestContext.WriteLine($"noise-adaptive FWHM {before:F2} → {after:F2}");
-            Assert.That(after, Is.LessThan(before * 0.9),
-                "noise-adaptive RL should still sharpen over real signal");
+            Assert.That(after, Is.EqualTo(before).Within(before * 0.15),
+                "stars are protected; the noise-adaptive path must still preserve them");
         } finally {
             try { Directory.Delete(dir, true); } catch { /* best-effort */ }
         }

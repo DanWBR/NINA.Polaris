@@ -14456,6 +14456,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     Protect stars
                 </label>
                 <label class="seq-dither-checkbox" style="flex:0 0 auto"
+                       x-show="_deconSelection().family === 'rl' && _deconSelection().version !== 'field'"
+                       title="Run the RL iteration loop in this browser tab (server only measures the PSF and noise model, ~5–15 s). Frees the SBC CPU for capture during the deconvolution. Field mode always runs on the server.">
+                    <input type="checkbox" x-model="graxpert.modalRlRunInBrowser">
+                    Run in browser
+                </label>
+                <label class="seq-dither-checkbox" style="flex:0 0 auto"
                        x-show="!!window.__polarisIsNativeApp"
                        title="Run on the device GPU/NPU (NNAPI). Faster on powerful tablets; uses more memory.">
                     <input type="checkbox" x-model="graxpert.modalUseGpu">
@@ -16463,7 +16469,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <script src="/js/app.js?v=20260630-staroption"></script>
+    <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
+         so _runBrowserRl can find window.RlBrowserDecon. -->
+    <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
+    <script src="/js/app.js?v=20260630-browserrl"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

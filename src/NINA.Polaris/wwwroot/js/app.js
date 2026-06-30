@@ -2452,6 +2452,11 @@ function ninaApp() {
             // threshold, so shot noise on bright nebulosity is respected.
             modalDeconNoiseAdaptive: false,
             modalDeconProtectStars: true,
+            // Run the RL iteration loop in the browser (server only measures
+            // the PSF + noise model, then the browser does the heavy work).
+            // Stays true by default — frees the SBC server CPU for capture.
+            // Forced to false for field RL (multiple kernels per tile).
+            modalRlRunInBrowser: true,
             // GX-12h: parity with GraXpert UI, pick the dedicated
             // decon-stars or decon-objects ONNX model. Browser path
             // forwards as opts.target; CLI path tags the family in
@@ -25698,15 +25703,115 @@ function ninaApp() {
             }
         },
 
+        // Browser-side RL: server measures PSF+noise in seconds, browser runs
+        // the RL iteration loop so the SBC CPU stays free for capture.
+        // Only global-PSF mode (field mode needs multiple kernels per tile).
+        async _runBrowserRl() {
+            if (!window.RlBrowserDecon) {
+                this.toast('rl-decon.js not loaded — falling back to server RL', 'warn');
+                return this._runClassicalRl();
+            }
+            const paths = [...this.graxpert.modalPaths];
+            this.graxpert.browserActive = true;
+            this.graxpert.browserAbortRequested = false;
+            this.graxpert.browserDone = 0;
+            this.graxpert.browserTotal = paths.length;
+            this.graxpert.browserPhase = 'measuring PSF + noise model on server…';
+            this.graxpert.browserProgress = 0;
+            const protectStars = !!this.graxpert.modalDeconProtectStars;
+            const strength = this.graxpert.modalDeconStrength;
+            const written = [];
+            const failures = [];
+            const pairs = [];
+            try {
+                for (let pi = 0; pi < paths.length; pi++) {
+                    const path = paths[pi];
+                    const stem = path.split(/[\\/]+/).pop();
+                    if (this.graxpert.browserAbortRequested) break;
+
+                    // 1. Server: measure PSF + noise + stars (~5-15s on SBC)
+                    this.graxpert.browserPhase =
+                        `[${pi + 1}/${paths.length}] ${stem}: measuring PSF…`;
+                    const prepResp = await this.apiPost('/api/decon/rl-prepare', {
+                        path, strength, protectStars
+                    }, { timeout: 120000 });
+                    if (!prepResp.ok) {
+                        const e = await prepResp.json().catch(() => ({}));
+                        failures.push({ path, error: e.error || `HTTP ${prepResp.status}` });
+                        this.toast('RL prepare failed: ' + (e.error || prepResp.status), 'error', 6000);
+                        continue;
+                    }
+                    const prep = await prepResp.json();
+
+                    // 2. Fetch pixel data (/api/onnx/source-pixels, Uint16Array)
+                    this.graxpert.browserPhase =
+                        `[${pi + 1}/${paths.length}] ${stem}: downloading pixels…`;
+                    const pixInfo = await this._onnxFetchSourcePixels(path);
+                    if (!pixInfo) {
+                        failures.push({ path, error: 'pixel fetch failed' });
+                        continue;
+                    }
+                    const { pixels, width: w, height: h, channels } = pixInfo;
+
+                    // 3. Browser: run tiled RL iterations with FFT (pure JS)
+                    this.graxpert.browserPhase =
+                        `[${pi + 1}/${paths.length}] ${stem}: deconvolving in browser…`;
+                    let lastPct = 0;
+                    const result = await window.RlBrowserDecon.deconvolve(
+                        pixels, w, h, channels, prep, prep.iterations,
+                        frac => {
+                            const pct = Math.round(frac * 100);
+                            if (pct !== lastPct) {
+                                lastPct = pct;
+                                this.graxpert.browserProgress =
+                                    ((pi + frac) / paths.length) * 100;
+                            }
+                        }
+                    );
+
+                    // 4. Save result back to server as _rl.fits
+                    this.graxpert.browserPhase =
+                        `[${pi + 1}/${paths.length}] ${stem}: saving…`;
+                    const outPath = await this._onnxSaveResult(
+                        path, '_rl', result, w, h, channels);
+                    if (!outPath) {
+                        failures.push({ path, error: 'save failed' });
+                        continue;
+                    }
+                    written.push(outPath);
+                    pairs.push({ src: path, out: outPath, label: stem });
+                    this.graxpert.browserDone = written.length;
+
+                    const iters = prep.iterations;
+                    this.toast(
+                        `Classical RL (browser): PSF FWHM ${(+prep.fwhmPx).toFixed(2)}px · ` +
+                        `${prep.starsUsed} stars · ${iters} iters · saved`, 'ok', 6000);
+                }
+
+                this.graxpert.browserPhase = written.length > 0 ? 'done' : 'no output';
+                await this._graxpertHandleCompletion(written, failures.length, pairs);
+            } catch (e) {
+                const msg = (e && (e.message || e.errorMessage)) || String(e);
+                this.graxpert.browserPhase = 'failed: ' + msg;
+                this.toast('Browser RL failed: ' + msg, 'error', 6000);
+            } finally {
+                this.graxpert.browserActive = false;
+            }
+        },
+
         async graxpertStartRun() {
             if (this.graxpert.modalPaths.length === 0) {
                 this.toast('No files selected', 'warn');
                 return;
             }
-            // Classical RL (measured PSF) is server-side math, not a browser
-            // ONNX model — intercept before any browser/CLI branch.
+            // Classical RL (measured PSF): field mode is always server-side
+            // (multiple kernels per tile). Global mode defaults to browser RL
+            // (server only measures PSF/noise, browser runs iterations).
             if (this.graxpert.modalOp === 'deconvolution'
                 && this._deconSelection().family === 'rl') {
+                const isField = this._deconSelection().version === 'field';
+                if (!isField && this.graxpert.modalRlRunInBrowser)
+                    return this._runBrowserRl();
                 return this._runClassicalRl();
             }
             // GX-2: branch on the in-browser toggle. When the operation

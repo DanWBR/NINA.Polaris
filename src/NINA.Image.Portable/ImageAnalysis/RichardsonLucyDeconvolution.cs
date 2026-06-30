@@ -279,6 +279,42 @@ public class RichardsonLucyDeconvolution {
         }
     }
 
+    /// <summary>
+    /// Zero the support <paramref name="mask"/> over detected stars (feathered),
+    /// so the deconvolution only ever touches the diffuse signal (nebula /
+    /// galaxy) and every star is kept as the original. This is the robust way to
+    /// avoid the dark rings / colour halos RL produces around stars — especially
+    /// saturated ones, whose clipped cores can't be reconciled with the PSF.
+    /// <paramref name="starX"/>/<paramref name="starY"/> are centroids and
+    /// <paramref name="starR"/> the protect radius per star (px).
+    /// </summary>
+    public static void ApplyStarGuard(float[] mask, int width, int height,
+                                      double[] starX, double[] starY, double[] starR,
+                                      int feather) {
+        if (mask == null || starX == null || starX.Length == 0) return;
+        int n = width * height;
+        var protect = new float[n];
+        for (int s = 0; s < starX.Length; s++) {
+            double cx = starX[s], cy = starY[s], r = starR[s];
+            if (r < 1) r = 1;
+            int x0 = Math.Max(0, (int)(cx - r)), x1 = Math.Min(width - 1, (int)(cx + r));
+            int y0 = Math.Max(0, (int)(cy - r)), y1 = Math.Min(height - 1, (int)(cy + r));
+            double r2 = r * r;
+            for (int y = y0; y <= y1; y++) {
+                double dy = y - cy;
+                for (int x = x0; x <= x1; x++) {
+                    double dx = x - cx;
+                    if (dx * dx + dy * dy <= r2) protect[y * width + x] = 1f;
+                }
+            }
+        }
+        if (feather > 0) BoxBlur(protect, width, height, feather);
+        for (int i = 0; i < n; i++) {
+            float keep = protect[i]; if (keep > 1f) keep = 1f;
+            mask[i] *= 1f - keep;
+        }
+    }
+
     // Separable normalized box blur (radius r), used to feather the guard.
     private static void BoxBlur(float[] buf, int width, int height, int r) {
         int n = buf.Length;

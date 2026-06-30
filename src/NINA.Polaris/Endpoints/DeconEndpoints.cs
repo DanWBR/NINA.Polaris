@@ -78,7 +78,40 @@ public static class DeconEndpoints {
             }
             return Results.Ok(new { results, failures });
         });
+
+        // POST /api/decon/rl-prepare — measure PSF + noise model + star list for
+        // a single frame so the browser can run the RL iteration loop locally
+        // (keeping the SBC server CPU free during the heavy iteration phase).
+        // Only global-PSF mode is supported (field mode stays server-side).
+        g.MapPost("/rl-prepare", async (
+                DeconvolutionService svc,
+                RlPrepareRequest req) => {
+            if (string.IsNullOrWhiteSpace(req.Path))
+                return Results.BadRequest(new { error = "path is required" });
+            double strength = req.Strength is >= 0 and <= 1 ? req.Strength!.Value : 0.5;
+            bool protectStars = req.ProtectStars ?? true;
+            try {
+                var r = await Task.Run(() =>
+                    svc.PrepareForBrowserRl(req.Path, strength, protectStars));
+                return Results.Ok(new {
+                    width = r.Width, height = r.Height, channels = r.Channels,
+                    fwhmPx = r.FwhmPx, eccentricity = r.Eccentricity,
+                    starsUsed = r.StarsUsed, iterations = r.Iterations,
+                    kernelSize = r.KernelSize, kernelBase64 = r.KernelBase64,
+                    noiseA = r.NoiseA, noiseB = r.NoiseB, background = r.Background,
+                    dampT = 2.5,
+                    protectStars,
+                    stars = r.Stars.Select(s => new { x = s.X, y = s.Y, r = s.R })
+                });
+            } catch (InvalidOperationException ex) {
+                return Results.UnprocessableEntity(new { error = ex.Message });
+            } catch (FileNotFoundException) {
+                return Results.NotFound(new { error = "Source FITS not found" });
+            }
+        });
     }
+
+    public record RlPrepareRequest(string Path, double? Strength = null, bool? ProtectStars = null);
 
     public record DeconRequest(
         string[] Paths, double? Strength = null,

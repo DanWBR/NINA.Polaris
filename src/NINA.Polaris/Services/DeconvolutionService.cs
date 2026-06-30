@@ -45,6 +45,88 @@ public class DeconvolutionService {
         double FwhmPx, double Eccentricity, int StarsUsed, int Iterations,
         bool Field = false, int GridCells = 0, int MeasuredCells = 0);
 
+    public sealed record RlPrepareResult(
+        int Width, int Height, int Channels,
+        double FwhmPx, double Eccentricity, int StarsUsed, int Iterations,
+        int KernelSize, string KernelBase64,
+        double NoiseA, double NoiseB, double Background,
+        IReadOnlyList<StarEntry> Stars);
+
+    public sealed record StarEntry(double X, double Y, double R);
+
+    /// <summary>
+    /// Measure the PSF, noise model, and star positions for a frame so the
+    /// browser can run the RL iteration loop locally (avoiding long server-side
+    /// blocking). Only global-PSF mode is supported here — field mode stays
+    /// server-side (multiple kernels per tile are not worth the JS complexity).
+    /// </summary>
+    public RlPrepareResult PrepareForBrowserRl(string sourcePath,
+                                               double strength = 0.5,
+                                               bool protectStars = true) {
+        if (string.IsNullOrWhiteSpace(sourcePath))
+            throw new ArgumentException("sourcePath is required", nameof(sourcePath));
+        if (!File.Exists(sourcePath))
+            throw new FileNotFoundException("Source FITS not found", sourcePath);
+
+        BaseImageData src;
+        using (var fs = File.OpenRead(sourcePath)) src = FITSReader.Read(fs);
+
+        int w = src.Properties.Width, h = src.Properties.Height;
+        int channels = src.Properties.Channels == 3 ? 3 : 1;
+        long plane = (long)w * h;
+
+        var lum = new ushort[plane];
+        if (channels == 3) {
+            for (long i = 0; i < plane; i++)
+                lum[i] = (ushort)((src.Data[i] + src.Data[plane + i] + src.Data[2 * plane + i]) / 3);
+        } else {
+            Array.Copy(src.Data, lum, plane);
+        }
+
+        const string err =
+            "Not enough clean stars to measure the PSF (need ≥ 8 unsaturated, " +
+            "isolated, round stars). Use AI deconvolution for star-poor frames.";
+        var ex = new PsfExtractor();
+        var psf = ex.Extract(lum, w, h) ?? throw new InvalidOperationException(err);
+
+        var noiseModel = NoiseMap.EstimateModel(lum, w, h);
+        var (bg, _) = PsfExtractor.EstimateBackgroundNoise(lum);
+        int iters = RichardsonLucyDeconvolution.IterationsFromStrength(strength);
+        if (iters <= 0) iters = 1;
+
+        // Serialize kernel as little-endian float32 bytes → base64
+        var kBytes = new byte[psf.Kernel.Length * sizeof(float)];
+        Buffer.BlockCopy(psf.Kernel, 0, kBytes, 0, kBytes.Length);
+        var kernelBase64 = Convert.ToBase64String(kBytes);
+
+        // Star list (reuse the same detection config as the server-side guard)
+        var stars = new List<StarEntry>();
+        if (protectStars) try {
+            var det = new StarDetector {
+                MaxStarSize = 5000, MinHfr = 0.3, SigmaThreshold = 4.0,
+                BorderExclusion = 0, MaxStars = 2000
+            };
+            var detected = det.Detect(lum, w, h);
+            foreach (var s in detected) {
+                double hfr = s.HFR > 0 ? s.HFR : 2.0;
+                double r = Math.Clamp(3.0 * hfr + 2, 5, 60);
+                stars.Add(new StarEntry(s.X, s.Y, r));
+            }
+        } catch (Exception sgEx) {
+            _logger.LogWarning(sgEx, "RL prepare: star detection failed; browser will run without star guard");
+        }
+
+        _logger.LogInformation(
+            "RL prepare: {Src} ({W}×{H} ch={Ch}) PSF FWHM={Fwhm:F2} ecc={Ecc:F2} " +
+            "stars={Stars}/{All} iters={Iters} noiseA={NA:G3} noiseB={NB:G3} bg={Bg:F0}",
+            sourcePath, w, h, channels, psf.FwhmPx, psf.Eccentricity,
+            stars.Count, psf.StarsUsed, iters, noiseModel.A, noiseModel.B, bg);
+
+        return new RlPrepareResult(
+            w, h, channels, psf.FwhmPx, psf.Eccentricity, psf.StarsUsed, iters,
+            psf.Size, kernelBase64, noiseModel.A, noiseModel.B, bg, stars);
+    }
+
     /// <summary>
     /// Deconvolve <paramref name="sourcePath"/>. <paramref name="strength"/>
     /// (0..1) maps to the RL iteration count; <paramref name="supportMask"/>
