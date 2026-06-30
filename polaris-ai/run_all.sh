@@ -7,29 +7,33 @@
 #   ./run_all.sh --prep bge                    # one dataset
 #   ./run_all.sh denoise bge decon upscale halo
 #   ./run_all.sh --gpu 0 --no-qat --batch 24 decon
+#   ./run_all.sh --gpu 0 --qat-only --batch 16 denoise   # reuse fp32, run QAT only
 #
-# Options: --prep  --no-qat  --gpu N  --batch N  --base N  --blocks N  --models DIR
+# Options: --prep  --no-qat  --qat-only  --gpu N  --batch N  --base N  --blocks N  --models DIR
 set -euo pipefail
 cd "$(dirname "$0")"
 export PYTHONIOENCODING=utf-8
 
-PREP=0; NOQAT=0; BATCH=0; BASE=0; BLOCKS=0; GPU=""; MODELS=models
+PREP=0; NOQAT=0; QATONLY=0; BATCH=0; BASE=0; BLOCKS=0; GPU=""; MODELS=models
 TASKS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --prep)    PREP=1 ;;
-    --no-qat)  NOQAT=1 ;;
-    --gpu)     GPU="$2"; shift ;;
-    --batch)   BATCH="$2"; shift ;;
-    --base)    BASE="$2"; shift ;;
-    --blocks)  BLOCKS="$2"; shift ;;
-    --models)  MODELS="$2"; shift ;;
-    -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
-    -*)        echo "unknown option $1" >&2; exit 1 ;;
-    *)         TASKS+=("$1") ;;
+    --prep)     PREP=1 ;;
+    --no-qat)   NOQAT=1 ;;
+    --qat-only) QATONLY=1 ;;   # skip fp32 train, resume existing checkpoints/$T/best.pt
+    --gpu)      GPU="$2"; shift ;;
+    --batch)    BATCH="$2"; shift ;;
+    --base)     BASE="$2"; shift ;;
+    --blocks)   BLOCKS="$2"; shift ;;
+    --models)   MODELS="$2"; shift ;;
+    -h|--help)  sed -n '2,13p' "$0"; exit 0 ;;
+    -*)         echo "unknown option $1" >&2; exit 1 ;;
+    *)          TASKS+=("$1") ;;
   esac
   shift
 done
+# --qat-only implies QAT runs (can't combine with --no-qat).
+if [[ $QATONLY -eq 1 ]]; then NOQAT=0; fi
 
 if [[ -n "$GPU" ]]; then export CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES="$GPU"; fi
 if [[ ${#TASKS[@]} -eq 0 ]]; then TASKS=(denoise bge decon upscale halo); fi
@@ -81,9 +85,15 @@ for T in "${TASKS[@]}"; do
   cfg "$T"
   [[ -d $DATA ]] || { echo "missing $DATA -- run: ./run_all.sh --prep $T" >&2; exit 1; }
 
-  echo "==> train $T fp32 (${FP}ep, base=$B blocks=$K)"
-  python train_task.py --task "$T" --epochs $FP --batch $FPB --workers 4 \
-    --base $B --blocks $K --out "checkpoints/$T" $(data_args)
+  if [[ $QATONLY -eq 1 ]]; then
+    [[ -f "checkpoints/$T/best.pt" ]] || {
+      echo "missing checkpoints/$T/best.pt -- run fp32 first (drop --qat-only)" >&2; exit 1; }
+    echo "==> (qat-only) skipping fp32, reusing checkpoints/$T/best.pt"
+  else
+    echo "==> train $T fp32 (${FP}ep, base=$B blocks=$K)"
+    python train_task.py --task "$T" --epochs $FP --batch $FPB --workers 4 \
+      --base $B --blocks $K --out "checkpoints/$T" $(data_args)
+  fi
   CK="checkpoints/$T/best.pt"
 
   if [[ $NOQAT -eq 0 ]]; then
