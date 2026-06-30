@@ -9962,6 +9962,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             aria-label="Delete">
                         <span class="files-icon">🗑</span>
                     </button>
+                    <button class="btn btn-sm btn-icon btn-primary"
+                            @click="filesSetStudioRoot()"
+                            :disabled="!filesSelectedDir()"
+                            :title="filesSelectedDir() ? 'Set this folder as the Studio scan root' : 'Set as Studio root (select a single folder first)'"
+                            aria-label="Set as Studio root">
+                        <span class="files-icon">⭐</span>
+                    </button>
                     <span class="files-actions-sep" aria-hidden="true"></span>
                     <!-- Edit ops. GX-12d: arbitrary two-file before/after
                          comparator. Reuses the GraXpert run modal, select any
@@ -10113,14 +10120,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Upscale: AI super-resolution (2× / 4×, Polaris AI)"
                             aria-label="Upscale">
                         <span class="files-icon">📈</span>
-                    </button>
-                    <span style="flex:1"></span>
-                    <button class="btn btn-sm btn-icon btn-primary"
-                            @click="filesSetStudioRoot()"
-                            :disabled="!filesSelectedDir()"
-                            :title="filesSelectedDir() ? 'Set this folder as the Studio scan root' : 'Set as Studio root (select a single folder first)'"
-                            aria-label="Set as Studio root">
-                        <span class="files-icon">⭐</span>
                     </button>
                 </div>
 
