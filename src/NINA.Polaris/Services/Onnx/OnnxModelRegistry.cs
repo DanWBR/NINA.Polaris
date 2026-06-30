@@ -106,8 +106,10 @@ public class OnnxModelRegistry {
     // GX-12n: also accept "-fp16" / "-int8" tags so quantized models
     // produced by scripts/quantize_onnx_models.py register as
     // distinct versions (e.g. "2.0.0-fp16" alongside "2.0.0").
+    // Optional lowercase source prefix (e.g. "polaris-", "graxpert-")
+    // lets operators identify model origin from the folder name alone.
     private static readonly Regex VersionRegex =
-        new(@"^\d+\.\d+(\.\d+)?(-(fp16|int16|int8))?$", RegexOptions.Compiled);
+        new(@"^([a-z]+-)?(\d+\.\d+(\.\d+)?)(-(fp16|int16|int8))?$", RegexOptions.Compiled);
 
     public OnnxModelRegistry(ProfileService profile, IWebHostEnvironment env,
                               ILogger<OnnxModelRegistry> logger) {
