@@ -8,6 +8,7 @@ import install from '../../content/install/install.json';
 import gettingStarted from '../../content/guide/getting-started.json';
 import featuresPage from '../../content/features/features.json';
 import aboutPage from '../../content/about/about.json';
+import aiToolsJson from '../../content/ai-tools/ai-tools.json';
 
 // ---- Static site config (links/meta, not editorial copy) ----
 export const site = {
@@ -26,6 +27,7 @@ export const site = {
 
 export const navLinks = [
   { label: 'Features', href: '/features' },
+  { label: 'AI Tools', href: '/ai-tools' },
   { label: 'Get Started', href: '/getting-started' },
   { label: 'Download & Install', href: '/install' },
   { label: 'About', href: '/about' },
@@ -39,6 +41,7 @@ export const footerCols = [
     title: 'Project',
     links: [
       { label: 'All features', href: '/features', external: false },
+      { label: 'AI Tools', href: '/ai-tools', external: false },
       { label: 'Getting started', href: '/getting-started', external: false },
       { label: 'About', href: '/about', external: false },
       { label: 'Download & Install', href: '/install', external: false },
@@ -79,3 +82,6 @@ export const featurePage = featuresPage;
 
 // ---- About page (content/about/about.json) ----
 export const aboutContent = aboutPage;
+
+// ---- AI Tools page (content/ai-tools/ai-tools.json) ----
+export const aiToolsPage = aiToolsJson;

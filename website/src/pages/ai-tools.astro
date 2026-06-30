@@ -1,0 +1,299 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Footer from '../components/Footer.astro';
+import { aiToolsPage as p } from '../data/site';
+
+const sourceBadge: Record<string, { label: string; color: string }> = {
+  graxpert:      { label: 'GraXpert model',        color: '#2563eb' },
+  polaris:       { label: 'Polaris model',          color: '#7c3aed' },
+  'polaris-soon':{ label: 'Polaris model (soon)',   color: '#7c3aed' },
+  classical:     { label: 'Algorithm',              color: '#374151' },
+};
+---
+
+<Layout
+  title="AI Tools, N.I.N.A. Polaris"
+  description="All AI-powered image processing tools in N.I.N.A. Polaris: background extraction, AI denoise, classical and AI deconvolution, star removal, halo removal, and super-resolution upscaling. Runs fully local on browser GPU, OpenCL, RKNN NPU, or CPU."
+>
+  <main>
+
+    <!-- ── Hero ─────────────────────────────────────────────────── -->
+    <header class="page-head">
+      <div class="container">
+        <a class="back" href="/">← Back to home</a>
+        <div class="head-label">AI TOOLS</div>
+        <h1>{p.title}</h1>
+        <p class="lede">{p.lede}</p>
+      </div>
+    </header>
+
+    <!-- ── At a glance ──────────────────────────────────────────── -->
+    {p.glance && p.glance.length > 0 && (
+      <section class="section section-alt">
+        <div class="container">
+          <h2 class="block-title">{p.glanceTitle}</h2>
+          <div class="glance-grid">
+            {p.glance.map((g) => (
+              <div class="glance">
+                <span class="glance-dot" aria-hidden="true"></span>
+                <p><strong>{g.label}</strong> {g.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    )}
+
+    <!-- ── Tools ─────────────────────────────────────────────────── -->
+    <section class="section">
+      <div class="container">
+        <h2 class="block-title">{p.toolsTitle}</h2>
+        <div class="panels">
+          {p.tools.map((t) => {
+            const badge = sourceBadge[t.source ?? 'classical'];
+            return (
+              <article class="panel" id={t.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}>
+                <header class="panel-head">
+                  <span class="sq-icon" style={t.color ? `--ic: ${t.color}` : undefined}>{t.icon}</span>
+                  <div class="panel-id">
+                    <h3>{t.title}</h3>
+                    <div class="panel-meta">
+                      {t.tag && <span class="panel-tag">{t.tag}</span>}
+                      {badge && (
+                        <span class="source-badge" style={`--bc: ${badge.color}`}>{badge.label}</span>
+                      )}
+                    </div>
+                  </div>
+                </header>
+                {t.intro && <p class="panel-intro">{t.intro}</p>}
+                <ul class="panel-list">
+                  {t.items.map((it) => (
+                    <li>
+                      {it.label && <strong>{it.label}</strong>}
+                      {it.label && it.text ? ' ' : ''}
+                      {it.text}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Acceleration Backends ─────────────────────────────────── -->
+    <section class="section section-alt">
+      <div class="container">
+        <h2 class="block-title">{p.backendsTitle}</h2>
+        <p class="section-lede">{p.backendsLede}</p>
+        <div class="backends-grid">
+          {p.backends.map((b) => (
+            <article class="backend-card">
+              <div class="backend-head">
+                <span class="sq-icon sq-icon--sm" style={b.color ? `--ic: ${b.color}` : undefined}>{b.icon}</span>
+                <div>
+                  <h3 class="backend-title">{b.title}</h3>
+                  {b.tag && <span class="panel-tag">{b.tag}</span>}
+                </div>
+              </div>
+              {b.intro && <p class="backend-intro">{b.intro}</p>}
+              <ul class="panel-list">
+                {b.items.map((it) => (
+                  <li>
+                    {it.label && <strong>{it.label}</strong>}
+                    {it.label && it.text ? ' ' : ''}
+                    {it.text}
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Model Precision ───────────────────────────────────────── -->
+    <section class="section">
+      <div class="container">
+        <h2 class="block-title">{p.precisionTitle}</h2>
+        <p class="section-lede">{p.precisionLede}</p>
+        <div class="precision-grid">
+          {p.precisions.map((pr) => (
+            <div class="precision-card">
+              <div class="precision-head">
+                <span class="precision-name" style={`--pc: ${pr.color}`}>{pr.name}</span>
+                <span class="precision-tag" style={`--pc: ${pr.color}`}>{pr.tag}</span>
+              </div>
+              <p class="precision-desc">{pr.desc}</p>
+              <p class="precision-detail">{pr.detail}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Footer CTA ────────────────────────────────────────────── -->
+    <section class="section section-alt cta-section">
+      <div class="container cta-inner">
+        <p class="cta-text">All tools run locally. No subscriptions. Your images stay on your device.</p>
+        <a class="btn-primary" href="/install">Download Polaris</a>
+      </div>
+    </section>
+
+  </main>
+  <Footer />
+</Layout>
+
+<style>
+  /* ── Layout helpers ─────────────────────────────────────── */
+  .section       { padding: 56px 0; }
+  .section-alt   { background: var(--panel); }
+  .block-title   { font-size: clamp(22px, 3vw, 30px); font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
+  .section-lede  { font-size: 15px; color: var(--text-muted); max-width: 72ch; line-height: 1.6; margin-bottom: 32px; }
+
+  /* ── Page header ────────────────────────────────────────── */
+  .page-head { padding: 56px 0 40px; border-bottom: 1px solid var(--border); }
+  .back { display: inline-block; font-size: 14px; margin-bottom: 18px; color: var(--text-muted); }
+  .back:hover { color: var(--accent); text-decoration: none; }
+  .head-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .page-head h1 { font-size: clamp(30px, 5vw, 48px); font-weight: 800; letter-spacing: -1px; margin-bottom: 14px; }
+  .lede { font-size: 17px; color: var(--text-muted); max-width: 78ch; line-height: 1.6; }
+
+  /* ── At a glance ────────────────────────────────────────── */
+  .glance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .glance { display: flex; gap: 12px; align-items: flex-start; }
+  .glance-dot {
+    margin-top: 8px; width: 8px; height: 8px; flex-shrink: 0;
+    border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.7);
+  }
+  .glance p { font-size: 15px; color: var(--text-muted); line-height: 1.55; }
+  .glance strong { color: var(--text); }
+
+  /* ── Tool panels ────────────────────────────────────────── */
+  .panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 24px;
+    align-items: start;
+  }
+  .panel {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    scroll-margin-top: 88px;
+  }
+  .section-alt .panel { background: var(--bg); }
+  .panel-head { display: flex; align-items: center; gap: 13px; margin-bottom: 12px; }
+  .sq-icon {
+    --ic: var(--accent);
+    width: 42px; height: 42px; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 20px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ic) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ic) 40%, transparent);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--ic) 22%, transparent);
+  }
+  .sq-icon--sm { width: 34px; height: 34px; font-size: 16px; }
+  .panel-id { min-width: 0; }
+  .panel-id h3 { font-size: 17px; font-weight: 800; letter-spacing: 0.2px; line-height: 1.1; }
+  .panel-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+  .panel-tag { font-size: 12px; color: var(--text-muted); }
+  .source-badge {
+    --bc: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 99px;
+    background: color-mix(in srgb, var(--bc) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bc) 35%, transparent);
+    color: color-mix(in srgb, var(--bc) 90%, var(--text));
+  }
+  .panel-intro { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 14px; }
+  .panel-list { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .panel-list li {
+    position: relative; padding-left: 18px;
+    font-size: 13.5px; color: var(--text-muted); line-height: 1.55;
+  }
+  .panel-list li::before {
+    content: ""; position: absolute; left: 2px; top: 8px;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+  .panel-list strong { color: var(--text); font-weight: 600; }
+
+  /* ── Backends ───────────────────────────────────────────── */
+  .backends-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+    align-items: start;
+  }
+  .backend-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+  }
+  .backend-head { display: flex; align-items: center; gap: 11px; margin-bottom: 10px; }
+  .backend-title { font-size: 16px; font-weight: 700; line-height: 1.1; }
+  .backend-intro { font-size: 13.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 12px; }
+
+  /* ── Precision ──────────────────────────────────────────── */
+  .precision-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 20px;
+  }
+  .precision-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .precision-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .precision-name {
+    --pc: var(--accent);
+    font-size: 18px; font-weight: 800; font-family: monospace;
+    color: var(--pc);
+  }
+  .precision-tag {
+    --pc: var(--accent);
+    font-size: 11px; font-weight: 600;
+    padding: 2px 7px; border-radius: 99px;
+    background: color-mix(in srgb, var(--pc) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--pc) 30%, transparent);
+    color: color-mix(in srgb, var(--pc) 85%, var(--text));
+  }
+  .precision-desc { font-size: 13.5px; color: var(--text-muted); line-height: 1.6; margin-bottom: 8px; }
+  .precision-detail { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; opacity: 0.75; }
+
+  /* ── CTA ─────────────────────────────────────────────────── */
+  .cta-section { padding: 48px 0; }
+  .cta-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+  .cta-text { font-size: 17px; font-weight: 600; color: var(--text); max-width: 52ch; }
+  .btn-primary {
+    display: inline-block; padding: 12px 28px;
+    background: var(--accent); color: #fff;
+    border-radius: 8px; font-size: 15px; font-weight: 700;
+    text-decoration: none; white-space: nowrap;
+    transition: opacity 0.15s;
+  }
+  .btn-primary:hover { opacity: 0.88; text-decoration: none; }
+
+  /* ── Responsive ──────────────────────────────────────────── */
+  @media (max-width: 600px) {
+    .panels, .backends-grid, .precision-grid { grid-template-columns: 1fr; }
+    .cta-inner { flex-direction: column; align-items: flex-start; }
+    .glance-grid { grid-template-columns: 1fr; }
+  }
+</style>
