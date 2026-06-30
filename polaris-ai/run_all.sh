@@ -45,14 +45,18 @@ cfg() {
     halo)    KIND=pairs; DATA=data/own/halo_tiles;    VAL=data/own/halo_val;        B=96; K=3; FP=90;  Q=20; SZ=256 ;;
     *) echo "unknown task '$1' (bge|denoise|decon|upscale|halo)" >&2; exit 1 ;;
   esac
-  [[ $BASE   -gt 0 ]] && B=$BASE
-  [[ $BLOCKS -gt 0 ]] && K=$BLOCKS
+  # NOTE: use if/fi, not `cond && assign`. Under `set -e` a `[[ ]] && x` whose
+  # test is false returns 1; as the LAST statement of a function that makes the
+  # function return 1, which aborts the whole script. That bug exited run_all
+  # right after the "device:" line whenever BASE/BLOCKS were left at 0.
+  if [[ $BASE   -gt 0 ]]; then B=$BASE; fi
+  if [[ $BLOCKS -gt 0 ]]; then K=$BLOCKS; fi
 }
 
 data_args() {  # train data flags (with val)
   if [[ $KIND == tiles ]]; then printf -- "--tiles %s --val-tiles %s" "$DATA" "$VAL"
   else printf -- "--pairs %s --val-pairs %s" "$DATA" "$VAL"; fi
-  [[ -n $SCALE ]] && printf -- " --scale %s" "$SCALE"
+  if [[ -n $SCALE ]]; then printf -- " --scale %s" "$SCALE"; fi
 }
 
 if [[ $PREP -eq 1 ]]; then
@@ -69,8 +73,8 @@ if [[ $PREP -eq 1 ]]; then
   echo "prep done"; exit 0
 fi
 
-FPB=8;  [[ $BATCH -gt 0 ]] && FPB=$BATCH
-QB=6;   [[ $BATCH -gt 0 ]] && QB=$BATCH
+FPB=8;  if [[ $BATCH -gt 0 ]]; then FPB=$BATCH; fi
+QB=6;   if [[ $BATCH -gt 0 ]]; then QB=$BATCH; fi
 echo "device: $(python -c 'import torch;print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU")')"
 
 for T in "${TASKS[@]}"; do
@@ -92,7 +96,7 @@ for T in "${TASKS[@]}"; do
 
   echo "==> export $T"
   EX=(export.py --task "$T" --ckpt "$CK" --base $B --blocks $K --size $SZ --out "$MODELS")
-  [[ -n $SCALE ]] && EX+=(--scale $SCALE)
+  if [[ -n $SCALE ]]; then EX+=(--scale $SCALE); fi
   python "${EX[@]}"
 
   echo "==> calib $T"
