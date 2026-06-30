@@ -25418,6 +25418,14 @@ function ninaApp() {
                 label: 'Classical RL — measured PSF (server)',
                 sizeBytes: 0, isQuantized: false,
             });
+            // Field-varying PSF: a PSF per region (corner ≠ centre). The
+            // headline differentiator — corrects coma / field curvature / tilt.
+            out.push({
+                family: 'rl', version: 'field', target: 'rl',
+                key: 'rl::field',
+                label: 'Classical RL — field PSF, per-region (server)',
+                sizeBytes: 0, isQuantized: false,
+            });
             return out;
         },
 
@@ -25628,13 +25636,18 @@ function ninaApp() {
             this.graxpert.browserAbortRequested = false;
             this.graxpert.browserDone = 0;
             this.graxpert.browserTotal = paths.length;
-            this.graxpert.browserPhase = 'measuring PSF + deconvolving on the server…';
+            const field = this._deconSelection().version === 'field';
+            this.graxpert.browserPhase = field
+                ? 'measuring per-region PSF + deconvolving on the server…'
+                : 'measuring PSF + deconvolving on the server…';
             this.graxpert.browserProgress = 0;
             try {
                 const resp = await this.apiPost('/api/decon/rl', {
                     paths,
                     strength: this.graxpert.modalDeconStrength,
-                    supportMask: true
+                    supportMask: true,
+                    field,
+                    grid: 3
                 });
                 const r = await resp.json();
                 const results = r.results || [];
@@ -25646,9 +25659,11 @@ function ninaApp() {
                 }));
                 if (results[0]) {
                     const s = results[0];
+                    const cells = s.field ? ` · ${s.measuredCells}/${s.gridCells} cells` : '';
                     this.toast(
-                        `Classical RL: PSF FWHM ${(+s.fwhmPx).toFixed(2)}px · ` +
-                        `${s.starsUsed} stars · ${s.iterations} iters · ` +
+                        `Classical RL${s.field ? ' (field)' : ''}: PSF FWHM ` +
+                        `${(+s.fwhmPx).toFixed(2)}px · ${s.starsUsed} stars · ` +
+                        `${s.iterations} iters${cells} · ` +
                         `${written.length}/${paths.length} written`, 'ok', 6000);
                 }
                 for (const f of failures) {

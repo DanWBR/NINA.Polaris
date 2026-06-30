@@ -42,6 +42,8 @@ public static class DeconEndpoints {
             double strength = req.Strength is >= 0 and <= 1 ? req.Strength!.Value : 0.5;
             double tv = req.TvLambda ?? 0.002;
             bool mask = req.SupportMask ?? true;
+            bool field = req.Field ?? false;
+            int grid = req.Grid is >= 2 and <= 8 ? req.Grid!.Value : 3;
 
             var results = new List<object>();
             var failures = new List<object>();
@@ -49,7 +51,7 @@ public static class DeconEndpoints {
                 try {
                     // RL is CPU-heavy; keep the request thread free.
                     var r = await Task.Run(() =>
-                        svc.RichardsonLucy(path, strength, tv, mask));
+                        svc.RichardsonLucy(path, strength, tv, mask, field, grid));
                     results.Add(new {
                         sourcePath = path,
                         outputPath = r.OutputPath,
@@ -59,7 +61,10 @@ public static class DeconEndpoints {
                         fwhmPx = r.FwhmPx,
                         eccentricity = r.Eccentricity,
                         starsUsed = r.StarsUsed,
-                        iterations = r.Iterations
+                        iterations = r.Iterations,
+                        field = r.Field,
+                        gridCells = r.GridCells,
+                        measuredCells = r.MeasuredCells
                     });
                 } catch (Exception ex) {
                     failures.Add(new { sourcePath = path, error = ex.Message });
@@ -75,5 +80,6 @@ public static class DeconEndpoints {
 
     public record DeconRequest(
         string[] Paths, double? Strength = null,
-        double? TvLambda = null, bool? SupportMask = null);
+        double? TvLambda = null, bool? SupportMask = null,
+        bool? Field = null, int? Grid = null);
 }

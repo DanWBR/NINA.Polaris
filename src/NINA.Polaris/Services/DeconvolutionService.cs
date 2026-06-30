@@ -40,17 +40,21 @@ public class DeconvolutionService {
 
     public sealed record DeconResult(
         string OutputPath, int Width, int Height, int Channels,
-        double FwhmPx, double Eccentricity, int StarsUsed, int Iterations);
+        double FwhmPx, double Eccentricity, int StarsUsed, int Iterations,
+        bool Field = false, int GridCells = 0, int MeasuredCells = 0);
 
     /// <summary>
     /// Deconvolve <paramref name="sourcePath"/>. <paramref name="strength"/>
     /// (0..1) maps to the RL iteration count; <paramref name="supportMask"/>
-    /// limits sharpening to where there is signal. Throws
-    /// InvalidOperationException when the frame lacks enough clean stars to
-    /// measure a PSF (the caller surfaces a clear message).
+    /// limits sharpening to where there is signal. When <paramref name="field"/>
+    /// is true the PSF is measured per region on a <paramref name="grid"/>×grid
+    /// and each region is deconvolved with its own kernel (corner ≠ centre).
+    /// Throws InvalidOperationException when the frame lacks enough clean stars
+    /// to measure a PSF (the caller surfaces a clear message).
     /// </summary>
     public DeconResult RichardsonLucy(string sourcePath, double strength = 0.5,
-                                      double tvLambda = 0.002, bool supportMask = true) {
+                                      double tvLambda = 0.002, bool supportMask = true,
+                                      bool field = false, int grid = 3) {
         if (string.IsNullOrWhiteSpace(sourcePath))
             throw new ArgumentException("sourcePath is required", nameof(sourcePath));
         if (!File.Exists(sourcePath))
@@ -73,11 +77,23 @@ public class DeconvolutionService {
             Array.Copy(src.Data, lum, plane);
         }
 
-        var psf = new PsfExtractor().Extract(lum, w, h);
-        if (psf == null)
-            throw new InvalidOperationException(
-                "Not enough clean stars to measure the PSF (need ≥ 8 unsaturated, " +
-                "isolated, round stars). Use AI deconvolution for star-poor frames.");
+        var ex = new PsfExtractor();
+        const string err =
+            "Not enough clean stars to measure the PSF (need ≥ 8 unsaturated, " +
+            "isolated, round stars). Use AI deconvolution for star-poor frames.";
+
+        // Measure the PSF — a single global one, or a per-region field.
+        PsfModel psf;
+        PsfField psfField = null;
+        if (field) {
+            int g = Math.Clamp(grid, 2, 8);
+            psfField = ex.ExtractField(lum, w, h, g, g);
+            if (psfField == null) throw new InvalidOperationException(err);
+            psf = psfField.Global;
+        } else {
+            psf = ex.Extract(lum, w, h);
+            if (psf == null) throw new InvalidOperationException(err);
+        }
 
         int iters = RichardsonLucyDeconvolution.IterationsFromStrength(strength);
         if (iters <= 0) iters = 1;
@@ -91,13 +107,16 @@ public class DeconvolutionService {
             mask = RichardsonLucyDeconvolution.BuildSupportMask(lumF, w, h, bg, noise);
         }
 
-        var rl = new RichardsonLucyDeconvolution { Iterations = iters, TvLambda = tvLambda };
+        var rl = field ? null : new RichardsonLucyDeconvolution { Iterations = iters, TvLambda = tvLambda };
+        var fd = field ? new FieldDeconvolution { Iterations = iters, TvLambda = tvLambda } : null;
         var outData = new ushort[src.Data.Length];
         var planeF = new float[plane];
         for (int c = 0; c < channels; c++) {
             long baseIdx = (long)c * plane;
             for (long i = 0; i < plane; i++) planeF[i] = src.Data[baseIdx + i];
-            var dec = rl.Deconvolve(planeF, w, h, psf, mask);
+            var dec = field
+                ? fd.Deconvolve(planeF, w, h, psfField, mask)
+                : rl.Deconvolve(planeF, w, h, psf, mask);
             for (long i = 0; i < plane; i++) {
                 int v = (int)(dec[i] + 0.5f);
                 outData[baseIdx + i] = (ushort)(v < 0 ? 0 : (v > 65535 ? 65535 : v));
@@ -109,21 +128,27 @@ public class DeconvolutionService {
         var stem = Path.GetFileNameWithoutExtension(sourcePath);
         var outPath = Path.Combine(dir, stem + "_rl.fits");
 
+        int gridCells = field ? psfField.GridX * psfField.GridY : 0;
+        int measured = field ? psfField.MeasuredCellCount : 0;
+
         FITSWriter.Write(dst, outPath, customKeywords: new[] {
-            new KeyValuePair<string, string>("DECONALG", "RichardsonLucy-measuredPSF"),
+            new KeyValuePair<string, string>("DECONALG",
+                field ? "RichardsonLucy-fieldPSF" : "RichardsonLucy-measuredPSF"),
             new KeyValuePair<string, string>("DECONITER", iters.ToString()),
             new KeyValuePair<string, string>("DECONFWHM", psf.FwhmPx.ToString("F3")),
             new KeyValuePair<string, string>("DECONECC", psf.Eccentricity.ToString("F3")),
             new KeyValuePair<string, string>("DECONSTAR", psf.StarsUsed.ToString()),
+            new KeyValuePair<string, string>("DECONGRID",
+                field ? $"{psfField.GridX}x{psfField.GridY}" : "1x1"),
         });
 
         _logger.LogInformation(
-            "RL decon: {Src} ({W}×{H} ch={Ch}) → {Out} | PSF FWHM={Fwhm:F2} ecc={Ecc:F2} " +
-            "stars={Stars} iters={Iters}",
-            sourcePath, w, h, channels, outPath, psf.FwhmPx, psf.Eccentricity,
-            psf.StarsUsed, iters);
+            "RL decon ({Mode}): {Src} ({W}×{H} ch={Ch}) → {Out} | PSF FWHM={Fwhm:F2} " +
+            "ecc={Ecc:F2} stars={Stars} iters={Iters} cells={Measured}/{Grid}",
+            field ? "field" : "global", sourcePath, w, h, channels, outPath,
+            psf.FwhmPx, psf.Eccentricity, psf.StarsUsed, iters, measured, gridCells);
 
         return new DeconResult(outPath, w, h, channels,
-            psf.FwhmPx, psf.Eccentricity, psf.StarsUsed, iters);
+            psf.FwhmPx, psf.Eccentricity, psf.StarsUsed, iters, field, gridCells, measured);
     }
 }
