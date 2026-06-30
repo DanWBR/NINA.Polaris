@@ -44,7 +44,7 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260626-uppercase">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260627-autorunreorg">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260629-aitools">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260630-addrmerge">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-safetyguard">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260628-smbchip">
@@ -9846,42 +9846,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="files-pane-split">
                 <div class="files-left">
 
-                <!-- Address bar: roots dropdown + path crumbs + reload -->
-                <div class="files-addr">
-                    <select class="input-sm files-roots" @change="filesCd($event.target.value)">
-                        <option value="" disabled selected>Jump to root…</option>
-                        <template x-for="r in files.roots" :key="r.name">
-                            <option :value="r.name" x-text="r.displayName"></option>
-                        </template>
-                    </select>
-                    <nav class="files-crumbs" aria-label="Path">
-                        <template x-for="(crumb, i) in filesCrumbs()" :key="i">
-                            <span>
-                                <a href="#" @click.prevent="filesCd(crumb.path)" x-text="crumb.label"></a>
-                                <span x-show="i < filesCrumbs().length - 1" class="files-crumb-sep">›</span>
-                            </span>
-                        </template>
-                    </nav>
-                    <label class="files-hidden-toggle" title="Show hidden files">
-                        <input type="checkbox" x-model="files.showHidden" @change="filesReload()">
-                        Hidden
-                    </label>
-                    <!-- UNIF-4: opt-in FITS metadata columns. Lookup
-                         is a single batch SQL against frames.db (no
-                         per-file header parse), so even directories
-                         with 200+ FITS stay snappy. Off by default
-                         to keep the listing minimal for non-FITS
-                         folders. -->
-                    <label class="files-hidden-toggle"
-                           title="Show IMAGETYP, FILTER, TARGET, EXPOSURE columns from the FITS header cache">
-                        <input type="checkbox"
-                               x-model="files.showFitsMeta"
-                               @change="filesPersistMetaToggle(); filesReload()">
-                        FITS metadata
-                    </label>
-                    <button class="btn btn-sm" @click="filesReload()" title="Reload">⟳</button>
-                </div>
-
                 <!-- Clipboard indicator (cut/copy pending) -->
                 <div class="files-clipboard" x-show="files.clipboard" x-cloak>
                     <span x-text="(files.clipboard?.mode || '') + ' ' + (files.clipboard?.paths?.length || 0) + ' item(s)'"></span>
@@ -9977,6 +9941,44 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             aria-label="Compare">
                         <span class="files-icon">↔</span>
                     </button>
+
+                    <!-- Address controls merged onto the FILE TOOLS row,
+                         pushed to the right: roots dropdown, path crumbs,
+                         Hidden / FITS-metadata toggles, reload. -->
+                    <div class="files-addr-merged">
+                        <select class="input-sm files-roots" @change="filesCd($event.target.value)">
+                            <option value="" disabled selected>Jump to root…</option>
+                            <template x-for="r in files.roots" :key="r.name">
+                                <option :value="r.name" x-text="r.displayName"></option>
+                            </template>
+                        </select>
+                        <nav class="files-crumbs" aria-label="Path">
+                            <template x-for="(crumb, i) in filesCrumbs()" :key="i">
+                                <span>
+                                    <a href="#" @click.prevent="filesCd(crumb.path)" x-text="crumb.label"></a>
+                                    <span x-show="i < filesCrumbs().length - 1" class="files-crumb-sep">›</span>
+                                </span>
+                            </template>
+                        </nav>
+                        <label class="files-hidden-toggle" title="Show hidden files">
+                            <input type="checkbox" x-model="files.showHidden" @change="filesReload()">
+                            Hidden
+                        </label>
+                        <!-- UNIF-4: opt-in FITS metadata columns. Lookup
+                             is a single batch SQL against frames.db (no
+                             per-file header parse), so even directories
+                             with 200+ FITS stay snappy. Off by default
+                             to keep the listing minimal for non-FITS
+                             folders. -->
+                        <label class="files-hidden-toggle"
+                               title="Show IMAGETYP, FILTER, TARGET, EXPOSURE columns from the FITS header cache">
+                            <input type="checkbox"
+                                   x-model="files.showFitsMeta"
+                                   @change="filesPersistMetaToggle(); filesReload()">
+                            FITS metadata
+                        </label>
+                        <button class="btn btn-sm" @click="filesReload()" title="Reload">⟳</button>
+                    </div>
                 </div>
 
                 <!-- AI Tools — dedicated second toolbar grouping every

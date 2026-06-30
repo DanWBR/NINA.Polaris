@@ -1162,6 +1162,21 @@
     color: var(--text-secondary);
 }
 
+/* Address controls (roots + crumbs + Hidden/FITS toggles + reload) merged
+   onto the right end of the FILE TOOLS toolbar row. `margin-left:auto`
+   pushes the whole group to the right; crumbs are capped + ellipsized so a
+   deep path can't shove the toggles off-screen. */
+.files-addr-merged {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+.files-addr-merged .files-crumbs {
+    flex: 0 1 auto;
+    max-width: 340px;
+}
+
 /* Clipboard chip: shown while a cut/copy is pending. */
 .files-clipboard {
     display: flex;
