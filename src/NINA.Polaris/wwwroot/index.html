@@ -12676,6 +12676,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <table class="onnx-models-table">
                             <thead>
                                 <tr>
+                                    <th>Model</th>
                                     <th>Family</th>
                                     <th>Version</th>
                                     <th style="text-align:right">Size</th>
@@ -12686,8 +12687,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <template x-for="m in (onnx.manifest?.models || [])"
                                           :key="m.family + '/' + m.version">
                                     <tr>
-                                        <td x-text="m.family"></td>
-                                        <td x-text="m.version"></td>
+                                        <!-- Friendly product name w/ provider
+                                             (GraXpert vs Polaris), so the list
+                                             isn't an ambiguous family/version
+                                             dump. Raw family/version kept for
+                                             reference + debugging. -->
+                                        <td x-text="_modelDisplayName(m.family, m.version)"></td>
+                                        <td class="muted" x-text="m.family"></td>
+                                        <td class="muted" x-text="m.version"></td>
                                         <td style="text-align:right;
                                                    font-variant-numeric:tabular-nums"
                                             x-text="formatBytes(m.sizeBytes)"></td>
@@ -12703,7 +12710,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          x-show="!onnx.manifest?.models?.length && !onnx.scanning"
                          style="margin-top:10px">
                         No models detected. Set the path above to a folder
-                        containing the GraXpert ONNX models.
+                        containing the AI ONNX models (GraXpert or Polaris).
                     </div>
 
                     <!-- ── On-demand model downloader (bucket) ───────────── -->
