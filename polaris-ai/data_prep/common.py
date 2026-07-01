@@ -321,19 +321,19 @@ def add_star_halos_rgb(clean: np.ndarray, rng: np.random.Generator,
         # peaked core (scale a ~8-35 px) and long shallow tail (reaches 150-300+px
         # at very low contrast). This is large but faint/translucent -- the real
         # look -- NOT a bright filled bokeh disk (that was the artefact).
-        radius = float(np.exp(rng.uniform(np.log(20.0), np.log(55.0))))  # Moffat core scale
+        radius = float(np.exp(rng.uniform(np.log(12.0), np.log(40.0))))  # Moffat core scale
         beta = float(rng.uniform(1.0, 1.5))                    # low = long wings (real halo)
         # GLOW ONLY. A standalone bright "ring" produced a hard green donut
         # artefact; the real outer reflection ring is extremely faint/diffuse and
         # not worth the risk. The tapered Moffat glow already matches the bulk of
         # the measured real halo.
         kind = "glow"
-        # base = the glow's PEAK amplitude (lands on the saturated core, which the
-        # headroom composite absorbs); the visible part is the faint Moffat tail.
-        # Amplitude spans 3 real halos measured (SII_2 faint ~0.018@40px, NIR mid
-        # ~0.035, SII/550 bright ~0.13): same Moffat shape, ~7x amplitude spread
-        # driven by star brightness.
-        base = max(1e-4, peak) * float(rng.uniform(0.02, 0.18)) * intensity_scale
+        # base = the glow's PEAK amplitude. The synthetic halo represents ONLY the
+        # faint reflection glow ADDED beyond the star's own PSF -- the earlier
+        # 0.02-0.18 was fit to the TOTAL real profile (star PSF + halo) and made
+        # big opaque blobs since the clean-source stars are tiny points. Keep it
+        # faint/translucent: a few % peak, decaying. intensity_scale tweaks it.
+        base = max(1e-4, peak) * float(rng.uniform(0.006, 0.05)) * intensity_scale
         soft = 0.25
         color = _star_color(clean, cy, cx)                     # same colour as star
         pp = _halo_profile(cy, cx, radius, kind, out.shape[1:], soft=soft, beta=beta)
