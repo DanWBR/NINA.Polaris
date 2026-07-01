@@ -10313,7 +10313,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      cards + action toolbar; UNIF-5 fills Edit with
                      the OpenSeadragon viewer + sliders moved over
                      from the legacy EDITOR tab. -->
-                <aside class="files-right" :class="{ 'files-right--collapsed': filesStackCollapsed }">
+                <aside class="files-right" :class="{ 'files-right--collapsed': filesStackCollapsed }"
+                       :style="'--stack-w:' + filesStackWidth + 'px'">
                     <!-- Collapse handle: only shown on the narrow-screen overlay
                          layout (CSS gates it to ≤900px). Slides the Stack panel
                          off to the right edge so the file tree gets full width. -->
@@ -10334,6 +10335,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <div class="files-right-pane stack-pane" data-tour="studio-stack">
                         <div class="stack-header">
                             <h3 class="stack-title">Stack workspace</h3>
+                            <!-- Panel width slider: drives the --stack-w CSS var
+                                 on .files-right; persisted to localStorage. -->
+                            <label class="stack-width-ctl" title="Panel width">
+                                <span>↔</span>
+                                <input type="range" min="320" max="900" step="10"
+                                       x-model.number="filesStackWidth"
+                                       @input="localStorage.setItem('polaris-stack-width', filesStackWidth)">
+                            </label>
                             <button class="btn btn-sm"
                                     @click="stackClearAll()"
                                     :disabled="stackSlotDefs.every(d => stack[d.key].length === 0)

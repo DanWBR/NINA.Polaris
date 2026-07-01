@@ -631,10 +631,14 @@ function ninaApp() {
         uiLang: 'en',
         padScale: 100,   // control density %, applied (Settings → Appearance)
         padScaleDraft: 100, // slider draft; only committed to padScale on Apply
-        // STUDIO: on narrow screens the Stack panel floats as a collapsible
-        // right overlay so the file tree keeps the full width. Default
-        // collapsed (tree-first); no effect on the desktop side-by-side layout.
-        filesStackCollapsed: true,
+        // STUDIO: the Stack panel is SHOWN by default; the user can hide it
+        // with the collapse handle. On narrow screens it floats as a
+        // collapsible right overlay so the file tree keeps the full width.
+        filesStackCollapsed: false,
+        // User-adjustable Stack panel width (px), driven by a slider in the
+        // Stack header and persisted. Bound to the panel via the --stack-w CSS
+        // var so both the desktop split and the mobile overlay honour it.
+        filesStackWidth: (parseInt(localStorage.getItem('polaris-stack-width'), 10) || 460),
 
         // SWE-5: object-info card overlay on the sky map. Populated
         // when the bridge emits a map-click with a rich object payload

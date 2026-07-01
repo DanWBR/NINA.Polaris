@@ -910,7 +910,7 @@
     min-height: 0;
 }
 .files-right {
-    flex: 1 1 420px;
+    flex: 0 0 var(--stack-w, 420px);
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -965,7 +965,7 @@
     .files-left { flex: 1 1 auto; margin-right: 28px; }
     .files-right {
         position: absolute; right: 0; top: 0; bottom: 0;
-        width: min(420px, 88vw); flex: none; z-index: 5;
+        width: min(var(--stack-w, 420px), 88vw); flex: none; z-index: 5;
         padding-left: 28px;            /* clear the absolute handle */
         transition: transform 200ms ease;
         box-shadow: -8px 0 24px rgba(0, 0, 0, 0.45);
@@ -996,6 +996,24 @@
     color: var(--text-primary);
     font-size: 15px;
     font-weight: 600;
+}
+/* Compact panel-width slider in the Stack header. */
+.stack-width-ctl {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+.stack-width-ctl input[type="range"] {
+    width: 90px;
+    accent-color: var(--accent2-light, var(--accent));
+    cursor: ew-resize;
+}
+/* Hide the width slider on the narrow-screen overlay layout, where the
+   panel width is viewport-capped and dragging it adds little. */
+@media (max-width: 900px) {
+    .stack-width-ctl { display: none; }
 }
 .stack-slot {
     background: var(--bg-primary);
