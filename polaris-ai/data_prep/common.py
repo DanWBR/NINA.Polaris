@@ -243,21 +243,26 @@ def find_bright_stars(lum: np.ndarray, max_stars: int = 150,
 
 
 def _halo_profile(cy: int, cx: int, radius: float, kind: str, shape,
-                  soft: float = 0.25):
+                  soft: float = 0.25, beta: float = 1.5):
     """Return ``(slice_y, slice_x, profile)`` for a halo centred at (cy, cx).
 
-    Shapes match real reflection halos (see references): a **filled disk**
-    brightest at the centre, fading out with a soft-but-defined circular edge
-    (smoothstep) plus a subtle rim; a broad **glow**; or a thin **ring**. ``soft``
-    is the edge transition width as a fraction of ``radius`` (bigger = softer).
-    The bounding box always extends past the falloff so there is no hard cutoff."""
+    Calibrated against a REAL reflection halo measured in NIR.fit (bright
+    saturated star, background ~0.0085): the halo is a smooth **glow** with a
+    peaked core and a long, shallow tail (Moffat-like), fading from a few x the
+    background near the core out to ~200+ px at ~1.2x bg -- NOT a filled disk and
+    NOT a hard bokeh ring. Measured excess over bg: ~+0.035 @40px, +0.008 @80px,
+    +0.0045 @120px, +0.002 @200px.
+
+      * ``glow`` : Moffat ``(1 + (r/a)^2)^(-beta)`` -- ``radius`` = core scale a,
+        ``beta`` = wing steepness (small = longer wings). The realistic default.
+      * ``ring`` : a faint thin annulus at ``radius`` (the outer reflection ring).
+    """
     h, w = shape
-    sw = max(1.5, radius * soft)
-    if kind == "glow":
-        sigma = radius * 0.8
-        R = int(sigma * 3.4) + 2
-    else:  # disk / ring
+    if kind == "ring":
+        sw = max(1.5, radius * soft)
         R = int(radius + 4.0 * sw) + 2
+    else:  # glow: capture the long Moffat wings
+        R = int(radius * 12) + 2
     y0, y1 = max(0, cy - R), min(h, cy + R + 1)
     x0, x1 = max(0, cx - R), min(w, cx + R + 1)
     if y1 <= y0 or x1 <= x0:
@@ -266,17 +271,10 @@ def _halo_profile(cy: int, cx: int, radius: float, kind: str, shape,
     xx = np.arange(x0, x1)[None, :] - cx
     rr = np.sqrt(yy * yy + xx * xx).astype(np.float32)
     if kind == "ring":
+        sw = max(1.5, radius * soft)
         prof = np.exp(-((rr - radius) ** 2) / (2.0 * sw * sw))
-    elif kind == "glow":
-        prof = np.exp(-(rr ** 2) / (2.0 * (radius * 0.8) ** 2))
-    else:  # disk: bright centre + soft-edged fill + faint rim
-        t = np.clip((rr - (radius - sw)) / (2.0 * sw), 0.0, 1.0)
-        fill = 1.0 - (t * t * (3.0 - 2.0 * t))                      # smoothstep 1->0
-        center = np.exp(-(rr ** 2) / (2.0 * (radius * 0.55) ** 2))  # gentle central concentration
-        rim = np.exp(-((rr - radius) ** 2) / (2.0 * (sw * 0.9) ** 2))
-        # flatter, more translucent veil (less of a bright central blob)
-        prof = 0.6 * fill + 0.25 * center + 0.18 * rim
-        prof = prof / float(prof.max())
+    else:  # glow (Moffat): peaked core + long shallow tail, matches real halo
+        prof = (1.0 + (rr / max(1.0, radius)) ** 2) ** (-beta)
     return (slice(y0, y1), slice(x0, x1), prof.astype(np.float32))
 
 
@@ -309,21 +307,30 @@ def add_star_halos_rgb(clean: np.ndarray, rng: np.random.Generator,
     # Only a MINORITY of the brightest stars get a halo (real reflection halos
     # are the exception, not the rule) -- was up to every star, which flooded the
     # frame with bokeh.
-    n_halo = int(rng.integers(1, max(2, len(stars) // 6 + 1)))
+    n_halo = int(rng.integers(1, max(2, len(stars) // 5 + 1)))
     for (cy, cx, peak) in stars[:n_halo]:
-        # SMALL + subtle: real reflection halos are modest, not big bokeh disks.
-        # Log-uniform 3 -> 30 px radius, biased small (was uniform 6 -> 120).
-        radius = float(np.exp(rng.uniform(np.log(3.0), np.log(30.0))))
-        # Soft glow dominates (translucent), hard filled disk is now the minority;
-        # ring adds occasional variety.
-        r = rng.random()
-        kind = "glow" if r < 0.6 else ("disk" if r < 0.85 else "ring")
-        soft = float(rng.uniform(0.30, 0.55))                  # softer edges
-        # MUCH fainter / more transparent (was 0.003-0.05). Real halos are a
-        # faint veil; intensity_scale tweaks it further.
-        base = max(1e-4, peak) * float(rng.uniform(0.0015, 0.012)) * intensity_scale
+        # Calibrated to the real NIR.fit halo: a broad, smooth Moffat GLOW with a
+        # peaked core (scale a ~8-35 px) and long shallow tail (reaches 150-300+px
+        # at very low contrast). This is large but faint/translucent -- the real
+        # look -- NOT a bright filled bokeh disk (that was the artefact).
+        radius = float(np.exp(rng.uniform(np.log(20.0), np.log(55.0))))  # Moffat core scale
+        beta = float(rng.uniform(1.0, 1.5))                    # low = long wings (real halo)
+        # Mostly glow; occasionally a very faint outer reflection ring.
+        is_ring = rng.random() < 0.15
+        kind = "ring" if is_ring else "glow"
+        # base = the glow's PEAK amplitude (lands on the saturated core, which the
+        # headroom composite absorbs); the visible part is the faint Moffat tail.
+        # Real measured tail: ~+0.035 over bg (~0.0085) at 40px. peak~0.06-0.22
+        # reproduces that with the Moffat falloff. Rings are much fainter.
+        if is_ring:
+            radius = float(rng.uniform(60.0, 220.0))           # outer ring radius
+            base = max(1e-4, peak) * float(rng.uniform(0.002, 0.008)) * intensity_scale
+            soft = float(rng.uniform(0.10, 0.25))
+        else:
+            base = max(1e-4, peak) * float(rng.uniform(0.025, 0.11)) * intensity_scale
+            soft = 0.25
         color = _star_color(clean, cy, cx)                     # same colour as star
-        pp = _halo_profile(cy, cx, radius, kind, out.shape[1:], soft=soft)
+        pp = _halo_profile(cy, cx, radius, kind, out.shape[1:], soft=soft, beta=beta)
         if pp is None:
             continue
         sy, sx, prof = pp
