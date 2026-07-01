@@ -25499,7 +25499,7 @@ function ninaApp() {
             const v = String(version || '');
             const isPolaris = /^polaris[-_]?/i.test(v)
                 || family === 'halo' || family === 'upscale' || family === 'detail';
-            const clean = (v.replace(/^polaris[-_]?/i, '')
+            const clean = (v.replace(/^[a-z]+-/i, '')
                             .replace(/[-_](fp16|int8|int16)$/i, '')) || '1.0';
             const polarisNames = {
                 bge: 'Polaris BGE', denoise: 'Polaris Denoiser',
