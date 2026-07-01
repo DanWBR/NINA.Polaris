@@ -306,21 +306,22 @@ def add_star_halos_rgb(clean: np.ndarray, rng: np.random.Generator,
         return clean.astype(np.float32).copy()
     out = clean.astype(np.float32).copy()
     nch = clean.shape[0]
-    n_halo = int(rng.integers(max(1, len(stars) // 4), len(stars) + 1))
+    # Only a MINORITY of the brightest stars get a halo (real reflection halos
+    # are the exception, not the rule) -- was up to every star, which flooded the
+    # frame with bokeh.
+    n_halo = int(rng.integers(1, max(2, len(stars) // 6 + 1)))
     for (cy, cx, peak) in stars[:n_halo]:
-        # wide spread of diameters (small ~12 px up to ~240 px across)
-        radius = float(rng.uniform(6.0, 120.0))
-        # disk (filled, soft edge) dominates -- matches real reflection halos;
-        # glow / ring add variety.
+        # SMALL + subtle: real reflection halos are modest, not big bokeh disks.
+        # Log-uniform 3 -> 30 px radius, biased small (was uniform 6 -> 120).
+        radius = float(np.exp(rng.uniform(np.log(3.0), np.log(30.0))))
+        # Soft glow dominates (translucent), hard filled disk is now the minority;
+        # ring adds occasional variety.
         r = rng.random()
-        kind = "disk" if r < 0.6 else ("glow" if r < 0.85 else "ring")
-        soft = float(rng.uniform(0.18, 0.45))                  # edge softness
-        # fainter / more transparent than before (was 0.01-0.10)
-        # Spread faint -> moderate so training has real signal (an all-ultra-faint
-        # set makes "do nothing" near-optimal and the net barely learns to remove
-        # halos). The range still includes very faint cases, so it generalizes to
-        # the subtle real ones. intensity_scale tweaks it further.
-        base = max(1e-4, peak) * float(rng.uniform(0.003, 0.05)) * intensity_scale
+        kind = "glow" if r < 0.6 else ("disk" if r < 0.85 else "ring")
+        soft = float(rng.uniform(0.30, 0.55))                  # softer edges
+        # MUCH fainter / more transparent (was 0.003-0.05). Real halos are a
+        # faint veil; intensity_scale tweaks it further.
+        base = max(1e-4, peak) * float(rng.uniform(0.0015, 0.012)) * intensity_scale
         color = _star_color(clean, cy, cx)                     # same colour as star
         pp = _halo_profile(cy, cx, radius, kind, out.shape[1:], soft=soft)
         if pp is None:
