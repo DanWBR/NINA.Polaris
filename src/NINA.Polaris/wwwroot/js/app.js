@@ -2451,6 +2451,7 @@ function ninaApp() {
             modalSaveBackground: false,
             modalDeconStrength: 0.5,
             modalDeconPsfSize: 4.0,
+            fwhmBusy: false,   // "Auto" FWHM measurement in flight
             // NM-2: classical RL only — restrict sharpening by measured local
             // SNR (photon-transfer σ map) instead of a flat background noise
             // threshold, so shot noise on bright nebulosity is respected.
@@ -25473,6 +25474,40 @@ function ninaApp() {
                 version: version || '',
                 target: family === 'decon-objects' ? 'objects' : 'stars',
             };
+        },
+
+        // Auto-measure the "Image FWHM" field from the first selected frame.
+        // Posts the path to the server-side PSF extractor and fills the input
+        // with the median star FWHM (px). Used by the "Auto" button next to the
+        // Image FWHM number input in the decon / detail modal.
+        async graxpertAutoFwhm() {
+            const paths = this.graxpert.modalPaths;
+            if (!paths || !paths.length) return;
+            const path = paths[0];
+            this.graxpert.fwhmBusy = true;
+            try {
+                const resp = await this.apiFetch('/api/decon/measure-fwhm', {
+                    method: 'POST',
+                    body: JSON.stringify({ path }),
+                });
+                if (!resp.ok) {
+                    let msg = 'Could not measure FWHM';
+                    try { const j = await resp.json(); if (j && j.error) msg = j.error; } catch (_) { }
+                    this.toast(msg, 'error');
+                    return;
+                }
+                const j = await resp.json();
+                if (j && typeof j.fwhmPx === 'number' && j.fwhmPx > 0) {
+                    this.graxpert.modalDeconPsfSize = Math.round(j.fwhmPx * 10) / 10;
+                    this.toast(`Measured FWHM ${this.graxpert.modalDeconPsfSize.toFixed(1)} px from ${j.starsUsed} stars`, 'success');
+                } else {
+                    this.toast('Could not measure FWHM', 'error');
+                }
+            } catch (e) {
+                this.toast('Could not measure FWHM: ' + (e && e.message ? e.message : e), 'error');
+            } finally {
+                this.graxpert.fwhmBusy = false;
+            }
         },
 
         // Numeric (semver-ish) version compare. A plain string compare

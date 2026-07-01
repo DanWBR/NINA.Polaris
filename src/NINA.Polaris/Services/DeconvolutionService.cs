@@ -60,6 +60,44 @@ public class DeconvolutionService {
     /// blocking). Only global-PSF mode is supported here — field mode stays
     /// server-side (multiple kernels per tile are not worth the JS complexity).
     /// </summary>
+    /// <summary>
+    /// Lightweight PSF measurement: load the frame, build luminance, run the
+    /// star-based PSF extractor and return just the median star FWHM (px). Used
+    /// to auto-fill the "Image FWHM" field in the decon / detail modal so the
+    /// user doesn't have to eyeball it. Throws InvalidOperationException when the
+    /// frame is too star-poor to measure (caller surfaces a clear message).
+    /// </summary>
+    public (int Width, int Height, int Channels, double FwhmPx, double Eccentricity, int StarsUsed)
+        MeasureFwhm(string sourcePath) {
+        if (string.IsNullOrWhiteSpace(sourcePath))
+            throw new ArgumentException("sourcePath is required", nameof(sourcePath));
+        if (!File.Exists(sourcePath))
+            throw new FileNotFoundException("Source FITS not found", sourcePath);
+
+        BaseImageData src;
+        using (var fs = File.OpenRead(sourcePath)) src = FITSReader.Read(fs);
+
+        int w = src.Properties.Width, h = src.Properties.Height;
+        int channels = src.Properties.Channels == 3 ? 3 : 1;
+        long plane = (long)w * h;
+
+        var lum = new ushort[plane];
+        if (channels == 3) {
+            for (long i = 0; i < plane; i++)
+                lum[i] = (ushort)((src.Data[i] + src.Data[plane + i] + src.Data[2 * plane + i]) / 3);
+        } else {
+            Array.Copy(src.Data, lum, plane);
+        }
+
+        var psf = new PsfExtractor().Extract(lum, w, h)
+            ?? throw new InvalidOperationException(
+                "Not enough clean stars to measure the PSF (need ≥ 8 unsaturated, " +
+                "isolated, round stars).");
+        _logger.LogInformation("Measure FWHM: {Src} → {Fwhm:F2}px ecc={Ecc:F2} stars={N}",
+            sourcePath, psf.FwhmPx, psf.Eccentricity, psf.StarsUsed);
+        return (w, h, channels, psf.FwhmPx, psf.Eccentricity, psf.StarsUsed);
+    }
+
     public RlPrepareResult PrepareForBrowserRl(string sourcePath,
                                                double strength = 0.5,
                                                bool protectStars = true) {

@@ -14438,8 +14438,20 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </span>
                 </label>
                 <label>Image FWHM (in pixels)
-                    <input type="number" class="input-sm" step="0.1" min="0.5" max="20"
-                           x-model.number="graxpert.modalDeconPsfSize">
+                    <span style="display:flex; gap:6px; align-items:center">
+                        <input type="number" class="input-sm" step="0.1" min="0.5" max="20"
+                               style="flex:1"
+                               x-model.number="graxpert.modalDeconPsfSize">
+                        <!-- Auto-measure the median star FWHM from the first
+                             selected frame (server-side PSF extractor). -->
+                        <button class="btn btn-sm" type="button"
+                                @click="graxpertAutoFwhm()"
+                                :disabled="graxpert.fwhmBusy || !graxpert.modalPaths || !graxpert.modalPaths.length"
+                                title="Measure FWHM from the selected image's stars">
+                            <span x-show="!graxpert.fwhmBusy">Auto</span>
+                            <span x-show="graxpert.fwhmBusy">…</span>
+                        </button>
+                    </span>
                 </label>
             </div>
             <!-- Toggles on their own row, left-aligned, so they don't fight the
@@ -16495,7 +16507,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260701-comparezoom"></script>
+    <script src="/js/app.js?v=20260701-autofwhm"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

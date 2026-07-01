@@ -109,7 +109,27 @@ public static class DeconEndpoints {
                 return Results.NotFound(new { error = "Source FITS not found" });
             }
         });
+
+        // POST /api/decon/measure-fwhm — measure the median star FWHM (px) of a
+        // frame so the decon / detail modal can auto-fill the "Image FWHM" field.
+        g.MapPost("/measure-fwhm", async (DeconvolutionService svc, MeasureFwhmRequest req) => {
+            if (string.IsNullOrWhiteSpace(req.Path))
+                return Results.BadRequest(new { error = "path is required" });
+            try {
+                var r = await Task.Run(() => svc.MeasureFwhm(req.Path));
+                return Results.Ok(new {
+                    width = r.Width, height = r.Height, channels = r.Channels,
+                    fwhmPx = r.FwhmPx, eccentricity = r.Eccentricity, starsUsed = r.StarsUsed
+                });
+            } catch (InvalidOperationException ex) {
+                return Results.UnprocessableEntity(new { error = ex.Message });
+            } catch (FileNotFoundException) {
+                return Results.NotFound(new { error = "Source FITS not found" });
+            }
+        });
     }
+
+    public record MeasureFwhmRequest(string Path);
 
     public record RlPrepareRequest(string Path, double? Strength = null, bool? ProtectStars = null);
 
