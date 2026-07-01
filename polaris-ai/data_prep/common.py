@@ -327,7 +327,10 @@ def add_star_halos_rgb(clean: np.ndarray, rng: np.random.Generator,
             base = max(1e-4, peak) * float(rng.uniform(0.002, 0.008)) * intensity_scale
             soft = float(rng.uniform(0.10, 0.25))
         else:
-            base = max(1e-4, peak) * float(rng.uniform(0.025, 0.11)) * intensity_scale
+            # Amplitude spans 3 real halos measured (SII_2 faint ~0.018@40px,
+            # NIR mid ~0.035, SII/550 bright ~0.13): same Moffat shape, ~7x
+            # amplitude spread driven by star brightness.
+            base = max(1e-4, peak) * float(rng.uniform(0.02, 0.18)) * intensity_scale
             soft = 0.25
         color = _star_color(clean, cy, cx)                     # same colour as star
         pp = _halo_profile(cy, cx, radius, kind, out.shape[1:], soft=soft, beta=beta)
