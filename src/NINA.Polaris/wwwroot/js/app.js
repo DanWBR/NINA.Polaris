@@ -25531,8 +25531,9 @@ function ninaApp() {
                     ? (m.sizeBytes / (1024 * 1024)).toFixed(0)
                     : '?';
                 let tag = '';
-                if (m.version.endsWith('-fp16')) tag = ' (FP16)';
-                else if (m.version.endsWith('-int8')) tag = ' (INT8)';
+                if (m.version.endsWith('-fp16'))   tag = ' (FP16)';
+                else if (m.version.endsWith('-int16')) tag = ' (INT16)';
+                else if (m.version.endsWith('-int8'))  tag = ' (INT8)';
                 return {
                     version: m.version,
                     label: `${this._modelDisplayName(family, m.version)} — ${mb} MB${tag}`,
@@ -25556,9 +25557,10 @@ function ninaApp() {
             // ordering since FP32 is fastest there with WebGPU.
             const iOS = this._isIOS();
             const tagPriority = (v) => {
-                if (v.endsWith('-fp16')) return 0;
-                if (v.endsWith('-int8')) return 2;
-                return 1;   // unsuffixed FP32
+                if (v.endsWith('-fp16'))   return 0;
+                if (v.endsWith('-int16'))  return 1;
+                if (v.endsWith('-int8'))   return 3;
+                return 2;   // unsuffixed FP32
             };
             choices.sort((a, b) => {
                 if (iOS) {
