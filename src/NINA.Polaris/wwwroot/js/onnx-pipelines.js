@@ -1499,7 +1499,9 @@
                                 rawTile[ry * TILE + rx] = planeF[srcRow + rx];
                         }
                         const sortedTile = rawTile.slice().sort();
-                        loP_tile = sortedTile[Math.floor(0.001 * (sortedTile.length - 1))];
+                        // Match dataset.py _robust_norm: np.percentile(a, 1.0) and 99.9
+                        // p1 -> fraction 0.01, p99.9 -> fraction 0.999
+                        loP_tile = sortedTile[Math.floor(0.01  * (sortedTile.length - 1))];
                         hiP_tile = sortedTile[Math.floor(0.999 * (sortedTile.length - 1))];
                         const rangeP = Math.max(1e-6, hiP_tile - loP_tile);
                         const normTile = new Float32Array(TILE * TILE);
