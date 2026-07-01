@@ -49,7 +49,7 @@ self.localStorage = _storageShim;
 let _pipelinesLoaded = false;
 function ensurePipelines() {
     if (_pipelinesLoaded) return;
-    importScripts('/js/onnx-pipelines.js');   // sets self.OnnxRegistry
+    importScripts('/js/onnx-pipelines.js?v=20260701-detailfeather');   // sets self.OnnxRegistry
     _pipelinesLoaded = true;
 }
 

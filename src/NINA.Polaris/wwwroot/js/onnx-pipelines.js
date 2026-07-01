@@ -36,7 +36,7 @@
     // parent terminates after a short idle, which frees the whole heap. Kept
     // alive across a batch (fast), torn down once idle (reclaims). See
     // js/onnx-worker.js + runOneShot().
-    const ORT_WORKER_PATH = '/js/onnx-worker.js';
+    const ORT_WORKER_PATH = '/js/onnx-worker.js?v=20260701-detailfeather';
     const ONESHOT_IDLE_MS = 15000;
     let _osWorker = null;
     let _osSeq = 0;
@@ -1419,6 +1419,28 @@
             await _yieldToBrowser();
 
             const out = new Float32Array(padded.length);
+            // Polaris Detail (usePacked2ch) blends OVERLAPPING tiles with a
+            // feather window instead of hard-cropping the inner region: each
+            // tile is per-tile percentile-normalized (matches training), so
+            // adjacent tiles land at slightly different absolute levels and a
+            // hard crop leaves visible square seams in smooth nebula. A cosine
+            // partition-of-unity window (ramp width = the tile overlap) makes
+            // neighbours cross-fade, hiding the seams. wacc holds the summed
+            // weights for the final normalize.
+            const wacc = usePacked2ch ? new Float32Array(padded.length) : null;
+            let win1d = null;
+            if (usePacked2ch) {
+                const overlapPx = Math.max(1, TILE - STRIDE);
+                win1d = new Float32Array(TILE);
+                for (let i = 0; i < TILE; i++) {
+                    let w = 1;
+                    if (i < overlapPx)
+                        w = 0.5 - 0.5 * Math.cos(Math.PI * (i + 0.5) / overlapPx);
+                    else if (i >= TILE - overlapPx)
+                        w = 0.5 - 0.5 * Math.cos(Math.PI * (TILE - i - 0.5) / overlapPx);
+                    win1d[i] = Math.max(1e-4, w);
+                }
+            }
             // Strength gets the 0.95 cap GraXpert applies (TODO note in
             // GraXpert source: strength=1.0 produces no result).
             const effStrength = strength * 0.95;
@@ -1523,26 +1545,36 @@
                     // Output reconstruction differs by model:
                     // Polaris Detail outputs enhanced image directly in percentile [0,1] space.
                     // GraXpert subtracts a residual in log space then inverse-log.
-                    for (let y = 0; y < STRIDE; y++) {
-                        const tileRow = (MARGIN + y) * TILE + MARGIN;
-                        const outRow  = (sy + MARGIN + y) * padW + (sx + MARGIN);
-                        for (let x = 0; x < STRIDE; x++) {
-                            let v;
-                            if (usePacked2ch) {
-                                // model.py: output = img + delta; allow values below loP_tile
-                                // (PSF wing suppression) — Uint16 clamp below handles the floor.
-                                const normOut = residual[tileRow + x];
-                                v = normOut * (hiP_tile - loP_tile) + loP_tile;
-                            } else {
+                    if (usePacked2ch) {
+                        // Feathered blend over the FULL tile (not just the inner
+                        // crop): accumulate v*w into out and w into wacc; the
+                        // window cross-fades overlapping neighbours so per-tile
+                        // normalization differences don't leave square seams.
+                        const rangeT = hiP_tile - loP_tile;
+                        for (let y = 0; y < TILE; y++) {
+                            const tileRow = y * TILE;
+                            const outRow  = (sy + y) * padW + sx;
+                            const wy = win1d[y];
+                            for (let x = 0; x < TILE; x++) {
+                                const v = residual[tileRow + x] * rangeT + loP_tile;
+                                const w = wy * win1d[x];
+                                out[outRow + x]  += v * w;
+                                wacc[outRow + x] += w;
+                            }
+                        }
+                    } else {
+                        for (let y = 0; y < STRIDE; y++) {
+                            const tileRow = (MARGIN + y) * TILE + MARGIN;
+                            const outRow  = (sy + MARGIN + y) * padW + (sx + MARGIN);
+                            for (let x = 0; x < STRIDE; x++) {
                                 const normIn  = tensorData[tileRow + x];
                                 const normRes = residual[tileRow + x];
                                 const normOut = normIn - normRes;
                                 // GX-12d: De-normalize per GraXpert convention:
                                 // out * std / 0.1 + mean   (was * std * 0.1).
                                 const logVal = normOut * std / 0.1 + mean;
-                                v = Math.exp(logVal) + minV - eps;
+                                out[outRow + x] = Math.exp(logVal) + minV - eps;
                             }
-                            out[outRow + x] = v;
                         }
                     }
 
@@ -1554,6 +1586,13 @@
                 }
             }
             const inferenceMs = performance.now() - t0;
+
+            // Feathered blend: normalize the weighted accumulation.
+            if (usePacked2ch) {
+                for (let i = 0; i < out.length; i++) {
+                    if (wacc[i] > 1e-6) out[i] /= wacc[i];
+                }
+            }
 
             // Trim padding.
             const offsetX = (padW - width) / 2 | 0;
