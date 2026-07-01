@@ -36,7 +36,7 @@
     // parent terminates after a short idle, which frees the whole heap. Kept
     // alive across a batch (fast), torn down once idle (reclaims). See
     // js/onnx-worker.js + runOneShot().
-    const ORT_WORKER_PATH = '/js/onnx-worker.js?v=20260701-detailfeather';
+    const ORT_WORKER_PATH = '/js/onnx-worker.js?v=20260701-detaillum';
     const ONESHOT_IDLE_MS = 15000;
     let _osWorker = null;
     let _osSeq = 0;
@@ -1332,9 +1332,48 @@
 
     class DeconPipeline {
         async run(pixels, width, height, opts = {}) {
+            // Polaris Detail: run the net ONCE on luminance and re-apply the
+            // luminance change to R/G/B proportionally (ratio), so it can't
+            // shift a star's hue. Independent per-channel runs made stray
+            // green/red stars (each channel sharpened/scaled a touch
+            // differently). This also drops from 3 inferences to 1.
+            const channels = opts && opts.channels === 3 ? 3 : 1;
+            if (channels === 3 && opts.family === 'detail') {
+                return this._runRgbLuminance(pixels, width, height, opts);
+            }
             return runPerChannel(
                 (p, w, h, o) => this._runMono(p, w, h, o),
                 pixels, width, height, opts);
+        }
+
+        // Luminance-domain detail with exact chroma preservation. Enhances
+        // mean luminance once, then scales each channel by enhLum/lum so hue
+        // is untouched. Dark background (lum <= floor) passes through so the
+        // ratio can't amplify colour speckle.
+        async _runRgbLuminance(pixels, width, height, opts = {}) {
+            const planeLen = width * height;
+            const lum = new Uint16Array(planeLen);
+            for (let i = 0; i < planeLen; i++) {
+                lum[i] = ((pixels[i] + pixels[planeLen + i] + pixels[2 * planeLen + i]) / 3) | 0;
+            }
+            const passOpts = Object.assign({}, opts);
+            delete passOpts.channels;
+            const res = await this._runMono(lum, width, height, passOpts);
+            const enh = res.pixels;
+            const out = new Uint16Array(planeLen * 3);
+            for (let i = 0; i < planeLen; i++) {
+                const l = lum[i];
+                const ratio = l > 8 ? Math.min(8, enh[i] / l) : 1;
+                for (let c = 0; c < 3; c++) {
+                    let v = pixels[c * planeLen + i] * ratio;
+                    v = v < 0 ? 0 : (v > 65535 ? 65535 : (v + 0.5) | 0);
+                    out[c * planeLen + i] = v;
+                }
+            }
+            return {
+                pixels: out, width, height, channels: 3,
+                stats: Object.assign({}, res.stats || {}, { luminanceMode: true }),
+            };
         }
         async _runMono(pixels, width, height, opts = {}) {
             const target = opts.target || 'stars';   // 'stars' | 'objects'
