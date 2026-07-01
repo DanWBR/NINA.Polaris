@@ -84,19 +84,34 @@ def condition_value(fwhm: float) -> float:
     return float(fwhm / SIGMA_NORM)
 
 
-def _simulate_saturation(sharp: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-    """Occasionally clip the brightest pixels to a flat top, mimicking a
-    saturated/near-saturated star core. Real bright stars have flat-topped cores;
-    without this the model never sees a saturated star and rings it on inference.
-    Both the degraded input and the target derive from this clipped ``sharp`` so
-    the model learns the correct (do-not-ring) behaviour on flat cores."""
-    if rng.random() > 0.5:
-        return sharp
-    # clip at a high percentile so only the brightest cores flatten
-    cap = float(np.percentile(sharp, rng.uniform(99.0, 99.9)))
-    if cap <= 1e-4:
-        return sharp
-    return np.minimum(sharp, cap).astype(np.float32)
+def _add_hdr_point_stars(sharp: np.ndarray, kernel_peak: float,
+                         rng: np.random.Generator) -> np.ndarray:
+    """Add synthetic point-source stars at HIGH DYNAMIC RANGE, so that after the
+    make_pair PSF convolutions some saturate (clip at 1.0) in BOTH the input and
+    the target -- realistic saturated flat-top cores.
+
+    A point of integrated flux F becomes, after convolution:
+      input  peak = F * kernel_peak   (seeing PSF, wider  -> lower peak)
+      target peak = F * ref_peak      (reference PSF, tighter -> higher peak)
+    Both clip at 1.0, so a bright star -> a saturated flat-top in the input and a
+    SMALLER/tighter saturated flat-top in the target. This is the exact signal the
+    model needs: "shrink the saturated disk, do NOT carve a dark ring around it".
+    We draw the desired *observed input peak* p (log-uniform, many > 1 so they
+    saturate) and set F = p / kernel_peak so saturation is controlled regardless
+    of the sampled seeing PSF.
+    """
+    h, w = sharp.shape
+    out = sharp.copy()
+    if rng.random() < 0.15:        # ~15% of tiles stay pure nebula (no added stars)
+        return out
+    n = int(rng.integers(3, 45))
+    kp = max(kernel_peak, 1e-6)
+    for _ in range(n):
+        y = int(rng.integers(0, h)); x = int(rng.integers(0, w))
+        # desired observed (pre-clip) input peak: faint 0.2 -> saturating 6.0
+        peak = float(np.exp(rng.uniform(np.log(0.2), np.log(6.0))))
+        out[y, x] += peak / kp
+    return out
 
 
 def make_pair(
@@ -109,30 +124,34 @@ def make_pair(
       y : [1, H, W] float32 -- sharp target
       c : float             -- the normalised condition (for logging)
     """
-    # SATURATION: flat-top the brightest cores on some samples so the model
-    # learns not to over-sharpen (ring) saturated stars.
-    sharp = _simulate_saturation(sharp, rng)
-
     fwhm = sample_fwhm(rng)                     # seeing of the INPUT (>= FWHM_MIN)
     beta = float(rng.uniform(*beta_range))
     # ABERRATED PSF: elliptical core (tracking/coma/tilt) + optional diffraction
     # spikes (spider) + optional obstruction halo, so the model learns to round
     # out and clean up real-telescope star shapes, not just circular blur.
     kernel = make_aberrated_psf(rng, fwhm, beta=beta)
+    ref = gaussian_kernel(TARGET_FWHM * FWHM_TO_SIGMA)
+
+    # STAR SYNTHESIS: inject HDR point stars (incl. saturating) into the shared
+    # scene BEFORE both convolutions, so input and target stay physically
+    # consistent and both clip at 1.0 -> the model learns to tighten saturated
+    # stars without ringing (the real-image failure mode). Point stars added to
+    # `sharp` become PSF-shaped by the convolutions below.
+    scene = _add_hdr_point_stars(sharp, float(kernel.max()), rng)
+
     # DOMAIN RANDOMIZATION: vary SNR widely so the model learns to NOT amplify
     # noise (the failure mode on real data -- it sharpened the noise floor into
     # speckles). Random read noise + full-well (shot noise) per sample.
     read_noise = float(rng.uniform(1.0, 25.0))
     full_well = float(rng.uniform(8000.0, 100000.0))
-    deg = degrade_with_kernel(sharp, kernel, rng=rng,
+    deg = degrade_with_kernel(scene, kernel, rng=rng,
                               read_noise_e=read_noise, full_well_scale=full_well)
     # TARGET = the same scene at the GENTLE reference PSF (clean, no noise). This
     # is what makes the restoration well-posed: input(seeing) -> target(ref).
     # When the input fwhm is already <= TARGET_FWHM the target is BLURRIER than
     # the input, so the model learns to leave (or gently soften) sharp stars
     # rather than push them further and ring -- the anti-bubble teaching signal.
-    ref = gaussian_kernel(TARGET_FWHM * FWHM_TO_SIGMA)
-    target = np.clip(fftconvolve(sharp, ref, mode="same"), 0.0, 1.0).astype(np.float32)
+    target = np.clip(fftconvolve(scene, ref, mode="same"), 0.0, 1.0).astype(np.float32)
     c = condition_value(fwhm)
     cond = np.full_like(sharp, c, dtype=np.float32)
     x = np.stack([deg, cond], axis=0)          # [2, H, W]
