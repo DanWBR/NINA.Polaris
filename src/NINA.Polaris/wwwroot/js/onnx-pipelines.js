@@ -36,7 +36,7 @@
     // parent terminates after a short idle, which frees the whole heap. Kept
     // alive across a batch (fast), torn down once idle (reclaims). See
     // js/onnx-worker.js + runOneShot().
-    const ORT_WORKER_PATH = '/js/onnx-worker.js?v=20260701-detaillum';
+    const ORT_WORKER_PATH = '/js/onnx-worker.js?v=20260701-detailring';
     const ONESHOT_IDLE_MS = 15000;
     let _osWorker = null;
     let _osSeq = 0;
@@ -1360,10 +1360,18 @@
             delete passOpts.channels;
             const res = await this._runMono(lum, width, height, passOpts);
             const enh = res.pixels;
+            // Anti-ring guard: the final model still carves a thin dark ring at
+            // the very brightest (saturated) star edges. Cap how far the
+            // enhanced luminance may drop below the input (RING_FLOOR): a no-op
+            // in nebula (enh ~ lum) since it only bites where the net darkened
+            // hard. 0.7 = at most 30% dimming, keeps the sharpening contrast.
+            const RING_FLOOR = 0.7;
             const out = new Uint16Array(planeLen * 3);
             for (let i = 0; i < planeLen; i++) {
                 const l = lum[i];
-                const ratio = l > 8 ? Math.min(8, enh[i] / l) : 1;
+                let e = enh[i];
+                if (l > 8 && e < l * RING_FLOOR) e = l * RING_FLOOR;
+                const ratio = l > 8 ? Math.min(8, e / l) : 1;
                 for (let c = 0; c < 3; c++) {
                     let v = pixels[c * planeLen + i] * ratio;
                     v = v < 0 ? 0 : (v > 65535 ? 65535 : (v + 0.5) | 0);
