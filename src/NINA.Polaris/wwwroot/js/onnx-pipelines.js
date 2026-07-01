@@ -1527,8 +1527,10 @@
                         for (let x = 0; x < STRIDE; x++) {
                             let v;
                             if (usePacked2ch) {
+                                // model.py: output = img + delta; allow values below loP_tile
+                                // (PSF wing suppression) — Uint16 clamp below handles the floor.
                                 const normOut = residual[tileRow + x];
-                                v = Math.max(0, normOut) * (hiP_tile - loP_tile) + loP_tile;
+                                v = normOut * (hiP_tile - loP_tile) + loP_tile;
                             } else {
                                 const normIn  = tensorData[tileRow + x];
                                 const normRes = residual[tileRow + x];
