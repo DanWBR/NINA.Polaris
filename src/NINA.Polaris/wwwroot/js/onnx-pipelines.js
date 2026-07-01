@@ -1394,6 +1394,8 @@
             // Polaris detail model: single input [B,2,H,W] packing image+sigma.
             // Detected by having only one input name (implies 256px tile).
             const usePacked2ch = inputNames.length === 1 && !useThreeInputs;
+            // Polaris Detail sigma: fwhm / 9.0 (synth.py SIGMA_NORM = FWHM_MAX = 9.0)
+            const polarisConditionValue = Math.max(0, Math.min(1, psfPixels / 9.0));
             // GraXpert decon models use 512px tiles; Polaris detail uses 256px.
             const TILE = usePacked2ch ? 256 : 512;
             const STRIDE = usePacked2ch ? 192 : 448;
@@ -1486,11 +1488,26 @@
                     }
 
                     let inputTensor;
+                    let loP_tile = 0, hiP_tile = 1;
                     if (usePacked2ch) {
-                        // Polaris detail model: [B, 2, H, W] — ch0=image, ch1=sigma.
+                        // Polaris Detail: 1st-99.9th percentile normalization (not log).
+                        // Re-read raw [0,1] values from planeF (tile[] is already log-transformed).
+                        const rawTile = new Float32Array(TILE * TILE);
+                        for (let ry = 0; ry < TILE; ry++) {
+                            const srcRow = (sy + ry) * padW + sx;
+                            for (let rx = 0; rx < TILE; rx++)
+                                rawTile[ry * TILE + rx] = planeF[srcRow + rx];
+                        }
+                        const sortedTile = rawTile.slice().sort();
+                        loP_tile = sortedTile[Math.floor(0.001 * (sortedTile.length - 1))];
+                        hiP_tile = sortedTile[Math.floor(0.999 * (sortedTile.length - 1))];
+                        const rangeP = Math.max(1e-6, hiP_tile - loP_tile);
+                        const normTile = new Float32Array(TILE * TILE);
+                        for (let i = 0; i < rawTile.length; i++)
+                            normTile[i] = Math.max(0, Math.min(1, (rawTile[i] - loP_tile) / rangeP));
                         const packed = new Float32Array(2 * TILE * TILE);
-                        packed.set(tensorData, 0);
-                        packed.fill(sigmaNormalized, TILE * TILE);
+                        packed.set(normTile, 0);
+                        packed.fill(polarisConditionValue, TILE * TILE);
                         inputTensor = new ort.Tensor('float32', packed, [1, 2, TILE, TILE]);
                     } else {
                         inputTensor = new ort.Tensor('float32', tensorData, [1, 1, TILE, TILE]);
@@ -1501,19 +1518,26 @@
                     });
                     const residual = result[outputName].data;
 
-                    // Output = input - residual (in normalized space),
-                    // then inverse log-normalize.
+                    // Output reconstruction differs by model:
+                    // Polaris Detail outputs enhanced image directly in percentile [0,1] space.
+                    // GraXpert subtracts a residual in log space then inverse-log.
                     for (let y = 0; y < STRIDE; y++) {
                         const tileRow = (MARGIN + y) * TILE + MARGIN;
                         const outRow  = (sy + MARGIN + y) * padW + (sx + MARGIN);
                         for (let x = 0; x < STRIDE; x++) {
-                            const normIn  = tensorData[tileRow + x];
-                            const normRes = residual[tileRow + x];
-                            const normOut = normIn - normRes;
-                            // GX-12d: De-normalize per GraXpert convention:
-                            // out * std / 0.1 + mean   (was * std * 0.1).
-                            const logVal = normOut * std / 0.1 + mean;
-                            const v = Math.exp(logVal) + minV - eps;
+                            let v;
+                            if (usePacked2ch) {
+                                const normOut = residual[tileRow + x];
+                                v = Math.max(0, normOut) * (hiP_tile - loP_tile) + loP_tile;
+                            } else {
+                                const normIn  = tensorData[tileRow + x];
+                                const normRes = residual[tileRow + x];
+                                const normOut = normIn - normRes;
+                                // GX-12d: De-normalize per GraXpert convention:
+                                // out * std / 0.1 + mean   (was * std * 0.1).
+                                const logVal = normOut * std / 0.1 + mean;
+                                v = Math.exp(logVal) + minV - eps;
+                            }
                             out[outRow + x] = v;
                         }
                     }
