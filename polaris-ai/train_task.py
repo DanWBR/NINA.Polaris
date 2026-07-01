@@ -44,12 +44,13 @@ def build_dataset(args):
     """Return (train_ds, val_ds_or_None) for the chosen task."""
     if args.task == "decon":
         from dataset import DeconDataset
+        ln = getattr(args, "log_norm", False)
         extra = []
         if args.tiles2:
-            extra.append(DeconDataset(args.tiles2, tile=args.tile))
-        tr = DeconDataset(args.tiles, tile=args.tile)
+            extra.append(DeconDataset(args.tiles2, tile=args.tile, log_norm=ln))
+        tr = DeconDataset(args.tiles, tile=args.tile, log_norm=ln)
         full = ConcatDataset([tr] + extra) if extra else tr
-        val = DeconDataset(args.val_tiles, tile=args.tile, augment=False) \
+        val = DeconDataset(args.val_tiles, tile=args.tile, augment=False, log_norm=ln) \
             if args.val_tiles else None
         return full, val
     # denoise / bge: pre-baked pairs
@@ -126,6 +127,14 @@ def main():
                          "Ignored unless --qat is set.")
     ap.add_argument("--scale", type=int, default=2, choices=[2, 3, 4],
                     help="(upscale) super-resolution factor")
+    ap.add_argument("--log-norm", action="store_true",
+                    help="(decon/detail) GraXpert-style log-mean-std per-tile "
+                         "normalization instead of the 1st/99.9th percentile map. "
+                         "Log-compresses the dynamic range so saturated star cores "
+                         "no longer drive the dark-ring overshoot. The matching "
+                         "inference path in onnx-pipelines.js activates for model "
+                         "versions containing 'log', so name the export accordingly "
+                         "(e.g. polaris-1.2-log).")
     args = ap.parse_args()
 
     out = args.out or f"checkpoints/{args.task}"

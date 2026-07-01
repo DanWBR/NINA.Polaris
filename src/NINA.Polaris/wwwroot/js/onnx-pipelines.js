@@ -36,7 +36,7 @@
     // parent terminates after a short idle, which frees the whole heap. Kept
     // alive across a batch (fast), torn down once idle (reclaims). See
     // js/onnx-worker.js + runOneShot().
-    const ORT_WORKER_PATH = '/js/onnx-worker.js?v=20260701-detailadd';
+    const ORT_WORKER_PATH = '/js/onnx-worker.js?v=20260701-detaillog';
     const ONESHOT_IDLE_MS = 15000;
     let _osWorker = null;
     let _osSeq = 0;
@@ -1444,6 +1444,14 @@
             // Polaris detail model: single input [B,2,H,W] packing image+sigma.
             // Detected by having only one input name (implies 256px tile).
             const usePacked2ch = inputNames.length === 1 && !useThreeInputs;
+            // Log-domain Detail: a model trained with train_task.py --log-norm
+            // normalizes each tile in the GraXpert log-mean-std domain instead
+            // of the 1st/99.9th percentile map, so saturated star cores stop
+            // driving the dark-ring overshoot. It is opt-in per model: activate
+            // only when the selected version string contains "log" (e.g.
+            // polaris-1.2-log), so the existing percentile-trained model keeps
+            // its percentile inference and both can coexist in the registry.
+            const logNormDetail = usePacked2ch && /log/i.test(String(version || ''));
             // Polaris Detail sigma: fwhm / 9.0 (synth.py SIGMA_NORM = FWHM_MAX = 9.0)
             const polarisConditionValue = Math.max(0, Math.min(1, psfPixels / 9.0));
             // GraXpert decon models use 512px tiles; Polaris detail uses 256px.
@@ -1561,7 +1569,17 @@
 
                     let inputTensor;
                     let loP_tile = 0, hiP_tile = 1;
-                    if (usePacked2ch) {
+                    if (usePacked2ch && logNormDetail) {
+                        // Log-domain Detail: the image channel is the GraXpert
+                        // log-mean-std normalized tile (tensorData, computed
+                        // above), packed with the sigma condition. De-norm on
+                        // output is a single exp() (see below), matching
+                        // dataset.py log_norm_pair used at train time.
+                        const packed = new Float32Array(2 * TILE * TILE);
+                        packed.set(tensorData, 0);
+                        packed.fill(polarisConditionValue, TILE * TILE);
+                        inputTensor = new ort.Tensor('float32', packed, [1, 2, TILE, TILE]);
+                    } else if (usePacked2ch) {
                         // Polaris Detail: 1st-99.9th percentile normalization (not log).
                         // Re-read raw [0,1] values from planeF (tile[] is already log-transformed).
                         const rawTile = new Float32Array(TILE * TILE);
@@ -1595,7 +1613,27 @@
                     // Output reconstruction differs by model:
                     // Polaris Detail outputs enhanced image directly in percentile [0,1] space.
                     // GraXpert subtracts a residual in log space then inverse-log.
-                    if (usePacked2ch) {
+                    if (usePacked2ch && logNormDetail) {
+                        // Log-domain Detail: the net outputs the corrected image
+                        // directly in the normalized log domain (our out=img+delta
+                        // convention, NOT GraXpert's separate residual), so
+                        // de-normalize with a single exp() matching dataset.py
+                        // log_norm_pair. Feathered over the full tile like the
+                        // percentile path.
+                        for (let y = 0; y < TILE; y++) {
+                            const tileRow = y * TILE;
+                            const outRow  = (sy + y) * padW + sx;
+                            const wy = win1d[y];
+                            for (let x = 0; x < TILE; x++) {
+                                const normOut = residual[tileRow + x];
+                                const logVal = normOut * std / 0.1 + mean;
+                                const v = Math.exp(logVal) + minV - eps;
+                                const w = wy * win1d[x];
+                                out[outRow + x]  += v * w;
+                                wacc[outRow + x] += w;
+                            }
+                        }
+                    } else if (usePacked2ch) {
                         // Feathered blend over the FULL tile (not just the inner
                         // crop): accumulate v*w into out and w into wacc; the
                         // window cross-fades overlapping neighbours so per-tile

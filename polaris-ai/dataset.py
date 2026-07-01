@@ -47,9 +47,53 @@ def _robust_norm(a: np.ndarray) -> np.ndarray:
     return np.clip((a - lo) / (hi - lo), 0.0, 1.0).astype(np.float32)
 
 
+# --- GraXpert-style log-domain normalization (per tile) -----------------------
+# The percentile normalization above maps a per-tile 1st..99.9th window to
+# [0,1]. On a tile that contains a SATURATED star (value clipped at the frame
+# max) that window is dominated by the bright tail, and the linear map leaves
+# the star core pinned at 1.0 with a steep shoulder -- exactly where the model
+# tended to carve a dark ring ("bubble"). GraXpert's deconvolution instead
+# normalizes in the LOG domain: subtract the tile min, log-compress, then
+# zero-mean/unit-std scale by 0.1. Log compression flattens the huge dynamic
+# range between a saturated core and the sky, so the network never sees the
+# violent shoulder that drove the overshoot. See GraXpert deconvolution.py.
+#
+# IMPORTANT: at inference we only have the INPUT tile, so the (min, mean, std)
+# params MUST be derived from the input (blurred) image and the SAME params are
+# applied to the target during training. This mirrors the inference path in
+# onnx-pipelines.js (DeconPipeline log-norm branch) so the trained model is a
+# drop-in. The model predicts the corrected image directly (our `out = img +
+# delta` convention), NOT GraXpert's separate residual, so de-normalization is a
+# single exp() with no input subtraction.
+LOG_EPS = 1e-5
+LOG_SCALE = 0.1
+
+
+def log_norm_pair(x: np.ndarray, y: np.ndarray):
+    """Convert a (blurred+sigma, sharp) pair from linear ~[0,1] to the
+    GraXpert log-mean-std domain. ``x`` is [2,H,W] (image + sigma), ``y`` is
+    [1,H,W]. Returns the same shapes; only the image channel of ``x`` and all
+    of ``y`` are transformed (the sigma channel is left untouched)."""
+    img = x[0]
+    mn = float(img.min())
+    t = np.log(np.clip(img - mn, 0.0, None) + LOG_EPS)
+    mean = float(t.mean())
+    std = float(t.std())
+    if std < 1e-8:
+        std = 1e-8
+    xn = ((t - mean) / std * LOG_SCALE).astype(np.float32)
+    # Target with the SAME params (from the input). Clip the pre-log argument so
+    # target pixels below the input min don't produce NaNs.
+    ty = np.log(np.clip(y[0] - mn, 0.0, None) + LOG_EPS)
+    yn = ((ty - mean) / std * LOG_SCALE).astype(np.float32)
+    xo = x.copy()
+    xo[0] = xn
+    return xo, yn[None, :, :]
+
+
 class DeconDataset(Dataset):
     def __init__(self, tiles_dir: str, tile: int = 256, augment: bool = True,
-                 normalize: bool = True, seed: int = 0):
+                 normalize: bool = True, seed: int = 0, log_norm: bool = False):
         self.paths = sorted(
             p for ext in ("npy", "fits", "fit", "fts", "png", "tif", "tiff")
             for p in glob.glob(os.path.join(tiles_dir, f"**/*.{ext}"), recursive=True)
@@ -60,6 +104,7 @@ class DeconDataset(Dataset):
         self.augment = augment
         self.normalize = normalize
         self.base_seed = seed
+        self.log_norm = log_norm
 
     def __len__(self):
         return len(self.paths)
@@ -92,4 +137,6 @@ class DeconDataset(Dataset):
             sharp = np.ascontiguousarray(sharp)
 
         x, y, _ = synth.make_pair(sharp, rng)
+        if self.log_norm:
+            x, y = log_norm_pair(x, y)
         return torch.from_numpy(x), torch.from_numpy(y)
