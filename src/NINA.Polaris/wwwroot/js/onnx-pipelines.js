@@ -1520,6 +1520,17 @@
                     });
                     const residual = result[outputName].data;
 
+                    // Diagnostics for Polaris Detail (first 3 tiles only)
+                    if (usePacked2ch && processed < 3) {
+                        let rMin = Infinity, rMax = -Infinity, rSum = 0;
+                        for (let i = 0; i < residual.length; i++) {
+                            if (residual[i] < rMin) rMin = residual[i];
+                            if (residual[i] > rMax) rMax = residual[i];
+                            rSum += residual[i];
+                        }
+                        console.log(`[Detail tile ${processed}] loP=${loP_tile.toFixed(5)} hiP=${hiP_tile.toFixed(5)} | normOut min=${rMin.toFixed(4)} max=${rMax.toFixed(4)} mean=${(rSum/residual.length).toFixed(4)} | condition=${polarisConditionValue.toFixed(4)}`);
+                    }
+
                     // Output reconstruction differs by model:
                     // Polaris Detail outputs enhanced image directly in percentile [0,1] space.
                     // GraXpert subtracts a residual in log space then inverse-log.
