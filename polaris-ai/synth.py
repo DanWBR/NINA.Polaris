@@ -15,15 +15,23 @@ from psf import gaussian_kernel, moffat_kernel, make_aberrated_psf, FWHM_TO_SIGM
 
 # FWHM range (pixels) the model is trained to undo. Real survey/CMOS stars are
 # often 4-8 px, so the range goes wider than the first synthetic-only model.
-FWHM_MIN = 1.5
+# FWHM_MIN is deliberately set BELOW TARGET_FWHM so the training set includes
+# inputs that are already as sharp as (or sharper than) the target. Those cases
+# teach the model to LEAVE ALREADY-SHARP STARS ALONE (or gently soften an
+# over-sharp core) instead of always sharpening -- the previous 1.5>1.3 gap made
+# every example a sharpen op, so on real (already-tight) stars the model
+# over-deconvolved and carved dark rings ("bubbles"). See diag: out.min < 0.
+FWHM_MIN = 1.0
 FWHM_MAX = 9.0
-SIGMA_NORM = FWHM_MAX  # condition = fwhm / SIGMA_NORM  -> ~[0.17, 1.0]
+SIGMA_NORM = FWHM_MAX  # condition = fwhm / SIGMA_NORM  -> ~[0.11, 1.0]
 
 # The model restores to a small REFERENCE PSF, not to a literal point source.
 # Asking it to recover a 1-px delta from a blurred blob is ill-posed (pure
-# super-resolution) and makes it hallucinate ringy, fractured stars. A modest
-# diffraction-limited target (~1.3 px FWHM) is a well-posed, stable goal.
-TARGET_FWHM = 1.3
+# super-resolution) and makes it hallucinate ringy, fractured stars. Real bright
+# stars cannot be pushed to ~1 px without violent ringing, so the reference PSF
+# is a GENTLE ~2.2 px sharpen: well-posed, stable, and safe on bright/saturated
+# cores (the 1.3 px target was the main driver of the dark-ring artifact).
+TARGET_FWHM = 2.2
 
 
 def degrade(
@@ -76,6 +84,21 @@ def condition_value(fwhm: float) -> float:
     return float(fwhm / SIGMA_NORM)
 
 
+def _simulate_saturation(sharp: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """Occasionally clip the brightest pixels to a flat top, mimicking a
+    saturated/near-saturated star core. Real bright stars have flat-topped cores;
+    without this the model never sees a saturated star and rings it on inference.
+    Both the degraded input and the target derive from this clipped ``sharp`` so
+    the model learns the correct (do-not-ring) behaviour on flat cores."""
+    if rng.random() > 0.5:
+        return sharp
+    # clip at a high percentile so only the brightest cores flatten
+    cap = float(np.percentile(sharp, rng.uniform(99.0, 99.9)))
+    if cap <= 1e-4:
+        return sharp
+    return np.minimum(sharp, cap).astype(np.float32)
+
+
 def make_pair(
     sharp: np.ndarray, rng: np.random.Generator, beta_range=(2.2, 4.5)
 ):
@@ -86,7 +109,11 @@ def make_pair(
       y : [1, H, W] float32 -- sharp target
       c : float             -- the normalised condition (for logging)
     """
-    fwhm = sample_fwhm(rng)                     # seeing of the INPUT (>= 1.5 px)
+    # SATURATION: flat-top the brightest cores on some samples so the model
+    # learns not to over-sharpen (ring) saturated stars.
+    sharp = _simulate_saturation(sharp, rng)
+
+    fwhm = sample_fwhm(rng)                     # seeing of the INPUT (>= FWHM_MIN)
     beta = float(rng.uniform(*beta_range))
     # ABERRATED PSF: elliptical core (tracking/coma/tilt) + optional diffraction
     # spikes (spider) + optional obstruction halo, so the model learns to round
@@ -99,8 +126,11 @@ def make_pair(
     full_well = float(rng.uniform(8000.0, 100000.0))
     deg = degrade_with_kernel(sharp, kernel, rng=rng,
                               read_noise_e=read_noise, full_well_scale=full_well)
-    # TARGET = the same scene at the small reference PSF (clean, no noise). This
+    # TARGET = the same scene at the GENTLE reference PSF (clean, no noise). This
     # is what makes the restoration well-posed: input(seeing) -> target(ref).
+    # When the input fwhm is already <= TARGET_FWHM the target is BLURRIER than
+    # the input, so the model learns to leave (or gently soften) sharp stars
+    # rather than push them further and ring -- the anti-bubble teaching signal.
     ref = gaussian_kernel(TARGET_FWHM * FWHM_TO_SIGMA)
     target = np.clip(fftconvolve(sharp, ref, mode="same"), 0.0, 1.0).astype(np.float32)
     c = condition_value(fwhm)

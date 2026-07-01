@@ -59,11 +59,25 @@ def build_dataset(args):
     return tr, val
 
 
-def task_loss(task, p, y, w_grad, w_star):
+def anti_ring(p, x_img, y, w=0.5):
+    """Penalise the output dipping BELOW both the input and the target -- exactly
+    the negative overshoot that carves the dark ring ("bubble") around bright
+    stars. The clean target has no such dip and neither does the degraded input,
+    so anything darker than min(input, target) is pure ringing."""
+    import torch
+    floor = torch.minimum(x_img, y)
+    return w * torch.relu(floor - p).mean()
+
+
+def task_loss(task, p, y, w_grad, w_star, x=None):
     # halo removal protects bright cores (star_protect) so it only touches the
     # faint halo, like decon.
     if task in ("decon", "halo"):
-        return charbonnier(p, y) + w_grad * grad_loss(p, y) + w_star * star_protect(p, y)
+        loss = charbonnier(p, y) + w_grad * grad_loss(p, y) + w_star * star_protect(p, y)
+        if x is not None:
+            # x[:, :out_ch] is the image channel(s); decon out=1 so x[:, :1].
+            loss = loss + anti_ring(p, x[:, :p.shape[1]], y)
+        return loss
     if task in ("denoise", "upscale"):
         return charbonnier(p, y) + w_grad * grad_loss(p, y)
     return charbonnier(p, y)  # bge: smooth background, plain robust L1
@@ -189,7 +203,7 @@ def main():
             opt.zero_grad(set_to_none=True)
             with torch.amp.autocast("cuda", enabled=amp_on):
                 p = net(x)
-                loss = task_loss(args.task, p, y, args.w_grad, args.w_star)
+                loss = task_loss(args.task, p, y, args.w_grad, args.w_star, x=x)
             scaler.scale(loss).backward()
             scaler.step(opt)
             scaler.update()
