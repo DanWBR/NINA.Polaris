@@ -51,6 +51,13 @@ def main():
     ap.add_argument("--out", default="data/own")
     ap.add_argument("--tile", type=int, default=256)
     ap.add_argument("--stride", type=int, default=192)
+    # Sharp SOURCE for the detail model's synthetic pairs. Use the raw
+    # `originals` (real captured resolution), NOT `decon`/`denoised`: the
+    # deconvolved masters carry their own processing artefacts (ringing,
+    # over-sharpening) that the model would otherwise learn to reproduce.
+    # Grounding on the originals keeps the target well-posed and artefact-free.
+    ap.add_argument("--sharp-dir", default="originals",
+                    help="subfolder of --root used as the sharp base (default: originals)")
     ap.add_argument("--previews", type=int, default=3,
                     help="how many full-frame distorted previews to write")
     ap.add_argument("--val-name", default="",
@@ -58,7 +65,7 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
-    sharp_dir = os.path.join(args.root, "decon")
+    sharp_dir = os.path.join(args.root, args.sharp_dir)
     preview_dir = os.path.join(args.root, "originals+distortions")
     train_dir = os.path.join(args.out, "decon_tiles")
     val_dir = os.path.join(args.out, "decon_tiles_val")
@@ -66,7 +73,7 @@ def main():
 
     sharps = sorted(glob.glob(os.path.join(sharp_dir, "*.fit*")))
     if not sharps:
-        raise SystemExit(f"no decon FITS under {sharp_dir}")
+        raise SystemExit(f"no sharp-source FITS under {sharp_dir}")
     val_name = args.val_name or C.basename_no_ext(sharps[-1])
 
     total = 0
