@@ -918,6 +918,13 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
+    position: relative;
+    padding-left: 28px;
+    transition: flex-basis 200ms ease, max-width 200ms ease;
+}
+.files-right.files-right--collapsed {
+    flex: 0 0 28px;
+    max-width: 28px;
 }
 .files-right-pane {
     flex: 1 1 auto;
@@ -933,9 +940,22 @@
     color: var(--text-primary);
     margin: 0 0 8px;
 }
-/* Collapse handle for the Stack panel — only used on the narrow overlay
-   layout (shown via the @media block below); hidden on the desktop split. */
-.files-right-handle { display: none; }
+/* Collapse handle for the Stack panel. Visible on all screen sizes;
+   pinned to the left edge of .files-right exactly like quick-controls-toggle
+   in the LIVE/PREVIEW/VIDEO panels. */
+.files-right-handle {
+    display: flex;
+    position: absolute; left: 0; top: 0; bottom: 0; width: 28px; z-index: 1;
+    align-items: center; justify-content: center;
+    background: rgba(var(--accent2-rgb), 0.18);
+    border: none; border-right: 1px solid rgba(var(--accent2-light-rgb), 0.45);
+    color: var(--accent2-light); font-size: 18px; cursor: pointer;
+    padding: 0;
+}
+.files-right-handle:hover {
+    background: rgba(var(--accent2-rgb), 0.35);
+    color: white;
+}
 
 @media (max-width: 900px) {
     /* Keep the file tree on the LEFT at full width and float the Stack panel
@@ -952,12 +972,9 @@
     }
     .files-right.files-right--collapsed { transform: translateX(calc(100% - 28px)); }
     .files-right-handle {
-        display: flex;
-        position: absolute; left: 0; top: 0; bottom: 0; width: 28px; z-index: 1;
-        align-items: center; justify-content: center;
         background: var(--bg-elev, #11161f);
-        border: none; border-right: 1px solid var(--border);
-        color: var(--accent); font-size: 16px; cursor: pointer;
+        border-right: 1px solid var(--border);
+        color: var(--accent); font-size: 16px;
     }
 }
 
