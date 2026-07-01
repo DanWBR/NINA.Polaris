@@ -275,6 +275,14 @@ def _halo_profile(cy: int, cx: int, radius: float, kind: str, shape,
         prof = np.exp(-((rr - radius) ** 2) / (2.0 * sw * sw))
     else:  # glow (Moffat): peaked core + long shallow tail, matches real halo
         prof = (1.0 + (rr / max(1.0, radius)) ** 2) ** (-beta)
+    # Radial taper to ZERO at the bounding-box edge. The Moffat tail is still
+    # ~0.007 of peak at r=R, so a bare box truncation leaves a hard rectangular
+    # step (visible "square" halos when stretched). A smootherstep window from
+    # 0.55R -> R drives the profile smoothly to 0 with zero slope, making the
+    # falloff circular and seamless.
+    t = np.clip((rr - 0.55 * R) / (0.45 * R), 0.0, 1.0)
+    win = 1.0 - (t * t * t * (t * (t * 6.0 - 15.0) + 10.0))          # smootherstep 1->0
+    prof = prof * win
     return (slice(y0, y1), slice(x0, x1), prof.astype(np.float32))
 
 
@@ -315,23 +323,18 @@ def add_star_halos_rgb(clean: np.ndarray, rng: np.random.Generator,
         # look -- NOT a bright filled bokeh disk (that was the artefact).
         radius = float(np.exp(rng.uniform(np.log(20.0), np.log(55.0))))  # Moffat core scale
         beta = float(rng.uniform(1.0, 1.5))                    # low = long wings (real halo)
-        # Mostly glow; occasionally a very faint outer reflection ring.
-        is_ring = rng.random() < 0.15
-        kind = "ring" if is_ring else "glow"
+        # GLOW ONLY. A standalone bright "ring" produced a hard green donut
+        # artefact; the real outer reflection ring is extremely faint/diffuse and
+        # not worth the risk. The tapered Moffat glow already matches the bulk of
+        # the measured real halo.
+        kind = "glow"
         # base = the glow's PEAK amplitude (lands on the saturated core, which the
         # headroom composite absorbs); the visible part is the faint Moffat tail.
-        # Real measured tail: ~+0.035 over bg (~0.0085) at 40px. peak~0.06-0.22
-        # reproduces that with the Moffat falloff. Rings are much fainter.
-        if is_ring:
-            radius = float(rng.uniform(60.0, 220.0))           # outer ring radius
-            base = max(1e-4, peak) * float(rng.uniform(0.002, 0.008)) * intensity_scale
-            soft = float(rng.uniform(0.10, 0.25))
-        else:
-            # Amplitude spans 3 real halos measured (SII_2 faint ~0.018@40px,
-            # NIR mid ~0.035, SII/550 bright ~0.13): same Moffat shape, ~7x
-            # amplitude spread driven by star brightness.
-            base = max(1e-4, peak) * float(rng.uniform(0.02, 0.18)) * intensity_scale
-            soft = 0.25
+        # Amplitude spans 3 real halos measured (SII_2 faint ~0.018@40px, NIR mid
+        # ~0.035, SII/550 bright ~0.13): same Moffat shape, ~7x amplitude spread
+        # driven by star brightness.
+        base = max(1e-4, peak) * float(rng.uniform(0.02, 0.18)) * intensity_scale
+        soft = 0.25
         color = _star_color(clean, cy, cx)                     # same colour as star
         pp = _halo_profile(cy, cx, radius, kind, out.shape[1:], soft=soft, beta=beta)
         if pp is None:
