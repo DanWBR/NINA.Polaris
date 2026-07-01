@@ -36,7 +36,7 @@
     // parent terminates after a short idle, which frees the whole heap. Kept
     // alive across a batch (fast), torn down once idle (reclaims). See
     // js/onnx-worker.js + runOneShot().
-    const ORT_WORKER_PATH = '/js/onnx-worker.js?v=20260701-detailring';
+    const ORT_WORKER_PATH = '/js/onnx-worker.js?v=20260701-detailadd';
     const ONESHOT_IDLE_MS = 15000;
     let _osWorker = null;
     let _osSeq = 0;
@@ -1346,10 +1346,14 @@
                 pixels, width, height, opts);
         }
 
-        // Luminance-domain detail with exact chroma preservation. Enhances
-        // mean luminance once, then scales each channel by enhLum/lum so hue
-        // is untouched. Dark background (lum <= floor) passes through so the
-        // ratio can't amplify colour speckle.
+        // Luminance-domain detail. Enhances mean luminance once, then adds the
+        // luminance CHANGE (enh - lum) EQUALLY to R/G/B. Additive, not a
+        // multiplicative enh/lum ratio: the ratio version amplified per-channel
+        // colour noise in faint regions (red/cyan speckle everywhere). An equal
+        // additive delta neither amplifies chroma noise nor introduces a per-
+        // channel hue shift (no stray green/red stars). Anti-ring floor caps how
+        // negative the delta may go so the brightest saturated stars don't keep
+        // their thin dark ring.
         async _runRgbLuminance(pixels, width, height, opts = {}) {
             const planeLen = width * height;
             const lum = new Uint16Array(planeLen);
@@ -1360,20 +1364,19 @@
             delete passOpts.channels;
             const res = await this._runMono(lum, width, height, passOpts);
             const enh = res.pixels;
-            // Anti-ring guard: the final model still carves a thin dark ring at
-            // the very brightest (saturated) star edges. Cap how far the
-            // enhanced luminance may drop below the input (RING_FLOOR): a no-op
-            // in nebula (enh ~ lum) since it only bites where the net darkened
-            // hard. 0.7 = at most 30% dimming, keeps the sharpening contrast.
+            // Anti-ring: limit how far the enhancer may DARKEN a pixel (the ring
+            // is a strong negative delta at bright-star edges). Cap negative
+            // delta to -30% of the local luminance; positive delta (sharpening
+            // brightening) is unrestricted.
             const RING_FLOOR = 0.7;
             const out = new Uint16Array(planeLen * 3);
             for (let i = 0; i < planeLen; i++) {
                 const l = lum[i];
-                let e = enh[i];
-                if (l > 8 && e < l * RING_FLOOR) e = l * RING_FLOOR;
-                const ratio = l > 8 ? Math.min(8, e / l) : 1;
+                let d = enh[i] - l;                       // luminance change
+                const minD = -(1 - RING_FLOOR) * l;       // e.g. -0.3*l
+                if (d < minD) d = minD;
                 for (let c = 0; c < 3; c++) {
-                    let v = pixels[c * planeLen + i] * ratio;
+                    let v = pixels[c * planeLen + i] + d;
                     v = v < 0 ? 0 : (v > 65535 ? 65535 : (v + 0.5) | 0);
                     out[c * planeLen + i] = v;
                 }
