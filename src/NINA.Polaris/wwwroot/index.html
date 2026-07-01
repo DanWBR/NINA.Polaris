@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260627-autorunreorg">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260629-aitools">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260624-safetyguard">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260701-comparezoom">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260628-smbchip">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260628-vidprocess">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260624-untestedwarn">
@@ -15314,22 +15314,35 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         title="Re-run star removal with different settings">↻ Try again</button>
                 <button class="btn btn-sm" @click="graxpertCloseCompare()">Close</button>
             </div>
-            <!-- Image stage. Two <img> stacked; the OUT one is the
-                 top layer and clipped by a CSS variable so the left
-                 portion shows the SRC underneath. -->
+            <!-- Image stage. Two layers stacked; the OUT layer is clipped
+                 by --split (screen space) so the left portion shows the SRC
+                 underneath. Wheel = zoom (anchored at cursor), drag = pan
+                 when zoomed, double-click = reset. Both <img> share one
+                 transform so BEFORE/AFTER stay pixel-aligned. -->
             <div class="graxpert-compare-wrap"
-                 :style="'--split:' + (graxpertCompare.split * 100) + '%'">
-                <img class="graxpert-compare-src"
-                     :src="graxpertCompareSrc('src')"
-                     alt="Original"
-                     draggable="false">
-                <img class="graxpert-compare-out"
-                     :src="graxpertCompareSrc('out')"
-                     alt="Processed"
-                     draggable="false">
+                 :class="{ 'gc-zoomed': graxpertCompare.zoom > 1.001 }"
+                 :style="'--split:' + (graxpertCompare.split * 100) + '%'"
+                 @wheel.prevent="graxpertCompareWheel($event)"
+                 @mousedown="graxpertComparePanStart($event)"
+                 @touchstart.passive="graxpertComparePanStart($event)"
+                 @dblclick="graxpertCompareResetView()">
+                <div class="gc-layer">
+                    <img class="graxpert-compare-src"
+                         :src="graxpertCompareSrc('src')"
+                         :style="graxpertCompareImgStyle()"
+                         alt="Original"
+                         draggable="false">
+                </div>
+                <div class="gc-layer gc-out-clip">
+                    <img class="graxpert-compare-out"
+                         :src="graxpertCompareSrc('out')"
+                         :style="graxpertCompareImgStyle()"
+                         alt="Processed"
+                         draggable="false">
+                </div>
                 <div class="graxpert-compare-handle"
-                     @mousedown.prevent="graxpertCompareMouseDown($event)"
-                     @touchstart.prevent="graxpertCompareMouseDown($event)">
+                     @mousedown.prevent.stop="graxpertCompareMouseDown($event)"
+                     @touchstart.prevent.stop="graxpertCompareMouseDown($event)">
                     <div class="graxpert-compare-handle-bar"></div>
                     <div class="graxpert-compare-handle-grip">↔</div>
                 </div>
@@ -15337,6 +15350,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                       x-text="graxpertCompareTag('src')"></span>
                 <span class="graxpert-compare-tag graxpert-compare-tag-out"
                       x-text="graxpertCompareTag('out')"></span>
+                <span class="graxpert-compare-zoom" x-show="graxpertCompare.zoom > 1.001"
+                      x-text="graxpertCompare.zoom.toFixed(1) + '×'"></span>
             </div>
         </div>
     </div>
@@ -16480,7 +16495,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260630-browserrl"></script>
+    <script src="/js/app.js?v=20260701-comparezoom"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

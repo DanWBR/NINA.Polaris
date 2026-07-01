@@ -2020,6 +2020,16 @@
     user-select: none;
     cursor: ew-resize;
 }
+/* Zoom/pan: each <img> lives in a full-size layer. The clip that makes
+   the before/after divide lives on the LAYER (screen space) so it stays
+   put while the <img> inside is transformed (zoom/pan). Both imgs share
+   the same transform, so the two halves stay pixel-aligned. */
+.graxpert-compare-wrap .gc-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;        /* let wheel/drag reach the wrap */
+    overflow: hidden;
+}
 .graxpert-compare-wrap img {
     position: absolute;
     inset: 0;
@@ -2029,16 +2039,29 @@
     /* Pixel-art rendering is wrong for star-field stretched JPEGs.
        The default bilinear interpolation is what we want, leave it. */
     pointer-events: none;
+    transform-origin: 0 0;
+    will-change: transform;
 }
-.graxpert-compare-out {
+.gc-out-clip {
     /* GX-12f: AFTER (the processed image) sits on the RIGHT of the
-       handle, matches user convention ("before on left, after on
-       right") and the position of the .graxpert-compare-tag-out
-       label. Clip-path masks the LEFT portion of the OUT layer up
-       to --split, so SRC underneath shows through on the left half
-       and OUT is revealed on the right. At split=0 the whole image
-       is AFTER; at split=100% the whole image is BEFORE. */
+       handle; clip masks the LEFT portion up to --split so SRC shows
+       through on the left and OUT on the right. */
     clip-path: inset(0 0 0 var(--split));
+}
+/* When zoomed the wrap becomes a pan surface (grab cursor); at 1x it
+   keeps the ew-resize hint for the divider drag. */
+.graxpert-compare-wrap.gc-zoomed { cursor: grab; }
+.graxpert-compare-wrap.gc-zoomed:active { cursor: grabbing; }
+.graxpert-compare-zoom {
+    position: absolute;
+    left: 12px; bottom: 12px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(2, 6, 12, 0.7);
+    color: var(--text-primary, #e5e7eb);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    pointer-events: none;
 }
 /* PA-6: TPPA target suggestion chips on the POLAR tab. Server
    ranks high-Dec objects currently above 30°; UI shows them as a

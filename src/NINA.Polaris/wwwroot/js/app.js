@@ -2735,6 +2735,13 @@ function ninaApp() {
             index: 0,
             split: 0.5,
             dragging: false,
+            // Zoom + pan for pixel-peeping the comparison. zoom>=1; pan in
+            // wrap-pixel space (transform-origin 0 0). Both BEFORE/AFTER layers
+            // share the same transform so they stay pixel-aligned; the divider
+            // clip stays in screen space so it doesn't move when zooming.
+            zoom: 1, panX: 0, panY: 0,
+            panning: false, _panSX: 0, _panSY: 0, _panOX: 0, _panOY: 0,
+            _pinchDist: 0,
             mode: 'gx',
             // GX-12r: which GraXpert op produced these pairs, drives
             // the modal title ("GraXpert Denoise Comparison" vs
@@ -26331,6 +26338,7 @@ function ninaApp() {
             this.graxpertCompare.index = index || 0;
             this.graxpertCompare.split = 0.5;
             this.graxpertCompare.dragging = false;
+            this.graxpertCompareResetView();
             // GX-12g: 'gx' = GraXpert auto-open (BEFORE/AFTER tags);
             // 'compare' = arbitrary two-file pick from FILES (show
             // the actual filenames on each side).
@@ -26413,6 +26421,7 @@ function ninaApp() {
             this.graxpertCompare.index =
                 (this.graxpertCompare.index + 1) % n;
             this.graxpertCompare.split = 0.5;
+            this.graxpertCompareResetView();
         },
 
         graxpertComparePrev() {
@@ -26421,6 +26430,7 @@ function ninaApp() {
             this.graxpertCompare.index =
                 (this.graxpertCompare.index - 1 + n) % n;
             this.graxpertCompare.split = 0.5;
+            this.graxpertCompareResetView();
         },
 
         // URL helper that points the FILES preview endpoint at the
@@ -26461,16 +26471,110 @@ function ninaApp() {
         },
         graxpertCompareMouseUp() {
             this.graxpertCompare.dragging = false;
+            this.graxpertCompare.panning = false;
+            this.graxpertCompare._pinchDist = 0;
         },
         graxpertCompareMove(ev) {
-            if (!this.graxpertCompare.dragging) return;
+            const gc = this.graxpertCompare;
+            // Pinch-zoom (two touches) takes precedence over split/pan.
+            if (ev.touches && ev.touches.length === 2) {
+                this._graxpertComparePinch(ev);
+                return;
+            }
+            if (gc.dragging) {
+                const wrap = document.querySelector('.graxpert-compare-wrap');
+                if (!wrap) return;
+                const rect = wrap.getBoundingClientRect();
+                const clientX = ev.touches && ev.touches[0]
+                    ? ev.touches[0].clientX : ev.clientX;
+                const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+                gc.split = x / rect.width;
+                return;
+            }
+            if (gc.panning) {
+                const clientX = ev.touches && ev.touches[0] ? ev.touches[0].clientX : ev.clientX;
+                const clientY = ev.touches && ev.touches[0] ? ev.touches[0].clientY : ev.clientY;
+                gc.panX = gc._panOX + (clientX - gc._panSX);
+                gc.panY = gc._panOY + (clientY - gc._panSY);
+                this._graxpertCompareClampPan();
+            }
+        },
+
+        // Start panning the zoomed image (drag on the image background, not the
+        // divider handle). No-op at zoom 1 (nothing to pan).
+        graxpertComparePanStart(ev) {
+            const gc = this.graxpertCompare;
+            if (ev.touches && ev.touches.length === 2) { this._graxpertComparePinch(ev, true); return; }
+            if (gc.zoom <= 1.001) return;
+            gc.panning = true;
+            const clientX = ev.touches && ev.touches[0] ? ev.touches[0].clientX : ev.clientX;
+            const clientY = ev.touches && ev.touches[0] ? ev.touches[0].clientY : ev.clientY;
+            gc._panSX = clientX; gc._panSY = clientY;
+            gc._panOX = gc.panX; gc._panOY = gc.panY;
+        },
+
+        // Wheel zoom, anchored at the cursor so the point under the pointer
+        // stays put. transform-origin is 0 0, so screen = pan + zoom*local.
+        graxpertCompareWheel(ev) {
+            const gc = this.graxpertCompare;
             const wrap = document.querySelector('.graxpert-compare-wrap');
             if (!wrap) return;
             const rect = wrap.getBoundingClientRect();
-            const clientX = ev.touches && ev.touches[0]
-                ? ev.touches[0].clientX : ev.clientX;
-            const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
-            this.graxpertCompare.split = x / rect.width;
+            const cx = ev.clientX - rect.left, cy = ev.clientY - rect.top;
+            const z0 = gc.zoom;
+            const factor = ev.deltaY < 0 ? 1.15 : 1 / 1.15;
+            const z1 = Math.max(1, Math.min(16, z0 * factor));
+            if (z1 === z0) return;
+            gc.panX = cx - z1 * (cx - gc.panX) / z0;
+            gc.panY = cy - z1 * (cy - gc.panY) / z0;
+            gc.zoom = z1;
+            if (z1 <= 1.001) { gc.zoom = 1; gc.panX = 0; gc.panY = 0; }
+            this._graxpertCompareClampPan();
+        },
+
+        _graxpertComparePinch(ev, start) {
+            const gc = this.graxpertCompare;
+            const t = ev.touches;
+            const dist = Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+            const wrap = document.querySelector('.graxpert-compare-wrap');
+            if (!wrap) return;
+            const rect = wrap.getBoundingClientRect();
+            const cx = (t[0].clientX + t[1].clientX) / 2 - rect.left;
+            const cy = (t[0].clientY + t[1].clientY) / 2 - rect.top;
+            if (start || !gc._pinchDist) { gc._pinchDist = dist; gc._pinchCX = cx; gc._pinchCY = cy; return; }
+            const z0 = gc.zoom;
+            const z1 = Math.max(1, Math.min(16, z0 * (dist / gc._pinchDist)));
+            gc.panX = cx - z1 * (cx - gc.panX) / z0;
+            gc.panY = cy - z1 * (cy - gc.panY) / z0;
+            gc.zoom = z1; gc._pinchDist = dist;
+            if (z1 <= 1.001) { gc.zoom = 1; gc.panX = 0; gc.panY = 0; }
+            this._graxpertCompareClampPan();
+        },
+
+        // Keep the scaled image covering the wrap (origin 0 0): pan in
+        // [wrapDim*(1-zoom), 0] per axis. At zoom 1 both bounds are 0.
+        _graxpertCompareClampPan() {
+            const gc = this.graxpertCompare;
+            const wrap = document.querySelector('.graxpert-compare-wrap');
+            if (!wrap) return;
+            const w = wrap.clientWidth, h = wrap.clientHeight;
+            gc.panX = Math.max(w * (1 - gc.zoom), Math.min(0, gc.panX));
+            gc.panY = Math.max(h * (1 - gc.zoom), Math.min(0, gc.panY));
+        },
+
+        graxpertCompareResetView() {
+            this.graxpertCompare.zoom = 1;
+            this.graxpertCompare.panX = 0;
+            this.graxpertCompare.panY = 0;
+            this.graxpertCompare.panning = false;
+            this.graxpertCompare._pinchDist = 0;
+        },
+
+        // Shared transform for both BEFORE/AFTER <img> layers so they stay
+        // pixel-aligned under zoom/pan.
+        graxpertCompareImgStyle() {
+            const gc = this.graxpertCompare;
+            return `transform: translate(${gc.panX}px, ${gc.panY}px) scale(${gc.zoom}); transform-origin: 0 0;`;
         },
 
         _graxpertStartPolling() {
