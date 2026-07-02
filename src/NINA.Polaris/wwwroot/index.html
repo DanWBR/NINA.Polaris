@@ -10469,8 +10469,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <button class="btn btn-sm"
                                             @click="stackRunCombine()"
                                             :disabled="stack.lights.length < 2 || !!stack.activeJob"
-                                            title="Combine slot lights as per-filter mono masters into RGB/LRGB. You'll be prompted for the variable name (R/G/B/L) per file.">
-                                        Combine (RGB/LRGB)
+                                            title="Combine slot lights as per-filter mono masters: RGB / LRGB, a narrowband palette (SHO / HSO / HOS / HOO), or continuum subtraction (NB minus broadband). You'll be prompted for the role of each file.">
+                                        Combine channels
                                     </button>
                                     <button class="btn btn-sm"
                                             @click="stackRunColorCal()"
@@ -16798,7 +16798,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260702-ed2wf"></script>
+    <script src="/js/app.js?v=20260702-nbcombine"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

@@ -1722,6 +1722,9 @@ function ninaApp() {
                     rows: [],            // [{ var: 'Ha', frameId: 42 }, ...]
                     expressions: ['R', 'G', 'B']
                 },
+                // Narrowband palette (SHO/HSO/HOS/HOO) + continuum subtraction.
+                nb: { mapping: { Ha: null, OIII: null, SII: null }, palette: 'sho' },
+                cs: { mapping: { NB: null, C: null }, auto: true, scale: 1.0 },
                 lastJob: null
             },
             // CCALB-1/2/3: Siril-style color calibration on a single
@@ -2308,10 +2311,17 @@ function ninaApp() {
                 okLabel: 'Continue',
                 options: [
                     { value: 'rgb', label: 'RGB (3 channels)' },
-                    { value: 'lrgb', label: 'LRGB (4 channels + luminance)' }
+                    { value: 'lrgb', label: 'LRGB (4 channels + luminance)' },
+                    { value: 'narrowband', label: 'Narrowband palette (SHO / HSO / HOS / HOO)' },
+                    { value: 'continuum', label: 'Continuum subtraction (NB minus k*Broadband)' }
                 ]
             });
-            if (mode !== 'rgb' && mode !== 'lrgb') return; // cancelled
+            if (!['rgb', 'lrgb', 'narrowband', 'continuum'].includes(mode)) return; // cancelled
+            // Narrowband + continuum branch off to their own prompt flows
+            // (different roles + palette / scale options) and share the
+            // job-submit + poll helper with the RGB/LRGB path below.
+            if (mode === 'narrowband') { await this._stackRunNarrowband(); return; }
+            if (mode === 'continuum') { await this._stackRunContinuum(); return; }
             const need = mode === 'lrgb' ? 4 : 3;
             if (this.stack.lights.length < need) {
                 this.toast(mode.toUpperCase() + ' needs at least ' + need
@@ -2373,6 +2383,122 @@ function ninaApp() {
             // /api/studio/combine status route uses /{jobId} (no /status).
             await this._stackPollJob('/api/studio/combine/', body.jobId,
                 'Combine ' + mode.toUpperCase());
+        },
+
+        // SASPRO-B: narrowband palette combine (SHO / HSO / HOS / HOO).
+        // Same slot-as-inputs flow as stackRunCombine, but the variable
+        // per file is an emission line (Ha / OIII / SII) and the palette
+        // decides which line lands on which colour channel.
+        async _stackRunNarrowband() {
+            const palette = await this._pickOptionAsync({
+                title: 'Narrowband palette',
+                message: 'Palette (line to colour mapping):',
+                value: 'sho',
+                okLabel: 'Continue',
+                options: [
+                    { value: 'sho', label: 'SHO (SII=R, Ha=G, OIII=B) -- Hubble' },
+                    { value: 'hso', label: 'HSO (Ha=R, SII=G, OIII=B)' },
+                    { value: 'hos', label: 'HOS (Ha=R, OIII=G, SII=B)' },
+                    { value: 'hoo', label: 'HOO bicolor (Ha=R, OIII=G+B)' }
+                ]
+            });
+            if (!['sho', 'hso', 'hos', 'hoo'].includes(palette)) return;
+            const needSii = palette !== 'hoo';
+            const roles = needSii ? 'Ha / OIII / SII' : 'Ha / OIII';
+            const channelMap = [];
+            for (const p of this.stack.lights) {
+                const v = ((await this._promptTextAsync({
+                    title: 'Line for ' + this.stackBasename(p),
+                    message: 'Emission line (' + roles + ') -- leave empty to skip this file',
+                    placeholder: roles,
+                    allowEmpty: true,
+                    okLabel: 'Next'
+                })) || '').trim();
+                if (!v) continue;
+                channelMap.push({ variable: v, framePath: p });
+            }
+            const required = needSii ? ['Ha', 'OIII', 'SII'] : ['Ha', 'OIII'];
+            for (const r of required) {
+                if (!channelMap.some(c => c.variable.toUpperCase() === r.toUpperCase())) {
+                    this.toast('Missing "' + r + '" for the ' + palette.toUpperCase()
+                        + ' palette', 'warn');
+                    return;
+                }
+            }
+            await this._stackSubmitCombine({
+                mode: 'narrowband', channelMap, palette,
+                register: true, normalize: true
+            }, 'Narrowband ' + palette.toUpperCase());
+        },
+
+        // SASPRO-B: continuum subtraction (NB' = NB - k*Continuum). Roles
+        // are NB (narrowband) + C (broadband continuum); k is auto-estimated
+        // from star pixels or entered manually. normalize stays OFF so the
+        // auto k estimate isn't skewed by a pre-scaled background.
+        async _stackRunContinuum() {
+            const channelMap = [];
+            for (const p of this.stack.lights) {
+                const v = ((await this._promptTextAsync({
+                    title: 'Role for ' + this.stackBasename(p),
+                    message: 'Role (NB = narrowband, C = broadband/continuum) '
+                        + '-- leave empty to skip this file',
+                    placeholder: 'NB / C',
+                    allowEmpty: true,
+                    okLabel: 'Next'
+                })) || '').trim();
+                if (!v) continue;
+                channelMap.push({ variable: v, framePath: p });
+            }
+            for (const r of ['NB', 'C']) {
+                if (!channelMap.some(c => c.variable.toUpperCase() === r)) {
+                    this.toast('Continuum subtraction needs both "NB" and "C"', 'warn');
+                    return;
+                }
+            }
+            const scaleMode = await this._pickOptionAsync({
+                title: 'Continuum scale',
+                message: 'Subtraction scale k:',
+                value: 'auto',
+                okLabel: 'Continue',
+                options: [
+                    { value: 'auto', label: 'Auto (estimate k from bright star pixels)' },
+                    { value: 'manual', label: 'Manual (enter k)' }
+                ]
+            });
+            if (scaleMode !== 'auto' && scaleMode !== 'manual') return;
+            let continuumScale = null;
+            if (scaleMode === 'manual') {
+                const raw = ((await this._promptTextAsync({
+                    title: 'Continuum scale k',
+                    message: 'k in [0, 4] where NB result = NB - k*Continuum:',
+                    placeholder: '1.0',
+                    okLabel: 'Subtract'
+                })) || '').trim();
+                const k = parseFloat(raw);
+                if (!isFinite(k)) { this.toast('Invalid scale value', 'warn'); return; }
+                continuumScale = Math.min(4, Math.max(0, k));
+            }
+            await this._stackSubmitCombine({
+                mode: 'continuum', channelMap, continuumScale,
+                register: true, normalize: false
+            }, 'Continuum subtract');
+        },
+
+        // Shared submit + poll for the narrowband/continuum combine flows.
+        async _stackSubmitCombine(body, label) {
+            let resp;
+            try {
+                resp = await this.apiPost('/api/studio/combine', body);
+            } catch (e) {
+                this.toast(label + ' submit failed: ' + e.message, 'error');
+                return;
+            }
+            const j = await resp.json();
+            if (!j.jobId) {
+                this.toast(label + ' rejected: ' + (j.error || 'unknown'), 'error');
+                return;
+            }
+            await this._stackPollJob('/api/studio/combine/', j.jobId, label);
         },
 
         // UNIF-3c: Color Calibration -- only BG-auto in v1. Manual
@@ -10619,6 +10745,14 @@ function ninaApp() {
                     return this.studio.combine.pm.expressions
                         .slice(0, need)
                         .every(e => (e || '').trim().length > 0);
+                case 'nb': {
+                    const m = this.studio.combine.nb.mapping;
+                    const needSii = this.studio.combine.nb.palette !== 'hoo';
+                    return m.Ha != null && m.OIII != null && (!needSii || m.SII != null);
+                }
+                case 'cs':
+                    return this.studio.combine.cs.mapping.NB != null
+                        && this.studio.combine.cs.mapping.C != null;
                 default: return false;
             }
         },
@@ -10645,8 +10779,9 @@ function ninaApp() {
         async studioStartCombine() {
             if (!this.studioCombineCanRun()) return;
             const tab = this.studio.combine.activeTab;
+            const modeByTab = { pm: 'pixelmath', nb: 'narrowband', cs: 'continuum' };
             let body = {
-                mode: tab === 'pm' ? 'pixelmath' : tab,
+                mode: modeByTab[tab] || tab,
                 channelMap: [],
                 register: this.studio.combine.register,
                 normalize: this.studio.combine.normalize,

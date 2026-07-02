@@ -106,29 +106,49 @@ PixInsight's FITS Header view.
 
 Full walkthrough in [Color calibration](color-calibration.md).
 
-## Channel combine (mono LRGB / RGB / PixelMath)
+## Channel combine (RGB / LRGB / narrowband / continuum)
 
 For mono shooters: after per-filter integration leaves you with one
-master per filter, select two or more masters and click **Combine**
-in the selection bar. The modal has three tabs:
+master per filter, add two or more masters to the **Lights** slot of
+the STUDIO **Stacking** sub-tab, then click **Combine channels** under
+**3 - Combine & Colour**. A first prompt picks the mode; the following
+prompts collect the role of each file:
 
 - **RGB**, pack 3 mono masters (R/G/B) into a single RGB FITS.
 - **LRGB**, RGB plus a luminance master, combined via Lab swap
   (default, preserves chrominance) or Ratio (classical, faster).
-- **PixelMath**, evaluate per-pixel expressions over named channels.
-  Useful for narrowband palettes (HOO, SHO) and synthetic luminance.
-  Supports +, -, *, /, **, parens, plus min/max/abs/pow/sqrt/exp/
-  log/clamp.
+- **Narrowband palette**, map Ha / OIII / SII masters to colour by
+  palette: **SHO** (SII=R, Ha=G, OIII=B, the "Hubble" palette),
+  **HSO**, **HOS**, or **HOO** bicolor (Ha=R, OIII=G+B). Per-channel
+  normalize matches the three backgrounds so no single filter dominates
+  the colour.
+- **Continuum subtraction**, isolate the emission signal in a
+  narrowband master by removing a scaled broadband master:
+  `NB' = max(0, NB - k*Continuum)`. Assign the **NB** and **C** roles;
+  the scale `k` is auto-estimated from the bright star pixels (median
+  NB/Continuum where the signal is pure continuum) or entered manually
+  in `[0, 4]`. Stars largely cancel while the nebulosity remains.
+
+For richer per-pixel work (synthetic luminance, custom palettes) the
+underlying service also has a PixelMath mode; the palette + continuum
+modes above cover the common narrowband recipes without writing an
+expression.
 
 Cross-channel star registration is on by default (the per-filter
 masters come out of `BatchStackingService` aligned to their own
 reference frame, not to each other, so without registration you
-get coloured fringes on every star). Per-channel normalize is also
-on by default.
+get coloured fringes on every star). Per-channel normalize is on by
+default for RGB / LRGB / narrowband, and **off** for continuum
+subtraction so the auto `k` estimate isn't skewed by a pre-scaled
+background.
 
-Output: `integrated/{Target}/composed/{rgb|lrgb|pm}_{Target}_{stamp}.fits`
+Output: `integrated/{Target}/composed/{rgb|lrgb|nb|cs|pm}_{Target}_{stamp}.fits`
 with `CHCOMBINE`, `REGISTER`, `REGREF`, `REG_<channel>`, `NORMLIZE`
 custom headers describing the recipe.
+
+The narrowband palette + continuum math is implemented from scratch
+(`NarrowbandCombine` / `ContinuumSubtraction`), inspired by the
+narrowband tools in SASpro / PixInsight.
 
 Full walkthrough in [Mono LRGB workflow](lrgb-mono-workflow.md).
 

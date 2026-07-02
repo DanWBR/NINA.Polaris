@@ -87,6 +87,8 @@ public class ChannelCombineService {
         public const string RgbCompose  = "rgb";
         public const string LrgbCompose = "lrgb";
         public const string PixelMath   = "pixelmath";
+        public const string Narrowband  = "narrowband";
+        public const string Continuum   = "continuum";
     }
 
     // UNIF-3a: caller now passes a frame path instead of a SQLite id
@@ -104,6 +106,10 @@ public class ChannelCombineService {
         // PixelMath-only:
         List<string>? Expressions = null,           // 1 (mono out) or 3 (RGB out)
         bool MonoOutput = false,
+        // Narrowband-only: palette (sho|hso|hos|hoo), channels named Ha/OIII/SII.
+        string? Palette = "sho",
+        // Continuum-only: scale (null = auto from bright pixels), channels NB/C.
+        double? ContinuumScale = null,
         // Optional override; defaults to first input's target.
         string? TargetName = null);
 
@@ -306,9 +312,17 @@ public class ChannelCombineService {
                         req.Expressions, req.MonoOutput);
                     prefix = "pm";
                     break;
+                case Modes.Narrowband:
+                    composed = ComposeNarrowband(inputs, W, H, req.Palette, req.Normalize);
+                    prefix = "nb";
+                    break;
+                case Modes.Continuum:
+                    composed = ComposeContinuum(inputs, W, H, req.ContinuumScale);
+                    prefix = "cs";
+                    break;
                 default:
                     throw new ArgumentException(
-                        $"Unknown combine mode '{req.Mode}'. Expected one of: rgb, lrgb, pixelmath.");
+                        $"Unknown combine mode '{req.Mode}'. Expected one of: rgb, lrgb, pixelmath, narrowband, continuum.");
             }
             _jobs[jobId] = _jobs[jobId] with { Done = 1 };
 
@@ -433,6 +447,29 @@ public class ChannelCombineService {
             }
         }
         return (output, outChannels);
+    }
+
+    // ── compose: Narrowband palette (SHO/HSO/HOS/HOO) ────────────────
+    private static (ushort[] data, int channels) ComposeNarrowband(
+            List<LoadedChannel> inputs, int W, int H, string? palette, bool normalize) {
+        var ha = FindChannel(inputs, "Ha") ?? FindChannel(inputs, "H");
+        var oiii = FindChannel(inputs, "OIII") ?? FindChannel(inputs, "O");
+        var sii = FindChannel(inputs, "SII") ?? FindChannel(inputs, "S");
+        var packed = NarrowbandCombine.Compose(ha, oiii, sii, W, H, palette ?? "sho", normalize);
+        return (packed, 3);
+    }
+
+    // ── compose: Continuum subtraction (NB - k·Continuum) ────────────
+    private static (ushort[] data, int channels) ComposeContinuum(
+            List<LoadedChannel> inputs, int W, int H, double? scale) {
+        var nb = FindChannel(inputs, "NB") ?? throw new InvalidOperationException(
+            "Continuum subtraction needs the narrowband channel named 'NB'.");
+        var cont = FindChannel(inputs, "C") ?? FindChannel(inputs, "Continuum")
+            ?? throw new InvalidOperationException(
+                "Continuum subtraction needs the broadband channel named 'C'.");
+        var outp = ContinuumSubtraction.Subtract(nb, cont, W, H,
+            scale ?? 1.0, autoScale: scale == null);
+        return (outp, 1);
     }
 
     private static ushort[]? FindChannel(List<LoadedChannel> inputs, string name) {
