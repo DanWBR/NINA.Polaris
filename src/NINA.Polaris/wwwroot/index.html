@@ -44,7 +44,7 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260626-uppercase">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260627-autorunreorg">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260701-studiotabs">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260701-studiotabs2">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260701-comparezoombtn">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260628-smbchip">
@@ -10405,44 +10405,54 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                              gives the user progress feedback via toast
                              ticks. -->
                         <div class="stack-actions">
-                            <div class="stack-actions-row">
-                                <button class="btn btn-sm"
-                                        @click="stackRunMaster('dark')"
-                                        :disabled="stack.darks.length < 2 || !!stack.activeJob"
-                                        :title="'Stack ' + stack.darks.length + ' darks into a master_dark.fits'">
-                                    Master Dark
-                                </button>
-                                <button class="btn btn-sm"
-                                        @click="stackRunMaster('flat')"
-                                        :disabled="stack.flats.length < 2 || !!stack.activeJob">
-                                    Master Flat
-                                </button>
-                                <button class="btn btn-sm"
-                                        @click="stackRunMaster('bias')"
-                                        :disabled="stack.biases.length < 2 || !!stack.activeJob">
-                                    Master Bias
-                                </button>
+                            <!-- Grouped by pipeline stage so the flow reads
+                                 top-to-bottom: build masters, then calibrate +
+                                 integrate the lights, then combine channels +
+                                 colour-calibrate. -->
+                            <div class="stack-actions-group">
+                                <span class="stack-actions-label">1 · Masters</span>
+                                <div class="stack-actions-row">
+                                    <button class="btn btn-sm"
+                                            @click="stackRunMaster('dark')"
+                                            :disabled="stack.darks.length < 2 || !!stack.activeJob"
+                                            :title="'Stack ' + stack.darks.length + ' darks into a master_dark.fits'">
+                                        Master Dark
+                                    </button>
+                                    <button class="btn btn-sm"
+                                            @click="stackRunMaster('flat')"
+                                            :disabled="stack.flats.length < 2 || !!stack.activeJob">
+                                        Master Flat
+                                    </button>
+                                    <button class="btn btn-sm"
+                                            @click="stackRunMaster('bias')"
+                                            :disabled="stack.biases.length < 2 || !!stack.activeJob">
+                                        Master Bias
+                                    </button>
+                                </div>
                             </div>
-                            <div class="stack-actions-row">
-                                <button class="btn btn-sm btn-primary"
-                                        @click="stackRunCalibrate()"
-                                        :disabled="stack.lights.length === 0 || !!stack.activeJob"
-                                        title="Calibrate lights using master darks/flats/biases (auto-matched via FrameLibrary unless slots filled)">
-                                    Calibrate Lights
-                                </button>
-                                <button class="btn btn-sm btn-primary"
-                                        @click="stackRunIntegrate()"
-                                        :disabled="stack.lights.length < 2 || !!stack.activeJob"
-                                        title="Align + stack lights into a master_light.fits">
-                                    Integrate
-                                </button>
-                                <button class="btn btn-sm"
-                                        x-show="siril.status?.available"
-                                        @click="sirilOpenFromStack()"
-                                        :disabled="stack.lights.length < 2 || !!stack.activeJob"
-                                        title="Pre-process + stack with Siril using the lights + any darks/flats/biases in the slots. Polaris suggests the matching .ssf script.">
-                                    Stack with Siril
-                                </button>
+                            <div class="stack-actions-group">
+                                <span class="stack-actions-label">2 · Calibrate &amp; Integrate</span>
+                                <div class="stack-actions-row">
+                                    <button class="btn btn-sm btn-primary"
+                                            @click="stackRunCalibrate()"
+                                            :disabled="stack.lights.length === 0 || !!stack.activeJob"
+                                            title="Calibrate lights using master darks/flats/biases (auto-matched via FrameLibrary unless slots filled)">
+                                        Calibrate Lights
+                                    </button>
+                                    <button class="btn btn-sm btn-primary"
+                                            @click="stackRunIntegrate()"
+                                            :disabled="stack.lights.length < 2 || !!stack.activeJob"
+                                            title="Align + stack lights into a master_light.fits">
+                                        Integrate
+                                    </button>
+                                    <button class="btn btn-sm"
+                                            x-show="siril.status?.available"
+                                            @click="sirilOpenFromStack()"
+                                            :disabled="stack.lights.length < 2 || !!stack.activeJob"
+                                            title="Pre-process + stack with Siril using the lights + any darks/flats/biases in the slots. Polaris suggests the matching .ssf script.">
+                                        Stack with Siril
+                                    </button>
+                                </div>
                             </div>
                             <!-- UNIF-3c: Combine + ColorCal. The lights
                                  slot doubles as the input source for
@@ -10453,19 +10463,22 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                  only on the first light slot entry --
                                  Manual + PCC ROI pickers need richer
                                  UI than fits in this sub-phase. -->
-                            <div class="stack-actions-row">
-                                <button class="btn btn-sm"
-                                        @click="stackRunCombine()"
-                                        :disabled="stack.lights.length < 2 || !!stack.activeJob"
-                                        title="Combine slot lights as per-filter mono masters into RGB/LRGB. You'll be prompted for the variable name (R/G/B/L) per file.">
-                                    Combine (RGB/LRGB)
-                                </button>
-                                <button class="btn btn-sm"
-                                        @click="stackRunColorCal()"
-                                        :disabled="stack.lights.length === 0 || !!stack.activeJob"
-                                        title="Background-neutralise the first light slot entry (auto sample mode). Manual + PCC need richer UI -- coming later.">
-                                    Color Cal (BG auto)
-                                </button>
+                            <div class="stack-actions-group">
+                                <span class="stack-actions-label">3 · Combine &amp; Colour</span>
+                                <div class="stack-actions-row">
+                                    <button class="btn btn-sm"
+                                            @click="stackRunCombine()"
+                                            :disabled="stack.lights.length < 2 || !!stack.activeJob"
+                                            title="Combine slot lights as per-filter mono masters into RGB/LRGB. You'll be prompted for the variable name (R/G/B/L) per file.">
+                                        Combine (RGB/LRGB)
+                                    </button>
+                                    <button class="btn btn-sm"
+                                            @click="stackRunColorCal()"
+                                            :disabled="stack.lights.length === 0 || !!stack.activeJob"
+                                            title="Background-neutralise the first light slot entry (auto sample mode). Manual + PCC need richer UI -- coming later.">
+                                        Color Cal (BG auto)
+                                    </button>
+                                </div>
                             </div>
                             <div class="stack-job-status" x-show="stack.activeJob" x-cloak>
                                 <strong x-text="stack.activeJob?.label || 'Running…'"></strong>

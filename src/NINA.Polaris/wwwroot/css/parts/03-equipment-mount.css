@@ -1182,7 +1182,24 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+}
+/* Pipeline-stage groups (Masters / Calibrate & Integrate / Combine &
+   Colour), each with a small caption above its button row. */
+.stack-actions-group {
+    padding: 10px 0;
+}
+.stack-actions-group + .stack-actions-group {
+    border-top: 1px solid var(--border);
+}
+.stack-actions-group:first-child { padding-top: 2px; }
+.stack-actions-label {
+    display: block;
     margin-bottom: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
 }
 .stack-job-status {
     margin-top: 10px;
