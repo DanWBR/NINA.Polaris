@@ -1971,6 +1971,27 @@ function ninaApp() {
         setStudioTab(name) {
             this.studioTab = name;
             try { localStorage.setItem('polaris-studio-tab', name); } catch (_) { }
+            if (name === 'autoworkflow') { try { this.workflowLoadList(); } catch (_) { } }
+        },
+
+        // ===== Auto Workflow (AWF) =====================================
+        // A saveable, linear post-processing pipeline applied to a source
+        // image and re-runnable (as a batch) on other files. The runner is
+        // client-orchestrated because the AI steps are browser-only ONNX;
+        // it chains each step's output path into the next step's input.
+        workflow: {
+            name: '',
+            steps: [],            // [{ $type, enabled, params }]
+            sources: [],          // source file paths
+            saved: [],            // saved workflow names
+            keepIntermediates: false,
+            running: false,
+            abort: false,
+            currentFile: null,
+            currentStep: -1,
+            log: [],              // [{ kind, text }]
+            results: [],          // [{ source, output, ok }]
+            addType: 'bge',
         },
         setFilesSubTab(name) {
             if (name === 'edit') {
@@ -26224,6 +26245,336 @@ function ninaApp() {
             }
             const j = await r.json();
             return j.path;
+        },
+
+        // ===== Auto Workflow: step registry + runner ===================
+        // The op registry is the single source of truth for step types: the
+        // add-step dropdown, the per-step param form, and the runner dispatch
+        // all read from it. Adding a new post-processing step = one entry here.
+        _wfOps() {
+            return [
+                { type: 'bge',      label: 'Background Extraction', kind: 'onnx', family: 'bge',      suffix: '_bge',
+                  fields: [ { k: 'smoothing', label: 'Smoothing', type: 'range', min: 0, max: 2, step: 0.1, def: 1.0 } ],
+                  defaults: { correction: 'Subtraction', smoothing: 1.0 } },
+                { type: 'denoise',  label: 'Denoise', kind: 'onnx', family: 'denoise', suffix: '_denoise',
+                  fields: [ { k: 'strength', label: 'Strength', type: 'range', min: 0, max: 1, step: 0.05, def: 0.5 } ],
+                  defaults: { strength: 0.5 } },
+                { type: 'detail',   label: 'Detail / Sharpen', kind: 'onnx', family: 'detail', suffix: '_detail',
+                  fields: [ { k: 'strength', label: 'Strength', type: 'range', min: 0, max: 1, step: 0.05, def: 0.5 },
+                            { k: 'psfPixels', label: 'FWHM (px)', type: 'number', min: 0.5, max: 20, step: 0.1, def: 4.0 } ],
+                  defaults: { strength: 0.5, psfPixels: 4.0 } },
+                { type: 'halo',     label: 'Halo Removal', kind: 'onnx', family: 'halo', suffix: '_halo',
+                  fields: [ { k: 'strength', label: 'Strength', type: 'range', min: 0, max: 1, step: 0.05, def: 0.5 } ],
+                  defaults: { strength: 0.5 } },
+                { type: 'upscale',  label: 'Upscale', kind: 'onnx', family: 'upscale', suffix: '_upscale',
+                  fields: [ { k: 'scale', label: 'Scale', type: 'select', options: [2, 3, 4], def: 2 } ],
+                  defaults: { scale: 2 } },
+                { type: 'starless', label: 'Star Removal', kind: 'starless',
+                  fields: [ { k: 'passes', label: 'Passes', type: 'select', options: [1, 2, 3], def: 1 },
+                            { k: 'reduceHalos', label: 'Reduce halos', type: 'bool', def: true } ],
+                  defaults: { passes: 1, reduceHalos: true } },
+                { type: 'crop',     label: 'Crop', kind: 'crop',
+                  fields: [ { k: 'fracX', label: 'X', type: 'number', min: 0, max: 1, step: 0.01, def: 0.1 },
+                            { k: 'fracY', label: 'Y', type: 'number', min: 0, max: 1, step: 0.01, def: 0.1 },
+                            { k: 'fracW', label: 'W', type: 'number', min: 0.01, max: 1, step: 0.01, def: 0.8 },
+                            { k: 'fracH', label: 'H', type: 'number', min: 0.01, max: 1, step: 0.01, def: 0.8 } ],
+                  defaults: { fracX: 0.1, fracY: 0.1, fracW: 0.8, fracH: 0.8 } },
+                { type: 'rl',       label: 'Richardson-Lucy Decon', kind: 'rl',
+                  fields: [ { k: 'strength', label: 'Strength', type: 'range', min: 0, max: 1, step: 0.05, def: 0.5 },
+                            { k: 'protectStars', label: 'Protect stars', type: 'bool', def: true } ],
+                  defaults: { strength: 0.5, tvLambda: 0.002, field: false, grid: 3, protectStars: true } },
+                { type: 'blend',    label: 'Blend Stars Back', kind: 'blend',
+                  fields: [ { k: 'mode', label: 'Mode', type: 'select', options: ['screen', 'add', 'lighten'], def: 'screen' },
+                            { k: 'opacity', label: 'Opacity', type: 'range', min: 0, max: 1, step: 0.05, def: 1.0 } ],
+                  defaults: { mode: 'screen', opacity: 1.0 } },
+                { type: 'editor',   label: 'Editor adjustments + Export', kind: 'editor',
+                  fields: [ { k: 'format', label: 'Format', type: 'select', options: ['png', 'jpg', 'tif'], def: 'png' },
+                            { k: 'quality', label: 'Quality', type: 'range', min: 1, max: 100, step: 1, def: 92 } ],
+                  defaults: { edits: {}, format: 'png', quality: 92 } },
+            ];
+        },
+        _wfOp(type) { return this._wfOps().find(o => o.type === type) || null; },
+        _wfBase(p) { return p ? (String(p).split(/[\\/]/).pop()) : ''; },
+        _wfLog(kind, text) { this.workflow.log.push({ kind, text }); },
+
+        // --- step list management (UI) ---
+        wfAddStep() {
+            const op = this._wfOp(this.workflow.addType);
+            if (!op) return;
+            this.workflow.steps.push({
+                $type: op.type, enabled: true,
+                params: JSON.parse(JSON.stringify(op.defaults || {})),
+            });
+        },
+        wfRemoveStep(i) { this.workflow.steps.splice(i, 1); },
+        wfMoveStep(i, dir) {
+            const j = i + dir;
+            const s = this.workflow.steps;
+            if (j < 0 || j >= s.length) return;
+            [s[i], s[j]] = [s[j], s[i]];
+        },
+
+        // --- source list (reuse the Files browser selection) ---
+        wfAddSelectedSources() {
+            const sel = (this.files && this.files.selectedPaths) || [];
+            const fits = sel.filter(p => /\.(fits?|fts)$/i.test(p));
+            let added = 0;
+            for (const p of fits) {
+                if (!this.workflow.sources.includes(p)) { this.workflow.sources.push(p); added++; }
+            }
+            this.toast(added ? ('Added ' + added + ' source(s)') : 'No new FITS in selection',
+                added ? 'success' : 'warn');
+        },
+        wfRemoveSource(i) { this.workflow.sources.splice(i, 1); },
+
+        // --- persistence ---
+        async workflowLoadList() {
+            try {
+                const r = await this.apiFetch('/api/workflow/defs');
+                if (r.ok) { const j = await r.json(); this.workflow.saved = j.workflows || []; }
+            } catch (_) { /* non-fatal */ }
+        },
+        async workflowSave() {
+            const name = (this.workflow.name || '').trim();
+            if (!name) { this.toast('Name the workflow first', 'warn'); return; }
+            const doc = { version: 1, name, steps: this.workflow.steps };
+            try {
+                const r = await this.apiFetch('/api/workflow/defs/' + encodeURIComponent(name),
+                    { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                this.toast('Saved workflow "' + name + '"', 'success');
+                await this.workflowLoadList();
+            } catch (e) { this.toast('Save failed: ' + (e.message || e), 'error'); }
+        },
+        async workflowLoad(name) {
+            if (!name) return;
+            try {
+                const r = await this.apiFetch('/api/workflow/defs/' + encodeURIComponent(name));
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const doc = await r.json();
+                this.workflow.name = doc.name || name;
+                this.workflow.steps = (doc.steps || []).map(s => ({
+                    $type: s.$type || s.type, enabled: s.enabled !== false,
+                    params: s.params || {},
+                }));
+                this.toast('Loaded "' + this.workflow.name + '"', 'success');
+            } catch (e) { this.toast('Load failed: ' + (e.message || e), 'error'); }
+        },
+        async workflowDelete(name) {
+            const n = name || this.workflow.name;
+            if (!n) return;
+            if (!await this._confirmAsync('Delete workflow "' + n + '"?',
+                { title: 'Delete workflow', okLabel: 'Delete', danger: true })) return;
+            try {
+                await this.apiFetch('/api/workflow/defs/' + encodeURIComponent(n), { method: 'DELETE' });
+                this.toast('Deleted "' + n + '"', 'ok');
+                await this.workflowLoadList();
+            } catch (e) { this.toast('Delete failed: ' + (e.message || e), 'error'); }
+        },
+
+        // --- runner ---
+        workflowStop() { this.workflow.abort = true; },
+        async workflowRun() {
+            const wf = this.workflow;
+            if (wf.running) return;
+            const steps = wf.steps.filter(s => s.enabled !== false);
+            if (!steps.length) { this.toast('Workflow has no enabled steps', 'warn'); return; }
+            if (!wf.sources.length) { this.toast('Add at least one source file', 'warn'); return; }
+            if (typeof OnnxRegistry === 'undefined' && steps.some(s => this._wfOp(s.$type)?.kind === 'onnx' || this._wfOp(s.$type)?.kind === 'starless')) {
+                this.toast('AI steps need the in-browser inference engine (Settings → AI).', 'warn');
+            }
+            wf.running = true; wf.abort = false; wf.log = []; wf.results = [];
+            try {
+                for (let fi = 0; fi < wf.sources.length; fi++) {
+                    if (wf.abort) break;
+                    const source = wf.sources[fi];
+                    wf.currentFile = source;
+                    this._wfLog('file', '▶ ' + this._wfBase(source) + '  (' + (fi + 1) + '/' + wf.sources.length + ')');
+                    let cur = source;
+                    const named = {};        // prior named outputs (e.g. stars from starless)
+                    const produced = [];     // intermediates for cleanup
+                    let ok = true;
+                    for (let si = 0; si < steps.length; si++) {
+                        if (wf.abort) { ok = false; this._wfLog('warn', '  aborted'); break; }
+                        const step = steps[si];
+                        wf.currentStep = si;
+                        const op = this._wfOp(step.$type);
+                        if (!op) { this._wfLog('error', '  unknown step: ' + step.$type); ok = false; break; }
+                        this._wfLog('step', '· ' + op.label + ' …');
+                        try {
+                            const res = await this._wfExec(op, step.params || {}, cur, named, source);
+                            if (op.type === 'starless') {
+                                named.starless = res.starless; named.stars = res.stars;
+                                if (res.stars) produced.push(res.stars);
+                                cur = res.starless;
+                            } else {
+                                cur = res;
+                            }
+                            if (!cur) throw new Error('no output produced');
+                            if (cur !== source) produced.push(cur);
+                            this._wfLog('ok', '  ✓ ' + this._wfBase(cur));
+                        } catch (e) {
+                            this._wfLog('error', '  ✗ ' + (e.message || e)); ok = false; break;
+                        }
+                    }
+                    wf.results.push({ source, output: cur, ok });
+                    // Default: clean temp intermediates, keep only the final output.
+                    if (!wf.keepIntermediates && produced.length) {
+                        const keep = new Set([cur]);
+                        const trash = produced.filter(p => p && !keep.has(p) && p !== source);
+                        if (trash.length) { try { await this._wfDelete(trash); } catch (_) { } }
+                    }
+                    this._wfLog(ok ? 'done' : 'error',
+                        (ok ? '■ done → ' : '■ failed → ') + this._wfBase(cur));
+                }
+            } finally {
+                wf.running = false; wf.currentStep = -1; wf.currentFile = null;
+                try { this.filesReload(); } catch (_) { }
+            }
+        },
+
+        // Dispatch one step. Returns the output path (string), except starless
+        // which returns { starless, stars }.
+        async _wfExec(op, params, inputPath, named, source) {
+            if (op.kind === 'onnx')      return this._wfRunOnnx(op, params, inputPath);
+            if (op.kind === 'starless')  return this._wfStarless(params, inputPath);
+            if (op.kind === 'crop')      return this._wfCrop(params, inputPath);
+            if (op.kind === 'rl')        return this._wfRl(params, inputPath);
+            if (op.kind === 'blend')     return this._wfBlend(params, inputPath, named);
+            if (op.kind === 'editor')    return this._wfEditorExport(params, inputPath);
+            throw new Error('unsupported step kind: ' + op.kind);
+        },
+
+        async _wfRunOnnx(op, params, inputPath) {
+            if (typeof OnnxRegistry === 'undefined') throw new Error('inference engine not loaded');
+            const src = await this._onnxFetchSourcePixels(inputPath);
+            if (!src) throw new Error('could not read ' + this._wfBase(inputPath));
+            const opts = Object.assign({}, op.defaults, params, {
+                channels: src.channels,
+                family: op.family,
+                useGpu: !!(this.graxpert && this.graxpert.modalUseGpu),
+                onProgress: (phase, frac) => {
+                    this.workflow.log.length && (this.workflow.log[this.workflow.log.length - 1] =
+                        { kind: 'step', text: '· ' + op.label + ' ' + phase
+                            + (frac != null ? ' ' + Math.round(frac * 100) + '%' : '') });
+                },
+            });
+            const result = await OnnxRegistry.runOneShot(op.family, src.pixels, src.width, src.height, opts);
+            const out = await this._onnxSaveResult(inputPath, op.suffix, result.pixels,
+                result.width, result.height, result.channels);
+            if (result.background) {
+                await this._onnxSaveResult(inputPath, op.suffix + '_bg', result.background,
+                    result.width, result.height, result.channels);
+            }
+            return out;
+        },
+
+        async _wfStarless(params, inputPath) {
+            if (typeof OnnxRegistry === 'undefined' || !OnnxRegistry.StarRemovalPipeline)
+                throw new Error('star-removal engine not loaded');
+            const src = await this._onnxFetchSourcePixels(inputPath);
+            if (!src) throw new Error('could not read ' + this._wfBase(inputPath));
+            const pipeline = new OnnxRegistry.StarRemovalPipeline();
+            const result = await pipeline.run(src.pixels, src.width, src.height, {
+                channels: src.channels,
+                useGpu: !!(this.graxpert && this.graxpert.modalUseGpu),
+                passes: params.passes || 1,
+                reduceHalos: params.reduceHalos !== false,
+            });
+            const starless = await this._onnxSaveResult(inputPath, '_starless',
+                result.starless, result.width, result.height, result.channels);
+            const stars = await this._onnxSaveResult(inputPath, '_stars',
+                result.stars, result.width, result.height, result.channels);
+            return { starless, stars };
+        },
+
+        async _wfCrop(params, inputPath) {
+            const body = {
+                paths: [inputPath],
+                fracX: params.fracX, fracY: params.fracY,
+                fracW: params.fracW, fracH: params.fracH,
+            };
+            const r = await this.apiFetch('/api/crop/run',
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            if (!r.ok) throw new Error('crop HTTP ' + r.status);
+            const j = await r.json();
+            const out = j.results && j.results[0] && j.results[0].outputPath;
+            if (!out) throw new Error((j.failures && j.failures[0] && j.failures[0].error) || 'crop failed');
+            return out;
+        },
+
+        async _wfRl(params, inputPath) {
+            const body = {
+                paths: [inputPath],
+                strength: params.strength, tvLambda: params.tvLambda,
+                field: params.field, grid: params.grid,
+                protectStars: params.protectStars,
+            };
+            const r = await this.apiFetch('/api/decon/rl',
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            if (!r.ok) throw new Error('decon HTTP ' + r.status);
+            const j = await r.json();
+            const out = j.results && j.results[0] && j.results[0].outputPath;
+            if (!out) throw new Error((j.failures && j.failures[0] && j.failures[0].error) || 'decon failed');
+            return out;
+        },
+
+        async _wfBlend(params, inputPath, named) {
+            const stars = named && named.stars;
+            if (!stars) throw new Error('Blend needs a Star Removal step earlier in the workflow');
+            const load = await this.apiFetch('/api/blend/load',
+                { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ basePath: inputPath, blendPath: stars }) });
+            if (!load.ok) throw new Error('blend load HTTP ' + load.status);
+            const sid = (await load.json()).sessionId;
+            try {
+                const r = await this.apiFetch('/api/blend/render',
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ sessionId: sid, mode: params.mode || 'screen',
+                          opacity: params.opacity != null ? params.opacity : 1.0 }) });
+                if (!r.ok) throw new Error('blend render HTTP ' + r.status);
+                const out = (await r.json()).path;
+                if (!out) throw new Error('blend produced no output');
+                return out;
+            } finally {
+                try { await this.apiFetch('/api/blend/release',
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ sessionId: sid }) }); } catch (_) { }
+            }
+        },
+
+        async _wfEditorExport(params, inputPath) {
+            const load = await this.apiFetch('/api/editor/load',
+                { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ path: inputPath }) });
+            if (!load.ok) throw new Error('editor load HTTP ' + load.status);
+            const sid = (await load.json()).sessionId;
+            try {
+                const body = {
+                    sessionId: sid,
+                    edits: params.edits || {},
+                    format: params.format || 'png',
+                    quality: params.quality != null ? params.quality : 92,
+                };
+                const r = await this.apiFetch('/api/editor/export',
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                if (!r.ok) throw new Error('editor export HTTP ' + r.status);
+                const out = (await r.json()).path;
+                if (!out) throw new Error('export produced no file');
+                return out;
+            } finally {
+                try { await this.apiFetch('/api/editor/release',
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ sessionId: sid }) }); } catch (_) { }
+            }
+        },
+
+        async _wfDelete(paths) {
+            const arr = Array.isArray(paths) ? paths : [paths];
+            if (!arr.length) return;
+            await this.apiFetch('/api/files/delete',
+                { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ paths: arr, confirmed: true }) });
         },
 
         // UX: close the GraXpert modal after a successful run + (when on

@@ -183,6 +183,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Simulator.Gear.SimGearServic
 builder.Services.AddSingleton<EquipmentManager>();
 builder.Services.AddSingleton<SequenceEngine>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Sequencer.SequenceTemplateStore>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Workflow.WorkflowStore>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Sequencer.AdvancedSequenceEngine>();
 builder.Services.AddSingleton<MosaicPlannerService>();
 // PLAN mode: compiles ImagingPlans to sequence documents + a hosted runner that
@@ -1093,6 +1094,7 @@ app.MapUpdateEndpoints();
 app.MapCropEndpoints();
 app.MapDeconEndpoints();
 app.MapAnalysisEndpoints();
+app.MapWorkflowEndpoints();
 
 // GX-1: kick off an initial walk of the configured Onnx:ModelsPath
 // so /api/onnx/manifest is populated before the first browser request.
