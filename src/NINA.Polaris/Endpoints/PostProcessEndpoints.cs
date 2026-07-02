@@ -172,6 +172,46 @@ public static class PostProcessEndpoints {
             return Results.Ok(new { results, failures });
         });
 
+        // CLAHE — local contrast (best after a stretch).
+        g.MapPost("/clahe", async (
+                TonalService svc,
+                FrameLibraryService library,
+                ClaheRequest req) => {
+            if (req.Paths == null || req.Paths.Length == 0)
+                return Results.BadRequest(new { error = "paths is required" });
+            var results = new List<object>();
+            var failures = new List<object>();
+            foreach (var path in req.Paths) {
+                try {
+                    var r = svc.Clahe(path, req.ClipLimit ?? 2.0, req.Tiles ?? 8);
+                    results.Add(new { sourcePath = path, outputPath = r.OutputPath,
+                        width = r.Width, height = r.Height, channels = r.Channels });
+                } catch (Exception ex) { failures.Add(new { sourcePath = path, error = ex.Message }); }
+            }
+            if (results.Count > 0) { try { await library.RescanAsync(); } catch { } }
+            return Results.Ok(new { results, failures });
+        });
+
+        // Highlight recovery — soft-knee compression of blown cores.
+        g.MapPost("/highlight-recovery", async (
+                TonalService svc,
+                FrameLibraryService library,
+                HighlightRecoveryRequest req) => {
+            if (req.Paths == null || req.Paths.Length == 0)
+                return Results.BadRequest(new { error = "paths is required" });
+            var results = new List<object>();
+            var failures = new List<object>();
+            foreach (var path in req.Paths) {
+                try {
+                    var r = svc.HighlightRecovery(path, req.Knee ?? 0.6, req.Strength ?? 0.5);
+                    results.Add(new { sourcePath = path, outputPath = r.OutputPath,
+                        width = r.Width, height = r.Height, channels = r.Channels });
+                } catch (Exception ex) { failures.Add(new { sourcePath = path, error = ex.Message }); }
+            }
+            if (results.Count > 0) { try { await library.RescanAsync(); } catch { } }
+            return Results.Ok(new { results, failures });
+        });
+
         // Morphological star reduction (shrink / dim stars).
         g.MapPost("/star-reduce", async (
                 StarReductionService svc,
@@ -239,4 +279,12 @@ public static class PostProcessEndpoints {
     // amount 0..1 = core compression strength; scales = à-trous levels.
     public record WaveScaleHdrRequest(
         string[] Paths, double? Amount = null, int? Scales = null);
+
+    // clipLimit ≥1 caps per-bin count (2-4 typical); tiles = grid per axis.
+    public record ClaheRequest(
+        string[] Paths, double? ClipLimit = null, int? Tiles = null);
+
+    // knee 0..1 = where compression starts; strength 0..1 = pull-down amount.
+    public record HighlightRecoveryRequest(
+        string[] Paths, double? Knee = null, double? Strength = null);
 }
