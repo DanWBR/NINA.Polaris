@@ -1993,6 +1993,7 @@ function ninaApp() {
             results: [],          // [{ source, output, ok }]
             addType: 'bge',
             selected: -1,         // selected step index (left list → right detail)
+            previews: {},         // stepIndex → object URL of that step's output (latest file)
         },
         setFilesSubTab(name) {
             if (name === 'edit') {
@@ -26450,6 +26451,7 @@ function ninaApp() {
                 this.toast('AI steps need the in-browser inference engine (Settings → AI).', 'warn');
             }
             wf.running = true; wf.abort = false; wf.log = []; wf.results = [];
+            this._wfRevokePreviews(); wf.previews = {};
             try {
                 for (let fi = 0; fi < wf.sources.length; fi++) {
                     if (wf.abort) break;
@@ -26487,6 +26489,7 @@ function ninaApp() {
                             if (!cur) throw new Error('no output produced');
                             if (cur !== source) produced.push(cur);
                             this._wfLog('ok', '  ✓ ' + this._wfBase(cur));
+                            this._wfSetPreview(si, cur);
                         } catch (e) {
                             this._wfLog('error', '  ✗ ' + (e.message || e)); ok = false; break;
                         }
@@ -26507,6 +26510,7 @@ function ninaApp() {
                                     exportStep ? exportStep.params : { format: 'png', quality: 92 });
                                 if (out) { produced.push(out); cur = out; }
                                 this._wfLog('ok', '  ✓ ' + this._wfBase(cur));
+                                this._wfSetPreview(wf.currentStep, cur);
                             } catch (e) {
                                 this._wfLog('error', '  ✗ ' + (e.message || e)); ok = false;
                             }
@@ -26700,6 +26704,32 @@ function ninaApp() {
             await this.apiFetch('/api/files/delete',
                 { method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ paths: arr, confirmed: true }) });
+        },
+
+        // Per-step preview: fetch a small autostretched JPEG of a step's output
+        // (via /api/files/preview, apiFetch for auth) and stash an object URL by
+        // the step's list index so the list row + detail panel can show it.
+        // Non-fatal: a failed preview never breaks the run.
+        async _wfPreview(path) {
+            try {
+                const r = await this.apiFetch('/api/files/preview?path='
+                    + encodeURIComponent(path) + '&maxDim=320');
+                if (!r.ok) return null;
+                const blob = await r.blob();
+                return URL.createObjectURL(blob);
+            } catch (_) { return null; }
+        },
+        async _wfSetPreview(stepIndex, path) {
+            const url = await this._wfPreview(path);
+            if (!url) return;
+            const prev = this.workflow.previews[stepIndex];
+            if (prev) { try { URL.revokeObjectURL(prev); } catch (_) { } }
+            // Reassign the object so Alpine reacts to the new key.
+            this.workflow.previews = Object.assign({}, this.workflow.previews, { [stepIndex]: url });
+        },
+        _wfRevokePreviews() {
+            const p = this.workflow.previews || {};
+            for (const k in p) { try { URL.revokeObjectURL(p[k]); } catch (_) { } }
         },
 
         // UX: close the GraXpert modal after a successful run + (when on

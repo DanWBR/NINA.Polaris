@@ -1037,6 +1037,15 @@
 .awf-field-wide .awf-range { flex: 1; }
 .awf-field-wide .awf-range input[type="range"] { width: 100%; }
 .awf-dim { opacity: 0.45; }
+.awf-thumb {
+    width: 34px; height: 34px; object-fit: cover; border-radius: 3px;
+    border: 1px solid var(--border); background: #000; flex: 0 0 auto;
+}
+.awf-detail-preview { margin: 6px 0 10px; }
+.awf-detail-preview img {
+    max-width: 100%; max-height: 260px; border-radius: 6px;
+    border: 1px solid var(--border); background: #000; display: block;
+}
 @media (max-width: 720px) {
     .awf-cols { flex-direction: column; }
     .awf-list { flex-basis: auto; max-width: none; max-height: 220px; }

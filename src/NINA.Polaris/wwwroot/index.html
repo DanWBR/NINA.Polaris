@@ -44,7 +44,7 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260626-uppercase">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260627-autorunreorg">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260701-awf2">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260701-awf3">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260701-comparezoombtn">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260628-smbchip">
@@ -10574,6 +10574,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                              @click="wfSelect(i)">
                                             <input type="checkbox" x-model="step.enabled" @click.stop :disabled="workflow.running">
                                             <span class="awf-step-idx" x-text="(i + 1) + '.'"></span>
+                                            <img class="awf-thumb" x-show="workflow.previews[i]"
+                                                 :src="workflow.previews[i]" alt="" loading="lazy">
                                             <span class="awf-list-label" x-text="_wfOp(step.$type)?.label || step.$type"></span>
                                             <span class="awf-badge" x-show="_wfOp(step.$type)?.auto && step.params && step.params.auto">auto</span>
                                             <span style="flex:1"></span>
@@ -10591,6 +10593,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <template x-if="workflow.selected >= 0 && workflow.steps[workflow.selected]">
                                         <div>
                                             <h4 class="awf-detail-title" x-text="_wfOp(workflow.steps[workflow.selected].$type)?.label"></h4>
+
+                                            <!-- per-step output preview (after a run) -->
+                                            <div class="awf-detail-preview" x-show="workflow.previews[workflow.selected]" x-cloak>
+                                                <img :src="workflow.previews[workflow.selected]" alt="step output preview">
+                                            </div>
 
                                             <!-- editor-adjustment item: single slider + Auto -->
                                             <template x-if="_wfOp(workflow.steps[workflow.selected].$type)?.kind === 'edit'">
@@ -16727,7 +16734,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260701-awf2"></script>
+    <script src="/js/app.js?v=20260701-awf3"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
