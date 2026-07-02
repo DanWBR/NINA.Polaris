@@ -26605,6 +26605,26 @@ function ninaApp() {
             this.graxpertCompare._pinchDist = 0;
         },
 
+        // Button zoom (+/-), anchored at the wrap CENTER. Trackpads (MacBook)
+        // make wheel/pinch zoom fiddly, so the toolbar exposes explicit steps.
+        // Same clamp + pan-recentre math as the wheel handler, using the
+        // viewport centre as the anchor instead of the cursor.
+        graxpertCompareZoomBy(factor) {
+            const gc = this.graxpertCompare;
+            const wrap = document.querySelector('.graxpert-compare-wrap');
+            if (!wrap) return;
+            const rect = wrap.getBoundingClientRect();
+            const cx = rect.width / 2, cy = rect.height / 2;
+            const z0 = gc.zoom;
+            const z1 = Math.max(1, Math.min(16, z0 * factor));
+            if (z1 === z0) return;
+            gc.panX = cx - z1 * (cx - gc.panX) / z0;
+            gc.panY = cy - z1 * (cy - gc.panY) / z0;
+            gc.zoom = z1;
+            if (z1 <= 1.001) { gc.zoom = 1; gc.panX = 0; gc.panY = 0; }
+            this._graxpertCompareClampPan();
+        },
+
         // Shared transform for both BEFORE/AFTER <img> layers so they stay
         // pixel-aligned under zoom/pan.
         graxpertCompareImgStyle() {
