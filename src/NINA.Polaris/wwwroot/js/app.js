@@ -26328,6 +26328,17 @@ function ninaApp() {
                   fields: [ { k: 'strength', label: 'Strength', type: 'range', min: 0, max: 1, step: 0.05, def: 0.5 },
                             { k: 'protectStars', label: 'Protect stars', type: 'bool', def: true } ],
                   defaults: { strength: 0.5, tvLambda: 0.002, field: false, grid: 3, protectStars: true } },
+                // Wavelet sharpen/denoise + multiscale HDR (SASpro/PixInsight-
+                // inspired, à-trous; pure-math). FITS->FITS server ops.
+                { type: 'waveletsharpen', label: 'Wavelet Sharpen', kind: 'post', endpoint: '/api/post/wavelet-sharpen', suffix: '_wsharp',
+                  fields: [ { k: 'detail', label: 'Detail', type: 'range', min: 0, max: 1, step: 0.05, def: 0.5 },
+                            { k: 'denoise', label: 'Denoise', type: 'range', min: 0, max: 1, step: 0.05, def: 0.0 },
+                            { k: 'scales', label: 'Scales', type: 'number', min: 1, max: 8, step: 1, def: 5 } ],
+                  defaults: { detail: 0.5, denoise: 0.0, scales: 5 } },
+                { type: 'wavescalehdr', label: 'Multiscale HDR (recover cores)', kind: 'post', endpoint: '/api/post/wavescale-hdr', suffix: '_wshdr',
+                  fields: [ { k: 'amount', label: 'Amount', type: 'range', min: 0, max: 1, step: 0.05, def: 0.5 },
+                            { k: 'scales', label: 'Scales', type: 'number', min: 2, max: 8, step: 1, def: 6 } ],
+                  defaults: { amount: 0.5, scales: 6 } },
                 { type: 'blend',    label: 'Blend Stars Back', kind: 'blend',
                   fields: [ { k: 'mode', label: 'Mode', type: 'select', options: ['screen', 'add', 'lighten'], def: 'screen' },
                             { k: 'opacity', label: 'Opacity', type: 'range', min: 0, max: 1, step: 0.05, def: 1.0 } ],

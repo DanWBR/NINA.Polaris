@@ -132,6 +132,46 @@ public static class PostProcessEndpoints {
             return Results.Ok(new { results, failures });
         });
 
+        // Wavelet sharpen / denoise (à-trous multiscale, luminance).
+        g.MapPost("/wavelet-sharpen", async (
+                WaveletService svc,
+                FrameLibraryService library,
+                WaveletSharpenRequest req) => {
+            if (req.Paths == null || req.Paths.Length == 0)
+                return Results.BadRequest(new { error = "paths is required" });
+            var results = new List<object>();
+            var failures = new List<object>();
+            foreach (var path in req.Paths) {
+                try {
+                    var r = svc.Sharpen(path, req.Detail ?? 0.5, req.Denoise ?? 0.0, req.Scales ?? 5);
+                    results.Add(new { sourcePath = path, outputPath = r.OutputPath,
+                        width = r.Width, height = r.Height, channels = r.Channels });
+                } catch (Exception ex) { failures.Add(new { sourcePath = path, error = ex.Message }); }
+            }
+            if (results.Count > 0) { try { await library.RescanAsync(); } catch { } }
+            return Results.Ok(new { results, failures });
+        });
+
+        // Multiscale HDR: recover blown cores (à-trous, luminance).
+        g.MapPost("/wavescale-hdr", async (
+                WaveletService svc,
+                FrameLibraryService library,
+                WaveScaleHdrRequest req) => {
+            if (req.Paths == null || req.Paths.Length == 0)
+                return Results.BadRequest(new { error = "paths is required" });
+            var results = new List<object>();
+            var failures = new List<object>();
+            foreach (var path in req.Paths) {
+                try {
+                    var r = svc.Hdr(path, req.Amount ?? 0.5, req.Scales ?? 6);
+                    results.Add(new { sourcePath = path, outputPath = r.OutputPath,
+                        width = r.Width, height = r.Height, channels = r.Channels });
+                } catch (Exception ex) { failures.Add(new { sourcePath = path, error = ex.Message }); }
+            }
+            if (results.Count > 0) { try { await library.RescanAsync(); } catch { } }
+            return Results.Ok(new { results, failures });
+        });
+
         // Morphological star reduction (shrink / dim stars).
         g.MapPost("/star-reduce", async (
                 StarReductionService svc,
@@ -190,4 +230,13 @@ public static class PostProcessEndpoints {
     // bright star cores.
     public record StarReduceRequest(
         string[] Paths, double? Amount = null, int? Size = null, bool? ProtectCore = null);
+
+    // detail 0..1 = fine-detail boost; denoise 0..1 = threshold finest scales;
+    // scales = à-trous levels.
+    public record WaveletSharpenRequest(
+        string[] Paths, double? Detail = null, double? Denoise = null, int? Scales = null);
+
+    // amount 0..1 = core compression strength; scales = à-trous levels.
+    public record WaveScaleHdrRequest(
+        string[] Paths, double? Amount = null, int? Scales = null);
 }
