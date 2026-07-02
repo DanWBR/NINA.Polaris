@@ -152,6 +152,76 @@ Sortable.js):
 
 Apply → re-render preview. **Save processed** exports the final result.
 
+## Auto Workflow
+
+The third STUDIO sub-tab (**Files / Stacking / Auto Workflow**) is a
+**saveable, linear post-processing pipeline** applied to a source image and
+re-runnable as a **batch** over many files. Build it like the advanced
+sequencer: pick steps from the palette on the left, they append to the
+sequence in the middle, and selecting a step edits its parameters on the
+right. Each step's output feeds the next; a per-step preview shows the
+intermediate result. Intermediates are deleted by default (toggle "keep
+intermediates").
+
+**Getting started fast:**
+
+- A built-in **"Standard"** workflow is seeded on first run (auto-crop → BGE →
+  decon → denoise → auto-stretch → the Lightroom-style light/colour/detail
+  adjustments → JPG 90). Load it from the **Load** list and tweak. Delete it
+  and it stays deleted.
+- **Recommended preset** button builds a safe default (auto-crop → BGE →
+  denoise → detail → auto-stretch → contrast → saturation → export).
+- **Auto all** enables the "auto" option on every capable step.
+
+**Tools (single-image, server-side FITS→FITS):**
+
+- **Auto Crop (stacking borders)** — detects the largest fully-covered inner
+  rectangle and removes the black/ragged registration borders that stacking
+  leaves on slightly-misaligned subs. No ROI to draw.
+- **Crop** — manual rectangular crop (fractions).
+- **SCNR** — remove the residual green cast (average/maximum-neutral,
+  masked variants). Ported from Siril.
+- **Stretch (GHS / asinh)** — Generalized Hyperbolic / arc-sinh non-linear
+  stretch; "auto" picks the amount from the image median. Ported from Siril.
+- **Cosmetic (hot/cold pixels)** — sigma-based hot/cold pixel removal (CFA
+  option for undebayered OSC). Ported from Siril.
+- **Star Reduction** — morphological shrink/dim of stars (detected-star mask +
+  grayscale erosion), with core protection.
+- **Wavelet Sharpen** — multiscale (à-trous) detail boost + optional
+  denoise, on luminance so colour is preserved. Subsumes frequency
+  separation. SASpro/PixInsight-inspired.
+- **Multiscale HDR (recover cores)** — compress the large-scale luminance so
+  blown galaxy/nebula/star cores come down toward the background while fine
+  detail is kept.
+- **CLAHE (local contrast)** — contrast-limited adaptive histogram
+  equalization. Best placed **after** the stretch.
+- **Highlight Recovery** — soft-knee compression of blown highlights above a
+  knee point.
+
+**AI Tools (browser ONNX, need the models installed — see
+[ONNX inference](onnx-inference.md)):** Background Extraction, Denoise,
+Detail/Sharpen, Halo Removal, Upscale, Star Removal.
+
+**Decon / stars:** Richardson-Lucy deconvolution; Blend Stars Back (needs a
+prior Star Removal step).
+
+**Editor adjustments:** every Lightroom-style slider (exposure, contrast,
+black/white points, temperature, tint, vibrance, saturation, texture,
+clarity, dehaze, noise reduction, sharpen, vignette) is a step; all enabled
+edit-items are collected into one editor pass at the final **Export bitmap**
+step (PNG/JPG/TIF).
+
+**Save / Load / batch:** name and **Save** the workflow, add multiple source
+files from the Files-tab selection ("+ Add selected"), and **Run** to apply
+the same pipeline to every source. From the editor you can also press
+**→ Workflow** to send your current edits straight into a new workflow to
+name, save, and batch-apply.
+
+Licensing note: the classical filters (SCNR, GHS/asinh, cosmetic, star
+reduction) and the multiscale/tonal ops (wavelets, HDR, CLAHE, highlight
+recovery) are re-implemented from scratch from published algorithms (Siril /
+Starck à-trous / HDRMT / Zuiderveld CLAHE); no third-party code is bundled.
+
 ## External tools
 
 When detected on the host, STUDIO can hand off to:

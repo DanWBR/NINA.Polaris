@@ -34,7 +34,16 @@ The **✨ Auto** button at the top of the right-rail sliders computes a
 reasonable starting point for the Light and Color sections from the
 source frame's histogram. The sliders move to the computed values, the
 preview re-renders, and you can keep tweaking from there. **↺ Reset**
-sits next to Auto and zeros every slider in one click.
+sits next to Auto and zeros every slider in one click. **→ Workflow**
+(next to them) turns your current edits into a saveable
+[Auto Workflow](studio.md#auto-workflow) so you can name them and
+batch-apply the same look to other frames.
+
+**Stretch mode:** the histogram panel has a **Mode** selector — `MTF`
+(the classic black/mid/white handles) or `GHS` / `asinh` (a
+generalized-hyperbolic / arc-sinh curve driven by the D + B sliders).
+GHS/asinh apply as a linked, colour-preserving curve over the neutral
+base; the same stretch is available as an Auto Workflow step.
 
 What Auto touches:
 
