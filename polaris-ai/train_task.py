@@ -127,14 +127,15 @@ def main():
                          "Ignored unless --qat is set.")
     ap.add_argument("--scale", type=int, default=2, choices=[2, 3, 4],
                     help="(upscale) super-resolution factor")
-    ap.add_argument("--log-norm", action="store_true",
+    ap.add_argument("--log-norm", action=argparse.BooleanOptionalAction, default=True,
                     help="(decon/detail) GraXpert-style log-mean-std per-tile "
                          "normalization instead of the 1st/99.9th percentile map. "
                          "Log-compresses the dynamic range so saturated star cores "
-                         "no longer drive the dark-ring overshoot. The matching "
-                         "inference path in onnx-pipelines.js activates for model "
-                         "versions containing 'log', so name the export accordingly "
-                         "(e.g. polaris-1.2-log).")
+                         "no longer drive the dark-ring overshoot. This is now the "
+                         "DEFAULT and matches the default inference path in "
+                         "onnx-pipelines.js, so a plainly-named export (e.g. 1.2) "
+                         "runs log. Pass --no-log-norm to train the legacy "
+                         "percentile model (name that export with a '-pct' tag).")
     args = ap.parse_args()
 
     out = args.out or f"checkpoints/{args.task}"

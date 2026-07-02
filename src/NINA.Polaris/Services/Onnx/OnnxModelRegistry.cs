@@ -108,14 +108,15 @@ public class OnnxModelRegistry {
     // distinct versions (e.g. "2.0.0-fp16" alongside "2.0.0").
     // Optional lowercase source prefix (e.g. "polaris-", "graxpert-")
     // lets operators identify model origin from the folder name alone.
-    // The optional "-log" tag marks a Detail model trained with the
-    // GraXpert-style log-domain normalization (train_task.py --log-norm);
-    // onnx-pipelines.js keys its log-domain inference on the version string
-    // containing "log", so the tag must survive into the registered version
-    // (e.g. "1.2-log" or "1.2-log-fp16"). Without it the folder would be
-    // rejected and the model silently ignored.
+    // Detail normalization tag. Log-domain (GraXpert-style, train_task.py
+    // --log-norm) is now the DEFAULT inference path in onnx-pipelines.js, so
+    // a plain version (e.g. "1.2") runs log. The optional "-pct" tag opts a
+    // version back into the legacy 1st/99.9th percentile path (the earlier
+    // percentile-trained model, e.g. "1.1-pct"); "-log" is still accepted as
+    // an explicit no-op marker. Without allowing these tags the folder would
+    // be rejected and the model silently ignored.
     private static readonly Regex VersionRegex =
-        new(@"^([a-z]+-)?(\d+\.\d+(\.\d+)?)(-log)?(-(fp16|int16|int8))?$", RegexOptions.Compiled);
+        new(@"^([a-z]+-)?(\d+\.\d+(\.\d+)?)(-(log|pct))?(-(fp16|int16|int8))?$", RegexOptions.Compiled);
 
     public OnnxModelRegistry(ProfileService profile, IWebHostEnvironment env,
                               ILogger<OnnxModelRegistry> logger) {
