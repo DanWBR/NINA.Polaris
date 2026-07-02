@@ -1884,6 +1884,9 @@
     font-variant-numeric: tabular-nums;
 }
 .editor-slider-row input[type="range"] { width: 100%; }
+/* A select occupying the slider column (e.g. the Stretch mode picker):
+   fill the column like the range inputs do, no max-width cap. */
+.editor-slider-select { width: 100%; max-width: none; }
 
 /* ED-6 compute-mode pill, colour-codes which side is doing the math
    so the user knows at a glance whether slider drags will hit the

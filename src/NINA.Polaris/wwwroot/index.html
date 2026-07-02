@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260627-autorunreorg">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260701-awf6">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260701-comparezoombtn">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260702-stretchsection">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260628-smbchip">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260628-vidprocess">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260624-untestedwarn">
@@ -10950,36 +10950,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <button class="btn btn-sm" @click="editorHistoAuto()" title="Auto-stretch">Auto</button>
                                     <button class="btn btn-sm" :class="editorHistoZoom ? 'btn-active' : ''"
                                             @click="editorHistoToggleZoom()" title="Zoom the histogram to the data">Zoom</button>
-                                    <!-- Stretch mode: MTF handles (default) vs GHS / asinh
-                                         non-linear curve (Siril port). GHS/asinh ignore the
-                                         handles and use the D + B sliders below. -->
-                                    <select class="input input-sm" style="width:auto"
-                                            x-model="editorGhs.mode"
-                                            @change="editorSetStretchMode(editorGhs.mode)"
-                                            title="Stretch curve">
-                                        <option value="mtf">MTF</option>
-                                        <option value="ghs">GHS</option>
-                                        <option value="asinh">asinh</option>
-                                    </select>
-                                </div>
-                                <!-- GHS / asinh amount + intensity, shown only for those
-                                     modes. Live re-stretch on input. -->
-                                <div class="histo-actions" x-show="editorGhs.mode !== 'mtf'" style="gap:.5rem">
-                                    <label style="display:flex;align-items:center;gap:.25rem;font-size:.72rem">
-                                        D
-                                        <input type="range" min="0" max="20" step="0.1"
-                                               x-model.number="editorGhs.d" @input="_editorApplyGhs()"
-                                               style="width:6rem" title="Stretch amount">
-                                        <span x-text="Number(editorGhs.d).toFixed(1)"></span>
-                                    </label>
-                                    <label style="display:flex;align-items:center;gap:.25rem;font-size:.72rem"
-                                           x-show="editorGhs.mode === 'ghs'">
-                                        B
-                                        <input type="range" min="-5" max="15" step="0.1"
-                                               x-model.number="editorGhs.b" @input="_editorApplyGhs()"
-                                               style="width:6rem" title="Local intensity / character">
-                                        <span x-text="Number(editorGhs.b).toFixed(1)"></span>
-                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -11070,6 +11040,37 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
 
                         <!-- LUZ / LIGHT -->
+                        <!-- STRETCH — non-linear stretch mode (Siril GHS/asinh port).
+                             MTF = the histogram black/mid/white handles; GHS/asinh
+                             drive the hyperbolic curve with D (amount) + B (intensity),
+                             linked across channels so colour balance is preserved. -->
+                        <details class="editor-section" open>
+                            <summary>Stretch</summary>
+                            <label class="editor-slider-row">
+                                <span class="editor-slider-label">Mode</span>
+                                <select class="input-sm editor-slider-select"
+                                        x-model="editorGhs.mode"
+                                        @change="editorSetStretchMode(editorGhs.mode)">
+                                    <option value="mtf">MTF (handles)</option>
+                                    <option value="ghs">GHS</option>
+                                    <option value="asinh">asinh</option>
+                                </select>
+                                <span></span>
+                            </label>
+                            <label class="editor-slider-row" x-show="editorGhs.mode !== 'mtf'">
+                                <span class="editor-slider-label">Stretch (D)</span>
+                                <input type="range" min="0" max="20" step="0.1"
+                                       x-model.number="editorGhs.d" @input="_editorApplyGhs()">
+                                <span class="editor-slider-value" x-text="Number(editorGhs.d).toFixed(1)"></span>
+                            </label>
+                            <label class="editor-slider-row" x-show="editorGhs.mode === 'ghs'">
+                                <span class="editor-slider-label">Intensity (B)</span>
+                                <input type="range" min="-5" max="15" step="0.1"
+                                       x-model.number="editorGhs.b" @input="_editorApplyGhs()">
+                                <span class="editor-slider-value" x-text="Number(editorGhs.b).toFixed(1)"></span>
+                            </label>
+                        </details>
+
                         <details class="editor-section" open>
                             <summary>Light</summary>
                             <template x-for="s in editorLightSliders" :key="s.key">
@@ -16789,7 +16790,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260702-starred"></script>
+    <script src="/js/app.js?v=20260702-stretchsection"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
