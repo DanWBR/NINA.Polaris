@@ -42,7 +42,13 @@ def cmd_calib(args):
 
     if args.task == "decon":
         from dataset import DeconDataset
-        ds = DeconDataset(args.tiles, tile=args.size, augment=False)
+        # The calibration inputs MUST match the domain the model actually sees
+        # at inference. Detail is trained log-domain by default, so the calib
+        # tiles must be log-normalized too -- otherwise int8/int16 activation
+        # ranges are calibrated on the wrong (percentile) distribution and the
+        # quantized model degrades. Mirror train_task.py's --log-norm default.
+        ds = DeconDataset(args.tiles, tile=args.size, augment=False,
+                          log_norm=args.log_norm)
         get = lambda i: ds[int(i)][0].numpy().astype(np.float32)   # [2,H,W]
         n = len(ds)
     else:
@@ -141,6 +147,10 @@ def main():
     c.add_argument("--out", default="models/calib")
     c.add_argument("--count", type=int, default=300)
     c.add_argument("--size", type=int, default=256)
+    c.add_argument("--log-norm", action=argparse.BooleanOptionalAction, default=True,
+                   help="(decon) log-domain calibration tiles to match the default "
+                        "log-trained Detail model. Use --no-log-norm only for a "
+                        "legacy percentile (-pct) model.")
     c.set_defaults(func=cmd_calib)
 
     def _add_quant(name, fn, default_out):
