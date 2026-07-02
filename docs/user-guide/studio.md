@@ -189,9 +189,34 @@ intermediates").
   decon → denoise → auto-stretch → the Lightroom-style light/colour/detail
   adjustments → JPG 90). Load it from the **Load** list and tweak. Delete it
   and it stays deleted.
+- Three **combine presets** are also seeded: **Mono LRGB**, **Mono SHO**, and
+  **OSC dual-band SHO**. Each opens with a Combine source-stage (see below) and
+  then runs the same colour post pipeline. Load one, assign a file to each role,
+  and Run.
 - **Recommended preset** button builds a safe default (auto-crop → BGE →
   denoise → detail → auto-stretch → contrast → saturation → export).
 - **Auto all** enables the "auto" option on every capable step.
+
+**Combine source-stage (mono LRGB / mono SHO / OSC dual-band SHO):**
+
+At the top of the builder, the **Combine source** dropdown lets a workflow
+*produce* its source by composing several per-filter masters instead of taking
+a file from the Sources list:
+
+- **Mono LRGB** — assign R / G / B / L masters; composed via Lab luminance.
+- **Mono SHO** — assign Ha / OIII / SII masters; composed as the SHO palette.
+- **OSC dual-band SHO** — assign the two debayered RGB masters (Ha+OIII and
+  SII+OIII filters). Ha/SII are extracted from red, OIII from green+blue (both
+  masters' OIII are averaged for SNR), the two are star-registered, and packed
+  as SHO.
+
+Assign each role with **Set** (uses the FITS currently selected in the Files
+tab). When a combine mode is active the plain Sources list is hidden: the
+composed image becomes the single source the linear pipeline runs on. Combine
+runs once at the start (not per file), reusing the same cross-channel star
+registration as the manual [Channel combine](#channel-combine-rgb--lrgb--narrowband--continuum).
+The combine choice + role map is saved inside the workflow, so a saved LRGB/SHO
+workflow reloads ready to go (roles cleared for you to reassign).
 
 **Tools (single-image, server-side FITS→FITS):**
 

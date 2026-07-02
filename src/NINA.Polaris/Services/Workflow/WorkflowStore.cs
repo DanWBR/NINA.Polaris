@@ -77,17 +77,65 @@ public class WorkflowStore {
     public void SeedDefaults() {
         try {
             var marker = Path.Combine(_dir, ".seeded-standard-v1");
-            if (File.Exists(marker)) return;
-            var path = ResolvePath("Standard");
-            if (!File.Exists(path)) {
-                Save("Standard", StandardWorkflowJson);
-                _logger.LogInformation("Seeded default Auto Workflow 'Standard'");
+            if (!File.Exists(marker)) {
+                var path = ResolvePath("Standard");
+                if (!File.Exists(path)) {
+                    Save("Standard", StandardWorkflowJson);
+                    _logger.LogInformation("Seeded default Auto Workflow 'Standard'");
+                }
+                File.WriteAllText(marker, DateTime.UtcNow.ToString("o"));
             }
-            File.WriteAllText(marker, DateTime.UtcNow.ToString("o"));
+            // WFC-4: mono LRGB / mono SHO / OSC dual-band SHO starter
+            // workflows. Each opens with a Combine source-stage (roles left
+            // empty for the user to assign) then runs the standard colour
+            // post pipeline. Guarded by their own marker so installs that
+            // already passed the Standard marker still get them once.
+            var combineMarker = Path.Combine(_dir, ".seeded-combine-v1");
+            if (!File.Exists(combineMarker)) {
+                SeedCombinePreset("Mono LRGB", "lrgb");
+                SeedCombinePreset("Mono SHO", "sho");
+                SeedCombinePreset("OSC dual-band SHO", "osc-sho");
+                File.WriteAllText(combineMarker, DateTime.UtcNow.ToString("o"));
+            }
         } catch (Exception ex) {
             _logger.LogWarning(ex, "Could not seed default workflow");
         }
     }
+
+    private void SeedCombinePreset(string name, string mode) {
+        if (File.Exists(ResolvePath(name))) return;
+        Save(name, CombinePresetJson(name, mode));
+        _logger.LogInformation("Seeded combine Auto Workflow '{Name}'", name);
+    }
+
+    // A combine-source preset: the Combine stage composes the role-assigned
+    // masters (register + combine on the server) into one image, then the
+    // same colour post pipeline as "Standard" runs on it. roles are left
+    // empty so the user assigns files after loading the preset.
+    private static string CombinePresetJson(string name, string mode) => $$"""
+    {
+      "version": 1,
+      "name": "{{name}}",
+      "combine": { "mode": "{{mode}}", "roles": {} },
+      "steps": [
+        { "$type": "autocrop",    "enabled": true, "params": { "threshold": 0, "margin": 0 } },
+        { "$type": "bge",         "enabled": true, "params": { "correction": "Subtraction", "smoothing": 1.0 } },
+        { "$type": "detail",      "enabled": true, "params": { "strength": 0.5, "psfPixels": 4.0, "auto": true } },
+        { "$type": "denoise",     "enabled": true, "params": { "strength": 0.5 } },
+        { "$type": "autostretch", "enabled": true, "params": {} },
+        { "$type": "exposure",    "enabled": true, "params": { "value": 0, "auto": true } },
+        { "$type": "contrast",    "enabled": true, "params": { "value": 0, "auto": true } },
+        { "$type": "blacks",      "enabled": true, "params": { "value": 0, "auto": true } },
+        { "$type": "whites",      "enabled": true, "params": { "value": 0, "auto": true } },
+        { "$type": "vibrance",    "enabled": true, "params": { "value": 0, "auto": true } },
+        { "$type": "saturation",  "enabled": true, "params": { "value": 0, "auto": true } },
+        { "$type": "texture",     "enabled": true, "params": { "value": 0.15 } },
+        { "$type": "noisereduce", "enabled": true, "params": { "value": 0.12 } },
+        { "$type": "sharpen",     "enabled": true, "params": { "value": 0.15 } },
+        { "$type": "export",      "enabled": true, "params": { "format": "jpg", "quality": 90 } }
+      ]
+    }
+    """;
 
     // The "Standard" starter pipeline: mirrors a typical PixInsight+Lightroom
     // flow end to end (auto-crop the stacking borders → BGE → decon → denoise
