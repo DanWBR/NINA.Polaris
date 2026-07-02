@@ -65,6 +65,41 @@ public static class PostProcessEndpoints {
             }
             return Results.Ok(new { results, failures });
         });
+
+        // GHS / asinh stretch (linear -> stretched, linked across channels).
+        g.MapPost("/stretch", async (
+                StretchService svc,
+                FrameLibraryService library,
+                StretchRequest req) => {
+            if (req.Paths == null || req.Paths.Length == 0)
+                return Results.BadRequest(new { error = "paths is required" });
+
+            var results = new List<object>();
+            var failures = new List<object>();
+            foreach (var path in req.Paths) {
+                try {
+                    var r = svc.RunFits(path, req.Mode ?? "ghs",
+                        req.D ?? 1.0, req.B ?? 0.0,
+                        req.Lp ?? 0.0, req.Sp ?? 0.0, req.Hp ?? 1.0, req.Bp ?? 0.0,
+                        req.Auto ?? false, req.TargetBackground ?? 0.25);
+                    results.Add(new {
+                        sourcePath = path,
+                        outputPath = r.OutputPath,
+                        width = r.Width,
+                        height = r.Height,
+                        channels = r.Channels,
+                        appliedD = r.AppliedD
+                    });
+                } catch (Exception ex) {
+                    failures.Add(new { sourcePath = path, error = ex.Message });
+                }
+            }
+
+            if (results.Count > 0) {
+                try { await library.RescanAsync(); } catch { /* best-effort */ }
+            }
+            return Results.Ok(new { results, failures });
+        });
     }
 
     // mode: average-neutral | maximum-neutral | maximum-mask | additive-mask
@@ -73,4 +108,13 @@ public static class PostProcessEndpoints {
     public record ScnrRequest(
         string[] Paths, string? Mode = null,
         double? Amount = null, bool? PreserveLightness = null);
+
+    // mode: ghs | asinh. D = stretch amount, B = intensity/character (ghs),
+    // SP/LP/HP = symmetry / shadow-protect / highlight-protect points,
+    // BP = black point. Auto estimates D from the median toward TargetBackground.
+    public record StretchRequest(
+        string[] Paths, string? Mode = null,
+        double? D = null, double? B = null,
+        double? Lp = null, double? Sp = null, double? Hp = null, double? Bp = null,
+        bool? Auto = null, double? TargetBackground = null);
 }

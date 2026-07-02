@@ -162,15 +162,20 @@ public static class EditorEndpoints {
         // entirely client-side. Dimensions are sent in response headers
         // so the client doesn't have to round-trip a metadata call.
         g.MapGet("/raw/{sessionId}", (ImageEditService svc, HttpContext ctx, string sessionId,
-                                      bool? stretchAuto, double? black, double? mid, double? white) => {
+                                      bool? stretchAuto, double? black, double? mid, double? white,
+                                      string? mode, double? d, double? b,
+                                      double? sp, double? lp, double? hp) => {
             // The Stretch stage runs server-side from the cached linear data;
             // WASM then takes this 8-bit buffer and runs the rest locally.
             // The client re-fetches with new black/white (auto=false) when the
-            // operator drags the histogram handles.
+            // operator drags the histogram handles, or with mode=ghs/asinh + the
+            // hyperbolic params when the GHS/asinh stretch mode is selected.
             EditParams? edits = null;
             if (stretchAuto == false) {
                 edits = new EditParams(Stretch: new StretchParams(
-                    Auto: false, Black: black ?? 0, Mid: mid ?? 0.5, White: white ?? 1));
+                    Auto: false, Black: black ?? 0, Mid: mid ?? 0.5, White: white ?? 1,
+                    Mode: mode ?? "mtf", D: d ?? 0, B: b ?? 0,
+                    SP: sp ?? 0, LP: lp ?? 0, HP: hp ?? 1));
             }
             var buf = svc.GetWorkingBuffer(sessionId, edits);
             if (buf == null) return Results.NotFound(new { error = "Session not found." });

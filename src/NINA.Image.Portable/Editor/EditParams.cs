@@ -69,7 +69,17 @@ public sealed record StretchParams(
     bool Auto = true,
     double Black = 0.0,
     double Mid = 0.5,
-    double White = 1.0
+    double White = 1.0,
+    // Manual-stretch mode over the neutral base: "mtf" (default, black/mid/white
+    // MTF) or "ghs"/"asinh" (generalized-hyperbolic / arc-sinh curve, Siril port).
+    // For ghs/asinh the black/mid/white handles are ignored and the D/B/SP/LP/HP
+    // params drive the curve (D = 0 is identity).
+    string Mode = "mtf",
+    double D = 0.0,
+    double B = 0.0,
+    double SP = 0.0,
+    double LP = 0.0,
+    double HP = 1.0
 ) {
     public bool IsDefault => Auto;
 }

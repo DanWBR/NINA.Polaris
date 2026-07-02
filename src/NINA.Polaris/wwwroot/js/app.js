@@ -2920,6 +2920,11 @@ function ninaApp() {
         // black/white handles drive the editor's Blacks/Whites light params and
         // the bins come from the post-edit /api/editor/histogram result).
         editorHistoZoom: true,   // open framed to the data, not full 0..65535
+        // GHS / asinh stretch mode (Siril port). mode 'mtf' = classic
+        // black/mid/white handles; 'ghs'/'asinh' drive the hyperbolic curve
+        // with D (amount) + B (intensity). Applied as the linked Stage-B curve
+        // over the neutral base, so colour balance is preserved.
+        editorGhs: { mode: 'mtf', d: 1.0, b: 0.0 },
         // Width (px) of the editor's right-hand sliders panel. Drag the
         // resizer to change it; persisted so it survives reloads.
         editorPanelW: (function () {
@@ -12268,8 +12273,16 @@ function ninaApp() {
         _editorStretchQuery() {
             const st = this.editorState.edits.stretch;
             if (!st || st.auto !== false) return '';
-            return '?stretchAuto=false&black=' + (st.black ?? 0)
+            let q = '?stretchAuto=false&black=' + (st.black ?? 0)
                  + '&mid=' + (st.mid ?? 0.5) + '&white=' + (st.white ?? 1);
+            // GHS / asinh stretch mode carries its own params (the black/mid/
+            // white handles are ignored server-side for these modes).
+            if (st.mode && st.mode !== 'mtf') {
+                q += '&mode=' + encodeURIComponent(st.mode)
+                   + '&d=' + (st.d ?? 0) + '&b=' + (st.b ?? 0)
+                   + '&sp=' + (st.sp ?? 0) + '&lp=' + (st.lp ?? 0) + '&hp=' + (st.hp ?? 1);
+            }
+            return q;
         },
 
         // Re-stretch the linear source then re-render. Server mode picks up
@@ -12293,12 +12306,31 @@ function ninaApp() {
 
         editorHistoAuto() {
             // Back to the per-channel GraXpert auto-stretch (the load default).
+            this.editorGhs.mode = 'mtf';
             this.editorState.edits.stretch = { auto: true };
             this.editorHisto.blackFrac = this.editorHisto._auto.black;
             this.editorHisto.whiteFrac = this.editorHisto._auto.white;
             if (this.editorHistoZoom) this._editorHistoApplyZoom();
             this._editorApplyStretch();
             this._editorDrawHistogram();
+        },
+
+        // GHS / asinh stretch mode. Selecting 'mtf' hands control back to the
+        // histogram handles; 'ghs'/'asinh' apply the hyperbolic curve over the
+        // neutral base using the current D/B. Changing D/B re-applies live.
+        editorSetStretchMode(mode) {
+            this.editorGhs.mode = mode;
+            if (mode === 'mtf') { this.editorHistoAuto(); return; }
+            this._editorApplyGhs();
+        },
+        _editorApplyGhs() {
+            const g = this.editorGhs;
+            this.editorState.edits.stretch = {
+                auto: false, mode: g.mode,
+                d: Number(g.d) || 0, b: Number(g.b) || 0,
+                sp: 0, lp: 0, hp: 1,
+            };
+            this._editorApplyStretch();
         },
 
         // Zoom toggles between the full 0..65535 range and a window framing the
@@ -26302,6 +26334,20 @@ function ninaApp() {
                             { k: 'amount', label: 'Amount', type: 'range', min: 0, max: 1, step: 0.05, def: 1.0 },
                             { k: 'preserveLightness', label: 'Preserve lightness', type: 'bool', def: false } ],
                   defaults: { mode: 'average-neutral', amount: 1.0, preserveLightness: false } },
+                // GHS / asinh non-linear stretch (Siril port). Linked across
+                // channels so colour balance is preserved. 'auto' estimates the
+                // stretch amount D from the image median (leave on for a hands-
+                // off good result). FITS->FITS server op.
+                { type: 'stretch',  label: 'Stretch (GHS / asinh)', kind: 'post', endpoint: '/api/post/stretch', suffix: '_ghs',
+                  fields: [ { k: 'mode', label: 'Type', type: 'select', options: ['ghs', 'asinh'], def: 'ghs' },
+                            { k: 'auto', label: 'Auto amount (from median)', type: 'bool', def: true },
+                            { k: 'targetBackground', label: 'Auto target bg', type: 'range', min: 0.05, max: 0.6, step: 0.01, def: 0.25 },
+                            { k: 'd', label: 'Stretch (D)', type: 'range', min: 0, max: 20, step: 0.1, def: 1.0 },
+                            { k: 'b', label: 'Intensity (B)', type: 'range', min: -5, max: 15, step: 0.1, def: 0.0 },
+                            { k: 'sp', label: 'Symmetry (SP)', type: 'range', min: 0, max: 1, step: 0.01, def: 0.0 },
+                            { k: 'lp', label: 'Shadow protect (LP)', type: 'range', min: 0, max: 1, step: 0.01, def: 0.0 },
+                            { k: 'hp', label: 'Highlight protect (HP)', type: 'range', min: 0, max: 1, step: 0.01, def: 1.0 } ],
+                  defaults: { mode: 'ghs', auto: true, targetBackground: 0.25, d: 1.0, b: 0.0, sp: 0.0, lp: 0.0, hp: 1.0, bp: 0.0 } },
                 // --- Editor adjustments: one item per slider. All enabled
                 // edit items are collected into ONE EditParams and applied in a
                 // single editor pass at the export step (order among them does

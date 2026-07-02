@@ -50,8 +50,10 @@ public static class EditorStretch {
         // Stage A: per-channel auto → neutral display base.
         byte[] outp = AutoBase(linear, width, height, channels, bitDepth);
         // Stage B: linked manual adjustment on top (identity when Auto / unset).
+        // The curve is chosen by Mode: the classic black/mid/white MTF, or a
+        // generalized-hyperbolic / asinh curve (both linked, colour-preserving).
         if (sp != null && !sp.Auto) {
-            var lut = LinkedLut(sp.Black, sp.Mid, sp.White);
+            var lut = StretchLut(sp);
             for (int i = 0; i < outp.Length; i++) outp[i] = lut[outp[i]];
         }
         return outp;
@@ -75,6 +77,25 @@ public static class EditorStretch {
             return outp;
         }
         return AutoStretch.Apply(linear, width, height, bitDepth);
+    }
+
+    /// <summary>
+    /// Stage B LUT dispatcher: pick the display-space curve from the stretch
+    /// Mode. "ghs"/"asinh" build a generalized-hyperbolic / arc-sinh LUT
+    /// (identity when D = 0); anything else is the classic black/mid/white MTF.
+    /// </summary>
+    private static byte[] StretchLut(StretchParams sp) {
+        var mode = (sp.Mode ?? "mtf").Trim().ToLowerInvariant();
+        if (mode == "ghs" || mode == "asinh") {
+            var type = HyperbolicStretch.ParseType(mode);
+            // 256-entry curve over the already-stretched [0,1] display base.
+            var curve = HyperbolicStretch.BuildLut(256, type, sp.B, sp.D, sp.LP, sp.SP, sp.HP, 0.0);
+            var lut = new byte[256];
+            for (int v = 0; v < 256; v++)
+                lut[v] = (byte)Math.Clamp(Math.Round(curve[v] * 255.0), 0, 255);
+            return lut;
+        }
+        return LinkedLut(sp.Black, sp.Mid, sp.White);
     }
 
     /// <summary>Stage B: a 256→256 display-space LUT for the linked
