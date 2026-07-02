@@ -44,7 +44,7 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260626-uppercase">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260627-autorunreorg">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260701-awf6">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260702-wfcombine">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260702-stretchsection">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260628-smbchip">
@@ -10520,8 +10520,49 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     title="Delete the named workflow">🗑</button>
                         </div>
 
-                        <!-- Source files (from the Files browser selection) -->
+                        <!-- WFC-3: optional Combine source-stage. When a mode
+                             is chosen the workflow composes the role-assigned
+                             masters (register + combine on the server) into a
+                             single source, then runs the linear pipeline on it. -->
                         <div class="awf-section">
+                            <div class="awf-section-head">
+                                <span>Combine source</span>
+                            </div>
+                            <div class="awf-row">
+                                <select class="input-sm" style="flex:1"
+                                        x-model="workflow.combine.mode"
+                                        @change="wfCombineModeChanged()"
+                                        :disabled="workflow.running"
+                                        title="Compose per-filter masters into a single source before post-processing">
+                                    <option value="none">None (use the source list below)</option>
+                                    <option value="lrgb">Mono LRGB (R / G / B / L)</option>
+                                    <option value="sho">Mono SHO (Ha / OIII / SII)</option>
+                                    <option value="osc-sho">OSC dual-band SHO (Ha+OIII / SII+OIII)</option>
+                                </select>
+                            </div>
+                            <div class="awf-sources" x-show="workflow.combine.mode !== 'none'" x-cloak>
+                                <template x-for="role in wfCombineRoleList()" :key="role">
+                                    <div class="awf-source-row">
+                                        <span class="awf-role-tag" x-text="role"></span>
+                                        <span class="awf-source-name"
+                                              x-text="wfCombineBase(role) || 'not set'"
+                                              :class="{ 'text-muted': !wfCombineBase(role) }"
+                                              :title="(workflow.combine.roles || {})[role] || ''"></span>
+                                        <button class="btn btn-sm" @click="wfSetCombineRole(role)"
+                                                :disabled="workflow.running"
+                                                title="Assign the FITS selected in the Files tab to this role">Set</button>
+                                        <button class="awf-x" @click="wfClearCombineRole(role)"
+                                                :disabled="workflow.running || !wfCombineBase(role)">×</button>
+                                    </div>
+                                </template>
+                                <p class="hint">
+                                    Select a master in the Files tab, then "Set" per role.
+                                    The composed image becomes the workflow source.</p>
+                            </div>
+                        </div>
+
+                        <!-- Source files (from the Files browser selection) -->
+                        <div class="awf-section" x-show="workflow.combine.mode === 'none'">
                             <div class="awf-section-head">
                                 <span x-text="'Sources (' + workflow.sources.length + ')'"></span>
                                 <button class="btn btn-sm" @click="wfAddSelectedSources()"
@@ -10702,9 +10743,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <div class="awf-run">
                             <button class="btn btn-sm btn-primary" @click="workflowRun()"
                                     x-show="!workflow.running"
-                                    :disabled="!workflow.steps.length || !workflow.sources.length">
-                                ▶ Run<span x-show="workflow.sources.length > 1"
+                                    :disabled="!workflow.steps.length || (workflow.combine.mode === 'none' && !workflow.sources.length)">
+                                ▶ Run<span x-show="workflow.combine.mode === 'none' && workflow.sources.length > 1"
                                            x-text="' (' + workflow.sources.length + ' files)'"></span>
+                                <span x-show="workflow.combine.mode !== 'none'"
+                                      x-text="' (' + workflow.combine.mode.toUpperCase() + ')'"></span>
                             </button>
                             <button class="btn btn-sm btn-danger" @click="workflowStop()"
                                     x-show="workflow.running">■ Stop</button>
@@ -16798,7 +16841,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260702-nbcombine"></script>
+    <script src="/js/app.js?v=20260702-wfcombine"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

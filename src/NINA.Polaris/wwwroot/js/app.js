@@ -1986,6 +1986,13 @@ function ninaApp() {
             name: '',
             steps: [],            // [{ $type, enabled, params }]
             sources: [],          // source file paths
+            // WFC-3: optional combine source-stage. When mode !== 'none'
+            // the workflow first composes N role-assigned masters into a
+            // single source (register + compose on the server), then runs
+            // the linear pipeline on that one composed FITS instead of
+            // iterating the sources list. roles maps a role name
+            // (R/G/B/L, Ha/OIII/SII, HaOIII/SIIOIII) to a file path.
+            combine: { mode: 'none', roles: {} },
             saved: [],            // saved workflow names
             keepIntermediates: false,
             running: false,
@@ -26694,6 +26701,31 @@ function ninaApp() {
         },
         wfRemoveSource(i) { this.workflow.sources.splice(i, 1); },
 
+        // --- combine source-stage (WFC-3) ---
+        // Roles the currently selected combine mode needs, for the UI.
+        wfCombineRoleList() {
+            return this._wfCombineRoles(this.workflow.combine.mode) || [];
+        },
+        wfCombineBase(role) {
+            const p = (this.workflow.combine.roles || {})[role];
+            return p ? this._wfBase(p) : '';
+        },
+        // Assign the first selected FITS in the Files browser to a role.
+        wfSetCombineRole(role) {
+            const sel = (this.files && this.files.selectedPaths) || [];
+            const fits = sel.filter(p => /\.(fits?|fts)$/i.test(p));
+            if (!fits.length) { this.toast('Select a FITS in the file list first', 'warn'); return; }
+            if (!this.workflow.combine.roles) this.workflow.combine.roles = {};
+            this.workflow.combine.roles[role] = fits[0];
+        },
+        wfClearCombineRole(role) {
+            if (this.workflow.combine.roles) delete this.workflow.combine.roles[role];
+        },
+        // Reset role assignments when the mode changes (roles differ per mode).
+        wfCombineModeChanged() {
+            this.workflow.combine.roles = {};
+        },
+
         // --- persistence ---
         async workflowLoadList() {
             try {
@@ -26705,6 +26737,13 @@ function ninaApp() {
             const name = (this.workflow.name || '').trim();
             if (!name) { this.toast('Name the workflow first', 'warn'); return; }
             const doc = { version: 1, name, steps: this.workflow.steps };
+            // Persist the combine source-stage when it's set (WFC-3).
+            if (this.workflow.combine && this.workflow.combine.mode !== 'none') {
+                doc.combine = {
+                    mode: this.workflow.combine.mode,
+                    roles: { ...(this.workflow.combine.roles || {}) },
+                };
+            }
             try {
                 const r = await this.apiFetch('/api/workflow/defs/' + encodeURIComponent(name),
                     { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
@@ -26724,6 +26763,10 @@ function ninaApp() {
                     $type: s.$type || s.type, enabled: s.enabled !== false,
                     params: s.params || {},
                 }));
+                // Restore the combine source-stage (or clear it).
+                this.workflow.combine = (doc.combine && doc.combine.mode)
+                    ? { mode: doc.combine.mode, roles: { ...(doc.combine.roles || {}) } }
+                    : { mode: 'none', roles: {} };
                 this.toast('Loaded "' + this.workflow.name + '"', 'success');
             } catch (e) { this.toast('Load failed: ' + (e.message || e), 'error'); }
         },
@@ -26746,18 +26789,29 @@ function ninaApp() {
             if (wf.running) return;
             const steps = wf.steps.filter(s => s.enabled !== false);
             if (!steps.length) { this.toast('Workflow has no enabled steps', 'warn'); return; }
-            if (!wf.sources.length) { this.toast('Add at least one source file', 'warn'); return; }
+            const combineActive = wf.combine && wf.combine.mode && wf.combine.mode !== 'none';
+            if (!combineActive && !wf.sources.length) {
+                this.toast('Add at least one source file', 'warn'); return;
+            }
             if (typeof OnnxRegistry === 'undefined' && steps.some(s => this._wfOp(s.$type)?.kind === 'onnx' || this._wfOp(s.$type)?.kind === 'starless')) {
                 this.toast('AI steps need the in-browser inference engine (Settings → AI).', 'warn');
             }
             wf.running = true; wf.abort = false; wf.log = []; wf.results = [];
             this._wfRevokePreviews(); wf.previews = {};
             try {
-                for (let fi = 0; fi < wf.sources.length; fi++) {
+                // Combine source-stage: compose the role-assigned masters
+                // once, then run the linear pipeline on that single output.
+                let effectiveSources = wf.sources;
+                if (combineActive) {
+                    const composed = await this._wfRunCombineStage();
+                    if (!composed) { return; }   // stage logged + toasted the reason
+                    effectiveSources = [composed];
+                }
+                for (let fi = 0; fi < effectiveSources.length; fi++) {
                     if (wf.abort) break;
-                    const source = wf.sources[fi];
+                    const source = effectiveSources[fi];
                     wf.currentFile = source;
-                    this._wfLog('file', '▶ ' + this._wfBase(source) + '  (' + (fi + 1) + '/' + wf.sources.length + ')');
+                    this._wfLog('file', '▶ ' + this._wfBase(source) + '  (' + (fi + 1) + '/' + effectiveSources.length + ')');
                     let cur = source;
                     const named = {};        // prior named outputs (e.g. stars from starless)
                     const produced = [];     // intermediates for cleanup
@@ -26830,6 +26884,46 @@ function ninaApp() {
                 wf.running = false; wf.currentStep = -1; wf.currentFile = null;
                 try { this.filesReload(); } catch (_) { }
             }
+        },
+
+        // WFC-3: run the combine source-stage. Builds the channel map
+        // from the role->file assignments, submits the right /api/studio/
+        // combine mode, waits, and returns the composed FITS path (or null
+        // on any problem, having logged + toasted the reason).
+        _wfCombineRoles(mode) {
+            // The roles each mode needs, in output order.
+            return ({
+                lrgb: ['R', 'G', 'B', 'L'],
+                sho: ['Ha', 'OIII', 'SII'],
+                'osc-sho': ['HaOIII', 'SIIOIII'],
+            })[mode] || null;
+        },
+        async _wfRunCombineStage() {
+            const c = this.workflow.combine;
+            const roles = this._wfCombineRoles(c.mode);
+            if (!roles) { this.toast('Unknown combine mode: ' + c.mode, 'error'); return null; }
+            const channelMap = [];
+            for (const r of roles) {
+                const p = (c.roles || {})[r];
+                if (!p) { this.toast('Combine source: assign a file for "' + r + '"', 'warn'); return null; }
+                channelMap.push({ variable: r, framePath: p });
+            }
+            // sho -> narrowband palette; lrgb/osc-sho pass straight through.
+            const modeMap = { lrgb: 'lrgb', sho: 'narrowband', 'osc-sho': 'osc-sho' };
+            const body = { mode: modeMap[c.mode], channelMap, register: true, normalize: true };
+            if (c.mode === 'sho') body.palette = 'sho';
+            const label = 'Combine ' + c.mode.toUpperCase();
+            this._wfLog('step', '· ' + label + ' …');
+            let resp;
+            try { resp = await this.apiPost('/api/studio/combine', body); }
+            catch (e) { this._wfLog('error', '  ✗ combine submit: ' + (e.message || e)); return null; }
+            const j = await resp.json();
+            if (!j.jobId) { this._wfLog('error', '  ✗ combine rejected: ' + (j.error || 'unknown')); return null; }
+            const status = await this._stackPollJob('/api/studio/combine/', j.jobId, label);
+            const out = status && status.outputPath;
+            if (!out) { this._wfLog('error', '  ✗ combine produced no output'); return null; }
+            this._wfLog('ok', '  ✓ ' + this._wfBase(out));
+            return out;
         },
 
         // Dispatch one step. Returns the output path (string), except starless

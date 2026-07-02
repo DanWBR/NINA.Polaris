@@ -985,6 +985,12 @@
 .awf-source-row { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 4px; background: var(--bg-primary); }
 .awf-source-row.awf-active { outline: 1px solid var(--accent); }
 .awf-source-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+/* WFC-3: combine source-stage role label (Ha / OIII / R / L ...) */
+.awf-role-tag {
+    flex: 0 0 auto; min-width: 3.4em; font-size: 11px; font-weight: 600;
+    color: var(--accent); text-align: center; padding: 1px 5px; border-radius: 4px;
+    background: var(--bg-secondary);
+}
 .awf-x {
     appearance: none; background: transparent; border: none; color: var(--text-secondary);
     cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 5px; border-radius: 4px;
