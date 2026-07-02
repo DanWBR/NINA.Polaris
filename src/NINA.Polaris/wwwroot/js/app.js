@@ -26358,6 +26358,12 @@ function ninaApp() {
 
         // --- step list management (UI) ---
         wfSelect(i) { this.workflow.selected = i; },
+        // Append a specific op type (palette click) and select it.
+        wfAddType(type) {
+            if (this.workflow.running) return;
+            this.workflow.addType = type;
+            this.wfAddStep();
+        },
         wfAddStep() {
             const op = this._wfOp(this.workflow.addType);
             if (!op) return;

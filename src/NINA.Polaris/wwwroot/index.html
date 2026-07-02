@@ -44,7 +44,7 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260626-uppercase">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260627-autorunreorg">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260701-awf3">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260701-awf4">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260701-comparezoombtn">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260628-smbchip">
@@ -10544,52 +10544,60 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </div>
                         </div>
 
-                        <!-- Steps: sequencer-style left list + right detail.
-                             Each item is one action; every editor slider is its
-                             own item (with an optional Auto). -->
-                        <div class="awf-section">
-                            <div class="awf-section-head">
-                                <span>Steps</span>
-                                <select class="input-sm" x-model="workflow.addType" :disabled="workflow.running">
-                                    <template x-for="g in _wfOpsGrouped()" :key="g.label">
-                                        <optgroup :label="g.label">
-                                            <template x-for="op in g.ops" :key="op.type">
-                                                <option :value="op.type" x-text="op.label"></option>
-                                            </template>
-                                        </optgroup>
-                                    </template>
-                                </select>
-                                <button class="btn btn-sm" @click="wfAddStep()"
-                                        :disabled="workflow.running">+ Add</button>
+                        <!-- Steps: advanced-sequencer-style tri-pane —
+                             Palette (add), Sequence (ordered items), Properties
+                             (edit selected). Each item is one action; every
+                             editor slider is its own item (with an optional Auto). -->
+                        <div class="advseq-layout awf-tri">
+                            <!-- Palette: click an item to append it to the sequence -->
+                            <div class="advseq-palette">
+                                <div class="advseq-panel-title">Add step</div>
+                                <template x-for="g in _wfOpsGrouped()" :key="g.label">
+                                    <div class="palette-category">
+                                        <div class="palette-category-name" x-text="g.label"></div>
+                                        <template x-for="op in g.ops" :key="op.type">
+                                            <button class="palette-item" @click="wfAddType(op.type)"
+                                                    :disabled="workflow.running"
+                                                    :title="'Add ' + op.label">
+                                                <span class="palette-kind"
+                                                      :data-kind="g.label === 'Editor' ? 'Edit' : 'Tool'"
+                                                      x-text="op.label[0]"></span>
+                                                <span x-text="op.label"></span>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </template>
                             </div>
 
-                            <div class="awf-cols">
-                                <!-- left: ordered item list -->
-                                <div class="awf-list">
-                                    <template x-for="(step, i) in workflow.steps" :key="i">
-                                        <div class="awf-list-row"
-                                             :class="{ 'awf-sel': workflow.selected === i,
-                                                       'awf-step-active': workflow.running && workflow.currentStep === i,
-                                                       'awf-step-off': step.enabled === false }"
-                                             @click="wfSelect(i)">
-                                            <input type="checkbox" x-model="step.enabled" @click.stop :disabled="workflow.running">
-                                            <span class="awf-step-idx" x-text="(i + 1) + '.'"></span>
-                                            <img class="awf-thumb" x-show="workflow.previews[i]"
-                                                 :src="workflow.previews[i]" alt="" loading="lazy">
-                                            <span class="awf-list-label" x-text="_wfOp(step.$type)?.label || step.$type"></span>
-                                            <span class="awf-badge" x-show="_wfOp(step.$type)?.auto && step.params && step.params.auto">auto</span>
-                                            <span style="flex:1"></span>
-                                            <button class="awf-x" @click.stop="wfMoveStep(i, -1)" :disabled="workflow.running || i === 0" title="Move up">↑</button>
-                                            <button class="awf-x" @click.stop="wfMoveStep(i, 1)" :disabled="workflow.running || i === workflow.steps.length - 1" title="Move down">↓</button>
-                                            <button class="awf-x" @click.stop="wfRemoveStep(i)" :disabled="workflow.running" title="Remove">×</button>
-                                        </div>
-                                    </template>
-                                    <p class="hint" x-show="!workflow.steps.length" style="padding:8px">
-                                        Add items above. They run top-to-bottom; editor items apply together at the export step.</p>
-                                </div>
+                            <!-- Sequence: ordered items -->
+                            <div class="advseq-tree">
+                                <div class="advseq-panel-title">Sequence</div>
+                                <template x-for="(step, i) in workflow.steps" :key="i">
+                                    <div class="awf-list-row"
+                                         :class="{ 'awf-sel': workflow.selected === i,
+                                                   'awf-step-active': workflow.running && workflow.currentStep === i,
+                                                   'awf-step-off': step.enabled === false }"
+                                         @click="wfSelect(i)">
+                                        <input type="checkbox" x-model="step.enabled" @click.stop :disabled="workflow.running">
+                                        <span class="awf-step-idx" x-text="(i + 1) + '.'"></span>
+                                        <img class="awf-thumb" x-show="workflow.previews[i]"
+                                             :src="workflow.previews[i]" alt="" loading="lazy">
+                                        <span class="awf-list-label" x-text="_wfOp(step.$type)?.label || step.$type"></span>
+                                        <span class="awf-badge" x-show="_wfOp(step.$type)?.auto && step.params && step.params.auto">auto</span>
+                                        <span style="flex:1"></span>
+                                        <button class="awf-x" @click.stop="wfMoveStep(i, -1)" :disabled="workflow.running || i === 0" title="Move up">↑</button>
+                                        <button class="awf-x" @click.stop="wfMoveStep(i, 1)" :disabled="workflow.running || i === workflow.steps.length - 1" title="Move down">↓</button>
+                                        <button class="awf-x" @click.stop="wfRemoveStep(i)" :disabled="workflow.running" title="Remove">×</button>
+                                    </div>
+                                </template>
+                                <p class="hint" x-show="!workflow.steps.length" style="padding:8px">
+                                    Click items in the palette to build the sequence. Items run top-to-bottom; editor items apply together at the export step.</p>
+                            </div>
 
-                                <!-- right: selected item detail -->
-                                <div class="awf-detail" x-show="workflow.selected >= 0 && workflow.steps[workflow.selected]" x-cloak>
+                            <!-- Properties: selected item detail -->
+                            <div class="advseq-props">
+                                <div class="advseq-panel-title">Properties</div>
+                                <div x-show="workflow.selected >= 0 && workflow.steps[workflow.selected]" x-cloak>
                                     <template x-if="workflow.selected >= 0 && workflow.steps[workflow.selected]">
                                         <div>
                                             <h4 class="awf-detail-title" x-text="_wfOp(workflow.steps[workflow.selected].$type)?.label"></h4>
@@ -10667,9 +10675,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         </div>
                                     </template>
                                 </div>
-                                <div class="awf-detail awf-detail-empty" x-show="workflow.selected < 0 || !workflow.steps[workflow.selected]">
-                                    <p class="hint">Select an item to edit its settings.</p>
-                                </div>
+                                <p class="hint" x-show="workflow.selected < 0 || !workflow.steps[workflow.selected]">
+                                    Select an item to edit its settings.</p>
                             </div>
                         </div>
 
@@ -16734,7 +16741,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260701-awf3"></script>
+    <script src="/js/app.js?v=20260701-awf4"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
