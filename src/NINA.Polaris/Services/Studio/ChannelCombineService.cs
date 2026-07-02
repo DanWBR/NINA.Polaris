@@ -89,6 +89,8 @@ public class ChannelCombineService {
         public const string PixelMath   = "pixelmath";
         public const string Narrowband  = "narrowband";
         public const string Continuum   = "continuum";
+        // OSC dual-band SHO: 2 RGB masters (Ha+OIII, SII+OIII) -> SHO.
+        public const string OscSho      = "osc-sho";
     }
 
     // UNIF-3a: caller now passes a frame path instead of a SQLite id
@@ -135,6 +137,11 @@ public class ChannelCombineService {
 
     private void RunJob(string jobId, ChannelCombineRequest req) {
         try {
+            // OSC dual-band SHO takes 2 RGB masters (not mono) and does
+            // its own register + line extraction inside ComposeOscSho, so
+            // the generic mono register/normalize phases are skipped.
+            bool isOsc = string.Equals(req.Mode, Modes.OscSho, StringComparison.OrdinalIgnoreCase);
+
             // ── Phase 1: load + validate ─────────────────────────────
             _jobs[jobId] = _jobs[jobId] with { Stage = "loading", Done = 0 };
             var inputs = new List<LoadedChannel>(req.ChannelMap.Count);
@@ -151,7 +158,17 @@ public class ChannelCombineService {
                 var fileName = Path.GetFileName(slot.FramePath);
                 using var fs = File.OpenRead(slot.FramePath);
                 var img = FITSReader.Read(fs);
-                if (img.Properties.Channels != 1) {
+                // OSC dual-band SHO takes 3-channel RGB masters (the line
+                // extraction happens in ComposeOscSho); every other mode
+                // requires mono per-filter masters.
+                if (isOsc) {
+                    if (img.Properties.Channels != 3) {
+                        throw new InvalidOperationException(
+                            $"OSC dual-band input '{slot.Variable}' ({fileName}) is " +
+                            $"{img.Properties.Channels}-channel; it must be a 3-channel " +
+                            $"debayered RGB master.");
+                    }
+                } else if (img.Properties.Channels != 1) {
                     throw new InvalidOperationException(
                         $"Input '{slot.Variable}' ({fileName}) is " +
                         $"{img.Properties.Channels}-channel; channel combine inputs " +
@@ -194,7 +211,7 @@ public class ChannelCombineService {
             int refIdx = PickReferenceIndex(req.Mode, inputs);
             var transforms = new AffineTransform?[inputs.Count];
 
-            if (req.Register) {
+            if (req.Register && !isOsc) {
                 _jobs[jobId] = _jobs[jobId] with {
                     Stage = "registering", Done = 0, Total = inputs.Count,
                     ReferenceChannel = inputs[refIdx].Variable,
@@ -268,7 +285,7 @@ public class ChannelCombineService {
             }
 
             // ── Phase 3: optional per-channel normalization ──────────
-            if (req.Normalize) {
+            if (req.Normalize && !isOsc) {
                 _jobs[jobId] = _jobs[jobId] with { Stage = "normalizing", Done = 0, Total = inputs.Count };
                 var medians = new double[inputs.Count];
                 for (int i = 0; i < inputs.Count; i++) {
@@ -320,9 +337,13 @@ public class ChannelCombineService {
                     composed = ComposeContinuum(inputs, W, H, req.ContinuumScale);
                     prefix = "cs";
                     break;
+                case Modes.OscSho:
+                    composed = ComposeOscSho(inputs, W, H, req.Normalize);
+                    prefix = "sho";
+                    break;
                 default:
                     throw new ArgumentException(
-                        $"Unknown combine mode '{req.Mode}'. Expected one of: rgb, lrgb, pixelmath, narrowband, continuum.");
+                        $"Unknown combine mode '{req.Mode}'. Expected one of: rgb, lrgb, pixelmath, narrowband, continuum, osc-sho.");
             }
             _jobs[jobId] = _jobs[jobId] with { Done = 1 };
 
@@ -470,6 +491,57 @@ public class ChannelCombineService {
         var outp = ContinuumSubtraction.Subtract(nb, cont, W, H,
             scale ?? 1.0, autoScale: scale == null);
         return (outp, 1);
+    }
+
+    // ── compose: OSC dual-band SHO ───────────────────────────────────
+    // Two debayered RGB masters (Ha+OIII and SII+OIII dual-band filters)
+    // are turned into an SHO image. Each master's red plane is its
+    // "red line" (Ha or SII) and G+B carry OIII (see NarrowbandExtract).
+    // We register the SII+OIII master to the Ha+OIII master using the two
+    // red-line planes (the sharpest, most star-dominated channels), apply
+    // that single transform to the SII master's extracted planes so the
+    // two are on the same grid, average the two OIII planes for SNR, then
+    // pack SHO (R=SII, G=Ha, B=OIII) via NarrowbandCombine.
+    private static (ushort[] data, int channels) ComposeOscSho(
+            List<LoadedChannel> inputs, int W, int H, bool normalize) {
+        var haO = FindChannel(inputs, "HaOIII") ?? FindChannel(inputs, "HO")
+            ?? throw new InvalidOperationException(
+                "OSC dual-band SHO needs the Ha+OIII RGB master named 'HaOIII'.");
+        var siO = FindChannel(inputs, "SIIOIII") ?? FindChannel(inputs, "SO")
+            ?? throw new InvalidOperationException(
+                "OSC dual-band SHO needs the SII+OIII RGB master named 'SIIOIII'.");
+
+        var (ha, oiiiA) = NarrowbandExtract.Extract(haO, W, H);
+        var (sii, oiiiB) = NarrowbandExtract.Extract(siO, W, H);
+
+        // Register SII+OIII to Ha+OIII using the red-line planes (Ha vs
+        // SII). Same detector tuning as the mono register phase: only
+        // sharp stellar peaks, no diffuse nebular flooding.
+        var detector = new StarDetector { SigmaThreshold = 40.0, MaxStarSize = 12 };
+        var refStars = detector.Detect(ha, W, H);
+        var curStars = detector.Detect(sii, W, H);
+        if (refStars.Count < 5 || curStars.Count < 5) {
+            throw new InvalidOperationException(
+                $"OSC dual-band register found too few stars (Ha+OIII: {refStars.Count}, " +
+                $"SII+OIII: {curStars.Count}); need at least 5 in each red-line plane.");
+        }
+        var t = StarMatcher.Match(refStars, curStars, maxSearchRadius: 500)
+            ?? throw new InvalidOperationException(
+                "Could not register the SII+OIII master to the Ha+OIII master " +
+                "(StarMatcher found too few matched stars).");
+        sii = ImageResampler.ApplyTransform(sii, W, H, t);
+        oiiiB = ImageResampler.ApplyTransform(oiiiB, W, H, t);
+
+        // Combine both OIII channels (now co-registered) for a cleaner,
+        // higher-SNR OIII than either master alone.
+        long plane = (long)W * H;
+        var oiii = new ushort[plane];
+        for (int i = 0; i < plane; i++) {
+            oiii[i] = (ushort)((oiiiA[i] + oiiiB[i] + 1) / 2);
+        }
+
+        var packed = NarrowbandCombine.Compose(ha, oiii, sii, W, H, "sho", normalize);
+        return (packed, 3);
     }
 
     private static ushort[]? FindChannel(List<LoadedChannel> inputs, string name) {
