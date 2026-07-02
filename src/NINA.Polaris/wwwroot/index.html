@@ -44,7 +44,7 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260626-uppercase">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260627-autorunreorg">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260701-awf5">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260701-awf6">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260701-comparezoombtn">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260628-smbchip">
@@ -10552,6 +10552,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <!-- Palette: click an item to append it to the sequence -->
                             <div class="advseq-palette">
                                 <div class="advseq-panel-title">Add step</div>
+                                <div class="awf-quick">
+                                    <button class="btn btn-sm btn-primary" @click="wfPresetRecommended()"
+                                            :disabled="workflow.running"
+                                            title="Load a recommended linear pipeline (all auto)">★ Recommended</button>
+                                    <button class="btn btn-sm" @click="wfAutoAll()"
+                                            :disabled="workflow.running || !workflow.steps.length"
+                                            title="Enable Auto on every capable step">Auto all</button>
+                                </div>
                                 <template x-for="g in _wfOpsGrouped()" :key="g.label">
                                     <div class="palette-category">
                                         <div class="palette-category-name" x-text="g.label"></div>
@@ -16751,7 +16759,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260701-awf5"></script>
+    <script src="/js/app.js?v=20260701-awf6"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

@@ -26368,6 +26368,30 @@ function ninaApp() {
             this.workflow.addType = type;
             this.wfAddStep();
         },
+        // Turn on Auto for every step that supports it (editor auto-tunables +
+        // Detail's auto-FWHM), so the run tunes itself per image.
+        wfAutoAll() {
+            let n = 0;
+            for (const s of this.workflow.steps) {
+                const op = this._wfOp(s.$type);
+                if (op && (op.autoParam || op.auto)) { s.params = s.params || {}; s.params.auto = true; n++; }
+            }
+            this.toast(n ? ('Auto enabled on ' + n + ' step(s)') : 'No auto-capable steps', n ? 'success' : 'warn');
+        },
+        // One-click recommended linear pipeline: gradient removal → denoise →
+        // sharpen (auto FWHM) → auto stretch → gentle contrast/saturation (auto)
+        // → PNG export. All auto-tunables default on.
+        wfPresetRecommended() {
+            if (this.workflow.running) return;
+            const mk = (t) => {
+                const op = this._wfOp(t);
+                return { $type: t, enabled: true, params: JSON.parse(JSON.stringify(op?.defaults || {})) };
+            };
+            this.workflow.steps = ['bge', 'denoise', 'detail', 'autostretch',
+                'contrast', 'saturation', 'export'].map(mk);
+            this.workflow.selected = 0;
+            this.toast('Recommended workflow loaded', 'success');
+        },
         wfAddStep() {
             const op = this._wfOp(this.workflow.addType);
             if (!op) return;
