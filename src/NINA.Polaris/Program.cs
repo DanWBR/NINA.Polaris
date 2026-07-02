@@ -367,6 +367,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.External.UpdateService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.CropService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.PostProcess.ScnrService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.PostProcess.StretchService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.PostProcess.CosmeticService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.DeconvolutionService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameAnalysisService>();
 // TLS-2: DuckDNS HTTP client for setting TXT records during ACME

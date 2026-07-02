@@ -26348,6 +26348,15 @@ function ninaApp() {
                             { k: 'lp', label: 'Shadow protect (LP)', type: 'range', min: 0, max: 1, step: 0.01, def: 0.0 },
                             { k: 'hp', label: 'Highlight protect (HP)', type: 'range', min: 0, max: 1, step: 0.01, def: 1.0 } ],
                   defaults: { mode: 'ghs', auto: true, targetBackground: 0.25, d: 1.0, b: 0.0, sp: 0.0, lp: 0.0, hp: 1.0, bp: 0.0 } },
+                // Cosmetic correction -- hot/cold pixel removal (Siril port).
+                // sigmas are in units of the channel average deviation; cfa
+                // samples same-Bayer neighbours for undebayered OSC frames.
+                { type: 'cosmetic', label: 'Cosmetic (hot/cold pixels)', kind: 'post', endpoint: '/api/post/cosmetic', suffix: '_cc',
+                  fields: [ { k: 'sigmaHot', label: 'Hot sigma (-1 off)', type: 'number', min: -1, max: 20, step: 0.5, def: 3.0 },
+                            { k: 'sigmaCold', label: 'Cold sigma (-1 off)', type: 'number', min: -1, max: 20, step: 0.5, def: 5.0 },
+                            { k: 'amount', label: 'Amount', type: 'range', min: 0, max: 1, step: 0.05, def: 1.0 },
+                            { k: 'cfa', label: 'CFA (undebayered OSC)', type: 'bool', def: false } ],
+                  defaults: { sigmaHot: 3.0, sigmaCold: 5.0, amount: 1.0, cfa: false } },
                 // --- Editor adjustments: one item per slider. All enabled
                 // edit items are collected into ONE EditParams and applied in a
                 // single editor pass at the export step (order among them does

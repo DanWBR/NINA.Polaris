@@ -100,6 +100,37 @@ public static class PostProcessEndpoints {
             }
             return Results.Ok(new { results, failures });
         });
+
+        // Cosmetic correction (hot / cold pixel removal).
+        g.MapPost("/cosmetic", async (
+                CosmeticService svc,
+                FrameLibraryService library,
+                CosmeticRequest req) => {
+            if (req.Paths == null || req.Paths.Length == 0)
+                return Results.BadRequest(new { error = "paths is required" });
+
+            var results = new List<object>();
+            var failures = new List<object>();
+            foreach (var path in req.Paths) {
+                try {
+                    var r = svc.RunFits(path, req.SigmaCold ?? 5.0, req.SigmaHot ?? 3.0,
+                        req.Amount ?? 1.0, req.Cfa ?? false);
+                    results.Add(new {
+                        sourcePath = path,
+                        outputPath = r.OutputPath,
+                        width = r.Width, height = r.Height, channels = r.Channels,
+                        cold = r.Cold, hot = r.Hot
+                    });
+                } catch (Exception ex) {
+                    failures.Add(new { sourcePath = path, error = ex.Message });
+                }
+            }
+
+            if (results.Count > 0) {
+                try { await library.RescanAsync(); } catch { /* best-effort */ }
+            }
+            return Results.Ok(new { results, failures });
+        });
     }
 
     // mode: average-neutral | maximum-neutral | maximum-mask | additive-mask
@@ -117,4 +148,11 @@ public static class PostProcessEndpoints {
         double? D = null, double? B = null,
         double? Lp = null, double? Sp = null, double? Hp = null, double? Bp = null,
         bool? Auto = null, double? TargetBackground = null);
+
+    // sigmaCold / sigmaHot in units of the channel average deviation
+    // (-1 disables that side). cfa samples same-Bayer neighbours for
+    // undebayered OSC frames.
+    public record CosmeticRequest(
+        string[] Paths, double? SigmaCold = null, double? SigmaHot = null,
+        double? Amount = null, bool? Cfa = null);
 }
