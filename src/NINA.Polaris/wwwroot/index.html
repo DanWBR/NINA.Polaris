@@ -43,7 +43,7 @@
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260626-uppercase">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260627-autorunreorg">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260702-lsrej">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260702-wfcombine">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260702-stretchsection">
@@ -1284,6 +1284,25 @@
                             <span class="text-muted"
                                   x-show="liveStackStatus?.framesSavedToDisk"
                                   x-text="'(' + liveStackStatus?.framesSavedToDisk + ' saved)'"></span>
+                        </label>
+                        <!-- Per-pixel kappa-sigma outlier rejection. Drops
+                             cosmic rays / plane trails / dithered hot pixels
+                             instead of averaging them in. Pays off most WITH
+                             dithering; takes effect on the next Reset. -->
+                        <label class="livestack-save-frames-label"
+                               title="Reject per-pixel outliers (cosmic rays, plane/satellite trails, dithered hot pixels) instead of folding them into the running mean. Needs a few frames to build statistics; applies on the next stack Reset. Best combined with dithering.">
+                            <input type="checkbox"
+                                   x-model="liveStackSigmaRejection"
+                                   @change="saveLiveStackSigma()">
+                            🚫 Reject outliers (kappa-sigma)
+                            <template x-if="liveStackSigmaRejection">
+                                <span class="livestack-kappa-inline">
+                                    k
+                                    <input type="number" class="input-sm" min="1.5" max="6" step="0.5"
+                                           x-model.number="liveStackSigmaKappa"
+                                           @change="saveLiveStackSigma()">
+                                </span>
+                            </template>
                         </label>
                         <!-- Save-frames is on but no image output folder is set,
                              so every frame is silently dropped. Tell the user
@@ -16841,7 +16860,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260702-wfcombine"></script>
+    <script src="/js/app.js?v=20260702-lsrej"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

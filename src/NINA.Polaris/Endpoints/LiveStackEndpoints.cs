@@ -232,6 +232,26 @@ public static class LiveStackEndpoints {
             return Results.Ok(new { saved = true, enabled = req.Enabled });
         });
 
+        // Toggle per-pixel kappa-sigma outlier rejection on the live stack.
+        // Same dual write as /color: runtime flag (applies on the next
+        // reference frame, i.e. after a Reset) + persisted per-rig fields.
+        // Kappa clamps to a sane [1.5, 6] range; default 3.
+        group.MapPut("/sigma-rejection", (SigmaRejectionRequest req,
+                                          LiveStackingService stack,
+                                          ProfileService profiles) => {
+            stack.SigmaRejection = req.Enabled;
+            double k = req.Kappa is > 0 ? Math.Clamp(req.Kappa.Value, 1.5, 6.0) : 3.0;
+            stack.SigmaKappa = k;
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig != null) {
+                profiles.UpdateEquipmentProfile(rig.Id, r => {
+                    r.LiveStackSigmaRejection = req.Enabled;
+                    r.LiveStackSigmaKappa = k;
+                });
+            }
+            return Results.Ok(new { saved = true, enabled = req.Enabled, kappa = k });
+        });
+
         // SNR-3: session-only target SNR override. The active rig's
         // TargetSnr is the persisted default; the LIVE tab can push
         // a different number here for one session without touching
@@ -420,6 +440,10 @@ public static class LiveStackEndpoints {
     /// <summary>Body of PUT /api/livestack/color. Mirrors the LIVE tab
     /// colour-stacking checkbox.</summary>
     public record ColorStackRequest(bool Enabled);
+
+    /// <summary>Body of PUT /api/livestack/sigma-rejection. Mirrors the LIVE
+    /// tab kappa-sigma toggle + threshold. Kappa null keeps the default (3).</summary>
+    public record SigmaRejectionRequest(bool Enabled, double? Kappa = null);
 
     /// <summary>Body of PUT /api/livestack/max-duration. 0 =
     /// unlimited. The LIVE tab posts the user's "stack for N

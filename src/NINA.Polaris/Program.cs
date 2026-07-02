@@ -559,6 +559,24 @@ app.Services.GetRequiredService<RefocusSuggestionService>();
     }
     ApplyDurationCap("startup");
     profiles.EquipmentProfileActivated += _ => ApplyDurationCap("rig-switch");
+
+    // Per-rig kappa-sigma outlier rejection on the live stack (off by
+    // default). Same persistence pattern as the duration cap; takes effect
+    // on the next Reset (reference frame).
+    void ApplySigmaRejection(string trigger) {
+        var rig = profiles.ActiveEquipmentProfile;
+        bool enabled = rig?.LiveStackSigmaRejection ?? false;
+        double kappa = rig?.LiveStackSigmaKappa is > 0 ? rig!.LiveStackSigmaKappa : 3.0;
+        if (liveStack.SigmaRejection != enabled || Math.Abs(liveStack.SigmaKappa - kappa) > 1e-9) {
+            liveStack.SigmaRejection = enabled;
+            liveStack.SigmaKappa = kappa;
+            liveStackLogger.LogInformation(
+                "Live stack SigmaRejection -> {Enabled} (k={Kappa}, trigger={Trigger})",
+                enabled, kappa, trigger);
+        }
+    }
+    ApplySigmaRejection("startup");
+    profiles.EquipmentProfileActivated += _ => ApplySigmaRejection("rig-switch");
 }
 
 // INDIROB-3: sync the active rig's PreConnectDelayMsByDevice dict

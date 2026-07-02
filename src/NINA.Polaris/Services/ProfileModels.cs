@@ -838,6 +838,15 @@ public class EquipmentProfile {
     /// colour EAA rig can opt in while a mono rig stays mono.</summary>
     public bool LiveStackColor { get; set; } = false;
 
+    /// <summary>Per-pixel kappa-sigma outlier rejection on the live stack:
+    /// drop cosmic rays / plane trails / dithered hot pixels instead of
+    /// folding them into the running mean. Default OFF (extra CPU + a per-
+    /// pixel M2 buffer). Pays off most WITH dithering. Per-rig.</summary>
+    public bool LiveStackSigmaRejection { get; set; } = false;
+
+    /// <summary>Rejection threshold in sigmas (default 3.0).</summary>
+    public double LiveStackSigmaKappa { get; set; } = 3.0;
+
     /// <summary>Auto-pause the live stack after this many seconds
     /// of integration. 0 (default) = no cap, runs until the user
     /// resets or stops. Per-rig so different setups (planetary

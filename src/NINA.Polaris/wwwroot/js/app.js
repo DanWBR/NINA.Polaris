@@ -223,6 +223,12 @@ function ninaApp() {
         // actually engaged this session (server: ColorStacking + Bayered ref).
         liveStackColor: true,
         liveStackColorActive: false,
+        // Per-pixel kappa-sigma outlier rejection on the live stack. Mirrors
+        // the LIVE tab toggle; PUT /api/livestack/sigma-rejection updates the
+        // running flag + the active rig's LiveStackSigmaRejection/Kappa fields.
+        // OFF by default; pays off most WITH dithering.
+        liveStackSigmaRejection: false,
+        liveStackSigmaKappa: 3.0,
 
         // LSTR-5: live-stack auto-refocus + auto-recenter triggers.
         // Mirror of EquipmentProfile.LiveStackTriggers, hydrated from
@@ -7950,6 +7956,33 @@ function ninaApp() {
                 // Revert the checkbox if the server rejected it so the
                 // UI doesn't lie about the actual state.
                 this.liveStackSaveFrames = !this.liveStackSaveFrames;
+                this.toast('Save failed: ' + (e.message || e), 'error');
+            }
+        },
+
+        // LIVE tab "Reject outliers (kappa-sigma)" toggle + threshold. Same
+        // dual-write as the others: runtime flag + persisted per-rig fields.
+        // Takes full effect on the next Reset (the reference frame allocates
+        // the rejection buffers), so nudge the user toward Reset.
+        async saveLiveStackSigma() {
+            const k = Math.min(6, Math.max(1.5, Number(this.liveStackSigmaKappa) || 3.0));
+            this.liveStackSigmaKappa = k;
+            try {
+                await this.apiPost('/api/livestack/sigma-rejection', null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: this.liveStackSigmaRejection, kappa: k })
+                });
+                const rig = this.rigs.find(r => r.id === this.activeRigId);
+                if (rig) {
+                    rig.liveStackSigmaRejection = this.liveStackSigmaRejection;
+                    rig.liveStackSigmaKappa = k;
+                }
+                this.toast(this.liveStackSigmaRejection
+                    ? ('Outlier rejection on (k=' + k + ') — Reset the stack to apply')
+                    : 'Outlier rejection off — Reset the stack to apply', 'ok');
+            } catch (e) {
+                this.liveStackSigmaRejection = !this.liveStackSigmaRejection;
                 this.toast('Save failed: ' + (e.message || e), 'error');
             }
         },
@@ -16308,6 +16341,10 @@ function ninaApp() {
             // back automatically). The per-rig LiveStackColor field is no longer
             // consulted and the toggle was removed.
             this.liveStackColor = true;
+            // Per-pixel kappa-sigma rejection (off by default on old rigs).
+            this.liveStackSigmaRejection = rig.liveStackSigmaRejection === true;
+            this.liveStackSigmaKappa = (rig.liveStackSigmaKappa > 0)
+                ? rig.liveStackSigmaKappa : 3.0;
             // Auto-pause cap in MINUTES (UI unit). Backend stores
             // seconds. 0 = unlimited (default).
             this.liveStackMaxMinutes = Math.round(

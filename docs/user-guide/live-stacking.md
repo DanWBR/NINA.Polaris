@@ -191,8 +191,10 @@ so per-rig makes sense.
 
 ASIAIR-style dithering during live stacking: a small random nudge of the mount
 every N integrated frames so the target lands on slightly different pixels each
-time, which lets the stacker reject hot pixels, walking noise and fixed-pattern
-artifacts.
+time. This decorrelates hot pixels, walking noise and fixed-pattern artifacts
+from the sky, so they can be averaged down and (with **Reject outliers** below)
+removed outright. It also means the frames saved to disk are dithered, which
+benefits your final offline integration.
 
 Panel: LIVE tab → "Auto re-focus / re-center / dither" → **Auto dither**.
 
@@ -216,6 +218,33 @@ Requirements + behaviour:
 
 The same dither-every-N-frames option also exists for the AUTORUN sequencer
 (GUIDE/AUTORUN), and likewise routes through whichever guider backend is active.
+
+## Reject outliers (kappa-sigma)
+
+By default the live stack is a plain **running mean** — every frame's pixels are
+averaged in, with no per-pixel outlier rejection. That's fast, but a cosmic ray,
+a satellite/plane trail, or a hot pixel is averaged in too (just at reduced
+amplitude).
+
+The LIVE tab checkbox **🚫 Reject outliers (kappa-sigma)** (next to "Save each
+frame") adds per-pixel rejection: for each pixel Polaris tracks the running mean
+and spread of the frames seen so far, and a new sample more than **k** sigma away
+is dropped instead of folded in. The threshold **k** (default 3, range 1.5–6) is
+editable inline; lower = more aggressive.
+
+- It **pays off most combined with dithering** — dithering moves the defect to a
+  different sky pixel each frame, so it becomes the outlier that rejection then
+  removes cleanly. Without dithering a fixed hot pixel can land on the same sky
+  spot repeatedly and look like signal.
+- The first few frames always seed the statistics (nothing is rejected until a
+  spread estimate exists), so give it 5+ frames.
+- It runs on the CPU and allocates one extra full-frame buffer, so it costs a
+  little more RAM + per-frame time than the plain mean — off by default, opt in
+  per rig. Takes effect on the next **Reset** (the reference frame allocates the
+  buffers).
+- Setting lives on `EquipmentProfile.LiveStackSigmaRejection` / `…Kappa` (per
+  rig). Colour stacks reject on luminance (a bright outlier drops the whole RGB
+  triple so colour balance isn't skewed).
 
 ## Refocus suggestion (trend-based, manual focuser friendly)
 

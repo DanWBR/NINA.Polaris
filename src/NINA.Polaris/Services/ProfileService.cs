@@ -461,6 +461,8 @@ public class ProfileService {
             LiveStackComputeMode = src.LiveStackComputeMode,
             LiveStackSaveFramesToDisk = src.LiveStackSaveFramesToDisk,
             LiveStackColor = src.LiveStackColor,
+            LiveStackSigmaRejection = src.LiveStackSigmaRejection,
+            LiveStackSigmaKappa = src.LiveStackSigmaKappa,
             LiveStackMaxDurationSeconds = src.LiveStackMaxDurationSeconds,
             TargetSnr = src.TargetSnr,
             // LSPP-3: per-frame pre-processing (calibration + BGE).
