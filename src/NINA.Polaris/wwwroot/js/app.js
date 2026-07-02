@@ -26466,7 +26466,7 @@ function ninaApp() {
                 const op = this._wfOp(t);
                 return { $type: t, enabled: true, params: JSON.parse(JSON.stringify(op?.defaults || {})) };
             };
-            this.workflow.steps = ['bge', 'denoise', 'detail', 'autostretch',
+            this.workflow.steps = ['autocrop', 'bge', 'denoise', 'detail', 'autostretch',
                 'contrast', 'saturation', 'export'].map(mk);
             this.workflow.selected = 0;
             this.toast('Recommended workflow loaded', 'success');

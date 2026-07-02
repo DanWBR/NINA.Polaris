@@ -427,6 +427,11 @@ builder.Services.AddSingleton(sp =>
 
 var app = builder.Build();
 
+// Seed the built-in "Standard" Auto Workflow on first run (one-time, marker-
+// guarded so a user-deleted default stays deleted). Best-effort.
+try { app.Services.GetRequiredService<NINA.Polaris.Services.Workflow.WorkflowStore>().SeedDefaults(); }
+catch { /* non-fatal */ }
+
 // HTTP -> HTTPS redirect. Runs first so any plaintext request (LAN client that
 // typed http://) is bounced to the HTTPS endpoint, preserving host + path +
 // query. WebSocket upgrades only happen after the page loads over HTTPS, so

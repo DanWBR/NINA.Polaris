@@ -81,6 +81,29 @@ public class WorkflowStoreTests {
     }
 
     [Test]
+    public void SeedDefaults_WritesStandardOnce_AndRespectsDeletion() {
+        var store = NewStore();
+
+        store.SeedDefaults();
+        Assert.That(store.List(), Does.Contain("Standard"), "first run seeds Standard");
+        var json = store.Load("Standard");
+        Assert.That(json, Is.Not.Null);
+        // Valid JSON with the expected first + last steps.
+        using (var doc = System.Text.Json.JsonDocument.Parse(json!)) {
+            var steps = doc.RootElement.GetProperty("steps");
+            Assert.That(steps[0].GetProperty("$type").GetString(), Is.EqualTo("autocrop"));
+            Assert.That(steps[steps.GetArrayLength() - 1].GetProperty("$type").GetString(),
+                Is.EqualTo("export"));
+        }
+
+        // Marker guard: a user who deletes it does NOT get it back.
+        store.Delete("Standard");
+        store.SeedDefaults();
+        Assert.That(store.List(), Does.Not.Contain("Standard"),
+            "deleting the default must be permanent");
+    }
+
+    [Test]
     public void ResolvePath_RejectsTraversal() {
         var store = NewStore();
         // Path separators are stripped so a "../evil" name can never escape
