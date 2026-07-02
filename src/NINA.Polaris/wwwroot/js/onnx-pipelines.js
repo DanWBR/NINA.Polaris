@@ -36,7 +36,7 @@
     // parent terminates after a short idle, which frees the whole heap. Kept
     // alive across a batch (fast), torn down once idle (reclaims). See
     // js/onnx-worker.js + runOneShot().
-    const ORT_WORKER_PATH = '/js/onnx-worker.js?v=20260701-detaillog';
+    const ORT_WORKER_PATH = '/js/onnx-worker.js?v=20260701-detaillog2';
     const ONESHOT_IDLE_MS = 15000;
     let _osWorker = null;
     let _osSeq = 0;
@@ -1452,6 +1452,15 @@
             // polaris-1.2-log), so the existing percentile-trained model keeps
             // its percentile inference and both can coexist in the registry.
             const logNormDetail = usePacked2ch && /log/i.test(String(version || ''));
+            if (usePacked2ch) {
+                // Make the active normalization visible so it's easy to confirm
+                // WHICH Detail model/path actually ran (the log path only fires
+                // for a "-log" version; otherwise the percentile path runs).
+                try {
+                    console.info('[Detail] family=' + family + ' version=' + version +
+                        ' normalization=' + (logNormDetail ? 'log-domain' : 'percentile'));
+                } catch (_) { /* no console */ }
+            }
             // Polaris Detail sigma: fwhm / 9.0 (synth.py SIGMA_NORM = FWHM_MAX = 9.0)
             const polarisConditionValue = Math.max(0, Math.min(1, psfPixels / 9.0));
             // GraXpert decon models use 512px tiles; Polaris detail uses 256px.

@@ -108,8 +108,14 @@ public class OnnxModelRegistry {
     // distinct versions (e.g. "2.0.0-fp16" alongside "2.0.0").
     // Optional lowercase source prefix (e.g. "polaris-", "graxpert-")
     // lets operators identify model origin from the folder name alone.
+    // The optional "-log" tag marks a Detail model trained with the
+    // GraXpert-style log-domain normalization (train_task.py --log-norm);
+    // onnx-pipelines.js keys its log-domain inference on the version string
+    // containing "log", so the tag must survive into the registered version
+    // (e.g. "1.2-log" or "1.2-log-fp16"). Without it the folder would be
+    // rejected and the model silently ignored.
     private static readonly Regex VersionRegex =
-        new(@"^([a-z]+-)?(\d+\.\d+(\.\d+)?)(-(fp16|int16|int8))?$", RegexOptions.Compiled);
+        new(@"^([a-z]+-)?(\d+\.\d+(\.\d+)?)(-log)?(-(fp16|int16|int8))?$", RegexOptions.Compiled);
 
     public OnnxModelRegistry(ProfileService profile, IWebHostEnvironment env,
                               ILogger<OnnxModelRegistry> logger) {
