@@ -26262,9 +26262,13 @@ function ninaApp() {
                   fields: [ { k: 'strength', label: 'Strength', type: 'range', min: 0, max: 1, step: 0.05, def: 0.5 } ],
                   defaults: { strength: 0.5 } },
                 { type: 'detail',   label: 'Detail / Sharpen', kind: 'onnx', family: 'detail', suffix: '_detail',
+                  // Auto measures the star FWHM per-image (server PSF extractor)
+                  // and feeds it as psfPixels, so the sharpen matches the actual
+                  // seeing without the user guessing.
+                  autoParam: { key: 'psfPixels', label: 'Auto-measure FWHM (per image)', measure: 'fwhm' },
                   fields: [ { k: 'strength', label: 'Strength', type: 'range', min: 0, max: 1, step: 0.05, def: 0.5 },
                             { k: 'psfPixels', label: 'FWHM (px)', type: 'number', min: 0.5, max: 20, step: 0.1, def: 4.0 } ],
-                  defaults: { strength: 0.5, psfPixels: 4.0 } },
+                  defaults: { strength: 0.5, psfPixels: 4.0, auto: true } },
                 { type: 'halo',     label: 'Halo Removal', kind: 'onnx', family: 'halo', suffix: '_halo',
                   fields: [ { k: 'strength', label: 'Strength', type: 'range', min: 0, max: 1, step: 0.05, def: 0.5 } ],
                   defaults: { strength: 0.5 } },
@@ -26306,21 +26310,21 @@ function ninaApp() {
                 { type: 'whitepoint',  label: 'White point', kind: 'edit', group: 'Editor',
                   editPath: ['stretch', 'white'], min: 0, max: 1, step: 0.005, def: 1, defaults: { value: 1 } },
                 { type: 'exposure',    label: 'Exposure', kind: 'edit', group: 'Editor', auto: true,
-                  editPath: ['light', 'exposure'], min: -5, max: 5, step: 0.05, def: 0, defaults: { value: 0, auto: false } },
+                  editPath: ['light', 'exposure'], min: -5, max: 5, step: 0.05, def: 0, defaults: { value: 0, auto: true } },
                 { type: 'contrast',    label: 'Contrast', kind: 'edit', group: 'Editor', auto: true,
-                  editPath: ['light', 'contrast'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                  editPath: ['light', 'contrast'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: true } },
                 { type: 'highlights',  label: 'Highlights', kind: 'edit', group: 'Editor', auto: true,
-                  editPath: ['light', 'highlights'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                  editPath: ['light', 'highlights'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: true } },
                 { type: 'shadows',     label: 'Shadows', kind: 'edit', group: 'Editor', auto: true,
-                  editPath: ['light', 'shadows'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                  editPath: ['light', 'shadows'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: true } },
                 { type: 'whites',      label: 'Whites', kind: 'edit', group: 'Editor', auto: true,
-                  editPath: ['light', 'whites'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                  editPath: ['light', 'whites'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: true } },
                 { type: 'blacks',      label: 'Blacks', kind: 'edit', group: 'Editor', auto: true,
-                  editPath: ['light', 'blacks'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                  editPath: ['light', 'blacks'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: true } },
                 { type: 'vibrance',    label: 'Vibrance', kind: 'edit', group: 'Editor', auto: true,
-                  editPath: ['color', 'vibrance'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                  editPath: ['color', 'vibrance'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: true } },
                 { type: 'saturation',  label: 'Saturation', kind: 'edit', group: 'Editor', auto: true,
-                  editPath: ['color', 'saturation'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                  editPath: ['color', 'saturation'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: true } },
                 { type: 'hue',         label: 'Hue', kind: 'edit', group: 'Editor',
                   editPath: ['color', 'hue'], min: -180, max: 180, step: 1, def: 0, defaults: { value: 0 } },
                 { type: 'temp',        label: 'White balance: Temp (K)', kind: 'edit', group: 'Editor',
@@ -26549,11 +26553,34 @@ function ninaApp() {
             throw new Error('unsupported step kind: ' + op.kind);
         },
 
+        // Measure the median star FWHM (px) of a frame server-side. Used by the
+        // Detail step's "Auto FWHM" so the sharpen matches the real seeing.
+        async _wfMeasureFwhm(path) {
+            try {
+                const r = await this.apiFetch('/api/decon/measure-fwhm',
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ path }) });
+                if (!r.ok) return null;
+                const j = await r.json();
+                return (typeof j.fwhmPx === 'number' && j.fwhmPx > 0) ? j.fwhmPx : null;
+            } catch (_) { return null; }
+        },
+
         async _wfRunOnnx(op, params, inputPath) {
             if (typeof OnnxRegistry === 'undefined') throw new Error('inference engine not loaded');
+            // Auto-measured parameter (e.g. Detail FWHM): resolve it from the
+            // actual input before inference, falling back to the manual value.
+            const eff = Object.assign({}, params);
+            if (op.autoParam && params.auto) {
+                if (op.autoParam.measure === 'fwhm') {
+                    const f = await this._wfMeasureFwhm(inputPath);
+                    if (f) { eff[op.autoParam.key] = Math.round(f * 10) / 10;
+                        this._wfLog('step', '  auto FWHM = ' + eff[op.autoParam.key] + ' px'); }
+                }
+            }
             const src = await this._onnxFetchSourcePixels(inputPath);
             if (!src) throw new Error('could not read ' + this._wfBase(inputPath));
-            const opts = Object.assign({}, op.defaults, params, {
+            const opts = Object.assign({}, op.defaults, eff, {
                 channels: src.channels,
                 family: op.family,
                 useGpu: !!(this.graxpert && this.graxpert.modalUseGpu),
