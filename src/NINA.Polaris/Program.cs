@@ -365,6 +365,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.External.GraXpertService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.UpdateService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.CropService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.PostProcess.ScnrService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.DeconvolutionService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameAnalysisService>();
 // TLS-2: DuckDNS HTTP client for setting TXT records during ACME
@@ -1092,6 +1093,7 @@ app.MapDssEndpoints();
 app.MapGraXpertEndpoints();
 app.MapUpdateEndpoints();
 app.MapCropEndpoints();
+app.MapPostProcessEndpoints();
 app.MapDeconEndpoints();
 app.MapAnalysisEndpoints();
 app.MapWorkflowEndpoints();

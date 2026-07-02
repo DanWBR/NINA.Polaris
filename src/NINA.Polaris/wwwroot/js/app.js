@@ -26293,6 +26293,15 @@ function ninaApp() {
                   fields: [ { k: 'mode', label: 'Mode', type: 'select', options: ['screen', 'add', 'lighten'], def: 'screen' },
                             { k: 'opacity', label: 'Opacity', type: 'range', min: 0, max: 1, step: 0.05, def: 1.0 } ],
                   defaults: { mode: 'screen', opacity: 1.0 } },
+                // SCNR -- Subtractive Chromatic Noise Reduction (green-cast
+                // removal on RGB; no-op on mono). Ported from Siril. Plain
+                // FITS->FITS server op like crop/rl.
+                { type: 'scnr',     label: 'SCNR (remove green)', kind: 'post', endpoint: '/api/post/scnr', suffix: '_scnr',
+                  fields: [ { k: 'mode', label: 'Mode', type: 'select',
+                              options: ['average-neutral', 'maximum-neutral', 'maximum-mask', 'additive-mask'], def: 'average-neutral' },
+                            { k: 'amount', label: 'Amount', type: 'range', min: 0, max: 1, step: 0.05, def: 1.0 },
+                            { k: 'preserveLightness', label: 'Preserve lightness', type: 'bool', def: false } ],
+                  defaults: { mode: 'average-neutral', amount: 1.0, preserveLightness: false } },
                 // --- Editor adjustments: one item per slider. All enabled
                 // edit items are collected into ONE EditParams and applied in a
                 // single editor pass at the export step (order among them does
@@ -26573,6 +26582,7 @@ function ninaApp() {
             if (op.kind === 'starless')  return this._wfStarless(params, inputPath);
             if (op.kind === 'crop')      return this._wfCrop(params, inputPath);
             if (op.kind === 'rl')        return this._wfRl(params, inputPath);
+            if (op.kind === 'post')      return this._wfPost(op, params, inputPath);
             if (op.kind === 'blend')     return this._wfBlend(params, inputPath, named);
             throw new Error('unsupported step kind: ' + op.kind);
         },
@@ -26655,6 +26665,20 @@ function ninaApp() {
             const j = await r.json();
             const out = j.results && j.results[0] && j.results[0].outputPath;
             if (!out) throw new Error((j.failures && j.failures[0] && j.failures[0].error) || 'crop failed');
+            return out;
+        },
+
+        // Generic path-in/path-out server filter (Siril ports: SCNR, ...).
+        // POSTs { paths:[inputPath], ...params } to op.endpoint and returns
+        // results[0].outputPath -- same wire shape as crop/rl.
+        async _wfPost(op, params, inputPath) {
+            const body = Object.assign({ paths: [inputPath] }, params);
+            const r = await this.apiFetch(op.endpoint,
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            if (!r.ok) throw new Error(op.label + ' HTTP ' + r.status);
+            const j = await r.json();
+            const out = j.results && j.results[0] && j.results[0].outputPath;
+            if (!out) throw new Error((j.failures && j.failures[0] && j.failures[0].error) || (op.label + ' failed'));
             return out;
         },
 
