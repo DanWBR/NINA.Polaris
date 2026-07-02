@@ -131,6 +131,36 @@ public static class PostProcessEndpoints {
             }
             return Results.Ok(new { results, failures });
         });
+
+        // Morphological star reduction (shrink / dim stars).
+        g.MapPost("/star-reduce", async (
+                StarReductionService svc,
+                FrameLibraryService library,
+                StarReduceRequest req) => {
+            if (req.Paths == null || req.Paths.Length == 0)
+                return Results.BadRequest(new { error = "paths is required" });
+
+            var results = new List<object>();
+            var failures = new List<object>();
+            foreach (var path in req.Paths) {
+                try {
+                    var r = svc.RunFits(path, req.Amount ?? 0.5, req.Size ?? 2, req.ProtectCore ?? true);
+                    results.Add(new {
+                        sourcePath = path,
+                        outputPath = r.OutputPath,
+                        width = r.Width, height = r.Height, channels = r.Channels,
+                        starsReduced = r.StarsReduced
+                    });
+                } catch (Exception ex) {
+                    failures.Add(new { sourcePath = path, error = ex.Message });
+                }
+            }
+
+            if (results.Count > 0) {
+                try { await library.RescanAsync(); } catch { /* best-effort */ }
+            }
+            return Results.Ok(new { results, failures });
+        });
     }
 
     // mode: average-neutral | maximum-neutral | maximum-mask | additive-mask
@@ -155,4 +185,9 @@ public static class PostProcessEndpoints {
     public record CosmeticRequest(
         string[] Paths, double? SigmaCold = null, double? SigmaHot = null,
         double? Amount = null, bool? Cfa = null);
+
+    // amount 0..1 = strength; size = erosion radius (px); protectCore keeps
+    // bright star cores.
+    public record StarReduceRequest(
+        string[] Paths, double? Amount = null, int? Size = null, bool? ProtectCore = null);
 }

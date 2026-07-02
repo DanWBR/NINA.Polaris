@@ -26357,6 +26357,14 @@ function ninaApp() {
                             { k: 'amount', label: 'Amount', type: 'range', min: 0, max: 1, step: 0.05, def: 1.0 },
                             { k: 'cfa', label: 'CFA (undebayered OSC)', type: 'bool', def: false } ],
                   defaults: { sigmaHot: 3.0, sigmaCold: 5.0, amount: 1.0, cfa: false } },
+                // Morphological star reduction -- shrink/dim stars without
+                // removing them (detected-star mask + grayscale erosion).
+                // Complements the AI Star Removal + Blend path.
+                { type: 'starreduce', label: 'Star Reduction', kind: 'post', endpoint: '/api/post/star-reduce', suffix: '_starred',
+                  fields: [ { k: 'amount', label: 'Strength', type: 'range', min: 0, max: 1, step: 0.05, def: 0.5 },
+                            { k: 'size', label: 'Size (px)', type: 'number', min: 1, max: 12, step: 1, def: 2 },
+                            { k: 'protectCore', label: 'Protect cores', type: 'bool', def: true } ],
+                  defaults: { amount: 0.5, size: 2, protectCore: true } },
                 // --- Editor adjustments: one item per slider. All enabled
                 // edit items are collected into ONE EditParams and applied in a
                 // single editor pass at the export step (order among them does
