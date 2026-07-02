@@ -153,6 +153,35 @@ public class LiveStackingService {
     /// broadcast + colour save path.</summary>
     public bool ColorActive { get { lock (_lock) { return _colorActive; } } }
 
+    /// <summary>Per-rig opt-in: per-pixel kappa-sigma outlier rejection on the
+    /// live stack. When on, each incoming sample is compared to the pixel's
+    /// running mean +/- <see cref="SigmaKappa"/> * sigma (Welford, over the
+    /// already-accepted samples); samples past that are dropped instead of
+    /// folded in, so cosmic rays, plane/satellite trails and dithered hot
+    /// pixels stay out of the integration. OFF (default) keeps the plain
+    /// running-mean accumulate (GPU fast path). Pays off most WITH dithering.
+    /// Set via PUT /api/livestack/sigma-rejection, persisted per-rig.</summary>
+    public bool SigmaRejection { get; set; } = false;
+
+    /// <summary>Rejection threshold in sigmas (default 3.0). Lower = more
+    /// aggressive clipping.</summary>
+    public double SigmaKappa { get; set; } = 3.0;
+
+    // Frames must build a spread estimate before any sample can be rejected,
+    // so the first few always seed each pixel's statistics.
+    private const int SigmaMinFrames = 5;
+
+    // Welford M2 (sum of squared deviations) per pixel, allocated only while
+    // SigmaRejection is on. Mono uses _stackBuffer as the running sum; colour
+    // keeps a separate luminance running sum (_lumSumBuffer) since the three
+    // channel accumulators aren't a luminance.
+    private float[]? _m2Buffer;
+    private float[]? _lumSumBuffer;
+
+    /// <summary>Count of individual pixel samples rejected as outliers during
+    /// the current session (diagnostic; surfaced on the status payload).</summary>
+    public long RejectedPixels { get; private set; }
+
     /// <summary>When > 0, stacking auto-pauses after this many
     /// seconds elapsed since the first frame of the current stack
     /// (i.e. since the last Reset). 0 = run indefinitely. Frames
@@ -463,6 +492,9 @@ public class LiveStackingService {
             _stackR = null;
             _stackG = null;
             _stackB = null;
+            _m2Buffer = null;
+            _lumSumBuffer = null;
+            RejectedPixels = 0;
             _colorActive = false;
             _bayerPattern = BayerPatternEnum.None;
             _lastGoodBayer = BayerPatternEnum.None;
@@ -677,6 +709,15 @@ public class LiveStackingService {
                         _stackB = new float[pixelCount];
                         _logger.LogInformation("Live stack: colour mode ON (pattern {P})", _bayerPattern);
                     }
+                    // Kappa-sigma rejection buffers (opt-in). Mono reuses
+                    // _stackBuffer as the running sum + one M2 buffer; colour
+                    // needs a separate luminance running sum since the channel
+                    // accumulators aren't a luminance. Allocated only when on.
+                    if (SigmaRejection) {
+                        _m2Buffer = new float[pixelCount];
+                        if (_colorActive) _lumSumBuffer = new float[pixelCount];
+                        _logger.LogInformation("Live stack: kappa-sigma rejection ON (k={K})", SigmaKappa);
+                    }
                     // Part B2: remember the pier side at the reference so a
                     // later change can hint a flip before alignment proves it.
                     _referencePier = _equipment?.Telescope?.SideOfPier ?? PierSide.pierUnknown;
@@ -734,20 +775,48 @@ public class LiveStackingService {
                         b = ImageResampler.ApplyTransform(b, _width, _height, usedTransform);
                     }
                     int accN = Math.Min(r.Length, _stackR!.Length);
+                    bool rej = SigmaRejection && _m2Buffer != null && _lumSumBuffer != null;
                     for (int i = 0; i < accN; i++) {
                         // Off-canvas after warp is 0 in all three planes.
                         if (r[i] > 0 || g[i] > 0 || b[i] > 0) {
-                            _stackR![i] += r[i];
-                            _stackG![i] += g[i];
-                            _stackB![i] += b[i];
-                            _countBuffer![i]++;
+                            if (rej) {
+                                // Reject on luminance: an outlier in brightness
+                                // (cosmic ray, hot pixel) drops the whole RGB
+                                // triple so colour balance isn't skewed.
+                                double lum = 0.299 * r[i] + 0.587 * g[i] + 0.114 * b[i];
+                                if (!KappaSigmaStack.Accept(_lumSumBuffer!, _countBuffer!, _m2Buffer!,
+                                        i, lum, SigmaMinFrames, SigmaKappa)) {
+                                    RejectedPixels++;
+                                    continue;
+                                }
+                                _stackR![i] += r[i];
+                                _stackG![i] += g[i];
+                                _stackB![i] += b[i];
+                                // Update increments the shared count for us.
+                                KappaSigmaStack.Update(_lumSumBuffer!, _countBuffer!, _m2Buffer!, i, lum);
+                            } else {
+                                _stackR![i] += r[i];
+                                _stackG![i] += g[i];
+                                _stackB![i] += b[i];
+                                _countBuffer![i]++;
+                            }
                         }
                     }
                 } else {
                     // Mono: accumulate the aligned CFA/mono frame (running
                     // average), on the GPU when available, CPU otherwise.
                     int accN = Math.Min(alignedData.Length, _stackBuffer!.Length);
-                    if (!_gpu.TryAccumulate(alignedData, _stackBuffer!, _countBuffer!, accN)) {
+                    if (SigmaRejection && _m2Buffer != null) {
+                        // Kappa-sigma path: per-pixel Welford + reject before
+                        // folding in (no GPU kernel; runs on CPU).
+                        for (int i = 0; i < accN; i++) {
+                            if (alignedData[i] > 0 &&
+                                !KappaSigmaStack.Accumulate(_stackBuffer, _countBuffer!, _m2Buffer,
+                                    i, alignedData[i], SigmaMinFrames, SigmaKappa)) {
+                                RejectedPixels++;
+                            }
+                        }
+                    } else if (!_gpu.TryAccumulate(alignedData, _stackBuffer!, _countBuffer!, accN)) {
                         for (int i = 0; i < accN; i++) {
                             if (alignedData[i] > 0) {
                                 _stackBuffer[i] += alignedData[i];
