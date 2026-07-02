@@ -26311,6 +26311,13 @@ function ninaApp() {
                   fields: [ { k: 'passes', label: 'Passes', type: 'select', options: [1, 2, 3], def: 1 },
                             { k: 'reduceHalos', label: 'Reduce halos', type: 'bool', def: true } ],
                   defaults: { passes: 1, reduceHalos: true } },
+                // Auto crop -- detect + remove the black/ragged stacking
+                // borders on slightly-misaligned integrations (largest fully-
+                // covered inner rectangle). No ROI to set. FITS->FITS server op.
+                { type: 'autocrop', label: 'Auto Crop (stacking borders)', kind: 'post', endpoint: '/api/crop/auto', suffix: '_crop',
+                  fields: [ { k: 'threshold', label: 'Black threshold', type: 'number', min: 0, max: 5000, step: 1, def: 0 },
+                            { k: 'margin', label: 'Safety margin (px)', type: 'number', min: 0, max: 200, step: 1, def: 0 } ],
+                  defaults: { threshold: 0, margin: 0 } },
                 { type: 'crop',     label: 'Crop', kind: 'crop',
                   fields: [ { k: 'fracX', label: 'X', type: 'number', min: 0, max: 1, step: 0.01, def: 0.1 },
                             { k: 'fracY', label: 'Y', type: 'number', min: 0, max: 1, step: 0.01, def: 0.1 },

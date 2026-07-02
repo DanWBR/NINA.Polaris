@@ -81,6 +81,38 @@ public static class CropEndpoints {
 
             return Results.Ok(new { results, failures });
         });
+
+        // Auto-crop: detect + remove the black/ragged stacking borders on
+        // slightly-misaligned integrations. No ROI needed — the largest
+        // fully-covered inner rectangle is found per file. Same response
+        // shape as /run so the Auto Workflow post-runner can drive it.
+        g.MapPost("/auto", async (
+                CropService svc,
+                FrameLibraryService library,
+                AutoCropRequest req) => {
+            if (req.Paths == null || req.Paths.Length == 0)
+                return Results.BadRequest(new { error = "paths is required" });
+
+            var results = new List<object>();
+            var failures = new List<object>();
+            foreach (var path in req.Paths) {
+                try {
+                    var r = svc.AutoCropFits(path, req.Threshold ?? 0, req.Margin ?? 0);
+                    results.Add(new {
+                        sourcePath = path,
+                        outputPath = r.OutputPath,
+                        width = r.Width, height = r.Height, channels = r.Channels
+                    });
+                } catch (Exception ex) {
+                    failures.Add(new { sourcePath = path, error = ex.Message });
+                }
+            }
+
+            if (results.Count > 0) {
+                try { await library.RescanAsync(); } catch { /* best-effort */ }
+            }
+            return Results.Ok(new { results, failures });
+        });
     }
 
     // X/Y/Width/Height are legacy absolute pixel coords (kept for API
@@ -91,4 +123,10 @@ public static class CropEndpoints {
         string[] Paths, int X, int Y, int Width, int Height,
         double? FracX = null, double? FracY = null,
         double? FracW = null, double? FracH = null);
+
+    // Threshold = per-channel level a pixel must clear to count as covered
+    // (0 = exact black, what integrators write for uncovered areas). Margin =
+    // extra inward shrink in px (safety against low-SNR partial edges).
+    public record AutoCropRequest(
+        string[] Paths, int? Threshold = null, int? Margin = null);
 }

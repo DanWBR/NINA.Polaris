@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Image.FileFormat.FITS;
+using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
 
 namespace NINA.Polaris.Services;
@@ -107,6 +108,37 @@ public class CropService {
         h = Math.Clamp(h, 1, srcH - y);
 
         return CropCore(src, sourcePath, x, y, w, h);
+    }
+
+    /// <summary>
+    /// Auto-crop: detect the largest fully-stacked (non-black) inner rectangle
+    /// and crop to it, removing the ragged registration borders that stacking
+    /// leaves on slightly misaligned subs. <paramref name="threshold"/> is the
+    /// per-channel level below which a pixel counts as an uncovered border
+    /// (default 0 = exact black, what integrators write for uncovered areas);
+    /// raise it to also trim near-black partial-coverage edges.
+    /// <paramref name="margin"/> shrinks the detected rectangle inward by N px
+    /// as a safety against low-SNR partial edges. Writes `{stem}_crop.fits`
+    /// like the manual crop. Returns the detected geometry.
+    /// </summary>
+    public CropResult AutoCropFits(string sourcePath, int threshold = 0, int margin = 0) {
+        if (string.IsNullOrWhiteSpace(sourcePath))
+            throw new ArgumentException("sourcePath is required", nameof(sourcePath));
+        if (!File.Exists(sourcePath))
+            throw new FileNotFoundException("Source FITS not found", sourcePath);
+
+        BaseImageData src;
+        using (var fs = File.OpenRead(sourcePath)) {
+            src = FITSReader.Read(fs);
+        }
+        int channels = src.Properties.Channels == 3 ? 3 : 1;
+        var r = AutoCrop.FindContentRect(src.Data, src.Properties.Width, src.Properties.Height,
+            channels, threshold, margin);
+        _logger.LogInformation(
+            "AutoCrop: {Src} ({SrcW}×{SrcH}) → content ({X},{Y} {W}×{H}) thr={Thr} margin={M}",
+            sourcePath, src.Properties.Width, src.Properties.Height, r.X, r.Y, r.Width, r.Height,
+            threshold, margin);
+        return CropCore(src, sourcePath, r.X, r.Y, r.Width, r.Height);
     }
 
     private CropResult CropCore(BaseImageData src, string sourcePath,
