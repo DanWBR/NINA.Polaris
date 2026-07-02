@@ -115,6 +115,43 @@ public class BatchStackingService {
     public IntegrationProgress? GetStatus(string jobId)
         => _jobs.TryGetValue(jobId, out var p) ? p : null;
 
+    /// <summary>
+    /// Recommend a drizzle scale for a set of frames by measuring the median
+    /// star FWHM (px) on a small sample and combining it with the sub count.
+    /// FWHM in pixels is the sampling measure drizzle cares about; the rig's
+    /// pixel size / focal length aren't needed. Reads at most 5 frames.
+    /// </summary>
+    public DrizzleAdvisor.Advice AdviseDrizzle(IReadOnlyList<string> framePaths) {
+        var hfrs = new List<double>();
+        var detector = new StarDetector();
+        int sampled = 0;
+        foreach (var path in framePaths) {
+            if (sampled >= 5) break;
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) continue;
+            try {
+                BaseImageData img;
+                using (var fs = File.OpenRead(path)) img = FITSReader.Read(fs);
+                ushort[] src = img.Data;
+                var pat = img.Properties.BayerPattern;
+                if (pat != NINA.Core.Enum.BayerPatternEnum.None) {
+                    var ch = BayerDebayer.Bilinear(img.Data, img.Properties.Width, img.Properties.Height, pat);
+                    src = BayerDebayer.ToLuminance(ch);
+                }
+                var stars = detector.Detect(src, img.Properties.Width, img.Properties.Height);
+                foreach (var s in stars) if (s.HFR > 0) hfrs.Add(s.HFR);
+                sampled++;
+            } catch (Exception ex) {
+                _logger.LogDebug(ex, "Drizzle advice: skipped {Path}", path);
+            }
+        }
+        double medianFwhm = 0;
+        if (hfrs.Count > 0) {
+            hfrs.Sort();
+            medianFwhm = DrizzleAdvisor.FwhmFromHfr(hfrs[hfrs.Count / 2]);
+        }
+        return DrizzleAdvisor.Recommend(medianFwhm, framePaths.Count);
+    }
+
     private void RunJob(string jobId, IReadOnlyList<string> framePaths, IntegrationMethod method,
                         int drizzleScale = 1, double drizzlePixfrac = 1.0) {
         string? tempDir = null;

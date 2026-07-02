@@ -193,6 +193,21 @@ public static class StudioEndpoints {
             return p == null ? Results.NotFound() : Results.Ok(p);
         });
 
+        // Recommend a drizzle scale for the selected frames from their star
+        // FWHM (undersampled -> 2x, well-sampled -> 1x) + sub count. The UI
+        // calls this when the drizzle control is opened. Body: { framePaths }.
+        g.MapPost("/drizzle-advice", (BatchStackingService svc, DrizzleAdviceRequest req) => {
+            if (req?.FramePaths == null || req.FramePaths.Count == 0)
+                return Results.BadRequest(new { error = "No frames." });
+            var a = svc.AdviseDrizzle(req.FramePaths);
+            return Results.Ok(new {
+                fwhmPx = a.FwhmPx,
+                subCount = a.SubCount,
+                recommendedScale = a.RecommendedScale,
+                reason = a.Reason
+            });
+        });
+
         // --- CC-1: channel combine (RGB / LRGB / PixelMath) -----------
         // Combine N per-filter mono masters into one RGB or LRGB FITS.
         // The mono workflow's last missing step before AI cleanup and
@@ -344,6 +359,10 @@ public static class StudioEndpoints {
     // UNIF-3a: path-based contract. The Stack sub-tab posts absolute
     // paths straight from the user's slot assignments.
     public record MasterRequest(List<string> FramePaths, string Type, string Method);
+
+    /// <summary>Body of POST /api/studio/drizzle-advice: the frames the user is
+    /// about to integrate. The service samples a few for star FWHM.</summary>
+    public record DrizzleAdviceRequest(List<string> FramePaths);
 
     /// <summary>Thrown from the preview RenderCache lambda when the
     /// frame renderer returns null (corrupt / unreadable source), so the
