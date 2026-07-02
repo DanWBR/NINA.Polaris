@@ -1992,6 +1992,7 @@ function ninaApp() {
             log: [],              // [{ kind, text }]
             results: [],          // [{ source, output, ok }]
             addType: 'bge',
+            selected: -1,         // selected step index (left list → right detail)
         },
         setFilesSubTab(name) {
             if (name === 'edit') {
@@ -26287,17 +26288,75 @@ function ninaApp() {
                   fields: [ { k: 'mode', label: 'Mode', type: 'select', options: ['screen', 'add', 'lighten'], def: 'screen' },
                             { k: 'opacity', label: 'Opacity', type: 'range', min: 0, max: 1, step: 0.05, def: 1.0 } ],
                   defaults: { mode: 'screen', opacity: 1.0 } },
-                { type: 'editor',   label: 'Editor adjustments + Export', kind: 'editor',
+                // --- Editor adjustments: one item per slider. All enabled
+                // edit items are collected into ONE EditParams and applied in a
+                // single editor pass at the export step (order among them does
+                // not matter -- EditPipeline has a fixed internal order). Each
+                // supports an "Auto" toggle; the auto-tunable ones pull their
+                // value from /api/editor/auto (same engine as the editor's Auto
+                // button). ---
+                { type: 'autostretch', label: 'Auto Stretch (GraXpert)', kind: 'edit', group: 'Editor',
+                  editPath: ['stretch', 'auto'], boolOn: true,
+                  defaults: {} },
+                { type: 'blackpoint',  label: 'Black point', kind: 'edit', group: 'Editor',
+                  editPath: ['stretch', 'black'], min: 0, max: 1, step: 0.005, def: 0, defaults: { value: 0 } },
+                { type: 'midtones',    label: 'Midtones', kind: 'edit', group: 'Editor',
+                  editPath: ['stretch', 'mid'], min: 0, max: 1, step: 0.005, def: 0.5, defaults: { value: 0.5 } },
+                { type: 'whitepoint',  label: 'White point', kind: 'edit', group: 'Editor',
+                  editPath: ['stretch', 'white'], min: 0, max: 1, step: 0.005, def: 1, defaults: { value: 1 } },
+                { type: 'exposure',    label: 'Exposure', kind: 'edit', group: 'Editor', auto: true,
+                  editPath: ['light', 'exposure'], min: -5, max: 5, step: 0.05, def: 0, defaults: { value: 0, auto: false } },
+                { type: 'contrast',    label: 'Contrast', kind: 'edit', group: 'Editor', auto: true,
+                  editPath: ['light', 'contrast'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                { type: 'highlights',  label: 'Highlights', kind: 'edit', group: 'Editor', auto: true,
+                  editPath: ['light', 'highlights'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                { type: 'shadows',     label: 'Shadows', kind: 'edit', group: 'Editor', auto: true,
+                  editPath: ['light', 'shadows'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                { type: 'whites',      label: 'Whites', kind: 'edit', group: 'Editor', auto: true,
+                  editPath: ['light', 'whites'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                { type: 'blacks',      label: 'Blacks', kind: 'edit', group: 'Editor', auto: true,
+                  editPath: ['light', 'blacks'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                { type: 'vibrance',    label: 'Vibrance', kind: 'edit', group: 'Editor', auto: true,
+                  editPath: ['color', 'vibrance'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                { type: 'saturation',  label: 'Saturation', kind: 'edit', group: 'Editor', auto: true,
+                  editPath: ['color', 'saturation'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0, auto: false } },
+                { type: 'hue',         label: 'Hue', kind: 'edit', group: 'Editor',
+                  editPath: ['color', 'hue'], min: -180, max: 180, step: 1, def: 0, defaults: { value: 0 } },
+                { type: 'temp',        label: 'White balance: Temp (K)', kind: 'edit', group: 'Editor',
+                  editPath: ['whiteBalance', 'tempK'], min: 2000, max: 12000, step: 50, def: 6500, defaults: { value: 6500 } },
+                { type: 'tint',        label: 'White balance: Tint', kind: 'edit', group: 'Editor',
+                  editPath: ['whiteBalance', 'tint'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0 } },
+                { type: 'sharpen',     label: 'Sharpen', kind: 'edit', group: 'Editor',
+                  editPath: ['detail', 'sharpenAmount'], min: 0, max: 1, step: 0.02, def: 0, defaults: { value: 0 } },
+                { type: 'noisereduce', label: 'Noise reduction', kind: 'edit', group: 'Editor',
+                  editPath: ['detail', 'noiseReduce'], min: 0, max: 1, step: 0.02, def: 0, defaults: { value: 0 } },
+                { type: 'texture',     label: 'Texture', kind: 'edit', group: 'Editor',
+                  editPath: ['effects', 'texture'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0 } },
+                { type: 'clarity',     label: 'Clarity', kind: 'edit', group: 'Editor',
+                  editPath: ['effects', 'clarity'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0 } },
+                { type: 'dehaze',      label: 'Dehaze', kind: 'edit', group: 'Editor',
+                  editPath: ['effects', 'dehaze'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0 } },
+                { type: 'vignette',    label: 'Vignette', kind: 'edit', group: 'Editor',
+                  editPath: ['effects', 'vignetteAmount'], min: -1, max: 1, step: 0.02, def: 0, defaults: { value: 0 } },
+                { type: 'export',      label: 'Export bitmap', kind: 'editor-export', group: 'Editor',
                   fields: [ { k: 'format', label: 'Format', type: 'select', options: ['png', 'jpg', 'tif'], def: 'png' },
                             { k: 'quality', label: 'Quality', type: 'range', min: 1, max: 100, step: 1, def: 92 } ],
-                  defaults: { edits: {}, format: 'png', quality: 92 } },
+                  defaults: { format: 'png', quality: 92 } },
             ];
+        },
+        // Group labels for the add-step dropdown (optgroups).
+        _wfGroup(op) { return op.group || 'Tools'; },
+        _wfOpsGrouped() {
+            const g = {};
+            for (const op of this._wfOps()) { (g[this._wfGroup(op)] ||= []).push(op); }
+            return Object.entries(g).map(([label, ops]) => ({ label, ops }));
         },
         _wfOp(type) { return this._wfOps().find(o => o.type === type) || null; },
         _wfBase(p) { return p ? (String(p).split(/[\\/]/).pop()) : ''; },
         _wfLog(kind, text) { this.workflow.log.push({ kind, text }); },
 
         // --- step list management (UI) ---
+        wfSelect(i) { this.workflow.selected = i; },
         wfAddStep() {
             const op = this._wfOp(this.workflow.addType);
             if (!op) return;
@@ -26305,13 +26364,20 @@ function ninaApp() {
                 $type: op.type, enabled: true,
                 params: JSON.parse(JSON.stringify(op.defaults || {})),
             });
+            this.workflow.selected = this.workflow.steps.length - 1;
         },
-        wfRemoveStep(i) { this.workflow.steps.splice(i, 1); },
+        wfRemoveStep(i) {
+            this.workflow.steps.splice(i, 1);
+            if (this.workflow.selected >= this.workflow.steps.length)
+                this.workflow.selected = this.workflow.steps.length - 1;
+        },
         wfMoveStep(i, dir) {
             const j = i + dir;
             const s = this.workflow.steps;
             if (j < 0 || j >= s.length) return;
             [s[i], s[j]] = [s[j], s[i]];
+            if (this.workflow.selected === i) this.workflow.selected = j;
+            else if (this.workflow.selected === j) this.workflow.selected = i;
         },
 
         // --- source list (reuse the Files browser selection) ---
@@ -26394,12 +26460,20 @@ function ninaApp() {
                     const named = {};        // prior named outputs (e.g. stars from starless)
                     const produced = [];     // intermediates for cleanup
                     let ok = true;
-                    for (let si = 0; si < steps.length; si++) {
+                    // Phase 1: the FITS→FITS pipeline (AI + crop/rl/blend). Editor
+                    // adjustment items are skipped here and applied together in
+                    // phase 2 (one editor pass), since EditPipeline has a fixed
+                    // internal order and re-exporting per-slider would degrade to
+                    // 8-bit. Iterate the FULL step list so currentStep highlights
+                    // the real row.
+                    for (let si = 0; si < wf.steps.length; si++) {
                         if (wf.abort) { ok = false; this._wfLog('warn', '  aborted'); break; }
-                        const step = steps[si];
-                        wf.currentStep = si;
+                        const step = wf.steps[si];
+                        if (step.enabled === false) continue;
                         const op = this._wfOp(step.$type);
                         if (!op) { this._wfLog('error', '  unknown step: ' + step.$type); ok = false; break; }
+                        if (op.kind === 'edit' || op.kind === 'editor-export') continue;
+                        wf.currentStep = si;
                         this._wfLog('step', '· ' + op.label + ' …');
                         try {
                             const res = await this._wfExec(op, step.params || {}, cur, named, source);
@@ -26415,6 +26489,27 @@ function ninaApp() {
                             this._wfLog('ok', '  ✓ ' + this._wfBase(cur));
                         } catch (e) {
                             this._wfLog('error', '  ✗ ' + (e.message || e)); ok = false; break;
+                        }
+                    }
+                    // Phase 2: editor adjustments (each slider is its own item) +
+                    // export, collected into ONE EditParams pass.
+                    if (ok && !wf.abort) {
+                        const editItems = wf.steps.filter(s => s.enabled !== false
+                            && this._wfOp(s.$type)?.kind === 'edit');
+                        const exportStep = wf.steps.find(s => s.enabled !== false
+                            && this._wfOp(s.$type)?.kind === 'editor-export');
+                        if (editItems.length || exportStep) {
+                            const anchor = exportStep || editItems[0];
+                            wf.currentStep = wf.steps.indexOf(anchor);
+                            this._wfLog('step', '· Editor adjustments + export …');
+                            try {
+                                const out = await this._wfEditorApply(cur, editItems,
+                                    exportStep ? exportStep.params : { format: 'png', quality: 92 });
+                                if (out) { produced.push(out); cur = out; }
+                                this._wfLog('ok', '  ✓ ' + this._wfBase(cur));
+                            } catch (e) {
+                                this._wfLog('error', '  ✗ ' + (e.message || e)); ok = false;
+                            }
                         }
                     }
                     wf.results.push({ source, output: cur, ok });
@@ -26441,7 +26536,6 @@ function ninaApp() {
             if (op.kind === 'crop')      return this._wfCrop(params, inputPath);
             if (op.kind === 'rl')        return this._wfRl(params, inputPath);
             if (op.kind === 'blend')     return this._wfBlend(params, inputPath, named);
-            if (op.kind === 'editor')    return this._wfEditorExport(params, inputPath);
             throw new Error('unsupported step kind: ' + op.kind);
         },
 
@@ -26543,18 +26637,49 @@ function ninaApp() {
             }
         },
 
-        async _wfEditorExport(params, inputPath) {
+        // Build one EditParams object from the individual editor-adjustment
+        // items and apply it in a single editor pass, then export the bitmap.
+        // Each item maps to a field via op.editPath [section, key]. Items with
+        // params.auto pull their value from /api/editor/auto (same engine as
+        // the editor's Auto button); Auto Stretch sets stretch.auto = true.
+        async _wfEditorApply(inputPath, editItems, exportOpts) {
             const load = await this.apiFetch('/api/editor/load',
                 { method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ path: inputPath }) });
             if (!load.ok) throw new Error('editor load HTTP ' + load.status);
             const sid = (await load.json()).sessionId;
             try {
+                // If any item requests Auto, fetch the auto-tune suggestion once.
+                let auto = null;
+                if ((editItems || []).some(s => s.params && s.params.auto)) {
+                    try {
+                        const ar = await this.apiFetch('/api/editor/auto',
+                            { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ sessionId: sid }) });
+                        if (ar.ok) auto = await ar.json();   // { light, color }
+                    } catch (_) { /* fall back to slider values */ }
+                }
+                const edits = {};
+                const put = (section, key, val) => {
+                    (edits[section] ||= {})[key] = val;
+                };
+                for (const step of (editItems || [])) {
+                    const op = this._wfOp(step.$type);
+                    if (!op || !op.editPath) continue;
+                    const [section, key] = op.editPath;
+                    if (op.boolOn) { put(section, key, true); continue; }
+                    let val = step.params ? step.params.value : undefined;
+                    if (step.params && step.params.auto && auto && auto[section]
+                        && auto[section][key] != null) {
+                        val = auto[section][key];
+                    }
+                    if (val != null) put(section, key, val);
+                }
                 const body = {
                     sessionId: sid,
-                    edits: params.edits || {},
-                    format: params.format || 'png',
-                    quality: params.quality != null ? params.quality : 92,
+                    edits,
+                    format: (exportOpts && exportOpts.format) || 'png',
+                    quality: exportOpts && exportOpts.quality != null ? exportOpts.quality : 92,
                 };
                 const r = await this.apiFetch('/api/editor/export',
                     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

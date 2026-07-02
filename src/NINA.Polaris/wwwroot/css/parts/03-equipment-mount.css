@@ -1004,6 +1004,43 @@
 .awf-field input[type="range"] { width: 110px; vertical-align: middle; }
 .awf-range { display: inline-flex; align-items: center; gap: 6px; }
 .awf-val { font-variant-numeric: tabular-nums; min-width: 2.4em; }
+/* sequencer-style two columns: left item list + right detail */
+.awf-cols { display: flex; gap: 10px; align-items: stretch; }
+.awf-list {
+    flex: 0 0 46%; max-width: 46%; min-width: 220px;
+    max-height: 360px; overflow: auto;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary);
+    display: flex; flex-direction: column;
+}
+.awf-list-row {
+    display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+    border-bottom: 1px solid var(--border); cursor: pointer; font-size: 12.5px;
+}
+.awf-list-row:last-child { border-bottom: none; }
+.awf-list-row:hover { background: var(--bg-hover, rgba(255,255,255,0.04)); }
+.awf-list-row.awf-sel { background: var(--bg-selected, rgba(80,140,255,0.16)); }
+.awf-list-row.awf-step-active { outline: 2px solid var(--accent); outline-offset: -2px; }
+.awf-list-row.awf-step-off { opacity: 0.5; }
+.awf-list-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.awf-badge {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 1px 5px; border-radius: 4px; background: var(--accent); color: #fff;
+}
+.awf-detail {
+    flex: 1 1 auto; min-width: 0; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--bg-primary);
+}
+.awf-detail-empty { display: flex; align-items: center; justify-content: center; }
+.awf-detail-title { margin: 0 0 8px; font-size: 13px; }
+.awf-field-wide { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.awf-field-wide > span:first-child { min-width: 90px; }
+.awf-field-wide .awf-range { flex: 1; }
+.awf-field-wide .awf-range input[type="range"] { width: 100%; }
+.awf-dim { opacity: 0.45; }
+@media (max-width: 720px) {
+    .awf-cols { flex-direction: column; }
+    .awf-list { flex-basis: auto; max-width: none; max-height: 220px; }
+}
 .awf-run { margin-top: 12px; }
 .awf-log {
     margin-top: 10px; max-height: 200px; overflow: auto; padding: 8px 10px;
