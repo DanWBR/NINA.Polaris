@@ -89,12 +89,18 @@ public class BatchStackingService {
     // from FrameLibrary SQLite cache.
     public record IntegrationRequest(
         List<string> FramePaths,
-        string Method);
+        string Method,
+        // Drizzle: 1 = off (native-resolution resample + combine), 2/3 = drizzle
+        // integrate onto a scale× finer grid. Pixfrac is the drop shrink (0,1].
+        int DrizzleScale = 1,
+        double DrizzlePixfrac = 1.0);
 
     public string StartJob(IntegrationRequest req) {
         if (!Enum.TryParse<IntegrationMethod>(req.Method, true, out var method)) {
             method = IntegrationMethod.SigmaClippedMean;
         }
+        int scale = Math.Clamp(req.DrizzleScale, 1, 3);
+        double pixfrac = Math.Clamp(req.DrizzlePixfrac, 0.1, 1.0);
         var jobId = Guid.NewGuid().ToString("N")[..8];
         _jobs[jobId] = new IntegrationProgress {
             JobId = jobId,
@@ -102,14 +108,15 @@ public class BatchStackingService {
             Total = req.FramePaths.Count,
             Stage = "queued"
         };
-        _ = Task.Run(() => RunJob(jobId, req.FramePaths, method));
+        _ = Task.Run(() => RunJob(jobId, req.FramePaths, method, scale, pixfrac));
         return jobId;
     }
 
     public IntegrationProgress? GetStatus(string jobId)
         => _jobs.TryGetValue(jobId, out var p) ? p : null;
 
-    private void RunJob(string jobId, IReadOnlyList<string> framePaths, IntegrationMethod method) {
+    private void RunJob(string jobId, IReadOnlyList<string> framePaths, IntegrationMethod method,
+                        int drizzleScale = 1, double drizzlePixfrac = 1.0) {
         string? tempDir = null;
         try {
             // ---- Phase 1: detect stars (no pixels retained) ----------
@@ -199,6 +206,132 @@ public class BatchStackingService {
             int planeSize = W * H;
             int nPlanes = pattern == NINA.Core.Enum.BayerPatternEnum.None ? 1 : 3;
 
+            // Debayer a raw buffer into colour planes (R,G,B) for OSC, or wrap
+            // the mono buffer as a single plane. (Local function, hoisted so
+            // both the drizzle branch and the default path below can call it.)
+            ushort[][] PlanesOf(ushort[] data) {
+                if (pattern == NINA.Core.Enum.BayerPatternEnum.None) return new[] { data };
+                var ch = BayerDebayer.Bilinear(data, W, H, pattern);
+                return new[] { ch.R, ch.G, ch.B };
+            }
+
+            // ---- Drizzle path (scale > 1) ---------------------------------
+            // Forward-project each frame's pixels ("drops") onto a scale× finer
+            // grid instead of resample + combine. Accumulators live in RAM
+            // (drizzle's inherent cost); frames stream one at a time. No
+            // per-pixel sigma rejection here (classic drizzle is a weighted
+            // mean); use scale=1 for the sigma-clipped path.
+            if (drizzleScale > 1) {
+                int outWd = W * drizzleScale, outHd = H * drizzleScale;
+                long accBytes = (long)nPlanes * outWd * outHd * 2 * sizeof(float);
+                var (dOk, dMsg) = StackMemoryGuard.Check(accBytes, AvailableBytes(),
+                    $"drizzle-integrate at {drizzleScale}x");
+                if (!dOk) {
+                    _logger.LogWarning("Drizzle job {JobId} refused: {Msg}", jobId, dMsg);
+                    _jobs[jobId] = _jobs[jobId] with { InProgress = false, Stage = "error", Error = dMsg };
+                    return;
+                }
+                _jobs[jobId] = _jobs[jobId] with { Stage = "drizzling", Done = 0, IntegrationPercent = 0 };
+
+                var integ = new DrizzleIntegrator[nPlanes];
+                for (int p = 0; p < nPlanes; p++)
+                    integ[p] = new DrizzleIntegrator(W, H, drizzleScale, drizzlePixfrac);
+
+                var dzKept = new List<string>(frames.Count);
+                double dzExposure = 0; int dzDropped = 0; WcsInfo? dzWcs = null;
+                for (int i = 0; i < frames.Count; i++) {
+                    AffineTransform? t;
+                    if (i == refIdx) { t = AffineTransform.Identity; }
+                    else {
+                        t = StarMatcher.Match(refStars, frames[i].Stars);
+                        if (t == null) {
+                            _logger.LogWarning("Drop frame {File}: alignment failed", frames[i].Name);
+                            dzDropped++;
+                            _jobs[jobId] = _jobs[jobId] with { Done = i + 1, Dropped = dzDropped };
+                            continue;
+                        }
+                    }
+                    BaseImageData dimg;
+                    using (var fs = File.OpenRead(frames[i].Path)) dimg = FITSReader.Read(fs);
+                    if (i == refIdx) dzWcs = dimg.Properties.Wcs;
+                    var dplanes = PlanesOf(dimg.Data);
+                    for (int p = 0; p < nPlanes; p++) integ[p].AddFrame(dplanes[p], t);
+                    dzKept.Add(frames[i].Name);
+                    dzExposure += frames[i].Exposure;
+                    _jobs[jobId] = _jobs[jobId] with {
+                        Done = i + 1, Dropped = dzDropped,
+                        IntegrationPercent = (int)((i + 1) * 100L / frames.Count)
+                    };
+                }
+                int dzN = dzKept.Count;
+                if (dzN < 2)
+                    throw new InvalidOperationException($"Only {dzN} frame(s) survived alignment. Need ≥2.");
+
+                long outPlaneSize = (long)outWd * outHd;
+                var dzOut = new ushort[outPlaneSize * nPlanes];
+                for (int p = 0; p < nPlanes; p++) {
+                    var r = integ[p].Result();
+                    Array.Copy(r, 0, dzOut, p * outPlaneSize, r.Length);
+                }
+                double emptyPct = integ[0].EmptyFraction() * 100;
+
+                _jobs[jobId] = _jobs[jobId] with { Stage = "writing", IntegrationPercent = 100 };
+                var rigNameD = _profile.ActiveEquipmentProfile?.Name ?? "Default";
+                var outRootD = _profile.Active.ImageOutputDir
+                    ?? throw new InvalidOperationException("ImageOutputDir not set.");
+                var dirD = Path.Combine(outRootD, Sanitize(rigNameD), "integrated",
+                    Sanitize(target), Sanitize(filter));
+                Directory.CreateDirectory(dirD);
+                var fileNameD =
+                    $"master_light_{Sanitize(target)}_{Sanitize(filter)}_drz{drizzleScale}x_x{dzN}_{dzExposure:0}s.fits";
+                var outPathD = Path.Combine(dirD, fileNameD);
+                int copyD = 1;
+                while (File.Exists(outPathD))
+                    outPathD = Path.Combine(dirD,
+                        Path.GetFileNameWithoutExtension(fileNameD) + $"_{copyD++}.fits");
+
+                var propsD = new ImageProperties {
+                    Width = outWd, Height = outHd, BitDepth = bitDepth,
+                    Channels = nPlanes,
+                    BayerPattern = NINA.Core.Enum.BayerPatternEnum.None,
+                    IsBayered = false,
+                    Wcs = dzWcs,
+                };
+                var metaD = new ImageMetaData {
+                    CreationTime = DateTime.UtcNow,
+                    Camera = new ImageMetaData.CameraInfo(),
+                    Telescope = new ImageMetaData.TelescopeInfo(),
+                    Observer = new ImageMetaData.ObserverInfo(),
+                    Target = new ImageMetaData.TargetInfo { Name = target },
+                    Exposure = new ImageMetaData.ExposureInfo {
+                        ExposureTime = dzExposure, Filter = filter, ImageType = "MASTERLIGHT"
+                    }
+                };
+                var masterD = new BaseImageData(dzOut, propsD, metaD);
+                var ci = System.Globalization.CultureInfo.InvariantCulture;
+                var kwD = new List<KeyValuePair<string, string>> {
+                    new("NCOMBINE", dzN.ToString()),
+                    new("EXPTOTAL", dzExposure.ToString("0.##", ci)),
+                    new("INTMETH",  "Drizzle"),
+                    new("REJECT",   dzDropped.ToString()),
+                    new("DRIZZLE",  "T"),
+                    new("DRZSCALE", drizzleScale.ToString()),
+                    new("DRZFRAC",  drizzlePixfrac.ToString("0.##", ci)),
+                    new("DRZEMPTY", emptyPct.ToString("0.##", ci)),
+                    new("STACKREF", dzKept.Count > 0 ? Path.GetFileName(dzKept[0]) : "")
+                };
+                FITSWriter.Write(masterD, outPathD, customKeywords: kwD);
+                _logger.LogInformation(
+                    "Drizzle job {Job}: {N}/{Total} frames at {S}x -> {Path} (empty {E:0.0}%)",
+                    jobId, dzN, framePaths.Count, drizzleScale, outPathD, emptyPct);
+                _ = Task.Run(() => _library.RescanAsync());
+                _jobs[jobId] = _jobs[jobId] with {
+                    InProgress = false, Stage = "done", OutputPath = outPathD,
+                    Combined = dzN, Dropped = dzDropped, TotalExposureSec = dzExposure
+                };
+                return;
+            }
+
             tempDir = Path.Combine(Path.GetTempPath(), $"polaris_stack_{jobId}");
             Directory.CreateDirectory(tempDir);
             // Reused full-plane byte buffer for the spill writes.
@@ -213,15 +346,8 @@ public class BatchStackingService {
             // the reference's WCS is correct for the integrated master.
             WcsInfo? refWcs = null;
 
-            // Debayer a raw buffer into colour planes (R,G,B) for OSC, or
-            // wrap the mono buffer as a single plane. Stacking runs per-plane
-            // so colour is preserved and the resample interpolates within a
-            // channel instead of across the CFA mosaic.
-            ushort[][] PlanesOf(ushort[] data) {
-                if (pattern == NINA.Core.Enum.BayerPatternEnum.None) return new[] { data };
-                var ch = BayerDebayer.Bilinear(data, W, H, pattern);
-                return new[] { ch.R, ch.G, ch.B };
-            }
+            // (PlanesOf is declared once above so both the drizzle branch and
+            // this default path share it.)
 
             // Spill one frame's aligned plane(s) to temp raw files (host-order
             // ushort, no header — same process reads them back). Returns the
