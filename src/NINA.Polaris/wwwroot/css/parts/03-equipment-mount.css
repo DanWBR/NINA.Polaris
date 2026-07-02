@@ -926,6 +926,55 @@
     flex: 0 0 28px;
     max-width: 28px;
 }
+/* STUDIO tabbed layout: the explorer (files-left) and the right pane
+   (Stacking / Auto Workflow) are separate full-width sub-tabs now, not a
+   side-by-side split. On non-Files tabs the aside fills the row; on the
+   Files tab it collapses to zero width but STAYS in the DOM (the editor
+   overlay modal lives inside it and must keep working). */
+.files-right.files-right--full {
+    flex: 1 1 auto;
+    max-width: none;
+    padding-left: 16px;
+}
+.files-right.files-right--zero {
+    flex: 0 0 0;
+    width: 0;
+    min-width: 0;
+    max-width: 0;
+    padding: 0;
+    border: 0;
+    overflow: visible;   /* keep the fixed editor modal unclipped */
+}
+/* Studio sub-tab strip */
+.studio-subtabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px 0;
+    flex: 0 0 auto;
+}
+.studio-subtab {
+    appearance: none;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    color: var(--text-secondary);
+    padding: 7px 16px;
+    border-radius: 8px 8px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.studio-subtab:hover { color: var(--text-primary); }
+.studio-subtab.active {
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    border-color: var(--border);
+}
+.auto-workflow-empty {
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: 48px;
+}
 .files-right-pane {
     flex: 1 1 auto;
     overflow: auto;

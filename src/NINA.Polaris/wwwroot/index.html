@@ -44,7 +44,7 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260626-uppercase">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260627-autorunreorg">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260629-aitools">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260701-studiotabs">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260701-comparezoombtn">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260628-smbchip">
@@ -9841,10 +9841,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                           x-text="files.loading ? 'loading…' : (files.error || files.cwd || 'no path')"></span>
                 </div>
 
-                <!-- UNIF-1: 2-col split. Left holds the shared file
-                     browser, right swaps content by filesSubTab. -->
+                <!-- Studio sub-tabs: Files (explorer) / Stacking (workspace)
+                     / Auto Workflow (planned). Each pane is full-width; only
+                     one shows at a time. -->
+                <div class="studio-subtabs">
+                    <button class="studio-subtab" :class="{ active: studioTab === 'files' }"
+                            @click="setStudioTab('files')">Files</button>
+                    <button class="studio-subtab" :class="{ active: studioTab === 'stacking' }"
+                            @click="setStudioTab('stacking')">Stacking</button>
+                    <button class="studio-subtab" :class="{ active: studioTab === 'autoworkflow' }"
+                            @click="setStudioTab('autoworkflow')">Auto Workflow</button>
+                </div>
+
+                <!-- Full-width tabbed panes. files-left = Files; the aside on
+                     the right hosts Stacking + Auto Workflow (and the editor
+                     overlay modal). The aside stays in the DOM even on the
+                     Files tab (collapsed to 0 width) so the editor modal,
+                     which lives inside it, still opens. -->
                 <div class="files-pane-split">
-                <div class="files-left">
+                <div class="files-left" x-show="studioTab === 'files'">
 
                 <!-- Address bar: roots dropdown + path crumbs + reload -->
                 <div class="files-addr">
@@ -10313,36 +10328,20 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      cards + action toolbar; UNIF-5 fills Edit with
                      the OpenSeadragon viewer + sliders moved over
                      from the legacy EDITOR tab. -->
-                <aside class="files-right" :class="{ 'files-right--collapsed': filesStackCollapsed }"
-                       :style="'--stack-w:' + filesStackWidth + 'px'">
-                    <!-- Collapse handle: only shown on the narrow-screen overlay
-                         layout (CSS gates it to ≤900px). Slides the Stack panel
-                         off to the right edge so the file tree gets full width. -->
-                    <button class="files-right-handle"
-                            @click="filesStackCollapsed = !filesStackCollapsed"
-                            :title="filesStackCollapsed ? 'Show stack panel' : 'Hide stack panel'"
-                            x-text="filesStackCollapsed ? '‹' : '›'"></button>
+                <aside class="files-right"
+                       :class="{ 'files-right--full': studioTab !== 'files',
+                                 'files-right--zero': studioTab === 'files' }">
                     <!-- UNIF-2: Stack workspace. Four slot cards
                          (lights/darks/flats/biases) populated by
                          the "+ Add selection" button -- it pulls
                          from files.selectedPaths, filters non-FITS,
                          dedupes, and clears the browser selection
                          for visual feedback. Lists scroll inside the
-                         card so long sessions stay manageable.
-                         UNIF-3 will fill in the Actions toolbar with
-                         Master/Calibrate/Integrate/Combine/ColorCal/
-                         Siril wiring. -->
-                    <div class="files-right-pane stack-pane" data-tour="studio-stack">
+                         card so long sessions stay manageable. -->
+                    <div class="files-right-pane stack-pane" data-tour="studio-stack"
+                         x-show="studioTab === 'stacking'">
                         <div class="stack-header">
                             <h3 class="stack-title">Stack workspace</h3>
-                            <!-- Panel width slider: drives the --stack-w CSS var
-                                 on .files-right; persisted to localStorage. -->
-                            <label class="stack-width-ctl" title="Panel width">
-                                <span>↔</span>
-                                <input type="range" min="320" max="900" step="10"
-                                       x-model.number="filesStackWidth"
-                                       @input="localStorage.setItem('polaris-stack-width', filesStackWidth)">
-                            </label>
                             <button class="btn btn-sm"
                                     @click="stackClearAll()"
                                     :disabled="stackSlotDefs.every(d => stack[d.key].length === 0)
@@ -10475,6 +10474,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                       x-show="stack.activeJob?.done != null && stack.activeJob?.total"
                                       x-text="'(' + (stack.activeJob?.done) + '/' + (stack.activeJob?.total) + ')'"></span>
                             </div>
+                        </div>
+                    </div>
+                    <!-- Auto Workflow pane (planned). Placeholder for now;
+                         the automation pipeline UI lands here. -->
+                    <div class="files-right-pane auto-workflow-pane"
+                         x-show="studioTab === 'autoworkflow'">
+                        <div class="stack-header">
+                            <h3 class="stack-title">Auto Workflow</h3>
+                        </div>
+                        <div class="auto-workflow-empty">
+                            <p class="hint">Automated post-processing workflow — coming soon.</p>
                         </div>
                     </div>
                     <!-- Lightroom-style editor as a fullscreen overlay
@@ -16519,7 +16529,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260701-comparezoombtn"></script>
+    <script src="/js/app.js?v=20260701-studiotabs"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

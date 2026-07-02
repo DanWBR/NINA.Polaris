@@ -1965,6 +1965,13 @@ function ninaApp() {
         // backward compatibility with any legacy bindings, but the
         // setter just redirects 'edit' to opening the modal.
         filesSubTab: 'stack',
+        // STUDIO sub-tabs: 'files' (explorer), 'stacking' (stack workspace),
+        // 'autoworkflow' (planned). Persisted so a reload keeps the view.
+        studioTab: (localStorage.getItem('polaris-studio-tab') || 'files'),
+        setStudioTab(name) {
+            this.studioTab = name;
+            try { localStorage.setItem('polaris-studio-tab', name); } catch (_) { }
+        },
         setFilesSubTab(name) {
             if (name === 'edit') {
                 this.editorOpenModal();
