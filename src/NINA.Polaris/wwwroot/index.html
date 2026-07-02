@@ -10983,6 +10983,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     title="Reset all sliders to defaults (zero edits)">
                                 ↺ Reset
                             </button>
+                            <!-- Turn the current edits into a saveable Auto Workflow
+                                 so they can be batch-applied to other frames. -->
+                            <button class="btn btn-sm"
+                                    @click="editorSendToWorkflow()"
+                                    :disabled="!editorState.session"
+                                    title="Send these edits to the Auto Workflow to name, save, and batch-apply to other frames">
+                                → Workflow
+                            </button>
                             <!-- CROP — same modal as the FILES toolbar.
                                  Pre-processing pass before BGE/decon/
                                  denoise; produces a sibling _crop.fits.
@@ -16790,7 +16798,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260702-tonal"></script>
+    <script src="/js/app.js?v=20260702-ed2wf"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

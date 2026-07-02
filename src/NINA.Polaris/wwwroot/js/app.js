@@ -11366,6 +11366,38 @@ function ninaApp() {
             this._editorPushHistory();
         },
 
+        // C1 (SASpro learning: history → replayable workflow). Turn the
+        // editor's current adjustments into an Auto Workflow so they can be
+        // named, saved, and batch-applied to other frames. Each non-default
+        // editor slider maps to its matching Auto Workflow edit-item (same
+        // editPath registry), plus an auto-stretch + a final PNG export. We
+        // hand the built steps to the Auto Workflow tab and let its existing
+        // Save UI name + persist them (no bespoke naming dialog).
+        editorSendToWorkflow() {
+            if (this.workflow.running) return;
+            const e = this.editorState.edits || {};
+            const steps = [];
+            if (e.stretch && e.stretch.auto !== false)
+                steps.push({ $type: 'autostretch', enabled: true, params: {} });
+            for (const op of this._wfOps()) {
+                if (op.kind !== 'edit' || op.type === 'autostretch') continue;
+                const p = op.editPath;
+                if (!p) continue;
+                const cur = e[p[0]] ? e[p[0]][p[1]] : undefined;
+                if (cur == null) continue;
+                const def = (op.def != null) ? op.def : (op.defaults && op.defaults.value);
+                if (typeof def === 'number' && Math.abs(cur - def) < 1e-6) continue;
+                steps.push({ $type: op.type, enabled: true, params: { value: cur } });
+            }
+            if (!steps.length) { this.toast('No editor adjustments to send', 'warn'); return; }
+            steps.push({ $type: 'export', enabled: true, params: { format: 'png', quality: 92 } });
+            this.workflow.steps = steps;
+            this.workflow.selected = 0;
+            if (!this.workflow.name) this.workflow.name = 'Editor edits';
+            this.setStudioTab('autoworkflow');
+            this.toast('Sent editor edits to Auto Workflow — name it and Save', 'success');
+        },
+
         // Middle-truncated path for the editor toolbar so deep
         // upload paths (C:\...\7bffd2631c47495098227ef33a96778d\
         // result_4200s_graxpert_bge.fits) don't push the right
