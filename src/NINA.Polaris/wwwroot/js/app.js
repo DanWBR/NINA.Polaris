@@ -2287,11 +2287,44 @@ function ninaApp() {
                 ]
             });
             if (!methodIn) return;
+
+            // Drizzle: ask the server which scale suits this data (star FWHM +
+            // sub count), then let the user pick with that recommendation shown.
+            let advice = null;
+            try {
+                const r = await this.apiPost('/api/studio/drizzle-advice',
+                    { framePaths: this.stack.lights });
+                advice = await r.json();
+            } catch (_) { /* recommendation is best-effort */ }
+            const recScale = advice?.recommendedScale || 1;
+            const recMsg = advice?.reason
+                ? ('Recommended: ' + (recScale > 1 ? recScale + 'x drizzle' : '1x (no drizzle)')
+                    + '\n' + advice.reason)
+                : 'Drizzle recovers resolution on undersampled data; 1x = native size.';
+            const scaleIn = await this._pickOptionAsync({
+                title: 'Drizzle scale',
+                message: recMsg,
+                value: String(recScale),
+                okLabel: 'Integrate',
+                options: [
+                    { value: '1', label: '1x - native size (no drizzle)' },
+                    { value: '2', label: '2x - drizzle (undersampled data)' },
+                    { value: '3', label: '3x - drizzle (heavily undersampled)' }
+                ]
+            });
+            if (!scaleIn) return;
+            const drizzleScale = parseInt(scaleIn, 10) || 1;
+
             let resp;
             try {
                 resp = await this.apiPost('/api/studio/integrate', {
                     framePaths: this.stack.lights,
-                    method: methodIn.trim()
+                    method: methodIn.trim(),
+                    drizzleScale,
+                    // A slightly shrunk drop (0.9) sharpens drizzle a touch while
+                    // still filling coverage with a normal dither pattern; 1x
+                    // ignores pixfrac.
+                    drizzlePixfrac: drizzleScale > 1 ? 0.9 : 1.0
                 });
             } catch (e) {
                 this.toast('Integrate submit failed: ' + e.message, 'error');
@@ -2303,7 +2336,7 @@ function ninaApp() {
                 return;
             }
             await this._stackPollJob('/api/studio/integrate/', body.jobId,
-                'Integrate');
+                drizzleScale > 1 ? ('Integrate (drizzle ' + drizzleScale + 'x)') : 'Integrate');
         },
 
         // UNIF-3c: Channel Combine. Treats the lights slot as a

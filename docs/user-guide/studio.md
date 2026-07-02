@@ -80,6 +80,39 @@ Select calibrated lights → **Integrate** button:
 Output: `integrated/{Target}/{Filter}/master_{Target}_{Filter}_{N}x{Exp}s.fits`
 with `NCOMBINE`, `EXPTOTAL`, `INTMETH`, `REJECT` headers.
 
+### Drizzle (super-resolution)
+
+After picking the integration method, Integrate asks for a **drizzle scale**
+and shows a **recommendation** computed from your data:
+
+- **1x** - native size. The standard resample + combine (with sigma-clip
+  rejection). Right for well/over-sampled data.
+- **2x / 3x** - drizzle (Fruchter & Hook variable-pixel linear reconstruction).
+  Each pixel is forward-projected as a shrunk "drop" onto a finer grid; with
+  sub-pixel **dithered** subs this recovers resolution lost to **undersampling**
+  and reduces aliasing.
+
+The recommendation samples a few frames' star **FWHM in pixels**: under ~2 px
+the data is undersampled and 2x is suggested (with a note if you have few
+subs); at ~2.6 px+ it's well sampled and 1x is suggested (drizzle >1x there
+just amplifies noise and enlarges the file). Same algorithm as Siril/PixInsight
+drizzle - the only difference between those tools is the default scale (Siril
+defaults to 1x, PixInsight to 2x); here you pick with the recommendation in
+front of you.
+
+Requirements + notes:
+
+- Drizzle **needs dithered subs** (the whole point is sub-pixel diversity); an
+  un-dithered set at 2x/3x leaves coverage holes and grid patterns. The output
+  header records `DRZEMPTY` (percent of output pixels no drop reached) as a
+  coverage sanity check.
+- Drizzle keeps the accumulator in RAM (its inherent cost): a 2x integration is
+  ~4x the output pixels, 3x is ~9x. A pre-flight RAM guard refuses up front if
+  it won't fit; on a small SBC prefer 1x/2x.
+- Drizzle mode is a weighted mean (no per-pixel sigma rejection); for
+  cosmic-ray / trail rejection use 1x. Output: `master_light_..._drz{N}x_...`
+  with `DRIZZLE`, `DRZSCALE`, `DRZFRAC`, `DRZEMPTY` headers.
+
 ## Color calibration (Siril-style)
 
 After channel combine produces an RGB master, click **🎯 Color
