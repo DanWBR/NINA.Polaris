@@ -87,7 +87,7 @@ Commit the `eval/*.json` files (they are small and ARE the reference).
   then deploy as e.g. `denoise-ai-models/2.0.0-512-fp16/model.onnx`.
 - [x] `export.py --graph-opt`: ORT offline graph-optimized `_opt` sibling
   (BN folds pre-baked for browser WASM).
-- [ ] **Halo int8 via QAT** (PTQ int8 is unsafe on residual models):
+- [x] **Halo int8 via QAT** (PTQ int8 is unsafe on residual models):
 
 ```powershell
 python train_task.py --task halo --pairs data\own\halo_tiles --resume checkpoints\halo\best.pt `
@@ -98,9 +98,25 @@ python quantize.py int8 --onnx models\halo_fp32_256.onnx --calib models\calib_ha
     --out models\halo_int8_256.onnx
 ```
 
-- [ ] **w8a16 matrix**: `quantize.py w8a16` exists and was never evaluated. If
-  it lands near int16 quality at int8 weight size, it becomes the preferred
-  NPU/download format. Generate for each family and add to the eval JSONs.
+- [x] **w8a16 matrix**: `quantize.py w8a16` exists and was never evaluated.
+  DONE for halo (`eval\halo_qat.json`, 200 val samples, range L 107.96):
+
+  | variant | PSNR dB | SSIM | Δ vs fp32 |
+  |---|---|---|---|
+  | fp32  | 48.36 | 0.9816 | - |
+  | fp16  | 48.36 | 0.9816 | +0.01 |
+  | int16 | 48.33 | 0.9816 | -0.03 |
+  | **w8a16** | **48.33** | **0.9816** | **-0.03** |
+  | int8  | 46.19 | 0.9759 | -2.17 |
+
+  **Verdict: w8a16 is the preferred NPU/download format.** It matches int16
+  quality (-0.03 dB, imperceptible) at int8 WEIGHT size (~half int16 on disk).
+  The int8 -2.17 dB gap is ACTIVATION quantization, not weights: int16 and
+  w8a16 both carry int8-grade weights and both tie fp32, so the QAT weights
+  are correct; only 8-bit activations degrade int8. Repeat the same
+  `quantize.py w8a16` + `eval_models.py` for denoise/bge/detail/upscale before
+  declaring each family's download format. (`eval_models.py` now scans the
+  w8a16 variant automatically.)
 
 ---
 
