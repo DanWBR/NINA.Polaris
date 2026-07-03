@@ -36,7 +36,7 @@
     // parent terminates after a short idle, which frees the whole heap. Kept
     // alive across a batch (fast), torn down once idle (reclaims). See
     // js/onnx-worker.js + runOneShot().
-    const ORT_WORKER_PATH = '/js/onnx-worker.js?v=20260701-detaillog3';
+    const ORT_WORKER_PATH = '/js/onnx-worker.js?v=20260702-stride192';
     const ONESHOT_IDLE_MS = 15000;
     let _osWorker = null;
     let _osSeq = 0;
@@ -268,6 +268,31 @@
         const hit = (m.models || []).find(
             x => x.family === family && x.version === wanted);
         return hit ? wanted : requestedVersion;
+    }
+
+    // AIIMP: prefer a 512-static sibling on desktop WebGPU. A 512 tile does
+    // the work of four 256 tiles with the same per-pixel math, and a real
+    // GPU is under-utilised by 256 tiles, so when the manifest registers a
+    // "-512" sibling (export.py --size 512, folder e.g. "2.0.0-512" or
+    // "2.0.0-512-fp16") we use it. Never on iOS (memory) and never without
+    // WebGPU (WASM gains little and pays 4x the per-run latency per call).
+    // The "-512" token slots BEFORE any quant suffix, matching the registry
+    // version grammar. Pure preference layer with fallback.
+    async function prefer512OnDesktopGpu(family, version) {
+        if (_isIOSForOnnx()) return version;
+        if (typeof navigator === 'undefined' || !navigator.gpu) return version;
+        if (/-512(?:-|$)/.test(version)) return version;
+        const m = /^(.*?)(-(?:fp16|int16|int8))?$/.exec(version);
+        const wanted = m[1] + '-512' + (m[2] || '');
+        const man = await fetchManifest();
+        const hit = (man.models || []).find(
+            x => x.family === family && x.version === wanted);
+        return hit ? wanted : version;
+    }
+
+    /** Tile size a version's model expects: 512 for "-512" siblings, else 256. */
+    function tileOfVersion(version) {
+        return /-512(?:-|$)/.test(version) ? 512 : 256;
     }
 
     /** Find the manifest entry for a given (family, version), or null. */
@@ -950,16 +975,28 @@
     }
 
     // ───────────────────────────────────────────────────────────────
-    // GX-3: Denoise pipeline (v2 / v3). Tile-based, stride 128,
-    // window 256, 64-pixel context margin per tile edge. Output of
-    // each tile keeps only the inner 128x128 stride region (the
-    // outer 64-px margin existed only to let the model see context
-    // beyond the inner region); inner regions tile perfectly so
-    // there's no blend math to get wrong. Same approach as GraXpert.
+    // GX-3: Denoise pipeline (v2 / v3). Tile-based: window 256,
+    // stride 192 (32-pixel context margin per tile edge). Output of
+    // each tile keeps only the inner stride x stride region (the
+    // outer margin exists only so the model sees context beyond the
+    // inner region); inner regions tile perfectly so there's no
+    // blend math to get wrong. Same hard-crop approach as GraXpert.
+    //
+    // AIIMP: stride was 128 (margin 64), which computed every output
+    // pixel 4x — (256/128)^2 redundancy. Stride 192 cuts that to
+    // 1.78x, ~2.25x fewer inferences per image. Denoise normalization
+    // is GLOBAL (one median/MAD per plane), so adjacent tiles live in
+    // the same domain and 32px of context matches the geometry the
+    // Detail pipeline (256/192) and GraXpert's own decon (512/448)
+    // already use without seams. opts.stride overrides for A/B.
     //
     // v2 (2.0.0) clip ±10, v3 (3.0.2) clip ±1. Strength blends the
     // denoised result back against the original to taste.
     // ───────────────────────────────────────────────────────────────
+    // Context margin per tile edge; stride = TILE - 2*margin (192 for the
+    // 256 models, 448 for a -512 sibling — the same margin geometry
+    // GraXpert's decon uses at 512/448).
+    const DENOISE_TILE_MARGIN = 32;
 
     // GX-9 (UX): cede o thread principal pro browser desenhar 1 frame.
     // Necessário antes/depois de blocos sync grandes (allocação +
@@ -1063,9 +1100,12 @@
             // Reused by halo removal (same RGB tiled + MAD-normalize + strength
             // blend recipe), so the family/version are overridable.
             const family = opts.family || 'denoise';
-            const version = opts.version || (family === 'denoise' ? '2.0.0' : '1.0.0');
+            let version = opts.version || (family === 'denoise' ? '2.0.0' : '1.0.0');
+            version = await prefer512OnDesktopGpu(family, version);
             const strength = Math.max(0, Math.min(1, opts.strength != null ? opts.strength : 0.5));
-            const TILE = 256, STRIDE = 128, MARGIN = (TILE - STRIDE) / 2;
+            const TILE = tileOfVersion(version);
+            const STRIDE = opts.stride || (TILE - 2 * DENOISE_TILE_MARGIN);
+            const MARGIN = (TILE - STRIDE) / 2;
             const CLIP = version.startsWith('3.') ? 1.0 : 10.0;
             const planeLen = width * height;
             const INV = 1 / 65535;
@@ -1157,12 +1197,13 @@
         }
         async _runMono(pixels, width, height, opts = {}) {
             const family = opts.family || 'denoise';
-            const version = opts.version || (family === 'denoise' ? '2.0.0' : '1.0.0');
+            let version = opts.version || (family === 'denoise' ? '2.0.0' : '1.0.0');
+            version = await prefer512OnDesktopGpu(family, version);
             const strength = Math.max(0, Math.min(1,
                 opts.strength != null ? opts.strength : 0.5));
-            const TILE = 256;
-            const STRIDE = 128;
-            const MARGIN = (TILE - STRIDE) / 2;   // 64
+            const TILE = tileOfVersion(version);
+            const STRIDE = opts.stride || (TILE - 2 * DENOISE_TILE_MARGIN);
+            const MARGIN = (TILE - STRIDE) / 2;   // 32 at the defaults
             const CLIP = version.startsWith('3.') ? 1.0 : 10.0;
 
             const session = await loadSession(family, version, opts.onProgress, opts.useGpu);

@@ -115,8 +115,12 @@ public class OnnxModelRegistry {
     // percentile-trained model, e.g. "1.1-pct"); "-log" is still accepted as
     // an explicit no-op marker. Without allowing these tags the folder would
     // be rejected and the model silently ignored.
+    // AIIMP: optional "-512" tile-size tag (export.py --size 512). A 512-
+    // static sibling (e.g. "2.0.0-512", "2.0.0-512-fp16") runs ~4x fewer
+    // tiles per image; onnx-pipelines.js prefers it on desktop WebGPU and
+    // keeps the plain 256 version for WASM / NPU / iOS.
     private static readonly Regex VersionRegex =
-        new(@"^([a-z]+-)?(\d+\.\d+(\.\d+)?)(-(log|pct))?(-(fp16|int16|int8))?$", RegexOptions.Compiled);
+        new(@"^([a-z]+-)?(\d+\.\d+(\.\d+)?)(-(log|pct))?(-512)?(-(fp16|int16|int8))?$", RegexOptions.Compiled);
 
     public OnnxModelRegistry(ProfileService profile, IWebHostEnvironment env,
                               ILogger<OnnxModelRegistry> logger) {

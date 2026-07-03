@@ -72,6 +72,11 @@ def main():
     ap.add_argument("--scale", type=int, default=2, choices=[2, 3, 4],
                     help="(upscale) super-resolution factor; --size is the LR input size")
     ap.add_argument("--no-fp16", action="store_true")
+    ap.add_argument("--graph-opt", action="store_true",
+                    help="Also write an ORT offline graph-optimized _opt "
+                         "sibling of the static fp32 (BN folds, fusions "
+                         "pre-baked so browser WASM skips them at session "
+                         "create).")
     args = ap.parse_args()
 
     spec = TASKS[args.task]
@@ -121,6 +126,27 @@ def main():
             print("wrote", fp16)
         except Exception as e:  # noqa: BLE001
             print("fp16 conversion skipped:", e)
+
+    if args.graph_opt:
+        # AIIMP: pre-run ORT's offline graph optimizations (BN-into-conv
+        # folding, elementwise fusions, constant folding). WASM in the browser
+        # otherwise pays this fusion cost at every session create; baking it
+        # in also shrinks/steadies the graph the wasm EP executes. Writes an
+        # `_opt` sibling so the plain files stay canonical for quantization.
+        try:
+            import onnxruntime as ort_rt
+
+            for src in (fp32_static,):
+                so = ort_rt.SessionOptions()
+                so.graph_optimization_level = \
+                    ort_rt.GraphOptimizationLevel.ORT_ENABLE_BASIC
+                dst = src.replace(".onnx", "_opt.onnx")
+                so.optimized_model_filepath = dst
+                ort_rt.InferenceSession(src, so,
+                                        providers=["CPUExecutionProvider"])
+                print("wrote", dst, "(offline graph-optimized)")
+        except Exception as e:  # noqa: BLE001
+            print("graph optimization skipped:", e)
 
     print("\nNext (build a calib set first: "
           f"python quantize.py calib --task {args.task} "
