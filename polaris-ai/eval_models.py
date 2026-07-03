@@ -69,7 +69,8 @@ def _iter_pairs(args):
             # every run and no two evals were comparable.
             rng = np.random.default_rng(
                 zlib.crc32(os.path.basename(p).encode("utf-8")) % (2**31))
-            x, y, _ = synth.make_pair(sharp, rng)        # x [2,H,W], y [1,H,W]
+            x, y, _ = synth.make_pair(                    # x [2,H,W], y [1,H,W]
+                sharp, rng, noise_matched=getattr(args, "noise_matched", False))
             # CRITICAL: the production Detail model is TRAINED in the
             # GraXpert log-mean-std domain (train_task.py --log-norm default
             # True) and the int8/int16 calibration set is log-normalized too
@@ -116,6 +117,13 @@ def main():
                          "domain the production model was trained in (mirrors "
                          "quantize.py calib). --no-log-norm only for a legacy "
                          "percentile-normalized model.")
+    ap.add_argument("--noise-matched", action="store_true",
+                    help="Decon only: synthesize eval pairs with the BXT "
+                         "noise-preserving target (target = f*g' + n). Pass this "
+                         "when evaluating a model trained with "
+                         "--noise-matched-target, else PSNR reads artificially "
+                         "low (the model correctly outputs noise the clean "
+                         "target lacks).")
     ap.add_argument("--per-pair-range", action="store_true",
                     help="Legacy behaviour: derive the PSNR/SSIM range L per "
                          "pair instead of once over the whole validation set. "

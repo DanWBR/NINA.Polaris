@@ -149,7 +149,8 @@ def _iter_synth(args):
         # re-synthesize different pairs every run (see eval_models.py).
         rng = np.random.default_rng(
             zlib.crc32(os.path.basename(p).encode("utf-8")) % (2**31))
-        x, y, _ = synth.make_pair(sharp, rng)
+        x, y, _ = synth.make_pair(
+            sharp, rng, noise_matched=getattr(args, "noise_matched", False))
         if args.log_norm:
             x, y = ds.log_norm_pair(x, y)
         yield x, y[0], x[0]
@@ -185,6 +186,10 @@ def main():
     ap.add_argument("--size", type=int, default=256)
     ap.add_argument("--limit", type=int, default=100)
     ap.add_argument("--log-norm", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--noise-matched", action="store_true",
+                    help="Synthesize eval pairs with the BXT noise-preserving "
+                         "target; pass when the model was trained with "
+                         "--noise-matched-target.")
     ap.add_argument("--json-out", default="")
     args = ap.parse_args()
 

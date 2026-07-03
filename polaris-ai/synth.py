@@ -115,7 +115,8 @@ def _add_hdr_point_stars(sharp: np.ndarray, kernel_peak: float,
 
 
 def make_pair(
-    sharp: np.ndarray, rng: np.random.Generator, beta_range=(2.2, 4.5)
+    sharp: np.ndarray, rng: np.random.Generator, beta_range=(2.2, 4.5),
+    noise_matched: bool = False,
 ):
     """Produce one training example from a sharp tile.
 
@@ -123,6 +124,18 @@ def make_pair(
       x : [2, H, W] float32 -- [degraded image, sigma map]
       y : [1, H, W] float32 -- sharp target
       c : float             -- the normalised condition (for logging)
+
+    ``noise_matched`` switches the target from the classic CLEAN reference-PSF
+    image to a NOISE-PRESERVING one: input = f*g + n, target = f*g' + n with the
+    SAME additive noise field n. This is BlurXTerminator's deconvolution
+    formulation (RC-Astro, "The Mathematics of BlurXTerminator"): the loss
+    e = f*g' + n - F[f*g + n, W] asks the network to replace ONLY the PSF (g->g')
+    and pass the noise through untouched -- deconvolution is NOT denoising (that
+    is a separate model). It MUST be the same realization of n, not independent
+    noise: with independent noise the MSE optimum is the conditional mean = the
+    clean target, so the net would still learn to denoise and re-introduce the
+    over-smoothing that carves dark rings around bright/saturated cores. See
+    [[polaris_detail_model]].
     """
     fwhm = sample_fwhm(rng)                     # seeing of the INPUT (>= FWHM_MIN)
     beta = float(rng.uniform(*beta_range))
@@ -144,14 +157,31 @@ def make_pair(
     # speckles). Random read noise + full-well (shot noise) per sample.
     read_noise = float(rng.uniform(1.0, 25.0))
     full_well = float(rng.uniform(8000.0, 100000.0))
-    deg = degrade_with_kernel(scene, kernel, rng=rng,
-                              read_noise_e=read_noise, full_well_scale=full_well)
-    # TARGET = the same scene at the GENTLE reference PSF (clean, no noise). This
-    # is what makes the restoration well-posed: input(seeing) -> target(ref).
-    # When the input fwhm is already <= TARGET_FWHM the target is BLURRIER than
-    # the input, so the model learns to leave (or gently soften) sharp stars
-    # rather than push them further and ring -- the anti-bubble teaching signal.
-    target = np.clip(fftconvolve(scene, ref, mode="same"), 0.0, 1.0).astype(np.float32)
+
+    if noise_matched:
+        # BXT formulation: build ONE additive noise field n from the observed
+        # (input-blurred) signal and add it to BOTH the seeing blur (input) and
+        # the reference blur (target). The network then only ever changes the
+        # PSF and leaves the noise floor intact -- no denoising pressure to
+        # over-smooth saturated cores into dark rings.
+        input_blur = np.clip(fftconvolve(scene, kernel, mode="same"), 0.0, None)
+        target_blur = np.clip(fftconvolve(scene, ref, mode="same"), 0.0, None)
+        elec = input_blur * full_well
+        shot = rng.poisson(np.clip(elec, 0, None)).astype(np.float32) - elec  # zero-mean shot
+        read = rng.normal(0.0, read_noise, size=sharp.shape).astype(np.float32)
+        noise = ((shot + read) / full_well).astype(np.float32)               # the single n
+        deg = np.clip(input_blur + noise, 0.0, 1.0).astype(np.float32)
+        target = np.clip(target_blur + noise, 0.0, 1.0).astype(np.float32)
+    else:
+        deg = degrade_with_kernel(scene, kernel, rng=rng,
+                                  read_noise_e=read_noise, full_well_scale=full_well)
+        # TARGET = the same scene at the GENTLE reference PSF (clean, no noise).
+        # This is what makes the restoration well-posed: input(seeing) ->
+        # target(ref). When the input fwhm is already <= TARGET_FWHM the target
+        # is BLURRIER than the input, so the model learns to leave (or gently
+        # soften) sharp stars rather than push them further and ring -- the
+        # anti-bubble teaching signal.
+        target = np.clip(fftconvolve(scene, ref, mode="same"), 0.0, 1.0).astype(np.float32)
     c = condition_value(fwhm)
     cond = np.full_like(sharp, c, dtype=np.float32)
     x = np.stack([deg, cond], axis=0)          # [2, H, W]

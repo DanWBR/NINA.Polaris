@@ -46,14 +46,19 @@ def build_dataset(args):
         from dataset import DeconDataset
         ln = getattr(args, "log_norm", False)
         fa = getattr(args, "flux_aug", False)
+        nm = getattr(args, "noise_matched_target", False)
         extra = []
         if args.tiles2:
             extra.append(DeconDataset(args.tiles2, tile=args.tile, log_norm=ln,
-                                      flux_aug=fa))
-        tr = DeconDataset(args.tiles, tile=args.tile, log_norm=ln, flux_aug=fa)
+                                      flux_aug=fa, noise_matched=nm))
+        tr = DeconDataset(args.tiles, tile=args.tile, log_norm=ln, flux_aug=fa,
+                          noise_matched=nm)
         full = ConcatDataset([tr] + extra) if extra else tr
-        # Validation never augments (flux or geometric) so the metric is stable.
-        val = DeconDataset(args.val_tiles, tile=args.tile, augment=False, log_norm=ln) \
+        # Validation never augments (flux or geometric) so the metric is stable,
+        # but it MUST match the target definition (noise_matched) so val loss is
+        # comparable to the train objective.
+        val = DeconDataset(args.val_tiles, tile=args.tile, augment=False,
+                           log_norm=ln, noise_matched=nm) \
             if args.val_tiles else None
         return full, val
     # denoise / bge: pre-baked pairs
@@ -220,6 +225,16 @@ def main():
                          "dark-ring fix targets. (Paired tasks skip it: their "
                          "MAD/log per-tile normalization is gain-invariant, a "
                          "global gain would be a no-op.)")
+    ap.add_argument("--noise-matched-target", action="store_true",
+                    help="(decon) BlurXTerminator formulation: target = f*g' + n "
+                         "with the SAME additive noise as the input, instead of "
+                         "the clean reference-PSF target. The net then only "
+                         "replaces the PSF and passes noise through untouched "
+                         "(deconvolution != denoising), which removes the "
+                         "over-smoothing pressure that carves dark rings around "
+                         "saturated cores. NOTE: eval it with the matching "
+                         "--noise-matched flag or PSNR will read low (the model "
+                         "correctly outputs noise a clean eval target lacks).")
     ap.add_argument("--distill-teacher", default="",
                     help="Path to a teacher checkpoint (e.g. the 60M best.pt). "
                          "Adds w * L1(student, teacher(x)) so a small --base/"

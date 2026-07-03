@@ -151,6 +151,49 @@ python eval_star_metrics.py --task decon --models models_r2 --tiles-val data\own
 Winning recipe then retrains the other tasks - those checkpoints become the
 **teachers** for Fase 3.
 
+### Pilot r2 result (2026-07-03): recipe REGRESSED, do not adopt
+
+Apples-to-apples vs the shipped `detail` checkpoint (same val, same range L 3.82):
+
+| | fp32 PSNR | SSIM | FWHM ratio | dark-ring | flux ratio |
+|---|---|---|---|---|---|
+| baseline (detail) | **43.05** | **0.9365** | 1.0587 | **0.0224** | 0.8221 |
+| r2 (ema+warmup+accum+w-fft+flux-aug) | 39.67 | 0.8626 | 1.0558 | 0.0373 | **0.9281** |
+
+The "+7 dB vs 32.65" first seen was a range-L artifact (old baseline had a
+different L); the honest comparison shows the recipe LOST 3.4 dB / 0.074 SSIM,
+did NOT sharpen (FWHM ~unchanged), and **regressed dark-ring +66%**. Only flux
+ratio improved (flux-aug). Prime suspect: `--w-fft` pushes high-freq -> ringing
+= a dark ring around saturated cores (explains PSNR down + dark-ring up + FWHM
+flat together). Next ablation: drop `--w-fft`, keep flux-aug + ema/warmup
+(`detail_r4`).
+
+### BXT noise-matched target (`--noise-matched-target`) - the grounded next lever
+
+From "The Mathematics of BlurXTerminator" (RC-Astro). BXT's loss is
+`e = f*g' + n - F[f*g + n]`: the target KEEPS the input's noise, so the net only
+replaces the PSF and passes noise through -- deconvolution is NOT denoising. We
+already match 2 of BXT's 3 pillars (non-delta reference target PSF
+TARGET_FWHM=2.2; HDR saturated-core training). The gap: `synth.make_pair`'s
+target is CLEAN (no noise), so our net is forced to sharpen AND denoise at once
+-- the denoising pressure near saturated cores is a classic dark-ring generator.
+Implemented `--noise-matched-target` (synth builds ONE additive noise field n
+and adds it to both the seeing blur (input) and the reference blur (target); it
+MUST be the SAME realization, else the MSE optimum is the clean target and the
+net still learns to denoise). Eval with the matching `--noise-matched` flag on
+both eval scripts or PSNR reads low (model correctly outputs noise a clean eval
+target lacks) - judge on dark-ring / FWHM. (BXT pillar 3, separate stellar vs
+non-stellar output PSFs, is the strategic future direction, a separate epic.)
+
+```powershell
+python train_task.py --task decon --tiles data\own\decon_tiles --val-tiles data\own\decon_tiles_val `
+    --epochs 60 --out checkpoints\detail_r5 --batch 8 --accum 2 `
+    --ema 0.999 --warmup-steps 500 --flux-aug --noise-matched-target
+python export.py --task decon --ckpt checkpoints\detail_r5\best.pt --out models_r5
+python eval_star_metrics.py --task decon --models models_r5 --tiles-val data\own\decon_tiles_val --noise-matched --json-out eval\r5_decon_stars.json
+python eval_models.py --task decon --models models_r5 --tiles-val data\own\decon_tiles_val --noise-matched --json-out eval\r5_decon.json
+```
+
 ---
 
 ## Fase 3 - shrink 4-6x (distillation; the strategic payoff)
