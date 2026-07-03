@@ -222,8 +222,15 @@ public class AutoFocusService {
                     catch (Exception ex) { _logger.LogDebug(ex, "AF frame relay failed (non-fatal)"); }
                     var hfr = MeasureHFR(image, request.MinStars);
                     var point = new AutoFocusPoint { Position = actualPos, HFR = hfr.medianHfr, StarCount = hfr.starCount };
-                    Progress.Points.Add(point);
-                    Progress = Progress with { LastHfr = point.HFR, LastStarCount = point.StarCount };
+                    // Copy-on-write: the WS status broadcaster and the REST status
+                    // endpoint serialize Progress.Points concurrently with this
+                    // loop. Mutating the live list mid-enumeration throws
+                    // "Collection was modified"; swapping in a fresh list gives
+                    // readers an immutable snapshot (record assignment is atomic).
+                    Progress = Progress with {
+                        Points = new List<AutoFocusPoint>(Progress.Points) { point },
+                        LastHfr = point.HFR, LastStarCount = point.StarCount
+                    };
                     _logger.LogInformation("AF sample {I}/{N}: pos={Pos} stars={Stars} HFR={HFR:F2}",
                         i + 1, positions.Count, actualPos, point.StarCount, point.HFR);
                 }
@@ -261,7 +268,10 @@ public class AutoFocusService {
                         rejected.Count, string.Join(", ", rejected.Select(p => p.Position)));
 
                 int bestPosition = (int)Math.Round(fit.MinX);
-                int rangeMin = positions.Min(), rangeMax = positions.Max();
+                // Gate against the ACTUALLY sampled range (travel clamping can
+                // compress it below the requested positions).
+                int rangeMin = Progress.Points.Min(p => p.Position);
+                int rangeMax = Progress.Points.Max(p => p.Position);
                 int padding = request.StepSize * 2;
                 bool inRange = bestPosition >= rangeMin - padding && bestPosition <= rangeMax + padding;
 
@@ -406,6 +416,14 @@ public class AutoFocusService {
         // Progress so the live V-curve chart grows point by point.
         async Task SampleAt(int pos) {
             ct.ThrowIfCancellationRequested();
+            // Approach every sample from below when backlash compensation is on,
+            // so both arms of the V are measured with the same gear engagement.
+            // The grid sweep gets this for free (it samples lowest-first); the
+            // adaptive sweep alternates arms, and without this the left arm is
+            // approached moving DOWN while the right arm moves UP — backlash
+            // then offsets the two arms optically and biases the vertex.
+            if (request.BacklashSteps > 0 && pos < focuser.Position)
+                await MoveAndSettleAsync(focuser, pos - request.BacklashSteps, ct);
             await MoveAndSettleAsync(focuser, pos, ct);
             int actual = focuser.Position;
             var image = await CaptureGated(source, camera, request.ExposureSeconds, ct);
@@ -413,9 +431,11 @@ public class AutoFocusService {
             catch (Exception ex) { _logger.LogDebug(ex, "AF frame relay failed (non-fatal)"); }
             var hfr = MeasureHFR(image, request.MinStars);
             var pt = new AutoFocusPoint { Position = actual, HFR = hfr.medianHfr, StarCount = hfr.starCount };
-            Progress.Points.Add(pt);
+            // Copy-on-write: status serializers read Points concurrently (see the
+            // grid loop for the full rationale).
             Progress = Progress with {
-                CurrentPosition = actual, CurrentSampleIndex = Progress.Points.Count - 1,
+                Points = new List<AutoFocusPoint>(Progress.Points) { pt },
+                CurrentPosition = actual, CurrentSampleIndex = Progress.Points.Count,
                 LastHfr = pt.HFR, LastStarCount = pt.StarCount
             };
             _logger.LogInformation("AF(adaptive) sample #{N}: pos={Pos} stars={Stars} HFR={HFR:F2}",
@@ -447,7 +467,24 @@ public class AutoFocusService {
                 var (action, target) = NextAdaptiveStep(
                     validNow, curMin, curMax, startPosition, step, need, maxPoints, Progress.Points.Count);
                 if (action == AdaptiveAction.Done) break;
-                await SampleAt(target);
+                // Travel-limit handling: growing past a rail would just re-sample
+                // the rail position over and over, burning the maxPoints budget.
+                // Redirect that growth to the other arm; stop when both rail out.
+                int clamped = ClampToTravel(focuser, target);
+                bool railed = action == AdaptiveAction.SampleLeft ? clamped >= curMin : clamped <= curMax;
+                if (railed) {
+                    int other = action == AdaptiveAction.SampleLeft
+                        ? ClampToTravel(focuser, curMax + step)
+                        : ClampToTravel(focuser, curMin - step);
+                    bool otherRailed = action == AdaptiveAction.SampleLeft ? other <= curMax : other >= curMin;
+                    if (otherRailed) {
+                        _logger.LogWarning("AF(adaptive): both travel limits reached, stopping growth at {N} points",
+                            Progress.Points.Count);
+                        break;
+                    }
+                    clamped = other;
+                }
+                await SampleAt(clamped);
             }
 
             // ---- Fit + quality gate (same discipline as the fixed sweep) ----
@@ -548,8 +585,22 @@ public class AutoFocusService {
     /// sequences its Busy/Idle transitions or how fast the move completes.
     /// </remarks>
     private async Task MoveAndSettleAsync(IFocuser focuser, int target, CancellationToken ct) {
+        // Clamp to the focuser's travel BEFORE commanding the move. Backends
+        // like IndiFocuser clamp internally, so an out-of-range request would
+        // stop at the rail while WaitForFocuserReached spins its full 60s
+        // deadline waiting for a target the hardware can never report.
+        target = ClampToTravel(focuser, target);
         await focuser.MoveAbsoluteAsync(target, ct);
         await WaitForFocuserReached(focuser, target, ct);
+    }
+
+    /// <summary>Clamp a requested focuser target to the device's physical
+    /// travel. MaxPosition can read 0 before a driver populates it (INDI
+    /// FOCUS_MAX); in that case only the lower bound is enforced.</summary>
+    private static int ClampToTravel(IFocuser focuser, int target) {
+        int max = 0;
+        try { max = focuser.MaxPosition; } catch { }
+        return max > 0 ? Math.Clamp(target, 0, max) : Math.Max(0, target);
     }
 
     private async Task WaitForFocuserReached(IFocuser focuser, int target, CancellationToken ct) {
@@ -626,12 +677,20 @@ public class AutoFocusService {
         if (points.Count < 3)
             throw new ArgumentException("Need at least 3 points for parabola fit");
 
+        // Fit in u = x - x̄ instead of raw positions. Focuser positions can be
+        // huge (10^5..10^6 steps) with a tiny sweep span, which makes the
+        // {1, x, x²} basis nearly collinear — the normal-equations determinant
+        // then cancels catastrophically in double precision. Centering keeps
+        // the system well conditioned regardless of the absolute position; the
+        // coefficients are mapped back exactly afterwards so the reported
+        // A/B/C stay in raw-position space (wire contract unchanged).
         int n = points.Count;
+        double xbar = points.Average(p => (double)p.Position);
         double sumX = 0, sumX2 = 0, sumX3 = 0, sumX4 = 0;
         double sumY = 0, sumXY = 0, sumX2Y = 0;
 
         foreach (var p in points) {
-            double x = p.Position;
+            double x = p.Position - xbar;
             double y = p.HFR;
             sumX += x;
             sumX2 += x * x;
@@ -642,7 +701,7 @@ public class AutoFocusService {
             sumX2Y += x * x * y;
         }
 
-        // Normal equations matrix:
+        // Normal equations matrix (in centered u):
         // | n     sumX    sumX2 |   |c|   |sumY  |
         // | sumX  sumX2   sumX3 | * |b| = |sumXY |
         // | sumX2 sumX3   sumX4 |   |a|   |sumX2Y|
@@ -654,7 +713,11 @@ public class AutoFocusService {
         double[] v = { sumY, sumXY, sumX2Y };
 
         var sol = Solve3x3(m, v);
-        double c = sol[0], b = sol[1], a = sol[2];
+        double cu = sol[0], bu = sol[1], a = sol[2];
+        // Map y = a·u² + bu·u + cu with u = x - x̄ back to raw x:
+        // a is unchanged; b = bu - 2a·x̄; c = a·x̄² - bu·x̄ + cu.
+        double b = bu - 2 * a * xbar;
+        double c = a * xbar * xbar - bu * xbar + cu;
 
         double rSquared = ComputeRSquared(points, a, b, c);
 

@@ -119,6 +119,47 @@ public class AutoFocusServiceTests {
         Assert.That(fit, Is.Not.Null);
     }
 
+    [Test]
+    public void FitParabola_HugePositionOffset_StaysWellConditioned() {
+        // Regression: raw focuser positions in the 10^5..10^6 range with a tiny
+        // sweep span make {1, x, x²} nearly collinear — before the centered fit,
+        // Cramer's rule on the raw sums cancelled catastrophically. The fit is
+        // now performed in u = x - x̄, so the vertex must come back sub-step
+        // accurate even at position ~1,000,000 with step 10.
+        var pts = new List<AutoFocusPoint>();
+        for (int x = 999_960; x <= 1_000_040; x += 10) {
+            double y = 0.002 * Math.Pow(x - 1_000_000, 2) + 1.7;
+            pts.Add(new AutoFocusPoint { Position = x, HFR = y, StarCount = 50 });
+        }
+
+        var fit = AutoFocusService.FitParabola(pts);
+
+        Assert.That(fit.MinX, Is.EqualTo(1_000_000.0).Within(0.5));
+        Assert.That(fit.MinY, Is.EqualTo(1.7).Within(0.05));
+        Assert.That(fit.A, Is.EqualTo(0.002).Within(0.0002));
+        Assert.That(fit.RSquared, Is.GreaterThan(0.999));
+    }
+
+    [Test]
+    public void FitParabola_CenteredFit_MapsCoefficientsBackToRawSpace() {
+        // The reported A/B/C must stay in raw-position space (the client draws
+        // the fitted curve from them): evaluating y = Ax² + Bx + C at a sample
+        // position must reproduce the sample.
+        var pts = new List<AutoFocusPoint>();
+        for (int x = 49_800; x <= 50_200; x += 50) {
+            double y = 0.0005 * Math.Pow(x - 50_000, 2) + 2.1;
+            pts.Add(new AutoFocusPoint { Position = x, HFR = y, StarCount = 50 });
+        }
+
+        var fit = AutoFocusService.FitParabola(pts);
+
+        foreach (var p in pts) {
+            double pred = fit.A * (double)p.Position * p.Position + fit.B * p.Position + fit.C;
+            Assert.That(pred, Is.EqualTo(p.HFR).Within(0.01),
+                $"raw-space evaluation at {p.Position} must match the sample");
+        }
+    }
+
     // ---- Robust fit (spurious-point rejection) ----
 
     [Test]
