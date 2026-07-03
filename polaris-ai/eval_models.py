@@ -1,4 +1,4 @@
-"""Per-task quality eval across precisions (fp32 / fp16 / int16 / int8).
+"""Per-task quality eval across precisions (fp32 / fp16 / int16 / w8a16 / int8).
 
 Runs each exported ONNX over a held-out validation set and reports mean PSNR +
 SSIM, so the "no quantization degradation" claim is measured: int8-QAT should
@@ -144,7 +144,7 @@ def main():
         print(f"range L (targets, fixed): {global_rng:.4f}")
 
     variants = []
-    for tag in ("fp32", "fp16", "int16", "int8"):
+    for tag in ("fp32", "fp16", "int16", "w8a16", "int8"):
         # accept both sized and unsized names
         for cand in (f"{args.task}_{tag}_{args.size}.onnx", f"{args.task}_{tag}.onnx"):
             path = os.path.join(args.models, cand)
