@@ -93,7 +93,8 @@ def log_norm_pair(x: np.ndarray, y: np.ndarray):
 
 class DeconDataset(Dataset):
     def __init__(self, tiles_dir: str, tile: int = 256, augment: bool = True,
-                 normalize: bool = True, seed: int = 0, log_norm: bool = False):
+                 normalize: bool = True, seed: int = 0, log_norm: bool = False,
+                 flux_aug: bool = False):
         self.paths = sorted(
             p for ext in ("npy", "fits", "fit", "fts", "png", "tif", "tiff")
             for p in glob.glob(os.path.join(tiles_dir, f"**/*.{ext}"), recursive=True)
@@ -105,6 +106,7 @@ class DeconDataset(Dataset):
         self.normalize = normalize
         self.base_seed = seed
         self.log_norm = log_norm
+        self.flux_aug = flux_aug
 
     def __len__(self):
         return len(self.paths)
@@ -135,6 +137,16 @@ class DeconDataset(Dataset):
             if k:
                 sharp = np.rot90(sharp, k)
             sharp = np.ascontiguousarray(sharp)
+
+        # AIIMP flux augmentation: random exposure gain BEFORE the forward
+        # model. Gains > 1 clip more star cores at 1.0, varying the
+        # saturated-core morphology (the dark-ring failure surface); < 1
+        # deepens the faint end. The per-tile log/percentile normalization is
+        # gain-invariant for the unclipped part, so this specifically
+        # exercises saturation, not brightness.
+        if self.flux_aug:
+            g = float(np.exp(rng.uniform(np.log(0.5), np.log(2.0))))
+            sharp = np.clip(sharp * g, 0.0, 1.0).astype(np.float32)
 
         x, y, _ = synth.make_pair(sharp, rng)
         if self.log_norm:
