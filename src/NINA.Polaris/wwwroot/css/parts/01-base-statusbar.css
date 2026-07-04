@@ -105,6 +105,14 @@ html[data-font="system"] {
 }
 
 :root {
+    /* The whole app is dark (default + night themes; there is no light
+       theme). Declaring the document color-scheme dark makes Chromium/
+       Firefox render ALL native controls + their popups dark — most
+       importantly the <select> option list, which otherwise falls back to
+       a white popup with washed-out light text (the per-select
+       color-scheme hack elsewhere is unreliable on some Chromium/Windows
+       builds; this is the robust global fix). */
+    color-scheme: dark;
     --bg-primary: #1a1a2e;
     --bg-secondary: #16213e;
     --bg-tertiary: #0f3460;
