@@ -62,7 +62,7 @@
     <link rel="stylesheet" href="/css/parts/12-tour.css?v=20260624-tour1">
     <!-- Optional external assistant module chrome (badge / FAB / iframe panel).
          Inert unless a manifest URL is configured (assistant-config.json). -->
-    <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260704-assist7">
+    <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260704-assist8">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -16973,7 +16973,11 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <div class="assistant-panel" x-show="asst.open" x-cloak x-transition.opacity
                  :style="_assistantPanelStyle()">
                 <div class="assistant-panel-header">
-                    <span x-text="asst.manifest.product.name"></span>
+                    <span class="assistant-panel-title">
+                        <span class="assistant-panel-icon"
+                              x-text="asst.manifest.iframe.fabIconEmoji || asst.manifest.product.iconEmoji || '🔭'"></span>
+                        <span x-text="asst.manifest.product.name"></span>
+                    </span>
                     <button @click="asst.open=false" title="Close">&times;</button>
                 </div>
                 <iframe id="assistantFrame" :src="asst.iframeSrc" class="assistant-iframe"

@@ -117,6 +117,8 @@
     color: var(--text-primary);
     font-size: 13px;
 }
+.assistant-panel-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.assistant-panel-icon { font-size: 16px; line-height: 1; flex: none; }
 .assistant-panel-header button {
     background: none;
     border: none;
