@@ -1,0 +1,44 @@
+{
+  "task": "decon",
+  "date": "2026-07-04",
+  "samples": 200,
+  "log_norm": true,
+  "range_L": 3.8197238445281982,
+  "results": [
+    {
+      "variant": "fp32",
+      "model": "decon_fp32_256.onnx",
+      "psnr_db": 35.5306,
+      "ssim": 0.768193,
+      "delta_db_vs_fp32": null
+    },
+    {
+      "variant": "fp16",
+      "model": "decon_fp16_256.onnx",
+      "psnr_db": 35.5288,
+      "ssim": 0.768135,
+      "delta_db_vs_fp32": -0.0018
+    },
+    {
+      "variant": "int16",
+      "model": "decon_int16_256.onnx",
+      "psnr_db": 35.5256,
+      "ssim": 0.76819,
+      "delta_db_vs_fp32": -0.0051
+    },
+    {
+      "variant": "w8a16",
+      "model": "decon_w8a16_256.onnx",
+      "psnr_db": 35.5364,
+      "ssim": 0.768908,
+      "delta_db_vs_fp32": 0.0058
+    },
+    {
+      "variant": "int8",
+      "model": "decon_int8_256.onnx",
+      "psnr_db": 34.5686,
+      "ssim": 0.32463,
+      "delta_db_vs_fp32": -0.962
+    }
+  ]
+}

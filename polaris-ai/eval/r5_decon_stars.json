@@ -1,0 +1,22 @@
+{
+  "task": "decon",
+  "mode": "synthetic (vs target)",
+  "date": "2026-07-03",
+  "tiles": 100,
+  "results": [
+    {
+      "variant": "fp32",
+      "stars": 2968,
+      "fwhm_ratio": 1.3257,
+      "dark_ring": 0.050868,
+      "flux_ratio": 1.3249
+    },
+    {
+      "variant": "fp16",
+      "stars": 2968,
+      "fwhm_ratio": 1.3256,
+      "dark_ring": 0.050866,
+      "flux_ratio": 1.3253
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "task": "decon",
+  "date": "2026-07-04",
+  "samples": 200,
+  "log_norm": true,
+  "range_L": 3.8197238445281982,
+  "results": [
+    {
+      "variant": "fp32",
+      "model": "decon_fp32_256.onnx",
+      "psnr_db": 35.7361,
+      "ssim": 0.783423,
+      "delta_db_vs_fp32": null
+    },
+    {
+      "variant": "fp16",
+      "model": "decon_fp16_256.onnx",
+      "psnr_db": 35.7342,
+      "ssim": 0.783359,
+      "delta_db_vs_fp32": -0.0019
+    }
+  ]
+}

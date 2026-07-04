@@ -1,0 +1,44 @@
+{
+  "task": "halo",
+  "date": "2026-07-02",
+  "samples": 200,
+  "log_norm": null,
+  "range_L": 107.9607281088829,
+  "results": [
+    {
+      "variant": "fp32",
+      "model": "halo_fp32_256.onnx",
+      "psnr_db": 48.3556,
+      "ssim": 0.981555,
+      "delta_db_vs_fp32": null
+    },
+    {
+      "variant": "fp16",
+      "model": "halo_fp16_256.onnx",
+      "psnr_db": 48.362,
+      "ssim": 0.981598,
+      "delta_db_vs_fp32": 0.0064
+    },
+    {
+      "variant": "int16",
+      "model": "halo_int16_256.onnx",
+      "psnr_db": 48.3306,
+      "ssim": 0.981608,
+      "delta_db_vs_fp32": -0.025
+    },
+    {
+      "variant": "w8a16",
+      "model": "halo_w8a16_256.onnx",
+      "psnr_db": 48.3303,
+      "ssim": 0.981605,
+      "delta_db_vs_fp32": -0.0253
+    },
+    {
+      "variant": "int8",
+      "model": "halo_int8_256.onnx",
+      "psnr_db": 46.1862,
+      "ssim": 0.975863,
+      "delta_db_vs_fp32": -2.1694
+    }
+  ]
+}
