@@ -25932,7 +25932,7 @@ function ninaApp() {
             const isPolaris = /^polaris[-_]?/i.test(v)
                 || family === 'halo' || family === 'upscale' || family === 'detail';
             const clean = (v.replace(/^[a-z]+-/i, '')
-                            .replace(/[-_](fp16|int8|int16)$/i, '')) || '1.0';
+                            .replace(/[-_](fp16|int8|int16|w8a16)$/i, '')) || '1.0';
             const polarisNames = {
                 bge: 'Polaris BGE', denoise: 'Polaris Denoiser',
                 halo: 'Polaris Halo Remover', upscale: 'Polaris Upscaler',
@@ -25965,6 +25965,7 @@ function ninaApp() {
                 let tag = '';
                 if (m.version.endsWith('-fp16'))   tag = ' (FP16)';
                 else if (m.version.endsWith('-int16')) tag = ' (INT16)';
+                else if (m.version.endsWith('-w8a16')) tag = ' (W8A16, NPU)';
                 else if (m.version.endsWith('-int8'))  tag = ' (INT8)';
                 return {
                     version: m.version,
@@ -25991,6 +25992,9 @@ function ninaApp() {
             const tagPriority = (v) => {
                 if (v.endsWith('-fp16'))   return 0;
                 if (v.endsWith('-int16'))  return 1;
+                // w8a16 is an NPU / download quant: ORT Web WASM can't run its
+                // int8 weight ops, so on iOS push it below FP32 next to int8.
+                if (v.endsWith('-w8a16'))  return 3;
                 if (v.endsWith('-int8'))   return 3;
                 return 2;   // unsuffixed FP32
             };

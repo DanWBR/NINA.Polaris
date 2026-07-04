@@ -119,8 +119,12 @@ public class OnnxModelRegistry {
     // static sibling (e.g. "2.0.0-512", "2.0.0-512-fp16") runs ~4x fewer
     // tiles per image; onnx-pipelines.js prefers it on desktop WebGPU and
     // keeps the plain 256 version for WASM / NPU / iOS.
+    // "w8a16" (int8 weights + int16 activations) is the preferred NPU / download
+    // quant for the residual-heavy Detail/decon model: lossless vs fp32 where
+    // plain int8 PTQ collapses. It rides the same folder convention as the other
+    // quant tags (e.g. "1.2-w8a16").
     private static readonly Regex VersionRegex =
-        new(@"^([a-z]+-)?(\d+\.\d+(\.\d+)?)(-(log|pct))?(-512)?(-(fp16|int16|int8))?$", RegexOptions.Compiled);
+        new(@"^([a-z]+-)?(\d+\.\d+(\.\d+)?)(-(log|pct))?(-512)?(-(fp16|int16|int8|w8a16))?$", RegexOptions.Compiled);
 
     public OnnxModelRegistry(ProfileService profile, IWebHostEnvironment env,
                               ILogger<OnnxModelRegistry> logger) {

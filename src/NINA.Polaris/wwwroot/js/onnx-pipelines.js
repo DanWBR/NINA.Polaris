@@ -564,12 +564,15 @@
             // bails out only after allocating intermediate buffers,
             // which on iOS Safari cascades into a tab-OOM.
             const msg = (e && e.message) || String(e);
-            const isQuant = /(-int8|-fp16)$/.test(version);
+            const isQuant = /(-int8|-w8a16|-fp16)$/.test(version);
             let hint = '';
-            if (version.endsWith('-int8')) {
-                hint = '\n\nINT8 models are not supported by the bundled ' +
-                       'ORT Web WASM runtime. Try -fp16 or the original FP32 ' +
-                       'model instead.';
+            if (version.endsWith('-int8') || version.endsWith('-w8a16')) {
+                // w8a16 (int8 weights + int16 activations) leans on the same
+                // int8 weight-dequant ops the bundled WASM EP lacks; it's an
+                // NPU / download quant, not a browser one.
+                hint = '\n\nINT8 / W8A16 models are not supported by the bundled ' +
+                       'ORT Web WASM runtime, they are meant for the NPU. Try ' +
+                       '-fp16 or the original FP32 model instead.';
             } else if (isQuant) {
                 hint = '\n\nTry switching to the original FP32 model.';
             }
