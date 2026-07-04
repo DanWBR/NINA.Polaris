@@ -14658,10 +14658,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <div class="siril-modal-row" x-show="onnxAvailableForOp(graxpert.modalOp)">
                 <label class="checkbox-label">
                     <input type="checkbox" x-model="graxpert.modalRunInBrowser">
-                    Enable local AI processing
+                    Enable local (client) processing
                 </label>
                 <p class="hint" style="margin-top:4px">
-                    If enabled, this device will be used to run the AI model directly, offloading the server. Requires a compatible GPU and a supported browser.
+                    If enabled, this device will be used to run the processing model directly, offloading the server. Requires a compatible GPU and a supported browser.
                 </p>
                 <!-- GX-10: when the client is on plain HTTP and HTTPS
                      is available, surface the upgrade. Without WebGPU
@@ -14735,15 +14735,19 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 not better.
             </p>
 
-            <!-- BGE controls -->
+            <!-- BGE controls. Model selector on its own full-width row so the
+                 long product-name labels (e.g. "Polaris BGE v1.0.0 — 230 MB")
+                 are not clipped; the numeric/enum controls share the next row. -->
             <div class="siril-modal-row" x-show="graxpert.modalOp === 'background-extraction'">
                 <label>AI model
-                    <select class="input-sm" x-model="graxpert.modalBgeVersion">
+                    <select class="input-sm" style="width:100%" x-model="graxpert.modalBgeVersion">
                         <template x-for="m in modelChoices('bge')" :key="m.version">
                             <option :value="m.version" x-text="m.label"></option>
                         </template>
                     </select>
                 </label>
+            </div>
+            <div class="siril-modal-row" x-show="graxpert.modalOp === 'background-extraction'">
                 <label>Smoothing
                     <input type="number" class="input-sm" step="0.05" min="0" max="1"
                            x-model.number="graxpert.modalSmoothing">
