@@ -1402,9 +1402,13 @@
     gap: 4px;
 }
 .files-actions-icons .btn.btn-icon {
-    width: 32px;
+    /* Labeled pill: icon + short caption side by side (caption to the
+       RIGHT of the glyph). Auto width so the caption sets the size; the
+       title/aria-label still carry the full description for tooltips
+       and screen readers. */
+    width: auto;
     height: 32px;
-    padding: 0;
+    padding: 0 9px 0 8px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1418,6 +1422,21 @@
        keeps them visually centered regardless of font metrics. */
     display: inline-block;
     line-height: 1;
+    margin-right: 6px;
+    flex: 0 0 auto;
+}
+/* Short caption to the right of the icon. Smaller + muted so the glyph
+   still leads; nowrap keeps each pill on one line. */
+.files-icon-label {
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--text);
+    white-space: nowrap;
+    user-select: none;
+}
+.files-actions-icons .btn.btn-icon:disabled .files-icon-label {
+    color: var(--text-muted);
 }
 /* Thin vertical divider between logical groups (file ops / edit ops
    / AI ops / studio root). Purely decorative, hidden from

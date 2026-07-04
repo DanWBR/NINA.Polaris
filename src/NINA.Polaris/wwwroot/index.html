@@ -44,7 +44,7 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260626-uppercase">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260702-lsrej">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260702-wfcombine">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260704-toollabels">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260702-stretchsection">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260628-smbchip">
@@ -9939,10 +9939,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             @click="filesMkdir()"
                             title="New folder" aria-label="New folder">
                         <span class="files-icon">+</span>
+                        <span class="files-icon-label">New</span>
                     </button>
                     <label class="btn btn-sm btn-icon" style="cursor:pointer"
                            title="Upload files from your device" aria-label="Upload">
                         <span class="files-icon">⬆</span>
+                        <span class="files-icon-label">Upload</span>
                         <input type="file" multiple style="display:none"
                                @change="filesUpload($event.target.files); $event.target.value = ''">
                     </label>
@@ -9952,6 +9954,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Download selected (single file or ZIP for multiple)"
                             aria-label="Download">
                         <span class="files-icon">⬇</span>
+                        <span class="files-icon-label">Download</span>
                     </button>
                     <span class="files-actions-sep" aria-hidden="true"></span>
                     <button class="btn btn-sm btn-icon"
@@ -9959,12 +9962,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             :disabled="files.selectedPaths.length === 0"
                             title="Copy selected to clipboard" aria-label="Copy">
                         <span class="files-icon">📋</span>
+                        <span class="files-icon-label">Copy</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
                             @click="filesCut()"
                             :disabled="files.selectedPaths.length === 0"
                             title="Cut selected to clipboard" aria-label="Cut">
                         <span class="files-icon">✂</span>
+                        <span class="files-icon-label">Cut</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
                             @click="filesPaste()"
@@ -9972,12 +9977,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Paste clipboard contents into the current folder"
                             aria-label="Paste">
                         <span class="files-icon">📥</span>
+                        <span class="files-icon-label">Paste</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
                             @click="filesRename()"
                             :disabled="files.selectedPaths.length !== 1"
                             title="Rename selected file or folder" aria-label="Rename">
                         <span class="files-icon">✏</span>
+                        <span class="files-icon-label">Rename</span>
                     </button>
                     <!-- Batch rename FITS files from their header fields
                          (e.g. {OBJECT}_{FILTER}_{EXPTIME}s_{n:03}). Preview
@@ -9988,6 +9995,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Batch rename selected files from FITS header fields"
                             aria-label="Batch rename">
                         <span class="files-icon">🏷</span>
+                        <span class="files-icon-label">Batch</span>
                     </button>
                     <button class="btn btn-sm btn-icon btn-danger"
                             @click="filesDelete()"
@@ -9995,6 +10003,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Delete selected (asks for confirmation)"
                             aria-label="Delete">
                         <span class="files-icon">🗑</span>
+                        <span class="files-icon-label">Delete</span>
                     </button>
                     <button class="btn btn-sm btn-icon btn-primary"
                             @click="filesSetStudioRoot()"
@@ -10002,6 +10011,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             :title="filesSelectedDir() ? 'Set this folder as the Studio scan root' : 'Set as Studio root (select a single folder first)'"
                             aria-label="Set as Studio root">
                         <span class="files-icon">⭐</span>
+                        <span class="files-icon-label">Studio root</span>
                     </button>
                     <span class="files-actions-sep" aria-hidden="true"></span>
                     <!-- Edit ops. GX-12d: arbitrary two-file before/after
@@ -10017,6 +10027,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Compare the two selected files in a before/after viewer"
                             aria-label="Compare">
                         <span class="files-icon">↔</span>
+                        <span class="files-icon-label">Compare</span>
                     </button>
                 </div>
 
@@ -10044,6 +10055,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Image Blend: recombine two images (e.g. starless + stars) with independent stretch + Screen blend"
                             aria-label="Image Blend">
                         <span class="files-icon">🎚️</span>
+                        <span class="files-icon-label">Blend</span>
                     </button>
                     <button class="btn btn-sm btn-icon" data-tour="studio-editor"
                             :disabled="files.selectedPaths.length !== 1
@@ -10052,6 +10064,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Open this file in the Lightroom-style editor"
                             aria-label="Edit">
                         <span class="files-icon">🎨</span>
+                        <span class="files-icon-label">Edit</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
                             :disabled="files.selectedPaths.length !== 1
@@ -10060,6 +10073,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Crop a rectangle from this image (saves as _crop.fits)"
                             aria-label="Crop">
                         <span class="files-icon">⌗</span>
+                        <span class="files-icon-label">Crop</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
                             :disabled="files.selectedPaths.length !== 1
@@ -10068,6 +10082,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Analyze tilt &amp; aberrations in this image"
                             aria-label="Analyze">
                         <span class="files-icon">🔬</span>
+                        <span class="files-icon-label">Analyze</span>
                     </button>
                     <span class="files-actions-sep" aria-hidden="true"></span>
                     <button class="btn btn-sm btn-icon"
@@ -10081,6 +10096,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             aria-label="Plate solve">
                         <span class="files-icon" x-show="!filesSolveBusy">🎯</span>
                         <span class="files-icon" x-show="filesSolveBusy">⏳</span>
+                        <span class="files-icon-label">Solve</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
                             :disabled="files.selectedPaths.length !== 1"
@@ -10088,6 +10104,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Star colour repair (SVBony debayer fringe). Select one OSC frame; run before BGE."
                             aria-label="Star colour repair">
                         <span class="files-icon" x-text="starColor.busy ? '⏳' : '🔘'"></span>
+                        <span class="files-icon-label">Star fix</span>
                     </button>
                     <span class="files-actions-sep" aria-hidden="true"></span>
                     <!-- Remove stars (StarNet++) — writes _starless + _stars,
@@ -10101,6 +10118,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Remove stars (StarNet++): writes _starless + _stars, then shows original vs starless"
                             aria-label="Remove stars">
                         <span class="files-icon" x-text="starRemoval.busy ? '⏳' : '🌠'"></span>
+                        <span class="files-icon-label">Starless</span>
                     </button>
                     <span class="files-actions-sep" aria-hidden="true"></span>
                     <!-- GraXpert ONNX/CLI ops: BGE / decon / denoise. -->
@@ -10113,6 +10131,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="AI Background Extraction: remove gradients (GraXpert or Polaris model, in-browser or CLI)"
                             aria-label="Background extraction">
                         <span class="files-icon">🌃</span>
+                        <span class="files-icon-label">BGE</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
                             x-show="deconAvailable()"
@@ -10122,6 +10141,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Image Sharpen / Detail: deconvolution &amp; detail enhancement (GraXpert/Polaris model or classical measured-PSF Richardson-Lucy)"
                             aria-label="Sharpen / Detail">
                         <span class="files-icon">🌌</span>
+                        <span class="files-icon-label">Detail</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
                             x-show="graxpert.status?.supportsDenoising
@@ -10132,6 +10152,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="AI Denoise: reduce noise (GraXpert or Polaris model)"
                             aria-label="Denoise">
                         <span class="files-icon">🫧</span>
+                        <span class="files-icon-label">Denoise</span>
                     </button>
                     <span class="files-actions-sep" aria-hidden="true"
                           x-show="onnxAvailableForOp('halo-removal')
@@ -10145,6 +10166,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Halo removal: remove reflection halos around bright stars (Polaris AI)"
                             aria-label="Halo removal">
                         <span class="files-icon">✨</span>
+                        <span class="files-icon-label">Halo</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
                             x-show="onnxAvailableForOp('upscaling')"
@@ -10154,6 +10176,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Upscale: AI super-resolution (2× / 4×, Polaris AI)"
                             aria-label="Upscale">
                         <span class="files-icon">📈</span>
+                        <span class="files-icon-label">Upscale</span>
                     </button>
                 </div>
 
