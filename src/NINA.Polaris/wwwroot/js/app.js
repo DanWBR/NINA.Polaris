@@ -13952,7 +13952,23 @@ function ninaApp() {
             // position → nothing to anchor to, so it piggybacks on `mount`.
             let aux = null;
             const afl = this.aux?.focalLengthMm;
-            const asw = this.auxSensorWidthMm, ash = this.auxSensorHeightMm;
+            let asw = this.auxSensorWidthMm, ash = this.auxSensorHeightMm;
+            if (!(asw > 0 && ash > 0) && this.aux?.enabled) {
+                // Live dims missing: DSLRs on the aux port (indi_gphoto)
+                // don't publish CCD_INFO — their geometry lives in the rig's
+                // per-aux overrides (the DSLR picker fills auxCameraMaxX/Y +
+                // pixel size). Derive the footprint from those so the pink
+                // rect shows for a configured-but-quiet (or not-yet-
+                // connected) aux camera. Gated on aux.enabled so leftover
+                // fields on a rig with the aux turned off don't draw it.
+                const ax = Number(this.aux?.maxX) || 0;
+                const ay = Number(this.aux?.maxY) || 0;
+                const ap = Number(this.aux?.pixelSizeUm) || 0;
+                if (ax > 0 && ay > 0 && ap > 0) {
+                    asw = ax * ap / 1000;
+                    ash = ay * ap / 1000;
+                }
+            }
             if (afl > 0 && asw > 0 && ash > 0) {
                 const auxW = 2 * Math.atan(asw / (2 * afl)) * (180 / Math.PI);
                 const auxH = 2 * Math.atan(ash / (2 * afl)) * (180 / Math.PI);
