@@ -108,6 +108,17 @@
         "highlight": false
       },
       {
+        "device": "Orange Pi 4 Pro (Allwinner A733)",
+        "url": "http://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-4-Pro.html",
+        "cores": "8 cores",
+        "score": "147",
+        "stacking": "34.1 Mpx/s",
+        "capture": "15.4 Mpx/s",
+        "memory": "8.7 GB/s",
+        "price": "$60-90",
+        "highlight": false
+      },
+      {
         "device": "Raspberry Pi 5 Model B",
         "url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
         "cores": "4 cores",
