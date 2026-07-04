@@ -236,6 +236,9 @@ frames arrive. → [live-stacking.md](user-guide/live-stacking.md)
   dark/flat/bias) and GraXpert background extraction applied before each
   frame is added.
 - **OSC color stacking** — automatic for one-shot-color cameras.
+- **Kappa-sigma pixel rejection** — optionally reject per-pixel outliers
+  (cosmic rays, plane / satellite trails, dithered hot pixels) instead of
+  folding them into the running mean; per-rig, best combined with dithering.
 - **Auto re-focus / re-center triggers** — kick off an auto-focus or a
   re-center when HFR drifts or the target wanders.
 - **Save the current stack** to FITS at any time (into a dedicated `stacked`
@@ -289,10 +292,19 @@ Browse, calibrate, and integrate your captured frames on the host.
 - **Calibration** — apply masters to light frames.
 - **Batch stacking** — register and integrate a set of lights into a master,
   with progress reporting.
-- **Channel combine** — merge per-filter masters into one RGB image:
+- **Drizzle integration** — optional 1x / 2x / 3x drizzle (Fruchter & Hook)
+  for well-dithered, undersampled data, with an automatic recommendation
+  computed from the frames' measured FWHM so you only upscale when it
+  actually recovers resolution.
+- **Channel combine** — merge per-filter masters into one image:
   - **RGB compose** (no luminance needed),
   - **LRGB** (Lab / ratio combine when you have a luminance master),
-  - **PixelMath** for narrowband palettes (HOO, SHO, …).
+  - **Narrowband palettes** — one-click SHO / HSO / HOS / HOO from mono
+    S / H / O masters, plus continuum subtraction (Ha−R, OIII−G) and
+    free-form **PixelMath**,
+  - **OSC dual-band → SHO** — pull Ha / SII and OIII out of Ha+OIII and
+    SII+OIII one-shot-color masters and combine them, with automatic star
+    alignment between the two frames.
   → [lrgb-mono-workflow.md](user-guide/lrgb-mono-workflow.md)
 - **Color calibration** (Siril-style, plate-solve-driven):
   - **Background neutralization** (zero-config),
@@ -306,7 +318,10 @@ Browse, calibrate, and integrate your captured frames on the host.
   cast with a dark notch) some OSC cameras leave on bright stars, via sub-pixel
   channel alignment and radial colour/luminance symmetry repair. Neighbour-aware
   for crowded fields, with a before/after montage of the brightest stars.
-- **Crop tool** with a drag picker.
+- **Crop tool** with a drag picker, plus an **Auto crop** button that
+  suggests the largest fully-stacked rectangle to trim the ragged dither
+  borders left by slightly-misaligned integrations — you review and adjust
+  it before saving.
 
 ---
 
@@ -337,13 +352,17 @@ A Lightroom-style finishing editor for your master image.
 
 ---
 
-## AI Inference (ONNX / GraXpert)
+## AI Inference (ONNX / GraXpert + Polaris models)
 
-GraXpert's AI models run on whatever hardware is fastest, with no per-frame
-cloud calls. → [onnx-inference.md](user-guide/onnx-inference.md)
+GraXpert's models plus Polaris's own AI models run on whatever hardware is
+fastest, with no per-frame cloud calls. → [onnx-inference.md](user-guide/onnx-inference.md)
 
 - **Background Extraction (BGE)**, **Denoise** (v2 + v3), and
-  **Deconvolution** (stars / objects) models.
+  **Deconvolution** (stars / objects) models (GraXpert).
+- **Polaris's own models** — a **Detail / Sharpen** enhancer, **Halo removal**
+  (cleans the reflection halos around bright stars), and an **Upscaler**
+  (2x / 4x super-resolution). All are NPU / quantization-friendly and run
+  in the browser or on the SBC NPU.
 - **Star-removal models** — nox and starrem2k13 (both MIT, bundled) plus the
   opt-in StarNet++ (NonCommercial). All are FP16-quantized so they run in the
   browser on phones and tablets via WebGPU, or on WASM.

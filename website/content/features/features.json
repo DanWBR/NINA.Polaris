@@ -123,6 +123,7 @@
         { "label": "Continuous integration", "text": "with live alignment (star matching) and a growing preview." },
         { "label": "Per-frame pre-processing", "text": "optional calibration (auto-matched master dark/flat/bias) and GraXpert background extraction applied before each frame is added, running wherever the stack runs: in the browser via WebAssembly and WebGPU, or server-side through the GraXpert CLI or the RK3588 NPU." },
         { "label": "OSC color stacking", "text": "automatic for one-shot-color cameras." },
+        { "label": "Kappa-sigma pixel rejection", "text": "optionally reject per-pixel outliers (cosmic rays, plane or satellite trails, dithered hot pixels) instead of folding them into the running mean; per-rig, and best paired with dithering." },
         { "label": "Auto re-focus and re-center triggers", "text": "kick off an auto-focus or a re-center when HFR drifts or the target wanders." },
         { "label": "Save the current stack", "text": "to FITS at any time, into a dedicated stacked folder." },
         { "label": "Client-side compute offload", "text": "on a slow server (Pi 2/3) the stacking math can run in your browser via WebAssembly instead of the host." },
@@ -158,11 +159,12 @@
         { "label": "Master generation", "text": "build master darks, flats, and bias frames." },
         { "label": "Calibration", "text": "apply masters to light frames." },
         { "label": "Batch stacking", "text": "register and integrate a set of lights into a master, with progress reporting." },
-        { "label": "Channel combine", "text": "merge per-filter masters into one RGB image, with RGB compose (no luminance needed), LRGB (Lab or ratio combine when you have a luminance master), and PixelMath for narrowband palettes (HOO, SHO)." },
+        { "label": "Drizzle integration", "text": "optional 1x, 2x, or 3x drizzle (Fruchter and Hook) for well-dithered, undersampled data, with an automatic recommendation computed from the frames' measured FWHM so you only upscale when it actually recovers resolution." },
+        { "label": "Channel combine", "text": "merge per-filter masters into one image: RGB compose (no luminance needed), LRGB (Lab or ratio combine when you have a luminance master), one-click narrowband palettes (SHO, HSO, HOS, HOO) with continuum subtraction (Ha minus R, OIII minus G), free-form PixelMath, and an OSC dual-band mode that pulls Ha, SII, and OIII out of Ha+OIII and SII+OIII one-shot-color masters and combines them with automatic star alignment." },
         { "label": "Color calibration", "text": "Siril-style and plate-solve-driven: background neutralization (zero-config), manual (background patch and white-reference patch), and PCC, Photometric Color Calibration against the bundled APASS DR10 star catalog for science-grade color." },
         { "label": "Quick processing", "text": "debayer, background extraction, noise reduction, and sharpening passes." },
         { "label": "Star colour repair", "text": "fix the one-sided colour fringe (a blue or magenta cast with a dark notch) that some one-shot-colour cameras leave on bright stars, using sub-pixel channel alignment and radial colour and luminance symmetry repair. Neighbour-aware for crowded fields, with a before/after montage of the brightest stars." },
-        { "label": "Crop tool", "text": "with a drag picker." }
+        { "label": "Crop tool", "text": "with a drag picker, plus an Auto crop button that suggests the largest fully-stacked rectangle to trim the ragged dither borders left by slightly-misaligned integrations; you review and adjust it before saving." }
       ]
     },
     {
@@ -182,7 +184,8 @@
       "icon": "🤖", "color": "#7e57c2", "title": "AI inference", "tag": "ONNX / GraXpert",
       "intro": "GraXpert's AI models run on whatever hardware is fastest, with no per-frame cloud calls.",
       "items": [
-        { "label": "Models", "text": "Background Extraction (BGE), Denoise (v2 and v3), and Deconvolution (stars and objects)." },
+        { "label": "GraXpert models", "text": "Background Extraction (BGE), Denoise (v2 and v3), and Deconvolution (stars and objects)." },
+        { "label": "Polaris's own models", "text": "a Detail / Sharpen enhancer, Halo removal (cleans the reflection halos around bright stars), and a 2x/4x Upscaler, all trained from scratch on real astrophotos and quantization-friendly so they run in the browser or on the SBC NPU." },
         { "label": "Star-removal models", "text": "nox and starrem2k13 (both MIT, bundled) plus the opt-in StarNet++ (NonCommercial). All are FP16-quantized so they run in the browser on phones and tablets via WebGPU, or on WASM." },
         { "label": "On-device model downloader", "text": "pull ready-made .onnx models onto the device from the bundled SourceForge catalogue or your own bucket, with SHA-256 verification and no Docker or Python on the host (Settings, AI inference, Download models)." },
         { "label": "In-browser inference", "text": "onnxruntime-web uses the client device's GPU (WebGPU) or WASM SIMD; the server just hosts the .onnx files." },
