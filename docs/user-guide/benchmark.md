@@ -1,7 +1,7 @@
 # Hardware benchmark
 
 Polaris runs on a wide range of computers: Raspberry Pi 4 / 5, Orange Pi
-5 Pro, Radxa Dragon Q6A, x86 mini-PCs and PC sticks, and more. They differ a lot in how
+4 Pro, Orange Pi 5 Pro, Radxa Dragon Q6A, x86 mini-PCs and PC sticks, and more. They differ a lot in how
 fast they can stack frames and encode the live video stream. The
 **Hardware Benchmark** (Settings → Hardware benchmark) measures your
 machine so you can compare boards and pick the right one for your rig.
@@ -113,6 +113,25 @@ the best result.
 | Memory bandwidth | 7.7 GB/s | 8.1 GB/s |
 
 (16.78 MP frames.)
+
+### Orange Pi 4 Pro (8 cores, Allwinner A733)
+
+Run: 2026-07-04 (2 consecutive runs: 147, 144).
+
+| Metric | Value |
+|---|---|
+| **Polaris score** | **147** |
+| Stacking throughput | 2.03 fps · 34.1 Mpx/s (16.78 MP frames) |
+| Stacking detect / align / resample / stats | 122.69 / 0.57 / 167.53 / 201.82 ms |
+| Capture/video throughput | 0.92 fps · 15.4 Mpx/s |
+| Debayer / JPEG / LZ4 | 113.25 / 961.27 / 15.76 ms (LZ4 2030 MB/s) |
+| CPU single / multi-thread | 2406 / 7839 MFLOPS (3.26× scaling) |
+| Memory bandwidth | 8.7 GB/s |
+
+Sits between the Raspberry Pi 4 (110) and Pi 5 (211) — a solid mid-range SBC.
+Note: on the stock Orange Pi image the board self-reports only its SoC codename
+(`sun60iw2`) in `/proc/device-tree/model`; Polaris now resolves the friendly
+"Orange Pi 4 Pro" name from the device-tree `compatible` string instead.
 
 ### Orange Pi 5 Pro (8 cores, RK3588S)
 

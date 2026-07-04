@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 
@@ -93,6 +94,17 @@ public static class HostInfo {
             // device-tree files end with a stray null byte
             var dt = File.ReadAllText(dtPath).TrimEnd('\0', ' ', '\n', '\r');
             if (!string.IsNullOrWhiteSpace(dt)) {
+                // Some vendor images (e.g. Orange Pi's stock Ubuntu) put only the
+                // SoC CODENAME in the model node — "sun60iw2", "rk3588s" — instead
+                // of a human board name. When it looks like a bare codename, try
+                // /proc/device-tree/compatible, whose "vendor,board" tuples (e.g.
+                // "xunlong,orangepi-4-pro") yield the real board.
+                if (LooksLikeSocCodename(dt)) {
+                    var board = DetectLinuxCompatibleBoard();
+                    if (!string.IsNullOrWhiteSpace(board)) {
+                        return (ClassifyLinuxModel(board!), board!);
+                    }
+                }
                 return (ClassifyLinuxModel(dt), dt);
             }
         }
@@ -204,6 +216,80 @@ public static class HostInfo {
         if (m.Contains("nano")) return "mini-pc";
         if (m.Contains("vmware") || m.Contains("virtualbox") || m.Contains("kvm") || m.Contains("qemu")) return "vm";
         return "linux";
+    }
+
+    /// <summary>True when a device-tree "model" is really a bare SoC codename
+    /// (no vendor/board), e.g. "sun60iw2", "sun55iw3", "rk3588", "rk3399",
+    /// "s905d3", "h616". Some vendor kernels populate the model node with the
+    /// silicon codename instead of a human board name.</summary>
+    internal static bool LooksLikeSocCodename(string s) {
+        if (string.IsNullOrWhiteSpace(s) || s.Contains(' ')) return false;
+        return Regex.IsMatch(s, @"^(sun\d+iw\d+[a-z]?|rk3\d{2,3}[a-z]?|s\d{3}[a-z]?\d?|h\d{2,3}|a\d{2,3}|t\d{3})$",
+            RegexOptions.IgnoreCase);
+    }
+
+    /// <summary>Extract a friendly board name from the null-separated
+    /// "vendor,board" list in <c>/proc/device-tree/compatible</c>
+    /// (e.g. "xunlong,orangepi-4-pro\0allwinner,sun60iw2"). Skips pure-silicon
+    /// vendor entries (allwinner/rockchip/...) and returns the first
+    /// board-vendor tuple beautified. Null if none usable.</summary>
+    internal static string? DetectLinuxCompatibleBoard() {
+        try {
+            const string path = "/proc/device-tree/compatible";
+            if (!File.Exists(path)) return null;
+            var entries = File.ReadAllText(path).Split('\0', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var e in entries) {
+                var comma = e.IndexOf(',');
+                if (comma <= 0) continue;
+                var vendor = e[..comma].Trim().ToLowerInvariant();
+                var board = e[(comma + 1)..].Trim();
+                var brand = VendorBrand(vendor);
+                if (brand == null || string.IsNullOrWhiteSpace(board)) continue; // silicon vendor -> skip
+                return BeautifyBoardSlug(brand, board);
+            }
+        } catch { /* /proc not readable */ }
+        return null;
+    }
+
+    /// <summary>Map a device-tree compatible vendor prefix to a consumer brand.
+    /// Silicon vendors (allwinner/rockchip/qualcomm/...) return null so the
+    /// caller skips their SoC-only compatible entry.</summary>
+    internal static string? VendorBrand(string vendor) => vendor switch {
+        "xunlong" => "Orange Pi",
+        "raspberrypi" => "Raspberry Pi",
+        "radxa" => "Radxa",
+        "pine64" => "Pine64",
+        "friendlyarm" or "friendlyelec" => "FriendlyELEC",
+        "hardkernel" => "ODROID",
+        "nvidia" => "NVIDIA",
+        "libretech" or "libre-computer" => "Libre Computer",
+        "bananapi" or "sinovoip" => "Banana Pi",
+        "beagle" or "beagleboard" => "BeagleBoard",
+        "asus" => "ASUS",
+        // silicon vendors -> not a board name
+        _ => null
+    };
+
+    /// <summary>Turn a compatible board slug ("orangepi-4-pro", "4-model-b")
+    /// into a title-cased name, dropping a leading vendor-smashed token and
+    /// prefixing the brand: -> "Orange Pi 4 Pro", "Raspberry Pi 4 Model B".</summary>
+    internal static string BeautifyBoardSlug(string brand, string slug) {
+        var parts = slug.Replace('_', '-').Split('-', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var brandKey = brand.Replace(" ", "").ToLowerInvariant();
+        // Drop leading tokens that just repeat the brand ("orangepi", "rpi", ...).
+        while (parts.Count > 0) {
+            var p0 = parts[0].ToLowerInvariant();
+            if (p0 == brandKey || (p0.Length >= 4 && brandKey.StartsWith(p0))) parts.RemoveAt(0);
+            else break;
+        }
+        var name = string.Join(" ", parts.Select(TitleToken)).Trim();
+        return string.IsNullOrWhiteSpace(name) ? brand : $"{brand} {name}";
+    }
+
+    private static string TitleToken(string t) {
+        if (t.Length == 0) return t;
+        if (t.All(char.IsDigit)) return t;                 // "4", "5"
+        return char.ToUpperInvariant(t[0]) + t[1..].ToLowerInvariant(); // "pro"->"Pro", "b"->"B"
     }
 
     internal static string ClassifyWindowsModel(string model) {

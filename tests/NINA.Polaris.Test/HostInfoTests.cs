@@ -31,6 +31,8 @@ public class HostInfoTests {
     [TestCase("Raspberry Pi 4 Model B Rev 1.4", "raspberry-pi")]
     [TestCase("Raspberry Pi 3 Model B Plus Rev 1.3", "raspberry-pi")]
     [TestCase("NVIDIA Jetson Nano Developer Kit", "jetson")]
+    [TestCase("Orange Pi 4 Pro", "orangepi")]
+    [TestCase("Orange Pi 5 Pro", "orangepi")]
     [TestCase("Radxa Rock Pi 4B", "rockpi")]
     [TestCase("ROCK Pi 5B (RK3588)", "rockpi")]
     [TestCase("Hardkernel Odroid-N2Plus", "odroid")]
@@ -194,6 +196,41 @@ public class HostInfoTests {
         // 5800 MHz → "5.80 GHz" (not "5.8 GHz" or "5,80 GHz")
         Assert.That(HostInfo.BuildCpuLabel("X", 5800, 1), Does.Contain("5.80 GHz"));
         Assert.That(HostInfo.BuildCpuLabel("X", 1000, 1), Does.Contain("1.00 GHz"));
+    }
+
+    // --- device-tree "compatible" fallback: resolves a friendly board name
+    //     when a vendor image only puts the SoC codename in the model node
+    //     (e.g. Orange Pi's stock Ubuntu reports "sun60iw2").
+    [TestCase("sun60iw2", true)]   // Allwinner A733 (Orange Pi 4 Pro)
+    [TestCase("sun55iw3", true)]   // Allwinner T527
+    [TestCase("rk3588", true)]
+    [TestCase("rk3588s", true)]
+    [TestCase("rk3399", true)]
+    [TestCase("h616", true)]
+    [TestCase("Raspberry Pi 5 Model B Rev 1.0", false)] // real board name (has spaces)
+    [TestCase("Orange Pi 4 Pro", false)]
+    [TestCase("", false)]
+    public void LooksLikeSocCodename_ClassifiesBareCodenames(string model, bool expected) {
+        Assert.That(HostInfo.LooksLikeSocCodename(model), Is.EqualTo(expected));
+    }
+
+    [TestCase("xunlong", "Orange Pi")]
+    [TestCase("raspberrypi", "Raspberry Pi")]
+    [TestCase("radxa", "Radxa")]
+    [TestCase("hardkernel", "ODROID")]
+    [TestCase("allwinner", null)]   // silicon vendor -> skipped
+    [TestCase("rockchip", null)]
+    [TestCase("qualcomm", null)]
+    public void VendorBrand_MapsBoardVendorsOnly(string vendor, string? expected) {
+        Assert.That(HostInfo.VendorBrand(vendor), Is.EqualTo(expected));
+    }
+
+    [TestCase("Orange Pi", "orangepi-4-pro", "Orange Pi 4 Pro")]
+    [TestCase("Orange Pi", "orangepi-5-pro", "Orange Pi 5 Pro")]
+    [TestCase("Raspberry Pi", "4-model-b", "Raspberry Pi 4 Model B")]
+    [TestCase("Radxa", "rock-5b", "Radxa Rock 5b")]
+    public void BeautifyBoardSlug_TitleCasesAndDropsBrandDuplication(string brand, string slug, string expected) {
+        Assert.That(HostInfo.BeautifyBoardSlug(brand, slug), Is.EqualTo(expected));
     }
 
     [Test]
