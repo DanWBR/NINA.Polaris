@@ -2819,6 +2819,7 @@ function ninaApp() {
             previewUrl: '',     // /api/files/preview?path=... + auth token
             error: '',
             busy: false,
+            autoBusy: false,    // "Auto crop" suggest request in flight
             // Drag rectangle in DISPLAY-pixel coordinates relative to
             // .crop-picker bounding rect. Both null when no selection.
             roi: { startX: null, startY: null, endX: null, endY: null },
@@ -25599,6 +25600,50 @@ function ninaApp() {
             h = Math.min(h, srcH - y);
             if (w < 1 || h < 1) return null;
             return { x, y, width: w, height: h };
+        },
+
+        // Auto crop SUGGEST: ask the server for the largest fully-stacked
+        // inner rectangle (trims the ragged/black dither borders) and pre-fill
+        // the picker with it. Nothing is written — the user reviews, adjusts,
+        // or accepts with "Crop and save". Inverse of _cropRoiFractions:
+        // fractions relative to the image → picker display coords.
+        async cropAutoSuggest() {
+            if (this.crop.busy || this.crop.autoBusy) return;
+            const dispW = this.crop.imgDisplayWidth, dispH = this.crop.imgDisplayHeight;
+            if (!dispW || !dispH) {
+                this.crop.error = 'Wait for the image to finish loading, then try again.';
+                return;
+            }
+            this.crop.autoBusy = true;
+            this.crop.error = '';
+            try {
+                const r = await this.apiFetch('/api/crop/auto-suggest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ paths: [this.crop.sourcePath] })
+                });
+                const d = await r.json();
+                if (d.error) { this.crop.error = d.error; return; }
+                if (d.full) {
+                    this.toast('No stacking borders found — the frame is already fully covered.', 'info');
+                    return;
+                }
+                const offL = this.crop._imgOffLeft || 0;
+                const offT = this.crop._imgOffTop || 0;
+                const sx = offL + (d.fracX || 0) * dispW;
+                const sy = offT + (d.fracY || 0) * dispH;
+                this.crop.roi = {
+                    startX: sx, startY: sy,
+                    endX: sx + (d.fracW || 0) * dispW,
+                    endY: sy + (d.fracH || 0) * dispH
+                };
+                this.crop.dragging = false;
+                this.toast('Auto crop suggested — adjust the rectangle or Crop and save.', 'success');
+            } catch (e) {
+                this.crop.error = (e && e.message) ? e.message : String(e);
+            } finally {
+                this.crop.autoBusy = false;
+            }
         },
 
         async cropStartRun() {

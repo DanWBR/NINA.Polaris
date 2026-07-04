@@ -15082,6 +15082,18 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="btn" @click="cropClose()" :disabled="crop.busy">
                     Cancel
                 </button>
+                <!-- Auto crop: server finds the largest fully-stacked inner
+                     rectangle (trims the ragged/black dither borders) and
+                     pre-fills the picker so the user can accept or adjust it
+                     before saving. -->
+                <button class="btn"
+                        @click="cropAutoSuggest()"
+                        :disabled="crop.busy || crop.autoBusy || !crop.previewUrl"
+                        title="Suggest a rectangle that removes the ragged stacking borders. You can still adjust it before cropping."
+                        style="margin-right:auto">
+                    <span x-show="!crop.autoBusy">✨ Auto crop</span>
+                    <span x-show="crop.autoBusy">Detecting…</span>
+                </button>
                 <button class="btn"
                         @click="cropResetRoi()"
                         :disabled="crop.roi.startX === null || crop.busy">

@@ -141,6 +141,43 @@ public class CropService {
         return CropCore(src, sourcePath, r.X, r.Y, r.Width, r.Height);
     }
 
+    public sealed record AutoCropSuggestion(
+        double FracX, double FracY, double FracW, double FracH,
+        int X, int Y, int Width, int Height, int SourceWidth, int SourceHeight);
+
+    /// <summary>
+    /// Detect the largest fully-stacked (non-black) inner rectangle like
+    /// <see cref="AutoCropFits"/>, but WITHOUT writing anything: returns the
+    /// suggested ROI as normalised fractions (0..1, top-left origin) so the web
+    /// crop picker can pre-fill its rectangle for the user to accept or adjust
+    /// before committing. Same threshold/margin semantics as the auto crop.
+    /// If the whole frame is already covered the suggestion is the full image.
+    /// </summary>
+    public AutoCropSuggestion SuggestAutoCropFraction(string sourcePath, int threshold = 0, int margin = 0) {
+        if (string.IsNullOrWhiteSpace(sourcePath))
+            throw new ArgumentException("sourcePath is required", nameof(sourcePath));
+        if (!File.Exists(sourcePath))
+            throw new FileNotFoundException("Source FITS not found", sourcePath);
+
+        BaseImageData src;
+        using (var fs = File.OpenRead(sourcePath)) {
+            src = FITSReader.Read(fs);
+        }
+        int w = src.Properties.Width;
+        int h = src.Properties.Height;
+        int channels = src.Properties.Channels == 3 ? 3 : 1;
+        var r = AutoCrop.FindContentRect(src.Data, w, h, channels, threshold, margin);
+
+        double fx = w > 0 ? (double)r.X / w : 0;
+        double fy = h > 0 ? (double)r.Y / h : 0;
+        double fw = w > 0 ? (double)r.Width / w : 1;
+        double fh = h > 0 ? (double)r.Height / h : 1;
+        _logger.LogInformation(
+            "AutoCrop suggest: {Src} ({W}×{H}) → ({X},{Y} {RW}×{RH}) thr={Thr} margin={M}",
+            sourcePath, w, h, r.X, r.Y, r.Width, r.Height, threshold, margin);
+        return new AutoCropSuggestion(fx, fy, fw, fh, r.X, r.Y, r.Width, r.Height, w, h);
+    }
+
     private CropResult CropCore(BaseImageData src, string sourcePath,
                                 int x, int y, int width, int height) {
         int srcW = src.Properties.Width;

@@ -113,6 +113,29 @@ public static class CropEndpoints {
             }
             return Results.Ok(new { results, failures });
         });
+
+        // Auto-crop SUGGEST: run the same content-rect detection but write
+        // nothing — return the ROI as normalised fractions so the crop picker
+        // can pre-fill its rectangle for the user to review/adjust before
+        // committing with /run. One file (the modal shows one image).
+        g.MapPost("/auto-suggest", (CropService svc, AutoCropRequest req) => {
+            if (req.Paths == null || req.Paths.Length == 0)
+                return Results.BadRequest(new { error = "paths is required" });
+            try {
+                var s = svc.SuggestAutoCropFraction(
+                    req.Paths[0], req.Threshold ?? 0, req.Margin ?? 0);
+                return Results.Ok(new {
+                    fracX = s.FracX, fracY = s.FracY, fracW = s.FracW, fracH = s.FracH,
+                    x = s.X, y = s.Y, width = s.Width, height = s.Height,
+                    sourceWidth = s.SourceWidth, sourceHeight = s.SourceHeight,
+                    // Whole frame already covered → nothing to trim; the UI can
+                    // tell the user instead of drawing a full-image rectangle.
+                    full = s.Width >= s.SourceWidth && s.Height >= s.SourceHeight
+                });
+            } catch (Exception ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
     }
 
     // X/Y/Width/Height are legacy absolute pixel coords (kept for API
