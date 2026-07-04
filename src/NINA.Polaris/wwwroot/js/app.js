@@ -9858,6 +9858,14 @@ function ninaApp() {
             this._assistantInstallBridge();
             this.asst.ready = true;
 
+            // The assistant panel and the on-screen keyboard both dock to the
+            // bottom-right corner. While the panel is open, suspend the Polaris
+            // keyboard so it never pops up over the chat (the assistant iframe
+            // handles its own input via the native keyboard).
+            this.$watch('asst.open', (open) => {
+                try { if (window.PolarisKeyboard) window.PolarisKeyboard.setSuspended(!!open); } catch (_) {}
+            });
+
             if (!this.asst.subscribed && (!m.badge || m.badge.show !== false) && !dismissed) {
                 this.asst.badgeVisible = true;
             }

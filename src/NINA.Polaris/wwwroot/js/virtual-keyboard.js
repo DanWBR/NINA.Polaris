@@ -46,7 +46,17 @@
         try { return window.matchMedia && window.matchMedia('(pointer: coarse)').matches; }
         catch (e) { return ('ontouchstart' in window) || navigator.maxTouchPoints > 0; }
     }
+    // External components (e.g. the assistant panel) can temporarily suspend
+    // the on-screen keyboard so it doesn't pop up in the same bottom-right
+    // corner they occupy. Suspension overrides the mode and hides any panel
+    // that is currently showing.
+    var suspended = false;
+    function setSuspended(v) {
+        suspended = !!v;
+        if (suspended) hide();
+    }
     function isEnabled() {
+        if (suspended) return false;
         var m = getMode();
         if (m === 'on') return true;
         if (m === 'off') return false;
@@ -453,6 +463,7 @@
         getMode: getMode,
         setMode: setMode,
         isEnabled: isEnabled,
+        setSuspended: setSuspended,
         hide: hide
     };
 })();
