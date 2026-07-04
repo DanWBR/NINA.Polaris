@@ -774,6 +774,22 @@
     object-fit: contain;
     image-rendering: pixelated;
 }
+
+/* Pixel-exact rendering for every astro-image inspection surface: editor
+   preview, crop picker, the before/after comparer, and the Auto Workflow
+   detail preview. Astro pixels matter — the browser must NOT bilinear-
+   smooth when the image is scaled up. `crisp-edges` first as the older
+   Firefox spelling, then `pixelated` (Chrome/Edge/Safari + modern FF).
+   The main PREVIEW/LIVE viewers use OpenSeadragon, disabled separately
+   via imageSmoothingEnabled:false in app.js. */
+.editor-preview-img,
+.crop-picker-img,
+.graxpert-compare-src,
+.graxpert-compare-out,
+.awf-detail-preview {
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+}
 .studio-viewer-stars {
     position: absolute;
     inset: 0;

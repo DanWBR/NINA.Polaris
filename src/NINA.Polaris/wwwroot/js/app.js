@@ -14652,6 +14652,9 @@ function ninaApp() {
                         visibilityRatio: 0.5,
                         minZoomImageRatio: 0.5,
                         maxZoomPixelRatio: 4.0,
+                        // Nearest-neighbour when zoomed past 1:1 so the operator
+                        // inspects real pixels (no bilinear smoothing on astro data).
+                        imageSmoothingEnabled: false,
                         animationTime: 0.3
                     });
                 });
@@ -14792,6 +14795,9 @@ function ninaApp() {
                 visibilityRatio: 0.5,
                 minZoomImageRatio: 0.8,
                 maxZoomPixelRatio: 4.0,
+                // Nearest-neighbour when zoomed past 1:1 so the operator
+                // inspects real pixels (no bilinear smoothing on astro data).
+                imageSmoothingEnabled: false,
                 gestureSettingsMouse: { clickToZoom: false },
                 gestureSettingsTouch: { clickToZoom: false },
                 animationTime: 0.4,
