@@ -1343,7 +1343,40 @@
     border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
 }
-.files-roots { min-width: 120px; }
+/* Roots picker ("Jump to root..."). Custom-styled select: native arrow
+   removed and replaced with a muted chevron, comfortable padding + a
+   wider min so the placeholder and drive labels are not clipped. No
+   max-width cap (dropdowns fill available space per house style). */
+.files-roots {
+    min-width: 190px;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    padding: 0 30px 0 12px;
+    background-color: var(--bg-elev);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238b95a1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+.files-roots:hover {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    background-color: color-mix(in srgb, var(--accent) 6%, var(--bg-elev));
+}
+.files-roots:focus,
+.files-roots:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+/* The disabled placeholder reads muted; real drive options read normal. */
+.files-roots option { color: var(--text); background: var(--bg-elev); }
+.files-roots option:disabled { color: var(--text-muted); }
 .files-crumbs {
     flex: 1 1 auto;
     min-width: 0;
