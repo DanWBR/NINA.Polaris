@@ -74,6 +74,7 @@ function ninaApp() {
             open: false,          // chat panel open
             iframeLoaded: false,  // iframe src set (lazy)
             iframeSrc: 'about:blank',
+            pos: null,            // {left, top} px if the user dragged the launcher; else default corner
         },
         // On-screen keyboard mode (Settings → Appearance). The actual
         // behaviour lives in /js/virtual-keyboard.js; this just mirrors the
@@ -9855,6 +9856,9 @@ function ninaApp() {
             let dismissed = false;
             try { dismissed = localStorage.getItem('polaris.assistant.badgeDismissed') === '1'; } catch (_) {}
 
+            this._assistantLoadPos();
+            window.addEventListener('resize', () => this._assistantClampPos());
+
             this._assistantInstallBridge();
             this.asst.ready = true;
 
@@ -10057,7 +10061,80 @@ function ninaApp() {
         },
 
         // ---- assistant onboarding actions (bound in the DOM) ----
-        assistantOpenIntro() { this.asst.introOpen = true; },
+        assistantOpenIntro() {
+            if (this._asstDragged) { this._asstDragged = false; return; } // ignore the click that ends a drag
+            this.asst.introOpen = true;
+        },
+
+        // ---- Draggable, persisted launcher (badge + FAB share one position) ---
+        _assistantLauncherStyle() {
+            const p = this.asst.pos;
+            if (!p) return {}; // default CSS bottom-right corner
+            return { left: p.left + 'px', top: p.top + 'px', right: 'auto', bottom: 'auto' };
+        },
+        _assistantPanelStyle() {
+            const p = this.asst.pos;
+            const vw = window.innerWidth, vh = window.innerHeight;
+            // On phones the panel is a full-width bottom sheet (CSS media query);
+            // don't override that, and don't reposition if the user never dragged.
+            if (!p || vw <= 480) return {};
+            const sz = 56, gap = 10;
+            const Wp = Math.min(400, vw - 2 * gap);
+            const Hp = Math.min(560, vh - 120);
+            // Prefer opening above the launcher; fall back to below; then clamp.
+            let top = p.top - Hp - gap;
+            if (top < gap) top = p.top + sz + gap;
+            if (top + Hp > vh - gap) top = Math.max(gap, vh - gap - Hp);
+            // Align the panel's right edge with the launcher's, then clamp on-screen.
+            let left = p.left + sz - Wp;
+            left = Math.max(gap, Math.min(left, vw - gap - Wp));
+            return { left: left + 'px', top: top + 'px', right: 'auto', bottom: 'auto', width: Wp + 'px' };
+        },
+        assistantDragStart(ev) {
+            if (ev.button != null && ev.button !== 0) return; // primary / touch only
+            const el = ev.currentTarget;
+            const rect = el.getBoundingClientRect();
+            const startX = ev.clientX, startY = ev.clientY;
+            const offX = startX - rect.left, offY = startY - rect.top;
+            const w = rect.width, h = rect.height;
+            const gap = 6;
+            let moved = false;
+            const onMove = (e) => {
+                if (!moved && Math.abs(e.clientX - startX) + Math.abs(e.clientY - startY) < 5) return;
+                moved = true;
+                const vw = window.innerWidth, vh = window.innerHeight;
+                let left = e.clientX - offX, top = e.clientY - offY;
+                left = Math.max(gap, Math.min(left, vw - w - gap));
+                top = Math.max(gap, Math.min(top, vh - h - gap));
+                this.asst.pos = { left, top };
+            };
+            const onUp = () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                if (moved) { this._asstDragged = true; this._assistantSavePos(); } // suppress the trailing click
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+        },
+        _assistantSavePos() {
+            try {
+                if (this.asst.pos) localStorage.setItem('polaris.assistant.launcherPos', JSON.stringify(this.asst.pos));
+            } catch (_) {}
+        },
+        _assistantLoadPos() {
+            let p = null;
+            try { const s = localStorage.getItem('polaris.assistant.launcherPos'); if (s) p = JSON.parse(s); } catch (_) {}
+            if (p && typeof p.left === 'number' && typeof p.top === 'number') { this.asst.pos = p; this._assistantClampPos(); }
+        },
+        _assistantClampPos() {
+            const p = this.asst.pos;
+            if (!p) return;
+            const vw = window.innerWidth, vh = window.innerHeight, sz = 56, gap = 6;
+            this.asst.pos = {
+                left: Math.max(gap, Math.min(p.left, vw - sz - gap)),
+                top: Math.max(gap, Math.min(p.top, vh - sz - gap)),
+            };
+        },
         assistantDismissBadge() {
             this.asst.badgeVisible = false;
             try { localStorage.setItem('polaris.assistant.badgeDismissed', '1'); } catch (_) {}
@@ -10070,6 +10147,7 @@ function ninaApp() {
             this.asst.open = true;
         },
         assistantToggle() {
+            if (this._asstDragged) { this._asstDragged = false; return; } // ignore the click that ends a drag
             this._assistantEnsureIframe();
             this.asst.open = !this.asst.open;
             this._assistantPost({ v: 1, type: 'host:visibility', open: this.asst.open });

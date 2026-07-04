@@ -62,7 +62,7 @@
     <link rel="stylesheet" href="/css/parts/12-tour.css?v=20260624-tour1">
     <!-- Optional external assistant module chrome (badge / FAB / iframe panel).
          Inert unless a manifest URL is configured (assistant-config.json). -->
-    <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260704-assist3">
+    <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260704-assist5">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -16901,7 +16901,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260704-assist4"></script>
+    <script src="/js/app.js?v=20260704-assist5"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
@@ -16921,7 +16921,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         <div>
             <!-- Intro badge (before opt-in) -->
             <button class="assistant-badge" x-show="asst.badgeVisible" x-cloak
-                    x-transition.opacity @click="assistantOpenIntro()">
+                    x-transition.opacity @click="assistantOpenIntro()"
+                    @pointerdown="assistantDragStart($event)" :style="_assistantLauncherStyle()">
                 <span class="assistant-badge-icon" x-text="asst.manifest.product.iconEmoji || '✨'"></span>
                 <span x-text="(asst.manifest.badge && asst.manifest.badge.label) || asst.manifest.product.name"></span>
                 <span class="assistant-badge-x" @click.stop="assistantDismissBadge()" title="Dismiss">&times;</span>
@@ -16963,12 +16964,14 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <!-- Floating action button (after subscription) -->
             <button class="assistant-fab" x-show="asst.subscribed" x-cloak
                     :class="{ 'active': asst.open }" @click="assistantToggle()"
+                    @pointerdown="assistantDragStart($event)" :style="_assistantLauncherStyle()"
                     :title="asst.manifest.iframe.fabLabel || asst.manifest.product.name">
                 <span x-text="asst.manifest.iframe.fabIconEmoji || asst.manifest.product.iconEmoji || '✨'"></span>
             </button>
 
             <!-- Chat panel: external iframe host -->
-            <div class="assistant-panel" x-show="asst.open" x-cloak x-transition.opacity>
+            <div class="assistant-panel" x-show="asst.open" x-cloak x-transition.opacity
+                 :style="_assistantPanelStyle()">
                 <div class="assistant-panel-header">
                     <span x-text="asst.manifest.product.name"></span>
                     <button @click="asst.open=false" title="Close">&times;</button>
