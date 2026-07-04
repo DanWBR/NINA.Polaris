@@ -1,0 +1,4 @@
+{
+  "_comment": "Optional external assistant module. Empty by default: the assistant host stays completely inactive unless an operator/product build points manifestUrl at a manifest (see the assistant manifest schema). This keeps the open-source app free of any assistant-specific product logic. A localStorage key 'polaris.assistant.manifestUrl' overrides this for development.",
+  "manifestUrl": ""
+}

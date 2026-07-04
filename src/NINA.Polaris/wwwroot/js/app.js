@@ -60,6 +60,21 @@ function ninaApp() {
     return {
         tab: 'home',
         nightMode: false,
+
+        // Optional external assistant module (opt-in). Neutral host state only;
+        // all product/chat/billing logic is loaded from the external assistant
+        // service via the iframe. Stays fully inert unless a manifest URL is
+        // configured (see _initAssistant + wwwroot/assistant-config.json).
+        asst: {
+            manifest: null,       // the fetched cloud manifest (branding + allowlist)
+            ready: false,         // manifest fetched + valid => host chrome is live
+            badgeVisible: false,  // intro badge (before opt-in)
+            introOpen: false,     // intro/subscribe modal
+            subscribed: false,    // reported by the iframe, persisted locally
+            open: false,          // chat panel open
+            iframeLoaded: false,  // iframe src set (lazy)
+            iframeSrc: 'about:blank',
+        },
         // On-screen keyboard mode (Settings → Appearance). The actual
         // behaviour lives in /js/virtual-keyboard.js; this just mirrors the
         // persisted choice for the <select>. 'auto' | 'on' | 'off'.
@@ -3343,6 +3358,7 @@ function ninaApp() {
         init() {
             this.updateClock();
             setInterval(() => this.updateClock(), 1000);
+            this._initAssistant();
             this.initBattery();
             this.loadDeviceName();
             this.updateFov();
@@ -9804,6 +9820,218 @@ function ninaApp() {
                     }
                 }, 2000);
             });
+        },
+
+        // ---- Optional external assistant module (neutral host) ----------------
+        // The whole feature is inert unless a manifest URL is configured. This
+        // host carries NO assistant/product logic: it fetches a cloud manifest
+        // (branding + a Polaris-call allowlist), renders a badge/modal/FAB, and
+        // bridges the external iframe's tool-call requests to the local Polaris
+        // API (allowlist + hardcoded denylist enforced here). All chat, billing
+        // and agent logic live in the external service loaded in the iframe.
+        async _initAssistant() {
+            let url = '';
+            try { url = localStorage.getItem('polaris.assistant.manifestUrl') || ''; } catch (_) {}
+            if (!url) {
+                try {
+                    const r = await fetch('/assistant-config.json', { cache: 'no-store' });
+                    if (r.ok) { const j = await r.json(); url = (j && j.manifestUrl) || ''; }
+                } catch (_) { /* no config shipped -> feature absent */ }
+            }
+            if (!url) return; // off by default
+
+            let m = null;
+            try {
+                const r = await fetch(url, { cache: 'no-store' });
+                if (!r.ok) return;
+                m = await r.json();
+            } catch (_) { return; }
+            // Minimal validation. Anything malformed -> stay inert.
+            if (!m || m.version !== 1 || !m.product || !m.product.name
+                || !m.intro || !m.subscription || !m.iframe || !m.iframe.url || !m.iframe.origin) return;
+
+            this.asst.manifest = m;
+            try { this.asst.subscribed = localStorage.getItem('polaris.assistant.subscribed') === '1'; } catch (_) {}
+            let dismissed = false;
+            try { dismissed = localStorage.getItem('polaris.assistant.badgeDismissed') === '1'; } catch (_) {}
+
+            this._assistantInstallBridge();
+            this.asst.ready = true;
+
+            if (!this.asst.subscribed && (!m.badge || m.badge.show !== false) && !dismissed) {
+                this.asst.badgeVisible = true;
+            }
+            // Throttled status forwarder (only while watching + panel open).
+            setInterval(() => this._assistantForwardStatus(), 2000);
+        },
+
+        _assistantInstallBridge() {
+            if (this._asstBridgeInstalled) return;
+            this._asstBridgeInstalled = true;
+            this._asstWatch = false;
+            window.addEventListener('message', (ev) => {
+                const m = this.asst.manifest;
+                if (!m || ev.origin !== m.iframe.origin) return; // strict origin check
+                const msg = ev.data;
+                if (!msg || typeof msg !== 'object' || msg.v !== 1 || !msg.type) return;
+                this._assistantOnMessage(msg);
+            });
+        },
+
+        _assistantPost(msg) {
+            const m = this.asst.manifest;
+            if (!m) return;
+            const frame = document.getElementById('assistantFrame');
+            if (!frame || !frame.contentWindow) return;
+            try {
+                frame.contentWindow.postMessage(msg, m.iframe.origin);
+            } catch (e) {
+                try { frame.contentWindow.postMessage(JSON.parse(JSON.stringify(msg)), m.iframe.origin); }
+                catch (_) { /* drop */ }
+            }
+        },
+
+        _assistantOnMessage(msg) {
+            switch (msg.type) {
+                case 'assistant:ready':
+                    this._assistantPost({
+                        v: 1, type: 'host:init', parentOrigin: location.origin, protocolVersion: 1,
+                        polaris: { version: this.currentVersion || '', baseUrl: location.origin },
+                        locale: this.uiLanguage || 'en', theme: this.nightMode ? 'night' : 'dark'
+                    });
+                    this._assistantPost({
+                        v: 1, type: 'host:auth',
+                        hasPolarisSession: !!(this.auth && this.auth.authenticated)
+                    });
+                    break;
+                case 'assistant:tool-call': this._assistantExecTool(msg); break;
+                case 'assistant:watch': this._asstWatch = !!msg.on; break;
+                case 'assistant:subscribed': this._assistantSetSubscribed(!!msg.subscribed); break;
+                case 'assistant:notify':
+                    this.toast(String(msg.text || ''),
+                        msg.level === 'error' ? 'error' : msg.level === 'warn' ? 'warn' : 'info');
+                    break;
+                case 'assistant:open-external': this._assistantOpenExternal(msg.url); break;
+                case 'assistant:close': this.asst.open = false; break;
+            }
+        },
+
+        // Execute a Polaris API call on the iframe's behalf. Enforces the
+        // manifest allowlist AND a hardcoded denylist of dangerous endpoints.
+        async _assistantExecTool(msg) {
+            const id = msg.id;
+            const reply = (ok, result, error) =>
+                this._assistantPost({ v: 1, type: 'host:tool-result', id, ok, result, error });
+            try {
+                const method = String(msg.method || 'GET').toUpperCase();
+                const path = String(msg.path || '');
+                if (!path.startsWith('/api/')
+                    || /^\/api\/auth\//.test(path)
+                    || path === '/api/system/factory-reset'
+                    || /^\/api\/system\/power\//.test(path)
+                    || /^\/api\/tls\//.test(path)) {
+                    return reply(false, null, 'blocked');
+                }
+                const allow = (this.asst.manifest.allowlist || []).some(a =>
+                    String(a.method).toUpperCase() === method
+                    && this._assistantPathMatch(a.pathPattern, path));
+                if (!allow) return reply(false, null, 'not allowed');
+
+                let url = path;
+                if (msg.query && typeof msg.query === 'object') {
+                    const qs = Object.entries(msg.query)
+                        .filter(([, v]) => v !== undefined && v !== null && v !== '')
+                        .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
+                    if (qs) url += (url.includes('?') ? '&' : '?') + qs;
+                }
+                const opts = { method };
+                if (method !== 'GET' && method !== 'HEAD' && msg.body != null) {
+                    opts.body = JSON.stringify(msg.body);
+                    opts.headers = { 'Content-Type': 'application/json' };
+                }
+                const resp = await this.apiFetch(url, opts);
+                let data = null;
+                try { data = await resp.json(); } catch (_) { data = null; }
+                reply(resp.ok, resp.ok ? data : (data || { status: resp.status }),
+                    resp.ok ? undefined : ('HTTP ' + resp.status));
+            } catch (e) {
+                reply(false, null, String((e && e.message) || e));
+            }
+        },
+
+        // Match an allowlist path pattern (may contain {placeholders}) to a path.
+        _assistantPathMatch(pattern, path) {
+            const esc = String(pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                .replace(/\\\{[^/]+?\\\}/g, '[^/]+');
+            try { return new RegExp('^' + esc + '$').test(path); } catch (_) { return false; }
+        },
+
+        _assistantSetSubscribed(v) {
+            this.asst.subscribed = v;
+            try { localStorage.setItem('polaris.assistant.subscribed', v ? '1' : '0'); } catch (_) {}
+            if (v) {
+                this.asst.badgeVisible = false;
+                this.asst.introOpen = false;
+            } else {
+                this.asst.open = false; // lapsed / backed out
+            }
+        },
+
+        _assistantForwardStatus() {
+            if (!this._asstWatch || !this.asst.open) return;
+            const snap = {
+                tab: this.tab,
+                mount: this.mount ? {
+                    connected: !!this.mount.connected, ra: this.mount.ra, dec: this.mount.dec,
+                    tracking: this.mount.tracking, slewing: this.mount.slewing
+                } : null,
+                camera: this.camera ? {
+                    connected: !!this.camera.connected, temperature: this.camera.temperature
+                } : null,
+                guider: this.guider ? {
+                    guiding: !!this.guider.guiding, rmsTotal: this.guider.rmsTotal
+                } : null,
+                liveStack: { active: !!this.liveActive },
+            };
+            this._assistantPost({ v: 1, type: 'host:status', snapshot: snap });
+        },
+
+        // ---- assistant onboarding actions (bound in the DOM) ----
+        assistantOpenIntro() { this.asst.introOpen = true; },
+        assistantDismissBadge() {
+            this.asst.badgeVisible = false;
+            try { localStorage.setItem('polaris.assistant.badgeDismissed', '1'); } catch (_) {}
+        },
+        assistantStart() {
+            // "Get started": load the external client, which runs the whole
+            // account + subscribe + session flow and reports back subscribed.
+            this.asst.introOpen = false;
+            this._assistantEnsureIframe();
+            this.asst.open = true;
+        },
+        assistantToggle() {
+            this._assistantEnsureIframe();
+            this.asst.open = !this.asst.open;
+            this._assistantPost({ v: 1, type: 'host:visibility', open: this.asst.open });
+        },
+        _assistantEnsureIframe() {
+            if (this.asst.iframeLoaded || !this.asst.manifest) return;
+            this.asst.iframeSrc = this.asst.manifest.iframe.url;
+            this.asst.iframeLoaded = true;
+        },
+        _assistantOpenExternal(url) {
+            const m = this.asst.manifest;
+            if (!m) return;
+            let u;
+            try { u = new URL(url); } catch (_) { return; }
+            if (u.protocol !== 'https:') return;
+            const allowed = [m.iframe.origin, m.api && m.api.base,
+                m.subscription && m.subscription.checkoutUrl, m.subscription && m.subscription.manageUrl,
+                m.links && m.links.privacyUrl, m.links && m.links.termsUrl]
+                .filter(Boolean)
+                .some(s => { try { return new URL(s).origin === u.origin; } catch (_) { return false; } });
+            if (!allowed) return;
+            window.open(url, '_blank', 'noopener');
         },
 
         _initSkyBridge() {

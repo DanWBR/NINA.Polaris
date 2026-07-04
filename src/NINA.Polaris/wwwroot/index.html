@@ -60,6 +60,9 @@
     <link rel="stylesheet" href="/css/parts/11-motion.css?v=20260622-motion3">
     <!-- Interactive introductory tour (coach-marks / spotlight). -->
     <link rel="stylesheet" href="/css/parts/12-tour.css?v=20260624-tour1">
+    <!-- Optional external assistant module chrome (badge / FAB / iframe panel).
+         Inert unless a manifest URL is configured (assistant-config.json). -->
+    <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260704-assist1">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -16898,7 +16901,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260704-w8a16"></script>
+    <script src="/js/app.js?v=20260704-assist1"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
@@ -16909,5 +16912,72 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          CLST-4 will wire handleImageFrame to use it when computeMode
          === 'client'. -->
     <script type="module" src="/js/wasm/main.js"></script>
+
+    <!-- Optional external assistant module (opt-in). Neutral host only:
+         intro badge -> subscribe modal -> floating button -> external iframe.
+         Entirely inert unless a manifest URL is configured (assistant-config.json);
+         all product/chat/billing logic lives in the external assistant service. -->
+    <template x-if="asst.ready">
+        <div>
+            <!-- Intro badge (before opt-in) -->
+            <button class="assistant-badge" x-show="asst.badgeVisible" x-cloak
+                    x-transition.opacity @click="assistantOpenIntro()">
+                <span class="assistant-badge-icon" x-text="asst.manifest.product.iconEmoji || '✨'"></span>
+                <span x-text="(asst.manifest.badge && asst.manifest.badge.label) || asst.manifest.product.name"></span>
+                <span class="assistant-badge-x" @click.stop="assistantDismissBadge()" title="Dismiss">&times;</span>
+            </button>
+
+            <!-- Intro / subscribe modal -->
+            <div class="assistant-intro-overlay" x-show="asst.introOpen" x-cloak
+                 x-transition.opacity @click.self="asst.introOpen=false">
+                <div class="assistant-intro">
+                    <div class="assistant-intro-head">
+                        <span class="assistant-intro-icon" x-text="asst.manifest.product.iconEmoji || '✨'"></span>
+                        <div>
+                            <div class="assistant-intro-title" x-text="asst.manifest.intro.headline"></div>
+                            <div class="assistant-intro-tag" x-text="asst.manifest.product.tagline || ''"></div>
+                        </div>
+                        <button class="assistant-intro-close" @click="asst.introOpen=false">&times;</button>
+                    </div>
+                    <p class="assistant-intro-body" x-show="asst.manifest.intro.bodyMarkdown"
+                       x-text="asst.manifest.intro.bodyMarkdown"></p>
+                    <ul class="assistant-intro-bullets">
+                        <template x-for="b in (asst.manifest.intro.bullets || [])" :key="b">
+                            <li x-text="b"></li>
+                        </template>
+                    </ul>
+                    <div class="assistant-intro-actions">
+                        <button class="btn btn-primary" @click="assistantStart()"
+                                x-text="'Get started · ' + (asst.manifest.subscription.priceDisplay || '')"></button>
+                        <button class="btn" @click="asst.introOpen=false">Not now</button>
+                    </div>
+                    <div class="assistant-intro-links">
+                        <a x-show="asst.manifest.links && asst.manifest.links.privacyUrl" href="#"
+                           @click.prevent="_assistantOpenExternal(asst.manifest.links.privacyUrl)">Privacy</a>
+                        <a x-show="asst.manifest.links && asst.manifest.links.termsUrl" href="#"
+                           @click.prevent="_assistantOpenExternal(asst.manifest.links.termsUrl)">Terms</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Floating action button (after subscription) -->
+            <button class="assistant-fab" x-show="asst.subscribed" x-cloak
+                    :class="{ 'active': asst.open }" @click="assistantToggle()"
+                    :title="asst.manifest.iframe.fabLabel || asst.manifest.product.name">
+                <span x-text="asst.manifest.iframe.fabIconEmoji || asst.manifest.product.iconEmoji || '✨'"></span>
+            </button>
+
+            <!-- Chat panel: external iframe host -->
+            <div class="assistant-panel" x-show="asst.open" x-cloak x-transition.opacity>
+                <div class="assistant-panel-header">
+                    <span x-text="asst.manifest.product.name"></span>
+                    <button @click="asst.open=false" title="Close">&times;</button>
+                </div>
+                <iframe id="assistantFrame" :src="asst.iframeSrc" class="assistant-iframe"
+                        :sandbox="asst.manifest.iframe.sandbox || 'allow-scripts allow-forms allow-popups allow-same-origin'"
+                        title="Assistant"></iframe>
+            </div>
+        </div>
+    </template>
 </body>
 </html>
