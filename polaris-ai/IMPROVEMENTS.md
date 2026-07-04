@@ -280,8 +280,8 @@ Measured on 200 synth decon tiles (log-norm eval, fixed range L):
   it is untouched. Plain int8 for Detail only via QAT (`train_task.py --qat`).
 - **w8a16 is the preferred NPU/download quant for Detail/decon**: int8 weight
   size, int16-activation quality, lossless vs fp32.
-- Real-image dark-ring/bubble check is still the true arbiter; synth PSNR/SSIM
-  only proves the quant didn't regress vs fp16.
+- r5 accepted and deployed as `detail-ai-models/1.2` (real-image check, app
+  re-scan, and bucket upload done 2026-07-04).
 
 ### w8a16 is now a first-class deploy tag (Polaris side)
 
