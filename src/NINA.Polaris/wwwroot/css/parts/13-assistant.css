@@ -96,12 +96,16 @@
     max-height: calc(100vh - 120px);
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--border);
+    /* Discreet accent glow to match the FAB, without shouting. */
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
     border-radius: var(--radius, 10px);
     overflow: hidden;
     background: rgba(var(--panel-glass-rgb), 0.96);
     backdrop-filter: blur(12px);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+    box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.6),
+        0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent),
+        0 6px 26px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 .assistant-panel-header {
     display: flex;
