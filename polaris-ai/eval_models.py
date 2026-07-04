@@ -70,7 +70,8 @@ def _iter_pairs(args):
             rng = np.random.default_rng(
                 zlib.crc32(os.path.basename(p).encode("utf-8")) % (2**31))
             x, y, _ = synth.make_pair(                    # x [2,H,W], y [1,H,W]
-                sharp, rng, noise_matched=getattr(args, "noise_matched", False))
+                sharp, rng, noise_matched=getattr(args, "noise_matched", False),
+                noise_match_alpha=getattr(args, "noise_match_alpha", 1.0))
             # CRITICAL: the production Detail model is TRAINED in the
             # GraXpert log-mean-std domain (train_task.py --log-norm default
             # True) and the int8/int16 calibration set is log-normalized too
@@ -124,6 +125,10 @@ def main():
                          "--noise-matched-target, else PSNR reads artificially "
                          "low (the model correctly outputs noise the clean "
                          "target lacks).")
+    ap.add_argument("--noise-match-alpha", type=float, default=1.0,
+                    help="Match the training --noise-match-alpha so the eval "
+                         "target has the same noise fraction the model was "
+                         "trained against.")
     ap.add_argument("--per-pair-range", action="store_true",
                     help="Legacy behaviour: derive the PSNR/SSIM range L per "
                          "pair instead of once over the whole validation set. "

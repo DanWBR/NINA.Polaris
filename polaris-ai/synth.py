@@ -116,7 +116,7 @@ def _add_hdr_point_stars(sharp: np.ndarray, kernel_peak: float,
 
 def make_pair(
     sharp: np.ndarray, rng: np.random.Generator, beta_range=(2.2, 4.5),
-    noise_matched: bool = False,
+    noise_matched: bool = False, noise_match_alpha: float = 1.0,
 ):
     """Produce one training example from a sharp tile.
 
@@ -126,15 +126,22 @@ def make_pair(
       c : float             -- the normalised condition (for logging)
 
     ``noise_matched`` switches the target from the classic CLEAN reference-PSF
-    image to a NOISE-PRESERVING one: input = f*g + n, target = f*g' + n with the
-    SAME additive noise field n. This is BlurXTerminator's deconvolution
+    image to a NOISE-PRESERVING one: input = f*g + n, target = f*g' + alpha*n with
+    the SAME additive noise field n. This is BlurXTerminator's deconvolution
     formulation (RC-Astro, "The Mathematics of BlurXTerminator"): the loss
     e = f*g' + n - F[f*g + n, W] asks the network to replace ONLY the PSF (g->g')
     and pass the noise through untouched -- deconvolution is NOT denoising (that
     is a separate model). It MUST be the same realization of n, not independent
     noise: with independent noise the MSE optimum is the conditional mean = the
     clean target, so the net would still learn to denoise and re-introduce the
-    over-smoothing that carves dark rings around bright/saturated cores. See
+    over-smoothing that carves dark rings around bright/saturated cores.
+
+    ``noise_match_alpha`` (0..1) scales how much of the input noise the target
+    keeps. 1.0 = pure BXT (target as noisy as the input). Full matching can
+    DILUTE the PSF-narrowing gradient when the noise energy dominates the small
+    deconvolution signal, so the net under-sharpens (observed: FWHM ratio ~1.33
+    at alpha=1). A partial alpha (~0.3-0.5) keeps most of the anti-denoising
+    pressure while restoring a strong PSF-learning signal. See
     [[polaris_detail_model]].
     """
     fwhm = sample_fwhm(rng)                     # seeing of the INPUT (>= FWHM_MIN)
@@ -171,7 +178,9 @@ def make_pair(
         read = rng.normal(0.0, read_noise, size=sharp.shape).astype(np.float32)
         noise = ((shot + read) / full_well).astype(np.float32)               # the single n
         deg = np.clip(input_blur + noise, 0.0, 1.0).astype(np.float32)
-        target = np.clip(target_blur + noise, 0.0, 1.0).astype(np.float32)
+        # Target keeps alpha*n of the SAME field (alpha=1 -> pure BXT; <1 keeps
+        # the anti-denoising pressure without drowning the PSF-learning signal).
+        target = np.clip(target_blur + noise_match_alpha * noise, 0.0, 1.0).astype(np.float32)
     else:
         deg = degrade_with_kernel(scene, kernel, rng=rng,
                                   read_noise_e=read_noise, full_well_scale=full_well)

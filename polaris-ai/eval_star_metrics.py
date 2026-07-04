@@ -150,7 +150,8 @@ def _iter_synth(args):
         rng = np.random.default_rng(
             zlib.crc32(os.path.basename(p).encode("utf-8")) % (2**31))
         x, y, _ = synth.make_pair(
-            sharp, rng, noise_matched=getattr(args, "noise_matched", False))
+            sharp, rng, noise_matched=getattr(args, "noise_matched", False),
+            noise_match_alpha=getattr(args, "noise_match_alpha", 1.0))
         if args.log_norm:
             x, y = ds.log_norm_pair(x, y)
         yield x, y[0], x[0]
@@ -190,6 +191,8 @@ def main():
                     help="Synthesize eval pairs with the BXT noise-preserving "
                          "target; pass when the model was trained with "
                          "--noise-matched-target.")
+    ap.add_argument("--noise-match-alpha", type=float, default=1.0,
+                    help="Match the training --noise-match-alpha.")
     ap.add_argument("--json-out", default="")
     args = ap.parse_args()
 

@@ -94,7 +94,8 @@ def log_norm_pair(x: np.ndarray, y: np.ndarray):
 class DeconDataset(Dataset):
     def __init__(self, tiles_dir: str, tile: int = 256, augment: bool = True,
                  normalize: bool = True, seed: int = 0, log_norm: bool = False,
-                 flux_aug: bool = False, noise_matched: bool = False):
+                 flux_aug: bool = False, noise_matched: bool = False,
+                 noise_match_alpha: float = 1.0):
         self.paths = sorted(
             p for ext in ("npy", "fits", "fit", "fts", "png", "tif", "tiff")
             for p in glob.glob(os.path.join(tiles_dir, f"**/*.{ext}"), recursive=True)
@@ -108,6 +109,7 @@ class DeconDataset(Dataset):
         self.log_norm = log_norm
         self.flux_aug = flux_aug
         self.noise_matched = noise_matched
+        self.noise_match_alpha = noise_match_alpha
 
     def __len__(self):
         return len(self.paths)
@@ -149,7 +151,8 @@ class DeconDataset(Dataset):
             g = float(np.exp(rng.uniform(np.log(0.5), np.log(2.0))))
             sharp = np.clip(sharp * g, 0.0, 1.0).astype(np.float32)
 
-        x, y, _ = synth.make_pair(sharp, rng, noise_matched=self.noise_matched)
+        x, y, _ = synth.make_pair(sharp, rng, noise_matched=self.noise_matched,
+                                  noise_match_alpha=self.noise_match_alpha)
         if self.log_norm:
             x, y = log_norm_pair(x, y)
         return torch.from_numpy(x), torch.from_numpy(y)
