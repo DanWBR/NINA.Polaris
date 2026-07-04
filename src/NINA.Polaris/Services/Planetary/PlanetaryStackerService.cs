@@ -136,11 +136,23 @@ public class PlanetaryStackerService {
             var accum = new uint[reader.Width * reader.Height];
             var counts = new ushort[reader.Width * reader.Height];
             int stacked = 0;
+            // Bayer SERs are stacked as the raw CFA mosaic (no debayer), so the
+            // per-frame shift MUST preserve the CFA phase: an odd dx/dy lands R
+            // pixels on G positions and the mean of mis-phased mosaics scrambles
+            // the colour after debayer. Round Bayer offsets to the nearest EVEN
+            // pixel (≤1 px extra alignment error, invisible next to seeing).
+            bool cfa = reader.ColorMode != SerColorMode.Mono;
             for (int k = 0; k < picked.Length; k++) {
                 ct.ThrowIfCancellationRequested();
                 var frame = reader.ReadFrameAsUshort(picked[k]);
-                int dx = (int)Math.Round(refC.X - centroids[k].X);
-                int dy = (int)Math.Round(refC.Y - centroids[k].Y);
+                int dx, dy;
+                if (cfa) {
+                    dx = (int)Math.Round((refC.X - centroids[k].X) / 2.0) * 2;
+                    dy = (int)Math.Round((refC.Y - centroids[k].Y) / 2.0) * 2;
+                } else {
+                    dx = (int)Math.Round(refC.X - centroids[k].X);
+                    dy = (int)Math.Round(refC.Y - centroids[k].Y);
+                }
                 for (int y = 0; y < reader.Height; y++) {
                     int sy = y - dy;
                     if (sy < 0 || sy >= reader.Height) continue;

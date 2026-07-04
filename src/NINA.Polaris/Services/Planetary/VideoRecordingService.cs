@@ -65,7 +65,12 @@ public class VideoRecordingService : IDisposable {
         int Width, int Height, SerColorMode Color, DateTime Utc);
 
     public bool IsRecording { get; private set; }
-    public string? OutputPath => _writer?.Path;
+    // The SER writer opens lazily on the first streamed frame, so right after
+    // Start() the writer is still null — report the path Start() settled on
+    // (where the file WILL be) so /record/start + /record/status can show it
+    // immediately instead of null until the first frame lands.
+    private string? _pendingPath;
+    public string? OutputPath => _writer?.Path ?? _pendingPath;
     public int FrameCount => _writer?.FrameCount ?? 0;
     public long BytesWritten => _writer?.BytesWritten ?? 0;
     public TimeSpan Duration => IsRecording ? DateTime.UtcNow - _startedAt : TimeSpan.Zero;
@@ -108,6 +113,7 @@ public class VideoRecordingService : IDisposable {
             var path = Path.Combine(baseDir, $"{DateTime.UtcNow:yyyy-MM-ddTHH-mm-ss}.ser");
             var instrument = cam.DeviceName;
             var telescope = _equip.Telescope?.DeviceName ?? "";
+            _pendingPath = path;
             _activeConfig = cfg;
             _startedAt = DateTime.UtcNow;
             _droppedFrames = 0;
@@ -168,6 +174,7 @@ public class VideoRecordingService : IDisposable {
         var frames = writer?.FrameCount ?? 0;
         try { writer?.Dispose(); }
         catch (Exception ex) { _logger.LogWarning(ex, "Writer dispose failed"); }
+        _pendingPath = null;
         _logger.LogInformation("Recording stopped: {Path} ({N} frames, {Dropped} dropped)",
             path, frames, _droppedFrames);
     }

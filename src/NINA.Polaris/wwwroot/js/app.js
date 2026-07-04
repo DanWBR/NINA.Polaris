@@ -19824,11 +19824,16 @@ function ninaApp() {
                 return;
             }
             try {
-                const r = await this.apiPost('/api/video/record/start', {
+                const resp = await this.apiPost('/api/video/record/start', {
                     targetName: this.video.targetName || 'planet',
                     maxDurationSeconds: this.video.maxDurationSec > 0 ? this.video.maxDurationSec : null
                 });
-                this.toast(`Recording → ${r.path}`, 'ok');
+                // apiPost returns the Response — parse it. Previously `r.path`
+                // was read off the Response object, always toasting
+                // "Recording → undefined". Show just the filename.
+                const r = await resp.json();
+                const name = r.path ? (r.path.split(/[\\/]/).pop() || r.path) : null;
+                this.toast(name ? `Recording → ${name}` : 'Recording started', 'ok');
             } catch (e) { this.toast('Record failed: ' + (e.message || 'unknown'), 'error'); }
         },
 
@@ -19864,7 +19869,15 @@ function ninaApp() {
                 // across camera reconnects, which is the more common
                 // case). Skip when a stream is already running — the
                 // driver would reject the change mid-exposure.
-                if (this.video.roiW > 0 && this.video.roiH > 0
+                // ONLY inside the VIDEO tab: this function also runs from
+                // the PREVIEW nav button and after camera connect (any
+                // tab), and re-applying the planetary ROI there silently
+                // shrank PREVIEW / LIVE / sequence captures to e.g.
+                // 640x480 — the ROI is a VIDEO-only concept (the tab
+                // watcher resets to full frame on leave, and /connect
+                // asserts full frame server-side for the same reason).
+                if (this.tab === 'video'
+                    && this.video.roiW > 0 && this.video.roiH > 0
                     && !this.cameraStream.running
                     && this.cameraCaps.roi !== false) {
                     try {

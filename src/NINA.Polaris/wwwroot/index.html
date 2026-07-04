@@ -3628,10 +3628,17 @@
                             <span class="fov-preset-label">FOV</span>
                             <div class="fov-preset-flow"
                                  role="group" aria-label="Field of view / ROI">
+                                <!-- FULL clears the ROI. Must call videoSetRoiRect
+                                     (the old videoSetRoi(size) was renamed when the
+                                     rectangular pills landed — the stale reference
+                                     made this button a silent no-op, trapping the
+                                     user in the last ROI). Active only when BOTH
+                                     dims are 0: roiSize alone is 0 for rectangular
+                                     ROIs too, which lit FULL alongside e.g. 1280×720. -->
                                 <button type="button" class="bin-preset"
-                                        :data-active="video.roiSize === 0"
+                                        :data-active="video.roiW === 0 && video.roiH === 0"
                                         :disabled="cameraStream.running || videoRecording.recording"
-                                        @click="videoSetRoi(0)">
+                                        @click="videoSetRoiRect(0, 0, 'square', 0)">
                                     FULL
                                 </button>
                                 <template x-for="sz in [320, 640, 800, 1024, 1280, 1920]" :key="sz">
@@ -16899,7 +16906,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260704-autocrop"></script>
+    <script src="/js/app.js?v=20260704-videoroi"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
