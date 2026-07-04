@@ -48,16 +48,18 @@
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    border: none;
-    background: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    background: color-mix(in srgb, var(--accent) 62%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
     color: #fff;
     font-size: 24px;
     line-height: 1;
     cursor: pointer;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
-    transition: transform 0.15s ease, filter 0.15s ease;
+    transition: transform 0.15s ease, filter 0.15s ease, background 0.15s ease;
 }
-.assistant-fab:hover { transform: scale(1.06); filter: brightness(1.08); }
+.assistant-fab:hover { transform: scale(1.06); background: color-mix(in srgb, var(--accent) 82%, transparent); }
 .assistant-fab:active { transform: scale(0.95); }
 .assistant-fab.active { filter: brightness(0.9); }
 
