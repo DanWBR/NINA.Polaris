@@ -10036,9 +10036,10 @@ function ninaApp() {
             if (v) {
                 this.asst.badgeVisible = false;
                 this.asst.introOpen = false;
-            } else {
-                this.asst.open = false; // lapsed / backed out
             }
+            // Do NOT touch asst.open here: the iframe reports subscribed:false on
+            // every onboarding step (email / subscribe gate) while the panel must
+            // stay open. Panel visibility is user-controlled (FAB / close button).
         },
 
         _assistantForwardStatus() {
