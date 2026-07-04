@@ -1349,6 +1349,10 @@
    max-width cap (dropdowns fill available space per house style). */
 .files-roots {
     min-width: 190px;
+    /* Coach Chromium/Windows to render the native option popup dark, else
+       it falls back to a white list with washed-out light text (matches
+       the app-wide select pattern, e.g. 06-modals-overlays.css). */
+    color-scheme: dark;
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
