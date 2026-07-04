@@ -9909,7 +9909,7 @@ function ninaApp() {
                     this._assistantPost({
                         v: 1, type: 'host:init', parentOrigin: location.origin, protocolVersion: 1,
                         polaris: { version: this.currentVersion || '', baseUrl: location.origin },
-                        locale: this.uiLanguage || 'en', theme: this.nightMode ? 'night' : 'dark'
+                        locale: (window.I18N && window.I18N.lang) || 'en', theme: this.nightMode ? 'night' : 'dark'
                     });
                     this._assistantPost({
                         v: 1, type: 'host:auth',
