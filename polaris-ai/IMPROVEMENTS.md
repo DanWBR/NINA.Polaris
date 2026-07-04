@@ -259,3 +259,42 @@ free at inference. Implement in `model.py`+`export.py` if the schedule allows.
 - After swapping deployed model files: Settings -> AI "Re-scan models" +
   "Clear model cache" + hard reload (IndexedDB caches by hash).
 - ONNX files and `data/` never go to git (Supabase bucket for distribution).
+
+---
+
+## Detail r5 quantization result (2026-07-04)
+
+Measured on 200 synth decon tiles (log-norm eval, fixed range L):
+
+| variant | PSNR (dB) | SSIM | verdict |
+|---|---|---|---|
+| fp32  | 35.53 | 0.7682 | reference |
+| fp16  | 35.53 | 0.7681 | lossless (pure cast) |
+| int16 | 35.53 | 0.7682 | lossless (PTQ int16 == fp16) |
+| w8a16 | 35.54 | 0.7689 | lossless (delta is rounding noise) |
+| int8  | 34.57 | 0.3246 | BROKEN |
+
+- **int8 PTQ collapses** on the residual-heavy Detail model: the tell is not
+  the -0.96 dB PSNR but the SSIM crater 0.77 -> 0.32. Cause = int8 *activation*
+  quantization crushing the small residual. w8a16 keeps int16 activations, so
+  it is untouched. Plain int8 for Detail only via QAT (`train_task.py --qat`).
+- **w8a16 is the preferred NPU/download quant for Detail/decon**: int8 weight
+  size, int16-activation quality, lossless vs fp32.
+- Real-image dark-ring/bubble check is still the true arbiter; synth PSNR/SSIM
+  only proves the quant didn't regress vs fp16.
+
+### w8a16 is now a first-class deploy tag (Polaris side)
+
+Promoting r5 exposed that `w8a16` was unsupported end-to-end:
+
+- `OnnxModelRegistry.VersionRegex` only matched `fp16|int16|int8` -> a
+  `{family}/{version}-w8a16/model.onnx` folder was silently rejected and never
+  registered. Fixed to accept `w8a16`.
+- `app.js` model picker: `(W8A16, NPU)` label + display-name cleanup + iOS sort
+  priority next to int8.
+- `onnx-pipelines.js` load guard: treats `-w8a16` like `-int8` so a browser
+  pick gives "meant for the NPU, use -fp16" instead of an ORT Web WASM crash
+  (WASM EP lacks the int8 weight-dequant ops). w8a16 is an NPU/download format,
+  not a browser one.
+- Detail r5 deployed as `detail-ai-models/1.2` with fp32 + fp16 + int16 +
+  w8a16 siblings (no int8). 1.1 kept as fallback.
