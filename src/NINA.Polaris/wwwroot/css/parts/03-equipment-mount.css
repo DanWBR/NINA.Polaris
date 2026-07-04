@@ -1378,9 +1378,10 @@
     border-color: var(--accent);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
 }
-/* The disabled placeholder reads muted; real drive options read normal. */
-.files-roots option { color: var(--text); background: var(--bg-elev); }
-.files-roots option:disabled { color: var(--text-muted); }
+/* Do NOT set explicit background/color on the options: on Chromium/Windows
+   that overrides color-scheme:dark and forces the native popup back to a
+   white list with washed-out light text. color-scheme:dark alone renders
+   the popup dark + readable (same as the app's other custom selects). */
 .files-crumbs {
     flex: 1 1 auto;
     min-width: 0;
