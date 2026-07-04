@@ -9905,6 +9905,7 @@ function ninaApp() {
                     });
                     break;
                 case 'assistant:tool-call': this._assistantExecTool(msg); break;
+                case 'assistant:ui': this._assistantExecUi(msg); break;
                 case 'assistant:watch': this._asstWatch = !!msg.on; break;
                 case 'assistant:subscribed': this._assistantSetSubscribed(!!msg.subscribed); break;
                 case 'assistant:notify':
@@ -9964,6 +9965,57 @@ function ninaApp() {
             const esc = String(pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
                 .replace(/\\\{[^/]+?\\\}/g, '[^/]+');
             try { return new RegExp('^' + esc + '$').test(path); } catch (_) { return false; }
+        },
+
+        // Curated, safe UI-control channel so the assistant can steer the app to
+        // a panel to SHOW the user what it is doing (e.g. jump to FOCUS while it
+        // adjusts focus, or LIVE to show the stack). Non-destructive: only the
+        // same navigation the sidebar buttons already perform, from a fixed
+        // vocabulary. No arbitrary DOM/JS. Extensible with more safe verbs later.
+        _assistantExecUi(msg) {
+            const id = msg.id;
+            const reply = (ok, result, error) =>
+                this._assistantPost({ v: 1, type: 'host:tool-result', id, ok, result, error });
+            try {
+                const action = String(msg.action || '');
+                const p = msg.params || {};
+                if (action === 'navigate') {
+                    // Friendly aliases the LLM may use -> canonical tab ids.
+                    const ALIAS = {
+                        equipment: 'equip', rigs: 'equip', autorun: 'sequence',
+                        studio: 'files', editor: 'files', advanced: 'seqadv', sequencer: 'seqadv'
+                    };
+                    let tab = String(p.tab || '').toLowerCase();
+                    tab = ALIAS[tab] || tab;
+                    // Canonical tab -> the same init side-effect the sidebar runs.
+                    const NAV = {
+                        home: null,
+                        equip: () => this.loadOpticsCatalogue && this.loadOpticsCatalogue(),
+                        polar: () => this.loadPolarTargets && this.loadPolarTargets(),
+                        sky: () => this.$nextTick(() => this.initSkyViewer && this.initSkyViewer()),
+                        tonight: () => this.loadTonightsBest && this.loadTonightsBest(),
+                        weather: () => this.loadWeatherForecast && this.loadWeatherForecast(),
+                        focus: null,
+                        guide: null,
+                        preview: () => this.loadCameraCapabilities && this.loadCameraCapabilities(),
+                        sequence: () => this.loadEndActions && this.loadEndActions(),
+                        plan: () => this.loadPlans && this.loadPlans(),
+                        live: null,
+                        video: () => this.loadCameraCapabilities && this.loadCameraCapabilities(),
+                        seqadv: () => this.loadAdvSeq && this.loadAdvSeq(),
+                        files: () => this.filesInit && this.filesInit(),
+                        settings: null,
+                        help: () => this.helpOnTabEnter && this.helpOnTabEnter(),
+                    };
+                    if (!(tab in NAV)) return reply(false, null, 'unknown tab');
+                    this.tab = tab;
+                    try { if (NAV[tab]) NAV[tab](); } catch (_) { /* best-effort init */ }
+                    return reply(true, { tab });
+                }
+                return reply(false, null, 'unknown action');
+            } catch (e) {
+                reply(false, null, String((e && e.message) || e));
+            }
         },
 
         _assistantSetSubscribed(v) {
