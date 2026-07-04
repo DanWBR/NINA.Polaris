@@ -687,18 +687,10 @@
             <div x-show="tab === 'home'" class="tab-panel home-panel">
                 <div class="home-hero">
                     <div class="home-hero-text">
-                        <!-- Wordmark mirrored from the header so the
-                             home hero reinforces the same brand
-                             treatment instead of competing pill. -->
-                        <div class="home-eyebrow">
-                            <span class="brand-name">N.I.N.A.</span>
-                            <span class="brand-tag">POLARIS</span>
-                            <!-- PA-7: version comes from /api/system/status, which
-                     reads it from the assembly. Auto-incrementing
-                     0.1.{days-since-2026}.{seconds-since-midnight/2}
-                     stamp set by NINA.Polaris.csproj at build time. -->
-                <span class="brand-version" x-text="'v' + (appVersion || '…')"></span>
-                        </div>
+                        <!-- No wordmark/version here: the app header already
+                             carries both, repeating them on HOME was
+                             redundant. Version remains visible in the header
+                             + HELP > About. -->
                         <h1 class="home-title">Ready when you are.</h1>
                         <p class="home-lede" x-show="!indiConnected">
                             Nothing connected yet. Pick a starting point below and the rest of the
