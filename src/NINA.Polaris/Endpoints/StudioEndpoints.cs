@@ -330,6 +330,42 @@ public static class StudioEndpoints {
             });
         });
 
+        // --- SPCC: SpectroPhotometric Color Calibration --------------
+        // Spectral sibling of PCC: integrates each matched star's spectrum
+        // through the selected sensor+filter response instead of a fixed
+        // B-V slope. Body:
+        //   { framePath, sensorId, filterSetId, whiteRefId,
+        //     source: "auto"|"blackbody"|"pickles"|"gaia" }
+        g.MapPost("/spcc", (SpccService svc, SpccService.SpccRequest req) => {
+            if (req == null || string.IsNullOrWhiteSpace(req.FramePath))
+                return Results.BadRequest(new { error = "framePath required." });
+            try {
+                return Results.Accepted(value: new { jobId = svc.StartJob(req) });
+            } catch (ArgumentException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        g.MapGet("/spcc/{jobId}/status", (SpccService svc, string jobId) => {
+            var p = svc.GetStatus(jobId);
+            return p == null ? Results.NotFound() : Results.Ok(p);
+        });
+
+        // SPCC pre-flight for the modal: available sensors / filter sets /
+        // white references / spectral sources, plus the catalog status
+        // (SPCC needs a plate-solved frame + APASS like PCC).
+        g.MapGet("/spcc/options",
+            (SpccDatabase db, NINA.Polaris.Services.Sky.ApassCatalog cat) => {
+            return Results.Ok(new {
+                spcc = db.Options(),
+                curvesPath = db.CurvesPath,
+                catalog = new {
+                    available = cat.IsAvailable,
+                    starCount = cat.IsAvailable ? cat.StarCount : 0,
+                },
+            });
+        });
+
         // --- ST-6: debayer + background extraction -------------------
 
         // Debayer an OSC frame to a single-channel luminance plane.
