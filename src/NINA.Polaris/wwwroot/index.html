@@ -12151,6 +12151,71 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
                 </div>
 
+                <!-- Colour-calibration reference data (PCC + SPCC). Status of the
+                     APASS catalog and the SPCC spectral sources + curve database.
+                     Everything ships with Polaris — this card just reports what's
+                     present and where the editable curves live. -->
+                <div class="settings-section" id="colorcal-data-card" x-init="ccDataLoad()">
+                    <h3><span class="settings-card-icon">🎨</span>Colour calibration data</h3>
+                    <p class="text-muted" style="font-size:12px; max-width:600px; margin-top:4px">
+                        What PCC and SPCC use to match your stars to a reference. It
+                        all ships with Polaris — nothing to download on the device.
+                    </p>
+
+                    <div style="display:flex; flex-direction:column; gap:10px; margin-top:12px; max-width:600px; font-size:12.5px">
+                        <!-- APASS star catalogue (PCC + SPCC photometry) -->
+                        <div style="display:flex; align-items:baseline; gap:8px">
+                            <span style="min-width:150px; color:var(--text-muted)">APASS star catalogue</span>
+                            <template x-if="ccData.catalog && ccData.catalog.available">
+                                <span class="text-ok">✓ ready · <strong x-text="(ccData.catalog.starCount||0).toLocaleString()"></strong> stars</span>
+                            </template>
+                            <template x-if="ccData.catalog && !ccData.catalog.available">
+                                <span class="text-warn">⚠ not installed — run <code>scripts/download-apass.py</code> on the server</span>
+                            </template>
+                            <span x-show="!ccData.catalog" class="text-muted">…</span>
+                        </div>
+
+                        <!-- SPCC spectral sources -->
+                        <div style="display:flex; align-items:baseline; gap:8px">
+                            <span style="min-width:150px; color:var(--text-muted)">SPCC spectra</span>
+                            <span x-show="ccData.sources">
+                                <span class="text-ok">✓ Blackbody</span>
+                                <span class="text-muted"> (always) · </span>
+                                <span :class="ccData.sources?.pickles ? 'text-ok' : 'text-muted'"
+                                      x-text="(ccData.sources?.pickles ? '✓' : '—') + ' Pickles library'"></span>
+                                <span class="text-muted"> (empirical, bundled) · </span>
+                                <span :class="ccData.sources?.gaia ? 'text-ok' : 'text-muted'"
+                                      x-text="(ccData.sources?.gaia ? '✓' : '—') + ' Gaia per-star'"></span>
+                                <span x-show="!ccData.sources?.gaia" class="text-muted"> (planned)</span>
+                            </span>
+                            <span x-show="!ccData.sources" class="text-muted">…</span>
+                        </div>
+
+                        <!-- Filter / sensor response curves -->
+                        <div style="display:flex; align-items:baseline; gap:8px">
+                            <span style="min-width:150px; color:var(--text-muted)">SPCC curves</span>
+                            <span x-show="ccData.sources">
+                                <strong x-text="ccData.sensorCount"></strong> sensor profiles ·
+                                <strong x-text="ccData.filterCount"></strong> filter sets
+                                <span class="text-muted">(generic, editable)</span>
+                            </span>
+                            <span x-show="!ccData.sources" class="text-muted">…</span>
+                        </div>
+                    </div>
+
+                    <p class="text-muted" style="font-size:11px; margin-top:12px; max-width:600px">
+                        The bundled sensor/filter curves are idealised generic archetypes, not
+                        measured manufacturer data. To calibrate against your exact gear, drop your
+                        real QE / transmission curves into
+                        <code x-text="ccData.curvesPath || 'wwwroot/catalogs/spcc/curves.json'"></code>
+                        (each curve is <code>{ wl:[nm…], v:[0..1…] }</code>) and re-run SPCC.
+                    </p>
+
+                    <div style="margin-top:10px">
+                        <button class="btn btn-sm" @click="ccDataLoad()" :disabled="ccData.loading">↻ Refresh</button>
+                    </div>
+                </div>
+
                 <!-- CLOCK-3: server-vs-client wall-clock card. Drift
                      surfaces here so the user can sync explicitly
                      instead of Polaris jumping the wall clock during
@@ -17073,7 +17138,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260705-spcc3"></script>
+    <script src="/js/app.js?v=20260705-spcc4"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

@@ -3004,6 +3004,14 @@ function ninaApp() {
             result: null,
         },
 
+        // Settings › Colour calibration data card: read-only status of the
+        // APASS catalogue + SPCC spectral sources + curve database. All of it
+        // ships bundled, so this is informational (one call to /spcc/options).
+        ccData: {
+            loading: false, catalog: null, sources: null, curvesPath: '',
+            sensorCount: 0, filterCount: 0,
+        },
+
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
         // Always renders the live sky from the observer's location at the
         // current UTC time, in horizontal projection, same convention as
@@ -28185,6 +28193,23 @@ function ninaApp() {
                 this.pcc.busy = false;
                 this.pcc.error = (e && e.message) ? e.message : String(e);
             }
+        },
+
+        // ── Settings: colour-calibration data status ───────────────────
+        async ccDataLoad() {
+            this.ccData.loading = true;
+            try {
+                const r = await this.apiFetch('/api/studio/spcc/options');
+                if (r.ok) {
+                    const d = await r.json();
+                    this.ccData.catalog = d.catalog || null;
+                    this.ccData.sources = d.spcc?.sources || null;
+                    this.ccData.curvesPath = d.curvesPath || '';
+                    this.ccData.sensorCount = (d.spcc?.sensors || []).length;
+                    this.ccData.filterCount = (d.spcc?.filterSets || []).length;
+                }
+            } catch { /* card just shows placeholders */ }
+            this.ccData.loading = false;
         },
 
         // ── SPCC modal (SpectroPhotometric Color Calibration) ──────────
