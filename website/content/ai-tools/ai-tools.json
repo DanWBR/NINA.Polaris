@@ -135,30 +135,28 @@
       "icon": "💫",
       "color": "#ec4899",
       "title": "Halo Removal",
-      "tag": "Polaris model",
-      "source": "polaris-soon",
+      "source": "polaris",
       "intro": "Polaris's own neural network, trained from scratch on real astrophotos, removes the diffraction halo rings that appear around bright stars in fast refractors and Newtonians. Unlike classical approaches, the model understands the spatial context of each star and avoids removing genuine nebulosity near bright sources.",
       "items": [
         { "label": "Polaris-native model:", "text": "trained on our own dataset of real astrophotos with synthetic halo augmentation; not a GraXpert repackage" },
         { "label": "Context-aware:", "text": "RGB 3-channel input gives the model enough context to distinguish halos from nearby nebulosity and emission regions" },
         { "label": "Evaluated at 50+ dB PSNR:", "text": "fp16 variant is essentially lossless vs fp32; int16 is within 0.03 dB" },
         { "label": "Four precisions:", "text": "fp32 (reference), fp16 (recommended), int16 (NPU/PTQ), int8 with QAT for maximum compression" },
-        { "label": "Status:", "text": "model training complete; QAT fine-tuning in progress. Release soon" }
+        { "label": "Where:", "text": "AI Tools toolbar and the Editor's AI section, Halo Removal option" }
       ]
     },
     {
       "icon": "🔍",
       "color": "#a855f7",
       "title": "AI Upscaling",
-      "tag": "Polaris model",
-      "source": "polaris-soon",
+      "source": "polaris",
       "intro": "Super-resolution 2x upscaling using Polaris's own UpscaleNet, a residual U-Net architecture trained on real astrophotos and designed for NPU-friendly int8 quantization. Useful for preparing images for large prints, high-DPI displays, or recovering more detail at the pixel level.",
       "items": [
         { "label": "Polaris UpscaleNet:", "text": "custom residual U-Net; internally 2x-upsamples before the encoder, so the network processes the full high-resolution feature space" },
         { "label": "Evaluated at 50.22 dB PSNR:", "text": "fp16 (50.22 dB) is indistinguishable from fp32 (50.21 dB); int16 within 0.03 dB" },
-        { "label": "int8 via QAT:", "text": "Quantization-Aware Training brings int8 back to near-lossless after PTQ showed a 3.3 dB degradation; QAT in progress" },
+        { "label": "int8 via QAT:", "text": "Quantization-Aware Training brings int8 back to near-lossless after PTQ showed a 3.3 dB degradation" },
         { "label": "2x scale:", "text": "output is double the input dimensions in both axes; a 3000x2000 frame becomes 6000x4000" },
-        { "label": "Status:", "text": "model training complete; QAT fine-tuning in progress. Release soon" }
+        { "label": "Where:", "text": "AI Tools toolbar and the Editor's AI section, Upscale option" }
       ]
     }
   ],
@@ -260,7 +258,7 @@
       "tag": "Maximum compression",
       "color": "#a855f7",
       "desc": "8-bit integer produced by Quantization-Aware Training: STE fake-quant hooks inserted during fine-tuning so the model learns to compensate for quantization error from the start.",
-      "detail": "PTQ int8 showed -3.3 dB PSNR degradation for upscale. QAT brings this back to near-lossless. QAT training in progress for halo and upscale; bge and denoise to follow."
+      "detail": "PTQ int8 showed -3.3 dB PSNR degradation for upscale. QAT brings this back to near-lossless. Halo Removal and Upscaling now ship with QAT models; bge and denoise to follow."
     }
   ]
 }
