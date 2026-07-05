@@ -62,7 +62,7 @@
     <link rel="stylesheet" href="/css/parts/12-tour.css?v=20260624-tour1">
     <!-- Optional external assistant module chrome (badge / FAB / iframe panel).
          Inert unless a manifest URL is configured (assistant-config.json). -->
-    <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist12">
+    <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -16901,7 +16901,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260705-assist14"></script>
+    <script src="/js/app.js?v=20260705-assist15"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
@@ -16983,7 +16983,11 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                               x-text="asst.manifest.iframe.fabIconEmoji || asst.manifest.product.iconEmoji || '🔭'"></span>
                         <span x-text="asst.manifest.product.name"></span>
                     </span>
-                    <button @click="asst.open=false" title="Close">&times;</button>
+                    <span class="assistant-panel-actions">
+                        <button x-show="asst.dock !== 'float'" @pointerdown.stop @click="assistantUndock()"
+                                title="Undock">&#x2750;</button>
+                        <button @click="asst.open=false" title="Close">&times;</button>
+                    </span>
                 </div>
                 <iframe id="assistantFrame" :src="asst.iframeSrc" class="assistant-iframe"
                         :sandbox="asst.manifest.iframe.sandbox || 'allow-scripts allow-forms allow-popups allow-same-origin'"

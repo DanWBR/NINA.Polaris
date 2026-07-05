@@ -166,6 +166,8 @@
 .assistant-dock-preview.dock-right  { right: 0; top: 0; bottom: 0; width: 360px; }
 .assistant-dock-preview.dock-bottom { left: 0; right: 0; bottom: 0; height: 300px; }
 .assistant-panel-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.assistant-panel-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+.assistant-panel-actions button { font-size: 15px; }
 .assistant-panel-icon { font-size: 16px; line-height: 1; flex: none; }
 .assistant-panel-header button {
     background: none;

@@ -10253,6 +10253,23 @@ function ninaApp() {
             window.addEventListener('pointermove', onMove);
             window.addEventListener('pointerup', onUp);
         },
+        // Explicit "pop out" from a dock into a floating window. Unambiguous
+        // alternative to drag-to-undock (which can re-snap near an edge). Shown
+        // in the header only while docked.
+        assistantUndock() {
+            const vw = window.innerWidth, vh = window.innerHeight, gap = 10;
+            const saved = this.asst.panel;
+            const w = Math.min(saved && saved.w ? saved.w : 400, vw - 2 * gap);
+            const h = Math.min(saved && saved.h ? saved.h : 560, vh - 2 * gap);
+            this.asst.dock = 'float';
+            this.asst.panel = {
+                w, h,
+                left: Math.max(gap, vw - w - 24),   // settle near the FAB corner
+                top: Math.max(gap, vh - h - 24),
+            };
+            this._assistantSavePanel();
+            this._assistantSaveDock();
+        },
         assistantDockResizeStart(ev) {
             if (ev.button != null && ev.button !== 0) return;
             ev.stopPropagation(); ev.preventDefault();
