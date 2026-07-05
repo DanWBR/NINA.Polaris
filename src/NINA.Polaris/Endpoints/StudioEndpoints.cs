@@ -193,6 +193,29 @@ public static class StudioEndpoints {
             return p == null ? Results.NotFound() : Results.Ok(p);
         });
 
+        // --- subframe grading (rank subs by quality, pick keepers) -----
+        // Measure each light's star count + median HFR and rank them, then
+        // select the best for stacking. Runs in the background (star-detecting
+        // a whole night is O(N) FITS reads). Frames come from explicit
+        // framePaths, or a library query (type/filter/target/date window).
+        // Body:
+        //   { framePaths?: [..],
+        //     type?, filter?, target?, dateFrom?, dateTo?, limit?,
+        //     keepBest?: 20,            (keep the N best)
+        //     hfrTolerancePct?: 15 }    (else keep within N% of the best HFR)
+        // The status result's `selected` array holds the keeper paths to hand
+        // straight to POST /integrate.
+        g.MapPost("/grade", (FrameGradingService svc, FrameGradingService.GradeRequest req) => {
+            if (req == null) return Results.BadRequest(new { error = "Missing body." });
+            var jobId = svc.StartJob(req);
+            return Results.Accepted(value: new { jobId });
+        });
+
+        g.MapGet("/grade/{jobId}/status", (FrameGradingService svc, string jobId) => {
+            var p = svc.GetStatus(jobId);
+            return p == null ? Results.NotFound() : Results.Ok(p);
+        });
+
         // Recommend a drizzle scale for the selected frames from their star
         // FWHM (undersampled -> 2x, well-sampled -> 1x) + sub count. The UI
         // calls this when the drizzle control is opened. Body: { framePaths }.
