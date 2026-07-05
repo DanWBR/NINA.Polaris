@@ -13873,6 +13873,15 @@ function ninaApp() {
 
         // --- Preview --------------------------------------------------
 
+        // Toolbar "View": open the single selected file in the viewer — the
+        // discoverable equivalent of double-clicking/double-tapping the row.
+        filesViewSelected() {
+            if (this.files.selectedPaths.length !== 1) return;
+            const entry = this.files.entries.find(
+                e => e.fullPath === this.files.selectedPaths[0]);
+            if (entry && !entry.isDirectory) this.filesOpenPreview(entry);
+        },
+
         async filesOpenPreview(entry) {
             if (!entry || entry.isDirectory) return;
             const ext = (entry.name.toLowerCase().split('.').pop() || '');

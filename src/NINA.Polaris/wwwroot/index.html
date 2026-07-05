@@ -10008,6 +10008,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon-label">Invert</span>
                     </button>
                     <span class="files-actions-sep" aria-hidden="true"></span>
+                    <!-- Open the selected image in the viewer (same as a
+                         double-click/double-tap on the row, made discoverable). -->
+                    <button class="btn btn-sm btn-icon"
+                            @click="filesViewSelected()"
+                            :disabled="files.selectedPaths.length !== 1 || !!filesSelectedDir()"
+                            title="View: open the selected image in the viewer (or double-click the row)"
+                            aria-label="View">
+                        <span class="files-icon">👁️</span>
+                        <span class="files-icon-label">View</span>
+                    </button>
                     <!-- Batch rename FITS files from their header fields
                          (e.g. {OBJECT}_{FILTER}_{EXPTIME}s_{n:03}). Preview
                          before applying. Enabled for one or more selected. -->
@@ -17063,7 +17073,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260705-spcc2"></script>
+    <script src="/js/app.js?v=20260705-spcc3"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
