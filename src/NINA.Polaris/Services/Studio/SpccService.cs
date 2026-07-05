@@ -170,22 +170,44 @@ public class SpccService {
             .QueryRegionAsync(wcs.RaDeg, wcs.DecDeg, radius, magLimit: 16.0)
             .GetAwaiter().GetResult();
 
-        // Match catalog→detected and build one SPCC star per match, with its
-        // spectrum from the chosen source. The radius is loosened from 3px so
-        // a slightly imperfect plate-solve doesn't drop otherwise-good stars.
-        var spccStars = new List<SpccMath.SpccStar>();
+        // Match catalog→detected. The radius is loosened from 3px so a
+        // slightly imperfect plate-solve doesn't drop otherwise-good stars.
         const double matchRadiusPx = 5.0;
         var grid = new SpatialGrid<StarPhotometer.StarPhotometry>(matchRadiusPx);
         foreach (var p in phots) if (!p.Saturated) grid.Add(p.X, p.Y, p);
-        foreach (var c in catalogStars) {
-            if (c.Bv == null) continue;
-            var (px, py) = wcs.RaDecToPixel(c.Ra, c.Dec);
-            if (double.IsNaN(px) || double.IsNaN(py)) continue;
-            if (grid.TryNearest(px, py, matchRadiusPx, out var best, out _)) {
-                var spectrum = _db.StarSpectrumFromBv(source, c.Bv.Value);
-                spccStars.Add(new SpccMath.SpccStar(best.FluxR, best.FluxG, best.FluxB, spectrum));
+
+        // External plate-solves (e.g. a Siril result.fit) can store the WCS
+        // with the opposite vertical convention to how Polaris loads the
+        // pixels, which misaligns every catalog star except near the centre
+        // row. Try both Y orientations and keep whichever aligns more stars;
+        // for a self-consistent (Polaris-solved) frame the un-flipped pass
+        // wins and the flip finds ~none, so this is a no-op there.
+        List<(double Bv, StarPhotometer.StarPhotometry Phot)> MatchAll(bool flipY) {
+            var m = new List<(double, StarPhotometer.StarPhotometry)>();
+            foreach (var c in catalogStars) {
+                if (c.Bv == null) continue;
+                var (px, py) = wcs.RaDecToPixel(c.Ra, c.Dec);
+                if (double.IsNaN(px) || double.IsNaN(py)) continue;
+                double qy = flipY ? (H + 1 - py) : py;
+                if (grid.TryNearest(px, qy, matchRadiusPx, out var best, out _))
+                    m.Add((c.Bv.Value, best));
             }
+            return m;
         }
+        var mNormal = MatchAll(false);
+        var mFlip = MatchAll(true);
+        bool usedFlip = mFlip.Count > mNormal.Count;
+        var matched = usedFlip ? mFlip : mNormal;
+
+        var spccStars = new List<SpccMath.SpccStar>(matched.Count);
+        foreach (var (bv, phot) in matched) {
+            var spectrum = _db.StarSpectrumFromBv(source, bv);
+            spccStars.Add(new SpccMath.SpccStar(phot.FluxR, phot.FluxG, phot.FluxB, spectrum));
+        }
+        if (usedFlip)
+            _logger.LogInformation("SPCC: matched with a vertical WCS flip " +
+                "({N} vs {M} un-flipped) — external plate-solve convention.",
+                mFlip.Count, mNormal.Count);
         if (spccStars.Count < 5) {
             int withBv = catalogStars.Count(c => c.Bv != null);
             string diag =

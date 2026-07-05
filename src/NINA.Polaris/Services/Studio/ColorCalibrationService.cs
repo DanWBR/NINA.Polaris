@@ -362,15 +362,26 @@ public class ColorCalibrationService {
         var detectedGrid = new NINA.Image.ImageAnalysis.SpatialGrid<StarPhotometer.StarPhotometry>(matchRadiusPx);
         foreach (var p in phots)
             if (!p.Saturated) detectedGrid.Add(p.X, p.Y, p);
-        foreach (var c in catalogStars) {
-            if (c.Bv == null) continue;
-            var (px, py) = wcs.RaDecToPixel(c.Ra, c.Dec);
-            if (double.IsNaN(px) || double.IsNaN(py)) continue;
-            if (detectedGrid.TryNearest(px, py, matchRadiusPx, out var best, out _)) {
-                matched.Add(new ColorCalibrationMath.CalibrationStar(
-                    Photometry: best, Bv: c.Bv.Value));
+        // External plate-solves (e.g. a Siril result.fit) can store the WCS
+        // with the opposite vertical convention to how Polaris loads the
+        // pixels, misaligning every catalog star except near the centre row.
+        // Try both Y orientations and keep whichever aligns more stars; a
+        // Polaris-solved frame is self-consistent so the flip finds ~none.
+        List<ColorCalibrationMath.CalibrationStar> MatchAll(bool flipY) {
+            var m = new List<ColorCalibrationMath.CalibrationStar>();
+            foreach (var c in catalogStars) {
+                if (c.Bv == null) continue;
+                var (px, py) = wcs.RaDecToPixel(c.Ra, c.Dec);
+                if (double.IsNaN(px) || double.IsNaN(py)) continue;
+                double qy = flipY ? (H + 1 - py) : py;
+                if (detectedGrid.TryNearest(px, qy, matchRadiusPx, out var best, out _))
+                    m.Add(new ColorCalibrationMath.CalibrationStar(Photometry: best, Bv: c.Bv.Value));
             }
+            return m;
         }
+        var mNormal = MatchAll(false);
+        var mFlip = MatchAll(true);
+        matched = mFlip.Count > mNormal.Count ? mFlip : mNormal;
         if (matched.Count < 5) {
             throw new InvalidOperationException(
                 $"PCC: only {matched.Count} catalog stars matched to " +
