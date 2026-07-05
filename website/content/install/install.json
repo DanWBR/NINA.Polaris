@@ -100,11 +100,12 @@
         "device": "Orange Pi 4 Pro",
         "badge": "arm64",
         "color": "#ff7a18",
-        "url": "",
-        "os": "",
-        "polaris": "",
-        "size": "",
-        "note": ""
+        "url": "https://drive.google.com/uc?export=download&id=1YPuDTWRohe6lt1BkTcSSN3tdLUcnDFwA",
+        "os": "Ubuntu 22.04 (arm64)",
+        "polaris": "0.90.1",
+        "size": "2.84 GB (.7z)",
+        "access": "https://polaris-opi4pro-1.local:5000/",
+        "note": "HDD Raw Copy Tool image (imgcv2). 7-Zip archive; extract, then write the .img to the internal storage with HDD Raw Copy Tool. Login password: polaris1234."
       },
       {
         "device": "Orange Pi 5 Pro",
