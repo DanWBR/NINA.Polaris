@@ -10108,6 +10108,24 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon" x-text="starColor.busy ? '⏳' : '🔘'"></span>
                         <span class="files-icon-label">Star fix</span>
                     </button>
+                    <!-- Colour calibration on a plate-solved RGB master: PCC
+                         (APASS B-V) and SPCC (spectral integration). One file. -->
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1"
+                            @click="pccOpenModal(files.selectedPaths[0])"
+                            title="Photometric Color Calibration (PCC): white-balance a plate-solved RGB master from APASS star colours."
+                            aria-label="Photometric Color Calibration">
+                        <span class="files-icon" x-text="pcc.busy ? '⏳' : '🎨'"></span>
+                        <span class="files-icon-label">PCC</span>
+                    </button>
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1"
+                            @click="spccOpenModal(files.selectedPaths[0])"
+                            title="SpectroPhotometric Color Calibration (SPCC): integrate star spectra through your sensor + filter response."
+                            aria-label="SpectroPhotometric Color Calibration">
+                        <span class="files-icon" x-text="spcc.busy ? '⏳' : '🌈'"></span>
+                        <span class="files-icon-label">SPCC</span>
+                    </button>
                     <span class="files-actions-sep" aria-hidden="true"></span>
                     <!-- Remove stars (StarNet++) — writes _starless + _stars,
                          then opens the before/after comparator. One file. -->
