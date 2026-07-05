@@ -10108,8 +10108,16 @@ function ninaApp() {
                     connected: !!this.camera.connected, temperature: this.camera.temperature
                 } : null,
                 guider: this.guider ? {
-                    guiding: !!this.guider.guiding, rmsTotal: this.guider.rmsTotal
+                    guiding: !!this.guider.guiding, rmsTotal: this.guider.rmsTotal,
+                    // appState drives the assistant's real-time watcher (e.g.
+                    // 'LostLock' => guiding-lost nudge). PHD2 + native parity.
+                    appState: this.guider.appState || null
                 } : null,
+                // Focus HFR + minutes-to-meridian-flip feed the watcher's
+                // focus-drift and meridian heads-up rules. Both are top-level
+                // Alpine state kept in sync from /ws/status.
+                focus: { hfr: this.lastHfr || 0 },
+                meridian: { minutesToFlip: this.mfTimeToFlipMinutes },
                 liveStack: { active: !!this.liveActive },
             };
             this._assistantPost({ v: 1, type: 'host:status', snapshot: snap });
