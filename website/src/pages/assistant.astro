@@ -52,9 +52,9 @@ const shots = p.screenshots ?? [];
       <section class="section shot-section">
         <div class="container">
           <figure class="shot">
-            {shots[0].src
-              ? <img src={shots[0].src} alt={shots[0].caption} loading="lazy" />
-              : <div class="shot-ph"><span class="shot-ph-icon">🔭</span><span class="shot-ph-tag">Screenshot</span></div>}
+            {shots[0].src && <img src={shots[0].src} alt={shots[0].caption} loading="lazy"
+              onerror="var f=this.closest('.shot');this.remove();var p=f.querySelector('.shot-ph');if(p)p.style.display='grid';" />}
+            <div class="shot-ph" style={shots[0].src ? 'display:none' : undefined}><span class="shot-ph-icon">🔭</span><span class="shot-ph-tag">Screenshot</span></div>
             <figcaption>{shots[0].caption}</figcaption>
           </figure>
         </div>
@@ -93,9 +93,9 @@ const shots = p.screenshots ?? [];
       <section class="section shot-section section-alt">
         <div class="container">
           <figure class="shot">
-            {shots[1].src
-              ? <img src={shots[1].src} alt={shots[1].caption} loading="lazy" />
-              : <div class="shot-ph"><span class="shot-ph-icon">🗓️</span><span class="shot-ph-tag">Screenshot</span></div>}
+            {shots[1].src && <img src={shots[1].src} alt={shots[1].caption} loading="lazy"
+              onerror="var f=this.closest('.shot');this.remove();var p=f.querySelector('.shot-ph');if(p)p.style.display='grid';" />}
+            <div class="shot-ph" style={shots[1].src ? 'display:none' : undefined}><span class="shot-ph-icon">🗓️</span><span class="shot-ph-tag">Screenshot</span></div>
             <figcaption>{shots[1].caption}</figcaption>
           </figure>
         </div>
@@ -123,9 +123,9 @@ const shots = p.screenshots ?? [];
       <section class="section shot-section">
         <div class="container">
           <figure class="shot">
-            {shots[2].src
-              ? <img src={shots[2].src} alt={shots[2].caption} loading="lazy" />
-              : <div class="shot-ph"><span class="shot-ph-icon">📷</span><span class="shot-ph-tag">Screenshot</span></div>}
+            {shots[2].src && <img src={shots[2].src} alt={shots[2].caption} loading="lazy"
+              onerror="var f=this.closest('.shot');this.remove();var p=f.querySelector('.shot-ph');if(p)p.style.display='grid';" />}
+            <div class="shot-ph" style={shots[2].src ? 'display:none' : undefined}><span class="shot-ph-icon">📷</span><span class="shot-ph-tag">Screenshot</span></div>
             <figcaption>{shots[2].caption}</figcaption>
           </figure>
         </div>

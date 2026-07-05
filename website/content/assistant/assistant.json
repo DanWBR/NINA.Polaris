@@ -76,9 +76,9 @@
   ],
   "screenshotsTitle": "See it in action",
   "screenshots": [
-    { "caption": "The assistant chat docked beside Polaris, planning the night.", "src": "" },
-    { "caption": "A night plan built in PLAN mode, ready to review and start.", "src": "" },
-    { "caption": "Frame analysis: the assistant inspecting a sub and flagging trailing.", "src": "" }
+    { "caption": "The assistant chat docked beside Polaris, planning the night.", "src": "/assets/screenshots/assistant-chat.jpg" },
+    { "caption": "A night plan built in PLAN mode, ready to review and start.", "src": "/assets/screenshots/assistant-plan.jpg" },
+    { "caption": "Frame analysis: the assistant inspecting a sub and flagging trailing.", "src": "/assets/screenshots/assistant-frame.jpg" }
   ],
   "howTitle": "How it works",
   "howLede": "The assistant runs in the cloud, but it never talks to your telescope directly. Your browser is the bridge: it relays the assistant's requests to your local Polaris over your LAN, so your rig stays offline-friendly and under your control.",
