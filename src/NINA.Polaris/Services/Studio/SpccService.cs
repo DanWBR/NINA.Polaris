@@ -186,13 +186,23 @@ public class SpccService {
                 spccStars.Add(new SpccMath.SpccStar(best.FluxR, best.FluxG, best.FluxB, spectrum));
             }
         }
-        if (spccStars.Count < 5)
+        if (spccStars.Count < 5) {
+            int withBv = catalogStars.Count(c => c.Bv != null);
+            string diag =
+                $"Detected {stars.Count} stars in the image; {catalogStars.Count} " +
+                $"APASS stars in the field ({withBv} with a usable B-V colour); " +
+                $"only {spccStars.Count} aligned within {matchRadiusPx:0}px.";
+            string hint = withBv < 5
+                ? "The catalog is sparse in this field. Try a wider field, or deepen " +
+                  "APASS by re-running scripts/download-apass.py with a higher " +
+                  "--mag-limit (the bundled catalog is capped at V=13)."
+                : "There are enough catalog stars but few line up with detected " +
+                  "stars, so the plate-solve (WCS) is likely inaccurate. Re-solve " +
+                  "the master (STUDIO -> Solve) and try again.";
             throw new InvalidOperationException(
                 $"SPCC: only {spccStars.Count} catalog matches; needs at least 5. " +
-                "This field is short on calibratable stars. Try a wider field, a " +
-                "more accurate plate-solve, or deepen the catalog by re-running " +
-                "scripts/download-apass.py with a higher --mag-limit (the bundled " +
-                "APASS is capped at V=13).");
+                diag + " " + hint);
+        }
 
         var gains = SpccMath.Solve(spccStars, whiteRef, respR, respG, respB);
         return (gains, spccStars.Count);
