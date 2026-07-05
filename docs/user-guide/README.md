@@ -9,6 +9,10 @@ without a desktop.
 This guide is split into **flows** (do this to accomplish X) and
 **references** (this is what every control does).
 
+> **Lost in the UI? → [Where do I go to do X?](ui-navigation.md)** — a quick
+> map of every panel and a task index (connect gear, pick a target, focus,
+> guide, capture, live-stack, process, settings).
+
 ## New to Polaris? Start here
 
 1. **[Installation](installation.md)**, get the server running on your
