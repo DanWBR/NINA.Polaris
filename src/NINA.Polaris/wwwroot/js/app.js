@@ -5804,6 +5804,7 @@ function ninaApp() {
             document.body.style.zoom = String(z);
             try { localStorage.setItem('nina-ui-zoom', String(z)); }
             catch (_) { /* private mode etc. */ }
+            this._assistantPushUi();
         },
 
         // Friendly device name (shown on network discovery). Loaded at
@@ -5875,6 +5876,7 @@ function ninaApp() {
                 else document.documentElement.setAttribute('data-font', v);
                 localStorage.setItem('nina-ui-font', v);
             } catch (_) { /* private mode etc. */ }
+            this._assistantPushUi();
         },
 
         // Reduce motion (Settings → Appearance). Toggles <html
@@ -5922,6 +5924,7 @@ function ninaApp() {
                 document.documentElement.style.setProperty('--pad-scale', (v / 100).toString());
                 localStorage.setItem('nina-pad-scale', String(v));
             } catch (_) { /* private mode etc. */ }
+            this._assistantPushUi();
         },
 
         // Persist the on-screen-keyboard mode through the global the
@@ -5946,6 +5949,7 @@ function ninaApp() {
             this.uiZoom = z;
             this.uiZoomDraft = z;
             document.body.style.zoom = String(z);
+            this._assistantPushUi();
         },
 
         // Toast notification (auto-dismiss)
@@ -9911,13 +9915,31 @@ function ninaApp() {
             }
         },
 
+        // The assistant iframe is cross-origin (cloud), so it can't read the
+        // host's CSS. Forward the same Appearance settings the user picked for
+        // Polaris (font family, page zoom, control density) so the chat matches.
+        _assistantUiSettings() {
+            return {
+                font: this.uiFont || 'atkinson',
+                zoom: Number(this.uiZoom) || 1,
+                padScale: Number(this.padScale) || 100,
+            };
+        },
+        // Push a live Appearance change to the iframe (called from the Settings
+        // apply handlers) so the chat updates without reopening.
+        _assistantPushUi() {
+            if (!this.asst || !this.asst.ready) return;
+            this._assistantPost({ v: 1, type: 'host:ui', ui: this._assistantUiSettings() });
+        },
+
         _assistantOnMessage(msg) {
             switch (msg.type) {
                 case 'assistant:ready':
                     this._assistantPost({
                         v: 1, type: 'host:init', parentOrigin: location.origin, protocolVersion: 1,
                         polaris: { version: this.currentVersion || '', baseUrl: location.origin },
-                        locale: (window.I18N && window.I18N.lang) || 'en', theme: this.nightMode ? 'night' : 'dark'
+                        locale: (window.I18N && window.I18N.lang) || 'en', theme: this.nightMode ? 'night' : 'dark',
+                        ui: this._assistantUiSettings()
                     });
                     this._assistantPost({
                         v: 1, type: 'host:auth',
@@ -10183,12 +10205,30 @@ function ninaApp() {
             if (ev.button != null && ev.button !== 0) return;
             if (ev.target.closest('button')) return; // let the close button work
             if (window.innerWidth <= 480) return;     // phone bottom sheet: no drag
+            const vw = window.innerWidth, vh = window.innerHeight, gap = 4;
+            const wasDocked = this.asst.dock !== 'float';
             const { rect } = this._assistantPanelRect(ev);
+            // When pulling out of a dock, drop the full-height docked rect and
+            // adopt a sensible floating size (last floating geometry if we have
+            // one, else the defaults) so the panel visibly detaches — otherwise
+            // it keeps the dock's full height and looks like it never undocked.
+            let w, h, offX, offY;
+            if (wasDocked) {
+                const saved = this.asst.panel;
+                w = Math.min(saved && saved.w ? saved.w : 400, vw - 2 * gap);
+                h = Math.min(saved && saved.h ? saved.h : 560, vh - 2 * gap);
+                offX = Math.min(w / 2, w - 20);   // grab near the header's middle
+                offY = 16;
+            } else {
+                w = rect.width; h = rect.height;
+                offX = Math.min(ev.clientX - rect.left, w - 20);
+                offY = ev.clientY - rect.top;
+            }
             // Pull out of any dock and follow the cursor as a floating window.
             this.asst.dock = 'float';
-            const w = rect.width, h = rect.height, gap = 4;
-            const offX = Math.min(ev.clientX - rect.left, w - 20), offY = ev.clientY - rect.top;
-            this.asst.panel = { left: rect.left, top: rect.top, w, h };
+            const left0 = Math.max(gap, Math.min(ev.clientX - offX, vw - w - gap));
+            const top0 = Math.max(gap, Math.min(ev.clientY - offY, vh - h - gap));
+            this.asst.panel = { left: left0, top: top0, w, h };
             this.asst.panelDragging = true;
             const EDGE = 40;
             const onMove = (e) => {
