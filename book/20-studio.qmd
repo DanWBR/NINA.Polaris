@@ -339,10 +339,9 @@ the roles cleared for you to reassign.
   mask and grayscale erosion (a morphological shrinking operation),
   with core protection.
 - **Wavelet Sharpen**: a multiscale detail boost using the à-trous
-  wavelet decomposition (which separates the image into detail
-  layers by scale), with optional denoise, applied on luminance so
-  color is preserved.
-  <!-- TODO cite: Starck et al., à-trous wavelet transform -->
+  wavelet decomposition [@starck2007undecimated] (which separates
+  the image into detail layers by scale), with optional denoise,
+  applied on luminance so color is preserved.
 - **Multiscale HDR (recover cores)**: compresses the large-scale
   luminance so blown-out galaxy, nebula, and star cores come down
   toward the background while fine detail is kept.
