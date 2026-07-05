@@ -162,14 +162,19 @@ public class SpccService {
         double yScale = Math.Sqrt(wcs.CD12 * wcs.CD12 + wcs.CD22 * wcs.CD22);
         double fovH = xScale * W, fovV = yScale * H;
         double radius = 1.2 * Math.Sqrt(fovV * fovV + fovH * fovH) / 2.0;
+        // magLimit 16 is a ceiling: the query returns whatever the local
+        // catalog actually holds (the bundled APASS is capped at ~V=13, but a
+        // deeper re-download is used transparently if present). Broader than
+        // the old 13 so sparse fields still find calibration stars.
         var catalogStars = _catalog
-            .QueryRegionAsync(wcs.RaDeg, wcs.DecDeg, radius, magLimit: 13.0)
+            .QueryRegionAsync(wcs.RaDeg, wcs.DecDeg, radius, magLimit: 16.0)
             .GetAwaiter().GetResult();
 
-        // Match catalog→detected (3 px) and build one SPCC star per match,
-        // with its spectrum from the chosen source.
+        // Match catalog→detected and build one SPCC star per match, with its
+        // spectrum from the chosen source. The radius is loosened from 3px so
+        // a slightly imperfect plate-solve doesn't drop otherwise-good stars.
         var spccStars = new List<SpccMath.SpccStar>();
-        const double matchRadiusPx = 3.0;
+        const double matchRadiusPx = 5.0;
         var grid = new SpatialGrid<StarPhotometer.StarPhotometry>(matchRadiusPx);
         foreach (var p in phots) if (!p.Saturated) grid.Add(p.X, p.Y, p);
         foreach (var c in catalogStars) {
@@ -184,7 +189,10 @@ public class SpccService {
         if (spccStars.Count < 5)
             throw new InvalidOperationException(
                 $"SPCC: only {spccStars.Count} catalog matches; needs at least 5. " +
-                "Check plate-solve accuracy and field star density.");
+                "This field is short on calibratable stars. Try a wider field, a " +
+                "more accurate plate-solve, or deepen the catalog by re-running " +
+                "scripts/download-apass.py with a higher --mag-limit (the bundled " +
+                "APASS is capped at V=13).");
 
         var gains = SpccMath.Solve(spccStars, whiteRef, respR, respG, respB);
         return (gains, spccStars.Count);

@@ -341,15 +341,20 @@ public class ColorCalibrationService {
         double fovDegH = xScale * W;
         double fovDegV = yScale * H;
         double radius = 1.2 * Math.Sqrt(fovDegV * fovDegV + fovDegH * fovDegH) / 2.0;
+        // magLimit 16 is a ceiling: the bundled APASS is capped at ~V=13, but
+        // a deeper re-download is picked up transparently. Broader than the old
+        // 13 so sparse fields still find catalog stars.
         var catalogTask = _catalog.QueryRegionAsync(
-            wcs.RaDeg, wcs.DecDeg, radius, magLimit: 13.0);
+            wcs.RaDeg, wcs.DecDeg, radius, magLimit: 16.0);
         var catalogStars = catalogTask.GetAwaiter().GetResult();
 
         // ── 5. Match catalog stars to detected stars ──────────────────
         // For each catalog star with valid B-V, project to pixel space
         // and find the nearest detected star within 3 px.
         var matched = new List<ColorCalibrationMath.CalibrationStar>();
-        const double matchRadiusPx = 3.0;
+        // Loosened from 3px so a slightly imperfect plate-solve doesn't drop
+        // otherwise-good catalog stars.
+        const double matchRadiusPx = 5.0;
         // PERF #366: index the (non-saturated) detected stars in a spatial
         // grid so each catalog star is matched by scanning only nearby
         // cells, instead of the full O(catalog * detected) brute force.
