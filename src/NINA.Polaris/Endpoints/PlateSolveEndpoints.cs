@@ -621,9 +621,19 @@ public static class PlateSolveEndpoints {
                         var raDeg = result.RaDeg != 0 ? result.RaDeg : result.RaHours * 15.0;
                         NINA.Image.ImageData.BaseImageData img;
                         using (var fs = File.OpenRead(request.Path)) img = FITSReader.Read(fs);
-                        var wcs = WcsHeaders.FromSolveResult(
-                            raDeg, result.DecDeg, result.ScaleArcsecPerPixel, result.RotationDeg,
-                            img.Properties.Width, img.Properties.Height);
+                        // Prefer the solver's real CD matrix (carries parity /
+                        // mirror); only reconstruct from (scale, rotation) — which
+                        // assumes a fixed handedness and can mirror the RA axis — as
+                        // a last resort when no CD matrix was reported.
+                        var wcs = result.HasCdMatrix
+                            ? WcsHeaders.FromCdMatrix(
+                                raDeg, result.DecDeg, result.CrPix1, result.CrPix2,
+                                result.CD11!.Value, result.CD12!.Value,
+                                result.CD21!.Value, result.CD22!.Value,
+                                img.Properties.Width, img.Properties.Height)
+                            : WcsHeaders.FromSolveResult(
+                                raDeg, result.DecDeg, result.ScaleArcsecPerPixel, result.RotationDeg,
+                                img.Properties.Width, img.Properties.Height);
                         // ImageProperties is an init-only record; copy with the WCS set.
                         var stamped = new NINA.Image.ImageData.BaseImageData(
                             img.Data, img.Properties with { Wcs = wcs }, img.MetaData);

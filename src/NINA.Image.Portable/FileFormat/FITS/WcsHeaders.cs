@@ -117,6 +117,29 @@ public static class WcsHeaders {
     }
 
     /// <summary>
+    /// Build a <see cref="WcsInfo"/> directly from a plate-solver's reported
+    /// CD matrix + reference pixel. Prefer this over <see cref="FromSolveResult"/>
+    /// whenever the solver hands back a real CD matrix (ASTAP and astrometry.net
+    /// both do): the CD matrix carries the true parity (mirror/flip) of the
+    /// optical train, which a (scale, rotation) reconstruction cannot — it
+    /// assumes a fixed handedness and silently mirrors the RA axis for setups
+    /// with the opposite parity, misprojecting every catalog star (the root
+    /// cause of PCC/SPCC "only N catalog matches").
+    /// </summary>
+    public static WcsInfo FromCdMatrix(double raDeg, double decDeg,
+            double crPix1, double crPix2,
+            double cd11, double cd12, double cd21, double cd22,
+            int imageWidth, int imageHeight) {
+        return new WcsInfo {
+            RaDeg = raDeg,
+            DecDeg = decDeg,
+            RefPixelX = crPix1 > 0 ? crPix1 : (imageWidth + 1) / 2.0,
+            RefPixelY = crPix2 > 0 ? crPix2 : (imageHeight + 1) / 2.0,
+            CD11 = cd11, CD12 = cd12, CD21 = cd21, CD22 = cd22,
+        };
+    }
+
+    /// <summary>
     /// Pull a <see cref="WcsInfo"/> out of a FITS header dictionary
     /// if it has the WCS cards; returns null otherwise (no WCS
     /// present, common for un-solved frames).

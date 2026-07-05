@@ -603,17 +603,32 @@ public class AstapSolver : IPlateSolver {
             BaseImageData original, PlateSolveResult solve, int w, int h,
             string proxyPath) {
         WcsInfo? wcs = null;
-        try {
-            using var fs = File.OpenRead(proxyPath);
-            var hdr = FITSReader.ReadHeadersOnly(fs);
-            wcs = WcsHeaders.Read(hdr);
-        } catch {
-            // Fall through; we'll synthesise below.
+        // Preferred: the CD matrix ASTAP reported in its .ini/.wcs sidecar,
+        // already captured in the solve result. It carries the true parity
+        // (mirror/flip); the proxy FITS itself is only WCS-updated in place
+        // when ASTAP runs with -update, so reading it back is unreliable and
+        // re-synthesising from (scale, rotation) drops parity — either way the
+        // RA axis can end up mirrored, misprojecting every catalog star (PCC/
+        // SPCC "few matches"). The solve result is the reliable source.
+        if (solve.HasCdMatrix) {
+            wcs = WcsHeaders.FromCdMatrix(
+                solve.RaDeg != 0 ? solve.RaDeg : solve.RaHours * 15.0,
+                solve.DecDeg, solve.CrPix1, solve.CrPix2,
+                solve.CD11!.Value, solve.CD12!.Value,
+                solve.CD21!.Value, solve.CD22!.Value, w, h);
         }
-        // Fallback: synthesise from (scale, rotation) if we couldn't
-        // recover the proxy's CD matrix for any reason. Better to
-        // have a slightly-wrong WCS than no WCS at all — the caller
-        // gets the same numerical RA/Dec either way.
+        if (wcs == null) {
+            try {
+                using var fs = File.OpenRead(proxyPath);
+                var hdr = FITSReader.ReadHeadersOnly(fs);
+                wcs = WcsHeaders.Read(hdr);
+            } catch {
+                // Fall through; we'll synthesise below.
+            }
+        }
+        // Last-resort fallback: synthesise from (scale, rotation) if we have
+        // no CD matrix at all. Better a slightly-wrong WCS than none — the
+        // caller gets the same numerical RA/Dec either way.
         wcs ??= WcsHeaders.FromSolveResult(
             solve.RaDeg, solve.DecDeg,
             solve.ScaleArcsecPerPixel, solve.RotationDeg, w, h);

@@ -203,4 +203,47 @@ public class WcsHeadersTests {
         Assert.That(mx, Is.EqualTo(497).Within(8), "M4 X");
         Assert.That(my, Is.EqualTo(1003).Within(8), "M4 Y");
     }
+
+    [Test]
+    public void FromCdMatrix_PreservesParity_UnlikeScalarReconstruction() {
+        // Regression for the "PCC/SPCC only N catalog matches" bug on an
+        // ASI585MC M16 stack. ASTAP solved the frame as a PROPER rotation
+        // (CD determinant > 0) at ~92.5° with ~0.877"/px, but the WCS was
+        // stamped by re-synthesising from (scale, rotation) via
+        // FromSolveResult, which hard-codes the opposite handedness
+        // (determinant < 0). That mirrors the RA axis, so projected catalog
+        // stars land on the wrong side and only a few near the mirror line
+        // match (verified: 3 matches with the reconstructed CD vs 201 with
+        // ASTAP's real CD). FromCdMatrix must keep ASTAP's CD verbatim.
+        const double cd11 = -1.0547186888599640E-005;
+        const double cd12 =  2.4381437281592155E-004;
+        const double cd21 = -2.4347164862200036E-004;
+        const double cd22 = -1.0420198096190324E-005;
+
+        var wcs = WcsHeaders.FromCdMatrix(
+            raDeg: 274.7280594730, decDeg: -13.8695795083,
+            crPix1: 1920.5, crPix2: 1080.5,
+            cd11, cd12, cd21, cd22,
+            imageWidth: 3840, imageHeight: 2160);
+
+        // CD preserved exactly (parity intact) and the frame is a proper
+        // rotation — determinant > 0.
+        Assert.That(wcs.CD11, Is.EqualTo(cd11).Within(1e-18));
+        Assert.That(wcs.CD12, Is.EqualTo(cd12).Within(1e-18));
+        Assert.That(wcs.CD21, Is.EqualTo(cd21).Within(1e-18));
+        Assert.That(wcs.CD22, Is.EqualTo(cd22).Within(1e-18));
+        Assert.That(wcs.CD11 * wcs.CD22 - wcs.CD12 * wcs.CD21,
+            Is.GreaterThan(0), "ASTAP solved this frame as a proper rotation.");
+
+        // The scalar (scale, rotation) reconstruction produces the OPPOSITE
+        // parity for the very same solve — this is exactly what used to be
+        // written to disk and broke catalog matching.
+        double scaleArcsec = Math.Sqrt(cd11 * cd11 + cd21 * cd21) * 3600.0;
+        double rotDeg = Math.Atan2(cd21, cd11) * 180.0 / Math.PI;
+        var recon = WcsHeaders.FromSolveResult(
+            274.7280594730, -13.8695795083, scaleArcsec, rotDeg, 3840, 2160);
+        Assert.That(recon.CD11 * recon.CD22 - recon.CD12 * recon.CD21,
+            Is.LessThan(0),
+            "Scalar reconstruction mirrors parity — why FromCdMatrix is preferred.");
+    }
 }
