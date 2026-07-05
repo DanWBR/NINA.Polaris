@@ -116,17 +116,19 @@ the best result.
 
 ### Orange Pi 4 Pro (8 cores, Allwinner A733)
 
-Run: 2026-07-04 (2 consecutive runs: 147, 144).
+Run: 2026-07-05 with a heatsink + fan (best of several: 156). Passively cooled it
+scored 147/144 on 2026-07-04, so active cooling is worth about a 6% gain here by
+holding the CPU clocks up under the sustained load.
 
 | Metric | Value |
 |---|---|
-| **Polaris score** | **147** |
-| Stacking throughput | 2.03 fps · 34.1 Mpx/s (16.78 MP frames) |
-| Stacking detect / align / resample / stats | 122.69 / 0.57 / 167.53 / 201.82 ms |
-| Capture/video throughput | 0.92 fps · 15.4 Mpx/s |
-| Debayer / JPEG / LZ4 | 113.25 / 961.27 / 15.76 ms (LZ4 2030 MB/s) |
-| CPU single / multi-thread | 2406 / 7839 MFLOPS (3.26× scaling) |
-| Memory bandwidth | 8.7 GB/s |
+| **Polaris score** | **156** (147 passively cooled) |
+| Stacking throughput | 2.06 fps · 34.6 Mpx/s (16.78 MP frames) |
+| Stacking detect / align / resample / stats | 119.22 / 0.57 / 174.22 / 191.31 ms |
+| Capture/video throughput | 1.06 fps · 17.8 Mpx/s |
+| Debayer / JPEG / LZ4 | 115.52 / 808.5 / 18.97 ms (LZ4 1686.9 MB/s) |
+| CPU single / multi-thread | 2405 / 7934 MFLOPS (3.3× scaling) |
+| Memory bandwidth | 9.4 GB/s |
 
 Sits between the Raspberry Pi 4 (110) and Pi 5 (211) — a solid mid-range SBC.
 Note: on the stock Orange Pi image the board self-reports only its SoC codename

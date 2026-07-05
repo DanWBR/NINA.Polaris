@@ -81,6 +81,7 @@ function ninaApp() {
             dockW: 360,           // docked side-column width
             dockH: 300,           // docked bottom-strip height
             dockHint: null,       // edge being hovered during a drag ('left'|'right'|'bottom')
+            mobileFree: false,    // phone: user dragged the bottom-sheet into a floating window (session-only)
         },
         // On-screen keyboard mode (Settings → Appearance). The actual
         // behaviour lives in /js/virtual-keyboard.js; this just mirrors the
@@ -10128,7 +10129,18 @@ function ninaApp() {
         },
         _assistantPanelStyle() {
             const vw = window.innerWidth, vh = window.innerHeight;
-            if (vw <= 480) return {}; // phone: full-width bottom sheet (CSS)
+            if (vw <= 480) {
+                // Phone default = full-width bottom sheet (CSS). Once the user
+                // drags the header it becomes a movable floating window (this
+                // inline geometry outranks the @media bottom-sheet rules).
+                const gm = this.asst.panel;
+                if (this.asst.mobileFree && gm) return {
+                    left: gm.left + 'px', top: gm.top + 'px', width: gm.w + 'px', height: gm.h + 'px',
+                    right: 'auto', bottom: 'auto', maxWidth: 'none', maxHeight: 'none',
+                    borderRadius: 'var(--radius, 10px)',
+                };
+                return {};
+            }
             // Docked to an edge: fill that side.
             const d = this.asst.dock;
             if (d === 'left' || d === 'right') {
@@ -10204,16 +10216,16 @@ function ninaApp() {
         assistantPanelDragStart(ev) {
             if (ev.button != null && ev.button !== 0) return;
             if (ev.target.closest('button')) return; // let the close button work
-            if (window.innerWidth <= 480) return;     // phone bottom sheet: no drag
             const vw = window.innerWidth, vh = window.innerHeight, gap = 4;
+            const mobile = vw <= 480;
             const wasDocked = this.asst.dock !== 'float';
             const { rect } = this._assistantPanelRect(ev);
-            // When pulling out of a dock, drop the full-height docked rect and
-            // adopt a sensible floating size (last floating geometry if we have
-            // one, else the defaults) so the panel visibly detaches — otherwise
-            // it keeps the dock's full height and looks like it never undocked.
+            // When pulling out of a dock — or lifting the phone bottom sheet —
+            // drop the full-size rect and adopt a sensible floating size (last
+            // floating geometry if we have one, else defaults) so the panel
+            // visibly detaches and lands under the cursor.
             let w, h, offX, offY;
-            if (wasDocked) {
+            if (wasDocked || mobile) {
                 const saved = this.asst.panel;
                 w = Math.min(saved && saved.w ? saved.w : 400, vw - 2 * gap);
                 h = Math.min(saved && saved.h ? saved.h : 560, vh - 2 * gap);
@@ -10225,6 +10237,7 @@ function ninaApp() {
                 offY = ev.clientY - rect.top;
             }
             // Pull out of any dock and follow the cursor as a floating window.
+            if (mobile) this.asst.mobileFree = true; // float geometry now wins over the bottom-sheet CSS
             this.asst.dock = 'float';
             const left0 = Math.max(gap, Math.min(ev.clientX - offX, vw - w - gap));
             const top0 = Math.max(gap, Math.min(ev.clientY - offY, vh - h - gap));
@@ -10237,7 +10250,9 @@ function ninaApp() {
                 let top = Math.max(gap, Math.min(e.clientY - offY, vh - h - gap));
                 this.asst.panel = { left, top, w, h };
                 // Edge-snap hint based on cursor proximity to a viewport edge.
-                this.asst.dockHint = e.clientX <= EDGE ? 'left'
+                // Disabled on phones (the panel nearly fills the width there).
+                this.asst.dockHint = mobile ? null
+                    : e.clientX <= EDGE ? 'left'
                     : e.clientX >= vw - EDGE ? 'right'
                     : e.clientY >= vh - EDGE ? 'bottom' : null;
             };

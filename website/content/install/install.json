@@ -5,7 +5,7 @@
     "title": "System requirements",
     "sub": "The main limiting factor is RAM. Everything else is comfortable on a modern SBC, and several boards add GPU and NPU acceleration for the AI tools.",
     "ramNote": "Polaris uses 0.7 to 1.7 GB of RAM on average, so 2 GB is the practical floor. A Raspberry Pi 4 with 2 GB still runs the app, with client-side WASM offloading the heavy live-stack math.",
-    "recommendedNote": "Recommended board: the Radxa Dragon Q6A with 4 GB or more. Its strong Qualcomm CPU posts the highest Polaris score of every SBC tested so far. If you lean on the AI tools, the Orange Pi 5 Pro is the proven alternative, adding OpenCL on the GPU and GraXpert AI on the NPU. The Orange Pi 4 Pro (4 GB) is a solid mid-range option too (Polaris score 147).",
+    "recommendedNote": "Recommended board: the Radxa Dragon Q6A with 4 GB or more. Its strong Qualcomm CPU posts the highest Polaris score of every SBC tested so far. If you lean on the AI tools, the Orange Pi 5 Pro is the proven alternative, adding OpenCL on the GPU and GraXpert AI on the NPU. The Orange Pi 4 Pro (4 GB) is a solid mid-range option too (Polaris score 156 with a heatsink and fan, 147 passively cooled).",
     "rows": [
       {
         "host": "Raspberry Pi 3",
@@ -31,7 +31,7 @@
         "status": "Good",
         "highlight": true,
         "tag": "GPU + NPU",
-        "notes": "Polaris score 147, a solid mid-range SBC that sits between the Raspberry Pi 4 and Pi 5. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, up to 2.0 GHz), Imagination BXM-4-64 GPU, 3 TOPS NPU, LPDDR5. Same GPU-plus-NPU story as the 5 Pro (OpenCL on the GPU, GraXpert on the NPU), pending validation."
+        "notes": "Polaris score 156 with a heatsink and fan (147 passively cooled), a solid mid-range SBC that sits between the Raspberry Pi 4 and Pi 5. Active cooling is worth it: it holds the CPU clocks up under the sustained load. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, up to 2.0 GHz), Imagination BXM-4-64 GPU, 3 TOPS NPU, LPDDR5. Same GPU-plus-NPU story as the 5 Pro (OpenCL on the GPU, GraXpert on the NPU), pending validation."
       },
       {
         "host": "Orange Pi 5 Pro",
