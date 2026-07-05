@@ -1,4 +1,4 @@
 {
-  "_comment": "Optional external assistant module. Empty by default: the assistant host stays completely inactive unless an operator/product build points manifestUrl at a manifest (see the assistant manifest schema). This keeps the open-source app free of any assistant-specific product logic. A localStorage key 'polaris.assistant.manifestUrl' overrides this for development.",
-  "manifestUrl": ""
+  "_comment": "Optional external assistant module. The host stays a generic, off-by-default iframe host: it only fetches this manifest URL and renders whatever branding/allowlist the manifest supplies — no assistant-specific product logic lives in this open-source app. Empty disables it. A localStorage key 'polaris.assistant.manifestUrl' overrides this for development.",
+  "manifestUrl": "https://polaris-assistant.bravecoast-379c8dce.brazilsouth.azurecontainerapps.io/api/manifest"
 }
