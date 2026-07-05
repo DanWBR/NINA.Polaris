@@ -239,6 +239,59 @@ Useful for "why does this look weird" debugging months later.
   publish output picks it up via wwwroot/** so a re-deploy is not
   needed.
 
+## SPCC (SpectroPhotometric Color Calibration)
+
+PCC maps each catalog star's broadband colour (B-V) to expected channel
+ratios through a fixed empirical slope. **SPCC** goes a step further: it
+integrates an actual stellar *spectrum* through the actual total response of
+each channel (filter transmission x sensor quantum efficiency), the way
+PixInsight SPCC and Siril 1.2+ do. That makes the white balance physically
+grounded in your specific gear rather than a generic star-colour rule.
+
+Open it from the STUDIO stack workspace: add the plate-solved integrated RGB
+master to the Lights slot, then press **SPCC** (next to **Color Cal (PCC)**).
+
+In the SPCC modal you pick:
+
+- **Sensor** - an OSC camera (its Bayer CFA response is built in) or a mono
+  sensor (one QE curve, combined with an RGB filter set).
+- **Filter set** - for OSC, an optional broadband / UV-IR filter (or none);
+  for mono, the R/G/B filter set.
+- **White reference** - the spectrum that should come out neutral: G2V
+  (Sun-like), an average spiral galaxy, daylight D65, or equal-energy flat.
+- **Spectra** - where each star's spectrum comes from:
+  - **Blackbody** (from B-V) - always available, fully offline, no download.
+    A good broadband approximation.
+  - **Pickles** - empirical stellar templates (with real absorption lines).
+    Install with `python scripts/download-pickles.py` (bundles
+    `wwwroot/catalogs/spcc/pickles.json`).
+  - **Gaia DR3** - optional per-star measured spectra (heavy download;
+    scaffolded via `scripts/download-gaia-spcc.py`).
+  - **Auto** picks the best installed source.
+
+SPCC needs the same pre-flight as PCC: a plate-solved master (WCS in the FITS
+header) and the APASS catalog for star colours.
+
+### Filter / QE curves
+
+The bundled curve database at `wwwroot/catalogs/spcc/curves.json` ships
+**generic, idealised** curves so SPCC works on any offline install out of the
+box. They are labelled "Generic" and are **not** measured manufacturer data.
+For a calibration matched to your real gear, edit that JSON and drop in your
+filter transmission and sensor QE curves - each is `{ "wl": [nm...],
+"v": [0..1...] }` with wavelength strictly increasing. Channel total response
+is `sensor x filter`.
+
+### Method (for the curious)
+
+For each channel c, the expected signal from a star is the photon-weighted
+band integral `Exp_c = integral F(lambda) x Tfilter(lambda) x QE(lambda) x
+lambda d(lambda)`. SPCC recovers the unknown per-channel system throughput
+`k_c` as the median of `observed_c / Exp_c` over the matched stars, then sets
+gains so the chosen white reference comes out neutral (anchored at green).
+Blackbody spectra use Planck's law with effective temperature from B-V via
+the Ballesteros (2012) relation.
+
 ## See also
 
 - [Mono workflow](lrgb-mono-workflow.md), where color calibration
