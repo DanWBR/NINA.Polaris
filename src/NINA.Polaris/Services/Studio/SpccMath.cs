@@ -225,6 +225,31 @@ public static class SpccMath {
         return ComputeGains(k, whiteRef, respR, respG, respB);
     }
 
+    /// <summary>
+    /// Per-star channel ratios for the white-balance summary plot: the MEASURED
+    /// ratio (obs_c / obs_G) and the EXPECTED ratio (Exp_c / Exp_G, from the
+    /// star's spectrum integrated through channel c). Same star-rejection rule
+    /// as <see cref="ComputeThroughput"/>. Returns four parallel lists
+    /// (catalog B/G, image B/G, catalog R/G, image R/G).
+    /// </summary>
+    public static (List<double> CatBg, List<double> ImgBg, List<double> CatRg, List<double> ImgRg)
+            ChannelRatios(IReadOnlyList<SpccStar> stars,
+                ResponseCurve respR, ResponseCurve respG, ResponseCurve respB) {
+        var catBg = new List<double>(); var imgBg = new List<double>();
+        var catRg = new List<double>(); var imgRg = new List<double>();
+        if (stars == null) return (catBg, imgBg, catRg, imgRg);
+        foreach (var s in stars) {
+            if (s.ObsR <= 0 || s.ObsG <= 0 || s.ObsB <= 0) continue;
+            double eR = IntegrateChannel(s.Spectrum, respR);
+            double eG = IntegrateChannel(s.Spectrum, respG);
+            double eB = IntegrateChannel(s.Spectrum, respB);
+            if (eR <= 0 || eG <= 0 || eB <= 0) continue;
+            catBg.Add(eB / eG); imgBg.Add(s.ObsB / s.ObsG);
+            catRg.Add(eR / eG); imgRg.Add(s.ObsR / s.ObsG);
+        }
+        return (catBg, imgBg, catRg, imgRg);
+    }
+
     internal static double Median(List<double> values) {
         if (values.Count == 0) return 0;
         values.Sort();

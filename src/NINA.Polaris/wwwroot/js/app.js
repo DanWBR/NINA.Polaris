@@ -3019,6 +3019,14 @@ function ninaApp() {
             sensorCount: 0, filterCount: 0,
         },
 
+        // White-balance summary shown after PCC/SPCC: the Siril/PixInsight-style
+        // scatter of measured vs expected channel ratio (B/G and R/G) with a
+        // robust line fit. Data comes from the job result's `whiteBalance`.
+        wbSummary: {
+            open: false, data: null, method: '', refName: '', stars: 0,
+            comparePair: null, _charts: [],
+        },
+
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
         // Always renders the live sky from the observer's location at the
         // current UTC time, in horizontal projection, same convention as
@@ -28194,8 +28202,14 @@ function ninaApp() {
                 if (!done || !done.outputPath) throw new Error('Timed out waiting for the job.');
                 this.pcc.result = done;
                 this.pcc.busy = false;
+                this.pcc.modalOpen = false;   // task done → close the input modal
                 try { this.filesReload?.(); } catch { /* non-fatal */ }
-                this.graxpertOpenCompare([{ src, out: done.outputPath, label: 'PCC' }], 0, 'compare', null);
+                const pair = { src, out: done.outputPath, label: 'PCC' };
+                // Show the white-balance summary (Siril/PixInsight-style fit);
+                // it has a button to open the before/after comparator. Fall
+                // back to the comparator directly if no summary came back.
+                if (!this.wbShow(done.whiteBalance, 'PCC', done.whiteBalance?.reference, pair))
+                    this.graxpertOpenCompare([pair], 0, 'compare', null);
             } catch (e) {
                 this.pcc.busy = false;
                 this.pcc.error = (e && e.message) ? e.message : String(e);
@@ -28281,8 +28295,15 @@ function ninaApp() {
                 if (!done || !done.outputPath) throw new Error('Timed out waiting for the job.');
                 this.spcc.result = done;
                 this.spcc.busy = false;
+                this.spcc.modalOpen = false;   // task done → close the input modal
                 try { this.filesReload?.(); } catch { /* non-fatal */ }
-                this.graxpertOpenCompare([{ src, out: done.outputPath, label: 'SPCC' }], 0, 'compare', null);
+                const pair = { src, out: done.outputPath, label: 'SPCC' };
+                // Map the white-ref id to its friendly name for the header.
+                const wr = (this.spcc.options?.whiteRefs || [])
+                    .find(w => w.id === done.whiteBalance?.reference);
+                const refName = wr ? wr.name : (done.whiteBalance?.reference || '');
+                if (!this.wbShow(done.whiteBalance, 'SPCC', refName, pair))
+                    this.graxpertOpenCompare([pair], 0, 'compare', null);
             } catch (e) {
                 this.spcc.busy = false;
                 this.spcc.error = (e && e.message) ? e.message : String(e);
@@ -28336,6 +28357,73 @@ function ninaApp() {
         // choice for colour calibration; linked for denoise/decon.
         graxpertCompareToggleStretch() {
             this.graxpertCompare.linkStretch = !this.graxpertCompare.linkStretch;
+        },
+
+        // ── White-balance summary (PCC/SPCC) ───────────────────────────
+        wbFmt(v, d = 6) {
+            return (v == null || isNaN(v)) ? '—' : Number(v).toFixed(d);
+        },
+        // Show the summary. `comparePair` (optional) enables a "before/after"
+        // button that opens the existing comparator.
+        wbShow(summary, method, refName, comparePair) {
+            if (!summary) return false;
+            this.wbSummary.data = summary;
+            this.wbSummary.method = method || summary.method || '';
+            this.wbSummary.refName = refName || summary.reference || '';
+            this.wbSummary.stars = summary.stars || 0;
+            this.wbSummary.comparePair = comparePair || null;
+            this.wbSummary.open = true;
+            this.$nextTick(() => this._wbRender());
+            return true;
+        },
+        wbClose() { this._wbDestroy(); this.wbSummary.open = false; },
+        wbOpenCompare() {
+            const p = this.wbSummary.comparePair;
+            this.wbClose();
+            if (p) this.graxpertOpenCompare([p], 0, 'compare', null);
+        },
+        _wbDestroy() {
+            (this.wbSummary._charts || []).forEach(c => { try { c.destroy(); } catch { /* */ } });
+            this.wbSummary._charts = [];
+        },
+        _wbRender() {
+            this._wbDestroy();
+            const s = this.wbSummary.data;
+            if (!s || typeof Chart === 'undefined') return;
+            this._wbChart(this.$refs.wbCanvasBg, s.bg, 'B/G');
+            this._wbChart(this.$refs.wbCanvasRg, s.rg, 'R/G');
+        },
+        _wbChart(canvas, ch, label) {
+            if (!canvas || !ch || !ch.catX || !ch.catX.length) return;
+            const pts = ch.catX.map((x, i) => ({ x, y: ch.imgY[i] }));
+            const xmin = Math.min(...ch.catX), xmax = Math.max(...ch.catX);
+            const f = ch.fit || { slope: 1, intercept: 0 };
+            const line = [
+                { x: xmin, y: f.intercept + f.slope * xmin },
+                { x: xmax, y: f.intercept + f.slope * xmax },
+            ];
+            const c = new Chart(canvas.getContext('2d'), {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        { label, data: pts, pointRadius: 1.5,
+                          pointBackgroundColor: 'rgba(155,89,208,0.75)',
+                          pointBorderWidth: 0, showLine: false },
+                        { label: 'Best fit', data: line, type: 'line',
+                          borderColor: '#22c39a', borderWidth: 1.6,
+                          pointRadius: 0, fill: false },
+                    ],
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Catalog ' + label + ' (flux)' } },
+                        y: { title: { display: true, text: 'Image ' + label + ' (flux)' } },
+                    },
+                    plugins: { legend: { display: true, labels: { boxWidth: 14 } } },
+                },
+            });
+            this.wbSummary._charts.push(c);
         },
         // Re-open star-removal options for the source shown in the comparator,
         // so the user can tweak settings and run again when a result isn't good.

@@ -15782,6 +15782,61 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          more of the AI output. Stretched JPEGs come from the same
          /api/files/preview endpoint the FILES tab uses, so the
          contrast curves match between sides. -->
+    <!-- White Balance summary (after PCC/SPCC): measured vs expected channel
+         ratio scatter + robust line fit, one panel per colour, like the plot
+         Siril / PixInsight show after a photometric calibration. -->
+    <div class="graxpert-compare-backdrop" x-show="wbSummary.open" x-cloak
+         @click.self="wbClose()" @keydown.escape.window="wbClose()"
+         style="z-index:1002">
+        <div class="wb-modal">
+            <div class="wb-head">
+                <strong>White Balance summary</strong>
+                <span class="text-muted" style="font-size:12px"
+                      x-text="(wbSummary.method || '') + ' · ' + wbSummary.stars + ' stars'"></span>
+                <span style="flex:1"></span>
+                <button class="btn btn-sm" x-show="wbSummary.comparePair"
+                        @click="wbOpenCompare()">◨ Before / after</button>
+                <button class="btn btn-sm" @click="wbClose()">Close</button>
+            </div>
+            <div class="wb-body">
+                <div class="wb-panel">
+                    <div class="wb-caption" x-show="wbSummary.data && wbSummary.data.bg">
+                        <div class="wb-cap-title"
+                             x-text="'B/G ' + (wbSummary.method||'') + ' linear fit'"></div>
+                        <div x-text="'y = ' + wbFmt(wbSummary.data?.bg?.fit?.intercept, 4)
+                             + ' + ' + wbFmt(wbSummary.data?.bg?.fit?.slope, 4)
+                             + '·x   ·   σ = ' + wbFmt(wbSummary.data?.bg?.fit?.sigma, 4)"></div>
+                        <div x-text="'White reference: ' + (wbSummary.refName || '—')"></div>
+                        <div x-text="wbSummary.data?.bg?.fit?.nStars + ' stars ('
+                             + wbSummary.data?.bg?.fit?.nOutliers + ' outliers removed)'"></div>
+                    </div>
+                    <div class="wb-canvas-wrap"><canvas x-ref="wbCanvasBg"></canvas></div>
+                </div>
+                <div class="wb-panel">
+                    <div class="wb-caption" x-show="wbSummary.data && wbSummary.data.rg">
+                        <div class="wb-cap-title"
+                             x-text="'R/G ' + (wbSummary.method||'') + ' linear fit'"></div>
+                        <div x-text="'y = ' + wbFmt(wbSummary.data?.rg?.fit?.intercept, 4)
+                             + ' + ' + wbFmt(wbSummary.data?.rg?.fit?.slope, 4)
+                             + '·x   ·   σ = ' + wbFmt(wbSummary.data?.rg?.fit?.sigma, 4)"></div>
+                        <div x-text="'White reference: ' + (wbSummary.refName || '—')"></div>
+                        <div x-text="wbSummary.data?.rg?.fit?.nStars + ' stars ('
+                             + wbSummary.data?.rg?.fit?.nOutliers + ' outliers removed)'"></div>
+                    </div>
+                    <div class="wb-canvas-wrap"><canvas x-ref="wbCanvasRg"></canvas></div>
+                </div>
+            </div>
+            <div class="wb-foot text-muted" x-show="wbSummary.data">
+                White-balance gains &nbsp;
+                <strong x-text="'R ' + wbFmt(wbSummary.data?.gainR, 3)"></strong> ·
+                <strong x-text="'G ' + wbFmt(wbSummary.data?.gainG, 3)"></strong> ·
+                <strong x-text="'B ' + wbFmt(wbSummary.data?.gainB, 3)"></strong>
+                &nbsp;— applied to the new master. A tight scatter on the green fit
+                line means a confident calibration.
+            </div>
+        </div>
+    </div>
+
     <div class="graxpert-compare-backdrop" x-show="graxpertCompare.open"
          x-cloak
          @click.self="graxpertCloseCompare()"
@@ -17148,7 +17203,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260705-spcc5"></script>
+    <script src="/js/app.js?v=20260705-spcc6"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

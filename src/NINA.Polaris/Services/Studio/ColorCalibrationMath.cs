@@ -298,6 +298,30 @@ public static class ColorCalibrationMath {
         };
     }
 
+    /// <summary>
+    /// Per-star channel ratios for the white-balance summary plot: the MEASURED
+    /// ratio (obs_c / obs_G) and the EXPECTED ratio from the star's catalog B-V
+    /// through the same empirical log-flux slopes <see cref="ComputePccGains"/>
+    /// uses. Same star rejection. Returns four parallel lists (catalog B/G,
+    /// image B/G, catalog R/G, image R/G).
+    /// </summary>
+    public static (List<double> CatBg, List<double> ImgBg, List<double> CatRg, List<double> ImgRg)
+            PccChannelRatios(IReadOnlyList<CalibrationStar> stars) {
+        var catBg = new List<double>(); var imgBg = new List<double>();
+        var catRg = new List<double>(); var imgRg = new List<double>();
+        if (stars == null) return (catBg, imgBg, catRg, imgRg);
+        foreach (var s in stars) {
+            var p = s.Photometry;
+            if (p.Saturated) continue;
+            if (p.FluxR <= 0 || p.FluxG <= 0 || p.FluxB <= 0) continue;
+            catRg.Add(Math.Pow(10.0, SlopeRedPerBv * (s.Bv - ReferenceBv)));
+            imgRg.Add(p.FluxR / p.FluxG);
+            catBg.Add(Math.Pow(10.0, SlopeBluePerBv * (s.Bv - ReferenceBv)));
+            imgBg.Add(p.FluxB / p.FluxG);
+        }
+        return (catBg, imgBg, catRg, imgRg);
+    }
+
     private static double Median(List<double> sorted) {
         int n = sorted.Count;
         if (n == 0) return 1.0;

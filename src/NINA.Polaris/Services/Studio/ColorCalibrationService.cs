@@ -137,6 +137,7 @@ public class ColorCalibrationService {
             double[] offsets = new double[3];
             double[] gains   = new double[] { 1, 1, 1 };
             string prefix;
+            WhiteBalanceFit.Summary? wbSummary = null;   // PCC only
 
             switch ((req.Mode ?? "").ToLowerInvariant()) {
                 case Modes.BgNeutral:
@@ -161,6 +162,7 @@ public class ColorCalibrationService {
                     var pcc = RunPhotometric(img, W, H);
                     offsets = pcc.offsets;
                     gains = pcc.gains;
+                    wbSummary = pcc.summary;
                     _jobs[jobId] = _jobs[jobId] with {
                         MatchedStars = pcc.matchedCount };
                     prefix = "pcc";
@@ -208,6 +210,7 @@ public class ColorCalibrationService {
                 OutputPath = outPath,
                 OffsetR = offsets[0], OffsetG = offsets[1], OffsetB = offsets[2],
                 GainR = gains[0], GainG = gains[1], GainB = gains[2],
+                WhiteBalance = wbSummary,
             };
         } catch (Exception ex) {
             _logger.LogError(ex, "Color calibration job {JobId} failed", jobId);
@@ -288,7 +291,7 @@ public class ColorCalibrationService {
     /// background). Returns (offsets, gains, matchedCount) so the
     /// caller's apply step is unchanged from the BG and Manual modes.
     /// </summary>
-    private (double[] offsets, double[] gains, int matchedCount) RunPhotometric(
+    private (double[] offsets, double[] gains, int matchedCount, WhiteBalanceFit.Summary summary) RunPhotometric(
             BaseImageData img, int W, int H) {
         // ── 1. Pre-flight: WCS in FITS ────────────────────────────────
         var wcs = img.Properties.Wcs;
@@ -398,6 +401,12 @@ public class ColorCalibrationService {
         // ── 6. Fit per-channel gains ──────────────────────────────────
         var gains = ColorCalibrationMath.ComputePccGains(matched);
 
+        // White-balance summary (measured vs expected channel ratios + fit),
+        // for the Siril/PixInsight-style plot the UI shows after the run.
+        var (cBg, iBg, cRg, iRg) = ColorCalibrationMath.PccChannelRatios(matched);
+        var summary = WhiteBalanceFit.Build(cBg, iBg, cRg, iRg,
+            gains[0], gains[1], gains[2], "Empirical (B-V)", "PCC", matched.Count);
+
         // ── 7. BG offsets via auto-detect so the final output is also
         //      background-neutral. PCC fixes star colours, BG neut
         //      fixes the sky pedestal; both are needed for a clean
@@ -410,7 +419,7 @@ public class ColorCalibrationService {
             "BG offsets R={Or:F1} G={Og:F1} B={Ob:F1}",
             matched.Count, gains[0], gains[2], offsets[0], offsets[1], offsets[2]);
 
-        return (offsets, gains, matched.Count);
+        return (offsets, gains, matched.Count, summary);
     }
 }
 
@@ -428,4 +437,5 @@ public record ColorCalibrationProgress {
     public double GainG { get; init; } = 1;
     public double GainB { get; init; } = 1;
     public int MatchedStars { get; init; }   // PCC only
+    public WhiteBalanceFit.Summary? WhiteBalance { get; init; }   // PCC only
 }

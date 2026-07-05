@@ -90,7 +90,7 @@ public class SpccService {
                 ? _db.BestSource : req.Source;
 
             _jobs[jobId] = _jobs[jobId] with { Stage = "computing", Source = source };
-            var (gains, matched) = RunSpcc(img, W, H, req, source);
+            var (gains, matched, wbSummary) = RunSpcc(img, W, H, req, source);
 
             // Background-neutralise too, so the calibrated master has a
             // neutral sky (same as PCC). Zero the background across channels
@@ -125,6 +125,7 @@ public class SpccService {
                 InProgress = false, Stage = "done", OutputPath = outPath,
                 GainR = gains[0], GainG = gains[1], GainB = gains[2],
                 MatchedStars = matched, Source = source,
+                WhiteBalance = wbSummary,
             };
         } catch (Exception ex) {
             _logger.LogError(ex, "SPCC job {JobId} failed", jobId);
@@ -133,7 +134,7 @@ public class SpccService {
         }
     }
 
-    private (double[] gains, int matched) RunSpcc(
+    private (double[] gains, int matched, WhiteBalanceFit.Summary summary) RunSpcc(
             BaseImageData img, int W, int H, SpccRequest req, string source) {
         var wcs = img.Properties.Wcs
             ?? throw new InvalidOperationException(
@@ -231,7 +232,13 @@ public class SpccService {
         }
 
         var gains = SpccMath.Solve(spccStars, whiteRef, respR, respG, respB);
-        return (gains, spccStars.Count);
+
+        // White-balance summary (measured vs expected channel ratios + fit),
+        // for the Siril/PixInsight-style plot the UI shows after the run.
+        var (cBg, iBg, cRg, iRg) = SpccMath.ChannelRatios(spccStars, respR, respG, respB);
+        var summary = WhiteBalanceFit.Build(cBg, iBg, cRg, iRg,
+            gains[0], gains[1], gains[2], req.WhiteRefId ?? "", "SPCC", spccStars.Count);
+        return (gains, spccStars.Count, summary);
     }
 
     private string WriteOutput(ushort[] data, int W, int H, int bitDepth,
@@ -294,4 +301,5 @@ public record SpccProgress {
     public double GainR { get; init; }
     public double GainG { get; init; }
     public double GainB { get; init; }
+    public WhiteBalanceFit.Summary? WhiteBalance { get; init; }
 }

@@ -2020,3 +2020,41 @@
     color: var(--danger);
     border-color: var(--danger);
 }
+
+/* White Balance summary (PCC/SPCC): two scatter panels + line fit, shown on
+   the shared .graxpert-compare-backdrop overlay. */
+.wb-modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: min(1100px, 94vw);
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+.wb-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+}
+.wb-body {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    overflow: auto;
+    flex-wrap: wrap;
+}
+.wb-panel {
+    flex: 1 1 460px;
+    min-width: 320px;
+    display: flex;
+    flex-direction: column;
+}
+.wb-caption { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 8px; }
+.wb-cap-title { color: var(--text); font-weight: 700; font-size: 13px; }
+.wb-canvas-wrap { position: relative; height: 340px; }
+.wb-foot { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 12px; }
