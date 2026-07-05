@@ -22,8 +22,10 @@ want-list (polar-alignment result, Bahtinov overlay, embedded PHD2
 window, simulator settings, PREVIEW tab, ADV tri-pane, file browser,
 Combine dialog, EDITOR).
 
-Remaining `<!-- TODO cite: ... -->`: the à-trous wavelet transform
-(Starck et al.) and the SASpro attribution in chapter 20.
+No `<!-- TODO cite: ... -->` markers remain; every citation in the
+72-entry bibliography is resolved. Before any print run, verify the
+entries against ADS or the publisher, per the policy at the top of
+`references.bib`.
 
 ## Building
 
