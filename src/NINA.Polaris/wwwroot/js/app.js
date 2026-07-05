@@ -9970,6 +9970,15 @@ function ninaApp() {
                     opts.body = JSON.stringify(msg.body);
                     opts.headers = { 'Content-Type': 'application/json' };
                 }
+                // Image tools (analyze_frame): return the frame as a downscaled
+                // data URL so the assistant's vision model can look at it.
+                if (msg.responseType === 'image') {
+                    const resp = await this.apiFetch(url, opts);
+                    if (!resp.ok) return reply(false, null, 'HTTP ' + resp.status);
+                    const blob = await resp.blob();
+                    const dataUrl = await this._assistantImageToDataUrl(blob, 1536, 0.85);
+                    return reply(true, { dataUrl }, undefined);
+                }
                 const resp = await this.apiFetch(url, opts);
                 let data = null;
                 try { data = await resp.json(); } catch (_) { data = null; }
@@ -9978,6 +9987,20 @@ function ninaApp() {
             } catch (e) {
                 reply(false, null, String((e && e.message) || e));
             }
+        },
+
+        // Decode a blob and re-encode as a size-capped JPEG data URL (keeps the
+        // vision payload small: bandwidth + token cost).
+        async _assistantImageToDataUrl(blob, maxDim, quality) {
+            const bmp = await createImageBitmap(blob);
+            const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+            const w = Math.max(1, Math.round(bmp.width * scale));
+            const h = Math.max(1, Math.round(bmp.height * scale));
+            const cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
+            try { bmp.close(); } catch (_) {}
+            return cv.toDataURL('image/jpeg', quality);
         },
 
         // Match an allowlist path pattern (may contain {placeholders}) to a path.
