@@ -10517,10 +10517,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         Combine channels
                                     </button>
                                     <button class="btn btn-sm"
-                                            @click="stackRunColorCal()"
+                                            @click="pccOpenModal(stack.lights[0])"
                                             :disabled="stack.lights.length === 0 || !!stack.activeJob"
-                                            title="Background-neutralise the first light slot entry (auto sample mode). Manual + PCC need richer UI -- coming later.">
-                                        Color Cal (BG auto)
+                                            title="Photometric Color Calibration on the first light slot entry: background neutralise, or plate-solve + APASS catalog white balance (B-V).">
+                                        Color Cal (PCC)
+                                    </button>
+                                    <button class="btn btn-sm"
+                                            @click="spccOpenModal(stack.lights[0])"
+                                            :disabled="stack.lights.length === 0 || !!stack.activeJob"
+                                            title="SpectroPhotometric Color Calibration: integrate each catalog star's spectrum through your sensor + filter response for a physically-grounded white balance.">
+                                        SPCC
                                     </button>
                                 </div>
                             </div>
@@ -16398,6 +16404,124 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- PCC (Photometric Color Calibration) modal -->
+    <div class="modal-overlay" x-show="pcc.modalOpen" x-cloak
+         @click.self="if(!pcc.busy) pcc.modalOpen=false"
+         @keydown.escape.window="if(!pcc.busy) pcc.modalOpen=false">
+        <div class="modal-card">
+            <div class="modal-head">
+                <span class="modal-icon">🎨</span>
+                <h3>Photometric Color Calibration (PCC)</h3>
+            </div>
+            <p style="font-size:13px">
+                White-balances an RGB master by comparing star colours to the APASS
+                catalog (B-V). Writes a new FITS; the original is kept.
+                <span x-show="pcc.framePath" class="text-muted" x-text="'Source: ' + stackBasename(pcc.framePath)"></span>
+            </p>
+            <label class="editor-slider-row" style="display:flex;align-items:center;gap:8px;margin:10px 0">
+                <span style="min-width:90px">Mode</span>
+                <select class="input-sm" style="flex:1" x-model="pcc.mode">
+                    <option value="pcc">Photometric (plate-solve + APASS)</option>
+                    <option value="bg">Background neutralise only (no catalog)</option>
+                </select>
+            </label>
+            <p x-show="pcc.mode==='pcc' && pcc.catalog" class="hint"
+               :style="pcc.catalog && pcc.catalog.available ? 'color:var(--ok,#4c8)' : 'color:var(--danger,#e66)'"
+               x-text="pcc.catalog && pcc.catalog.available
+                   ? ('APASS ready · ' + (pcc.catalog.starCount||0).toLocaleString() + ' stars')
+                   : 'APASS catalog not installed — run scripts/download-apass.py, or use Background mode.'"></p>
+            <p x-show="pcc.mode==='pcc'" class="hint text-muted" style="font-size:11px">
+                Needs a plate-solved master (WCS in the FITS header).
+            </p>
+            <p x-show="pcc.result" class="hint" style="font-size:12px"
+               x-text="pcc.result ? ('Done · gains R=' + (pcc.result.gainR??1).toFixed(3) + ' G=' + (pcc.result.gainG??1).toFixed(3) + ' B=' + (pcc.result.gainB??1).toFixed(3) + (pcc.result.matchedStars ? (' · ' + pcc.result.matchedStars + ' stars') : '')) : ''"></p>
+            <p x-show="pcc.busy" class="text-muted" style="font-size:12px" x-text="'Working… ' + (pcc.stage || '')"></p>
+            <p x-show="pcc.error" style="color:var(--danger,#e66);font-size:12px" x-text="pcc.error"></p>
+            <div class="modal-actions">
+                <button class="btn btn-sm" :disabled="pcc.busy" @click="pcc.modalOpen=false">Close</button>
+                <button class="btn btn-sm btn-primary" :disabled="pcc.busy" @click="pccRun()">
+                    <span x-text="pcc.busy ? 'Running…' : 'Run'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SPCC (SpectroPhotometric Color Calibration) modal -->
+    <div class="modal-overlay" x-show="spcc.modalOpen" x-cloak
+         @click.self="if(!spcc.busy) spcc.modalOpen=false"
+         @keydown.escape.window="if(!spcc.busy) spcc.modalOpen=false">
+        <div class="modal-card">
+            <div class="modal-head">
+                <span class="modal-icon">🌈</span>
+                <h3>SpectroPhotometric Color Calibration (SPCC)</h3>
+            </div>
+            <p style="font-size:13px">
+                Integrates each catalog star's spectrum through your sensor + filter
+                response for a physically-grounded white balance. Writes a new FITS.
+                <span x-show="spcc.framePath" class="text-muted" x-text="'Source: ' + stackBasename(spcc.framePath)"></span>
+            </p>
+            <p x-show="spcc.loading" class="text-muted" style="font-size:12px">Loading options…</p>
+            <template x-if="spcc.options">
+                <div>
+                    <label class="editor-slider-row" style="display:flex;align-items:center;gap:8px;margin:8px 0">
+                        <span style="min-width:90px">Sensor</span>
+                        <select class="input-sm" style="flex:1" x-model="spcc.sensorId">
+                            <template x-for="s in spcc.options.sensors" :key="s.id">
+                                <option :value="s.id" x-text="s.name + ' (' + s.kind + ')'"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <label class="editor-slider-row" style="display:flex;align-items:center;gap:8px;margin:8px 0">
+                        <span style="min-width:90px">Filter set</span>
+                        <select class="input-sm" style="flex:1" x-model="spcc.filterSetId">
+                            <template x-for="f in spccFilterSetsForSensor()" :key="f.id">
+                                <option :value="f.id" x-text="f.name"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <label class="editor-slider-row" style="display:flex;align-items:center;gap:8px;margin:8px 0">
+                        <span style="min-width:90px">White ref</span>
+                        <select class="input-sm" style="flex:1" x-model="spcc.whiteRefId">
+                            <template x-for="w in spcc.options.whiteRefs" :key="w.id">
+                                <option :value="w.id" x-text="w.name"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <label class="editor-slider-row" style="display:flex;align-items:center;gap:8px;margin:8px 0"
+                           title="Where each star's spectrum comes from. Blackbody is always available; Pickles/Gaia need the download scripts.">
+                        <span style="min-width:90px">Spectra</span>
+                        <select class="input-sm" style="flex:1" x-model="spcc.source">
+                            <option value="auto" x-text="'Auto (best installed: ' + (spcc.options.sources?.best || 'blackbody') + ')'"></option>
+                            <option value="blackbody">Blackbody (from B-V)</option>
+                            <option value="pickles" :disabled="!spcc.options.sources?.pickles" x-text="'Pickles templates' + (spcc.options.sources?.pickles ? '' : ' (not installed)')"></option>
+                            <option value="gaia" :disabled="!spcc.options.sources?.gaia" x-text="'Gaia DR3' + (spcc.options.sources?.gaia ? '' : ' (not installed)')"></option>
+                        </select>
+                    </label>
+                    <p class="hint" :style="spcc.catalog && spcc.catalog.available ? 'color:var(--ok,#4c8)' : 'color:var(--danger,#e66)'"
+                       x-text="spcc.catalog && spcc.catalog.available
+                           ? ('APASS ready · ' + (spcc.catalog.starCount||0).toLocaleString() + ' stars')
+                           : 'APASS catalog not installed — run scripts/download-apass.py.'"></p>
+                    <p class="hint text-muted" style="font-size:11px">
+                        Needs a plate-solved RGB master (WCS). Curves are the bundled generic
+                        set — edit <code x-text="spcc.curvesPath || 'catalogs/spcc/curves.json'"></code> for your real gear.
+                    </p>
+                </div>
+            </template>
+            <p x-show="spcc.result" class="hint" style="font-size:12px"
+               x-text="spcc.result ? ('Done · source=' + (spcc.result.source||'') + ' · gains R=' + (spcc.result.gainR??1).toFixed(3) + ' G=' + (spcc.result.gainG??1).toFixed(3) + ' B=' + (spcc.result.gainB??1).toFixed(3) + ' · ' + (spcc.result.matchedStars||0) + ' stars') : ''"></p>
+            <p x-show="spcc.busy" class="text-muted" style="font-size:12px" x-text="'Working… ' + (spcc.stage || '')"></p>
+            <p x-show="spcc.error" style="color:var(--danger,#e66);font-size:12px" x-text="spcc.error"></p>
+            <div class="modal-actions">
+                <button class="btn btn-sm" :disabled="spcc.busy" @click="spcc.modalOpen=false">Close</button>
+                <button class="btn btn-sm btn-primary"
+                        :disabled="spcc.busy || spcc.loading || !spcc.options || !(spcc.catalog && spcc.catalog.available)"
+                        @click="spccRun()">
+                    <span x-text="spcc.busy ? 'Running…' : 'Run SPCC'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay" x-show="planShutdownConfirm" x-cloak @click.self="planShutdownConfirm = false"
          @keydown.escape.window="planShutdownConfirm = false">
         <div class="modal-card danger">
@@ -16901,7 +17025,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260705-assist18"></script>
+    <script src="/js/app.js?v=20260705-spcc1"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

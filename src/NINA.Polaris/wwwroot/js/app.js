@@ -2986,6 +2986,24 @@ function ninaApp() {
             exclusionRadius: 9, stage: '', error: '',
         },
 
+        // Photometric Color Calibration modal (APASS B-V, fixed-slope).
+        // Operates on the Lights slot's integrated master. Modes: bg (no
+        // catalog) | pcc (plate-solve + APASS). Manual ROI mode stays on
+        // the curl endpoint for now.
+        pcc: {
+            modalOpen: false, busy: false, framePath: '', mode: 'pcc',
+            stage: '', error: '', catalog: null, result: null,
+        },
+
+        // SpectroPhotometric Color Calibration modal (spectral integration
+        // through filter x QE curves). Options come from /spcc/options.
+        spcc: {
+            modalOpen: false, busy: false, framePath: '', stage: '', error: '',
+            loading: false, options: null, catalog: null, curvesPath: '',
+            sensorId: '', filterSetId: '', whiteRefId: '', source: 'auto',
+            result: null,
+        },
+
         // d3-celestial Sky Viewer (offline, BSD-3-Clause).
         // Always renders the live sky from the observer's location at the
         // current UTC time, in horizontal projection, same convention as
@@ -28106,6 +28124,126 @@ function ninaApp() {
                 this.starColor.busy = false;
                 this.starColor.error = (e && e.message) ? e.message : String(e);
             }
+        },
+
+        // ── PCC modal (Photometric Color Calibration) ──────────────────
+        pccOpenModal(framePath) {
+            if (!framePath) { this.toast?.('Add the integrated master to the Lights slot first', 'warn'); return; }
+            this.pcc.framePath = framePath;
+            this.pcc.busy = false; this.pcc.stage = ''; this.pcc.error = '';
+            this.pcc.result = null; this.pcc.catalog = null;
+            this.pcc.modalOpen = true;
+            this.apiFetch('/api/studio/colorcal/catalog-status')
+                .then(r => r.ok ? r.json() : null)
+                .then(c => { this.pcc.catalog = c; }).catch(() => {});
+        },
+        async pccRun() {
+            const src = this.pcc.framePath;
+            if (!src) return;
+            this.pcc.busy = true; this.pcc.error = ''; this.pcc.result = null; this.pcc.stage = 'starting';
+            try {
+                const r = await this.apiFetch('/api/studio/colorcal', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ framePath: src, mode: this.pcc.mode, bgSample: 'auto' }),
+                });
+                if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || ('HTTP ' + r.status)); }
+                const { jobId } = await r.json();
+                const done = await this._ccPoll('/api/studio/colorcal/' + jobId, s => { this.pcc.stage = s; });
+                if (!done || !done.outputPath) throw new Error('Timed out waiting for the job.');
+                this.pcc.result = done;
+                this.pcc.busy = false;
+                try { this.filesReload?.(); } catch { /* non-fatal */ }
+                this.graxpertOpenCompare([{ src, out: done.outputPath, label: 'PCC' }], 0, 'compare', null);
+            } catch (e) {
+                this.pcc.busy = false;
+                this.pcc.error = (e && e.message) ? e.message : String(e);
+            }
+        },
+
+        // ── SPCC modal (SpectroPhotometric Color Calibration) ──────────
+        spccFilterSetsForSensor() {
+            const o = this.spcc.options;
+            if (!o) return [];
+            const sensor = (o.sensors || []).find(s => s.id === this.spcc.sensorId);
+            const type = sensor ? sensor.kind : null;   // 'osc' | 'mono'
+            return (o.filterSets || []).filter(f => f.kind === 'any' || f.kind === type);
+        },
+        _spccDefaultFilter() {
+            const list = this.spccFilterSetsForSensor();
+            if (list.length && !list.some(f => f.id === this.spcc.filterSetId)) {
+                this.spcc.filterSetId = list[0].id;
+            }
+        },
+        async spccOpenModal(framePath) {
+            if (!framePath) { this.toast?.('Add the integrated master to the Lights slot first', 'warn'); return; }
+            this.spcc.framePath = framePath;
+            this.spcc.busy = false; this.spcc.stage = ''; this.spcc.error = '';
+            this.spcc.result = null; this.spcc.modalOpen = true;
+            this.spcc.loading = true; this.spcc.options = null; this.spcc.catalog = null;
+            try {
+                const r = await this.apiFetch('/api/studio/spcc/options');
+                if (r.ok) {
+                    const d = await r.json();
+                    this.spcc.options = d.spcc;
+                    this.spcc.catalog = d.catalog;
+                    this.spcc.curvesPath = d.curvesPath || '';
+                    const sensors = d.spcc?.sensors || [];
+                    if (sensors.length && !sensors.some(s => s.id === this.spcc.sensorId))
+                        this.spcc.sensorId = sensors[0].id;
+                    const whites = d.spcc?.whiteRefs || [];
+                    if (whites.length && !whites.some(w => w.id === this.spcc.whiteRefId))
+                        this.spcc.whiteRefId = whites[0].id;
+                    this._spccDefaultFilter();
+                } else {
+                    this.spcc.error = 'Could not load SPCC options (HTTP ' + r.status + ')';
+                }
+            } catch (e) { this.spcc.error = String((e && e.message) || e); }
+            this.spcc.loading = false;
+        },
+        async spccRun() {
+            const src = this.spcc.framePath;
+            if (!src) return;
+            this._spccDefaultFilter();
+            this.spcc.busy = true; this.spcc.error = ''; this.spcc.result = null; this.spcc.stage = 'starting';
+            try {
+                const r = await this.apiFetch('/api/studio/spcc', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        framePath: src,
+                        sensorId: this.spcc.sensorId,
+                        filterSetId: this.spcc.filterSetId,
+                        whiteRefId: this.spcc.whiteRefId,
+                        source: this.spcc.source,
+                    }),
+                });
+                if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || ('HTTP ' + r.status)); }
+                const { jobId } = await r.json();
+                const done = await this._ccPoll('/api/studio/spcc/' + jobId + '/status', s => { this.spcc.stage = s; });
+                if (!done || !done.outputPath) throw new Error('Timed out waiting for the job.');
+                this.spcc.result = done;
+                this.spcc.busy = false;
+                try { this.filesReload?.(); } catch { /* non-fatal */ }
+                this.graxpertOpenCompare([{ src, out: done.outputPath, label: 'SPCC' }], 0, 'compare', null);
+            } catch (e) {
+                this.spcc.busy = false;
+                this.spcc.error = (e && e.message) ? e.message : String(e);
+            }
+        },
+        // Shared colour-cal job poll: calls statusUrl until inProgress=false.
+        async _ccPoll(statusUrl, onStage) {
+            for (let i = 0; i < 1200; i++) {
+                await new Promise(res => setTimeout(res, 500));
+                let sr;
+                try { sr = await this.apiFetch(statusUrl); } catch { continue; }
+                if (!sr.ok) continue;
+                const p = await sr.json();
+                onStage?.(p.stage || '');
+                if (!p.inProgress) {
+                    if (p.error) throw new Error(p.error);
+                    return p;
+                }
+            }
+            return null;
         },
 
         graxpertOpenCompare(pairs, index, mode, op) {
