@@ -260,27 +260,49 @@ In the SPCC modal you pick:
 - **White reference** - the spectrum that should come out neutral: G2V
   (Sun-like), an average spiral galaxy, daylight D65, or equal-energy flat.
 - **Spectra** - where each star's spectrum comes from:
-  - **Blackbody** (from B-V) - always available, fully offline, no download.
-    A good broadband approximation.
-  - **Pickles** - empirical stellar templates (with real absorption lines).
-    Install with `python scripts/download-pickles.py` (bundles
-    `wwwroot/catalogs/spcc/pickles.json`).
-  - **Gaia DR3** - optional per-star measured spectra (heavy download;
+  - **Blackbody** (from B-V) - always available, fully offline. A good
+    broadband approximation.
+  - **Pickles** - empirical stellar templates with real absorption lines.
+    **Ships bundled** (`wwwroot/catalogs/spcc/pickles.json`, the 131-template
+    Pickles 1998 UVKLIB set) so it works out of the box - nothing to install.
+    Rebuild it with `python scripts/download-pickles.py` if needed.
+  - **Gaia DR3** - optional per-star measured spectra (planned; heavy download,
     scaffolded via `scripts/download-gaia-spcc.py`).
-  - **Auto** picks the best installed source.
+  - **Auto** picks the best installed source (Gaia > Pickles > Blackbody).
 
 SPCC needs the same pre-flight as PCC: a plate-solved master (WCS in the FITS
 header) and the APASS catalog for star colours.
+
+### The White Balance summary
+
+When PCC or SPCC finishes, the input modal closes and a **White Balance
+summary** appears: two scatter plots (B/G and R/G) of each matched star's
+*measured* channel ratio against its *expected* ratio, with a robust
+line fit - the same read-out Siril and PixInsight show. A tight cluster on the
+green fit line means a confident calibration; the header reports the slope,
+scatter (sigma), star count and outliers removed, and the applied R/G/B gains.
+A **Before / after** button opens the comparator (colour calibration uses an
+**independent** stretch per side so the colour change is actually visible).
 
 ### Filter / QE curves
 
 The bundled curve database at `wwwroot/catalogs/spcc/curves.json` ships
 **generic, idealised** curves so SPCC works on any offline install out of the
-box. They are labelled "Generic" and are **not** measured manufacturer data.
+box. They are labelled "Generic" and are **not** measured manufacturer data. It
+covers a spread of archetypes to choose from - OSC (neutral, modern back-
+illuminated with strong red/NIR, and older front-illuminated CCD), mono
+(standard and modern high-QE), and filter sets (no filter, UV/IR-cut,
+broadband light-pollution, dual-band Ha+OIII, and RGB for mono).
+
 For a calibration matched to your real gear, edit that JSON and drop in your
 filter transmission and sensor QE curves - each is `{ "wl": [nm...],
 "v": [0..1...] }` with wavelength strictly increasing. Channel total response
 is `sensor x filter`.
+
+You can check what's installed under **Config -> Colour calibration data**: the
+APASS catalog status, which SPCC spectral sources are present (Blackbody always,
+Pickles bundled, Gaia planned), and the count of sensor/filter curves, plus the
+path to `curves.json` for editing.
 
 ### Method (for the curious)
 
