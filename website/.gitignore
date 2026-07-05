@@ -14,3 +14,5 @@ npm-debug.log*
 .env.production
 # macOS
 .DS_Store
+# handbook is rendered into public/ by CI (deploy-website.yml), never committed
+public/handbook/

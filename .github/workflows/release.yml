@@ -135,6 +135,37 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # Render The Polaris Handbook (book/) to PDF so every release ships
+  # the manual that describes exactly that version. HTML lives on the
+  # website (deploy-website.yml); PRs get a fast HTML-only check
+  # (book-check.yml).
+  book:
+    name: Render handbook PDF
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Quarto + TinyTeX
+        uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          tinytex: true
+
+      - name: Install LaTeX packages the book needs (Inter font, tikz)
+        run: tlmgr install inter pgf || "$HOME"/.TinyTeX/bin/*/tlmgr install inter pgf
+
+      - name: Render PDF
+        working-directory: book
+        run: quarto render --to pdf
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: handbook
+          path: book/_build/The-Polaris-Handbook.pdf
+          if-no-files-found: error
+          retention-days: 30
+
   # Lint .deb files (non-fatal style checks). Only runs when at least
   # one .deb artifact is in the matrix.
   lint-deb:
@@ -159,7 +190,7 @@ jobs:
 
   release:
     name: Attach to GitHub Release
-    needs: build
+    needs: [build, book]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -212,6 +243,7 @@ jobs:
             dist/*.deb
             dist/*.tar.gz
             dist/*.zip
+            dist/*.pdf
           fail_on_unmatched_files: true
           generate_release_notes: true
           body: |
@@ -256,6 +288,13 @@ jobs:
             For unattended Windows installs see the optional NSSM /
             scheduled-task recipes in
             [docs/user-guide/installation.md](https://github.com/${{ github.repository }}/blob/master/docs/user-guide/installation.md).
+
+            ## Manual
+
+            `The-Polaris-Handbook.pdf` is the complete manual for this
+            release (300 pages: install, workflows, every tab, internals).
+            Stable link:
+            https://github.com/${{ github.repository }}/releases/latest/download/The-Polaris-Handbook.pdf
 
             ## Verification
 

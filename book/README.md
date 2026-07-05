@@ -41,6 +41,25 @@ quarto render --to pdf    # print PDF in _build/
 quarto preview            # live-reload preview while writing
 ```
 
+## Continuous integration
+
+Three workflows keep the book honest (`.github/workflows/`):
+
+- `book-check.yml`: on every PR touching `book/`, renders the HTML
+  edition and fails on Quarto warnings (unresolved citations, broken
+  cross-references, missing images), on em-dashes, and on leftover
+  `TODO cite` markers.
+- `release.yml` (the `book` job): renders the PDF with TinyTeX and
+  attaches `The-Polaris-Handbook.pdf` to every GitHub release, so
+  each Polaris version ships the manual that describes it. Stable
+  link: `releases/latest/download/The-Polaris-Handbook.pdf`.
+- `deploy-website.yml`: renders the HTML edition and publishes it at
+  `polaris-astro.app.br/handbook/` whenever `book/` or `website/`
+  changes on master.
+
+Practical consequence: when a feature PR changes behavior the book
+describes, update the relevant chapter in the same PR.
+
 ## Citations
 
 Every technical claim cites its source. Algorithms, file formats,

@@ -2,13 +2,17 @@ name: Deploy website
 
 # Builds the Astro marketing site in website/ and publishes it to
 # GitHub Pages on the custom domain polaris-astro.app.br.
-# Independent from the release workflows; only runs on website changes.
+# Independent from the release workflows; runs on website or book
+# changes. The Polaris Handbook (book/) is rendered to HTML and
+# served under /handbook/ : it lands in website/public/ before the
+# Astro build, so Astro copies it into the deployed site verbatim.
 
 on:
   push:
     branches: [master]
     paths:
       - 'website/**'
+      - 'book/**'
       - '.github/workflows/deploy-website.yml'
   workflow_dispatch:
 
@@ -28,6 +32,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Set up Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+      - name: Render the handbook (HTML)
+        working-directory: book
+        run: quarto render --to html
+      - name: Stage handbook under /handbook
+        run: |
+          mkdir -p website/public/handbook
+          cp -r book/_build/* website/public/handbook/
       - name: Build with Astro
         uses: withastro/action@v3
         with:

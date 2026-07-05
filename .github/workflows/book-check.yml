@@ -1,0 +1,54 @@
+name: Book check
+
+# Fast guard-rail for the handbook: on any PR that touches book/,
+# render the HTML edition (no LaTeX needed) and fail on anything
+# Quarto warns about: unresolved citations, broken cross-references,
+# missing images. Also enforces the book's style rule (no em-dashes,
+# see book/README.md). The PDF is only built on releases, so this
+# check stays fast (~2 min).
+
+on:
+  pull_request:
+    paths:
+      - 'book/**'
+      - '.github/workflows/book-check.yml'
+  workflow_dispatch:
+
+jobs:
+  render:
+    name: Render HTML + style checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Style rule, no em-dashes in book prose
+        run: |
+          # \x{2014} is the em-dash; the book replaces it with
+          # comma / colon / semicolon / period everywhere.
+          if grep -rnP '\x{2014}' book/*.qmd book/README.md book/references.bib; then
+            echo "::error::Em-dash found in the book; use comma, colon, semicolon, or period instead (book/README.md, Conventions)."
+            exit 1
+          fi
+          echo "OK: no em-dashes."
+
+      - name: No leftover TODO citations
+        run: |
+          if grep -rn 'TODO cite' book/*.qmd; then
+            echo "::error::Unresolved 'TODO cite' marker found; add the reference to book/references.bib or remove the claim."
+            exit 1
+          fi
+          echo "OK: no TODO cites."
+
+      - name: Set up Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Render HTML edition
+        working-directory: book
+        run: |
+          quarto render --to html 2>&1 | tee render.log
+          if grep -E 'WARN|ERROR' render.log; then
+            echo "::error::Quarto reported warnings or errors (unresolved citation, broken cross-reference, or missing resource). See render.log output above."
+            exit 1
+          fi
+          echo "OK: clean render."
