@@ -1,54 +1,66 @@
 #!/usr/bin/env python3
 """
-Fetch the Pickles (1998) stellar spectral flux library and convert it to
-the compact JSON the SPCC engine consumes.
+Fetch the Pickles (1998) UVKLIB stellar spectral flux library and convert it
+to the compact JSON the SPCC engine consumes.
 
 Output: src/NINA.Polaris/wwwroot/catalogs/spcc/pickles.json
-        (gitignored; bundled by the csproj Content Include into the
-        publish output + Docker image, like the APASS catalog)
+        (committed + bundled: at ~95 KB it ships in the repo and travels into
+        the publish output / Docker image / .deb like curves.json, so SPCC's
+        "Pickles" spectral source is available out of the box — no download
+        needed on the device. Re-run this only to refresh/rebuild it.)
 
 Why: SPCC's always-available spectral source is a blackbody derived from a
 star's catalog B-V. That is a good broadband approximation, but real stars
 have absorption lines. Pickles templates are empirical spectra; picking the
 nearest-colour template and integrating IT through the filter/QE curves is
 the "Pickles" spectral source Polaris offers as an accuracy upgrade. Fully
-offline once downloaded.
+offline once bundled.
+
+Source: STScI CDBS reference atlas, grid/pickles/dat_uvk (the 131-spectrum
+UVKLIB set), which is a stable public mirror of the Pickles atlas. The older
+VizieR TAP path (J/PASP/110/863) was retired here because that service is
+unreliable and its table layout changed.
 
 Reference: A.J. Pickles, "A Stellar Spectral Flux Library: 1150-25000 A",
-PASP 110, 863 (1998); VizieR J/PASP/110/863.
+PASP 110, 863 (1998).
 
 Each template's B-V is computed self-consistently by synthetic photometry
 through the Johnson B and V bands (Bessell 1990 passbands, embedded below),
 so no external colour table is needed. Spectra are resampled onto the SPCC
-working grid (380-720 nm @ 5 nm) and normalised.
+working grid (380-720 nm @ 5 nm) and normalised. Real spectral-type names
+(O5V, G2V, M3II, ...) come from the atlas index file.
 
 Usage:
     python scripts/download-pickles.py
 
 Requirements:
-    Python 3.8+, stdlib only (urllib + json). If the VizieR table layout
-    changes, adjust VIZIER_TAP and the ADQL query near the top of main().
+    Python 3.8+, numpy, astropy (to read the atlas FITS tables). Needs
+    internet only when (re)building; the produced JSON is committed.
 """
 
 import argparse
+import io
 import json
 import math
 import os
 import sys
-import urllib.parse
 import urllib.request
 
-VIZIER_TAP = "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync"
+BASE = "https://ssb.stsci.edu/cdbs/grid/pickles/dat_uvk/"
 
 # SPCC working grid (must match SpccDatabase.Grid on the C# side).
 GRID = [380 + 5 * i for i in range(int((720 - 380) / 5) + 1)]
 
 # Johnson B and V passbands (Bessell 1990), wavelength in nm, response 0..1.
-# Coarse but sufficient for a B-V colour index used only to pick a template.
 JOHNSON_B = ([360, 380, 400, 420, 440, 460, 480, 500, 520, 540, 560],
              [0.00, 0.30, 0.80, 1.00, 0.92, 0.70, 0.45, 0.22, 0.08, 0.02, 0.00])
 JOHNSON_V = ([470, 490, 510, 530, 550, 570, 590, 610, 630, 650, 680, 700],
              [0.00, 0.15, 0.55, 0.87, 1.00, 0.94, 0.79, 0.58, 0.36, 0.18, 0.03, 0.00])
+
+
+def _get(url):
+    with urllib.request.urlopen(url, timeout=90) as resp:
+        return resp.read()
 
 
 def interp(xs, ys, x):
@@ -69,7 +81,7 @@ def interp(xs, ys, x):
 
 
 def band_flux(wl_nm, flux, band):
-    """Photon-weighted flux through a passband: sum F*R*lambda."""
+    """Photon-weighted flux through a passband: integral of F*R*lambda."""
     bx, by = band
     s = 0.0
     prev_l = bx[0]
@@ -83,9 +95,6 @@ def band_flux(wl_nm, flux, band):
 
 
 def synthetic_bv(wl_nm, flux):
-    """B-V from synthetic photometry, anchored so a ~solar template ≈ 0.65.
-    The zero-point offset cancels in template SELECTION (nearest B-V), so a
-    consistent instrumental colour is all we need."""
     fb = band_flux(wl_nm, flux, JOHNSON_B)
     fv = band_flux(wl_nm, flux, JOHNSON_V)
     if fb <= 0 or fv <= 0:
@@ -93,48 +102,15 @@ def synthetic_bv(wl_nm, flux):
     return -2.5 * math.log10(fb / fv)
 
 
-def fetch_pickles():
-    """Return list of (name, wl_nm[list], flux[list]) from VizieR.
-
-    The Pickles spectra live in VizieR J/PASP/110/863. This queries the
-    spectra table and groups rows by spectrum name. Adjust the ADQL if the
-    published column names differ in your VizieR mirror."""
-    adql = (
-        "SELECT SpType, lambda, Flux "
-        'FROM "J/PASP/110/863/table3" '
-        "ORDER BY SpType, lambda"
-    )
-    params = urllib.parse.urlencode({
-        "request": "doQuery", "lang": "ADQL", "format": "csv", "query": adql,
-    })
-    url = VIZIER_TAP + "?" + params
-    print(f"Querying VizieR: {url[:90]}...", file=sys.stderr)
-    with urllib.request.urlopen(url, timeout=300) as resp:
-        text = resp.read().decode("utf-8", "replace")
-
-    rows = {}
-    lines = text.splitlines()
-    for line in lines[1:]:                      # skip header
-        parts = line.split(",")
-        if len(parts) < 3:
-            continue
-        name = parts[0].strip().strip('"')
-        try:
-            lam_ang = float(parts[1])
-            flux = float(parts[2])
-        except ValueError:
-            continue
-        rows.setdefault(name, ([], []))
-        rows[name][0].append(lam_ang / 10.0)     # Angstrom -> nm
-        rows[name][1].append(flux)
-    out = []
-    for name, (wl, fl) in rows.items():
-        pairs = sorted(zip(wl, fl))
-        out.append((name, [p[0] for p in pairs], [p[1] for p in pairs]))
-    return out
-
-
 def main():
+    try:
+        from astropy.io import fits
+        import numpy as np
+    except ImportError:
+        print("ERROR: this script needs numpy + astropy to read the atlas "
+              "FITS tables (pip install numpy astropy).", file=sys.stderr)
+        return 1
+
     ap = argparse.ArgumentParser(description="Build SPCC pickles.json")
     default_out = os.path.join(
         os.path.dirname(__file__), "..", "src", "NINA.Polaris",
@@ -142,41 +118,58 @@ def main():
     ap.add_argument("--out", default=default_out)
     args = ap.parse_args()
 
+    # Spectral-type names from the atlas index (FILENAME -> SPTYPE).
+    names = {}
     try:
-        specs = fetch_pickles()
+        idx = fits.open(io.BytesIO(_get(BASE + "pickles_uk.fits")))
+        cols = idx[1].columns.names
+        for row in idx[1].data:
+            rec = {c.upper(): row[i] for i, c in enumerate(cols)}
+            fn = str(rec.get("FILENAME", "")).strip().lower()
+            sp = str(rec.get("SPTYPE", "")).strip()
+            if fn:
+                names[fn] = sp
     except Exception as e:  # noqa: BLE001
-        print(f"ERROR fetching Pickles library: {e}\n"
-              "The VizieR table layout may have changed; edit fetch_pickles().",
+        print(f"WARN: could not read atlas index ({e}); using uk<N> names.",
               file=sys.stderr)
-        return 1
-    if not specs:
-        print("ERROR: no spectra returned.", file=sys.stderr)
-        return 1
 
     templates = []
-    for name, wl, fl in specs:
-        if len(wl) < 10:
+    for i in range(1, 132):
+        fn = f"pickles_uk_{i}"
+        try:
+            h = fits.open(io.BytesIO(_get(BASE + fn + ".fits")))
+            wl_ang = np.asarray(h[1].data["WAVELENGTH"], float)
+            flux = np.asarray(h[1].data["FLUX"], float)
+        except Exception as e:  # noqa: BLE001
+            print(f"skip {fn}: {e}", file=sys.stderr)
             continue
-        bv = synthetic_bv(wl, fl)
+        wl_nm = (wl_ang / 10.0).tolist()
+        fl = flux.tolist()
+        bv = synthetic_bv(wl_nm, fl)
         if bv is None:
             continue
-        # Resample onto the shared grid + normalise to a unit mean so
-        # templates are on a comparable scale (SPCC only uses ratios).
-        resampled = [interp(wl, fl, g) for g in GRID]
+        resampled = [interp(wl_nm, fl, g) for g in GRID]
         m = sum(resampled) / len(resampled)
         if m <= 0:
             continue
         resampled = [v / m for v in resampled]
-        templates.append({"name": name, "bv": round(bv, 4),
+        templates.append({"name": names.get(fn, f"uk{i}"), "bv": round(bv, 4),
                           "flux": [round(v, 6) for v in resampled]})
+
+    if not templates:
+        print("ERROR: no spectra fetched (network / source unavailable).",
+              file=sys.stderr)
+        return 1
 
     templates.sort(key=lambda t: t["bv"])
     out = {"grid": GRID, "templates": templates,
-           "source": "Pickles 1998 (VizieR J/PASP/110/863)"}
+           "source": "Pickles 1998 UVKLIB (STScI CDBS grid/pickles/dat_uvk); "
+                     "PASP 110, 863"}
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(out, f)
-    print(f"Wrote {len(templates)} templates to {args.out}")
+    print(f"Wrote {len(templates)} templates "
+          f"(B-V {templates[0]['bv']}..{templates[-1]['bv']}) to {args.out}")
     return 0
 
 

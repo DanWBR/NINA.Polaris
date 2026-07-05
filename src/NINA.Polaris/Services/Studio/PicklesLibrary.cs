@@ -23,9 +23,10 @@ namespace NINA.Polaris.Services.Studio;
 /// resamples it onto the working grid, so it integrates a REAL stellar
 /// spectrum (with its absorption lines) rather than a smooth blackbody.
 ///
-/// The bundled <c>pickles.json</c> is produced by
+/// The bundled <c>pickles.json</c> ships in the repo (~95 KB, 131 UVKLIB
+/// templates) so this source is available out of the box. It is (re)built by
 /// <c>scripts/download-pickles.py</c>, which fetches the library (Pickles
-/// 1998, PASP 110, 863; VizieR J/PASP/110/863) and converts it to:
+/// 1998, PASP 110, 863; STScI CDBS grid/pickles/dat_uvk) and converts it to:
 ///   { "grid": [nm...], "templates": [ { "name":"g2v", "bv":0.66,
 ///     "flux":[...] }, ... ] }
 /// with every template pre-sampled onto the shared <c>grid</c>.

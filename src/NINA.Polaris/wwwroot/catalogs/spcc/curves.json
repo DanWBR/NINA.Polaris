@@ -1,6 +1,6 @@
 {
-  "_note": "SPCC generic curve database (v1). All curves here are IDEALISED/synthetic, labelled 'Generic', and meant as a working starting point on any offline install. They are NOT measured manufacturer data. To calibrate against your real gear, add your filter transmission and sensor QE curves (drop-in edit this file): each curve is { wl:[nm...], v:[0..1...] } with wl strictly increasing. Channel total response = sensor response x filter transmission. For an OSC sensor each of r/g/b already includes the Bayer CFA; for a mono sensor the single qe curve is combined with the R/G/B filter set. Wavelengths in nm, throughput/QE normalised 0..1.",
-  "version": 1,
+  "_note": "SPCC generic curve database (v2). All curves here are IDEALISED/synthetic, labelled 'Generic', and meant as a working starting point on any offline install. They are NOT measured manufacturer data. To calibrate against your real gear, add your filter transmission and sensor QE curves (drop-in edit this file): each curve is { wl:[nm...], v:[0..1...] } with wl strictly increasing. Channel total response = sensor response x filter transmission. For an OSC sensor each of r/g/b already includes the Bayer CFA; for a mono sensor the single qe curve is combined with the R/G/B filter set. Wavelengths in nm, throughput/QE normalised 0..1. Sensor archetypes: 'osc-generic'/'mono-generic' are neutral references; 'osc-modern-bsi'/'mono-bsi' approximate modern back-illuminated Sony-class chips (stronger red/NIR); 'osc-ccd' approximates the older front-illuminated CCD era (weaker NIR).",
+  "version": 2,
   "sensors": [
     {
       "id": "osc-generic",
@@ -11,10 +11,32 @@
       "b": { "wl": [380, 410, 440, 470, 500, 540, 600, 720], "v": [0.20, 0.55, 0.78, 0.72, 0.45, 0.15, 0.04, 0.01] }
     },
     {
+      "id": "osc-modern-bsi",
+      "name": "Generic modern BSI OSC (Sony-class, strong red/NIR)",
+      "type": "osc",
+      "r": { "wl": [380, 540, 570, 600, 630, 660, 700, 720], "v": [0.03, 0.08, 0.42, 0.85, 0.92, 0.86, 0.62, 0.45] },
+      "g": { "wl": [380, 440, 470, 500, 530, 560, 600, 660, 720], "v": [0.05, 0.42, 0.75, 0.90, 0.92, 0.78, 0.42, 0.14, 0.06] },
+      "b": { "wl": [380, 410, 440, 470, 500, 540, 600, 720], "v": [0.35, 0.72, 0.90, 0.85, 0.58, 0.22, 0.07, 0.02] }
+    },
+    {
+      "id": "osc-ccd",
+      "name": "Generic CCD-era OSC (front-illuminated, weak NIR)",
+      "type": "osc",
+      "r": { "wl": [380, 540, 570, 600, 630, 660, 700, 720], "v": [0.01, 0.04, 0.24, 0.58, 0.62, 0.44, 0.18, 0.08] },
+      "g": { "wl": [380, 440, 470, 500, 530, 560, 600, 660, 720], "v": [0.02, 0.24, 0.48, 0.62, 0.62, 0.46, 0.20, 0.05, 0.02] },
+      "b": { "wl": [380, 410, 440, 470, 500, 540, 600, 720], "v": [0.14, 0.42, 0.58, 0.54, 0.32, 0.10, 0.03, 0.01] }
+    },
+    {
       "id": "mono-generic",
       "name": "Generic mono (silicon QE)",
       "type": "mono",
       "qe": { "wl": [380, 420, 460, 500, 540, 580, 620, 660, 700, 720], "v": [0.15, 0.35, 0.55, 0.72, 0.82, 0.85, 0.80, 0.68, 0.50, 0.42] }
+    },
+    {
+      "id": "mono-bsi",
+      "name": "Generic modern BSI mono (high broadband QE)",
+      "type": "mono",
+      "qe": { "wl": [380, 420, 460, 500, 540, 580, 620, 660, 700, 720], "v": [0.45, 0.72, 0.88, 0.92, 0.91, 0.90, 0.88, 0.82, 0.70, 0.62] }
     }
   ],
   "filterSets": [
@@ -31,12 +53,34 @@
       "all": { "wl": [380, 395, 410, 680, 695, 720], "v": [0.0, 0.2, 0.95, 0.95, 0.2, 0.0] }
     },
     {
+      "id": "osc-lp-broadband",
+      "name": "Generic broadband light-pollution (OSC, L-Pro-class)",
+      "for": "osc",
+      "all": { "wl": [380, 400, 420, 480, 560, 575, 595, 610, 680, 695, 720],
+               "v": [0.0, 0.30, 0.90, 0.92, 0.90, 0.35, 0.35, 0.90, 0.90, 0.25, 0.0] }
+    },
+    {
+      "id": "osc-dualband",
+      "name": "Generic dual-band Ha+OIII (OSC, L-eXtreme-class)",
+      "for": "osc",
+      "all": { "wl": [380, 494, 498, 502, 506, 510, 650, 653, 656, 659, 662, 720],
+               "v": [0.0, 0.0, 0.5, 0.92, 0.5, 0.0, 0.0, 0.5, 0.92, 0.5, 0.0, 0.0] }
+    },
+    {
       "id": "rgb-generic",
       "name": "Generic RGB filter set (mono)",
       "for": "mono",
       "r": { "wl": [380, 585, 600, 680, 695, 720], "v": [0.0, 0.0, 0.9, 0.9, 0.0, 0.0] },
       "g": { "wl": [380, 490, 505, 575, 590, 720], "v": [0.0, 0.0, 0.9, 0.9, 0.0, 0.0] },
       "b": { "wl": [380, 400, 415, 490, 505, 720], "v": [0.0, 0.0, 0.9, 0.9, 0.0, 0.0] }
+    },
+    {
+      "id": "rgb-astro",
+      "name": "Generic astronomy RGB (mono, sharp cutoffs, Astrodon/Baader-class)",
+      "for": "mono",
+      "r": { "wl": [380, 588, 592, 686, 690, 720], "v": [0.0, 0.0, 0.95, 0.95, 0.0, 0.0] },
+      "g": { "wl": [380, 494, 498, 578, 582, 720], "v": [0.0, 0.0, 0.95, 0.95, 0.0, 0.0] },
+      "b": { "wl": [380, 398, 402, 494, 498, 720], "v": [0.0, 0.0, 0.95, 0.95, 0.0, 0.0] }
     }
   ],
   "whiteRefs": [
