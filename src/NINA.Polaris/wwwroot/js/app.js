@@ -2979,6 +2979,13 @@ function ninaApp() {
             // SN: when set, the comparator shows a "Try again" button that
             // re-opens star-removal options for this source path.
             starRetryPath: null,
+            // Whether AFTER pins the BEFORE histogram (stretchFrom). Good for
+            // tonal ops (denoise/decon) where a noise-floor shift would look
+            // like a colour change; WRONG for colour calibration (PCC/SPCC),
+            // where each side must auto-stretch on its own so the colour shift
+            // is actually visible. Defaulted per mode in graxpertOpenCompare;
+            // toggleable in the toolbar.
+            linkStretch: true,
         },
         // Star colour/fringe repair (SVBony debayer artifact) — run first.
         starColor: {
@@ -28313,10 +28320,22 @@ function ninaApp() {
             // "GraXpert Denoise Comparison". null in compare-mode
             // (no op context, see graxpertCompareTitle).
             this.graxpertCompare.op = op || null;
+            // Link the AFTER stretch to the BEFORE only for tonal GraXpert-style
+            // ops (mode 'gx'), where matching the histogram is what makes a
+            // denoise/decon visible. For 'compare' mode (colour calibration
+            // PCC/SPCC and arbitrary two-file picks) each side auto-stretches
+            // independently so the colour change is actually visible.
+            this.graxpertCompare.linkStretch = (this.graxpertCompare.mode === 'gx');
             // Default: not a star-removal compare. starRemovalRun sets this
             // after opening so the "Try again" (re-run StarNet) button shows.
             this.graxpertCompare.starRetryPath = null;
             this.graxpertCompare.open = true;
+        },
+        // Toggle whether the AFTER side pins the BEFORE histogram (linked) or
+        // auto-stretches on its own (independent). Independent is the right
+        // choice for colour calibration; linked for denoise/decon.
+        graxpertCompareToggleStretch() {
+            this.graxpertCompare.linkStretch = !this.graxpertCompare.linkStretch;
         },
         // Re-open star-removal options for the source shown in the comparator,
         // so the user can tweak settings and run again when a result isn't good.
@@ -28409,15 +28428,14 @@ function ninaApp() {
             if (!pair) return '';
             const p = pair[side];
             if (!p) return '';
-            // GX-12c: AFTER renders with the BEFORE file's histogram
-            // params pinned via stretchFrom, otherwise each side
-            // auto-stretches independently and a slight noise-floor
-            // shift in the denoised output produces wildly different
-            // colour mapping (looks like a colour-balance change
-            // instead of a noise reduction).
+            // GX-12c: AFTER can pin the BEFORE file's histogram via
+            // stretchFrom so a noise-floor shift in a denoised output
+            // doesn't read as a colour-balance change. But for colour
+            // calibration (PCC/SPCC) that hides the whole point, so the
+            // link is off by default in 'compare' mode and toggleable.
             let url = '/api/files/preview?path=' + encodeURIComponent(p)
                     + '&maxDim=2400';
-            if (side === 'out' && pair.src) {
+            if (side === 'out' && pair.src && this.graxpertCompare.linkStretch) {
                 url += '&stretchFrom=' + encodeURIComponent(pair.src);
             }
             // <img> can't carry the Authorization header; append the

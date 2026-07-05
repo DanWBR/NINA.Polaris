@@ -15837,6 +15837,16 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             :disabled="graxpertCompare.zoom <= 1.001"
                             title="Fit / reset zoom">Fit</button>
                 </span>
+                <!-- Stretch link: independent stretch per image (right for colour
+                     calibration, where the change IS the point) vs linked (right
+                     for denoise/decon, so a noise-floor shift doesn't read as a
+                     colour change). -->
+                <button class="btn btn-sm"
+                        @click="graxpertCompareToggleStretch()"
+                        :title="graxpertCompare.linkStretch
+                            ? 'Stretch: linked — AFTER uses the BEFORE histogram. Click for an independent stretch per image (better for colour calibration).'
+                            : 'Stretch: independent — each image auto-stretches on its own. Click to link AFTER to the BEFORE histogram (better for denoise/decon).'"
+                        x-text="graxpertCompare.linkStretch ? '🔗 Linked stretch' : '🔀 Independent stretch'"></button>
                 <button class="btn btn-sm" @click="graxpertCloseCompare()">Close</button>
             </div>
             <!-- Image stage. Two layers stacked; the OUT layer is clipped
@@ -17138,7 +17148,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260705-spcc4"></script>
+    <script src="/js/app.js?v=20260705-spcc5"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
