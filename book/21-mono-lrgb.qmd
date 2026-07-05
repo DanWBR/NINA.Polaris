@@ -1,0 +1,341 @@
+# Mono, LRGB, and Narrowband {#sec-mono-lrgb}
+
+A mono camera records no color of its own: you shoot the same target
+through different filters and combine the results afterwards. This
+chapter is the mono-and-filter-wheel branch of the Polaris pipeline:
+how to take the per-filter masters that come out of STUDIO's
+Integrate step (@sec-studio) and turn them into a single color image,
+without leaving Polaris. If you shoot OSC (one-shot color, a camera
+that captures color directly), your path is the end-to-end workflow
+in @sec-end-to-end; you only need this chapter for dual-band palette
+tricks.
+
+One point up front: luminance is optional. Plenty of mono workflows
+are pure RGB, with no separate luminance pass, and narrowband-only
+shooters skip RGB entirely. Use the **RGB** mode when you have R, G,
+and B masters; the **LRGB** mode when you also captured a luminance
+master (shot through a clear or near-clear filter) and want its
+higher signal-to-noise ratio to drive the image's lightness; and the
+narrowband palette or **PixelMath** modes for everything else.
+
+## What you need before starting
+
+- A mono camera and filter wheel.
+- At least two per-filter masters already produced by STUDIO's
+  **Integrate**, one `master_*.fits` per filter, landing under
+  `{rig}/integrated/{target}/{filter}/`. RGB needs 3 masters, LRGB
+  needs 4, and PixelMath needs as many as your formula references
+  (minimum 2). If you have not done the per-filter integration yet,
+  @sec-studio covers it.
+- Masters stretched to comparable brightness ranges. In practice:
+  either keep them all linear (the raw stack output), or pre-stretch
+  each one in STUDIO with the same parameters. Polaris trusts that
+  the channels are comparable; if one is wildly brighter than the
+  others, the output shifts toward it.
+
+A typical mono session lands one of these layouts on disk:
+
+```
+# Plain RGB (no luminance), common for fast or short sessions
+{rig}/integrated/M81/
+  R/master_R_30x180s.fits
+  G/master_G_30x180s.fits
+  B/master_B_30x180s.fits
+
+# Classic LRGB (luminance master adds SNR)
+{rig}/integrated/M81/
+  L/master_L_30x180s.fits          (extra L pass for noise control)
+  R/master_R_15x180s.fits
+  G/master_G_15x180s.fits
+  B/master_B_15x180s.fits
+
+# Narrowband only (no RGB at all)
+{rig}/integrated/NGC7000/
+  Ha/master_Ha_20x300s.fits
+  OIII/master_OIII_15x300s.fits
+  SII/master_SII_10x300s.fits      (optional, for SHO palette)
+```
+
+## Opening the Combine dialog
+
+In STUDIO, add the per-filter masters to the **Lights** slot of the
+Stack workspace (or multi-select them in the frame grid with
+Ctrl-click; the selection bar shows the count so you can verify the
+pick), then click **Combine channels**. The dialog first asks for
+the combine mode, then collects the role of each file.
+
+<!-- screenshot: the Combine dialog with three RGB masters assigned
+and the Register channels and Normalize per-channel checkboxes at
+the bottom -->
+
+## The combine modes
+
+### RGB
+
+The default, and the one most mono shooters use: three mono masters
+in, one RGB FITS out. No luminance master required; this is the
+right mode when you only captured RGB filters or chose not to spend
+session time on a separate L pass.
+
+Polaris auto-fills the R, G, and B roles from each frame's `FILTER`
+header. If your filter names do not match (you set `FILTER=Red`,
+say), pick them manually from the dropdowns.
+
+Output:
+`{rig}/integrated/{target}/composed/rgb_{target}_{stamp}.fits`
+
+### LRGB
+
+For shooters who also captured a luminance master: four masters in
+(R, G, B, L), one color image out that takes its lightness from L.
+The luminance is where the signal-to-noise lives, because it is
+captured through the broadest filter; that is what makes LRGB look
+cleaner than plain RGB when you have it. If you have no L master,
+use the RGB mode instead; it gives the same three-channel compose
+without forcing an L slot.
+
+Pick an algorithm:
+
+- **Lab swap** (the default, recommended). Converts the RGB stack to
+  the CIE Lab color space (which separates lightness from color),
+  replaces the lightness channel with the L master, and converts
+  back. Best color preservation; matches the output of PixInsight's
+  LRGBCombination tool [@pixinsight].
+- **Ratio** (classical, faster). Multiplies R, G, and B per pixel by
+  `L / luminance(RGB)`. Slightly cheaper, but it can shift
+  saturation where the ratio swings far from 1.
+
+Output:
+`{rig}/integrated/{target}/composed/lrgb_{target}_{stamp}.fits`
+
+### Narrowband palettes
+
+Narrowband filters isolate the light of specific emission lines
+(hydrogen-alpha, oxygen-III, sulfur-II), and a palette maps those
+masters to display colors. The built-in palettes:
+
+- **SHO** (the "Hubble" palette): SII to red, Ha to green, OIII to
+  blue.
+- **HSO** and **HOS**: the same three inputs in other orders.
+- **HOO** bicolor, for two-filter data: Ha to red, OIII to both
+  green and blue.
+
+Per-channel normalization matches the three backgrounds so no single
+filter dominates the color. Output lands in the same `composed/`
+folder with an `nb_` prefix.
+
+### Continuum subtraction
+
+Continuum subtraction isolates the emission-line signal in a
+narrowband master by removing a scaled broadband master:
+
+```
+NB' = max(0, NB - k * Continuum)
+```
+
+Assign the **NB** (narrowband) and **C** (continuum, broadband)
+roles; the scale `k` is auto-estimated from the bright star pixels
+(the median NB-to-continuum ratio where the signal is pure
+continuum), or entered manually in the range 0 to 4. Stars largely
+cancel while the nebulosity remains. Output uses a `cs_` prefix.
+For this mode, per-channel normalization defaults to off so the
+automatic `k` estimate is not skewed by a pre-scaled background.
+
+### PixelMath
+
+For everything the fixed modes cannot express: custom palettes,
+synthetic luminance, channel arithmetic. PixelMath is a small
+formula language evaluated per pixel.
+
+Each row in **Variable bindings** maps a selected frame to a name of
+your choosing; the name defaults to the filter header, so Ha and
+OIII masters auto-populate as `Ha` and `OIII`. Each **Output
+expression** is a formula using those names: for RGB output you
+write three, one per output channel, or tick **Mono output** for a
+single expression and a single-channel FITS.
+
+Supported syntax:
+
+- Numbers: `0.5`, `1.2e3`
+- Operators: `+`, `-`, `*`, `/`, `**` (power, right-associative)
+- Parentheses: `(R + G) * 0.5`
+- Functions: `min`, `max`, `abs`, `pow`, `sqrt`, `exp`, `log`,
+  `clamp(value, min, max)`
+
+Common recipes:
+
+| What you want | Variable bindings | Expressions |
+|---|---|---|
+| HOO bicolor (Ha + OIII) | `Ha`, `OIII` | R = `Ha`, G = `0.5*Ha + 0.5*OIII`, B = `OIII` |
+| SHO Hubble palette | `Ha`, `OIII`, `SII` | R = `SII`, G = `Ha`, B = `OIII` |
+| Synthetic luminance from RGB | `R`, `G`, `B` | (Mono out) L = `(R + G + B) / 3` |
+| Ha-boosted red for LRGB | `R`, `Ha` | R = `0.7*R + 0.3*Ha` (then re-combine as L+R'+G+B) |
+
+A typo in a variable name surfaces immediately in the dialog as a
+job error, before any pixels are read. Division by zero falls back
+to 0, so no invalid values propagate into the output.
+
+Output:
+`{rig}/integrated/{target}/composed/pm_{target}_{stamp}.fits`
+
+## Cross-channel registration: leave it on
+
+The **Register channels** checkbox at the bottom of the dialog is on
+by default, and it is what saves you from colored fringes on every
+star.
+
+The reason is subtle: each per-filter master comes out of the batch
+stacker aligned to its own reference frame, the best-HFR frame
+within that filter's stack. So the R master is aligned to its own
+best R sub, and the G master to its own best G sub. They are not
+aligned to each other, even when shot the same night, because the
+references are different frames captured under slightly different
+seeing (the constantly shifting blur of the atmosphere). Without
+registration you get colored halos around bright stars (R offset by
+a pixel or three from G and B), ghosting of fine nebula structure,
+and a generally soft look.
+
+With it on, Polaris detects stars on each input (at a detection
+threshold of 7 sigma rather than the usual 5, because masters have
+a much higher signal-to-noise ratio and a lower threshold would
+flood-detect star halos), matches them against the reference channel
+(L for LRGB, otherwise the first input), computes an affine
+transform per channel (a shift-rotate-scale mapping), and resamples.
+The transforms are recorded in the output FITS headers (`REGREF`,
+`REG_R`, `REG_G`, `REG_B`) for reproducibility.
+
+Turn registration off only when you know the masters are already
+aligned: a permanent pier observatory with no re-framing between
+filters and the same reference frame across stacks. For backyard or
+mobile rigs, leave it on.
+
+## Per-channel normalization: also on
+
+Filters captured across different sessions can sit on very different
+sky backgrounds. The **Normalize per-channel** checkbox scales each
+input so their medians line up before the combine, which keeps a
+bright-background R master from red-casting the output just because
+R was shot under a brighter sky. It defaults to on for RGB, LRGB,
+and the narrowband palettes; turn it off for PixelMath when you want
+raw channel values feeding your expression, for example when you
+computed your own pre-scale factors.
+
+## Run
+
+Click **Combine**. Progress steps through loading, registering,
+normalizing, composing, and writing. Time depends on input size and
+how many channels need registration; on a Raspberry Pi 5:
+
+- 2 channels, registration off: about 5 s
+- 4 channels (LRGB), registration on: about 25 s (registration adds
+  roughly 15 s of star detection and matching across the
+  non-reference channels)
+- 6 channels (LRGB plus narrowband): about 40 s
+
+A toast confirms the output path, and the new file appears in the
+frame browser after the automatic rescan with a 3-channel badge (or
+1-channel for PixelMath mono output).
+
+If you find yourself repeating the same combine plus post-processing
+recipe, the Auto Workflow presets (**Mono LRGB**, **Mono SHO**, and
+**OSC dual-band SHO**) wrap this combine step and a full color
+pipeline into one saved, re-runnable workflow (@sec-studio).
+
+## After the combine
+
+Run **Color calibration** on the composed master next: background
+neutralization as a quick first pass, a manual white reference when
+a tint remains, or full photometric calibration against a star
+catalog. @sec-color-calibration covers all three.
+
+Downstream, the composed RGB or LRGB FITS is just a frame, and
+everything treats it like any other master:
+
+1. **GraXpert AI cleanup** (background extraction, denoise,
+   deconvolution; @sec-ai-cleanup). The pipelines iterate per RGB
+   plane automatically, so they work on a composed file exactly as
+   they do on OSC data.
+2. **The EDITOR** (@sec-editor) for tone work; RGB composed files
+   open as 3-channel sessions with the color sliders active.
+3. **Export** as JPG, PNG, or 16-bit TIFF.
+
+## What the output records
+
+Every composed FITS carries its recipe in custom headers:
+`CHCOMBINE` (the mode), `REGISTER` (on or off), `REGREF` (the
+reference channel), `REG_R`/`REG_G`/`REG_B`/`REG_L` (the affine
+transform applied to each channel, as the six numbers
+`M00,M01,M10,M11,Tx,Ty`), `NORMLIZE` (on or off), and `NCHANNEL`
+(input count). Any FITS header inspector, such as PixInsight's FITS
+Header view, shows them, so you can audit exactly how any composed
+file was produced months later.^[For integrators: the dialog posts
+to `/api/studio/combine`, and the server's `ChannelCombineService`
+dispatches to an RGB compose, `LrgbCombiner` (Lab swap or Ratio),
+the narrowband and continuum implementations, or
+`PixelMathEvaluator`, which compiles each output expression once and
+evaluates it per pixel. The narrowband palette and continuum math
+are implemented from scratch, inspired by the narrowband tools in
+SASpro and PixInsight.]
+
+## Worked example: M81 pure RGB
+
+The simpler path, and what most backyard mono shooters do. Pi 5
+host, ZWO ASI2600MM Pro, EQ6-R Pro mount, Askar FRA600, RGB filter
+set, no luminance pass.
+
+| Step | Time | Output |
+|---|---|---|
+| Capture: 20R + 20G + 20B at 180 s each, unattended | 3 h | 60 raw lights |
+| STUDIO: calibrate and integrate per filter | 8 min | 3 per-filter masters |
+| Combine: RGB mode, Register on, Normalize on | 15 s | `rgb_M81_*.fits` |
+| GraXpert background extraction | 30 s | `_bge.fits` |
+| GraXpert denoise | 90 s | `_denoise.fits` |
+| EDITOR tone work | 8 min | sidecar saved |
+| Export JPG at quality 92 | 3 s | final image |
+
+Active human work: about 20 minutes. The rest is camera and Polaris
+time.
+
+## Worked example: M81 LRGB with an Ha boost
+
+The same hardware plus an L filter and an Ha narrowband filter.
+
+| Step | Time | Output |
+|---|---|---|
+| Capture: 30L + 15R + 15G + 15B + 20Ha, unattended | 8 h | 95 raw lights |
+| STUDIO: calibrate and integrate per filter | 12 min | 5 per-filter masters |
+| Combine: LRGB mode, Lab swap, Register on | 25 s | `lrgb_M81_*.fits` |
+| GraXpert background extraction | 30 s | `_bge.fits` |
+| GraXpert denoise | 90 s | `_denoise.fits` |
+| GraXpert deconvolution (objects) | 2 min | `_decon_objects.fits` |
+| EDITOR tone work | 10 min | sidecar saved |
+| Optional: re-combine with PixelMath R = `0.7*R + 0.3*Ha` | 25 s | `pm_M81_*.fits` |
+| Then re-combine that output with the L master, LRGB mode | 25 s | Ha-boosted LRGB |
+| Export JPG quality 92, 50% resize | 3 s | final image |
+
+The Ha boost is optional, and many users run straight LRGB. But that
+PixelMath round-trip is exactly the kind of step that used to mean
+exporting to PixInsight, doing the math there, and loading the
+result back; here it stays in one application.
+
+## Common pitfalls
+
+- **Colored star halos in the output**: registration was off. Re-run
+  with **Register channels** checked.
+- **Output much brighter or dimmer than expected**: the L and RGB
+  brightness ranges drifted apart. Re-stretch each master in STUDIO
+  with the same parameters before combining, or use the Ratio
+  algorithm, which is less sensitive to absolute brightness.
+- **"Could not register channel X"**: that filter's master has too
+  few detectable stars (very short total exposure, a very narrow
+  filter, bad framing). Increase that channel's total exposure, or
+  turn registration off if you trust the existing alignment.
+- **PixelMath says "unknown variable Ha2"**: a typo. The variable
+  names come from the Variable bindings rows, and expressions must
+  use those exact names, case-sensitively.
+- **The Combine button stays disabled**: not enough channels
+  assigned. RGB needs all 3 roles filled, LRGB all 4, and PixelMath
+  needs at least 2 binding rows and a non-empty expression for every
+  output channel.
+
+<!-- consolidated from: docs/user-guide/lrgb-mono-workflow.md, docs/user-guide/studio.md (channel combine section) -->

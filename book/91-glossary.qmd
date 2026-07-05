@@ -1,0 +1,417 @@
+# Glossary {#sec-glossary}
+
+The astrophotography terms used throughout this book and the Polaris
+UI, in about two lines each, alphabetically. Chapters gloss each term
+briefly on first use; this is the fuller reference.
+
+**Alpaca**. The modern, network-based protocol for astronomy devices,
+ASCOM's HTTP successor [@ascom_alpaca]. Polaris speaks Alpaca
+natively; on Windows any classic ASCOM driver can be bridged through
+the ASCOM Remote Server.
+
+**ASCOM**. The long-standing Windows standard for astronomy device
+drivers [@ascom_alpaca]. Classic ASCOM drivers use Windows-only COM
+plumbing; Alpaca is the same standard reworked to run over the
+network from any machine.
+
+**ASTAP**. The Astrometric Stacking Program [@kleijn_astap], the fast
+offline plate solver bundled with Polaris. Needs a star database
+alongside the program (@sec-installation).
+
+**Astrometry.net**. The blind plate-solving engine that can identify
+a star field with no pointing hint at all [@lang2010astrometry].
+Polaris uses it, locally or via the nova.astrometry.net web service,
+as a fallback solver.
+
+**Autoguiding**. Using a second camera to watch a star and send tiny
+corrections to the mount, canceling tracking errors during long
+exposures. Polaris guides through PHD2 or its built-in guider
+(@sec-guiding).
+
+**AUTORUN**. Polaris's name for the simple list-style sequence
+runner (@sec-autorun), as opposed to the tree-based Advanced
+Sequencer (@sec-adv-sequencer).
+
+**Back-focus (backspacing)**. The mechanical distance from the
+telescope's rear flange to the camera sensor that the optical design
+expects; reducers and flatteners publish their required value
+(typically 55 mm or 56 mm). Polaris's Main Telescope card shows the
+required value once you pick an optical tube and accessory from the
+catalog.
+
+**Background extraction (BGE)**. Removing the gradient (light
+pollution, moon glow) from an image. Polaris runs GraXpert's AI model
+for this, in the browser or on the host [@graxpert].
+
+**Backlash**. The slack in a gear train: when a focuser or mount
+reverses direction, the first part of the motion takes up the slack
+before anything moves. Auto-focus offers backlash compensation for
+focusers with this hysteresis.
+
+**Bahtinov mask**. A slotted mask placed over the telescope aperture
+that turns a bright star into a diffraction spike pattern; the
+central spike sits exactly between the others only at perfect focus.
+Polaris overlays a digital assistant on the pattern (@sec-focusing).
+
+**Bayer matrix / debayering**. The checkerboard of red, green, and
+blue filters printed over a color camera's pixels, and the
+reconstruction (debayering, or demosaicing) that turns the raw
+checkerboard into a full-color image.
+
+**Bias frame**. A zero-length exposure that captures only the
+sensor's read noise pattern. Subtracted from lights and flats during
+calibration.
+
+**Binning**. Combining adjacent pixels into one (2×2 reads four
+pixels as one). Reduces resolution but boosts signal-to-noise ratio
+and frame rate.
+
+**Calibration (guiding)**. Teaching the guider how the mount responds
+to pulse commands, done once per pointing region and redone after a
+meridian flip if the camera orientation changed. Polaris's Smart
+Calibrate button automates the step calculation (@sec-guiding).
+
+**Calibration frames**. The bias, dark, and flat frames used to
+correct sensor artifacts in light frames. STUDIO generates the master
+versions (@sec-studio).
+
+**CCD_VIDEO_STREAM**. An INDI property some cameras (ZWO, QHY, gphoto
+DSLRs) expose to switch into continuous streaming at 10-30 frames per
+second without per-frame exposure round-trips. Polaris's camera
+stream detects and uses it automatically.
+
+**Collimation**. The alignment of a telescope's mirrors or lenses on
+a common optical axis. Miscollimation shows up as asymmetric,
+comet-shaped stars that no amount of focusing fixes.
+
+**Cosmetic correction**. Removing hot and cold pixels from a stack by
+statistical rejection, so isolated defective pixels do not survive
+into the final image.
+
+**Dark frame**. A long exposure with the shutter closed or the lens
+covered, capturing thermal noise. Subtracted from lights to remove
+hot pixels and dark current.
+
+**Declination (Dec)**. The celestial equivalent of latitude, measured
+in degrees from −90° (south celestial pole) to +90° (north). Half of
+an (RA, Dec) coordinate pair.
+
+**Deconvolution**. Mathematically reversing the blur that optics and
+atmosphere impose, classically with the Richardson-Lucy algorithm
+[@richardson1972bayesian; @lucy1974iterative]. Polaris offers an AI
+version through GraXpert's model (@sec-ai-cleanup).
+
+**Denoising**. Reducing random noise while preserving real detail.
+One of the three AI cleanup operations Polaris runs in the browser
+(@sec-ai-cleanup).
+
+**Dithering**. Slightly shifting the mount between exposures so hot
+pixels and fixed-pattern noise never land on the same sky twice and
+average out in the stack. Polaris triggers it through PHD2,
+configurable per sequence.
+
+**Drift**. The slow movement of a target across the sensor over time,
+from residual tracking error and atmospheric refraction. Live
+stacking can auto-recenter on a schedule to correct it
+(@sec-live-stacking).
+
+**Drizzle**. A stacking technique that reconstructs finer detail than
+any single frame holds, by placing many dithered, undersampled frames
+onto a finer output grid [@fruchter2002drizzle].
+
+**DSO (deep-sky object)**. Anything beyond the solar system worth
+photographing: galaxies, nebulae, and star clusters. The SKY tab's
+atlas catalogs them (@sec-sky-explorer).
+
+**EAA (electronically assisted astronomy)**. Watching a stacked image
+build up on screen live during the session, rather than processing
+offline later. Polaris's LIVE tab is purpose-built for it
+(@sec-live-stacking).
+
+**Ephemeris**. A table of predicted positions of a celestial object
+over time. Polaris computes ephemerides for Tonight's Best and the
+altitude charts (@sec-night-planner).
+
+**Field of view (FOV)**. How much sky the camera and telescope
+combination covers, calculated from sensor size and focal length.
+Polaris shows yours on the Main Telescope card.
+
+**Field rotation**. The slow rotation of the star field around the
+frame center that appears when the mount's polar axis is misaligned
+(or on an alt-azimuth mount). It breaks frame alignment in stacking.
+
+**Filter offsets**. Per-filter focus position differences (in focuser
+steps) relative to a reference filter, usually luminance. Stored per
+rig, so a filter change can adjust focus without a full auto-focus
+run (@sec-focusing).
+
+**Filter wheel**. A motorized carousel that rotates filters in front
+of a monochrome camera's sensor, letting one camera shoot through L,
+R, G, B, or narrowband filters in sequence.
+
+**FITS**. The Flexible Image Transport System, astronomy's standard
+image format: a text header plus a raw pixel array, usually 16-bit
+[@wells1981fits; @pence2010fits]. Polaris reads and writes FITS by
+default.
+
+**Flat frame**. An exposure of an evenly illuminated surface (a flat
+panel, twilight sky, or a T-shirt over the aperture), used to correct
+vignetting and dust shadows.
+
+**Flexure**. Slight bending between the imaging telescope and the
+guide scope as the mount moves, so the two see slightly different
+motion. A classic cause of drift that guiding cannot see.
+
+**Focal ratio**. Focal length divided by aperture diameter (the
+f-number). Lower is "faster": it gathers light over a wider cone and
+needs shorter exposures for the same signal.
+
+**FWHM (full width at half maximum)**. A star-size measure: the width
+of the star's brightness profile at half its peak. Like HFR, smaller
+means sharper; the two metrics track each other closely.
+
+**Gain**. The camera's amplification setting, the astro-camera
+equivalent of ISO. Higher gain brightens faint signal at the cost of
+dynamic range.
+
+**German equatorial mount (GEM)**. The classic counterweighted
+equatorial mount design. Its geometry forces a meridian flip when a
+target crosses from the east side of the sky to the west
+(@sec-mounts).
+
+**Goto**. Slewing the mount to a specific (RA, Dec) target on
+command.
+
+**GraXpert**. The free AI-based astro image correction tool
+[@graxpert] whose trained models Polaris uses for background
+extraction, denoising, and deconvolution, in the browser or through
+the host-side CLI (@sec-ai-cleanup).
+
+**Guide camera**. The secondary camera, on a guide scope or off-axis
+guider, that the guiding software uses to track a star and derive
+correction pulses. PHD2 owns it; Polaris does not manage it directly.
+
+**Guide rate**. How fast the mount moves in response to guide pulses,
+usually 0.5× sidereal (about 7.5 arcseconds per second).
+
+**Guide scope / off-axis guider**. The two ways to feed a guide
+camera: a small separate telescope riding on the main one, or a
+prism (the off-axis guider, OAG) that picks a sliver of light from
+the main telescope's own beam.
+
+**HFR (half-flux radius)**. A focus metric: the radius, in pixels,
+containing half of a star's light. Smaller is sharper. Auto-focus
+minimizes HFR via a V-curve sweep, and live stacking can trigger a
+refocus when HFR degrades (@sec-focusing).
+
+**HiPS**. Hierarchical Progressive Surveys, the tiled all-sky image
+format the SKY tab uses: the bundled offline tiles first, the CDS
+Aladin servers for deeper zooms online [@cds_aladin].
+
+**Histogram**. The distribution of pixel brightness in an image. In
+astrophotography almost everything piles up at the dark end until a
+stretch spreads it out.
+
+**Hot pixel**. A pixel that reads far too bright regardless of the
+sky, from sensor defects and thermal noise. Removed by dark
+subtraction, cosmetic correction, and dithering.
+
+**INDI**. The Linux-first protocol and driver ecosystem for astronomy
+devices [@downey_indi]. Polaris is INDI-native; `indiserver` runs on
+the host on port 7624.
+
+**ISO**. Sensor sensitivity on DSLR and mirrorless bodies. Polaris
+exposes ISO selectors for vendor-driver cameras (Canon, Nikon, Sony;
+@sec-dslr).
+
+**Kappa-sigma clipping**. A stacking rejection method: pixels more
+than kappa standard deviations (sigma) from the mean across frames
+are thrown out, removing satellite trails, plane lights, and cosmic
+ray hits.
+
+**Laplacian variance**. A sharpness metric [@pertuz2013focus] Polaris
+uses in the planetary pipeline to rank video frames for lucky
+imaging. Higher means sharper.
+
+**Light frame**. An actual exposure of the target, as opposed to the
+calibration frames that correct it. The frames you keep.
+
+**LRGB**. The monochrome-camera workflow that shoots luminance (L)
+for detail plus red, green, and blue filters for color, then combines
+the four stacks into one color image (@sec-mono-lrgb).
+
+**LST (local sidereal time)**. The right ascension currently crossing
+your meridian. Polaris computes it to drive meridian-flip warnings.
+
+**Lucky imaging**. Capturing thousands of short video frames of a
+planet and keeping only the sharpest few percent, beating the
+atmosphere by luck [@law2006lucky]. The VIDEO tab implements it
+(@sec-planetary).
+
+**Luminance**. The brightness-only channel of an image, or the clear
+filter (L) that captures it. Carries the detail in an LRGB
+combination.
+
+**Master frame**. The average of many calibration frames of one kind
+(master dark, master flat, master bias), smoother than any single
+frame. STUDIO builds and applies them (@sec-studio).
+
+**Meridian**. The imaginary north-south line passing directly
+overhead. Targets are highest, and imaging is best, as they cross it.
+
+**Meridian flip**. The side swap a German equatorial mount must
+perform as a target crosses the meridian, to keep the telescope from
+colliding with the pier. Polaris automates the whole pause, flip,
+re-solve, re-center, resume cycle (@sec-mounts).
+
+**Monochrome camera**. A camera with no color filter array; every
+pixel sees all light. More sensitive than a color camera, but needs
+filters and a filter wheel to produce color (@sec-mono-lrgb).
+
+**Mosaic**. Covering a target too large for one field of view with a
+grid of overlapping panels, later stitched together. The SKY tab's
+framing assistant plans them (@sec-sky-explorer).
+
+**MTF (midtone transfer function)**. The non-linear stretch curve
+used to display astro images. Polaris's WebGL renderer applies it on
+the GPU at preview time without touching the underlying data.
+
+**Narrowband**. Filters that pass only a few nanometers around one
+emission line, most commonly hydrogen-alpha (Ha), doubly ionized
+oxygen (OIII), and singly ionized sulfur (SII). They cut through
+light pollution and feed false-color palettes such as SHO and HOO
+(@sec-mono-lrgb).
+
+**Offset**. A small constant the camera adds to every pixel before
+digitizing, so read noise never clips to zero. Set once per gain
+value and left alone.
+
+**OSC (one-shot color)**. A camera with a Bayer matrix that captures
+color in a single exposure, as opposed to a monochrome camera with
+filters. Simpler; somewhat less sensitive.
+
+**PHD2**. The de-facto standard autoguiding program [@openphd_phd2].
+Polaris controls it over its network command interface on TCP port
+4400 and can embed its full GUI in the browser (@sec-guiding).
+
+**Photometric color calibration (PCC / SPCC)**. Setting an image's
+color balance by comparing the measured colors of its stars against
+their true catalog colors, using APASS [@henden2014apass] or Gaia
+[@gaia2023dr3] photometry. Polaris bundles the catalog data
+(@sec-color-calibration).
+
+**Pixel scale**. Arcseconds of sky per pixel: pixel size in microns
+times 206.265, divided by focal length in millimeters. It defines
+your resolution and feeds plate solving and guiding tuning.
+
+**Plate solving**. Working out the exact (RA, Dec) a frame is pointed
+at by matching its stars against a catalog, then using that to
+re-center the mount. Polaris uses ASTAP by default, with PlateSolve3
+and Astrometry.net as fallbacks (@sec-requirements).
+
+**Polar alignment**. Aiming the mount's rotation axis at the
+celestial pole so tracking follows the sky exactly. Polaris offers
+TPPA and a rudimentary method for sites without a view of the pole
+(@sec-polar-alignment).
+
+**Polaris (this app)**. Not to be confused with the star. Named after
+the user, kind of.
+
+**Rig**. Polaris's term for a saved bundle of equipment selections
+and per-setup defaults (cooler temperature, focus step, focal length,
+guiding preset, and so on). Switch rigs in one click from the RIGS
+tab; each keeps its own configuration (@sec-rigs).
+
+**Right ascension (RA)**. The celestial equivalent of longitude,
+measured in hours (0 to 24) rather than degrees. Half of an (RA, Dec)
+coordinate pair.
+
+**RMS (guiding)**. The root-mean-square of guiding corrections, the
+single number that summarizes guiding quality. Usually quoted in
+arcseconds; smaller is better.
+
+**ROI (region of interest)**. A subframe of the camera sensor read
+out instead of the whole chip, for faster frame rates; essential in
+planetary imaging (@sec-planetary).
+
+**Rotator**. A motorized device that rotates the camera to a
+commanded angle, so a planned framing can be reproduced exactly.
+
+**Seeing**. The steadiness of the atmosphere. Poor seeing smears
+stars and limits resolution no matter how good the optics; it is the
+"seeing" column in the weather forecast.
+
+**SER**. A raw video format designed for planetary capture: a header,
+uncompressed frames, and an optional timestamp trailer [@ser_format].
+Polaris writes SER from the VIDEO tab, and dedicated planetary
+stacking programs read it.
+
+**Settling**. The pause after a dither or slew while the mount stops
+oscillating and guiding locks back on, before the next exposure
+starts.
+
+**Sidereal rate**. The speed of the sky's apparent rotation, one full
+turn in 23 hours 56 minutes. Tracking at sidereal rate holds stars
+still on the sensor.
+
+**Siril**. A free astronomical image-processing application
+[@siril]. Polaris can hand pre-processing and stacking to Siril
+scripts as an alternative to its built-in STUDIO pipeline
+(@sec-studio).
+
+**Sky atlas**. The offline catalog of deep-sky objects browsable in
+the SKY tab, with search, filters, and framing tools
+(@sec-sky-explorer).
+
+**Slew**. Moving the mount fast to a new position, as opposed to
+tracking. Polaris chains slew, plate solve, and re-center into one
+operation.
+
+**SNR (signal-to-noise ratio)**. How far the real signal stands above
+the noise. It grows with total integration time; live stacking shows
+a running SNR readout (@sec-live-stacking).
+
+**Star removal**. Separating an image into a starless layer and a
+stars-only layer, in the manner of StarNet [@misiura_starnet], so
+nebulosity can be stretched hard without bloating stars, then
+recombined (@sec-star-removal).
+
+**Stretch**. Converting linear pixel values to display-friendly
+brightness through a non-linear curve (autostretch, manual sliders,
+or MTF). Necessary because the raw data is linear and nearly black.
+
+**Target**. In sequencing, a (name, RA, Dec) tuple the engine slews
+to and shoots a set of frames of.
+
+**TPPA (three-point polar alignment)**. The polar-alignment method
+that plate-solves three mount positions to measure the axis error,
+then guides you through correcting it live (@sec-polar-alignment).
+
+**Tracking**. The mount's continuous compensation for Earth's
+rotation, usually at sidereal rate, keeping the target stationary on
+the sensor.
+
+**V-curve**. The plot of HFR against focuser position that auto-focus
+builds: a sweep of positions around the current one, a parabola fit
+through the samples, and a move to the vertex (@sec-focusing).
+
+**Vignetting**. The gradual darkening toward an image's corners
+imposed by the optical path. Corrected by flat frames.
+
+**WebSocket**. A long-lived, two-way browser-to-server connection.
+Polaris uses one for the once-per-second status broadcast and another
+for the live image stream (@sec-api).
+
+**White balance**. Per-channel gain multipliers (red and blue
+relative to green) for color cameras. The VIDEO tab exposes sliders
+when the camera supports INDI's `WB_R` and `WB_B` properties.
+
+**XISF**. PixInsight's image format. Polaris can write it as an
+alternative to FITS.
+
+**xpra**. A Linux tool that shows a native program's window inside a
+web page [@xpra_project]. Polaris uses it to embed PHD2's full GUI in
+the GUIDE tab for the dialogs PHD2's network interface does not
+expose (@sec-guiding).
+
+<!-- consolidated from: docs/user-guide/GLOSSARY.md -->

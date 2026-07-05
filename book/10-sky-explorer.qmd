@@ -1,0 +1,360 @@
+# Sky Explorer and Session Planning {#sec-sky-explorer}
+
+The SKY tab is where a session starts before any shutter opens: an
+offline sky map, target search against a bundled deep-sky catalog,
+altitude planning for the night, field-of-view framing, a mosaic
+planner, and the slew-and-center orchestration that puts the chosen
+target on the sensor. Everything essential works with no internet at
+the telescope; online services are used only as optional enrichments
+and fallbacks.
+
+## The sky map
+
+The map itself is
+[stellarium-web-engine](https://github.com/Stellarium/stellarium-web-engine),
+the engine behind the web version of the popular Stellarium
+planetarium, running as its own sandboxed sub-app (served under
+`/sky/`) embedded in the page.^[For the technically curious: it runs
+in an iframe, draws with WebGL2 (the browser's built-in 3D graphics
+capability), and the host page steers it with postMessage, the
+standard way two web pages exchange data.] Drag to pan; use the
+mouse wheel or a pinch gesture to zoom. The view aims wherever the
+host UI tells it: the mount's current RA/Dec (right ascension and
+declination, the sky's equivalent of longitude and latitude), a
+search hit, or the **Centre on selected target** buttons.
+
+The bundled `skydata/` directory (about 4.6 MB, shipped in the repo
+and in the publish output) covers, fully offline: stars from the
+Hipparcos and Tycho catalogs (the standard star catalogs from ESA's
+Hipparcos mission) in the brighter naked-eye to binocular range, the
+NGC/IC/Messier catalog of DSOs (deep-sky objects: galaxies, nebulae,
+and star clusters) as labelled markers, the official IAU
+(International Astronomical Union) constellation lines and names (on
+by default), the 88 western constellation figure illustrations as
+toggleable artwork, a low-resolution Milky Way panorama, and the Sun,
+Moon, planets, asteroids, and comets.
+
+WebGL2 is mandatory for the map; almost every desktop, laptop, and
+tablet browser from the last few years has it. On a host without it
+(for example, running Polaris's local browser directly on a
+Raspberry Pi 2's bare display), the SKY tab shows a graceful
+fallback banner; open Polaris from a desktop, laptop, or tablet
+browser instead.
+
+![The SKY map with a target card open: magnitude, coordinates,
+meridian and horizon times, tonight's altitude curve, and the slew
+actions. On the map, the red rectangle is the target framing and the
+blue one is where the mount currently
+points.](images/sky-explorer.jpg){#fig-sky-map}
+
+## Offline deep-sky imagery (DSS)
+
+Real deep-sky imagery, the "I can actually see the nebula" background
+familiar from the ASIAIR (ZWO's all-in-one imaging controller), comes
+from the DSS Color survey (the Digitized Sky Survey, a photographic
+atlas of the entire sky), delivered as HiPS tiles (sky images cut
+into small squares that load progressively as you zoom, like an
+online road map). Two modes exist:
+
+- **Online** (the default when no local bundle is present): tiles are
+  streamed on demand from CDS Strasbourg (the astronomical data
+  centre in France that hosts the survey). Needs a connection.
+- **Offline**: provision the DSS bundle once; the bridge auto-detects
+  it and prefers it, so the rich sky works at the telescope with no
+  network.
+
+The repo ships HEALPix order 3 and below as a baseline (the HEALPix
+order is the tile set's zoom level; each extra order roughly
+quadruples the number of tiles), so the offline background works out
+of the box. For more detail, download a deeper tile set. Size
+scales roughly four times per order, so pick the ceiling that fits
+the memory card of your SBC (single-board computer, such as a
+Raspberry Pi):
+
+| max order | tiles | approx size | look |
+|---|---:|---:|---|
+| 3 | ~1 020 | ~30 MB | big objects recognisable, soft on zoom |
+| 4 | ~4 100 | ~110 MB | most DSOs recognisable (good value) |
+| 5 | ~16 400 | ~400 MB | detailed, ASIAIR-like |
+| 6 | ~65 500 | ~1.5 GB | overkill for framing |
+
+The easiest route is **Settings → Sky imagery (offline DSS)**, which
+downloads order 4 or 5 from inside the app. From a shell, the
+provisioning scripts do the same:
+
+```bash
+# Linux / macOS / Git-Bash  (args: MAX_ORDER [PARALLEL])
+scripts/fetch-stellarium-dss.sh 4
+```
+
+```powershell
+# Windows
+pwsh scripts/fetch-stellarium-dss.ps1 -MaxOrder 4
+```
+
+The script is resumable: it skips tiles already present, so you can
+re-run it later to top up to a higher order. It writes to
+`src/NINA.Polaris/wwwroot/sky/data/skydata/surveys/dss/`, a path
+tracked with Git LFS^[Git LFS (Large File Storage) is an extension
+to the Git version-control system that keeps big binary files out of
+the normal repository history and downloads them only when needed.]
+(see `.gitattributes`) so the binary tiles do not bloat a working
+clone but still ship in `dotnet publish` and the installer.
+Contributors who fetch tiles commit them afterwards:
+
+```bash
+git add src/NINA.Polaris/wwwroot/sky/data/skydata/surveys/dss
+git commit -m "skydata: bundle DSS Color HiPS (order 4)"
+```
+
+Attribution: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg.
+
+## DSO preview thumbnails
+
+Search results and atlas cards each show a small DSS2 cutout of the
+object, an ASIAIR-style photo per target, so you can tell a galaxy
+from a nebula at a glance, fully offline. The repo bundles Messier
+plus Caldwell coverage (about 206 images, roughly 3 MB) under
+`skydata/dso-thumbs/<SLUG>.jpg` (for example `M42.jpg`, `C14.jpg`),
+tracked with Git LFS. The app derives each file name (the "slug")
+from the result's catalog and id, and hides the image when none is
+bundled.
+
+To regenerate the set or widen coverage (bright NGC/IC, for example):
+
+```bash
+python scripts/build-dso-thumbs.py --catalogs M,C,NGC,IC --max-mag 11 --min-size 3
+```
+
+The script is resumable and sources DSS2 Color imagery via the CDS
+hips2fits service (STScI/NASA imagery). It is distinct from the
+online `/api/sky/image` NASA/Wikipedia lookup, which still works as a
+fallback when connected.
+
+## The bundled catalogs
+
+Search, the atlas filter, and Tonight's Best all draw from a bundled
+single-file database (SQLite, with an R*tree spatial index for fast
+sky searches) at `wwwroot/catalogs/dso/dso.db` (about 2.6 MB,
+roughly 14 500 objects):
+
+| Catalog | Entries | Source | License |
+|---|---:|---|---|
+| **NGC** | ~7570 | [OpenNGC](https://github.com/mattiaverga/OpenNGC) | CC BY-SA 4.0 |
+| **IC** | ~5000 | OpenNGC (same file) | CC BY-SA 4.0 |
+| **M** (Messier) | 107 | OpenNGC cross-reference (M-tagged duplicates) | CC BY-SA 4.0 |
+| **C** (Caldwell) | 104 | Embedded Caldwell to NGC/IC mapping in the build script | Public domain |
+| **Arp** | 592 | CDS Vizier `VII/192A/arplist` (Arp 1966) | Public domain |
+| **Sh2** | 313 | CDS Vizier `VII/20/catalog` (Sharpless 1959) | Public domain |
+| **HCG** | 100 | CDS Vizier `VII/213/groups` (Hickson 1982/89) | Public domain |
+| **AGC** | 767 | CDS Vizier `VII/110A/table3` (Abell-Corwin-Olowin 1989) | Public domain |
+
+The AGC entry is magnitude-trimmed at m10 < 17, keeping the brightest
+roughly 30% of the 2712-cluster catalog; fainter clusters require
+deep imaging beyond typical amateur reach. Full attribution and
+per-source license notes ship at `wwwroot/catalogs/dso/LICENSE.txt`.
+
+To rebuild the bundle from the original sources, run:
+
+```
+python scripts/build-dso-catalog.py
+```
+
+The output overwrites `src/NINA.Polaris/wwwroot/catalogs/dso/dso.db`.
+The script needs only the Python 3.8+ standard library (`urllib` and
+`sqlite3`), no external dependencies; cached downloads live in
+`scripts/.dso-cache/` for fast re-runs.
+
+When `dso.db` is missing (a development clone without the bundle),
+the SKY tab silently falls back to a small list of about 150
+hardcoded objects (the complete Messier catalog plus a handful of
+popular NGC entries), so the app still works, but search hits like
+"NGC 7331", "Arp 273", or "Sh2-279" come up empty.
+
+## Searching for a target
+
+At the top of the tab sit a text input and a **Search** button. Names
+resolve against the bundled catalog (NGC, IC, M, C, Arp, Sh2, HCG,
+AGC, plus common names like "Andromeda"), and you can also enter
+manual RA/Dec coordinates. Matches appear as result cards showing the
+name with alternate designations, RA/Dec (in J2000, the standard
+reference epoch for sky coordinates), magnitude and
+apparent size in arcminutes, an object-type badge (Galaxy, Nebula,
+Cluster, and so on), and the constellation. Click a result and it
+overlays on the map, centred and highlighted.
+
+The **Filters** button toggles a panel to narrow the results:
+
+- **Catalog** dropdown, restricting to a single source. Hidden when
+  the expanded database is not loaded.
+- **Object type** dropdown (Galaxy, Globular Cluster, HII Region,
+  Peculiar Galaxy, Planetary Nebula, Supernova Remnant, and more);
+  the list of types comes live from whatever is in the catalog.
+- **Constellation**, a free-text three-letter IAU abbreviation
+  ("Cyg", "Ori", "And"). Hidden when the expanded database is not
+  loaded.
+- **Magnitude range**, minimum and maximum inputs.
+- **Dec range**, minimum and maximum in degrees. Useful for
+  filtering by hemisphere: set the minimum Dec to 0 to keep only
+  northern targets, or the maximum to 0 for southern ones.
+
+## Planning the night: altitude chart, Tonight, and weather
+
+Once a target is selected, the bottom of the SKY tab shows its
+altitude against UTC time, with twilight bands (astronomical,
+nautical, civil), a Moon-altitude overlay, and a highlight on the
+best window where the target rides highest.
+
+For picking the target in the first place, the **Tonight** view ranks
+the best objects to image for your location and date, drawing
+altitude curves with the twilight and night windows. The ranking
+also surfaces large emission and dark nebulae that carry angular size
+but no stellar magnitude, so photogenic targets do not vanish just
+because they lack a catalog brightness. A **Weather** view shows
+current conditions and the forecast for the observing site, so you
+can judge whether the plan survives the clouds.
+
+## Field-of-view overlays and framing
+
+Polaris draws the camera footprints directly on the map so you can
+frame a composition before slewing:
+
+- The **blue rectangle** is the mount FOV (field of view), the main
+  camera's footprint anchored where the scope is pointing. It is
+  sized from the active rig's focal length and the connected
+  camera's sensor, and rotated to the solved camera angle once a
+  plate solve is available (plate solving matches the stars in a
+  captured frame against a catalog to find exactly where, and at
+  what angle, the camera is pointing).
+- The **red rectangle** is the target framing box. While idle it is
+  screen-anchored, so you drag the map to compose; while imaging with
+  a recent solve it snaps to the solved sky position, so red
+  converges on blue when you are framed correctly.
+- The **pink rectangle** is the auxiliary camera's FOV, shown when an
+  Auxiliary Camera System is configured on the rig (aux focal length
+  set, and the aux sensor reported once it connects; see @sec-rigs).
+  The aux rides the same mount, so it is anchored at the mount
+  position.
+- The **yellow rectangles** are the mosaic panels, described below.
+
+When you run a plate solve from SKY (**Solve & Sync**), Polaris also
+fires a parallel solve on the aux camera if one is connected: it
+captures a single aux frame with the aux exposure, gain, and binning,
+and solves it on its own hardware, concurrently with the main solve.
+The pink rectangle then snaps onto the aux camera's real solved
+rotation and scale, so you know for certain the field and angle the
+aux photo will come out with instead of assuming it matches the
+mount. A toast reports the solved aux rotation.
+
+## Slew & Center
+
+The big workflow button. With a target selected, click **Slew &
+Center** and Polaris:
+
+1. commands the mount to the target's RA/Dec;
+2. captures a plate-solve frame (5 s exposure by default);
+3. solves it, using ASTAP [@kleijn_astap], the plate-solving program
+   bundled with Polaris, as the primary solver, and falling back to
+   PlateSolve3 or Astrometry.net [@lang2010astrometry], online or
+   local;
+4. computes the offset from the intended position;
+5. re-slews to correct, repeating up to 5 iterations until the error
+   is within tolerance (30 arcsec by default).
+
+A status banner shows the phase live: "Slewing → Capturing → Solving
+→ Centering → Centered (12 arcsec error)".
+
+![Solve & Sync in action: the Plate solver panel streams the solver's
+log live while the map shows the current field-of-view rectangle;
+Sync here applies the solved position to the
+mount.](images/plate-solve.jpg){#fig-plate-solve}
+
+## Centering on the Sun, Moon, or a planet
+
+Plate solving cannot lock onto solar-system objects: the Sun and Moon
+wash the frame out, and a planetary shot (long focal length,
+millisecond exposures) has no background stars to match, so **Slew &
+Center** fails on them. The **Center on body** picker on the map
+handles them with a solve-near-and-offset strategy instead:
+
+1. Pick **Moon**, **Sun**, or a planet from the dropdown and click
+   **Center on body** (the mount must be connected).
+2. Polaris computes the object's apparent topocentric position (where
+   it appears from your exact spot on Earth) from its built-in
+   ephemeris (tables of where solar-system bodies are at any given
+   time), using your profile location and clock.
+3. It slews a few degrees off to a nearby star field and runs the
+   normal plate-solve and sync there, correcting the mount's pointing
+   model right next to the target without ever solving the object
+   itself.
+4. It re-reads the ephemeris (the Moon moves about 0.5 degrees per
+   hour) and performs a precise GoTo (an automated slew to exact
+   coordinates) onto the object. For the Moon
+   and Sun it then switches the mount to lunar or solar tracking so
+   the object stays centred.
+
+A phase chip shows progress (Computing position → Solving nearby
+field → Slewing to target → Centered), and the offset-field solve
+streams to the SKY solver console like any other solve. The
+procedure needs a connected mount, a camera, and a working plate
+solver for the offset field; if the nearby field will not solve,
+raise the offset or pick a clearer patch of sky.
+
+::: {.callout-warning}
+## The Sun
+Selecting the Sun pops a confirmation dialog. Only proceed with a
+certified full-aperture solar filter fitted. An unfiltered telescope
+pointed at the Sun destroys the camera instantly and can cause
+permanent eye damage. No software can protect against this.
+:::
+
+## Mosaic planner
+
+For targets larger than one field of view, click **Plan mosaic** with
+a target selected. Polaris overlays an N by M grid of panels on the
+map, drawn live as you adjust the settings: panels per axis, overlap
+percentage, and the total grid size. A cos(δ) correction (δ being
+the declination) keeps panels at high declination from stretching,
+and the planner shows an
+estimated session time computed as panels times exposure times
+frames.
+
+**Add to Sequence** is how the plan leaves the map: it generates the
+AUTORUN rows for all panels, ordered in a serpentine slew pattern
+(back and forth, row by row, like mowing a lawn) so the mount walks
+the grid efficiently. From there the sequencer takes
+over; see @sec-autorun. For multi-target scheduling across a whole
+night, the planner described in @sec-night-planner builds on the same
+target selection.
+
+## Stellarium sync
+
+If you have Stellarium (the popular free desktop planetarium
+program) open with its Remote Control plugin enabled, click **Get
+from Stellarium**. Polaris fetches Stellarium's current selection
+over HTTP (a plain web request on your local network) and
+auto-populates the search box with the RA, Dec, and name.
+
+## Slew preview
+
+While the mount is slewing and nothing is capturing, an inset card
+appears in the lower right showing a live camera feed, so you can
+watch the field sweep past during a GoTo. This is driven by
+`SlewPreviewService`, is on by default, and is polite to other camera
+consumers: it silently yields whenever a sequence, auto-focus,
+preview, or video recording grabs the camera.
+
+## Common pitfalls
+
+**Search returns nothing.** The catalog is not loaded; refresh the
+page.
+
+**Slew & Center fails repeatedly.** See the plate-solve section of
+@sec-troubleshooting.
+
+**Mosaic panels overlap wrongly.** The rig's focal length or sensor
+size is wrong. Re-pick the OTA from the catalog in the RIGS tab
+(@sec-rigs).
+
+<!-- consolidated from: docs/user-guide/sky-explorer.md,
+docs/FEATURES.md (SKY section) -->

@@ -1,0 +1,571 @@
+%% The Polaris Handbook bibliography.
+%% Policy: every technical claim in the book cites its source. Software and
+%% protocols are cited like any other work. Add a DOI whenever one exists,
+%% and verify entries against ADS (https://ui.adsabs.harvard.edu) or the
+%% publisher before relying on them in print.
+
+%% ---- Standards and file formats ----
+
+@article{wells1981fits,
+  author  = {Wells, D. C. and Greisen, E. W. and Harten, R. H.},
+  title   = {{FITS}: A Flexible Image Transport System},
+  journal = {Astronomy and Astrophysics Supplement Series},
+  volume  = {44},
+  pages   = {363--370},
+  year    = {1981}
+}
+
+@article{pence2010fits,
+  author  = {Pence, W. D. and Chiappetti, L. and Page, C. G. and Shaw, R. A. and Stobie, E.},
+  title   = {Definition of the Flexible Image Transport System ({FITS}), version 3.0},
+  journal = {Astronomy and Astrophysics},
+  volume  = {524},
+  pages   = {A42},
+  year    = {2010},
+  doi     = {10.1051/0004-6361/201015362}
+}
+
+%% ---- Plate solving and astrometry ----
+
+@article{lang2010astrometry,
+  author  = {Lang, Dustin and Hogg, David W. and Mierle, Keir and Blanton, Michael and Roweis, Sam},
+  title   = {Astrometry.net: Blind Astrometric Calibration of Arbitrary Astronomical Images},
+  journal = {The Astronomical Journal},
+  volume  = {139},
+  number  = {5},
+  pages   = {1782--1800},
+  year    = {2010},
+  doi     = {10.1088/0004-6256/139/5/1782}
+}
+
+@misc{kleijn_astap,
+  author       = {Kleijn, Han},
+  title        = {{ASTAP}: Astrometric Stacking Program},
+  howpublished = {\url{https://www.hnsky.org/astap.htm}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+%% ---- Source extraction and image analysis ----
+
+@article{bertin1996sextractor,
+  author  = {Bertin, E. and Arnouts, S.},
+  title   = {{SExtractor}: Software for source extraction},
+  journal = {Astronomy and Astrophysics Supplement Series},
+  volume  = {117},
+  pages   = {393--404},
+  year    = {1996},
+  doi     = {10.1051/aas:1996164}
+}
+
+%% ---- Stacking, reconstruction, deconvolution ----
+
+@article{fruchter2002drizzle,
+  author  = {Fruchter, A. S. and Hook, R. N.},
+  title   = {Drizzle: A Method for the Linear Reconstruction of Undersampled Images},
+  journal = {Publications of the Astronomical Society of the Pacific},
+  volume  = {114},
+  number  = {792},
+  pages   = {144--152},
+  year    = {2002},
+  doi     = {10.1086/338393}
+}
+
+@article{richardson1972bayesian,
+  author  = {Richardson, William Hadley},
+  title   = {Bayesian-Based Iterative Method of Image Restoration},
+  journal = {Journal of the Optical Society of America},
+  volume  = {62},
+  number  = {1},
+  pages   = {55--59},
+  year    = {1972},
+  doi     = {10.1364/JOSA.62.000055}
+}
+
+@article{lucy1974iterative,
+  author  = {Lucy, L. B.},
+  title   = {An iterative technique for the rectification of observed distributions},
+  journal = {The Astronomical Journal},
+  volume  = {79},
+  number  = {6},
+  pages   = {745--754},
+  year    = {1974},
+  doi     = {10.1086/111605}
+}
+
+@article{law2006lucky,
+  author  = {Law, N. M. and Mackay, C. D. and Baldwin, J. E.},
+  title   = {Lucky imaging: high angular resolution imaging in the visible from the ground},
+  journal = {Astronomy and Astrophysics},
+  volume  = {446},
+  number  = {2},
+  pages   = {739--745},
+  year    = {2006},
+  doi     = {10.1051/0004-6361:20053695}
+}
+
+%% ---- Photometric catalogs ----
+
+@article{henden2014apass,
+  author  = {Henden, A. and Munari, U.},
+  title   = {The {APASS} all-sky, multi-epoch {BVgri} photometric survey},
+  journal = {Contributions of the Astronomical Observatory Skalnat{\'e} Pleso},
+  volume  = {43},
+  number  = {3},
+  pages   = {518--522},
+  year    = {2014}
+}
+
+@article{gaia2023dr3,
+  author  = {{Gaia Collaboration} and Vallenari, A. and Brown, A. G. A. and Prusti, T. and others},
+  title   = {Gaia Data Release 3: Summary of the content and survey properties},
+  journal = {Astronomy and Astrophysics},
+  volume  = {674},
+  pages   = {A1},
+  year    = {2023},
+  doi     = {10.1051/0004-6361/202243940}
+}
+
+%% ---- Software and protocols ----
+
+@misc{berg_nina,
+  author       = {Berg, Stefan and {the N.I.N.A. contributors}},
+  title        = {{N.I.N.A.}: Nighttime Imaging 'N' Astronomy},
+  howpublished = {\url{https://nighttime-imaging.eu/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{downey_indi,
+  author       = {Downey, Elwood C.},
+  title        = {{INDI}: Instrument-Neutral Distributed Interface},
+  howpublished = {\url{https://www.indilib.org/}},
+  note         = {Protocol white paper and reference implementation, accessed 2026-07-05}
+}
+
+@misc{ascom_alpaca,
+  author       = {{The ASCOM Initiative}},
+  title        = {{ASCOM} and {Alpaca}: standards for astronomy device interoperability},
+  howpublished = {\url{https://ascom-standards.org/}},
+  note         = {Accessed 2026-07-05}
+}
+
+@misc{openphd_phd2,
+  author       = {Stark, Craig and Gilliam, Bret and Waddington, Andy and {the Open PHD Guiding contributors}},
+  title        = {{PHD2}: Open {PHD} Guiding},
+  howpublished = {\url{https://openphdguiding.org/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{siril,
+  author       = {{The Siril Team}},
+  title        = {Siril: astronomical image processing},
+  howpublished = {\url{https://siril.org/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{graxpert,
+  author       = {{The GraXpert Team}},
+  title        = {{GraXpert}: background extraction, denoising and deconvolution for astrophotography},
+  howpublished = {\url{https://graxpert.com/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{misiura_starnet,
+  author       = {Misiura, Nikita},
+  title        = {{StarNet++}: neural-network star removal},
+  howpublished = {\url{https://www.starnetastro.com/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{onnxruntime,
+  author       = {{Microsoft and the ONNX Runtime contributors}},
+  title        = {{ONNX} Runtime},
+  howpublished = {\url{https://onnxruntime.ai/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{rpi_imager,
+  author       = {{Raspberry Pi Ltd}},
+  title        = {Raspberry Pi Imager},
+  howpublished = {\url{https://www.raspberrypi.com/software/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{knro_indiwebmanager,
+  author       = {Mutlaq, Jasem},
+  title        = {{INDI} Web Manager ({indiwebmanager})},
+  howpublished = {\url{https://github.com/knro/indiwebmanager}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{xpra_project,
+  author       = {{The Xpra project contributors}},
+  title        = {Xpra: multi-platform screen and application forwarding},
+  howpublished = {\url{https://xpra.org/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{tightvnc_project,
+  author       = {{GlavSoft LLC}},
+  title        = {{TightVNC}: remote desktop software},
+  howpublished = {\url{https://www.tightvnc.com/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{novnc_project,
+  author       = {{The noVNC authors}},
+  title        = {{noVNC}: {VNC} client web application},
+  howpublished = {\url{https://novnc.com/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{gphoto_libgphoto2,
+  author       = {{The gPhoto project}},
+  title        = {{libgphoto2}: digital camera access library},
+  howpublished = {\url{http://www.gphoto.org/proj/libgphoto2/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{indilib_3rdparty,
+  author       = {{The INDI contributors}},
+  title        = {{INDI} 3rd-party driver repository},
+  howpublished = {\url{https://github.com/indilib/indi-3rdparty}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{ascom_omnisim,
+  author       = {{The ASCOM Initiative}},
+  title        = {{ASCOM} {Alpaca} Omni Simulators},
+  howpublished = {\url{https://github.com/ASCOMInitiative/ASCOMSimulators}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{canon_edsdk,
+  author       = {{Canon Inc.}},
+  title        = {Canon {EOS} Digital {SDK} ({EDSDK})},
+  howpublished = {\url{https://developercommunity.usa.canon.com/}},
+  note         = {Vendor SDK, accessed 2026-07-05}
+}
+
+@misc{nikon_sdk,
+  author       = {{Nikon Corporation}},
+  title        = {Nikon camera {SDK}s ({MAID} and Nikon Imaging {SDK})},
+  howpublished = {\url{https://sdk.nikonimaging.com/}},
+  note         = {Vendor SDK, accessed 2026-07-05}
+}
+
+@misc{sony_scrsdk,
+  author       = {{Sony Group Corporation}},
+  title        = {Sony Camera Remote {SDK}},
+  howpublished = {\url{https://developer.sony.com/imaging-products/camera-remote-sdk/}},
+  note         = {Vendor SDK, accessed 2026-07-05}
+}
+
+@misc{meklarian_meknikon,
+  author       = {{meklarian}},
+  title        = {{MekNikon}: C\# wrapper for the Nikon {MAID} {SDK}},
+  howpublished = {\url{https://github.com/meklarian/MekNikon}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{nantcom_sonycamerasdk,
+  author       = {{NantCom}},
+  title        = {{SonyCameraSDK}: portable C\# client for the Sony Camera Remote {API}},
+  howpublished = {\url{https://github.com/nantcom/SonyCameraSDK}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{ser_format,
+  title        = {The {SER} astronomical video file format},
+  howpublished = {File format specification},
+  note         = {Uncompressed raw video container widely used by planetary
+                  capture and stacking software}
+}
+
+@misc{webassembly,
+  author       = {{WebAssembly Community Group}},
+  title        = {{WebAssembly}},
+  howpublished = {\url{https://webassembly.org/}},
+  note         = {Specification, accessed 2026-07-05}
+}
+
+@article{pertuz2013focus,
+  author  = {Pertuz, Said and Puig, Domenec and Garcia, Miguel Angel},
+  title   = {Analysis of focus measure operators for shape-from-focus},
+  journal = {Pattern Recognition},
+  volume  = {46},
+  number  = {5},
+  pages   = {1415--1432},
+  year    = {2013},
+  doi     = {10.1016/j.patcog.2012.11.011}
+}
+
+%% ---- Entries merged from Part IV-VI + appendix consolidation ----
+
+@misc{openseadragon,
+  author       = {{OpenSeadragon contributors}},
+  title        = {{OpenSeadragon}: web-based viewer for high-resolution zoomable images},
+  howpublished = {\url{https://openseadragon.github.io/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{pixinsight,
+  author       = {{Pleiades Astrophoto}},
+  title        = {{PixInsight}: advanced image processing platform for astrophotography},
+  howpublished = {\url{https://pixinsight.com/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{sqlite,
+  author       = {Hipp, D. Richard and others},
+  title        = {{SQLite}},
+  howpublished = {\url{https://sqlite.org/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{harvey_nox,
+  author       = {Harvey, Christopher},
+  title        = {nox: deep-learning star removal},
+  year         = {2023},
+  howpublished = {\url{https://github.com/charvey2718/nox}},
+  note         = {MIT licence, code and trained weights. Accessed 2026-07-05}
+}
+
+@misc{patel_starrem2k13,
+  author       = {Patel, Ashish},
+  title        = {starrem2k13: star removal from astrophotography images},
+  howpublished = {\url{https://github.com/code2k13/starrem2k13}},
+  note         = {MIT licence, code and trained weights. Accessed 2026-07-05}
+}
+
+@misc{rockchip_rknn,
+  author       = {{Rockchip}},
+  title        = {{RKNN-Toolkit2} and the {RKNPU2} runtime},
+  howpublished = {\url{https://github.com/airockchip/rknn-toolkit2}},
+  note         = {NPU model conversion toolkit and runtime for Rockchip SoCs. Accessed 2026-07-05}
+}
+
+@misc{qualcomm_qairt,
+  author       = {{Qualcomm}},
+  title        = {Qualcomm {AI} Runtime ({QAIRT}) and Qualcomm {AI Hub}},
+  howpublished = {\url{https://aihub.qualcomm.com}},
+  note         = {Hexagon NPU runtime and cloud model-compilation service. Accessed 2026-07-05}
+}
+
+@misc{networkmanager_project,
+  author       = {{The NetworkManager developers}},
+  title        = {{NetworkManager}: network management daemon for Linux},
+  howpublished = {\url{https://networkmanager.dev/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{letsencrypt_isrg,
+  author       = {{Internet Security Research Group}},
+  title        = {Let's Encrypt: a free, automated, and open certificate authority},
+  howpublished = {\url{https://letsencrypt.org/}},
+  note         = {Service, accessed 2026-07-05}
+}
+
+@misc{lettuceencrypt_project,
+  author       = {McMaster, Nate and contributors},
+  title        = {{LettuceEncrypt}: free, automatic {HTTPS} certificate generation for {ASP.NET} {Core}},
+  howpublished = {\url{https://github.com/natemcmaster/LettuceEncrypt}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{xtermjs_project,
+  author       = {{The xterm.js contributors}},
+  title        = {xterm.js: a terminal for the web},
+  howpublished = {\url{https://xtermjs.org/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{jsonlines_format,
+  author       = {Ward, Ian},
+  title        = {{JSON} {Lines}: documentation for the {JSON} {Lines} text file format},
+  howpublished = {\url{https://jsonlines.org/}},
+  note         = {Specification, accessed 2026-07-05}
+}
+
+@misc{sharpcap_project,
+  author       = {Glover, Robin},
+  title        = {{SharpCap}: astronomy camera capture tool},
+  howpublished = {\url{https://www.sharpcap.co.uk/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{aspnetcore,
+  author       = {{Microsoft}},
+  title        = {{ASP.NET} Core},
+  howpublished = {\url{https://github.com/dotnet/aspnetcore}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{alpinejs,
+  author       = {Porzio, Caleb and contributors},
+  title        = {Alpine.js},
+  howpublished = {\url{https://alpinejs.dev}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{chartjs,
+  author       = {{Chart.js contributors}},
+  title        = {Chart.js},
+  howpublished = {\url{https://www.chartjs.org}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{yarp,
+  author       = {{Microsoft}},
+  title        = {{YARP}: Yet Another Reverse Proxy},
+  howpublished = {\url{https://github.com/dotnet/yarp}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{skiasharp,
+  author       = {{Mono Project}},
+  title        = {SkiaSharp},
+  howpublished = {\url{https://github.com/mono/SkiaSharp}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{messagepack,
+  author       = {Furuhashi, Sadayuki and contributors},
+  title        = {MessagePack: An efficient binary serialization format},
+  howpublished = {\url{https://msgpack.org}},
+  note         = {Specification and software, accessed 2026-07-05}
+}
+
+@misc{aladin_lite,
+  author       = {{CDS, Strasbourg astronomical Data Centre}},
+  title        = {Aladin Lite},
+  howpublished = {\url{https://aladin.cds.unistra.fr/AladinLite/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{nunit,
+  author       = {{NUnit Project}},
+  title        = {{NUnit}: Unit-testing framework for {.NET}},
+  howpublished = {\url{https://nunit.org}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{crowdin,
+  author       = {{Crowdin}},
+  title        = {Crowdin: Localization management platform},
+  howpublished = {\url{https://crowdin.com}},
+  note         = {Online service, accessed 2026-07-05}
+}
+
+@misc{deepl,
+  author       = {{DeepL SE}},
+  title        = {{DeepL} Translator {API}},
+  howpublished = {\url{https://www.deepl.com}},
+  note         = {Online service, accessed 2026-07-05}
+}
+
+@misc{libretranslate,
+  author       = {{LibreTranslate contributors}},
+  title        = {LibreTranslate: Free and open source machine translation {API}},
+  howpublished = {\url{https://libretranslate.com}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{planewave_platesolve3,
+  author       = {{PlaneWave Instruments}},
+  title        = {{PlateSolve3}},
+  howpublished = {\url{https://planewave.com/software-and-downloads/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{ascom_alpyca,
+  author       = {{The ASCOM Initiative}},
+  title        = {Alpyca: {Python} {API} library for {ASCOM} {Alpaca}},
+  howpublished = {\url{https://github.com/ASCOMInitiative/alpyca}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{stellarium_project,
+  author       = {{The Stellarium developers}},
+  title        = {Stellarium: open-source desktop planetarium},
+  howpublished = {\url{https://stellarium.org/}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{cosinekitty_astronomyengine,
+  author       = {Cross, Don},
+  title        = {Astronomy Engine: precision astronomy calculation library},
+  howpublished = {\url{https://github.com/cosinekitty/astronomy}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+@misc{ye_7timer,
+  author       = {Ye, Quanzhi},
+  title        = {{7Timer!}: astronomical weather forecast service},
+  howpublished = {\url{https://www.7timer.info/}},
+  note         = {Web service, accessed 2026-07-05}
+}
+
+@misc{osm_nominatim,
+  author       = {{OpenStreetMap contributors}},
+  title        = {Nominatim: open-source geocoding with {OpenStreetMap} data},
+  howpublished = {\url{https://nominatim.org/}},
+  note         = {Web service, accessed 2026-07-05}
+}
+
+@misc{cds_aladin,
+  author       = {{Centre de Donn{\'e}es astronomiques de Strasbourg (CDS)}},
+  title        = {Aladin Sky Atlas and {HiPS} image services},
+  howpublished = {\url{https://aladin.cds.unistra.fr/}},
+  note         = {Web service, accessed 2026-07-05}
+}
+
+@misc{sshnet_project,
+  author       = {{The SSH.NET contributors}},
+  title        = {{SSH.NET}: {SSH} library for {.NET}},
+  howpublished = {\url{https://github.com/sshnet/SSH.NET}},
+  note         = {Software, accessed 2026-07-05}
+}
+
+%% ---- Classic references resolved from consolidation TODOs ----
+%% Verify against ADS / publisher before print, like everything else.
+
+@book{janesick2007photon,
+  author    = {Janesick, James R.},
+  title     = {Photon Transfer},
+  publisher = {SPIE Press},
+  address   = {Bellingham, Washington},
+  year      = {2007},
+  doi       = {10.1117/3.725073}
+}
+
+@article{pickles1998library,
+  author  = {Pickles, A. J.},
+  title   = {A Stellar Spectral Flux Library: 1150--25000 {\AA}},
+  journal = {Publications of the Astronomical Society of the Pacific},
+  volume  = {110},
+  number  = {749},
+  pages   = {863--878},
+  year    = {1998},
+  doi     = {10.1086/316197}
+}
+
+@article{ballesteros2012temperature,
+  author  = {Ballesteros, F. J.},
+  title   = {New insights into black bodies},
+  journal = {EPL (Europhysics Letters)},
+  volume  = {97},
+  number  = {3},
+  pages   = {34008},
+  year    = {2012},
+  doi     = {10.1209/0295-5075/97/34008}
+}
+
+@incollection{zuiderveld1994clahe,
+  author    = {Zuiderveld, Karel},
+  title     = {Contrast Limited Adaptive Histogram Equalization},
+  booktitle = {Graphics Gems IV},
+  editor    = {Heckbert, Paul S.},
+  publisher = {Academic Press},
+  pages     = {474--485},
+  year      = {1994}
+}

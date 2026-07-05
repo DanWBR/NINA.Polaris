@@ -1,0 +1,117 @@
+project:
+  type: book
+  output-dir: _build
+
+book:
+  title: "The Polaris Handbook"
+  subtitle: "Browser-controlled astrophotography with N.I.N.A. Polaris"
+  author: "Daniel Wagner Oliveira de Medeiros"
+  date: today
+  repo-url: https://github.com/DanWBR/NINA.Polaris
+  chapters:
+    - index.qmd
+    - part: "Getting Started"
+      chapters:
+        - 01-what-is-polaris.qmd
+        - 02-installation.qmd
+        - 03-ui-tour.qmd
+        - 04-first-night.qmd
+    - part: "Equipment"
+      chapters:
+        - 05-rigs-and-drivers.qmd
+        - 06-dslr-mirrorless.qmd
+        - 07-mounts-accessories.qmd
+        - 08-simulator.qmd
+    - part: "Capturing the Night"
+      chapters:
+        - 09-polar-alignment.qmd
+        - 10-sky-explorer.qmd
+        - 11-focusing.qmd
+        - 12-autoguiding.qmd
+        - 13-preview.qmd
+        - 14-autorun-flats.qmd
+        - 15-advanced-sequencer.qmd
+        - 16-night-planner.qmd
+        - 17-live-stacking.qmd
+        - 18-planetary.qmd
+    - part: "Processing Your Images"
+      chapters:
+        - 19-managing-data.qmd
+        - 20-studio.qmd
+        - 21-mono-lrgb.qmd
+        - 22-color-calibration.qmd
+        - 23-ai-cleanup.qmd
+        - 24-star-removal-blend.qmd
+        - 25-editor.qmd
+        - 26-end-to-end.qmd
+    - part: "Remote Access and Administration"
+      chapters:
+        - 27-networking.qmd
+        - 28-administration.qmd
+    - part: "Under the Hood"
+      chapters:
+        - 29-architecture.qmd
+        - 30-api-configuration.qmd
+        - 31-building-contributing.qmd
+  appendices:
+    - 90-requirements.qmd
+    - 91-glossary.qmd
+    - 92-troubleshooting.qmd
+    - 93-faq.qmd
+    - 99-references.qmd
+
+bibliography: references.bib
+link-citations: true
+
+format:
+  html:
+    theme: cosmo
+    number-depth: 2
+  pdf:
+    documentclass: scrbook
+    papersize: a4
+    toc-depth: 2
+    number-depth: 2
+    colorlinks: true
+    include-in-header:
+      text: |
+        \setmainfont{Inter}[ItalicFont={Inter},ItalicFeatures={FakeSlant=0.21},BoldFont={Inter Bold},BoldItalicFont={Inter Bold},BoldItalicFeatures={FakeSlant=0.21}]
+        \setsansfont{Inter}
+        \usepackage{tikz}
+        % Full-bleed cover: the author's Horsehead + Flame Nebula image,
+        % cropped vertically (A4 portrait window over a landscape frame,
+        % nudged right so the Flame stays in view), title set in Inter
+        % on the dark starfield at the top.
+        \renewcommand{\maketitle}{%
+        \begin{titlepage}%
+        \begin{tikzpicture}[remember picture, overlay]
+          \node[inner sep=0pt] at ([xshift=12mm]current page.center)
+            {\includegraphics[height=\paperheight]{images/cover-horsehead.jpg}};
+          \node[anchor=north, text=white, align=center]
+            at ([yshift=-34mm]current page.north) {%
+              {\fontsize{37}{44}\selectfont\bfseries The Polaris Handbook}\\[8mm]
+              \textcolor{white}{\rule{58mm}{0.5pt}}\\[8mm]
+              {\fontsize{13.5}{18}\selectfont Browser-controlled astrophotography}\\[2.2mm]
+              {\fontsize{13.5}{18}\selectfont with N.I.N.A. Polaris}};
+          \node[anchor=south, text=white, align=center]
+            at ([yshift=20mm]current page.south)
+            {\fontsize{15}{20}\selectfont Daniel Wagner Oliveira de Medeiros};
+        \end{tikzpicture}%
+        \end{titlepage}%
+        % Interior title page, as in a printed book.
+        \begin{titlepage}\centering
+          \vspace*{56mm}
+          {\fontsize{28}{34}\selectfont\bfseries The Polaris Handbook\par}
+          \vspace{9mm}
+          {\large Browser-controlled astrophotography with N.I.N.A. Polaris\par}
+          \vfill
+          {\large Daniel Wagner Oliveira de Medeiros\par}
+          \vspace{5mm}
+          {\normalsize\today\par}
+          \vspace*{18mm}
+        \end{titlepage}}
+    geometry:
+      - margin=2.5cm
+
+crossref:
+  chapters: true

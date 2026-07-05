@@ -1,0 +1,78 @@
+# Preface {.unnumbered}
+
+N.I.N.A. Polaris grew fast. What started as a lightweight,
+browser-controlled fork (an independent offshoot that shares its
+starting code) of N.I.N.A., the popular Windows desktop imaging
+program, built for the Raspberry Pi, is now a complete
+astrophotography system: equipment control, guiding, focusing,
+planning, live stacking, planetary capture, and a full
+post-processing suite with AI tools that run right in the browser.
+The documentation grew with it, one page at a time, and today it spans
+more than fifty files across the repository. Every feature is documented
+somewhere; the problem is knowing where.
+
+This book is the answer. It is the single, organized reference for
+everything Polaris: how to use it, how it behaves, and how it works inside.
+It replaces no code and invents no features; it consolidates what the
+scattered documentation already knows into one coherent narrative, ordered
+the way you actually encounter the software, from the first install to the
+internals of the server.
+
+## Who this book is for {.unnumbered}
+
+You have shot astrophotography before, or you are willing to learn the craft
+alongside the tool. Concepts like plate solving, dithering, and calibration
+frames get a one-line explanation in context and a proper entry in the
+glossary (@sec-glossary), but this is a book about Polaris, not a general
+astrophotography course.
+
+Two audiences share these pages:
+
+- **Users** read Parts I through V: installation, equipment, capture,
+  processing, and remote access. Everything is task-oriented and follows the
+  arc of a real imaging session.
+- **Developers and integrators** add Part VI: the server architecture,
+  the REST and WebSocket APIs (the interfaces other programs use to
+  command and monitor Polaris), configuration, and the development
+  workflow.
+
+## How the book is organized {.unnumbered}
+
+- **Part I, Getting Started**: what Polaris is, installing it on a
+  Raspberry Pi, mini-PC, or Windows box, a tour of the interface, and your
+  first night out.
+- **Part II, Equipment**: rigs, drivers of every kind your gear might
+  speak (INDI, Alpaca, ASCOM, native SDKs; each is explained there),
+  DSLR and mirrorless cameras, mounts, and the built-in simulator.
+- **Part III, Capturing the Night**: polar alignment, planning, focusing,
+  guiding, sequencing (simple, advanced, and multi-target), live stacking,
+  and planetary work.
+- **Part IV, Processing Your Images**: from raw frames to a finished JPEG,
+  entirely inside Polaris: STUDIO, channel combination, color calibration,
+  AI cleanup, star removal, and the EDITOR.
+- **Part V, Remote Access and Administration**: networking, HTTPS, the
+  relay, authentication, and keeping a headless box (one that runs
+  with no monitor or keyboard attached) healthy.
+- **Part VI, Under the Hood**: architecture, API, configuration, and how to
+  build and contribute.
+- **Appendices**: the requirements matrix, glossary, troubleshooting, and
+  FAQ.
+
+## Conventions {.unnumbered}
+
+- UI elements appear in **bold**: press **Connect All** in the **RIGS** tab.
+- Sidebar tabs are written in capitals, as in the UI: RIGS, FOCUS, STUDIO.
+- File paths, commands, and configuration keys use `monospace`.
+- The machine running the Polaris server is called the **host**; the
+  laptop, tablet, or phone showing the UI is called the **client**.
+
+## A note on this edition {.unnumbered}
+
+This book tracks a moving target. It lives in the Polaris repository under
+`book/` and is built with Quarto (a publishing tool that turns plain
+text into books and websites), so it evolves with the software it
+describes. Where the software and the book disagree, the software is right
+and a fix to the book is welcome.
+
+The cover photograph, the Horsehead and Flame Nebulae in Orion, was
+captured and processed by the author.

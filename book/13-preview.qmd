@@ -1,0 +1,144 @@
+# Test Shots with PREVIEW {#sec-preview}
+
+Before you commit a night to a sequence, you look. The PREVIEW tab
+exists for exactly that: snapping test shots and running a continuous
+stream to check framing, focus, and exposure settings. It is
+deliberately decoupled from the AUTORUN sequence engine
+(@sec-autorun); use PREVIEW when you want to see a frame without
+committing to a save.
+
+## Controls
+
+- **Exp** (seconds): the exposure time. Sub-second values suit
+  planetary or focus tests; 5 to 30 s suits deep-sky framing.
+- **Gain**: camera gain. The units depend on the driver; ZWO
+  cameras typically use 0 to 600, QHY similar.
+- **Bin**: 1x1, 2x2, or 4x4 (binning merges neighbouring pixels into
+  one for a brighter, smaller image).
+- **Filter**: shown only when a filter wheel is connected; the wheel
+  swaps before the capture.
+- **Save to disk**: a toggle. When on, snaps land in
+  `{ImageOutputDir}/{Rig}/snaps/{Filter}_{Date}/`. When off (the
+  default), snaps render in the preview but do not persist, perfect
+  for test shots that would otherwise pollute the science folder.
+
+## The shutter button
+
+Snap, loop, and abort all route through the big circular shutter
+centered in the right sidebar, with the same gesture vocabulary as
+the LIVE, FOCUS Manual, and VIDEO tabs:
+
+- **Tap** while idle takes a single exposure. The ring fills in real
+  time as the exposure runs, with a numeric countdown below it.
+- **Long-press** (hold for at least 600 ms) while idle enters loop
+  mode. Each frame waits for the previous one to finish and render
+  before the next starts, so the effective frame rate is bounded by
+  exposure plus transfer plus render time. An amber ring during the
+  hold confirms the arming.
+- **Tap during a snap or loop** aborts it.
+
+A **Continuous preview** checkbox offers the same loop as the
+long-press gesture as an explicit toggle: check it to keep snapping
+back to back, using the exposure, gain, bin, and filter set above,
+until you uncheck it. It is disabled while Stream is running.
+
+Two more controls sit nearby. **Stream** is server-side continuous
+capture, kept as its own toggle below the shutter because it is a
+distinct mode, not a snap or a loop; its behavior is described below.
+**View** opens the last frame in the full-resolution viewer (built
+on OpenSeadragon, the smooth pan-and-zoom engine used by online map
+and museum sites) for close inspection.
+
+<!-- screenshot: PREVIEW tab with the circular shutter, controls, and
+stats bar -->
+
+## Snap, loop, or stream?
+
+The three modes trade fidelity for speed:
+
+- **Snap**: one frame. You want to look and decide. The default for
+  focus tests, framing, and plate-solve seeding (capturing the frame
+  the plate solver uses to work out exactly where the telescope is
+  pointing from the stars in the image).
+- **Loop**: chained snaps. Every frame goes through the full
+  pipeline (the FITS save if enabled, FITS being the standard
+  astronomy image format; statistics calculation; and the
+  remote-access relay), so the frame rate is bounded. Good when you
+  care about per-frame stats.
+- **Stream**: server-side continuous capture. Frames bypass save
+  and stats and are ephemeral, display only, which makes it the
+  highest-fps mode. Good for live view while framing or focusing,
+  planetary preview, and polar alignment.
+
+Stream auto-picks between two implementations. **Native mode**
+(labelled "native · X.X fps") is used when the camera supports the
+video mode of INDI (the device-driver framework Polaris uses to talk
+to equipment), `CCD_VIDEO_STREAM`: the driver pushes a continuous
+stream of image packets (BLOBs) at 10 to 30 fps (frames per second)
+with no per-frame round trips. **Loop mode** (labelled
+"loop · X.X fps") is the fallback: the server simply takes exposures
+back to back (a tight `CaptureAsync` loop). The tooltip on the
+button tells you which mode will run.
+
+Loop and Stream are mutually exclusive; one camera cannot be in two
+modes, so the buttons disable each other.
+
+## The stats bar
+
+Below the canvas, the stats bar shows the most recent snap's star
+count as found by Polaris's star finder (`StarDetector`), the median
+HFR (half-flux radius, a star-sharpness number; lower is sharper),
+the mean, median, and standard deviation of the pixel values, the
+minimum and maximum for clipping detection (spotting pixels that
+have gone fully black or fully white), and a **last:** timestamp.
+
+## The renderer
+
+The preview uses Polaris's WebGL2 pipeline (WebGL2 is the browser's
+built-in GPU graphics capability) when the browser provides it: GPU
+debayering (reconstructing full colour from a colour camera's filter
+mosaic) for the RGGB, GRBG, GBRG, and BGGR Bayer patterns, MTF
+auto-stretch (an automatic brightness curve that lifts faint detail
+without blowing out stars), a toggleable star-annotation overlay, a
+toggleable crosshair with a 3x3 grid, and a pixel hover readout
+showing the raw ADU (the camera's raw pixel count) and RGB values.
+Browsers without WebGL2 fall back to JPEG images encoded on the
+server, with the same visual result and slightly more CPU load on
+the host.
+
+## Where saved snaps go
+
+When **Save to disk** is on, the path is:
+
+```
+{ImageOutputDir}/{Rig}/snaps/{Filter}_{Date}/snap_NNN.fits
+```
+
+`Filter` is the current filter name, or `L` when no filter wheel is
+connected; `Date` is ISO `yyyy-MM-dd`; and `NNN` is an
+auto-incrementing sequence number within the date folder. This
+convention deliberately separates test shots from
+`lights/{Target}/...`, so the STUDIO frame library does not fill up
+with focus and framing frames you would just toss.
+
+## Common pitfalls
+
+**The Stream button is greyed out.** No camera is connected; connect
+one in the RIGS tab first (@sec-rigs).
+
+**The loop frame rate caps at 0.5 fps.** The exposure is dominating.
+Drop it to 100 ms, or switch to Stream mode if you do not need
+per-frame stats.
+
+**Saved snaps do not appear in STUDIO.** STUDIO's frame library
+scans only `lights/` and `calibration/` by default; snaps live in
+`snaps/` deliberately. To pull them into STUDIO (@sec-studio), move
+them to `lights/...` or use the FILES tab (@sec-files).
+
+The LIVE tab uses the same preview canvas while integrating stacks
+(@sec-live-stacking), and the VIDEO tab uses the same stream with
+SER recording (the raw video format planetary imagers stack later)
+on top (@sec-planetary). MTF stretch has a glossary entry in
+@sec-glossary.
+
+<!-- consolidated from: docs/user-guide/preview.md -->

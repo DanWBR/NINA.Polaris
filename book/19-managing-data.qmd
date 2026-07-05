@@ -1,0 +1,213 @@
+# Managing Your Data {#sec-files}
+
+An imaging night produces a lot of files: dozens or hundreds of light
+frames (the actual exposures of your target), calibration frames
+(darks, flats, and biases, the support exposures that map your
+sensor's defects; @sec-glossary has the full definitions), saved live
+stacks, test snaps, and eventually masters, composites, and exports.
+All of it lives on the host, the machine running the Polaris server,
+not on the laptop or tablet you are browsing from. This chapter is
+about managing that data: where frames land, how the built-in file
+browser works, how to move files on and off the host, and how to keep
+a small SD card from filling up mid-project.
+
+The file browser is the left column of the **STUDIO** tab and it is
+always on screen there; the right column switches between the
+**Stack** workspace (batch processing, @sec-studio) and the **Edit**
+workspace (single-frame adjustments, @sec-editor), with a third
+sub-tab, **Auto Workflow**, for saved processing pipelines
+(@sec-studio). Earlier releases split this across three separate
+sidebar tabs, FILES, STUDIO, and EDITOR; they were three views of the
+same universe, the image files on the host's disk, and splitting them
+forced a tab jump in the middle of every workflow (pick lights, stack,
+edit the master). Unified, the browser keeps your selection and your
+place in the folder tree while the right side changes role. If you
+see the name "FILES tab" in older Polaris material, this browser is
+what it means.
+
+<!-- screenshot: the STUDIO file browser: drive picker and path
+crumbs at the top, checkbox listing with FITS metadata columns
+enabled, selection bar with the Studio root indicator at the
+bottom -->
+
+## Where frames land
+
+Every capture path in Polaris writes under one folder, the
+**Studio root**, stored in the profile setting `ImageOutputDir`. The
+default is `$HOME/Pictures/Polaris` on Linux and
+`%USERPROFILE%/Pictures/Polaris` on Windows; the `.deb` package
+install points it at `/home/polaris/files` instead (@sec-installation
+covers the defaults and how to override them).
+
+Inside the root, each rig (each named equipment profile,
+@sec-rigs) gets its own folder, and each kind of capture gets a
+predictable subtree:
+
+```
+{ImageOutputDir}/
+  {RigName}/
+    lights/{Target}/{Filter}/{ISO-timestamp}/
+    calibration/dark/dark_{ExposureSec}s_{Gain}_{Temp}C.fits
+    calibration/flat/{Filter}/flat_{Timestamp}.fits
+    calibration/bias/bias_{Timestamp}.fits
+    stacked/                         (saved live stacks)
+    snaps/{Filter}_{Date}/           (from PREVIEW with Save on)
+    planetary/{Target}/{ts}.ser      (from the VIDEO tab)
+    siril/                           (Siril output)
+    bge/                             (GraXpert BGE output)
+```
+
+Light frames are therefore grouped by target, then by filter, then by
+session date, which makes both housekeeping ("delete the cloudy night
+of June 3rd") and processing ("select all the luminance subs of
+IC 4606") a matter of navigating to one folder. The processing
+stages described in the next chapters add their own subtrees under the
+same rig folder: `calibration/masters/` for master frames,
+`calibrated/` for calibrated lights, `integrated/` for stacked
+masters and their `composed/` channel combinations, and
+`processed/` for exported bitmaps (@sec-studio, @sec-mono-lrgb).
+
+## The browser
+
+The left column is a full file manager for the host's disk, not just
+for the Studio root:
+
+- **Drive picker**: on Windows it lists the lettered drives; on Linux
+  it offers `/`, `/home`, `/mnt`, `/media`, and `~` (the server
+  user's home folder). Removable disks and network mounts usually
+  appear under `/mnt` or `/media`.
+- **Path crumbs**: the current path is shown as clickable segments;
+  click any of them to jump back up.
+- **Toolbar**: **New folder**, **Upload**, **Download**, **Cut**,
+  **Copy**, **Paste**, **Rename**, **Delete**, **Compare**, **Crop**,
+  **Set as Studio root**, and **GraXpert** (the AI cleanup entry
+  point, @sec-ai-cleanup).
+- **Listing**: rows with name, size, modified date, and type columns,
+  each with a selection checkbox. Double-click a folder to enter it;
+  double-click a file to preview it. Multi-select with Ctrl-click and
+  Shift-click, as in a desktop file manager.
+- **Selection bar**: a summary such as "2 files · 124 MB" plus an
+  indicator showing the current Studio root.
+
+### FITS metadata columns
+
+Above the listing sits a **Show FITS metadata** checkbox, off by
+default so that folders holding thousands of files still list
+quickly. Turn it on and four extra columns appear: **Type**,
+**Filter**, **Target**, and **Exposure (s)**, read from each file's
+FITS header (FITS is the standard astronomy image format, and its
+header carries this shot metadata inside the file [@pence2010fits]).
+
+The values do not come from opening each file on demand; they come
+from the frame library, an index of every image Polaris knows about,
+kept in a SQLite database [@sqlite] (a small database engine that
+stores everything in a single file on the host). The lookup is a
+single batch query, under 100 ms even with hundreds of rows in view.
+Files that have not been indexed yet show "--" in those columns;
+click **Rescan** in the toolbar to index them. The checkbox state is
+remembered across sessions on that browser device.^[The preference
+is stored in the browser's localStorage, so it is per client device,
+not per host.]
+
+Use this when you inherit a folder of mixed lights, darks, and flats
+and do not want to open each file to check what it is.
+
+### Previewing files
+
+Double-clicking a file opens a preview appropriate to its type:
+
+- **FITS, XISF, TIFF, PNG, JPG**: a zoomable, pannable viewer
+  (OpenSeadragon [@openseadragon], the deep-zoom viewer used
+  throughout Polaris), with an automatic contrast stretch applied to
+  FITS files so a linear frame is actually visible. XISF is the
+  image format from the PixInsight world [@pixinsight]; Polaris reads
+  it alongside FITS.
+- **TXT, LOG, JSON, MD**: a text modal showing the first 32 KB of
+  the file.
+
+## Moving, copying, and deleting
+
+The mutation operations follow desktop conventions:
+
+- **Cut** then **Paste** moves files; a move across volumes (from the
+  SD card to a USB disk, say) is handled as a copy followed by a
+  delete.
+- **Copy** then **Paste** duplicates.
+- **Delete** asks for confirmation and writes a line to the server
+  log, so a destructive mistake is at least traceable.
+- **Rename** edits the name inline on the row.
+- **Upload** pushes files from the client device to the host;
+  **Download** pulls them the other way. Downloading a multi-file
+  selection streams a single ZIP archive to the browser, packed on
+  the fly, so there is no temporary archive eating disk space on the
+  host.
+
+One practical note on large downloads: if you reach Polaris through a
+reverse proxy (an intermediary web server in front of Polaris), a
+long-running ZIP download can hit the proxy's read timeout and abort.
+Give the proxy a long read timeout, or download over the direct LAN
+connection on port 5000, which has no such limit.
+
+## Switching the Studio root
+
+Navigate to any folder and click **Set as Studio root** (the
+star-marked toolbar button). This updates the profile's
+`ImageOutputDir` and re-indexes the frame library against the new
+root. It is the canonical way to switch storage targets between
+sessions: point it at a bigger USB SSD, a NAS share mounted under
+`/mnt`, or a fresh project folder, and every subsequent capture and
+processing output lands there.
+
+## Housekeeping on a small SD card
+
+A Raspberry Pi booting from a 32 or 64 GB SD card does not hold many
+nights of 24-megapixel FITS files, and stacking multiplies the
+footprint: calibrated copies, integrated masters, and composites all
+land next to the originals. A few habits keep the card healthy:
+
+- **Watch the disk gauge.** The bottom status bar shows the host's
+  disk usage at all times (@sec-ui-tour); glance at it before a long
+  unattended night.
+- **Prefer external storage for data.** Plug in a USB SSD (or mount
+  a NAS share) and **Set as Studio root** on it. The SD card then
+  holds only the operating system and Polaris itself, and card wear
+  and space pressure both disappear.
+- **Transfer, then delete.** After a session, select the night's
+  folders and **Download** them as one ZIP to your processing
+  machine, or **Cut** and **Paste** them onto an attached disk; then
+  **Delete** the originals. The per-date session folders under
+  `lights/{Target}/{Filter}/` make it easy to remove exactly one
+  night.
+- **Prune the processing by-products.** Calibrated intermediates
+  under `calibrated/` can be regenerated from the raw lights and the
+  masters at any time (@sec-studio), so they are safe to delete once
+  you have the integrated master.
+
+## Security model
+
+The browser is powerful, and it is worth being explicit about what it
+exposes. Polaris assumes a trusted home network: the file browser can
+reach the entire filesystem of the host, limited only by the
+permissions of the user account the server runs as. A blocklist
+covers the obvious traps (`/proc`, `/sys`, `/dev/shm`,
+`/etc/shadow`, `~/.ssh`, and the Windows registry hives), and
+destructive operations require double confirmation, but the surface
+is deliberately wide; that is what makes it useful.
+
+The consequence: do not expose Polaris directly to the internet. For
+access from outside your network, use the Relay, which adds access
+tokens, TLS encryption, and rate limiting (@sec-networking).
+
+## Common pitfalls
+
+**FITS metadata columns are blank ("--").** Those files are not in
+the frame library yet. Click **Rescan** in the toolbar.
+
+**A long ZIP download times out.** A reverse proxy in the path needs
+a longer read timeout; direct LAN access on port 5000 is unaffected.
+
+**New files do not appear in the listing.** The capture pipeline may
+still be flushing the file to disk; wait a few seconds and refresh or
+**Rescan**.
+
+<!-- consolidated from: docs/user-guide/files.md -->

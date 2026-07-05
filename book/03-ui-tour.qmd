@@ -1,0 +1,253 @@
+# A Tour of the Interface {#sec-ui-tour}
+
+Everything in Polaris happens in one web page. The left edge of that
+page is a sidebar, the main navigation rail; each button on it opens
+one panel, and some panels add a row of pills or tabs across the top
+for sub-views. The sidebar is deliberately ordered like a real
+session, top to bottom: connect your equipment, pick a target, focus,
+guide, capture, watch, process. This chapter walks the rail once,
+shows what is always on screen regardless of the panel, and ends with
+a task index for the moments when you know what you want to do but not
+where it lives.
+
+![The Polaris UI, here on the SKY tab: the sidebar rail on the left,
+connection and guiding badges in the top bar, and host telemetry (CPU,
+memory, disk) in the bottom status bar.](images/hero.jpg){#fig-ui-overview}
+
+## The sidebar, top to bottom
+
+**HOME** is the landing dashboard shown when you connect. It
+summarizes the session at a glance and offers quick jumps into the
+other panels; the next section describes it.
+
+**RIGS** is the equipment hub. Here you pick and connect your camera,
+mount, focuser, filter wheel, and guide gear, and you save each
+combination as a named rig so switching between a permanent setup and
+a travel kit is one click. Every way Polaris can talk to equipment
+lives here too: INDI (the standard driver system for astronomy gear
+on Linux), ASCOM Alpaca (the network flavor of the Windows ASCOM
+driver standard), classic ASCOM COM on Windows, the camera makers'
+own driver libraries (native SDKs), and the DSLR drivers, along with
+the embedded INDI Drivers Manager.
+@sec-rigs covers it in full; DSLR bodies get their own chapter in
+@sec-dslr and mounts and accessories in @sec-mounts.
+
+**POLAR** aligns the mount's polar axis before the night starts,
+using either TPPA (three-point polar alignment) with a live refinement
+loop, or a rudimentary single-target method for sites without a view
+of the pole. See @sec-polar-alignment.
+
+**SKY** is the Sky Explorer: an offline interactive sky map where you
+search for targets, frame them with a draggable field-of-view overlay,
+plan mosaics, and command slew-and-center. Its pill row adds
+**Tonight**, altitude curves and the best objects for your site and
+date, and **Weather**, current conditions and the forecast. See
+@sec-sky-explorer.
+
+**FOCUS** handles focusing and field analysis: manual stepping with a
+live HFR readout (HFR, half-flux radius, is a per-star size measure;
+smaller numbers mean sharper focus), the automated V-curve auto-focus
+(which samples star size across a range of focuser positions and
+moves to the minimum), a Bahtinov mask helper, and the tilt and
+aberration inspection tools. See @sec-focusing.
+
+**GUIDE** starts, stops, and monitors autoguiding (a second camera
+watches a star and continuously corrects the mount's tracking)
+through either the built-in guider or an external PHD2, the free
+guiding program most amateur astrophotographers use, including
+calibration and the live guide graph. See @sec-guiding.
+
+**PREVIEW** takes single test exposures for framing and focus checks,
+streams continuously if you want live framing, and can plate-solve
+the current frame (plate solving matches the stars in the frame
+against a catalog to work out exactly where the telescope is
+pointing). See @sec-preview.
+
+**AUTORUN** is the straightforward sequence runner: a frame list
+(exposure by count per filter, gain, and binning) shot unattended
+against the current target, plus end-of-session actions and the Flat
+Wizard for automated flats. See @sec-autorun.
+
+**PLAN** is the multi-target night planner in the ASIAIR style: queue
+several targets with time windows and per-target frame lists, review
+the elevation chart, and let it run the whole night with automatic
+slews, plate-solve centering, and meridian flips (the side swap a
+German equatorial mount must make as a target crosses the meridian).
+See @sec-night-planner.
+
+**LIVE** is live stacking for electronically-assisted astronomy
+(EAA: observing on screen as the image builds up in near real time):
+frames are aligned and integrated as they arrive, with optional
+per-frame calibration and pixel rejection, and the growing stack can
+be saved at any time. See @sec-live-stacking.
+
+**VIDEO** covers planetary and lucky imaging (shooting thousands of
+short video frames and keeping only the sharpest): high-frame-rate
+capture to SER files (a raw video format made for planetary work)
+with ROI subframing (reading out only a region of the sensor, for
+higher frame rates), frame-quality scoring, and a lucky-imaging
+stacker that keeps the best frames. See @sec-planetary.
+
+**ADV** is the Advanced Sequencer, a N.I.N.A.-style tree of
+containers, instructions, conditions, and triggers for automated
+nights that outgrow AUTORUN and PLAN. See @sec-adv-sequencer.
+
+**STUDIO** is where captured data becomes a finished image: a file
+browser for everything on the host (@sec-files), master generation,
+calibration, grading, and integration (@sec-studio), channel
+combination for mono and narrowband work (@sec-mono-lrgb), color
+calibration up to PCC and SPCC (photometric methods that set the
+color balance by comparing your stars against catalog measurements;
+@sec-color-calibration),
+the AI cleanup tools (@sec-ai-cleanup), star removal and blending
+(@sec-star-removal), and the non-destructive EDITOR
+(@sec-editor).
+
+**SETTINGS** holds global configuration and host management, from the
+observer location to networking, authentication, and self-update. An
+overview follows below; the details are split between @sec-networking
+and @sec-administration.
+
+**HELP** is the in-app guidance panel: tutorials, a first-night
+checklist, troubleshooting, and a one-click problem report. More on it
+below.
+
+## The HOME dashboard
+
+HOME is the first thing a connecting browser sees. It shows a session
+summary: the active rig, the connection status of each device, and
+what Polaris is currently doing. Quick-navigation shortcuts jump
+straight into the panel you need next. A host-info card identifies
+the machine running Polaris: model, operating system, architecture,
+core count, and CPU. When something feels wrong mid-session, HOME is
+the one-glance answer to "what state is everything in?".
+
+## Always on screen
+
+A few UI elements are present no matter which panel is open.
+
+The top status bar is the session's instrument cluster. It carries
+connection badges for INDI, Alpaca, and PHD2, the camera temperature,
+the live-stack frame count, the battery level of the client device,
+the clock, and the guider's dither and settle state (dithering nudges
+the mount slightly between frames so noise does not stack up in the
+same pixels; settling is the short wait for the mount to steady again
+afterwards). It also hosts a
+global sequence-abort button, the green **Update** badge that appears
+on `.deb` installs when a newer release exists (@sec-administration),
+and the **LOG** badge described below. Next to it, activity and
+transfer chips report live network throughput, in-flight uploads and
+downloads, and image-frame and exposure progress.
+
+Toasts are the transient notifications that slide in when something
+completes or fails. They disappear on their own, but nothing is lost:
+every toast is captured in the debug log.
+
+The **LOG** badge opens the debug log panel, which collects every
+server log line, HTTP request, toast, and browser error into one
+filterable stream, exportable as a JSONL file (a plain-text format
+with one log entry per line, easy for tools to read) for bug reports.
+When you file
+an issue, this is the attachment that makes it actionable;
+@sec-administration covers it.
+
+Two smaller conveniences round out the frame: multi-instance tabs let
+one browser manage several Polaris hosts side by side, and dismissable
+health chips surface host problems such as Raspberry Pi under-voltage
+warnings.
+
+## SETTINGS at a glance
+
+The **SETTINGS** panel gathers everything that is global rather than
+per-panel. Expect to find:
+
+- **Profiles and location**: the observer location (with a first-run
+  setup modal), units, and app-wide preferences.
+- **Appearance**: theme and font picker.
+- **Plate solving**: solver choice and downsampling (shrinking the
+  image before solving, for speed), plus a
+  **Colour calibration data** card showing the status of the APASS
+  star-brightness catalog, spectra, and sensor curves used by PCC and
+  SPCC (@sec-color-calibration).
+- **AI inference**: settings for the ONNX AI models (ONNX is the file
+  format the AI models come in) and the on-device model downloader
+  (@sec-ai-cleanup).
+- **Network mode**: the ASIAIR-style hotspot-to-station WiFi panel
+  (@sec-networking).
+- **Remote access**: the relay for encrypted (TLS-tunneled) access
+  from outside the LAN, HTTPS setup, and authentication
+  (@sec-networking).
+- **Remote terminal**: an embedded SSH terminal (a remote command
+  line for the host machine) for managing a headless host, one with
+  no monitor or keyboard, from the browser (@sec-administration).
+- **Clock sync**: push the browser's UTC time to a Pi without a
+  real-time clock (@sec-administration).
+- **Equipment simulator**: the built-in fake rig that renders real
+  stars (@sec-simulator).
+- **Benchmark**: synthetic workloads to compare hardware, with a
+  saved results history (@sec-administration).
+- **Power**: host power actions, the self-update check, and the
+  version rollback list (@sec-administration).
+
+## Getting help inside the app
+
+The **HELP** panel is the built-in manual for the moments you do not
+have this book at hand. It contains step-by-step tutorials, from
+capture-to-export to specific workflows such as LRGB mono, planetary,
+and photometric color calibration, plus a guided first-night
+checklist (the same ground @sec-first-night covers) and a
+troubleshooting accordion with links into the full user guide. The
+**Report a problem** action opens a pre-filled GitHub issue or
+discussion with client and server diagnostics already attached, so a
+useful bug report is one click, not an archaeology session.
+
+## Where do I go to do X? {#sec-task-index}
+
+When you know the task but not the panel, this table is the map.
+
+| Task | Go to | Notes |
+|---|---|---|
+| Connect my gear | **RIGS** | Pick each device, click **Connect**, save the combination as a rig |
+| Set my location | **SETTINGS** | The first-run setup prompts for it; change it here later |
+| Polar align | **POLAR** | Choose TPPA or Rudimentary and follow the steps |
+| Find a target | **SKY** | Search or browse the map; drag the FOV box to set rotation and framing |
+| See what is good tonight | **SKY**, **Tonight** pill | Altitude curves and ranked targets for your site and date |
+| Check the weather | **SKY**, **Weather** pill | Current conditions and forecast |
+| Go to and center a target | **SKY** | Slew-and-center slews, plate-solves, and re-centers |
+| Snap a quick test shot | **PREVIEW** | Set exposure and gain, take one frame |
+| Plate-solve the current frame | **PREVIEW** | The **Plate solve** button |
+| Auto-focus | **FOCUS** | Runs the V-curve sweep and moves to best focus |
+| Focus by hand | **FOCUS** | Watch HFR, or use the Bahtinov overlay |
+| Start guiding | **GUIDE** | Connect PHD2 or the native guider, calibrate, guide; the graph shows RMS (the average guiding error) |
+| Image one target unattended | **AUTORUN** | Set exposure, gain, filter, and count, then start |
+| Image several targets in one night | **PLAN** | Targets with time windows and per-target frame lists |
+| Live-stack (EAA) | **LIVE** | Start the loop and watch the stack grow; save as you go |
+| Planetary or lucky imaging | **VIDEO** | High-fps capture, SER recording, stack the best frames |
+| Take flats | **AUTORUN**, **Flat Wizard** | Automated flat acquisition |
+| Complex conditional sequences | **ADV** | The tree-based Advanced Sequencer |
+| Browse or open my files | **STUDIO** | The file browser; double-click or **View** opens the viewer |
+| Pick the best subs and stack them | **STUDIO** | Add your light frames (the subs), grade them, integrate the keepers |
+| Color calibrate | **STUDIO** | **Color Cal (PCC)** or **SPCC** on a plate-solved RGB master; re-solve via **Solve** if matches are low |
+| Combine channels (LRGB / SHO) | **STUDIO** | The **Combine** tool |
+| Background extraction, denoise, deconvolution, upscale | **STUDIO** | The AI tools, or the EDITOR's AI section |
+| Remove stars | **STUDIO** | Star removal, then blend back if wanted |
+| Edit (stretch, curves, crop) | **STUDIO**, **Editor** | Opens on an image |
+| Compare before and after | The comparator | Opens after a tool runs; keep the stretch toggle on **Independent** for color changes |
+| Change the plate solver or downsample | **SETTINGS**, **Plate solving** | |
+| Color-calibration data status | **SETTINGS**, **Colour calibration data** | APASS, spectra, and curve status |
+| Network, remote access, HTTPS, relay | **SETTINGS** | See @sec-networking |
+| AI and ONNX model settings | **SETTINGS** | See @sec-ai-cleanup |
+| Tutorials and troubleshooting | **HELP** | |
+
+## If you are just lost
+
+Start at **HOME** for status, then follow the sidebar top to bottom;
+it is ordered like a real session: RIGS to connect, SKY to pick a
+target, FOCUS, GUIDE, then AUTORUN or PLAN to capture, LIVE to watch,
+and STUDIO to process. **HELP** has a guided first-night checklist,
+and the next chapter (@sec-first-night) walks that same path with you
+in half an hour.
+
+<!-- consolidated from: docs/user-guide/ui-navigation.md,
+docs/FEATURES.md (HOME, SETTINGS, HELP, Always-on UI sections and tab
+names) -->

@@ -1,0 +1,187 @@
+# Polar Alignment {#sec-polar-alignment}
+
+An equatorial mount only tracks the sky properly when its polar axis
+points at the celestial pole, the point the whole sky appears to
+rotate around (close to the star Polaris in the northern hemisphere).
+Polaris dedicates the POLAR tab to getting it there, and ships two
+workflows for the job. Both rely on plate solving: taking a short
+photo and matching its stars against a catalog to work out exactly
+where the telescope is pointing. **TPPA** (Three-Point Polar
+Alignment) is the default and what most setups should use: it sweeps
+the mount through 30 degrees of right ascension (RA), plate-solves
+three points along the way, and fits the mount's polar axis from
+those solutions. **Rudimentary alignment** is the second option, a
+single-target iterative helper designed for setups where TPPA cannot
+work, typically because the polar region is hidden or the mount
+cannot slew freely.
+
+Because both workflows depend on plate solving, a solver must be
+configured before you start. ASTAP [@kleijn_astap], the plate-solving
+program bundled with Polaris, works without any extra setup;
+PlateSolve3 and the online astrometry.net service need credentials or
+paths. Solver configuration lives with the rest of the equipment
+setup in @sec-rigs.
+
+## TPPA: three-point polar alignment
+
+TPPA is the plate-solve-driven method. Polaris captures a frame,
+slews the mount in RA, captures and solves again, and repeats until it
+has three solved points spanning about 30 degrees of RA. From the arc
+those three solutions trace, it computes where the mount's polar axis
+actually points and how far it sits from the true pole. The result is
+a live error arrow that tells you which way to turn the altitude and
+azimuth bolts, the two adjustment bolts that tip the mount's axis
+up-down and left-right.
+
+After the initial measurement, **refinement mode** takes over: a
+continuous capture-and-solve loop with an on-screen error overlay that
+updates as you adjust the bolts, so you can watch the error shrink and
+converge to near zero without re-running the whole procedure.
+
+Because TPPA fits the axis from three independent solutions, it
+separates polar misalignment from other pointing errors and typically
+converges in fewer iterations than the rudimentary method. It does,
+however, require a clear enough sky and a mount that can slew (move
+under motor power) through the 30-degree RA sweep, while still
+tracking, without hitting an obstruction.
+
+## Rudimentary alignment: single-target iterative
+
+Rudimentary alignment exists for the situations TPPA cannot handle:
+
+- Balconies and urban observatories where the polar region is blocked.
+- Mounts that cannot slew freely in RA without obstruction.
+- Setups you have already aligned roughly with a compass and a tilt
+  app on your phone, where you just want a one-target sanity check.
+- Manual mounts with no GoTo (no motors that can point the mount at
+  coordinates on command): you point at the target by hand, and
+  Polaris only captures and solves.
+
+The workflow mirrors what experienced operators of the ASIAIR (ZWO's
+popular all-in-one imaging controller) already do by hand.
+
+First, coarse-align physically. Use a magnetic-declination
+calculator (NOAA's online tool, for example) plus a tilt app on your
+smartphone, and align the mount as close to true polar as you can
+eyeball it. This part happens outside Polaris; five minutes with the
+phone gets you within a degree or two.
+
+Second, pick a known, visible target: anything bright above the
+horizon, such as Sirius, Vega, or M42. Naked-eye visibility helps,
+not because the solver needs it (plate solving works fine on faint
+targets) but because you want to know roughly where the camera is
+pointing.
+
+Then click **Start** with **Slew to target** selected. Polaris
+commands the mount to GoTo the chosen coordinates, waits for it to
+settle, captures one frame, and runs a plate solve. It then reports:
+
+- the pointing the mount actually achieved (RA and Dec, where Dec is
+  declination; together they are the sky's equivalent of longitude
+  and latitude);
+- the azimuth error and altitude error, in arcseconds or arcminutes
+  (an arcminute is 1/60 of a degree; an arcsecond is 1/60 of that);
+- the total error magnitude, colour-coded green below 1 arcminute,
+  amber from 1 to 5 arcminutes, and red above 5 arcminutes;
+- a green dot (where the target should be) and a red dot (where the
+  mount ended up) on the embedded sky map.
+
+<!-- screenshot: rudimentary alignment result block with error
+readout, colour coding, and the green/red dots on the sky map -->
+
+Now walk over to the mount and nudge the azimuth or altitude knob a
+little, in the direction the error indicates. The sign convention:
+
+- **Positive azimuth error** means the mount is pointing east of
+  where it should be; turn the azimuth knob westward.
+- **Positive altitude error** means the mount is pointing above the
+  target; turn the altitude knob down.
+
+Click **Re-capture + solve**. Polaris captures another frame at the
+same mount position, without slewing this time, and re-computes the
+error. The convergence sparkline below the result block shows the
+trend across iterations: the bars get shorter and greener as you
+converge. Repeat until you are satisfied. Unlike TPPA there is no
+auto-stop; you decide when good enough is good enough.
+
+For manual mounts without GoTo, run the same loop with **Use current
+position** instead of **Slew to target**. You aim the mount by hand
+and Polaris captures and solves wherever it is pointing.
+
+### Why the math works despite being an approximation
+
+A single plate-solved frame cannot distinguish polar misalignment
+from mount pointing-model error, the small mechanical imperfections
+every mount has (cone error, where the telescope tube is not quite
+parallel to the mount's axis; axes that are not exactly
+perpendicular; and so on). Rudimentary alignment attributes the
+entire pointing
+offset to polar misalignment, which is mathematically wrong, but it
+works iteratively. After one or two manual knob nudges, the polar
+component dominates the change between iterations, while the
+mount-model component is constant and vanishes from the visible error
+arrow once you are a couple of iterations in. This is the same
+approximation used by SharpCap (a popular Windows capture program) in
+its Plate-Solve Polar Alignment and by KStars (the open-source
+planetarium and imaging suite) in its single-target mode, and the
+procedure that ASIAIR and N.I.N.A. (another free imaging suite)
+operators already run by hand.
+
+## Accuracy expectations
+
+The colour coding gives you the coarse scale: green below 1
+arcminute, amber between 1 and 5 arcminutes, red beyond. In
+practice, most operators settle at 30 to 60 arcseconds of total error
+for visual use or wide-field imaging; serious deep-sky imaging
+targets less than 30 arcseconds. TPPA's refinement mode makes the
+sub-arcminute range straightforward to reach because the overlay
+updates continuously while you turn the bolts.
+
+## Pre-flight requirements
+
+Before the rudimentary workflow starts, a pre-flight strip at the top
+of the sub-pane shows a check or cross for each prerequisite:
+
+- **Camera connected**: required, since the workflow captures frames.
+- **Mount connected**: required for **Slew to target** mode, optional
+  for **Use current position** mode (manual mounts).
+- **Site location**: required, because the math needs your latitude
+  and longitude to convert RA/Dec to local altitude and azimuth (how
+  high in the sky, and toward which compass direction). Set it under
+  **Settings → Site location**.
+
+## Choosing between the two methods
+
+| Situation | Use |
+|---|---|
+| Full view of the polar region, mount can slew 30 degrees in RA freely | **TPPA** (more rigorous, fewer iterations) |
+| Balcony, blocked polar view, or limited slew range | **Rudimentary** |
+| Manual mount (no GoTo) | **Rudimentary** with **Use current position** |
+| First-night setup after assembly | **Rudimentary** for a fast initial check; follow up with TPPA if you have time |
+| Permanent observatory, periodic check | **TPPA** (cleaner result) |
+
+## Troubleshooting and known limitations
+
+**The plate solve must succeed.** If the frame has too few stars
+(overcast sky, fogged optics, very short exposure), the solve fails
+and Polaris asks you to bump the exposure or gain.
+
+**Single-target math drifts near the zenith.** Near the zenith (the
+point straight overhead), the azimuth term gets amplified by
+cos(altitude). Polaris compensates for this in the
+reported number, but the underlying physics still mean an alignment
+run near the zenith is less informative than one closer to the
+celestial equator. Prefer targets at moderate altitude.
+
+**There is no auto-convergence threshold.** Some users want the loop
+to stop when the total error drops below, say, 30 arcseconds. Today
+this is left manual; the sparkline and colour coding are enough signal
+for most operators. A configurable per-rig threshold is a possible
+future addition.
+
+For a polar-alignment step in the context of a complete session, see
+the first-night walkthrough in @sec-first-night; general plate-solve
+failures are covered in @sec-troubleshooting.
+
+<!-- consolidated from: docs/user-guide/polar-alignment-rudimentary.md,
+docs/FEATURES.md (POLAR section) -->

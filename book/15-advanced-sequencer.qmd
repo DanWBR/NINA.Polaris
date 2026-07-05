@@ -1,0 +1,150 @@
+# The Advanced Sequencer {#sec-adv-sequencer}
+
+The ADV tab hosts Polaris's tree-based sequence engine, modeled on the
+one in N.I.N.A. [@berg_nina] (the free Windows imaging suite Polaris
+descends from), and built for multi-target unattended runs that need
+conditions, triggers, and branches. For simple flat lists, use AUTORUN
+instead (@sec-autorun); ADV is for the cases where flat lists fall
+short. The PLAN night planner (@sec-night-planner) compiles its plans
+into Advanced Sequencer documents and runs them on this same engine, so
+what you learn here also explains what PLAN does under the hood.
+
+## When to use ADV versus AUTORUN
+
+| Use case | Pick |
+|---|---|
+| 100 frames of M81 in L | AUTORUN |
+| LRGB across 3 targets with end-of-night warm-down | AUTORUN |
+| LRGB + Ha across 5 targets with conditional weather safety | ADV |
+| Per-target rotator + filter offsets + dither cadence variations | ADV |
+| Mosaic with branching capture per panel | ADV |
+| Anything like "if temperature drops 2°C, run an auto-focus" | ADV |
+
+## The tree model
+
+A sequence is a tree built from four kinds of items:
+
+- **Containers** group children: Sequential, Parallel, DeepSkyObject,
+  and Templated containers.
+- **Instructions** are atomic actions: Take Exposure, Slew, Center,
+  Move Focuser, Dither, Park, and so on.
+- **Conditions** gate execution: Loop Until Time, Loop Until Altitude,
+  Loop For N Exposures, and similar.
+- **Triggers** fire on events: Auto-focus on Temperature Change, the
+  Meridian Flip Trigger, Dither After N Exposures, and similar.
+
+Triggers attach to containers and apply to every instruction underneath
+them. An "Auto-focus on Temperature Change" trigger attached to a Deep
+Sky Object container will therefore fire an AF run whenever the
+temperature threshold is crossed during any instruction inside that
+target.
+
+## The tri-pane editor
+
+The editor splits into three panes. On the left sits the **Palette** of
+available items, filterable by name; you drag items from it onto the
+tree. The center holds the **Tree view**, with drag-to-reorder,
+expand and collapse, and status colouring during runs: green for done,
+blue for running, red for errored. On the right, the **Properties
+panel** shows the selected item's numeric, text, and dropdown fields,
+driven by that item type's metadata.
+
+The toolbar offers **Start**, **Pause**, **Resume**, **Stop**,
+**Save JSON**, **Load JSON**, **Import Template**, **Export Template**,
+and **New Sequence**. JSON is a plain-text data format: **Save JSON**
+writes the whole tree to a single file you can back up, share, or edit
+by hand, and **Load JSON** reads one back in.
+
+<!-- screenshot: ADV tri-pane editor with a running LRGB sequence tree -->
+
+## Templates
+
+Any subtree can be saved as a template, for example an "M81 LRGB
+nightly" subtree carrying a specific filter plan, dither cadence, and
+AF triggers. Templates load into the palette and drag-drop into any new
+sequence. They are stored as
+`{AppData}/Polaris/sequencer/templates/*.json`.
+
+## Available instructions
+
+The palette reflects what is loaded; this list is representative, not
+exhaustive.
+
+- **Mount**: Slew, Slew & Center, Park, Unpark, Set Tracking,
+  Solve & Sync. Solve & Sync plate-solves, that is, it takes a short
+  exposure, matches its star pattern against a catalog to learn
+  exactly where the scope points, and updates the mount's own idea of
+  its position to match.
+- **Camera**: Take Exposure, Take Many Exposures, Cool Camera, Warm
+  Camera, Take Aux Exposure, Cool Aux Camera, Warm Aux Camera. The Aux
+  variants drive the secondary (aux) camera and save frames to the
+  `aux/` subtree; exposure, gain, and binning default to the rig's aux
+  settings when left blank.
+- **Focuser**: Auto Focus, Move Focuser, Move to Filter Offset. Move
+  Focuser has a **target** selector (main / aux / guide) and Auto Focus
+  has a **focuser source** selector (main / aux / guide), so a sequence
+  can refocus the aux or guide optical train, not just the imaging one.
+- **Filter Wheel**: Switch Filter.
+- **Guider (PHD2)**: Start Guiding, Stop Guiding, Dither, Auto-select
+  Star, and Set Guider Gain. PHD2 is the free autoguiding program most
+  amateur astrophotographers use. Set Guider Gain applies to Polaris's
+  built-in (native) guider only; PHD2 owns its own gain.
+- **Dome / Flat Panel / Rotator**: open and close, slew azimuth, set
+  brightness, rotate to angle.
+- **Flow control**: Wait For Time, Wait Until Above Horizon, Wait For
+  Altitude, Wait For Moon Below Horizon, Wait For Sun Below Horizon.
+- **External**: Run External Script, Send HTTP Request, Send Email.
+
+## Conditions
+
+- **Loop Until Time**, a datetime cutoff.
+- **Loop Until Altitude**, until the target's altitude drops below a
+  threshold.
+- **Loop For N Exposures**, a frame counter.
+- **Loop For Duration**, a wall-clock timer.
+- **Loop While Safe**, which checks weather safety.
+
+## Triggers
+
+- **Auto Focus on Temperature Change**, with a temperature-change
+  (Δ°C) threshold.
+- **Auto Focus on HFR Increase**, firing when the average star size
+  (HFR, half-flux radius; lower means sharper focus) grows a set
+  percentage above baseline.
+- **Auto Focus on Time Elapsed**, on an interval.
+- **Auto Focus on Filter Change**, firing after every filter swap.
+- **Meridian Flip Trigger**, which flips the mount when the target
+  crosses the meridian (the imaginary north-south line overhead;
+  German equatorial mounts must swing the telescope to the other side
+  of the pier there to keep tracking).
+- **Dither After N Exposures**, the dither cadence. A dither nudges
+  the mount slightly between frames so hot pixels and other
+  fixed-pattern noise land on different sky pixels each time.
+- **Center After Drift**, a periodic plate solve and re-center.
+- **Safety Trigger**, which aborts to a safe state on a weather event.
+
+The auto-focus machinery these triggers invoke is described in
+@sec-focusing, and guiding in @sec-guiding.
+
+## Migrating from AUTORUN
+
+Open an AUTORUN sequence and click **Convert to Advanced**. Polaris
+generates an equivalent tree with each AUTORUN row mapped to a
+DeepSkyObject container, which you can then extend with conditions and
+triggers.
+
+## Common pitfalls
+
+**The sequence appears to do nothing.** A condition's gate is always
+false. Inspect the tree for a `Loop While Safe` condition with no
+weather device connected.
+
+**Triggers fire infinitely.** Your trigger condition matches a state
+that the triggered action does not reset. For example, Auto-focus on
+HFR Increase without a baseline fires on every frame. Combine it with
+an "every N frames" trigger as a floor.
+
+**Lost work.** Saving to JSON is not automatic. Save manually before
+running long sessions.
+
+<!-- consolidated from: docs/user-guide/adv-sequencer.md -->

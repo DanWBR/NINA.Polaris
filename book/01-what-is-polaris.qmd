@@ -1,0 +1,172 @@
+# What is Polaris? {#sec-what-is-polaris}
+
+N.I.N.A. Polaris is a self-hosted astrophotography controller: it
+runs entirely on hardware you own, with no cloud service and no
+account. A single server program lives on a small computer at the
+telescope (a Raspberry Pi, another ARM single-board computer, meaning
+one of those credit-card-sized boards, or a Windows mini-PC) and
+presents its entire interface as a web application. You point any
+browser on your network at the
+host, from a laptop, a tablet, or a phone, and you get the complete
+workflow: equipment control, capture, guiding, focusing, planning, live
+stacking, and post-processing. There is no desktop application to install
+and nothing to set up on the client side.
+
+Polaris is a community-driven fork (an independent offshoot that
+started from the same code) of N.I.N.A. (Nighttime Imaging 'N'
+Astronomy), the well-known Windows desktop imaging suite
+[@berg_nina]. It inherits N.I.N.A.'s sequencing concepts and much of
+its internal know-how, but it is a different product with a different
+shape: it runs headless (no monitor or keyboard on the telescope
+computer), it runs on Linux as well as Windows, and its whole
+interface lives in the browser. It is not affiliated with or
+supported by the official
+N.I.N.A. team; issues belong in the Polaris repository.
+
+If you have used an ASIAIR (ZWO's popular all-in-one controller box),
+the mental model transfers directly: a small box at the mount,
+controlled from a device in your hand. The difference is that Polaris
+is open source, runs on hardware you already own, speaks open
+protocols rather than a private one (INDI [@downey_indi], the
+standard equipment-driver system of Linux astronomy; ASCOM Alpaca
+[@ascom_alpaca], its network-friendly counterpart from the Windows
+world; and PHD2 [@openphd_phd2], the free autoguiding program most
+amateur astrophotographers use), and does not lock you into one
+vendor's cameras.
+
+## The division of labor {#sec-division-of-labor}
+
+Polaris splits the work between the host and your browser deliberately:
+
+```
+Browser (laptop / tablet / phone)        Polaris host (RPi / mini-PC)
+┌──────────────────────────────┐         ┌──────────────────────────┐
+│  Web UI (single-page app)    │◄──HTTP─►│  ASP.NET Core server     │
+│  Live preview (Canvas/WebGL) │◄──WS───►│  INDI / Alpaca / SDKs    │
+│  Image processing, AI (ONNX) │         │  Plate solving (ASTAP)   │
+│  Sky explorer                │         │  Sequence engine         │
+└──────────────────────────────┘         │  Live stacking           │
+                                         └──────────────────────────┘
+```
+
+The **host** is the data broker. It talks to the hardware, runs the
+sequence engine, saves the captured images as FITS files
+[@pence2010fits] (FITS is the standard image file format of
+astronomy), and streams images out. These jobs need proximity to the
+equipment and reliability, not raw computing power.
+
+The **client** does the heavy rendering and, notably, much of the
+heavy math. Image stretching runs on the graphics card through WebGL
+(the browser's built-in gateway to the GPU), and the AI models
+(background extraction from GraXpert, a popular free astro-processing
+tool, plus denoising, deconvolution, and star removal) run in the
+browser via ONNX Runtime^[ONNX Runtime is the engine that executes
+ready-trained AI models; ONNX is the file format those models are
+saved in.], using the client's graphics card through WebGPU (a newer
+browser technology for general-purpose GPU work) when available. A
+modest Raspberry Pi can therefore drive a serious imaging rig,
+because the expensive pixels are computed on whatever laptop or tablet you
+happen to hold.
+
+The two sides talk over plain HTTP (ordinary web requests) for
+commands and queries, and over WebSockets^[A WebSocket is a
+long-lived, two-way connection between browser and server; unlike an
+ordinary web request, it stays open so the server can push updates
+the instant they happen.] for the continuous streams: a
+once-per-second status broadcast
+that keeps every open browser in sync, and a binary image stream that
+delivers frames as they are captured. Several devices can watch the same
+session at once; the host is the single source of truth.
+
+## What it does {#sec-feature-map}
+
+Each area below has a dedicated chapter; this is the map.
+
+**Equipment** (Part II). Polaris connects to hardware through
+whichever door your gear prefers: INDI on Linux (400+ drivers), ASCOM
+Alpaca over the network, direct ASCOM COM on Windows^[COM is the
+Windows-only plumbing that classic ASCOM drivers are built on; Alpaca
+is the newer, network-based flavor of ASCOM that works from any
+machine.], or the camera makers' own driver libraries (native SDKs)
+for ZWO, SVBony, Player One, ToupTek, and Altair cameras. Canon, Nikon, and Sony
+DSLR/mirrorless bodies are supported. Equipment lives in **rigs**,
+per-setup profiles that group a telescope, camera, mount, focuser, filter
+wheel, guide gear, and accessories, so a permanent observatory and a grab-
+and-go refractor can coexist. A built-in simulator fakes an entire rig,
+rendering real stars for the simulated mount position, so plate
+solving (working out exactly where the telescope points by matching
+the star patterns in a photo against a catalog), auto-focus, and live
+stacking genuinely work without hardware.
+
+**Capture** (Part III). Polar alignment (TPPA, a three-point method,
+plus a rudimentary method for sites without a view of the pole), an
+offline sky atlas with target search and a mosaic planner, manual and
+V-curve auto-focus (an automated sweep that measures star size at
+several focuser positions and moves to the sharpest one), autoguiding
+through PHD2 [@openphd_phd2] or a built-in guider that reuses PHD2's
+guiding math, so it behaves the same way with nothing extra to
+install, plate-solve-and-center slews via ASTAP [@kleijn_astap], the
+plate-solving program bundled with Polaris, dithering (tiny random
+nudges of the mount between frames, so fixed-pattern noise does not
+pile up in the same pixels), and automated meridian flips (the side
+swap a German equatorial mount must perform as a target crosses the
+meridian). Sequencing comes in three sizes: AUTORUN for
+simple lists, ADV for N.I.N.A.-style trees, and PLAN for ASIAIR-style
+multi-target nights.
+
+**EAA and video** (Part III). Live stacking for
+electronically-assisted astronomy (EAA: watching the image build up
+on screen in near real time), with per-frame calibration and running
+SNR and HFR readouts (signal-to-noise ratio and a star-size measure
+of focus quality), plus an option that moves the stacking math into
+the browser, via WebAssembly (a browser technology that runs
+near-native-speed code), when the host is slow. A separate VIDEO
+pipeline covers planetary and lucky imaging [@law2006lucky] (shooting
+thousands of short video frames and keeping only the sharpest) in SER
+format, a raw video format designed for planetary capture.
+
+**Processing** (Part IV). A complete path from raw frames to a
+finished image without leaving the browser: STUDIO for calibration,
+integration, and channel combination (RGB, LRGB, and formula-driven
+PixelMath narrowband palettes), color calibration in the style of
+Siril [@siril] (a free astro image-processing application), up to
+photometric PCC (which sets the color balance by comparing your stars
+against their true catalog colors) using a bundled APASS star catalog
+[@henden2014apass], GraXpert AI cleanup [@graxpert], star removal and
+recombination, and a Lightroom-style non-destructive EDITOR that
+keeps every edit in a small sidecar file next to the image, so the
+original is never touched, with JPEG/PNG/TIFF export.
+
+**Access and operations** (Part V). WiFi hotspot-to-station switching
+in the ASIAIR style, HTTPS, authentication, a relay for access from
+outside your home network without opening ports on your router, an
+SSH terminal (a remote command line for the host machine) embedded in
+the browser, one-click self-update on single-board-computer installs,
+and a debug log panel that collects server logs, HTTP traffic, and
+browser errors into one exportable stream.
+
+## What it is not {#sec-what-it-is-not}
+
+Polaris is not the desktop N.I.N.A., and it does not try to be. There is no
+Windows-style plugin ecosystem compatibility, and some desktop features
+have no counterpart here. Conversely, much of Polaris (the browser AI
+pipeline, the multi-rig model, the relay, the planner) has no desktop
+equivalent. Chapter references throughout this book always describe
+Polaris's own behavior; when N.I.N.A. heritage matters, the text says so
+explicitly.
+
+## Platforms {#sec-platforms}
+
+The server runs on Linux ARM64 (Raspberry Pi 4 and 5 are the
+reference targets), Linux x64, and Windows x64. Packaged `.deb`
+installs (the standard install format on Debian and Ubuntu) handle
+dependencies, service setup through systemd^[systemd is the Linux
+service manager: it starts programs at boot, restarts them if they
+crash, and collects their logs.], and updates on Pi-class devices;
+Windows runs the same server as a console app or service; Docker
+images (Docker is a tool that runs software in ready-made, isolated
+packages called containers) cover both. The client is any modern
+browser; devices whose browser supports WebGPU get the fast AI path,
+everything else falls back to WebAssembly (slower than the graphics
+card, but available everywhere). The full dependency and
+hardware-sizing matrix lives in @sec-requirements.

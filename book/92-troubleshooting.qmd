@@ -1,0 +1,312 @@
+# Troubleshooting {#sec-troubleshooting}
+
+Common problems and their fixes, organized by symptom. Where a fix
+is covered in depth by a chapter, this appendix gives the short
+version and points there. If your issue is not here, open an issue on
+the repository and include: the Polaris version, the OS, the INDI
+driver version, what you were doing, what you expected, and what
+happened. The LOG panel can export all of that as one file
+(@sec-administration).
+
+## The server will not start
+
+**"The application requires the .NET runtime 10.x"**. You are running
+a framework-dependent build without the runtime. Install it:
+
+```bash
+# Linux
+sudo apt install dotnet-runtime-10.0
+```
+
+Or use a self-contained release build, which bundles the runtime;
+@sec-installation covers both.
+
+**"Address already in use"**. Another process holds one of Polaris's
+ports: 5000 (the HTTPS listener) or 5080 (the loopback-only HTTP
+listener). Either stop the other process (`sudo lsof -i :5000` names
+it) or move Polaris in `appsettings.json`:
+
+```json
+{ "Server": { "Https": { "Port": 5001 } } }
+```
+
+`Server:Http:Port` moves the HTTP side the same way; @sec-api lists
+every server setting.
+
+**The first request hangs**. Polaris does not require INDI at
+startup, but the first visit to the **RIGS** tab will spin while it
+tries to enumerate devices; verify `indiserver` is reachable (next
+section).
+
+## INDI will not connect
+
+**Connect shows a spinner forever, no error**. The INDI server is not
+running. Verify:
+
+```bash
+ps aux | grep indiserver       # process listed?
+ss -tlnp | grep 7624           # listening on port 7624?
+nc -v localhost 7624           # can a connection open?
+```
+
+Start it manually with the drivers you need:
+
+```bash
+indiserver -v indi_asi_ccd indi_eqmod_telescope
+```
+
+For a permanent setup, use indi-web [@knro_indiwebmanager], the
+driver-picking web UI that Polaris embeds in the **RIGS** tab
+(@sec-rigs).
+
+**It connects, but the device list is empty**. The server is up but
+no drivers loaded. Run `indiserver` with `-v` and watch its output
+for driver errors; the usual culprit is "device not present" because
+the USB cable is unplugged or permissions are denied.
+
+**Permission denied on a USB device**. Your user is not in the
+`dialout` or `plugdev` groups:
+
+```bash
+sudo usermod -aG dialout,plugdev $USER
+# then log out and back in
+```
+
+For per-device udev rules (ZWO especially), run the vendor's
+installer.
+
+## USB devices crash mid-operation (under-voltage)
+
+**Symptoms**: the focuser disconnects ("DISCONNECTED within 500ms of
+move to X" in the LOG panel), the filter wheel drops mid-change, a
+camera download fails halfway, or the mount throws communication
+errors only under load. The telltale pattern is that short or idle
+operations work fine while longer, heavier operations crash the
+device; often the device disappears from the INDI device list
+entirely and has to be re-discovered.
+
+**Root cause**: the Raspberry Pi's USB ports share a budget of about
+1.2 A total (on a Pi 4) across every connected device. When the
+combined draw of camera, mount, focuser, filter wheel, and
+USB-to-serial adapters exceeds that budget under peak load (a focuser
+running its motor while the camera reads out a frame), the 5 V rail
+sags below about 4.65 V, and at that point the device firmware cannot
+keep its USB session alive.
+
+The author hit exactly this with a ZWO AM3, EAF, EFW, and ASI camera
+on a Pi 4: short focuser moves worked, long moves and Reset & Home
+crashed the focuser every time. Plugging the focuser and camera into
+a powered USB hub instead of the Pi fixed it on the first try.
+
+**Confirm it is under-voltage**:
+
+```bash
+# 1. The Pi's hardware voltage monitor. Any non-zero value
+#    (especially 0x1, 0x10000, 0x40000, 0x50005) confirms
+#    under-voltage was detected at some point since boot.
+vcgencmd get_throttled
+# 0x0     = OK ever since boot
+# 0x50005 = under-voltage RIGHT NOW and throttled
+# 0x50000 = throttled now, was under-voltage earlier
+# 0x40000 = was throttled earlier (often follows under-voltage)
+
+# 2. The kernel log carries an explicit warning when the 5V rail
+#    drops below threshold.
+dmesg | grep -iE 'under-voltage|hwmon|voltage'
+# "Under-voltage detected! (0x00050005)" = confirmed
+```
+
+If you have a USB power meter, measure the actual draw on the Pi's
+USB-C input during a long focuser move; expect spikes well past
+1.5 A on a loaded setup, which is where 3 A-rated supplies save you.
+
+**Fixes, cheapest first**:
+
+1. **A powered USB hub** (about $15-30), the best ratio of cost to
+   fix. Plug the highest-current devices (focuser, cooled camera,
+   motorized filter wheel) into the hub; leave light devices (the
+   USB-to-serial mount adapter, a GPS dongle) on the Pi directly.
+2. **The official Raspberry Pi 5.1 V 3 A USB-C supply.** The 1.2 A
+   USB budget assumes the input supply delivers its rated 5.1 V; many
+   generic phone chargers sag to 4.9 V or less under load, stealing
+   headroom from your devices.
+3. **Shorter, thicker USB cables.** Cable resistance drops real
+   voltage at peak draw; replace any thin (28 AWG) or over-1-meter
+   cable on a high-current device with a thicker (24 AWG), shorter
+   one. Vendor-bundled cables are usually fine; aftermarket extension
+   cables are often the culprit.
+4. **External power on the device.** Some focuser revisions take
+   12 V auxiliary power so USB carries data only; cooled cameras have
+   a 12 V barrel jack, and the cooler should never be powered from
+   the Pi's USB.
+
+**What software cannot do**: chunking long moves, settling waits, and
+retries do not fix under-voltage; they only spread the peak draw out,
+which sometimes helps marginal cases and fails when the budget is
+genuinely exceeded. The **Reset** button on the focuser card cycles
+the INDI connection, which clears a wedged USB session after a crash,
+but it does not prevent the next one. The hardware checklist in
+@sec-installation sizes the power system correctly from the start.
+
+## Plate solving fails
+
+**"Astrometric solution failed"** during Slew & Center or Smart
+Calibrate. Work down this checklist:
+
+1. **Are there stars in the frame?** Open the **PREVIEW** tab and
+   take a manual exposure. A uniform gray field means focus is far
+   off; focus manually until stars appear (@sec-focusing).
+2. **Is the hint accurate?** The solver narrows its search using
+   pixel scale, field of view, and the (RA, Dec) hint, all derived
+   from your rig's focal length. Check that **RIGS**, Main Telescope,
+   **Focal length** matches the actual setup.
+3. **Is ASTAP installed with its star database?** The program alone
+   cannot solve; @sec-installation covers downloading the database.
+4. **Try a blind solve.** In **SETTINGS**, under **Plate solver**,
+   set the blind solver to **Astrometry.net online** and retry. Slow
+   (about 30 s) but it needs no hints.
+
+## PHD2 calibration fails
+
+**"Calibration aborted"**. The most common cause is the guide star
+moving out of frame during the calibration sweep:
+
+1. Point closer to the celestial equator; Smart Calibrate has a
+   **slew to equator** toggle that does this for you (@sec-guiding).
+2. Increase `MaxStepCount` in the PHD2 Brain dialog to allow more
+   steps per direction.
+3. Verify the guide rate setting matches the mount's actual rate.
+4. Smart Calibrate auto-computes the step size from pixel scale and
+   guide rate; if you manually overrode it to something too small,
+   calibration never reaches a measurable angle.
+
+## Auto-focus moves to a wildly wrong position
+
+The V-curve's parabola fit was poisoned by outlier samples: clouds, a
+frame without enough stars, a satellite trail. Polaris validates that
+the best position falls within the sweep's own range around the
+starting position; outside it, it logs a warning but still moves.
+Mitigations, all detailed in @sec-focusing:
+
+- raise **Min Stars** to 20+ to reject noisy samples;
+- enable backlash compensation if the focuser has hysteresis;
+- pre-focus manually to within a step or two before running
+  auto-focus;
+- increase **Steps** from 9 to 15 for a longer baseline.
+
+## Live stacking shows "frame count: 1" forever
+
+Alignment is failing on every frame after the first, meaning the
+first frame's reference stars cannot be matched to later frames.
+Causes:
+
+- field rotation (you slewed during the stack): reset and restart;
+- focus drifted hard, so stars are too bloated to detect: reset and
+  refocus;
+- the first frame had unusual lighting (a satellite or plane)
+  creating false "stars": reset, so the next first frame becomes the
+  reference.
+
+In the `/ws/status` payload, `liveStack.referenceStarCount` should be
+50 or more for a good reference; a value like 5 means the first frame
+was bad. @sec-live-stacking has the full alignment story.
+
+## A sequence stops mid-run with no error
+
+Check the **AUTORUN** tab: if the state is running but the current
+frame counter is not incrementing, the camera is hung. Causes:
+
+- the USB cable popped (check the INDI logs);
+- the cooler power-cycled itself (some cameras do this on
+  overcurrent);
+- mount tracking is off and a step is waiting on the tracking-on
+  state.
+
+The sequence engine does not yet detect these silently; it is on the
+roadmap. The workaround is to stop, reconnect the camera, and restart
+the sequence (@sec-autorun).
+
+## The meridian flip hangs
+
+The most common cause: your mount needs an explicit pier-side command
+to flip, and slewing back through the target position alone does not
+trigger it. EQMod-based mounts (CGEM, AVX, EQ6-R) flip on slew; some
+Celestron mounts driven over ASCOM do not. Workaround: open the INDI
+or ASCOM control panel for the mount and click its **Flip** or
+**Force Pier Side: East/West** button manually mid-flip. File an
+issue with your mount model; the project would like to support more.
+@sec-mounts covers the flip workflow end to end.
+
+## The mount kept tracking past the meridian
+
+If a mount tracks for hours past the meridian without flipping, the
+RA axis winds the cabling around the mount head until something
+snags; a real incident of this kind on another controller ripped a
+USB cable on a high-declination target. It happens when the meridian
+flip is off, or the mount (a strain-wave AM3/AM5, for example) is set
+to track far past the meridian, and the session keeps running, often
+clouded out and looping on lost guide stars.
+
+Polaris guards against this with the mount safety stop (in the
+Meridian Flip panel, under **Safety guard**, on by default):
+
+- the **past-meridian limit** stops tracking and aborts the session
+  if the target tracks more than N minutes past the meridian without
+  a flip (default 60); a healthy flipped mount never trips it;
+- the **guide circuit breaker** stops the session after N consecutive
+  lost-star failures with no recovery (default 20), instead of
+  looping forever.
+
+On a trip, Polaris turns tracking off (ending the winding), aborts
+the sequence or LIVE run, and shows a red banner with a **Dismiss**
+button. Enable **Park on safety stop** to also send the mount home,
+which unwinds fully. Both limits are tunable per rig in the same
+panel; setting a field to 0 disables that guard, and for deliberate
+far-past-meridian imaging on a strain-wave mount you raise the
+minutes limit. @sec-mounts has the details.
+
+## The embedded PHD2 GUI shows a blank panel
+
+Linux with xpra set up, but the embedded window stays blank.
+Diagnose:
+
+```bash
+xpra list                    # is the xpra session running?
+curl http://localhost:14600/ # can you connect locally?
+cat ~/.xpra/:100.log         # the session's own log
+```
+
+It is usually one of:
+
+- the Xorg-dummy configuration was not switched (see the setup steps
+  in @sec-guiding; the file is
+  `/etc/xpra/conf.d/55_server_x11.conf`);
+- an xpra password is set but this browser has never supplied it:
+  open the embedded panel's URL in a new tab once and type the
+  password; xpra remembers it for that browser session from there.
+
+## The STUDIO frame library is empty
+
+The **Rescan** button found no files. Causes:
+
+- `ImageOutputDir` points at the wrong place: check the Studio root
+  indicator in the **FILES** tab and re-set it from the folder that
+  actually contains `{rig}/lights/...` (@sec-files);
+- new files were saved while the rescan was running: click **Rescan**
+  again.
+
+## The live preview canvas is black
+
+WebGL2 (the browser's gateway to the graphics card) failed to
+initialize; the browser console (F12) will show shader compile
+errors. Workaround: in **SETTINGS**, enable **Force JPEG mode**, and
+the server encodes JPEG previews instead. Slightly more CPU on the
+host, but it works in any browser.
+
+## See also
+
+Quick answers to non-failure questions live in the FAQ (@sec-faq),
+and every capture chapter ends with a "common pitfalls" section for
+its own feature.
+
+<!-- consolidated from: docs/user-guide/troubleshooting.md -->

@@ -1,0 +1,566 @@
+# Networking and Remote Access {#sec-networking}
+
+Everything in Polaris happens over the network: the host sits at the
+telescope, and every screen you look at is a browser somewhere else.
+This chapter covers the four layers that make that connection work,
+in the order you meet them. First the WiFi link itself: the host's
+own hotspot for the field, and the switch onto your home network,
+with a safety net so a typo in the password can never strand the
+box. Then finding the host by name instead of by IP address. Then
+the encrypted connection (HTTPS) and the password gate that protect
+the link. Last, the relay, which lets you reach the rig from
+anywhere on the internet without opening your home router.
+
+## The two ports {#sec-two-ports}
+
+Polaris serves its interface on two ports (a port is the numbered
+"door" on a machine that a network service listens behind):
+
+- **Port 5000, HTTPS.** The encrypted endpoint, and the one you
+  type: `https://polaris-pi.local:5000`. It is reachable from every
+  device on the network and uses a certificate the host generates
+  for itself (more on that below). This is the only way a LAN
+  device gets real content from Polaris.
+- **Port 5080, plain HTTP.** Unencrypted, and by default it serves
+  content only to the host machine itself (loopback, the network
+  path a computer uses to talk to its own programs). It exists for
+  scripts running on the host and for the relay tunnel, both of
+  which never leave the machine. To other devices on the LAN this
+  port only ever answers with a redirect that bounces the browser
+  to the HTTPS address, so typing `http://` by mistake still lands
+  you on the right page instead of an error.
+
+Both sides are configurable in `appsettings.json`, the server's
+configuration file (see @sec-api for where it lives):
+
+```jsonc
+"Server": {
+  "Https": { "Enabled": true,  "Port": 5000 },
+  "Http":  { "Enabled": true,  "Port": 5080,
+             "Bind": "loopback",          // "any" exposes HTTP to the LAN
+             "RedirectToHttps": true }
+}
+```
+
+If you disable HTTPS entirely, remember that plain HTTP stays
+loopback-only unless you also set `Server:Http:Bind` to `"any"`;
+otherwise no other device can connect at all.^[Older Polaris
+documentation described HTTP on port 5000 and HTTPS on port 5001.
+The defaults have since swapped: HTTPS took over 5000, the address
+users naturally type, and HTTP moved to 5080. Configuration
+overrides for either port are still honoured.]
+
+## WiFi: hotspot and station {#sec-wifi-modes}
+
+A Raspberry Pi installed from the Polaris `.deb` package
+(@sec-installation) boots as a **WiFi hotspot**: it broadcasts its
+own network, named `Polaris-Hotspot` with password `polaris1234`,
+instead of joining one. That is what you connect your phone or
+laptop to on the first night in the field, before the host has ever
+seen your home WiFi. If you have used an ASIAIR, this is the same
+model as its Station Mode toggle.
+
+### First boot in the field
+
+1. Flash Raspberry Pi OS and install the Polaris `.deb`
+   (@sec-installation covers this end to end), then reboot.
+2. Wait about 30 seconds, then look for the WiFi network
+   `Polaris-Hotspot` on your phone. Connect with `polaris1234`.
+3. Open `https://polaris-pi.local:5000` and accept the certificate
+   warning once (explained under HTTPS below).
+
+You can stop there. The hotspot comes back every boot with no
+further setup, which is all you need for an off-grid site.
+
+### Joining your home network
+
+At home it is better to put the host on your existing WiFi, where
+it can also reach the internet for updates, time sync, and catalog
+downloads. This is called **station mode** (the host joins a
+network as an ordinary client instead of broadcasting its own).
+
+1. Open **SETTINGS**, **Network (WiFi)**.
+2. Click **Switch to Station Mode**.
+3. Pick your network from the scan list, sorted by signal
+   strength. For a hidden network (one that does not broadcast its
+   name), pick **Other (hidden SSID)** and type the name; SSID is
+   simply the technical term for a WiFi network's name.
+4. Type the password (WPA2, the standard WiFi encryption; 8 to 63
+   characters) and click **Connect & switch**.
+
+Your browser's connection drops the moment the switch starts,
+because the device you are holding was riding on the hotspot that
+just went away. That is expected. Reconnect your phone or laptop to
+your home WiFi and reopen `https://polaris-pi.local:5000`; the name
+resolves on the new network too, so the URL never changes.
+
+### The safety net: try and revert
+
+What if the password was wrong? Polaris waits up to 30 seconds for
+the host to actually obtain an address on the new network and reach
+its gateway (in other words, to be genuinely usable there). If that
+does not happen, it automatically reverts to the hotspot. Reconnect
+to `Polaris-Hotspot` and try again. The same revert covers a
+network that is out of range or a router that is up but not handing
+out addresses. The host can never strand itself with no working
+WiFi.
+
+### Arriving somewhere new: automatic hotspot fallback
+
+The try-and-revert net protects you during a switch. A second
+watchdog protects you across reboots. Suppose the host is set to
+station mode on your home WiFi and you drive it to a dark site.
+Your home network is out of range, so the host cannot join anything
+on boot, and without a screen you would need an Ethernet cable to
+reach it. Polaris watches for exactly this: if the host stays
+disconnected from every saved network for about 45 seconds after
+boot, it brings `Polaris-Hotspot` back up on its own. Connect with
+your phone as on the first night; the **Network** panel shows a
+note that the hotspot started automatically, and from there you can
+join whatever WiFi the new site offers. Back home, the saved home
+network takes priority again on the next boot with no action from
+you.
+
+The watchdog is on by default and tunable in configuration:
+`Network:AutoHotspotFallback` (default `true`) is the master
+switch, and `Network:HotspotFallbackSeconds` (default `45`, minimum
+`20`) is how long the host waits before starting the hotspot.
+
+### Switching back, and changing the hotspot credentials
+
+In station mode the same panel shows a **Switch back to Hotspot**
+button; click it and reconnect your device to `Polaris-Hotspot`.
+The default hotspot name and password are public knowledge, so
+change them if the rig lives anywhere a stranger might wander past:
+**SETTINGS**, **Network**, **Edit hotspot SSID / password** accepts
+a name of 1 to 32 characters and a WPA2 password of 8 to 63.
+Devices on the old name are disconnected; rejoin with the new one.
+
+### When the panel is read-only
+
+WiFi management needs Linux with NetworkManager, the standard Linux
+network configuration service [@networkmanager_project]. The panel
+explains itself with a banner when it cannot help:
+
+- On Windows or macOS hosts the panel is read-only; manage WiFi in
+  the operating system's own settings.
+- "nmcli not installed" means NetworkManager is missing: run
+  `sudo apt install network-manager` and reboot. A normal `.deb`
+  install pulls it in automatically.
+- "No WiFi interface detected" means the host has no WiFi radio at
+  all (a mini-PC on Ethernet, for example). Polaris manages only
+  WiFi; a wired connection is left entirely to the operating
+  system, and works alongside either WiFi mode.
+
+A few limits worth knowing: the hotspot runs on 2.4 GHz only, for
+maximum client compatibility; only one WiFi adapter is supported;
+and both modes use WPA2, not WPA3.^[For the curious: Polaris drives
+NetworkManager through `nmcli` as the unprivileged `polaris` system
+user, authorized by a PolicyKit rule the `.deb` installs at
+`/etc/polkit-1/rules.d/50-polaris-nm.rules` that grants that user
+NetworkManager actions only. It maintains two named connections:
+`polaris-hotspot` (created at first boot, autoconnect priority -10,
+shared addressing so clients get addresses automatically) and
+`polaris-station` (recreated on every switch so credentials stay
+fresh, priority 10, so a reachable home network always beats the
+hotspot). WiFi passwords are stored by NetworkManager itself in
+`/etc/NetworkManager/system-connections/`, root-owned; Polaris does
+not copy them anywhere.]
+
+## Finding the host by name {#sec-mdns}
+
+The URLs in this book use names like `polaris-pi.local` rather than
+IP addresses. That works thanks to mDNS (multicast DNS, a protocol
+that lets machines on a local network announce their own names, so
+`hostname.local` resolves without any central server). On Raspberry
+Pi OS this is provided by the system's Avahi service, and every
+modern phone, tablet, and desktop understands it. The practical
+consequence: the address you bookmark survives router reboots,
+DHCP changes, and the hotspot-to-station switch, because it names
+the machine, not its current IP.
+
+Polaris also announces itself as a discoverable service
+(`_nina._tcp`, on the HTTPS port 5000), so client software can find
+every Polaris host on the network without knowing any names. Each
+instance auto-generates a unique service name, `polaris-app-XXXX`,
+derived from a stable hardware identifier (the Pi's serial number,
+or failing that the network adapter's address), which means a single
+prepared SD-card image can be cloned onto several Pis without name
+collisions. The friendly device name you set in **SETTINGS** is
+broadcast alongside it, so discovery lists can show "Telescope on
+the balcony" instead of a serial. Both behaviours can be tuned with
+the `Mdns:Enabled`, `Mdns:Port`, and `Mdns:InstanceName`
+configuration keys.
+
+## HTTPS and the self-signed certificate {#sec-https}
+
+HTTPS is the encrypted flavour of ordinary web traffic: the browser
+and server negotiate TLS (Transport Layer Security, the encryption
+layer behind the padlock icon) so nobody on the network can read or
+tamper with what passes between them. On a home LAN that is nice to
+have; for Polaris it is also strictly necessary, for a less obvious
+reason.
+
+### Why HTTPS matters on a LAN
+
+Browsers gate their most powerful features behind a "secure
+context" check: the page must arrive over HTTPS, or from
+`localhost` on the same machine. Two of those features carry the
+Polaris processing pipeline described in @sec-ai-cleanup:
+
+- **WebGPU**, the browser's route to the client device's graphics
+  card. The AI tools (background extraction, denoising,
+  deconvolution) need it to run at full speed. Over plain HTTP to
+  any address other than `localhost`, WebGPU simply does not
+  exist, and the tools fall back to their slowest path. The
+  difference is not subtle: a heavy denoise run that takes about
+  ten seconds on a modern GPU can take half an hour on the
+  single-threaded fallback.
+- **SharedArrayBuffer**, a browser facility that lets that
+  fallback at least use every processor core instead of one, for
+  a four to eight times speedup on machines without a usable GPU.
+
+Typing `localhost` in a browser running on the host itself counts
+as secure without any ceremony, but `polaris-pi.local` or a raw IP
+address does not. That is what the HTTPS endpoint is for.
+
+### What Polaris generates
+
+On first boot Polaris creates its own certificate (the digital
+identity document a server presents to prove who it is; normally a
+public authority signs it, here the host signs it itself, hence
+"self-signed"):
+
+1. It collects every name and address a client might use to reach
+   the host: `localhost`, the machine's hostname, `hostname.local`,
+   `polaris.local`, `polaris-app.local`, and every real IP address
+   on every active network interface.
+2. It generates an RSA-2048 certificate listing all of them, valid
+   for five years.
+3. It stores the certificate, private key included, under the
+   Polaris data directory: on Linux
+   `~/.local/share/NINA.Polaris/cert/polaris.pfx`, on Windows
+   `%LOCALAPPDATA%\NINA.Polaris\cert\polaris.pfx`.
+4. It serves HTTPS on port 5000 with it.
+
+The same certificate is reused on later boots. It is regenerated
+only if the file is missing, expiry is less than 30 days away, or
+the set of names and addresses has changed substantially, for
+example after moving the box to a different network.
+
+### The first visit from each device
+
+Because no public authority vouches for a self-signed certificate,
+each browser warns once: "Your connection is not private" or
+`NET::ERR_CERT_AUTHORITY_INVALID`. Click **Advanced**, then
+**Proceed** (Chrome) or **Accept the Risk and Continue** (Firefox).
+The browser remembers the exception for that device, and refreshes
+work normally afterwards. **SETTINGS** lists ready-to-click HTTPS
+URLs for every name in the certificate, along with the
+certificate's fingerprint (a short checksum that uniquely
+identifies it). If you want certainty that the certificate your
+browser sees is the one Polaris generated, compare the fingerprint
+in the browser's certificate details dialog against the one
+**SETTINGS** prints; a match rules out anything sitting between
+you and the host.
+
+To confirm the payoff, open the browser's developer console on the
+HTTPS page and run:
+
+```js
+navigator.gpu.requestAdapter().then(a => console.log(a))
+```
+
+A non-null result means WebGPU is available.
+
+### Trusting the certificate permanently
+
+The warning-and-exception dance works, but you can also install the
+certificate into a device's trust store once, after which every
+browser on that device shows a normal padlock until the certificate
+expires. First download it: on the device to be trusted, open
+Polaris over HTTPS, go to **SETTINGS**, **HTTPS endpoints**, and
+click **Download certificate**; the file `polaris-root.crt` lands
+in your Downloads. (The same file is served at
+`https://polaris-pi.local:5000/api/system/server-cert`; it contains
+only the public certificate, never the private key.) Then install
+it:
+
+- **Windows (Chrome, Edge).** Double-click `polaris-root.crt`,
+  **Install Certificate**, **Local Machine**, place it in the
+  **Trusted Root Certification Authorities** store. Windows shows
+  the fingerprint before committing; compare it with **SETTINGS**,
+  confirm, restart the browser.
+- **macOS (Safari, Chrome).** Double-click the file to open
+  Keychain Access, drag the certificate from **login** to
+  **System**, then open it, expand **Trust**, and set **When using
+  this certificate** to **Always Trust**. Restart the browser.
+- **iPhone and iPad.** Download in Safari and allow the
+  configuration profile, install it under **Settings**, **Profile
+  Downloaded**. Then the step that catches everyone: **Settings**,
+  **General**, **About**, **Certificate Trust Settings**, and
+  toggle the *polaris-root* entry on. Without that last switch iOS
+  accepts the profile but Safari still distrusts it.
+- **Android.** Chrome on Android does not trust user-installed
+  certificates at all, so the padlock cannot be fixed there.
+  Workable alternatives: install Polaris to the home screen as an
+  app (Chrome menu, **Install app**), which hides the warning; use
+  Firefox, which honours user-installed certificates; or reach the
+  rig through the relay, which carries a publicly trusted
+  certificate.
+- **Linux (Chrome).** Import into the NSS database Chrome reads:
+
+  ```bash
+  sudo apt install libnss3-tools
+  certutil -d sql:$HOME/.pki/nssdb -A -t "C,," \
+      -n "polaris-root" -i polaris-root.crt
+  ```
+
+  For Firefox, import under **Settings**, **Privacy & Security**,
+  **Certificates**, **Authorities**, ticking "Trust this CA to
+  identify websites".
+
+The install is per device, not per browser profile: once the
+operating system trusts the certificate, every browser that
+respects the system store does too. After installing, verify the
+fingerprint once more against **SETTINGS**.
+
+### Turning HTTPS off
+
+If you only ever open Polaris on the host machine itself via
+`localhost`, HTTPS adds nothing; disable it in `appsettings.json`:
+
+```jsonc
+"Server": {
+  "Https": { "Enabled": false }
+}
+```
+
+`Server:Https:Port` moves the endpoint off 5000 if something else
+needs that port.
+
+### Why not a free public certificate?
+
+Let's Encrypt [@letsencrypt_isrg], the service that issues free
+publicly trusted certificates to most of the web, requires a domain
+name that resolves on the public internet plus proof of control
+over it. A Pi in an observatory answering to `polaris.local` has
+neither, so for LAN access the self-signed route is the only
+practical one. The relay, described below, is the exception: its
+public endpoint does carry a real Let's Encrypt certificate.
+
+## Authentication {#sec-authentication}
+
+Polaris ships with a password gate covering the API, the live
+WebSocket streams, and the embedded sub-applications (the PHD2
+interface, the INDI Web Manager, Stellarium). There is no default
+password and the setup cannot be skipped: hardcoded defaults get
+forgotten and never changed.
+
+### First run and daily sign-in
+
+The first time any browser opens a fresh install, a full-screen
+prompt asks you to set a password (minimum 8 characters). After
+that, every other device sees a **Sign in** overlay instead. Tick
+**Remember on this device** to stay signed in across browser
+restarts; leave it unticked and the session ends when the tab
+closes. Sessions also expire after 24 hours of inactivity, with the
+timer reset by every request, so an active imaging night never logs
+you out. All sessions end if the Polaris server restarts.
+
+To change the password, open **SETTINGS**, **Authentication**,
+**Change password**. On success every other device is signed out
+immediately and must use the new password; your own session
+continues. **Sign out** in the same card ends the current session.
+
+### Local connections skip the gate
+
+Connections from the host machine itself (loopback) bypass
+authentication entirely, the same convention Jupyter and Grafana
+use. Anyone who can already run commands on the host can control
+Polaris by other means anyway, so a password there adds nothing.
+This is what makes host-side scripts and SSH tunnels frictionless:
+
+```bash
+ssh -L 5080:localhost:5080 polaris@polaris-pi.local
+curl http://localhost:5080/api/system/status   # no token needed
+```
+
+(Note the plain-HTTP port 5080 here: loopback traffic never leaves
+the machine, so encryption buys nothing.)
+
+### Turning the gate off
+
+On a genuinely trusted network, an offline observatory or an
+isolated field router, you can disable authentication:
+**SETTINGS**, **Authentication**, **Disable auth**, confirm with
+your current password. Re-enable it the same way; the original
+password still applies.
+
+### If you forget the password
+
+Recovery requires file access to the host, by SSH or otherwise;
+there is no email reset. Edit the active profile:
+
+```bash
+ssh polaris@polaris-pi.local
+nano ~/.config/NINA.Polaris/profiles/active.json
+```
+
+Set both stored values to empty strings:
+
+```json
+  "AuthPasswordHash": "",
+  "AuthPasswordSalt": "",
+```
+
+Then restart the service with
+`sudo systemctl restart polaris.service`. The next browser visit
+shows the first-run prompt again, and the restart has already
+signed out every old session.
+
+### What the gate is made of
+
+The password is never stored, only a salted hash^[Specifically
+PBKDF2-SHA256 with 100,000 iterations and a random 16-byte salt, a
+deliberately slow one-way transformation that makes guessing the
+password from the stored value expensive. Session tokens are 32
+random bytes held only in server memory, delivered as a bearer
+header, a query parameter for plain download links, or a
+strictly-scoped session cookie. Failed sign-ins are rate limited to
+five per minute per client address, with exponential backoff capped
+at one hour, and password checks use constant-time comparison. The
+gate covers `/api/*` (except the sign-in endpoints and the version
+probe), `/ws/*`, and the embedded sub-app paths; static files stay
+open so the sign-in page itself can load.] of it. Be clear about
+what it does not protect against: someone with shell access to the
+host can simply edit the profile, and the relay adds its own
+separate token layer on top (next section); the two compose rather
+than overlap.
+
+## The relay: access from outside {#sec-relay}
+
+Everything so far assumes you and the host share a network. The
+**relay** removes that assumption: it is a small server you run on
+a cloud machine with a public address, and it forwards browser
+traffic to the Polaris host through a tunnel that the host itself
+opens outward. Because the host dials out (an ordinary outbound
+connection, like any web request), nothing on your home router
+needs to change: no port forwarding^[Port forwarding is the router
+configuration that exposes a machine on your home network to the
+internet; it works, but it means maintaining a hole in your
+firewall and a way to find your home's changing public address.],
+no dynamic DNS, and the host is never directly exposed to the
+internet.
+
+```
+Phone (anywhere) ──HTTPS──► relay server (cloud) ──tunnel──► Polaris host
+                                                   the host opened this
+                                                   connection outward
+```
+
+You want the relay when the rig is at a remote site and you are
+hours away, or when a friend should be able to check on a running
+session from their own home. You do not need it when your tablet
+and the host share a WiFi network; local access is simpler and
+faster.
+
+### Setting up the relay server
+
+The relay is a separate program in the Polaris repository
+(`src/NINA.Relay.Server`) that you build and run on any rented
+cloud machine (a VPS, a small virtual private server costing a few
+dollars a month) with a public hostname. One-time setup:
+
+1. Point a DNS record at the machine:
+   `relay.yourdomain.com -> your-VPS-IP`.
+2. Open port 443 (standard HTTPS), and optionally port 80 for the
+   certificate-issuance redirect.
+3. Run `./NINA.Relay.Server`. It obtains and renews a real Let's
+   Encrypt certificate automatically via LettuceEncrypt
+   [@lettuceencrypt_project], a library that handles the
+   certificate paperwork inside the server itself, so remote
+   browsers see a normal padlock with no warnings.
+4. Open the admin interface at
+   `https://relay.yourdomain.com/admin` (guarded by a separate
+   admin token set in an environment variable).
+5. Create a **tenant**, the relay's name for one Polaris rig: an
+   identifier such as `polaris-yourname` plus a generated 32-character
+   access token, with an optional monthly traffic quota and token
+   expiry date.
+
+The relay keeps its state in a single `tenants.json` file, easy to
+back up.^[Deployment, TLS, and mutual-TLS specifics for integrators
+live in `docs/relay-deployment.md`, `docs/relay-tls.md`, and
+`docs/relay-mtls.md` in the repository.]
+
+### Connecting the host
+
+On the Polaris host, add a section to `appsettings.json` and
+restart:
+
+```jsonc
+{
+  "Relay": {
+    "Enabled": true,
+    "ServerUrl": "wss://relay.yourdomain.com/tunnel",
+    "TenantId": "polaris-yourname",
+    "Token": "the-32-char-token-from-server-admin",
+    "ReconnectIntervalSeconds": 5,
+    "UseMtls": false
+  }
+}
+```
+
+The host opens a persistent WebSocket connection (a long-lived
+two-way channel, the same technology the live status feed uses) to
+the relay and keeps it open; the activity bar shows **Relay: ON**.
+Internally the tunnel delivers requests to the host's loopback HTTP
+port (5080 by default, following `Server:Http:Port`), which is one
+of the reasons that port exists.
+
+### Using it from a browser
+
+Once the tunnel is up, the full Polaris interface is available at:
+
+```
+https://relay.yourdomain.com/t/polaris-yourname/
+```
+
+A prompt asks for the tenant token. From there everything works as
+it does locally, including the live preview and sequence updates,
+because the WebSocket streams tunnel through as well. The regular
+Polaris password gate still applies behind the tenant token; the
+two layers are independent.
+
+### Security and behaviour
+
+The relay server is built to face the internet: publicly trusted
+TLS with automatic renewal, per-tenant tokens with optional expiry,
+per-tenant monthly byte quotas with automatic throttling, request
+rate limits, and a per-tenant audit log recording every request
+with timestamp, origin address, endpoint, and size. Optionally the
+tunnel itself can require mTLS (mutual TLS, where the host proves
+its identity to the relay with its own certificate, on top of the
+token).
+
+The host reconnects automatically after any interruption, retrying
+every 5 seconds, and the relay buffers a short window of requests
+across brief drops, so a flaky mobile connection on your side or a
+hiccup on the host's side usually goes unnoticed.
+
+Common pitfalls: a "Tunnel not connected" (502) page means the
+host's relay client is not running or the token is wrong; check the
+Polaris log on the host (@sec-administration). A connection that
+drops every 30 seconds usually means the VPS provider's idle
+timeout is shorter than the keepalive; tune
+`WebSocket:PingInterval` in `appsettings.json`. A quota-exceeded
+message means the monthly byte cap is spent; the live image stream
+is the bandwidth hog, so switch it to JPEG mode or live with
+status-only access until the month rolls over.
+
+<!-- consolidated from: docs/user-guide/network-mode.md,
+docs/user-guide/https-setup.md, docs/user-guide/authentication.md,
+docs/user-guide/relay.md; port defaults verified against
+src/NINA.Polaris/Program.cs (GX-10b) and
+src/NINA.Polaris/Services/RelayClient.cs -->

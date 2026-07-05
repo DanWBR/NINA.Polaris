@@ -1,0 +1,793 @@
+# Installation {#sec-installation}
+
+Polaris ships as a self-contained build: everything it needs is
+packed in, so there is no separate .NET runtime (the support software
+that .NET programs usually require) to install, no database to
+configure, and nothing at all to install on the client. You put one
+program on the host (a Raspberry Pi, another single-board computer, a
+mini-PC, or any Linux or Windows machine) and reach it
+from any browser on the same network. This chapter walks through every
+supported install path, from a ready-made SD-card image to a source
+build, and ends with where your images land and how updates work.
+
+From easiest to most manual, the options are:
+
+| Path | Best for |
+|---|---|
+| Ready-to-flash image | Get going in minutes on a supported board |
+| `.deb` (Debian / Ubuntu) | The recommended install on arm64 single-board computers and x86-64 PCs |
+| Portable `tar.gz` | Fedora, Arch, or any non-Debian Linux |
+| Windows `.zip` | A Windows mini-PC, desktop, or laptop |
+| Docker | Containerized deployment (one image covers Pi and PC) |
+| Build from source | Developers and unsupported platforms |
+
+Whichever path you take, the destination is the same: a server
+listening on TCP port 5000, secured with HTTPS and a self-signed
+certificate (one the server generates for itself; your browser warns
+about it once, and you tell it to trust it), that you open at
+`https://<hostname>.local:5000`.
+
+## Ready-to-flash images
+
+The fastest route is a pre-built OS image with Polaris preinstalled and
+configured for a specific board: Raspberry Pi, Orange Pi, x86-64 PC,
+and more. Flash (write) the image to an SD card, USB drive, or eMMC
+with a flashing tool: Raspberry Pi Imager [@rpi_imager], the official
+Raspberry Pi image writer, or balenaEtcher or Rufus, then boot.
+Download links live on the project's
+[Download page](https://polaris-astro.app.br/install) and on the
+[GitHub releases](https://github.com/DanWBR/NINA.Polaris/releases).
+
+On first boot Polaris starts automatically and is ready to use with no
+setup. If the device has WiFi but cannot join a known network, it
+raises its own hotspot named **Polaris-Hotspot** (password
+`polaris1234`); connect to that hotspot, then open the UI. Each image
+ships with its own hostname (for example `polaris-pi.local`), so the
+address is `https://<hostname>.local:5000`. The SSH^[SSH (secure
+shell) is the standard way to log in to a remote Linux machine and
+type commands, for example `ssh polaris@polaris-pi.local` from a
+laptop.] account on these images is user `polaris`, password
+`polaris`; change that password after your first login.
+
+If you clone one image onto several boards, the clones will not
+collide on the network. Each device advertises itself over
+mDNS^[mDNS (multicast DNS) is how devices on a home network find each
+other by name without any central server; it is what makes addresses
+ending in `.local` work.] as
+`polaris-app-XXXX`, where `XXXX` is derived from a stable hardware id
+(the board's serial number, or its primary MAC address if the serial
+is not readable), so every clone self-names without per-device
+configuration. To give a device a readable name, open **SETTINGS**,
+find **Device name**, and enter something like "Telescope on the
+balcony"; the name is stored per device, shown in discovery lists, and
+re-announced immediately when changed. If you prefer a fixed mDNS
+name, set `Mdns:InstanceName` in `appsettings.json`, but keep that
+file out of any image you clone or every clone will claim the same
+name. Note that the Linux hostname inside a cloned image is still
+identical on every board; it affects `ssh` and Avahi (the Linux
+service that answers `.local` name lookups), not
+Polaris's own discovery, so give each board a unique hostname on first
+boot if you SSH in by name. Phones and tablets generally cannot
+resolve `.local` names at all; on those devices rely on the discovery
+list in the Android app (or the IP address) rather than typing a
+`.local` hostname.
+
+## Debian and Ubuntu: the `.deb` package {#sec-install-deb}
+
+The recommended install on anything Debian-based is a one-command
+`.deb`. It works on arm64 SBCs (Raspberry Pi, Orange Pi, Radxa) and on
+x86-64 PCs.
+
+On an arm64 SBC:
+
+```bash
+wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb
+sudo apt install ./polaris_arm64.deb
+```
+
+On an x86-64 PC:
+
+```bash
+wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_amd64.deb
+sudo apt install ./polaris_amd64.deb
+```
+
+About thirty seconds later Polaris is running at
+`https://<hostname>.local:5000`, and the package's post-install script
+prints that address. The service is a normal systemd unit^[systemd is
+the Linux service manager; a "unit" is one service it looks after,
+starting it at boot and restarting it if it crashes.], so the usual
+commands manage it:
+
+```bash
+sudo systemctl status polaris
+sudo journalctl -u polaris -f
+sudo systemctl restart polaris
+```
+
+The package resolves a long list of chores you would otherwise do by
+hand:
+
+- every apt dependency (`indi-bin`, `libfontconfig1`, `python3-venv`,
+  and, as recommends, `indi-full`, `phd2`, `astap`, `siril`, `xpra`,
+  and `dphys-swapfile`);
+- a self-contained .NET 10 runtime, so no separate `dotnet` install;
+- the `polaris` system user;
+- the `/home/polaris/files/` capture root, wired in through the
+  `POLARIS_IMAGE_OUTPUT_DIR` environment variable;
+- indi-web (indiwebmanager [@knro_indiwebmanager]), a small web page
+  for choosing and starting drivers for INDI (the standard system for
+  controlling astronomy gear on Linux), installed in a managed
+  virtualenv (a self-contained Python environment) at
+  `/opt/polaris-indiweb-venv/`;
+- the systemd unit at `/lib/systemd/system/polaris.service`, enabled
+  and started;
+- a self-signed HTTPS certificate on port 5000;
+- a WiFi hotspot on first boot: on the very next reboot the device
+  comes up as an access point named `Polaris-Hotspot` (password
+  `polaris1234`) via NetworkManager, so you can reach the UI from a
+  phone with no further setup. From **SETTINGS**, under **Network**,
+  you can move the device onto your home WiFi at any time with a
+  30-second try-and-revert safety net; @sec-networking covers this in
+  detail.
+
+Three things remain manual after the `.deb`: downloading the star
+database for ASTAP, the plate-solving program bundled with Polaris
+(plate solving works out exactly where the telescope is pointing by
+matching the stars in a photo against a catalog; the package pulls
+the ASTAP program itself, not the catalog; see below), installing
+GraXpert (a free AI-based astro-processing tool) and its AI models if
+you want host-side AI processing (@sec-ai-cleanup), and optionally
+mounting a
+USB SSD over the capture root (covered in the Raspberry Pi recipe
+below).
+
+Once installed from the `.deb`, Polaris keeps itself current: a
+status-bar badge appears whenever a newer GitHub release exists, and
+one click downloads, installs, and reloads the new version with no SSH
+and no sudo password. The update section at the end of this chapter
+summarizes it; @sec-administration has the full story, including
+rollback and offline updates.
+
+## Raspberry Pi: from blank SD card to autostart {#sec-install-rpi}
+
+This is the end-to-end recipe for a brand new Raspberry Pi 4 or 5:
+from an empty SD card to a Polaris server that starts on boot, hosts
+INDI drivers, plate solves, and is reachable from any laptop or phone
+on your LAN. Total time is about thirty minutes, most of it spent on
+the OS update and reboot.
+
+### Hardware checklist
+
+| Item | Pi 4 | Pi 5 |
+|---|---|---|
+| RAM | 4 GB minimum, 8 GB recommended | 4 GB minimum, 8 GB recommended |
+| Power supply | Official 5V/3A USB-C | Official 27W USB-C (5V/5A PD) |
+| Cooling | Active fan (case fan or Argon ONE) | Active fan mandatory |
+| Storage | SanDisk Extreme Pro 64 GB+ or USB 3.0 SSD | NVMe HAT + NVMe SSD recommended |
+| Network | Wired Ethernet preferred | Wired Ethernet preferred |
+| USB hub | Powered USB 3.0 hub effectively mandatory with three or more USB devices | Same |
+
+A few notes on that table. A Pi 4 with 2 GB technically boots, but
+live stacking (stacking frames on screen as they arrive) and the
+editor will swap heavily, constantly spilling memory onto the slow SD
+card. An underpowered PSU is
+the number one source of "USB camera randomly disconnects". Long
+sessions reach 70 C inside a case, and the Pi 5 throttles aggressively
+without a fan. The SD card is fine for the OS, but put image output on
+a separate SSD over USB 3.0 or NVMe. WiFi works, but live-stack frames
+are big and wired Ethernet keeps the browser responsive. And the Pi
+4's USB ports share roughly 1.2 A total: a camera plus filter wheel
+plus focuser plus mount adapter is already four devices, and without a
+powered hub, long focuser moves, filter changes, and cooled-camera
+readouts under load will randomly crash devices off the bus.
+
+::: {.callout-warning}
+## The under-voltage trap
+The most common "my equipment randomly disconnects" issue is not a bad
+cable or a buggy driver; it is the Pi's USB rail sagging below 4.65 V
+under peak load. The pattern: short or idle operations work fine,
+while long focuser moves and cooled-camera readouts crash the device,
+sometimes removing it from the INDI device list entirely. Run
+`vcgencmd get_throttled`; anything non-zero is the smoking gun. The
+fix is a powered USB hub for the high-current devices (focuser,
+camera). A twenty-dollar hub solves what no amount of software
+tweaking can. The full diagnostic flow is in @sec-troubleshooting.
+:::
+
+You also need a microSD card reader on your main computer and,
+optionally, an HDMI cable for first boot (the headless setup below
+avoids it).
+
+### Flash Raspberry Pi OS
+
+Use Raspberry Pi OS Lite (64-bit), Bookworm. The Desktop edition also
+works but adds two gigabytes you do not need on a headless astro
+server (one running without a monitor). The 64-bit (aarch64) build is
+mandatory: the .NET 10 runtime, the remote debugger (vsdbg), and the
+ONNX AI models (ONNX is the file format Polaris's AI models come in)
+do not ship 32-bit ARM builds.
+
+1. Install Raspberry Pi Imager [@rpi_imager] on your laptop.
+2. Choose Device: Pi 4 or Pi 5.
+3. Choose OS: "Raspberry Pi OS (other)", then
+   "Raspberry Pi OS Lite (64-bit)".
+4. Choose Storage: your SD card.
+5. Open the advanced options (the gear icon) before writing: set a
+   hostname (this recipe uses `polaris-pi`, making the device
+   reachable at `polaris-pi.local`); enable SSH with password
+   authentication or a public key; set the username to `polaris` with
+   a password of your choice; configure WiFi if there is no Ethernet
+   at the scope; set your timezone and keyboard layout.
+6. Write the card, eject it, and boot the Pi.
+
+After boot the Pi appears on your network as `<hostname>.local` (via
+mDNS) or by IP from your router's admin page. SSH in:
+
+```bash
+ssh polaris@<hostname>.local
+```
+
+### First-boot tasks
+
+Update everything and reboot:
+
+```bash
+sudo apt update && sudo apt full-upgrade -y
+sudo reboot
+```
+
+SSH back in and confirm you are on a 64-bit kernel:
+
+```bash
+uname -m
+```
+
+This should print `aarch64`. If it prints `armv7l` you flashed the
+32-bit OS by accident; reflash with the Lite 64-bit image. If you
+skipped timezone and locale in the Imager, set them now with
+`sudo raspi-config` under Localisation Options.
+
+### Optional tuning
+
+Three small tweaks pay off on Pi-class hardware. First, bump swap
+(disk space the system uses as overflow memory) to
+2 GB, which helps the editor, the AI models, and batch stacking. Recent
+Raspberry Pi OS Lite images no longer ship `dphys-swapfile`, so
+install it first:
+
+```bash
+sudo apt install -y dphys-swapfile
+sudo dphys-swapfile swapoff
+sudo sed -i 's/CONF_SWAPSIZE=.*/CONF_SWAPSIZE=2048/' /etc/dphys-swapfile
+sudo dphys-swapfile setup
+sudo dphys-swapfile swapon
+```
+
+Verify with `free -m`; it should show about 2000 MB of swap.
+
+Second, on a Pi 4 only, reclaim GPU memory. Polaris runs headless and
+the GPU is unused, but the default split gives it 64 MB:
+
+```bash
+sudo sed -i 's/^gpu_mem=.*/gpu_mem=16/' /boot/firmware/config.txt 2>/dev/null \
+  || echo 'gpu_mem=16' | sudo tee -a /boot/firmware/config.txt
+```
+
+Third, again Pi 4 only, raise the USB current cap if you power the
+camera from the Pi itself:
+
+```bash
+echo 'max_usb_current=1' | sudo tee -a /boot/firmware/config.txt
+```
+
+The Pi 5 manages GPU memory automatically and already runs at full USB
+current with the official 27 W PSU, so skip both firmware tweaks
+there. Reboot with `sudo reboot` to apply.
+
+### A separate drive for captures
+
+The `.deb` uses `/home/polaris/files/` as the capture root. SD cards
+die fast under sequence writes, so if you have a USB 3.0 SSD or an
+NVMe drive, mount it over `~/files` and every capture lands on the SSD
+without changing any Polaris path. Find the drive with `lsblk`
+(typically `sda` with partition `sda1`) and, if it is new, format it.
+This wipes the drive:
+
+```bash
+sudo mkfs.ext4 /dev/sda1
+```
+
+Then mount it permanently:
+
+```bash
+echo "UUID=$(sudo blkid -s UUID -o value /dev/sda1) /home/polaris/files ext4 defaults,nofail 0 2" \
+  | sudo tee -a /etc/fstab
+sudo mount -a
+sudo chown polaris:polaris /home/polaris/files
+```
+
+The SD card now only handles the OS and the Polaris binary; the OS
+itself is light on writes and is fine on SD.
+
+### Install Polaris
+
+With the OS prepared, the install itself is the `.deb` from the
+previous section:
+
+```bash
+cd /tmp
+wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb
+sudo apt install ./polaris_arm64.deb
+```
+
+Sixty to ninety seconds later the post-install script prints that
+Polaris is running at `https://<hostname>.local:5000`. HTTPS with the
+auto-generated self-signed certificate is the LAN-facing endpoint;
+trust the certificate once per client device. Plain HTTP is also
+available on port 5080, but only on loopback (reachable from the Pi
+itself, not from the network), for SSH-tunneled or local
+reverse-proxy access. LAN access stays on HTTPS because browsers only
+enable WebGPU (the technology that lets a web page use the graphics
+card) on secure pages, and the in-browser AI tools depend on it.
+
+A note on the browser-side AI while you are here: Polaris hosts
+GraXpert's `.onnx` models [@graxpert] and feeds them to the browser,
+so background extraction, denoising, and deconvolution run on the GPU
+of the device showing the UI, not on the Pi. A stacked master that
+takes four to eight minutes through the GraXpert CLI (its
+command-line version, running on the host) on a Pi 5 finishes in ten
+to fifteen seconds in the browser of a laptop with an integrated GPU.
+The host-side GraXpert CLI install is still useful for
+automatic background extraction during capture and as a fallback when
+no browser is connected; @sec-ai-cleanup covers both paths.
+
+### Choosing how INDI drivers load
+
+Equipment control on Linux goes through an INDI server
+[@downey_indi]. You have two options; pick one, not both. The simplest
+is a manual `indiserver` per session, started over SSH with the
+drivers you need tonight:
+
+```bash
+indiserver -v indi_simulator_ccd indi_simulator_telescope
+# or for real gear:
+indiserver -v indi_asi_ccd indi_eqmod_telescope indi_asi_focuser indi_asi_wheel
+```
+
+Leave that SSH session open while you image. The recommended
+alternative is indi-web [@knro_indiwebmanager], a small web UI for
+picking drivers and starting the server without SSH; the `.deb`
+installs it for you, and Polaris embeds its UI at the bottom of the
+**RIGS** tab, where you pick a profile, tick the drivers, and start
+the server. @sec-rigs covers the embedded INDI Drivers Manager in
+full.
+
+If you install indi-web yourself (Raspberry Pi OS Bookworm blocks
+system-wide `pip install`, per a Python packaging policy called
+PEP 668, so use a virtualenv managed by pipenv, a tool that creates
+and tracks such isolated Python environments):
+
+```bash
+cd ~
+mkdir -p indiweb && cd indiweb
+pipenv --python=$(which python3)
+pipenv install indiweb legacy-cgi
+pipenv --venv
+```
+
+The `legacy-cgi` package restores the `cgi` module that Python 3.13
+removed; indi-web's bundled copy of `bottle.py` (the small web
+framework it is built on) imports it unconditionally and dies at
+startup without it on Pi OS images shipped after late 2025.
+`pipenv --venv` prints the virtualenv path; the program itself is at
+`{that path}/bin/indi-web`. Point Polaris at it in
+`appsettings.json`:
+
+```json
+{
+  "IndiWeb": {
+    "ExecutablePath": "/home/polaris/.local/share/virtualenvs/indiweb-AbCd1234/bin/indi-web",
+    "AutoStart": true,
+    "Port": 8624,
+    "BindAddress": "127.0.0.1"
+  }
+}
+```
+
+Then restart Polaris. One common pitfall: if the indi-web status flips
+back to "Stopped" right after Start, make sure the systemd unit sets
+`Environment=HOME=/home/polaris`, because Bottle reads its
+configuration from `$HOME` and exits if it is empty.
+
+PHD2 [@openphd_phd2], the free autoguiding program most amateur
+astrophotographers use, is optional and installed by the `.deb` as a
+recommended package; it listens for commands on port 4400 using
+JSON-RPC^[JSON-RPC is a simple convention that lets one program send
+commands to another over the network as small text messages.], which
+is how Polaris drives it from the **GUIDE** tab. On Linux the PHD2
+GUI can even be embedded in the Polaris browser window through xpra
+[@xpra_project], a tool that shows a Linux program's window inside a
+web page. @sec-guiding covers guiding end to end.
+
+### Newer INDI and PHD2 than apt ships
+
+The versions of INDI, PHD2, and xpra that apt installs on Bookworm
+trail the projects' own latest releases by six to eighteen months.
+They are fine for most setups; reach for newer builds only when a
+camera was released after the apt version froze, PHD2 has a fix you
+need, or the embedded PHD2 GUI needs a newer xpra protocol. There are
+two routes. On Ubuntu Server (24.04+ arm64) you can add the official
+PPAs (personal package archives, add-on software sources for Ubuntu):
+`ppa:mutlaqja/ppa` for `indi-full` plus third-party drivers, and
+`ppa:pch/phd2` for PHD2.
+These PPAs target Ubuntu release codenames, so they do not work on
+Raspberry Pi OS, which reports a Debian codename; forcing them risks
+pulling mismatched libraries. On Pi OS the supported way is compiling
+from source (the upstream repositories are
+`github.com/indilib/indi`, `github.com/indilib/indi-3rdparty`, and
+`github.com/OpenPHDGuiding/phd2`); source builds land in
+`/usr/local/bin/`, which takes precedence over (shadows) the apt
+versions in `/usr/bin/` on the PATH.
+
+## The ASTAP star database
+
+Plate solving uses ASTAP [@kleijn_astap], but the program alone
+cannot solve; it needs a star catalog, and no install path downloads
+one for you. The modern V50 database (Gaia-based, replacing the older H17
+Hipparcos catalog) covers focal lengths from 50 mm to 2000 mm, weighs
+about 290 MB, and ships as a `.deb` that installs to the right place:
+
+```bash
+cd /tmp
+wget -O v50_star_database.deb \
+  "https://downloads.sourceforge.net/project/astap-program/star_databases/v50_star_database.deb"
+sudo dpkg -i v50_star_database.deb
+```
+
+The package lands the catalog chunks in `/opt/astap/`, where ASTAP
+looks by default; no further configuration is needed. Verify:
+
+```bash
+ls /opt/astap/ | head     # should show *.001 / *.290 / etc chunks
+astap_cli -h 2>&1 | head  # confirms ASTAP itself runs
+```
+
+For ultra-narrow fields (a Hyperstar at f/2 with a huge sensor, or
+mosaic tiles under 30 arcmin) the deeper V17 database is available on
+the same SourceForge page; for a typical 400 mm to 1500 mm setup, V50
+is the right pick.
+
+## Other Linux: the portable `tar.gz`
+
+For Fedora, Arch, or any non-Debian distribution, or when you prefer
+no systemd integration, use the portable tarball (a plain compressed
+archive you unpack and run). The build is
+self-contained, so there is still no runtime to install. Replace
+`linux-arm64` with `linux-x64` on Intel or AMD hardware:
+
+```bash
+wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz
+tar -xzf polaris-linux-arm64.tar.gz
+cd polaris-linux-arm64
+./NINA.Polaris
+```
+
+It runs in the foreground. You are responsible for the pieces the
+`.deb` would have handled: an INDI server for equipment control
+(`sudo apt install indi-bin indi-full`, or your distribution's
+equivalent), indiwebmanager [@knro_indiwebmanager] if you want the
+embedded INDI Drivers Manager, `astap` and its star database for plate
+solving, `phd2` if you guide with PHD2, `siril` [@siril] (Siril is a
+free astro image-processing application) if you use the Siril-backed
+processing steps, `xpra` and `xserver-xorg-video-dummy` for the
+embedded PHD2 GUI, and `libfontconfig1`, a font library needed by the
+component Polaris uses to encode images (SkiaSharp).
+
+To survive reboots, wire up your own systemd unit. This one matches
+the conventions used throughout this book (binary in
+`~/polaris`, captures in `~/files`):
+
+```ini
+[Unit]
+Description=N.I.N.A. Polaris astrophotography server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=polaris
+Group=polaris
+WorkingDirectory=/home/polaris/polaris
+ExecStart=/home/polaris/polaris/NINA.Polaris
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
+Environment=HOME=/home/polaris
+Environment=POLARIS_IMAGE_OUTPUT_DIR=/home/polaris/files
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Save it as `/etc/systemd/system/polaris.service`, then:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable polaris.service
+sudo systemctl start polaris.service
+```
+
+The `Environment=HOME=` line matters: several helpers (indi-web's
+Bottle framework, GraXpert's model lookup) read `$HOME` and fail in
+confusing ways when systemd leaves it empty. The release tarball is
+self-contained, so no .NET runtime lines are needed; if you instead
+run a framework-dependent build (one that needs a separately
+installed .NET runtime) against a user-level runtime in
+`/home/polaris/.dotnet/`, add
+`Environment=DOTNET_ROOT=/home/polaris/.dotnet` and prepend that
+directory to a `PATH` line, or systemd will fail with "dotnet:
+command not found" or "framework not found". A manual install starts
+on plain HTTP; run `./NINA.Polaris --setup-https` once to generate a
+self-signed certificate and switch to HTTPS on port 5000, which is
+what unlocks WebGPU for the in-browser AI (@sec-networking).
+
+Before wiring the service, a quick test run in the foreground (a
+"smoke test") is worth the minute:
+
+```bash
+cd ~/polaris
+ASPNETCORE_URLS=http://0.0.0.0:5000 ./NINA.Polaris
+```
+
+You should see log lines like:
+
+```
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://0.0.0.0:5000
+info: NINA.Polaris.Services.MdnsService[0]
+      Advertising _nina._tcp on <hostname>.local
+```
+
+Open the UI from another machine, confirm the home page loads, and
+stop with Ctrl-C.
+
+## Windows
+
+The Windows build is portable, with no installer. The `win-x64` build
+covers Intel and AMD; a `win-arm64` build is also published for the
+Surface Pro X and some Copilot+ PCs.
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip" -OutFile polaris.zip
+Expand-Archive polaris.zip
+cd polaris-win-x64
+.\NINA.Polaris.exe
+```
+
+Open `https://localhost:5000` and accept the self-signed certificate
+once. Remember to open the firewall (rules below). On Windows you
+drive gear over ASCOM, the long-standing Windows astronomy driver
+standard, and Alpaca [@ascom_alpaca], its newer network-based flavor
+(or INDI via WSL2, Windows' built-in Linux environment), and you also
+get the camera makers' own DSLR drivers for Canon, Nikon, and Sony
+bodies; @sec-dslr covers camera-specific setup.
+
+## Docker
+
+Docker runs software in ready-made, isolated packages called
+containers; if that is how you like to run your servers, a multi-arch
+image (one download that covers both arm64 and amd64 machines) is
+published to GitHub Container Registry:
+
+```bash
+docker run -d --network host \
+  -v $(pwd)/config:/config \
+  -v $(pwd)/images:/images \
+  ghcr.io/danwbr/nina-polaris:latest
+```
+
+Host networking (the `--network host` flag, which lets the container
+share the host's network directly instead of sitting behind Docker's
+own private network) is the important flag, for two reasons. The mDNS
+announcer needs raw multicast traffic, which Docker's default bridge
+network blocks, so discovery at `<hostname>.local` only works with
+`--network host`. And INDI's image transfers (BLOB streaming) run
+much faster over loopback than through Docker's bridge. If you
+cannot use host networking,
+forward TCP 5000 and UDP 5353 instead and connect by IP.
+
+The compose file in the repository root (Docker Compose describes a
+whole container setup in a single file) runs the same image with
+sensible defaults: `network_mode: host`, restart `unless-stopped`, the
+environment variables `ASPNETCORE_URLS=http://0.0.0.0:5000`,
+`DOTNET_gcServer=0` (this selects the .NET memory-management mode
+that suits small-memory hosts better than the server mode's per-CPU
+memory pools), `Indi__Host=localhost`,
+`Indi__Port=7624`, and `Mdns__Enabled=true`, plus a named volume for
+profiles (`nina-data`, mounted at `/data`) and a bind mount for
+captured FITS files (`./images` at `/images`; point it at a real disk
+in production). Override `Indi__Host` to aim at an INDI server on
+another machine. Two optional compose profiles extend the stack:
+`--profile indi` adds an `indiserver` sidecar (a companion container)
+running the telescope,
+CCD, focuser, and filter-wheel simulators (handy for testing the whole
+stack with no hardware), and `--profile astap` mounts the plate solver
+from the host, which must have it installed at `/opt/astap`.
+
+```bash
+docker compose up -d                  # Polaris alone
+docker compose --profile indi up -d   # plus the INDI simulator sidecar
+```
+
+Inside the image Polaris runs as the non-root user `nina` (UID 1000),
+exposes port 5000, and answers a health check on
+`http://localhost:5000/api/system/status` every 30 seconds. On a
+Raspberry Pi a typical standalone run wires the capture root through
+the environment:
+
+```bash
+sudo apt install -y docker.io
+sudo usermod -aG docker polaris
+# log out and back in for the group to take effect
+docker run -d --name polaris \
+  --network host \
+  --restart unless-stopped \
+  -e POLARIS_IMAGE_OUTPUT_DIR=/data \
+  -v ~/files:/data \
+  -v ~/.config/polaris:/root/.config \
+  ghcr.io/danwbr/nina-polaris:latest
+```
+
+Skip the systemd steps if you use Docker; the container handles
+restarts on its own.
+
+## Building from source
+
+For developers and unsupported platforms. You need the .NET 10 SDK
+(the developer toolkit, not just the runtime) and Git with submodules
+(sub-repositories that Git pulls in alongside the main one):
+
+```bash
+git clone https://github.com/DanWBR/NINA.Polaris.git
+cd NINA.Polaris
+./deploy/publish-linux-arm64.sh   # or publish-linux-x64.sh / publish-win-x64.ps1
+./publish/linux-arm64/NINA.Polaris
+```
+
+Build and test target `net10.0`. The stellarium-web submodule ships
+prebuilt, version-pinned `.js` and `.wasm` files (WebAssembly, code
+compiled to run inside the browser), so the Emscripten compiler that
+produces them is only needed if you upgrade that engine. The
+equivalent direct publish for a Pi is:
+
+```bash
+dotnet publish src/NINA.Polaris/NINA.Polaris.csproj \
+  -c Release -r linux-arm64 --self-contained -o ~/polaris
+```
+
+@sec-contributing covers the development workflow, including remote
+debugging on a Pi from Visual Studio.
+
+## Opening the web UI
+
+Polaris listens on TCP 5000 (HTTPS, self-signed certificate) and
+announces itself over mDNS (UDP 5353), so
+`https://<hostname>.local:5000` resolves on the LAN; the host's IP
+address works too. Accept the self-signed certificate once per client
+device. HTTPS is what unlocks WebGPU and multi-threaded WebAssembly
+(WASM) in the
+browser, which the in-browser AI tools depend on. There is also an
+Android app on the Download page that scans the network, lists every
+Polaris instance it finds, and connects with one tap; this matters on
+phones, which usually cannot resolve `.local` names.
+
+If `<hostname>.local` does not resolve from a laptop, some routers
+block mDNS across VLANs or guest networks; fall back to the IP
+address (`hostname -I` on the host prints it). More connectivity
+diagnostics live in @sec-troubleshooting.
+
+### Firewall rules on manual installs
+
+The `.deb` opens the necessary ports for you. On a portable or Windows
+install, allow them yourself:
+
+```powershell
+# Windows (Admin PowerShell)
+New-NetFirewallRule -DisplayName "N.I.N.A. Polaris" -Direction Inbound -Protocol TCP -LocalPort 5000 -Action Allow -Profile Private,Domain
+New-NetFirewallRule -DisplayName "mDNS (Polaris)"   -Direction Inbound -Protocol UDP -LocalPort 5353 -Action Allow -Profile Private,Domain
+```
+
+```bash
+# Linux
+sudo ufw allow 5000/tcp
+sudo ufw allow 5353/udp
+```
+
+## Where captured images go
+
+Polaris saves captured images as FITS and XISF files (the two
+standard astro image formats) to a per-rig folder under
+`ImageOutputDir`. The default is `$HOME/Pictures/Polaris` on Linux and
+`%USERPROFILE%/Pictures/Polaris` on Windows; the `.deb` overrides it
+to `/home/polaris/files` through `POLARIS_IMAGE_OUTPUT_DIR`. To change
+it from the UI, open the **FILES** tab, navigate to the folder you
+want, and click **Set as Studio root** (@sec-files). The folder
+structure is:
+
+```
+{ImageOutputDir}/
+  {RigName}/
+    lights/{Target}/{Filter}/{ISO-timestamp}/
+    calibration/dark/dark_{ExposureSec}s_{Gain}_{Temp}C.fits
+    calibration/flat/{Filter}/flat_{Timestamp}.fits
+    calibration/bias/bias_{Timestamp}.fits
+    stacked/                         (saved live stacks)
+    snaps/{Filter}_{Date}/           (from PREVIEW with Save on)
+    planetary/{Target}/{ts}.ser      (from the VIDEO tab)
+    siril/                           (Siril output)
+    bge/                             (GraXpert BGE output)
+```
+
+## Keeping Polaris up to date
+
+On a `.deb` install, Polaris updates itself. It checks GitHub for a
+newer release on startup and once an hour, and when one exists for
+your host's architecture a green **Update** badge appears in the top
+status bar. One click downloads the architecture-matched `.deb`,
+installs it through a tightly scoped, passwordless PolicyKit rule
+(PolicyKit is the Linux mechanism that can allow a normal program to
+perform one specific administrative action without a sudo password),
+and reloads the page on the new version; the whole cycle takes from a
+few
+seconds to a couple of minutes on a Pi. The same machinery supports
+rolling back to any earlier release and even updating an offline host
+by relaying the download through your phone's connection.
+@sec-administration covers self-update, rollback, and the offline
+relay in detail. Note that the feature only exists on `.deb` installs
+(the `/opt/polaris` layout with systemd); there is no update badge on
+Windows or in a dev run, and the very first release that ships the
+updater must itself be installed manually with
+`sudo apt install ./polaris_<arch>.deb`.
+
+The manual alternative on any Debian-based host is SSH:
+
+```bash
+ssh polaris@<hostname>.local
+wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb
+sudo dpkg -i polaris_arm64.deb
+```
+
+Use `polaris_amd64.deb` on x86-64. Your profiles and data are kept
+across the upgrade. On a tarball install, stop the service, extract
+the new archive over the old one, and start again:
+
+```bash
+sudo systemctl stop polaris.service
+cd ~/polaris
+curl -L https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz \
+  | tar xz --overwrite
+sudo systemctl start polaris.service
+```
+
+The extraction does not touch `appsettings.json` or your image
+library, and profiles live in `~/.config/polaris/`, also untouched.
+
+## Verifying the install
+
+The quickest end-to-end check needs no hardware at all: open the UI,
+confirm the sidebar tabs load (RIGS, GUIDE, FOCUS, PREVIEW, AUTORUN,
+and the rest), start the INDI simulator profile (Telescope Simulator
+plus CCD Simulator) from the INDI Drivers section of the **RIGS** tab,
+connect both devices, and take a two-second snap from **PREVIEW**.
+After about three seconds a frame appears with stars on it; the
+simulator renders real stars from the GSC star catalog for the
+simulated
+mount position, so even a plate solve from **STUDIO** genuinely works
+(ASTAP solves in one to five seconds). @sec-simulator describes the
+simulator, and @sec-first-night walks you from a verified install to
+first frames on a real target.
+
+<!-- consolidated from: docs/user-guide/installation.md,
+docs/user-guide/raspberry-pi-setup.md, docs/user-guide/self-update.md,
+Dockerfile, docker-compose.yml -->

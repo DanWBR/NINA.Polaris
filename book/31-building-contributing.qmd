@@ -1,0 +1,428 @@
+# Building and Contributing {#sec-contributing}
+
+Polaris is open source under the Mozilla Public License 2.0, the
+same license as upstream N.I.N.A. [@berg_nina], and contributions
+flow through the ordinary GitHub workflow of forks, branches, and
+pull requests. This chapter covers the development side: building
+and running from source, the technology stack and project layout,
+the recipes for the most common kinds of change, remote-debugging a
+Raspberry Pi from Visual Studio, and how the web UI is translated.
+It assumes you have read @sec-architecture; the two chapters are
+designed as a pair.
+
+## Quick start
+
+Building needs the .NET 10 SDK. Then:
+
+```bash
+git clone https://github.com/DanWBR/nina-polaris.git
+cd nina-polaris
+dotnet build src/NINA.Polaris/NINA.Polaris.csproj
+dotnet test tests/NINA.Polaris.Test/NINA.Polaris.Test.csproj
+dotnet run --project src/NINA.Polaris/NINA.Polaris.csproj
+```
+
+The server comes up with its default listeners, HTTPS on port 5000
+and loopback HTTP on 5080 (@sec-api), so open
+`https://localhost:5000` and accept the self-signed certificate.
+The development loop is edit, rebuild, refresh the browser; static
+assets under `wwwroot/` (the HTML, JS, and CSS of the whole UI)
+reload without a rebuild, since there is no frontend build
+pipeline at all.
+
+## The stack
+
+- **.NET 10** (the latest standard-term-support release)
+- **ASP.NET Core minimal APIs** [@aspnetcore] plus raw WebSocket
+  handlers
+- **Alpine.js 3** [@alpinejs] for frontend reactivity, no build
+  pipeline
+- **NUnit** [@nunit] for the test suite in `tests/NINA.Polaris.Test`
+- **SQLite** [@sqlite] via `Microsoft.Data.Sqlite` for the STUDIO
+  frame index
+- **YARP** [@yarp] for the `/phd2-gui/` reverse proxy
+- **SkiaSharp** [@skiasharp] for JPEG, PNG, and TIFF encoding
+- **Microsoft.Extensions.Diagnostics.ResourceMonitoring** for the
+  host CPU and RAM gauges
+
+## Project layout
+
+```
+src/
+  NINA.Core.Portable/        # shared math / enums / utilities (no UI / IO)
+  NINA.Image.Portable/       # FITS reader/writer, XISF writer, star
+                             # detection, image stretch, BaseImageData
+                             # (pure code, no host deps)
+  NINA.INDI/                 # INDI TCP/XML protocol + device wrappers
+                             # (IndiCamera, IndiTelescope, ...)
+  NINA.Camera.CanonEdsdk/    # Windows-only Canon EDSDK driver wrapper
+  NINA.Camera.NikonSdk/      # ditto Nikon
+  NINA.Camera.SonySdk/       # ditto Sony
+  NINA.Mount.SynScanWifi/    # direct-WiFi SynScan driver
+  NINA.Relay.Protocol/       # shared types for the relay
+  NINA.Relay.Server/         # standalone VPS-deployed relay server
+  NINA.Polaris/              # the ASP.NET Core host: Services/,
+                             # Endpoints/, WebSocket/, wwwroot/
+tests/
+  NINA.Polaris.Test/         # all the unit tests
+docs/                        # user + dev docs
+```
+
+@sec-architecture describes what each project does and how they
+depend on one another.
+
+## Recipes for common changes
+
+### Adding a new INDI device kind
+
+The concrete walkthrough in `CONTRIBUTING.md` adds a hypothetical
+weather safety monitor; the steps generalize:
+
+1. Define the protocol surface in `NINA.INDI/Devices/IndiSafety.cs`:
+   a wrapper class taking the `IndiClient` and a device name, with
+   property getters reading the client's property dictionary
+   (`IsSafe`, for instance, reads the `SAFETY_STATUS` switch) and
+   async action methods.
+2. Wire it into `EquipmentManager`
+   (`Services/EquipmentManager.cs`): a typed `Safety` property and a
+   `SelectSafety(deviceName)` method.
+3. Add the endpoint file, `Endpoints/SafetyEndpoints.cs`, mapping a
+   `/api/safety` group with thin handlers that read the manager.
+4. Register it in `Program.cs` with `app.MapSafetyEndpoints();`.
+5. Add a card to the **RIGS** tab in `wwwroot/index.html` following
+   the existing pattern (icon header, dropdown, connect and
+   disconnect buttons, status dot).
+6. Add the matching state and methods in `wwwroot/js/app.js`.
+7. Add tests in `tests/NINA.Polaris.Test/IndiSafetyTests.cs`.
+
+The existing `IndiWeather` device and `WeatherEndpoints` show the
+full pattern end to end.
+
+### Adding a sidebar tab
+
+Add a `nav-btn` button to the sidebar in `index.html` and a
+`<div x-show="tab === 'newtab'" class="tab-panel">` for the panel;
+put any state on the Alpine component at the top of `app.js`, with
+status-stream absorption added to the `handleStatusMessage` switch;
+style it in `wwwroot/css/app.css` mirroring existing tabs; and link
+it from the user-guide index so users can find it. The VIDEO tab is
+the most recent complete example.
+
+### Adding a sequencer instruction, trigger, or condition
+
+The advanced sequencer discovers its building blocks through MEF
+exports in `src/NINA.Polaris/Services/Sequencer/`:
+
+1. Create a class deriving from the appropriate base
+   (`SequenceInstruction`, `SequenceTrigger`, or
+   `SequenceCondition`).
+2. Annotate it with `[Export]` plus the metadata attributes for
+   category and display name.
+3. Add the type to `SequencerFactory` so it appears in the palette.
+4. JSON serialization via `SequenceJsonConverter` picks it up from
+   the type metadata automatically.
+5. Add a test.
+
+`Services/Sequencer/Triggers/AutoFocusOnTemperatureTrigger.cs` is a
+complete trigger and
+`Services/Sequencer/Conditions/LoopUntilAltitudeCondition.cs` a
+complete condition to crib from.
+
+### Adding a plate solver
+
+Solvers follow the `IPlateSolver` strategy pattern. Implement
+`Task<PlateSolveResult> SolveAsync(string fitsPath,
+PlateSolveOptions options, CancellationToken ct)` in a new class
+under `Services/PlateSolving/`, register it as a singleton in
+`Program.cs`, and `PlateSolveService` (the dispatcher)
+auto-discovers it and adds it to the primary and blind solver
+dropdowns in **Settings**. `AstapSolver.cs` and
+`AstrometryNetLocalSolver.cs` are the references.
+
+## Coding conventions
+
+- **C#**: match the existing style. Records for DTOs, classes for
+  services, async/await everywhere; null-conditional reads from
+  service properties, because devices may be null before
+  `EquipmentManager` hooks them up.
+- **Comments** explain why, not what; reviewers reject comments
+  that restate the next line. XML doc-comments are required on
+  public service types and methods, a short paragraph minimum that
+  mentions which other service consumes them.
+- **Logging** is injected `ILogger<T>` with structured templates
+  (`LogInformation("X finished {Frames} frames", count)`), never
+  string concatenation.
+- **Async**: every IO surface is async; synchronous wrappers are an
+  anti-pattern here.
+- **JS**: Alpine.js plus vanilla JavaScript, small composable
+  methods on the single component, no build pipeline.
+- **CSS**: BEM-ish naming (`.equip-card`, `.equip-card-header`), one
+  stylesheet, no SASS or Tailwind.
+
+## Commits, branches, and tests
+
+Commit messages read `<scope>: <imperative summary>`, a blank line,
+then a short body explaining why. Scopes follow the project's plan
+phase identifiers (`LSTR-3`, `VIDPL-7`, and so on); ad-hoc work uses
+`ui:`, `feat:`, `fix:`, `docs:`, or `chore:`. AI-assisted commits
+end with a `Co-Authored-By` line naming the model.
+
+`master` is the trunk; maintainers may commit directly with build
+and tests green, everyone else branches (`feat/short-name`,
+`fix/short-name`) and opens a pull request, squash-merged by
+default.
+
+All new services and non-trivial helpers get unit tests, and pure
+functions get golden-value tests (a fixed input with a known-correct
+expected output). The full suite runs with:
+
+```bash
+dotnet test tests/NINA.Polaris.Test/NINA.Polaris.Test.csproj
+```
+
+about 450 tests in roughly five seconds, even on a Raspberry Pi 5.
+WebSocket and endpoint integration tests are not yet in place, only
+manual smoke testing; contributions there are welcome. For
+contributors using Claude Code, project-specific tool permissions
+live in `.claude/settings.json`.
+
+## Debugging a Raspberry Pi from Visual Studio
+
+Developing against real ARM hardware does not mean editing on the
+Pi. Four workflows, ranked by ergonomics: full SSH remote debugging
+from Visual Studio (A), a one-button deploy script (B), manual
+publish over SSH (C), and hot reload with `dotnet watch` (D).
+
+### A. SSH remote debugging (recommended)
+
+This gives breakpoints, watch windows, and call stacks against the
+process running on the Pi, exactly as if it were local.
+
+**Prepare the Pi once.** Install the ASP.NET Core 10 runtime (the
+SDK is not needed to run published output), the libraries SkiaSharp
+needs, and `vsdbg`, the debugger agent Visual Studio talks to over
+SSH:
+
+```bash
+ssh pi@<pi-ip>
+
+sudo apt update
+sudo apt install -y libicu-dev libssl-dev curl libfontconfig1
+curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin \
+    --channel 10.0 --runtime aspnetcore --install-dir /usr/share/dotnet
+sudo ln -sf /usr/share/dotnet/dotnet /usr/local/bin/dotnet
+dotnet --info     # should show "Microsoft.AspNetCore.App 10.x.x"
+
+curl -sSL https://aka.ms/getvsdbgsh | bash /dev/stdin -v latest -l ~/vsdbg
+
+mkdir -p ~/polaris
+```
+
+`libfontconfig1` is required by SkiaSharp for image encoding, and
+the INDI server is a separate install (@sec-installation). Confirm
+a 64-bit OS with `uname -m`; it must print `aarch64`, because the
+ARM64 `vsdbg` needs a 64-bit kernel.
+
+**Configure Visual Studio.** Add the Pi under **Tools → Options →
+Cross Platform → Connection Manager** (host, port 22, your SSH
+user, key-file authentication; generate a key with `ssh-keygen` and
+copy it over with `ssh-copy-id`). Then open `NINA.Polaris.slnx`,
+right-click the `NINA.Polaris` project, and add an SSH debug launch
+profile:
+
+| Field | Value |
+|---|---|
+| Hostname | the saved connection |
+| Project path on target machine | `/home/pi/polaris` |
+| Executable | `dotnet` |
+| Command line arguments | `NINA.Polaris.dll` |
+| Working directory | `/home/pi/polaris` |
+| Deploy on debug | checked |
+| Environment variables | `ASPNETCORE_URLS=http://0.0.0.0:5000` |
+
+(The environment variable comes from the original guide and only
+matters on older builds; current builds bind their listeners from
+the `Server:*` keys and serve HTTPS on port 5000 on all interfaces
+regardless, see @sec-api.)
+
+**Target ARM64 in the project file.** `NINA.Polaris.csproj` must
+publish for `linux-arm64`:
+
+```xml
+<RuntimeIdentifier>linux-arm64</RuntimeIdentifier>
+<SelfContained>false</SelfContained>
+```
+
+`SelfContained=false` matters: the runtime is already on the Pi, so
+there is no need to ship it on every deploy. The Windows-only
+camera SDK projects will not compile for Linux, so their references
+are wrapped in a condition:
+
+```xml
+<ItemGroup Condition="!$(RuntimeIdentifier.StartsWith('linux'))">
+  <ProjectReference Include="..\NINA.Camera.CanonEdsdk\NINA.Camera.CanonEdsdk.csproj" />
+  <ProjectReference Include="..\NINA.Camera.NikonSdk\NINA.Camera.NikonSdk.csproj" />
+</ItemGroup>
+```
+
+`NINA.Camera.SonySdk` targets plain `net10.0` (Sony ships Linux
+binaries) and needs no condition.
+
+**Hit F5.** Visual Studio publishes for `linux-arm64`, copies the
+output to `/home/pi/polaris/` over SCP (delta-only after the first
+deploy), runs `dotnet NINA.Polaris.dll` on the Pi with `vsdbg`
+attached, and breakpoints work as if local. Point a browser at the
+Pi to drive the UI.
+
+Gotchas: the first publish is slow (about two minutes), a Pi 4 is
+borderline for live stacking with the debugger attached (a Pi 5 is
+much more comfortable), and if Visual Studio cannot find `vsdbg`,
+set its path explicitly in the debug profile's pre-launch command
+to `~/vsdbg/vsdbg`.
+
+### B. One-button deploy script
+
+For the edit-deploy-look loop without the debugger,
+`deploy/deploy-to-pi.ps1` does publish, SCP, and service restart in
+one command. It needs SSH key authentication to the Pi and,
+optionally, a systemd user unit it can restart cleanly:
+
+```ini
+[Unit]
+Description=N.I.N.A. Polaris
+
+[Service]
+WorkingDirectory=%h/polaris
+ExecStart=/usr/local/bin/dotnet NINA.Polaris.dll
+Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+```
+
+installed at `~/.config/systemd/user/polaris.service`, enabled with
+`systemctl --user enable polaris`, and kept alive across logouts
+with `loginctl enable-linger pi`. The script auto-detects the unit
+and uses `systemctl --user restart polaris`; without it, it falls
+back to `pkill` plus `nohup`, fine for ad-hoc testing. Usage:
+
+```powershell
+.\deploy\deploy-to-pi.ps1                    # Pi 2/3 (32-bit, linux-arm)
+.\deploy\deploy-to-pi.ps1 -Rid linux-arm64   # Pi 4/5 (64-bit)
+.\deploy\deploy-to-pi.ps1 -PiHost 192.168.1.50
+.\deploy\deploy-to-pi.ps1 -PiUser dan -RemotePath /srv/polaris
+.\deploy\deploy-to-pi.ps1 -NoRestart         # copy only
+.\deploy\deploy-to-pi.ps1 -NoCopy            # restart only
+.\deploy\deploy-to-pi.ps1 -Debug             # Debug configuration
+```
+
+The first publish takes about thirty seconds; after that a deploy
+is mostly the file copy (five to fifteen seconds) plus a one-second
+restart.
+
+A note on the Raspberry Pi 2, the slowest supported target: it
+needs the 32-bit `linux-arm` runtime identifier (confirm with
+`uname -m` printing `armv7l`), its 1 GB of RAM is tight enough that
+live stacking plus PHD2 plus ASTAP together can swap, and its
+browser lacks WebGL2 so live preview falls back to server-side JPEG
+encoding. It is useful as a low-power smoke-test target; for real
+work use a Pi 4 with 4 GB or more, or a Pi 5 (@sec-requirements).
+
+### C. Manual publish over SSH
+
+Skip the tooling entirely: run the publish script from `deploy/`,
+copy the output with `scp`, then SSH in and start the binary
+yourself, watching logs on stdout. Useful for a quick "does my fix
+actually launch on the Pi" check, a bad choice for hunting an
+actual bug (use A) or for a repeatable loop (use B).
+
+### D. Hot reload with dotnet watch
+
+For tight iteration on CSS and JS, install the full .NET SDK on the
+Pi (about 500 MB more than the runtime) and run:
+
+```bash
+DOTNET_USE_POLLING_FILE_WATCHER=1 \
+    dotnet watch run --project NINA.Polaris
+```
+
+against a source tree mounted from the Windows machine over SSHFS
+(a network filesystem over SSH), so edits on Windows restart the
+host on the Pi automatically. The polling file watcher is required
+because filesystem change events do not propagate through SSHFS.
+There is no step-debugging, SSHFS adds latency to every file read,
+and the first build after mounting takes two to three times longer;
+for C# changes, workflow A is more pleasant.
+
+## Internationalization
+
+The web UI uses an English-source-as-key model in the gettext
+style: the English text already in `index.html` and `app.js` is
+itself the lookup key, and a per-language catalog at
+`wwwroot/data/locales/{lang}.json` maps
+`{ "English source": "Translation" }`. English is the identity
+language, with no catalog, no fetch, and no runtime overhead.
+Released languages are `en` plus `pt-BR`, `es`, `fr`, and `de`.
+
+At runtime, `wwwroot/js/i18n.js` (loaded before Alpine) translates
+non-English UIs with a scoped `MutationObserver`, a browser
+mechanism that watches the page for changes: it translates text
+nodes and the `title`, `placeholder`, `aria-label`, and `alt`
+attributes by looking up their current English content, so both
+static markup and Alpine-generated text are covered without
+per-binding edits. Strings built in JavaScript (toasts, chart
+labels) use `t()` or the Alpine `$t()` helper with `{var}`
+interpolation. Untranslated strings fall back to English, changing
+language reloads the page, and hot or numeric regions opt out with
+`data-no-i18n`.
+
+The translation workflow has four steps:
+
+1. **Extract** the source strings after any UI text change:
+   `node scripts/extract-i18n.mjs` writes
+   `wwwroot/data/locales/_source.json` and reports orphans.
+2. **Machine pre-translation** fills only the missing keys, never
+   overwriting curated ones, applying the glossary in
+   `scripts/i18n-glossary.json`:
+   `node scripts/pretranslate-i18n.mjs [lang]`, with the provider
+   configured through `DEEPL_API_KEY` (DeepL [@deepl]) or
+   `LIBRETRANSLATE_URL` (LibreTranslate [@libretranslate]).
+   Machine-filled keys are recorded in `{lang}.machine.json` for
+   review; with no provider configured, the script exits without
+   touching anything. DeepL's free tier has a monthly character
+   quota, and a `403 Forbidden` usually means it is spent.
+3. **Curated corrections** live in `scripts/i18n-overrides.json`
+   (an `all` section plus per-language overrides) and are applied
+   with `node scripts/apply-i18n-overrides.mjs`, which also
+   de-marks those keys as machine output.
+4. **Community refinement** happens on Crowdin [@crowdin], the
+   collaborative translation platform, configured by `crowdin.yml`
+   with English as the source language; `crowdin upload sources`
+   and `crowdin pull` move strings in and out.
+
+Conventions: jargon and product names stay English per the
+glossary's do-not-translate list (ASTAP, ONNX, OpenCL, INDI, ASCOM,
+PHD2, GraXpert, FITS, HFR, plate solving, dithering, and so on);
+the language names in the picker are never translated; server logs
+and backend errors stay `en-US` by design; and the `Locale.*` files
+from desktop N.I.N.A. are not reused, Polaris keeps a separate
+catalog. Adding a language means adding its code to `SUPPORTED` in
+`wwwroot/js/i18n.js`, to the picker in `index.html` under
+**Settings → Appearance**, to `RELEASED` in
+`pretranslate-i18n.mjs`, and a `languages_mapping` entry in
+`crowdin.yml`, then running the pre-translation.
+
+## License and third-party code
+
+Polaris is MPL 2.0 throughout, including the driver wrapper
+projects; the non-redistributable vendor SDK binaries the wrappers
+load at runtime remain under their vendors' licenses (@sec-dslr).
+When adding a NuGet package, include its license in
+`docs/third-party-licenses.md`, which is currently a stub and a
+good first contribution. Vendored browser libraries under
+`wwwroot/js/lib/` each carry an adjacent license file.
+
+<!-- consolidated from: CONTRIBUTING.md,
+docs/user-guide/rpi-debug-from-vs.md, docs/dev/i18n.md -->

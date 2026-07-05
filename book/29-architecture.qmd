@@ -1,0 +1,554 @@
+# Architecture {#sec-architecture}
+
+This chapter opens Part VI, the developer's section of the book. It
+describes how the Polaris server is put together: the host process,
+the service layer and its dependency graph, the protocol clients that
+talk to hardware and to PHD2, the request flows for representative
+operations, what gets persisted where, and the cross-cutting
+conventions that hold the codebase to one shape. If you plan to read
+the source, fix a bug, or integrate an external tool, start here and
+continue with @sec-api for the wire-level surface and
+@sec-contributing for the build and contribution workflow.
+
+## The thirty-second tour
+
+Polaris is a single ASP.NET Core minimal-API server [@aspnetcore]
+running on the astrophotography host (a Raspberry Pi or mini-PC). It
+speaks INDI [@downey_indi] to local hardware drivers and JSON-RPC to
+the PHD2 autoguider [@openphd_phd2], and exposes two things to the
+browser:
+
+1. REST endpoints at `/api/*` for commands and queries.
+2. WebSocket streams:
+   - `/ws/status`, a 1 Hz JSON broadcast of all service state;
+   - `/ws/image-stream`, binary JPEG or raw frames as they are
+     captured;
+   - `/ws/terminal`, a bidirectional SSH bridge for the in-browser
+     xterm.js terminal [@xtermjs_project], gated by the `Terminal:Enabled`
+     configuration key and implemented in `TerminalSocketHandler`.
+
+The browser runs a single-page application built with Alpine.js
+[@alpinejs], served straight from `wwwroot/index.html`, which
+subscribes to those streams and issues commands through the REST
+endpoints.
+
+```
+┌───────────────────────────────┐      ┌────────────────────────────────┐
+│ Browser (laptop/tablet/phone) │      │ Polaris host (RPi / mini-PC)   │
+│ ┌───────────────────────────┐ │      │ ┌────────────────────────────┐ │
+│ │ Alpine.js SPA (index.html)│◄├─HTTP─┤►│ ASP.NET Core minimal APIs  │ │
+│ │  tabs: HOME/RIGS/SKY/...  │ │      │ │  ├ Endpoints/* (REST)      │ │
+│ │  WebSocket subscribers    │◄├──WS──┤►│  ├ WebSocket/* handlers    │ │
+│ │  WebGL2 image renderer    │ │status│ │  └ Services/* (business)   │ │
+│ │  Chart.js for telemetry   │ │image │ │                            │ │
+│ └───────────────────────────┘ │      │ │ Outbound to drivers:       │ │
+└───────────────────────────────┘      │ │  ├ INDI client → indiserver│ │
+                                       │ │  ├ PHD2 client → phd2 :4400│ │
+                                       │ │  ├ Vendor SDKs (Canon/...) │ │
+                                       │ │  └ Process.Start: ASTAP /  │ │
+                                       │ │       Siril / GraXpert     │ │
+                                       │ └────────────────────────────┘ │
+                                       └────────────────────────────────┘
+```
+
+External programs (ASTAP for plate solving [@kleijn_astap], Siril
+[@siril] and GraXpert [@graxpert] for processing jobs) are launched
+as subprocesses; everything else is in-process. Telemetry charts in
+the browser are drawn with Chart.js [@chartjs].
+
+## The solution layout
+
+The repository is one .NET solution. `NINA.Polaris` is the ASP.NET
+Core host where roughly ninety percent of the business logic lives;
+every other project is a library it consumes. Each project folder
+carries its own `ARCHITECTURE.md` with the deeper details; the
+summaries below are deliberately brief.
+
+- `src/NINA.Core.Portable`: the smallest and lowest project. Shared
+  primitives every other library depends on: enums (bayer patterns,
+  camera states, device types, pier side), the mediator interface, an
+  `INotifyPropertyChanged` base inherited from upstream N.I.N.A.
+  [@berg_nina], and small utility helpers. Pure value types, no IO,
+  no third-party dependencies.
+- `src/NINA.Image.Portable`: image input/output, analysis, and math.
+  Home of the FITS reader and writer [@wells1981fits; @pence2010fits],
+  the XISF writer (PixInsight's format, with optional LZ4
+  compression), a 16-bit TIFF writer via SkiaSharp [@skiasharp], the
+  star detector, the star matcher (triangle-invariant features), the
+  affine fitter and bilinear resampler that together form the
+  live-stacking alignment pipeline (detect, match, fit, warp,
+  integrate), the MTF autostretch, per-pixel integration math (mean,
+  median, sigma-clipped), and the JPEG encoder behind the live
+  preview. `ushort[]` is the canonical pixel storage and `IImageData`
+  is the boundary type the rest of the system exchanges: a capture
+  produces one, and the live stacker, the writer, the image relay,
+  and the STUDIO jobs all consume it. Pure code, deterministic,
+  unit-tested with golden values.
+- `src/NINA.INDI`: the INDI protocol client and device wrappers,
+  covered in its own section below.
+- `src/NINA.Ascom.Com`: ASCOM Platform COM-interop adapters for
+  Windows. It enumerates installed drivers by walking the
+  `SOFTWARE\ASCOM\* Drivers` registry keys (a headless equivalent of
+  the ASCOM Chooser dialog) and late-binds to them through COM, so
+  Polaris ships no ASCOM assemblies and still starts on machines
+  without the Platform. Each driver instance gets its own STA
+  dispatcher thread so ASCOM's apartment threading rules are honoured
+  and a slow slew on one device cannot block an autofocus loop on
+  another.
+- `src/NINA.Camera.CanonEdsdk`, `src/NINA.Camera.NikonSdk`,
+  `src/NINA.Camera.SonySdk`: thin wrappers around the vendor camera
+  SDKs [@canon_edsdk; @nikon_sdk; @sony_scrsdk], each implementing
+  the common `ICamera` interface from `NINA.Image.Portable`. They are
+  separate projects because the vendor DLLs are not redistributable;
+  the user downloads them and drops them next to the Polaris binary,
+  and if they are absent the vendor simply does not appear in the
+  driver dropdown. Canon and Nikon target `net10.0-windows`; Sony
+  ships Linux binaries too, so that project targets plain `net10.0`
+  and runs on a Pi. All three write the vendor raw file (CR2, NEF,
+  ARW) verbatim to disk alongside the decoded frame. See @sec-dslr
+  for the user-facing procedure.
+- `src/NINA.Mount.SynScanWifi`: a direct-WiFi driver for Sky-Watcher
+  SynScan mounts (AZ-GTi and relatives) that skips INDI and ASCOM
+  entirely and speaks the SynScan App protocol, 8-byte command
+  packets over UDP port 11880. It implements the same `ITelescope`
+  contract, so the sequencer, slew-and-center, and meridian flip are
+  unchanged above it (@sec-mounts).
+- `src/NINA.Relay.Protocol` and `src/NINA.Relay.Server`: the remote
+  access relay, summarized near the end of this chapter.
+- `src/NINA.Polaris`: the host itself, the subject of the rest of
+  this chapter.
+- `tests/NINA.Polaris.Test`: the unit test suite (@sec-contributing).
+
+## The composition root
+
+`Program.cs` in `src/NINA.Polaris` is the single source of truth for
+what runs at startup. In order, it:
+
+1. creates the standard `WebApplication` builder;
+2. registers the services: foundation singletons (`ProfileService`,
+   `EquipmentManager`, `SkyCatalogService`), the imaging chain
+   (`ImageWriterService`, `ImageRelayService`), the PHD2 stack, every
+   `IPlateSolver` plus the `PlateSolveService` dispatcher, the
+   long-running orchestrators (`AutoFocusService`,
+   `MeridianFlipService`, `SequenceEngine`, `LiveStackingService`,
+   `LiveStackTriggersService`, `SlewPreviewService`,
+   `MosaicPlannerService`), the planetary services, the external-tool
+   wrappers (`SirilService`, `GraXpertService`), the file browser and
+   SQLite-backed frame library, and the hosted background services;
+3. registers the YARP reverse proxy [@yarp] that forwards
+   `/phd2-gui/*` to the xpra session hosting PHD2's own window
+   (@sec-guiding);
+4. builds the app and its middleware pipeline (CORS, static files,
+   WebSocket upgrade, endpoints);
+5. maps every endpoint group (`app.MapCameraEndpoints()`,
+   `app.MapTelescopeEndpoints()`, and so on);
+6. maps the WebSocket paths;
+7. eagerly resolves the orchestrators so their constructors run and
+   subscribe to events before any HTTP request arrives. This is how
+   `LiveStackTriggersService` gets wired to
+   `LiveStackingService` without an explicit call site. Any service
+   that must react to another service's events from the moment the
+   server starts, not merely on first request, must be eager-resolved
+   here.
+
+The listeners are configured directly on Kestrel (ASP.NET Core's web
+server) rather than through `ASPNETCORE_URLS`: by default HTTPS with
+a self-signed certificate from `SelfSignedCertService` listens on
+port 5000 on all interfaces, and plain HTTP is demoted to a
+loopback-only service port on 5080 for the relay tunnel and
+curl-from-the-host scripts. The reasoning, recorded in the source as
+change GX-10b, is that the URL users naturally type should be the
+HTTPS one, because browsers only unlock WebGPU and multi-threaded
+WebAssembly on secure origins. When the HTTP-to-HTTPS redirect is
+enabled (the default), the HTTP listener is exposed on the LAN too,
+but only ever answers with a redirect. @sec-api documents the
+`Server:*` configuration keys that control all of this.
+
+Two more startup details worth knowing: the request body limit is
+raised to 1 GB because endpoints such as `/api/onnx/save` round-trip
+raw 16-bit pixel data for full-frame images, and custom JSON
+converters serialize non-finite floating-point values (NaN,
+infinity) as `null` so one garbage number cannot turn a whole
+response into a 500 error.
+
+## The service layer
+
+Services live in `src/NINA.Polaris/Services/`. Every service is a DI
+singleton unless stated otherwise, registered in `Program.cs` and
+injected by constructor. They communicate in three ways:
+
+- **Direct DI references**, the most common: `SequenceEngine` holds
+  `EquipmentManager`, `ImageRelayService`, and `LiveStackingService`.
+- **C# events**, for example `ProfileService.EquipmentProfileActivated`
+  or `PHD2Client.AppStateChanged`.
+- **The WebSocket broadcast**: each service exposes a snapshot getter
+  (`GetStatus()` or a `CurrentStatus` property), and
+  `StatusStreamHandler` folds them all into the 1 Hz payload.
+
+The canonical service shape is a constructor taking `ILogger<T>` and
+its collaborators, an immutable status record replaced wholesale on
+every change (the UI never mutates snapshots), a `StatusChanged`
+event fired once per update, and async methods that all accept a
+`CancellationToken`. `StatusStreamHandler` does not subscribe to the
+events; it polls each injected service's `CurrentStatus` once per
+second and broadcasts the merged payload.
+
+### The dependency graph
+
+The source keeps this graph as a Mermaid diagram in the root
+`ARCHITECTURE.md`; rendered as layers, it looks like this, with
+arrows meaning "feeds into":
+
+```
+Foundation   ProfileService (profile.json)   IndiClient (:7624)
+                    │                             │
+Equipment           └────────► EquipmentManager ◄─┘
+                                     │
+Imaging      ImageRelayService ◄─────┼────► CameraStreamService
+             ImageWriterService ◄────┤
+             LiveStackingService ◄── ImageRelayService
+                                     │
+Capture      SequenceEngine ◄────────┼──── ImageRelayService
+             AutoFocusService ◄──────┼──── ImageRelayService
+             FlatWizardService ◄─────┘
+```
+
+Around that spine sit the specialist clusters:
+
+- **PHD2**: `PHD2Client` (JSON-RPC on port 4400) feeds
+  `PHD2ProfileSyncService`, `PHD2CalibrationOrchestrator`, and
+  `PHD2ProcessManager`; the process manager feeds
+  `PHD2AutoStartService`; `ProfileService` also feeds the profile
+  sync, and `EquipmentManager` the calibration orchestrator.
+  `Phd2GuiSessionService` manages the xpra-hosted PHD2 window.
+- **Plate solving**: `PlateSolveService` and `EquipmentManager` both
+  feed `SlewCenterService`, the plate-solve-and-slew-until-centered
+  orchestrator.
+- **Triggers**: `MeridianFlipService` takes input from
+  `EquipmentManager`, `SequenceEngine`, and `SlewCenterService`;
+  `SlewPreviewService` from `EquipmentManager` and
+  `CameraStreamService`; `LiveStackTriggersService` from
+  `LiveStackingService`, `AutoFocusService`, `SlewCenterService`, and
+  `PlateSolveService`.
+- **Sky**: `SkyCatalogService` and `AltitudeService` feed
+  `TonightsBestService`; `GeocodingService` and
+  `WeatherForecastService` stand alone.
+- **Planetary**: `CameraStreamService` and the `SerFileWriter` and
+  reader feed `VideoRecordingService`; the SER reader and
+  `PlateSolveService` feed `PlanetaryStackerService`.
+- **WebSocket**: nearly every service above reports into
+  `StatusStreamHandler` (`/ws/status`), and `ImageRelayService` alone
+  feeds `ImageStreamHandler` (`/ws/image-stream`).
+
+### The endpoints pattern
+
+Every file in `Endpoints/` follows the same shape: a static class
+with one extension method that maps a group.
+
+```csharp
+public static class FooEndpoints {
+    public static void MapFooEndpoints(this WebApplication app) {
+        var g = app.MapGroup("/api/foo");
+
+        g.MapGet("/status", (FooService f) => Results.Ok(new {
+            connected = f.IsConnected,
+            value = f.CurrentValue
+        }));
+
+        g.MapPost("/connect", async (FooService f) => {
+            await f.ConnectAsync();
+            return Results.NoContent();
+        });
+    }
+}
+```
+
+The rules of thumb: one file per logical resource
+(`CameraEndpoints` owns `/api/camera/*`, `TelescopeEndpoints` owns
+`/api/telescope/*`); the handler is a single expression or short
+method, with no business logic in the endpoint file; DTOs are inline
+records at the top of the file; errors that map to HTTP shape use
+`Results.NotFound(...)` and friends, while domain exceptions bubble
+to a global middleware that answers 500 with `{ error: "..." }`; and
+long-running operations return 202 with a `{ jobId }` that the caller
+polls or watches on `/ws/status`.
+
+### Long-running jobs
+
+Operations that take seconds to minutes (autofocus, meridian flip,
+slew-and-center, smart guider calibration, planetary stacking, the
+STUDIO batch jobs) all follow one orchestrator pattern:
+
+1. `StartJob(options)` returns a `Job` record with a GUID `JobId` and
+   spins the work on a background task.
+2. Job state lives in a `ConcurrentDictionary<string, Job>` on the
+   service; the phase is a string field such as `"preflight"`,
+   `"running"`, `"ok"`, or `"fail"`.
+3. The active job surfaces on the service's `CurrentJob` property and
+   is included in the `/ws/status` payload.
+4. `AbortJob(jobId)` flips a cancellation token the running task
+   observes.
+
+The UI already knows how to render phase and progress for any job
+that follows this shape, so new job services copy it. One deliberate
+wrinkle: cancelling a slew-and-center job also fires
+`Telescope.AbortSlewAsync()`, so the mount halts mid-flight instead
+of completing the in-flight slew, and the panic **Stop** control on
+the SKY map calls both the job cancel and `/api/telescope/abort`
+unconditionally so a raw slew with no job id stops too.
+
+## The INDI client
+
+INDI, the de facto Linux driver framework for astronomy equipment,
+is a property-oriented protocol: every device exposes named property
+vectors of numbers, switches, texts, lights (read-only indicators),
+or BLOBs (binary payloads such as FITS frames), carried as XML over a
+TCP socket, port 7624 by default [@downey_indi]. `src/NINA.INDI`
+implements the client side in three layers:
+
+- **Protocol**: `IndiXmlParser` reads the socket as a stream of
+  `defXXXVector`, `setXXXVector`, `message`, and `delProperty`
+  elements and materializes them into `IndiProperty` instances;
+  `IndiXmlWriter` builds the outbound `newXXXVector` commands.
+- **Client**: `IndiConnection` owns the raw socket with separate
+  send and receive loops; `IndiClient` sits on top, maintaining a
+  per-device, per-property dictionary, exposing typed getters and
+  setters, and routing BLOB events to `IndiBlobReceiver`, which
+  reassembles the binary chunks delivered inline in the XML stream.
+- **Device wrappers**: `IndiCamera`, `IndiTelescope`, `IndiFocuser`,
+  `IndiFilterWheel`, `IndiRotator`, `IndiFlatDevice`, `IndiDome`,
+  `IndiWeather`, and `IndiGuider`, each a thin facade over the
+  property dictionary for one device kind. `IndiCamera` is the most
+  complex: it implements the shared `ICamera` interface, detects the
+  bayer pattern, optionally drives `CCD_VIDEO_STREAM` for the VIDEO
+  tab, and converts incoming FITS BLOBs into image data via the
+  `FITSReader`.
+
+The library is pure protocol code: it knows nothing about Polaris's
+profiles or UI, and it does not launch `indiserver`; that is an
+external prerequisite (@sec-rigs). `EquipmentManager` in the host
+owns a single `IndiClient` and, when a rig selects an INDI device,
+instantiates the matching wrapper bound to that device name and
+exposes it through a typed property such as
+`EquipmentManager.Camera`. The Alpaca HTTP client [@ascom_alpaca]
+lives separately in `src/NINA.Polaris/Services/Alpaca/`.
+
+## The PHD2 stack
+
+Polaris manages PHD2 as a first-class device through a cluster of
+services. `PHD2Client` speaks PHD2's JSON-RPC event server on port
+4400: commands out, guide-step and state events in.
+`PHD2ProcessManager` can launch and shut down the PHD2 process
+itself, and `PHD2AutoStartService` (a hosted service) boots PHD2 and
+connects about two seconds after server startup when the profile asks
+for it. `PHD2ProfileSyncService` keeps a rig's PHD2 profile in step
+with the Polaris rig, `PHD2CalibrationOrchestrator` runs the smart
+calibration job, and `Phd2GuiSessionService` hosts PHD2's real GUI in
+an xpra session [@xpra_project] on Linux, which the YARP proxy
+exposes under `/phd2-gui/*` so the browser can embed it same-origin.
+@sec-guiding covers all of this from the user's side.
+
+## Request flows
+
+### A sequence-driven capture
+
+```
+Browser POST /api/sequence/start
+    → SequenceEngine.StartAsync
+    → loop per target:
+        → SlewCenterService.StartJob(ra, dec)
+          [plate solve + slew until centered]
+        → loop per frame:
+            → IndiCamera.CaptureAsync(exposure)
+                → IndiClient sends CCD_EXPOSURE
+                → INDI driver fires BLOB on completion
+                → IndiBlobReceiver decodes FITS → IImageData
+            → ImageWriter.SaveImage(imageData)   [persist to disk]
+            → ImageRelayService.RelayImageAsync(imageData)
+                → JPEG encode + send to all /ws/image-stream clients
+                → if live stack on: LiveStackingService.AddFrameAsync
+                    → align + accumulate + relay stacked
+                    → fire FrameIntegrated event
+                        → LiveStackTriggersService evaluates
+                          autofocus/recenter gates; may block here
+                          while autofocus runs (~60 s)
+            → SequenceEngine.MaybeDitherAsync(via PHD2)
+            → next frame
+        → next target
+```
+
+### The status broadcast
+
+`StatusStreamHandler` opens one WebSocket per client and, once per
+second, composes a single JSON payload from every service's snapshot
+getter: equipment status, live stack state and triggers, guider
+(including profile-sync, calibration-job, and GUI-session
+sub-objects), autofocus, meridian flip, sequence, camera stream,
+video recording and stacking, slew preview, host CPU and RAM metrics,
+and the Siril and GraXpert job lists. Every connected browser gets
+the same payload; there is no per-client filtering. The tick is cheap,
+roughly 1 to 5 KB when idle and 20 to 50 KB during heavy activity.
+On the client, `handleStatusMessage` in `wwwroot/js/app.js`
+switch-cases each top-level key into Alpine state, so every tab and
+panel binds to the same data without polling.
+
+The payload shape is the contract with the frontend: adding a new
+service status means adding a new sub-object to this composition.
+
+### The image stream
+
+`ImageStreamHandler` also keeps one WebSocket per client.
+`ImageRelayService.RelayImageAsync` broadcasts each new frame either
+as JPEG bytes (the default) or, when the client negotiates raw mode,
+as LZ4-compressed 16-bit data with the bayer pattern intact, which
+the browser debayers and stretches itself on the GPU through WebGL2.
+The client-side handler distinguishes the two by sniffing the bytes.
+Two protections keep the stream healthy on slow links: if a client's
+send queue backs up, the next frame is dropped (a missing tick rather
+than a stalled stream), and `AdaptiveBandwidthService` measures
+per-client latency and automatically falls back from raw to JPEG when
+the wire is slow.
+
+### The terminal bridge
+
+One `/ws/terminal` WebSocket equals one SSH session, bridged through
+the SSH.NET library [@sshnet_project]. Credentials arrive in a single
+authentication frame, live only in memory for the socket's lifetime,
+and are never persisted; there is no auto-reconnect. Keystrokes pump
+to SSH stdin, SSH stdout returns as text frames on a roughly 50 ms
+polling cadence, and a ten-minute idle watchdog closes abandoned
+sessions. The endpoint answers 403 unless enabled through the
+`Terminal:Enabled` configuration key or the equivalent per-profile
+toggle in **Settings**, so a deployment without the opt-in has no
+shell-exposure surface at all. @sec-api documents the wire protocol
+and @sec-administration the user-facing terminal.
+
+## Persistence
+
+- **User profiles and rigs**: JSON at `{AppData}/Polaris/profile.json`
+  through `ProfileService`. The profile holds the active rig pointer
+  plus every rig's fields: device selections, optics, PHD2 settings,
+  live-stack triggers, filter offsets.
+- **STUDIO frame library**: SQLite [@sqlite] at
+  `{AppData}/Polaris/studio/frames.db`, indexed by path, filter,
+  exposure, gain, and type, rescanned automatically on startup
+  (@sec-files).
+- **Relay tenant state** (relay server only): a `tenants.json` file,
+  plus per-tenant SQLite files for usage counters and the audit log.
+- **No session persistence**: sequences and live stacks are in-memory
+  only. Restart the server and you start fresh; by design a software
+  session is tied to a physical session at the telescope.
+
+## Cross-cutting concerns
+
+**Per-rig settings.** `EquipmentProfile` is the single source of
+truth for per-rig data. Adding a persisted field means touching four
+places: the property on `EquipmentProfile`, the clone path in
+`ProfileService.CloneActiveRigAs`, the `PUT /api/equipment/rigs/{id}`
+endpoint body, and the UI binding in `wwwroot/js/app.js` and
+`index.html`. Services that must react to a rig switch subscribe to
+`EquipmentProfileActivated`, and new fields default to a safe value
+because older `profile.json` files will not have them.
+
+**Events versus polling.** Services that care about "something
+happened elsewhere" either subscribe to a C# event
+(`ProfileService.EquipmentProfileActivated`,
+`PHD2Client.AppStateChanged`,
+`LiveStackingService.SubscribeFrameIntegrated`) or poll the other
+service's snapshot; the latter is less elegant but simpler, and most
+consumers do it.
+
+**Hosted services.** Anything needing its own loop or lifetime hook
+implements `IHostedService` (usually as a `BackgroundService`) and is
+registered with `AddHostedService`: `PHD2AutoStartService`,
+`Phd2GuiSessionService`, `SlewPreviewService` (a 1 s poll loop that
+detects mount slews), `HostMetricsService` (the CPU and RAM sampler),
+`PluginLoaderService` (discovers MEF plugins, .NET's built-in
+extension-loading framework), `RelayClient` (maintains the tunnel to
+the relay server when enabled), and `MdnsService`. The last one
+advertises the `_nina._tcp.local` service and publishes address
+records for `{instanceName}.local` (auto-generated as
+`polaris-app-XXXX` from the device's hardware id unless
+`Mdns:InstanceName` overrides it) on every routable local address, so
+the host is both discoverable in a Bonjour browser and directly
+reachable by typing the name into a URL bar.
+
+**Logging, configuration, cancellation, threading.** Logging is
+structured `ILogger<T>` everywhere, mirrored into an in-memory ring
+buffer that feeds the debug log panel (@sec-administration);
+`Logging:LogLevel:Default=Debug` makes it verbose. Configuration
+comes from `appsettings.json` plus environment-variable overrides
+(@sec-api). Every IO surface accepts a `CancellationToken`, and the
+HTTP request's `RequestAborted` token propagates into long-running
+handlers. Services are singletons and thread-safe by construction:
+`ConcurrentDictionary` for job collections, `lock` or `Interlocked`
+where needed, immutable record swaps for state snapshots.
+
+## The relay pair
+
+Remote access without router configuration is handled by two extra
+projects. `NINA.Relay.Server` is a standalone ASP.NET Core service
+deployed to a public VPS; `NINA.Relay.Protocol` is a tiny shared
+library holding the wire records both ends serialize over the tunnel
+as MessagePack [@messagepack], a compact binary format that matters
+for the image-stream path. The Pi initiates an outbound WebSocket to
+the relay's `/_tunnel` endpoint and keeps it open, so no ports are
+forwarded and no inbound firewall rule exists on the Pi side:
+
+```
+                       ┌───────────────────────┐
+  browser ── HTTPS ──► │  relay.example.com    │
+                       │  (NINA.Relay.Server)  │
+                       └──────────┬────────────┘
+                                  │ tunneled request frames
+                                  ▼
+                       ┌───────────────────────┐
+                       │  WS tunnel (outbound  │
+                       │  from Pi, kept open)  │
+                       └──────────┬────────────┘
+                                  │
+  ┌───────────────────────────────▼────────────────────────────┐
+  │ Pi running NINA.Polaris + RelayClient (initiates tunnel)   │
+  └────────────────────────────────────────────────────────────┘
+```
+
+`TunnelHandler` validates each Pi's hello frame (tenant id, token,
+protocol version) against the tenant registry; `PublicProxy` accepts
+browser HTTPS requests at `/t/{tenantId}/...`, forwards them through
+the matching tunnel as request frames, and writes the correlated
+response frames back, with WebSocket upgrades bridged the same way.
+Security is layered: automatic Let's Encrypt certificates via
+LettuceEncrypt [@lettuceencrypt_project], per-tenant 32-character tokens with
+optional expiry, monthly byte quotas, token-bucket rate limits, a
+per-tenant audit log, optional mutual-TLS client certificates on the
+tunnel, and a separate admin token for the `/admin` UI. Protocol
+changes bump `HelloFrame.ProtocolVersion` so mismatched ends fail
+with a readable error. The user-facing setup lives in
+@sec-networking.
+
+## The frontend
+
+There is no build pipeline: the HTML is the HTML and the JS is the
+JS. `wwwroot/index.html` holds the entire DOM tree, with each sidebar
+tab an `x-show` panel; `wwwroot/js/app.js` is a single Alpine.js
+component object, state at the top and methods grouped loosely by
+feature underneath; `wwwroot/css/app.css` is one stylesheet with
+BEM-ish class names and no preprocessor. Third-party libraries
+(Chart.js [@chartjs], Aladin Lite [@aladin_lite], OpenSeadragon
+[@openseadragon], and others) are vendored under `wwwroot/js/lib/`,
+each with an adjacent license file. The heavy client-side machinery
+this frontend hosts, the WebGL2 renderer and the in-browser AI
+pipeline, is described from the user's perspective in @sec-ui-tour
+and Part IV.
+
+<!-- consolidated from: ARCHITECTURE.md,
+src/NINA.Polaris/ARCHITECTURE.md, src/NINA.INDI/ARCHITECTURE.md,
+src/NINA.Image.Portable/ARCHITECTURE.md,
+src/NINA.Core.Portable/ARCHITECTURE.md,
+src/NINA.Ascom.Com/ARCHITECTURE.md,
+src/NINA.Camera.CanonEdsdk/ARCHITECTURE.md,
+src/NINA.Camera.NikonSdk/ARCHITECTURE.md,
+src/NINA.Camera.SonySdk/ARCHITECTURE.md,
+src/NINA.Mount.SynScanWifi/ARCHITECTURE.md,
+src/NINA.Relay.Protocol/ARCHITECTURE.md,
+src/NINA.Relay.Server/ARCHITECTURE.md -->

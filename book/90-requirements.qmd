@@ -1,0 +1,361 @@
+# Requirements Matrix {#sec-requirements}
+
+This appendix is the complete inventory of everything N.I.N.A. Polaris
+depends on or talks to, split into **required** (the server will not
+boot, or a named feature will not exist, without it) and **optional**
+(lights up an extra feature when present, degrades gracefully
+otherwise). Two platform columns run through the tables: **Windows**
+(mini-PC, desktop, laptop) and **Linux ARM/x64** (Raspberry Pi 4/5,
+Intel single-board computers, generic Linux servers). Polaris detects
+what is installed at runtime and hides the UI for what is not, so the
+goal here is to let you install the smallest set of dependencies for
+the features you actually want. Everything in the required sections
+also appears in @sec-installation with copy-paste setup commands.
+
+## The bare minimum
+
+| | Windows | Linux (RPi / x64) |
+| --- | --- | --- |
+| Runtime | .NET 10 Desktop Runtime | .NET 10 Runtime (linux-arm64 or linux-x64) |
+| Polaris binary | `NINA.Polaris.exe` (self-contained publish) | `NINA.Polaris` (self-contained publish) |
+| Network | TCP 5000 (HTTPS) open on the LAN side | TCP 5000 (HTTPS) open on the LAN side |
+
+That is all the home page needs. A self-contained publish (a build
+that packs the .NET runtime inside itself) removes even the runtime
+row, and every release build is published self-contained, so end
+users normally install nothing at all. Every other feature has its
+own dependency, described in the sections below.
+
+## Runtime
+
+- **Windows**: the
+  [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
+  Self-contained publishes (`deploy/publish-win-x64.ps1`) bundle the
+  runtime, so end users can skip this.
+- **Linux (RPi 4/5, Intel SBC, server)**:
+  `sudo apt install dotnet-runtime-10.0`, or use the self-contained
+  publish (`deploy/publish-linux-arm64.sh` for the Pi,
+  `deploy/publish-linux-x64.sh` for Intel), which embeds the runtime.
+
+## Network ports and firewall rules
+
+Polaris serves the UI over HTTPS on **TCP 5000** by default; that is
+the address you type (`https://<hostname>.local:5000`) and the only
+listener that must be reachable from the LAN. A plain-HTTP listener
+also exists on **TCP 5080**, but it binds to loopback only (reachable
+from the host itself, not from the network); it exists for the relay
+tunnel and for local scripts on the host, and it needs no firewall
+rule. When HTTPS is enabled, a plaintext request from the LAN is
+answered only with a redirect to the HTTPS address, so no real
+content ever crosses the network unencrypted. Both ports, and the
+option to expose HTTP on the LAN for legacy integrations, are
+configurable under `Server:Https:*` and `Server:Http:*` in
+`appsettings.json` (@sec-api); @sec-networking explains why HTTPS is
+the LAN default (browsers only enable WebGPU, the in-browser AI's
+fast path, on secure pages).
+
+The two ports to open, then, are:
+
+- **TCP 5000** inbound on the LAN interface (the HTTPS listener).
+- **UDP 5353** inbound for mDNS (multicast DNS, the mechanism that
+  makes `.local` names work on a home network), so
+  `polaris-app.local` resolves.
+
+Both are blocked by Windows Defender Firewall and by `ufw` (the
+standard Linux firewall front end) by default.
+
+On Windows, run in an Admin PowerShell:
+
+```powershell
+New-NetFirewallRule -DisplayName "N.I.N.A. Polaris" `
+    -Direction Inbound -Protocol TCP -LocalPort 5000 `
+    -Action Allow -Profile Private,Domain
+# mDNS (Bonjour) discovery
+New-NetFirewallRule -DisplayName "mDNS (Polaris)" `
+    -Direction Inbound -Protocol UDP -LocalPort 5353 `
+    -Action Allow -Profile Private,Domain
+```
+
+On Linux:
+
+```bash
+sudo ufw allow 5000/tcp
+sudo ufw allow 5353/udp
+```
+
+If `ufw` is not installed, plain
+`iptables -A INPUT -p tcp --dport 5000 -j ACCEPT` does the same job.
+
+### mDNS resolver on the client
+
+For `polaris-app.local` to resolve, the *client* device needs an mDNS
+resolver too:
+
+| Platform | What you need |
+| --- | --- |
+| Windows 10 1803+ | Built in. Nothing to install. |
+| Windows ≤10 1709 / Windows 7 | [Bonjour Print Services](https://support.apple.com/kb/dl999) (~5 MB, Apple-signed) |
+| macOS / iOS | Built in (Bonjour) |
+| Linux desktop | `sudo apt install avahi-daemon libnss-mdns`, then enable. Most distributions pre-install it. |
+| Android | Built in since Android 12. Older versions work on most LANs anyway because Chrome runs its own resolver. |
+
+## Building from source
+
+Needed only by developers running `dotnet build` or `dotnet test`
+against the repository, not by end users running a published binary.
+
+| Tool | Windows | Linux | Notes |
+| --- | --- | --- | --- |
+| **.NET 10 SDK** | [installer](https://dotnet.microsoft.com/download/dotnet/10.0) | `sudo apt install dotnet-sdk-10.0` (or the [Microsoft repository](https://learn.microsoft.com/dotnet/core/install/linux)) | Required. Build and test target `net10.0`. |
+| **Git** | [installer](https://git-scm.com/) | `sudo apt install git` | Required. Clone plus git submodules (stellarium-web-engine). |
+| **Git LFS** | comes with Git for Windows | `sudo apt install git-lfs && git lfs install` | Optional; only if you touch the docs PDF or large binary assets. |
+| **Bash / sh** | Git Bash (bundled) or WSL | native | Required for some helper scripts (`deploy/*.sh`). On pure Windows the PowerShell equivalents under `deploy/*.ps1` cover the same ground. |
+| **Docker** | [Docker Desktop](https://www.docker.com/products/docker-desktop) | `sudo apt install docker.io docker-compose-plugin` | Optional; needed by `scripts/build-stellarium-web.sh` (Emscripten via container) and `deploy/docker-build.sh` (multi-arch Polaris image). |
+| **Emscripten** | via Docker | via Docker | Optional; only if rebuilding stellarium-web. The submodule's pinned `.js`/`.wasm` files are committed, so Emscripten is needed only when you bump the engine. |
+
+@sec-contributing covers the full development workflow.
+
+## Equipment drivers
+
+Polaris talks to telescopes, cameras, focusers, filter wheels, and
+the rest through two driver buses. At least one is required to
+control hardware; both can coexist, and the **RIGS** tab lists
+devices from both, storing the per-device driver choice (`indi`,
+`alpaca`, or vendor SDK) in the active rig (@sec-rigs).
+
+### Option A: INDI (preferred on Linux, possible on Windows)
+
+INDI [@downey_indi] is the standard equipment-driver system of Linux
+astronomy.
+
+| Platform | Install |
+| --- | --- |
+| **Linux (Pi / desktop)** | `sudo apt install indi-full`, a meta-package with the daemon plus 100+ drivers (ZWO, Canon, EQMod, Celestron, flat panels, weather stations, and more). |
+| **Windows** | INDI runs natively but most users prefer the Alpaca path on Windows. If you really want INDI: the [windi](https://github.com/indilib/indi/wiki/Windows) build, or run [indiserver inside WSL2](https://www.indilib.org/get-indi/download.html) and expose the port. |
+
+### Option B: ASCOM / Alpaca
+
+ASCOM is the long-standing Windows astronomy driver standard; Alpaca
+[@ascom_alpaca] is its newer, network-based flavor.
+
+| Platform | Install |
+| --- | --- |
+| **Windows** | The [ASCOM Platform](https://ascom-standards.org/Downloads/Index.htm) (free) plus the driver pack for each device. Alpaca is enabled by default in ASCOM Platform 7+. |
+| **Linux** | Run an Alpaca-compatible device server, for example one built on [Alpyca](https://github.com/ASCOMInitiative/alpyca), the ASCOM Initiative's Python library [@ascom_alpyca]. Most modern ASCOM drivers expose Alpaca natively. Polaris discovers them over the LAN via UDP. |
+
+### Option C: vendor SDKs (DSLR / mirrorless, Windows only)
+
+The camera makers' own driver libraries. Each vendor's license
+prevents redistribution, so you register with the vendor, download,
+and drop the DLLs in place yourself; Polaris detects them at startup
+and they appear in **RIGS**, on the camera card's driver dropdown.
+
+- **Canon EDSDK** [@canon_edsdk]: register at
+  [developer.canon-asia.com](https://developer.canon-asia.com/),
+  download EDSDK 13.x+, drop the DLLs in `plugins/canon-edsdk/`.
+- **Nikon SDK** [@nikon_sdk]:
+  [developer.nikonimaging.com](https://developer.nikonimaging.com/),
+  drop in `plugins/nikon-sdk/`.
+- **Sony Camera Remote SDK** [@sony_scrsdk]:
+  [developer.sony.com/imaging-products](https://developer.sony.com/imaging-products/),
+  drop in `plugins/sony-sdk/`.
+
+DSLR and mirrorless bodies on **Linux** use `indi_gphoto_ccd`
+[@gphoto_libgphoto2] from `indi-full` (Option A); no vendor SDKs are
+needed there. @sec-dslr has end-to-end instructions per vendor.
+
+## Plate solving
+
+Plate solving (working out exactly where the telescope points by
+matching the stars in a photo against a catalog) powers the **Slew &
+Center** loop. Polaris ships a multi-solver dispatcher with automatic
+fallback; at least one of the four solvers below must be installed
+for the centering iteration to run. Without any solver, **Slew Only**
+still slews the mount; only the centering step is skipped.
+
+| Solver | Windows | Linux | When to pick it |
+| --- | --- | --- | --- |
+| **ASTAP** [@kleijn_astap] | [astap.exe](https://www.hnsky.org/astap.htm) installer plus a star database | `sudo apt install astap` plus a star database | Default. Fast (~1-3 s), works offline, MIT-licensed. Recommended for everyone. |
+| **PlateSolve3** [@planewave_platesolve3] | [PlateSolve3](https://planewave.com/software-and-downloads/) installer | n/a | Faster than ASTAP at long focal lengths. Windows only. Free for non-commercial use. |
+| **Astrometry.net (local)** [@lang2010astrometry] | not practical | `sudo apt install astrometry.net` plus index files | The gold standard but slow on a Pi (~30-60 s per solve). |
+| **Astrometry.net (online)** | API key only | API key only | Last resort. Needs internet, ~30-60 s per solve, free with an API key from [nova.astrometry.net](https://nova.astrometry.net). |
+
+ASTAP needs a star database alongside the program; no install path
+downloads one for you. The modern Gaia-based V50 database (about
+290 MB) is the right pick for typical setups, with deeper catalogs
+available for very narrow fields; @sec-installation walks through the
+download. Polaris detects all installed solvers at startup and
+dispatches primary first, blind fallback second. Paths and API keys
+are configured in `appsettings.json` under `PlateSolve:*` (@sec-api).
+
+## Optional: autoguiding
+
+PHD2 [@openphd_phd2], the free autoguiding program most amateur
+astrophotographers use, gets full integration: Polaris auto-detects
+it, can launch and shut it down, swap profiles, run Smart Calibrate,
+and broadcast guide statistics in real time (@sec-guiding).
+
+- **Windows**: the [PHD2](https://openphdguiding.org/) installer
+  (free, GPLv3).
+- **Linux (Pi)**: `sudo apt install phd2`.
+- **Linux embedded GUI** (the "PHD2 GUI" panel in the **GUIDE** tab):
+  requires xpra 6.0+ [@xpra_project], installed with
+  `sudo apt install xpra xserver-xorg-video-dummy`. Not supported on
+  32-bit Raspberry Pi (a Pi 2 or 3 running a 32-bit OS); Polaris
+  gates the feature off automatically there. @sec-guiding covers the
+  Xorg-dummy configuration tweak.
+
+The PHD2 connection (TCP 4400) is attempted automatically on Polaris
+startup, alongside INDI and Alpaca discovery.
+
+## Optional: post-processing tools
+
+| Tool | Windows | Linux | Why |
+| --- | --- | --- | --- |
+| **Siril** [@siril] | [Siril](https://siril.org/) installer | `sudo apt install siril` | Replaces the built-in stacking pipeline in STUDIO with the user's existing Siril scripts (five bundled, plus your `~/.siril/scripts`). |
+| **GraXpert** [@graxpert] | [GraXpert](https://www.graxpert.com/) v3.0+ installer | [AppImage release](https://github.com/Steffenhir/GraXpert/releases) | Host-side background extraction (automatic per-frame during sequences if toggled), deconvolution, and denoising. v3.0+ unlocks deconvolution and denoise; v2.x has background extraction only. |
+
+Polaris detects both at startup (through its
+`Services/External/BinaryLocator` component) and grays out the
+corresponding STUDIO buttons when they are missing. Note that the
+AI versions of these operations also run entirely in the browser
+with no host install at all; @sec-studio and @sec-ai-cleanup cover
+both paths.
+
+## Optional: simulators
+
+For testing the whole pipeline without hardware (@sec-simulator):
+
+| Platform | Install |
+| --- | --- |
+| **Linux / macOS** | `sudo apt install indi-bin`. The INDI CCD simulator renders real stars from the GSC catalog at the simulated mount position, so plate solving, auto-focus, and live stacking genuinely work. |
+| **Windows** | The [Alpaca Omni Simulator](https://github.com/ASCOMInitiative/ASCOMRemote/releases) [@ascom_omnisim], a single `.exe` that exposes the ASCOM camera, telescope, focuser, and filter-wheel simulators over Alpaca. |
+
+**SETTINGS**, under **Equipment simulator**, detects the install and
+spawns the whole simulator stack with a single click.
+
+## Optional: remote terminal
+
+The browser-based SSH terminal (built on xterm.js [@xtermjs_project],
+the browser terminal component, and SSH.NET [@sshnet_project], a .NET
+SSH library) lets you restart services from a Polaris tab when the
+host is headless (@sec-administration).
+
+| Platform | Install |
+| --- | --- |
+| **Polaris config** (both) | Set `Terminal:Enabled = true` in `appsettings.json` (default `false`). Polaris returns 403 on `/ws/terminal` otherwise. |
+| **Windows host** (SSH to itself) | Install OpenSSH Server: `Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0`, then `Start-Service sshd; Set-Service sshd -StartupType Automatic` (Admin). |
+| **Linux host** | `sudo apt install openssh-server && sudo systemctl enable --now ssh`. Already installed on Raspberry Pi OS by default. |
+
+Credentials are entered per connection and never persisted.
+
+## Optional: Stellarium sync
+
+Stellarium [@stellarium_project], the free desktop planetarium
+(GPLv2, any platform), can hand targets to Polaris: enable its
+**Plugins**, then **Remote Control**, bound to `127.0.0.1:8090`, and
+the SKY tab can pull the currently selected object as a target
+(@sec-sky-explorer).
+
+## Optional: Docker
+
+| | Tool |
+| --- | --- |
+| **Both platforms** | Docker 20.10+ with Compose v2. `docker compose up -d --build` for a single-host run; `deploy/docker-build.sh latest` builds multi-arch images (amd64 plus arm64) for pushing. |
+| | The Dockerfile is multi-stage (SDK image builds, runtime image ships). Volumes mount `/config` (profiles) and `/images` (FITS output). |
+
+The container uses the same TCP 5000 and UDP 5353 ports; forward both
+in the compose file, or use `--network host` on Linux (which mDNS
+discovery needs anyway; see @sec-installation).
+
+## Optional: relay server
+
+For reaching a Pi-based observatory from anywhere on the internet
+without exposing it directly (@sec-networking), you host the relay
+yourself:
+
+- a public VPS (a rented virtual server, any provider) with a domain
+  name pointed at it;
+- a Linux x64 or arm64 build of `NINA.Relay.Server` (in the Polaris
+  repository);
+- ports 80/443 open; Let's Encrypt certificates are built in through
+  LettuceEncrypt [@lettuceencrypt_project], a .NET library that
+  obtains and renews them automatically.
+
+The relay reverse-tunnels Polaris over HTTPS with per-tenant tokens,
+mutual TLS (both sides prove their identity with certificates), rate
+limiting, monthly byte quotas, and a web admin UI. Polaris itself,
+on the rig side, needs nothing extra: point it at the relay endpoint
+in **SETTINGS**.
+
+## Optional: astronomical calculations
+
+Ephemerides (predicted positions of celestial objects over time) for
+Tonight's Best and the altitude charts (@sec-night-planner) come from
+Astronomy Engine [@cosinekitty_astronomyengine], a small MIT-licensed
+library (~150 KB) pre-installed with Polaris via NuGet (.NET's
+package system). No external install.
+
+## Optional: internet-dependent features
+
+These features need an internet connection, one-time or recurring;
+everything else works fully offline.
+
+| Feature | What it fetches | Where from |
+| --- | --- | --- |
+| Weather forecast | Astronomical forecast (clouds, seeing, transparency) | [7Timer](https://www.7timer.info) [@ye_7timer] (free, no key) |
+| Tonight's Best thumbnails | DSO, planet, and Moon photos | NASA Image Library plus the Wikipedia REST API (free, no key) |
+| Reverse geocoding from lat/lng | The "City, Country" label below the home clock | OpenStreetMap [Nominatim](https://nominatim.org) [@osm_nominatim] (free, throttled) |
+| SKY tab DSS imagery | High-resolution deep-sky tiles when zoomed in | The CDS Strasbourg [Aladin](https://aladin.cds.unistra.fr) HiPS server [@cds_aladin] (free, public) |
+| Astrometry.net online solver | Plate-solve fallback | nova.astrometry.net (free, API key) |
+| Relay public access | Anywhere-on-internet access to a LAN Polaris | Your VPS (you host it) |
+
+All have graceful offline fallbacks; the home page works at the
+airlock of a Mars colony.
+
+## Hardware sizing
+
+| Host | Verdict | Notes |
+| --- | --- | --- |
+| **Raspberry Pi 5 (8 GB)** | Recommended | No compromises. Live stacking plus simultaneous STUDIO jobs are fine. |
+| **Raspberry Pi 4 (4 GB / 8 GB)** | Workhorse | The default target. The PHD2 GUI embed works; client-side WebAssembly live-stack offload takes the heavy math off the Pi. |
+| **Raspberry Pi 3 (1 GB)** | Limited | The app runs, but the PHD2 GUI embed is auto-disabled (32-bit ARM gate). Stacking on the Pi side gets tight; use the client-side offload. |
+| **Raspberry Pi 2 (512 MB)** | Bare minimum | Sequencing and live stacking work; STUDIO batch jobs are not realistic on the host. |
+| **Intel mini-PC (N100, J4125, and similar)** | Good | Headless Linux x64 publish. |
+| **Windows mini-PC / desktop / laptop** | Good | The win-x64 publish or `dotnet run`. The same feature set as Linux, plus the vendor DSLR drivers. |
+| **macOS** | Untested | Should run via `dotnet run` on Apple Silicon; no publish target is shipped. |
+
+## Browser requirements
+
+The client is any modern browser:
+
+| Browser | Minimum | Recommended |
+| --- | --- | --- |
+| **Chromium-based** (Chrome, Edge, Brave, Vivaldi) | 100+ | Latest |
+| **Firefox** | 100+ | Latest |
+| **Safari** | 16+ | Latest |
+| **Mobile** (Chrome Android, Safari iOS) | recent two major versions | Latest |
+
+WebGL2 (the browser's built-in gateway to the graphics card) is
+required for the GPU stretch pipeline and the SKY engine. Without it,
+those features fall back to server-side JPEG rendering (slower) and
+to a flat-background sky with no DSS imagery.
+
+WebAssembly with SIMD (a browser technology for near-native-speed
+code, with the vector instructions that make pixel math fast;
+Chromium 91+, Firefox 90+, Safari 16.4+) unlocks the client-side
+live-stack offload via the `NINA.Polaris.Wasm` module.
+
+## What Polaris does not need
+
+- **No** database server (a SQLite file under the application data
+  folder).
+- **No** message broker or cache; it is a single .NET process.
+- **No** Node.js or npm; the frontend is plain Alpine.js with
+  vendored libraries and no build step.
+- **No** Python runtime.
+- **No** Java.
+- **No** cloud account. Everything except the optional integrations
+  listed above runs on your LAN.
+
+<!-- consolidated from: REQUIREMENTS.md -->

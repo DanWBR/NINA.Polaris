@@ -1,0 +1,784 @@
+# Rigs and Device Drivers {#sec-rigs}
+
+Everything Polaris knows about your hardware lives in a **rig**: a named
+profile that bundles a telescope, a camera, a mount, a focuser, a filter
+wheel, the guide setup, an optional second camera, and a set of
+accessories, together with every per-setup default that goes with them.
+You can keep several rigs side by side, a permanent observatory setup
+and a grab-and-go refractor, and switch between them in one click. The
+RIGS tab is the cockpit for all of it: it holds the driver-host
+connection, one card per equipment role, and the multi-rig switcher.
+
+This chapter covers the rig model and the four "driver doors" through
+which Polaris reaches hardware: INDI (the open-source driver system
+astronomy gear speaks on Linux) [@downey_indi] with its embedded
+driver manager, ASCOM Alpaca (the network flavour of ASCOM, the
+long-standing Windows standard for astronomy drivers) [@ascom_alpaca],
+direct ASCOM on Windows, and the camera makers' own driver libraries
+(their SDKs, software development kits). DSLR and mirrorless bodies
+have their own vendor-specific paths, covered in @sec-dslr; direct
+WiFi mount drivers are covered in @sec-mounts; and the built-in
+simulator that
+stands in for all of this hardware is covered in @sec-simulator.
+
+## The four driver doors
+
+Polaris does not care which protocol your equipment speaks, but you do,
+because the setup work differs:
+
+- **INDI** is the Linux-native door. `indiserver`, the small
+  background program that hosts INDI drivers, runs on the host and
+  loads one driver per device; Polaris connects to it as a client, by
+  default on `localhost:7624` (port 7624 on the same machine). This
+  is the broadest door, covering hundreds of devices, and the default
+  choice on a Raspberry Pi.
+- **ASCOM Alpaca** is ASCOM carried over ordinary web traffic (HTTP)
+  and works on any OS. Polaris discovers Alpaca servers on the
+  network, or you enter a host and port manually. On Windows, classic
+  ASCOM drivers reach Alpaca through a bridge such as ASCOM Remote (a
+  free helper app that publishes classic ASCOM drivers over the
+  network) or the Omni Simulator (the ASCOM project's fake-hardware
+  test server).
+- **ASCOM (COM, direct)** talks to classic ASCOM Platform drivers
+  through COM^[COM (Component Object Model) is the Windows plumbing
+  that lets one program call directly into another; "COM interop" is
+  the .NET mechanism Polaris uses to make those calls.], Windows
+  only, with no bridge process and no HTTP hop.
+- **Native camera SDKs** bypass driver servers entirely for SVBony,
+  ZWO ASI, PlayerOne, ToupTek, and Altair cameras, streaming straight
+  off USB. This is the fast path for high-frame-rate planetary video
+  (@sec-planetary).
+
+Each is described in detail later in this chapter, after the tour of
+the RIGS tab itself.
+
+## The connection panel
+
+The driver-host connection lives in a framed panel above the
+**Equipment** / **INDI Drivers** / **INDI Control Panel** sub-tabstrip,
+so it stays visible on every sub-tab; all three need a live connection.
+
+When no driver host is connected, the panel offers two tabs:
+
+- **INDI**: host and port inputs plus a **Connect** button. The
+  default is `localhost:7624`.
+- **ASCOM/Alpaca**: a **Discover** button, manual host/port entry
+  for servers hidden behind a router (NAT) that the broadcast
+  discovery cannot see, and a per-server device list.
+
+Once connected, the panel collapses to a compact green bar reading
+`INDI · localhost:7624 · N devices` with a check mark, plus **Refresh**
+and **Disconnect** buttons.
+
+## Role cards
+
+Below the connection panel, one card per equipment role fills the
+**Equipment** sub-tab. Every card shares the same skeleton: a header
+with an icon, the role label, and a status dot (gray means no device
+selected, amber means selected but not connected, green means
+connected), and a body with a device dropdown, **Connect** and
+**Disconnect** buttons, and role-specific controls.
+
+![The Equipment sub-tab with INDI connected: the Main Telescope card
+with catalog-filled optics on the left, and the camera card with
+cooler control and temperature graph on the
+right.](images/devices.jpg){#fig-rigs-cards}
+
+### Main telescope
+
+The Main Telescope card involves no hardware connection at all; it is
+purely optical metadata. The focal length and aperture you enter here
+drive the field-of-view calculation, the `FOCALLEN` header written
+into each FITS file (FITS is astronomy's standard image format), and
+the hints handed to plate solving (matching the stars in a photo
+against a catalog to work out exactly where the telescope is
+pointing; see @sec-glossary). There are two ways to populate it:
+
+The preferred way is the catalog pickers: a **Brand** dropdown of
+curated OTAs (Askar, Celestron, Sky-Watcher, GSO, Meade, SVBony,
+Explore Scientific, Astro-Physics, and more), a **Model** dropdown
+filtered by brand that shows aperture and f-ratio, and an
+**Accessory** dropdown of reducers, flatteners, Barlows, and extenders
+compatible with the picked OTA, which applies the focal-length
+multiplier automatically.
+
+Alternatively, leave **Brand** set to "Manual entry" and fill the
+numeric **Focal length**, **Aperture**, and **Factor** inputs by hand.
+Both paths populate the same persisted fields on the active rig.
+
+### Camera
+
+The driver dropdown lists INDI and Alpaca devices, plus, on Windows,
+the Canon EDSDK, Nikon, and Sony SDK entries when those SDKs are
+installed (@sec-dslr). Connecting brings up a temperature chart, a
+cooler target input, and quick gain and binning controls (binning
+merges adjacent pixels into one, trading resolution for a brighter,
+faster readout); a
+cooler-power chart appears at the bottom left when a cooled sensor is
+active. Sensor dimensions are auto-detected from the driver, so there
+is no manual entry (this used to be a Settings field and has been
+removed).
+
+Dedicated astronomy cameras expose an analogue **gain** number; the
+field carries a **(?)** helper that explains gain in ISO terms (higher
+gain means a brighter image and lower read noise, but less dynamic
+range). DSLR and mirrorless bodies report **ISO** instead: when the
+driver publishes a `CCD_ISO` list, Polaris shows an ISO dropdown in
+the capture controls in place of the numeric gain box (see @sec-dslr).
+
+### Mount
+
+The driver dropdown offers INDI Telescope, Alpaca Telescope, or one of
+the direct-WiFi drivers Polaris ships (SynScan WiFi, NexStar WiFi,
+LX200 TCP; see @sec-mounts for which of these are implemented today).
+Connecting brings up a tracking toggle, park and unpark buttons, an
+RA/Dec readout, and an NSEW directional pad.
+
+### Main scope focus motor and filter wheel
+
+Both are standard select-and-connect cards. The focuser card is named
+after the optical train it drives, the **Main Scope Focus Motor**. The
+Filter Wheel card exposes filter swap controls; the filter labels come
+from the rig's `FilterOffsets` table, edited in the **Manage rigs**
+modal.
+
+### Guiding system
+
+One card covers the whole guide setup, split into three labelled
+groups.
+
+**Scope** is metadata-only, like the Main Telescope card but for the
+guide optics. The guide focal length and aperture drive pixel-scale
+sanity checks in PHD2 (the free autoguiding program most amateur
+astrophotographers use) and the guiding resolution readout. The
+catalog pickers here are driven by `wwwroot/data/guidescopes.json`,
+a curated list of common guide scopes (SVBony, ZWO, William Optics,
+Askar, Sky-Watcher, Orion, QHY, and others); picking a model
+auto-fills focal length and aperture. For off-catalog scopes, leave
+**Brand** at "Manual entry" and type the numbers. Guide scopes take no
+reducer, so there is no accessory picker.
+
+**Camera** behaves according to the rig's **Guider driver** setting on
+this card, `native` or `phd2`:
+
+- With the **native guider** (the default), Polaris manages the guide
+  camera directly: a driver and device picker (INDI, Alpaca, vendor
+  SDK, or Simulator) and a connect toggle, just like the imaging
+  camera. The built-in native autoguider (@sec-guiding) auto-connects
+  and uses it for pulse guiding (steering the mount with short timed
+  correction pulses). The guide camera must differ from the
+  imaging camera while that is connected.
+- With **PHD2** [@openphd_phd2], a separately running PHD2 owns the
+  camera, and the card mirrors, read-only, what PHD2 reports through
+  its `get_current_equipment` status query, so you can see at a
+  glance which guide camera PHD2 is using.
+
+**Focus Motor** is an optional motor on the guide scope, for setups
+that motorise it: a driver and device picker plus a connect toggle.
+Once connected it can be jogged from the FOCUS tab via the **Focuser:
+Guide** source switch, and auto-focused with the Auto V-curve
+**Optical train: Guide** option, which uses the guide camera
+(@sec-focusing).
+
+### Auxiliary camera system
+
+The aux system is a second imaging camera riding the same mount
+through a different lens or telescope, capturing in parallel to make
+use of the same tracked night. The card is split into **Camera +
+Lens/Scope** and **Focus Motor** groups and carries:
+
+- a driver and device picker (INDI, vendor SDK, or Alpaca, like the
+  main camera), connect and disconnect, and live status;
+- focal length, aperture, brand, and model for the aux optical train,
+  its own values, used for the `FOCALLEN` header of aux frames;
+- exposure, gain, and binning; the aux loop runs on its own cadence,
+  independent of the main camera;
+- an **Enable aux capture** toggle: when on, the aux loop captures and
+  saves frames automatically whenever a main session (LIVE or AUTORUN)
+  is running, pausing while the mount is busy with a dither (a tiny
+  deliberate nudge of the framing between frames), a settle, a
+  meridian flip (the mount swinging the telescope to the pier's other
+  side as the target crosses the meridian), or a slew, so trailed
+  frames are not saved (@sec-glossary defines these in full);
+- an **Aux Focuser** picker, an optional focuser for the aux train,
+  for manual focusing and Auto V-curve via **Optical train:
+  Auxiliary**.
+
+Aux frames are written to a separate `aux/` subtree,
+`{rig}/aux/{target}/{filter}/{session}/`, so they never mix with the
+main camera's `lights/` (@sec-files). The aux camera is also viewable
+in the FOCUS tab via the **Camera: Auxiliary** source switch. Capture
+and save is the aux camera's whole job; there is no guiding, live
+stacking, or sequencing through it. The SKY map does draw its real
+field of view, though: when connected it shows a pink aux FOV
+rectangle, and a SKY plate solve fires a parallel aux solve so the
+rectangle reflects the true rotation and scale the aux frame will come
+out with (@sec-sky-explorer).
+
+### Accessories
+
+A collapsible block below the main grid that auto-expands when at
+least one accessory has a saved selection. It holds four cards:
+
+- **Rotator**: angle readout, slew, and sync;
+- **Flat Panel**: light toggle and brightness slider where supported;
+- **Dome**: azimuth, shutter, park, and a slave-to-scope toggle;
+- **Weather**: a read-only sensor display (cloud, humidity, dewpoint,
+  wind, sky temperature, and MPSAS, a sky-brightness measure in
+  magnitudes per square arcsecond, higher meaning darker).
+
+## Managing rigs
+
+The rig dropdown at the top of the tab switches the active rig in one
+click; all device selections and per-rig defaults reload
+automatically. The **Save selections** button persists the current
+dropdown picks, the cooler target, and the focuser step into the
+active rig.
+
+**Manage rigs...** opens a modal with the rig lifecycle controls:
+inline rename per rig, a per-rig devices summary (camera, mount,
+focuser, filter wheel), a per-rig optics summary (focal length,
+f-ratio, accessory), a collapsible per-rig **filter offsets** table
+(`{Filter → ΔSteps}`, used by the `MoveToFilterOffsetInstruction` in
+sequences, @sec-adv-sequencer), **Activate** and **Delete** buttons
+per rig, and **New empty rig** and **Duplicate active** at the footer.
+The modal is intentionally slim: device pickers and optics live on the
+RIGS-tab cards, so the modal is for rig lifecycle and filter offsets
+only.
+
+Beyond the obvious device names, each rig persists:
+
+- cooler target temperature (°C);
+- default gain, offset, and binning;
+- focuser step size and backlash;
+- main scope focal length, aperture, brand, model, accessory, factor,
+  and required back-focus;
+- guide scope focal length, aperture, brand, and model;
+- guide focuser device and driver;
+- aux camera device and driver, aux optics (focal length, aperture,
+  brand, model), aux exposure, gain, and binning, the enable flag, and
+  the aux focuser device and driver;
+- the PHD2 endpoint (host and port), profile id cache, algorithm
+  preset, calibration step override, and custom algorithm parameters;
+- the filter offsets table;
+- live-stack triggers (the refocus and recenter policy, see
+  @sec-live-stacking).
+
+## The telescope and accessory catalogs
+
+The catalog dropdowns are driven by three JSON files (plain text
+files holding structured data, editable in any text editor) checked
+into the repository: `wwwroot/data/telescopes.json` and
+`wwwroot/data/optical-accessories.json` for the Main Telescope card,
+and `wwwroot/data/guidescopes.json` for the guide scope. To add a new
+OTA, reducer, or guide scope, edit the JSON, restart the server, and
+refresh the browser. Pull requests (changes proposed through GitHub)
+with additions for popular new hardware are welcome
+(@sec-contributing).
+
+## INDI drivers manager (embedded indi-web)
+
+Polaris's normal INDI client connects to a running `indiserver` on
+port 7624 and lists whatever drivers that server has already loaded.
+It cannot, by itself, add or remove drivers; that requires either
+restarting `indiserver` with new arguments or talking to its FIFO (a
+command pipe: a special file `indiserver` watches for instructions).
+Without help, every "I plugged in a new accessory and need its driver
+loaded" trip means logging into the host over SSH (a remote
+command-line session), `pkill indiserver`, and relaunching with the
+new driver on the command line.
+
+The embedded **indi-web** panel removes that trip. indi-web
+[@knro_indiwebmanager] is the small web page that starts and stops
+INDI drivers; Polaris embeds it inside the RIGS tab, so you can
+start, stop, and configure INDI drivers from the browser. Unlike the
+embedded PHD2 window, which needs xpra (a tool that streams a desktop
+program's window into the browser) to appear, indi-web is already a
+browser app: Polaris simply passes its traffic through its own web
+address (a reverse proxy) at `/indi-web/` and shows it in an iframe
+(a window-in-a-page that displays one web page inside another). No
+extra display server, no extra streaming bandwidth. The panel gives
+you:
+
+- a checklist of every INDI driver installed on the host;
+- profiles, groups of drivers you turn on together, for example
+  "Mono SHO rig", "OSC travel rig", "Sim only" (OSC is a one-shot
+  colour camera; SHO is the narrowband filter trio);
+- start, stop, and restart of `indiserver` from the browser;
+- the telescope simulator and utility drivers without command-line
+  wizardry.
+
+### Requirements and install
+
+indi-web needs Linux or macOS (Windows is unsupported, since
+`indiserver` itself does not ship for Windows), Python 3.x with `pip`
+(Python's package installer) available on the PATH (the list of
+folders the system searches for commands), and the INDI core
+installed via `apt install indi-bin` on Debian, Ubuntu, or Raspberry
+Pi OS (or your distribution's equivalent); indi-web runs the
+`indiserver` already on your system, it does not bundle its own. It
+listens on port 8624, indi-web's default, bound to `127.0.0.1` only
+(the loopback address, reachable only from the host itself); Polaris
+proxies access through itself.
+
+Install is one line on the Polaris host:
+
+```bash
+pip install indiweb
+```
+
+You do not need to start indi-web yourself. Polaris's
+`IndiWebManagerService` detects the binary, manages the process, and
+surfaces it in the RIGS tab.
+
+If `pip install` lands in a virtual environment^[A virtual
+environment (venv) is a private folder holding a Python program and
+its dependencies, kept separate from the Python that ships with the
+OS. Raspberry Pi OS Bookworm and later block system-wide
+`pip install` to protect the OS's own packages (a Python policy
+known as PEP 668), so installing into a venv is the recommended
+route there.], point Polaris at the absolute path of the
+`indi-web` binary in `appsettings.json`. For a plain venv:
+
+```json
+{
+  "IndiWeb": {
+    "ExecutablePath": "/home/polaris/.venv/polaris/bin/indi-web",
+    "AutoStart": true,
+    "Port": 8624,
+    "BindAddress": "127.0.0.1"
+  }
+}
+```
+
+For an install managed with pipenv (a tool that creates and tracks
+such virtual environments for you), following the upstream README's
+recommended path:
+
+```bash
+sudo apt install pipenv
+cd ~ && mkdir indiweb && cd indiweb
+pipenv --python=$(which python3)
+pipenv install indiweb
+# discover the venv path pipenv chose:
+pipenv --venv
+```
+
+`pipenv --venv` prints something like
+`/home/polaris/.local/share/virtualenvs/indiweb-AbCd1234`; the binary
+is at `{that path}/bin/indi-web`. Plug it into
+`IndiWeb:ExecutablePath` the same way. The hash suffix changes only if
+the Pipfile changes (rare), so set it once and forget it unless you
+`pipenv update` to a new release.
+
+`BindAddress` should stay on loopback unless you really know what you
+are doing: indi-web has no authentication, so binding it to `0.0.0.0`
+(which accepts connections from any machine) re-exposes driver
+control to anyone on the LAN.
+
+### Workflow
+
+Open the RIGS tab and scroll to the **INDI Drivers** section near the
+bottom of the page, below Accessories. A status pill shows the current
+state: **Running** (green, indi-web is up and the iframe is loaded),
+**Stopped** (installed but not running; click **Start**), **Not
+installed** (a `pip install` hint is shown inline), or **OS not
+supported** (a Windows banner with the reason).
+
+Click **Start**; the iframe appears after a quick network check (a
+TCP probe) confirms indi-web is listening, typically one to three
+seconds. In the embedded UI, pick
+or create a profile, tick the drivers you want, and click **Server**,
+then **Start**. indi-web now owns the `indiserver` process, and
+Polaris's normal equipment cards see the loaded drivers in their
+device dropdowns. When you are done, click **Stop** in the Polaris
+control row; Polaris kills the child process tree cleanly.
+
+![The INDI Drivers sub-tab: indi-web running embedded inside the RIGS
+tab, with the equipment profile, auto-start toggles, the driver list,
+and per-driver status.](images/gs-connect.jpg){#fig-indi-web}
+
+To have indi-web come up with Polaris itself, set
+`IndiWeb:AutoStart = true` in `appsettings.json`. With auto-start on,
+the service launches indi-web about three seconds after Polaris boots,
+and the INDI Drivers section shows the running iframe immediately on
+first open. Without it (the default), indi-web only runs when you
+click **Start**.
+
+### Coexistence with the built-in simulator
+
+Both `IndiWebManagerService` and the built-in simulator service
+(@sec-simulator) want to control `indiserver`. They get along, but
+you have to pick one owner per session. If you are using indi-web for
+everything, real hardware or simulators, leave the simulator service
+disabled and use indi-web's profile dropdown to load the simulator
+drivers (`indi_simulator_ccd`, `indi_simulator_telescope`, and so on)
+when you want a dry run. If you are using the simulator service for
+dry runs, leave indi-web stopped; the simulator service spawns its own
+`indiserver` via FIFO. If both run at once they race on the same FIFO
+and one of them loses commands.
+
+### Troubleshooting indi-web
+
+**The banner says "indi-web not detected" but you installed it.**
+Polaris looks at the `PATH` of the user running Polaris. If you
+installed with `pip install --user` and Polaris runs under a
+different user (for example when systemd, the Linux service manager,
+runs it as the `polaris` user), `~/.local/bin` may not be in
+that user's PATH. Either install system-wide with
+`sudo pip install indiweb`, or set `IndiWeb:ExecutablePath` to the
+absolute path in `appsettings.json`.
+
+**The banner shows the binary path but the status is "Not
+installed".** Detection runs but comes back empty because the user
+running Polaris cannot read or execute the path. With systemd that
+user is whoever the unit's `User=` directive names (often `polaris` or
+`root`), not your interactive login. Verify by impersonating the
+Polaris user:
+
+```bash
+sudo -u polaris /home/polaris/.local/share/virtualenvs/indiweb-XXXXXXXX/bin/indi-web --version
+```
+
+If that errors with "Permission denied" or "No such file or
+directory", either make the venv readable by the Polaris user
+(`chmod -R o+rx` on the venv tree if it is currently 700, or
+`chown -R polaris:polaris` if it should belong to that user), or edit
+`User=` in `/etc/systemd/system/polaris.service` so Polaris runs as
+the user who owns the venv.
+
+**Start failed with `ModuleNotFoundError: No module named 'cgi'`.**
+Python 3.13 removed the `cgi` module from the standard library, but
+the copy of `bottle.py` that ships inside indi-web still imports it.
+Install the drop-in replacement from PyPI (Python's package archive)
+into the same venv:
+
+```bash
+sudo /opt/polaris-indiweb-venv/bin/pip install legacy-cgi
+sudo systemctl restart polaris.service
+```
+
+The path is `/opt/polaris-indiweb-venv/` when installed via the
+Polaris `.deb`, or `~/.local/share/virtualenvs/indiweb-XXXX/` for a
+pipenv install. This bites every install on Raspberry Pi OS images
+shipped after late 2025, which moved to Python 3.13 as the default;
+the `.deb` postinst installs `legacy-cgi` automatically, so it only
+affects users who set up indi-web manually.
+
+**The status flips to "Stopped" right after you click Start.** The
+child process spawned but died before the TCP probe could catch it.
+Check `journalctl -u polaris -f` (or wherever your log lands); Polaris
+logs `Spawning indi-web: {path} {args}` followed by either the
+listener-up message or an `indi-web exited prematurely (code N)` line.
+Common causes: `HOME` not set in the systemd unit (Bottle, the small
+web framework inside indi-web, reads
+configuration from `$HOME` on startup and indi-web exits immediately
+when it is empty; add `Environment=HOME=/home/polaris` to the
+`[Service]` block and `systemctl daemon-reload`); port 8624 already in
+use by an old indi-web or a container (`lsof -i:8624` to find it, kill
+it, restart Polaris); or libindi missing
+(`apt list --installed | grep indi-bin`, and if empty,
+`sudo apt install indi-bin`).
+
+**The iframe shows "Bad Gateway" (502).** The reverse proxy got an
+error talking to `127.0.0.1:8624`, usually because indi-web died
+between the status probe and the iframe fetch. Check the Polaris log
+for the inner error and click the refresh control in the Polaris
+control row to re-probe.
+
+**The iframe shows the indi-web UI but the driver list is empty.**
+That is an indi-web to `indiserver` problem, not a Polaris problem.
+indi-web finds drivers by scanning XML files under `/usr/share/indi/`;
+if `indi-bin` is not installed the directory is empty and there is
+nothing to list.
+
+**Polaris's equipment cards do not see drivers started via
+indi-web.** Polaris's INDI client connects via TCP to `indiserver` on
+the configured host and port. Check that they match what indi-web's
+"Server" page reports.
+
+**You want to manage indi-web with your own systemd unit instead.**
+Do not. `IndiWebManagerService` is designed to be the sole owner of
+the indi-web process. With a parallel unit, Polaris probes
+`127.0.0.1:8624` on boot, sees a listener, and flips the status to
+running, but its **Stop** button then fails silently because Polaris
+did not spawn that process; and if `IndiWeb:AutoStart` is true while
+the unit also starts on boot, both try to bind 8624 and one loses
+with an `EADDRINUSE` ("address already in use") error. For 24/7
+observatory rigs where the Polaris server is
+itself a systemd unit, set `IndiWeb:AutoStart = true` and let Polaris
+handle the lifecycle.
+
+## The INDI control panel
+
+The **INDI Control Panel** sub-tab is a built-in replacement for
+`indi_control_panel`, the old standalone desktop program, which
+recent Raspberry Pi OS and libindi 2.x (the INDI core library)
+releases no longer ship. It shows
+every property each connected device exposes, grouped per device, and
+lets you read and edit them right in the browser. Properties are
+grouped (Main, Options, Site, and so on) and searchable; number,
+switch, text, and light types each get the right editor, and
+read-only properties show greyed out. Edits are sent through the same
+path the rest of the app uses and then auto-saved to the driver's
+`~/.indi/*_config.xml`, so they come back on the next connect.
+**Refresh / Resync** at the top re-reads the property list; use
+**Resync** after loading or unloading a driver in the INDI drivers
+manager.
+
+The INDI protocol carries only a short label per property, no
+description. To make the cryptic names friendlier, every property has
+a small **(?)** icon next to its name. Hover it to read a
+plain-language English explanation as a tooltip; around 80 common
+INDI standard properties (camera, mount, focuser, filter wheel, dome,
+rotator, weather, plus the general ones) ship with a built-in
+description. Click it to open a small editor that shows the built-in
+text and gives you a box to write your own note, which is saved and
+shown instead from then on. Notes are saved per property name, not per
+device, so a note you write on `CCD_TEMPERATURE` shows up for every
+camera and survives reconnects; **Clear note** returns to the built-in
+description. The built-in descriptions live in
+`wwwroot/data/indi-property-help.json`; your own notes live in the
+profile, so a factory reset clears them along with the rest of your
+settings (@sec-administration).
+
+## ASCOM (COM, direct) on Windows
+
+On Windows, Polaris can talk to your ASCOM Platform drivers directly
+through COM interop, without going through ASCOM Remote Server or the
+Alpaca Omni Simulator. The hop you would otherwise pay (HTTP to
+localhost, then COM) goes away, and you do not have to keep a separate
+bridge process running.
+
+|  | ASCOM (COM, direct) | Alpaca (HTTP) |
+|---|---|---|
+| OS | Windows only | Any |
+| Setup | Just install the ASCOM Platform | Install Platform + ASCOM Remote / Omni Sim |
+| Latency | ~0 ms | ~1-3 ms localhost |
+| Driver compatibility | Every ASCOM driver ever shipped | Only those exposed through the bridge |
+| Service mode | Not when Polaris runs as SYSTEM | Works |
+
+The short version: on Windows, prefer ASCOM (COM, direct) unless you
+specifically need Polaris to run as a Windows service.
+
+You need three things: Windows (the COM path is Windows-only; Linux
+and macOS keep using INDI or Alpaca), ASCOM Platform 6.5 or 7.x from
+<https://ascom-standards.org/> (a free download), and at least one
+registered ASCOM driver; most cameras, mounts, focusers, and filter
+wheels installed via their vendor installers land there automatically.
+Polaris ships no ASCOM bits itself: if the Platform is not installed,
+the "ASCOM (COM, direct)" entry in the RIGS dropdowns shows up greyed
+out with a hint to install it.
+
+Connecting a device:
+
+1. In the RIGS tab, pick the device card (Camera or Mount).
+2. In the **Driver** dropdown, choose "ASCOM (COM, direct)".
+3. Click **Detect**. The dropdown fills with every ASCOM driver of
+   that device type registered on the machine, labelled with the
+   description the driver author wrote into the registry ("ZWO ASI
+   Camera", "iOptron CEM70", "Pegasus FocusCube3").
+4. Pick the driver.
+5. Optionally click **Setup** to open the driver's modal setup
+   dialog: COM port pickers, mount-model pickers, filter naming,
+   whatever the vendor exposed. Polaris waits for you to dismiss the
+   form before continuing.
+6. Toggle the connect switch on. Polaris instantiates the driver,
+   sets `Connected = true`, reads the metadata, and you are live.
+
+Under the hood, each connected ASCOM device gets its own dedicated
+worker thread running in STA mode^[STA (single-threaded apartment)
+is a Windows rule saying a driver must always be called from the
+same one thread. Polaris gives each device its own thread and
+funnels every call through it in order, which is exactly the
+treatment ASCOM drivers expect.], and all property reads, writes,
+and method calls against that driver go through that thread, one at
+a time. This keeps a slow operation on one device, say a
+60-second telescope slew, from blocking another device on a different
+thread, such as an autofocus loop on the focuser. The cost is about
+1 MB of stack memory plus one operating-system thread per connected
+device; a typical
+four-device rig uses four extra threads, which is negligible.
+
+### Troubleshooting ASCOM COM
+
+**"ASCOM (COM, direct)" is missing or greyed out.** On Linux or macOS
+this is expected; use INDI or Alpaca. On Windows it means the ASCOM
+Platform is not installed, or your user lacks read access to the
+`HKLM\SOFTWARE\ASCOM` branch of the Windows registry (the
+system-wide settings database). Install or reinstall the Platform
+and reopen RIGS.
+
+**Detect finds nothing.** The driver vendor's installer did not
+register the COM class for your user. Re-run the installer (most need
+admin rights), or check `HKLM\SOFTWARE\ASCOM\<Type> Drivers\` for the
+expected ProgID (the name under which the driver registered itself).
+
+**The Setup dialog fails with a "no interactive desktop" error.**
+Polaris is running as a Windows service or under SYSTEM, and the
+setup dialog needs an interactive desktop session to render. Either
+start Polaris from your normal logged-in user account, or configure
+the driver once from another interactive app (the ASCOM Platform's
+Chooser, or the vendor's standalone tool) and come back to Polaris.
+
+**Connect succeeds but the driver behaves oddly.** ASCOM drivers vary
+in quality; some advertise capabilities they do not support, or throw
+`PropertyNotImplementedException` on properties they are meant to
+implement. Polaris swallows the common failures and substitutes
+neutral defaults (NaN for temperature, false for cooler-on, and so
+on), but if a critical method fails, the pop-up toast shows the
+driver's numeric Windows error code (the HRESULT) verbatim so you
+can report it to the driver vendor.
+
+**A 32-bit driver on 64-bit Polaris.** Most modern ASCOM drivers are
+64-bit and load directly into Polaris. A handful of legacy drivers
+are 32-bit only and require ASCOM's COM surrogate (a helper process
+Windows uses to run a 32-bit driver on behalf of a 64-bit program).
+Polaris detects these and lists
+them in the dropdown, but you will need to either use ASCOM Remote or
+Alpaca instead (which works around the bitness gap) or ask the vendor
+for a 64-bit build.
+
+For development without hardware, the **Equipment Simulator** panel
+in SETTINGS can spawn the ASCOM Omni Simulator, which exposes every
+device type through Alpaca with no driver registration involved; see
+@sec-simulator.
+
+## Native camera SDKs
+
+Polaris can talk to SVBony, ZWO ASI, PlayerOne, ToupTek, and Altair
+cameras through their native USB SDKs, bypassing the INDI server
+entirely. This is the fast path for high-frame-rate planetary video:
+the INDI route does a full per-exposure round trip per frame, often
+around 1 fps for a non-streaming driver, whereas the native SDK
+streams continuously straight off USB.
+
+Use it for planetary and lunar video, where you want the highest
+sustainable frame rate at a small ROI (region of interest, a crop of
+the sensor); pick a small subframe such as
+640×480 for the highest fps. For deep-sky imaging the INDI driver is
+fine; the SDK backend is an alternative you select per rig, not a
+replacement. Frame rate is ultimately sensor-bound: a cooled
+deep-sky OSC camera like the SVBony SV405CC
+(Sony IMX294) tops out at tens of fps
+even over the native SDK, and true 100 fps needs a small, fast
+planetary sensor such as the ZWO ASI462 or ASI678.
+
+The camera driver picker in RIGS lists "SVBony (SDK, native)",
+"ZWO ASI (SDK, native)", "PlayerOne (SDK, native)", "ToupTek (SDK,
+native)", and "Altair (SDK, native)" whenever the matching native
+library loads on the host. Choose one, **Discover**, and connect like
+any other camera; all camera operations (capture, gain, cooler, ROI,
+and live video) go through the SDK while it is the active driver.
+
+### Platforms and packaging
+
+The native libraries ship bundled in the package per architecture:
+Linux arm64 and x64 (`.so` library files) and Windows x64 (`.dll`
+library files), copied next to the executable in the published build
+with no separate download.
+(PlayerOne additionally ships arm32 and x86 `.so` files in its SDK,
+though Polaris packages arm64 and x64.) On Linux, the `.deb` installs
+udev rules^[udev is the part of Linux that reacts when hardware is
+plugged in; a udev rule is a small text file telling it who may use
+a device.]
+(`/lib/udev/rules.d/99-polaris-{svbony,asi,playerone,touptek,altair}.rules`)
+so the `polaris` service user can open the camera without root, and
+raises `usbfs_memory_mb` (the kernel's buffer for USB transfers) for
+high-fps USB3 streaming. The package's post-install script
+reloads udev automatically; replug the camera once after install. If
+the native library is missing for your platform or architecture, the
+driver simply does not appear in the picker, and the INDI driver
+remains available.
+
+To quantify the gain, run the Hardware Benchmark video probe
+(SETTINGS, **Hardware Benchmark**, "measure the connected camera";
+set a small **Video ROI** and tick **Measure recording**) before and
+after switching from INDI to the SDK backend, and compare capture
+fps, transmit fps, record fps, and dropped frames.
+
+### Maturity
+
+| Backend | Native libs bundled | Validated on hardware |
+|---|---|---|
+| SVBony | Linux arm64/x64, Windows x64 | SV405CC (Pi 5, USB3) |
+| ZWO ASI | Linux arm64/x64, Windows x64 | not yet |
+| PlayerOne | Linux arm64/arm32/x64/x86, Windows x64 | not yet |
+| ToupTek | Linux arm64/x64, Windows x64 | not yet |
+| Altair | Linux arm64 (glibc)/x64, Windows x64 | not yet |
+
+The ZWO, PlayerOne, ToupTek, and Altair backends are written to the
+vendor SDKs and compile and pass managed smoke tests, but have not
+been exercised on real cameras yet. Treat the first connect, capture,
+and stream as a shakedown, and if you hit a bug, capture the Polaris
+log (`journalctl -u polaris.service -f` on the Pi) around the failure
+and file it. The known fragile spots, documented so whoever debugs the
+first session knows where to start:
+
+- **ToupTek raw format and bit depth.** The backend forces raw Bayer
+  output (the sensor's undeveloped colour-mosaic data,
+  `OPTION_RAW=1`) at maximum bit depth (`OPTION_BITDEPTH=1`)
+  and reads the actual depth and Bayer pattern back from
+  `get_RawFormat` on connect. Some models only deliver 8-bit, ignore
+  the bit-depth option, or report a different FourCC (a
+  four-character code naming the pixel format); if the image
+  looks mono, half-height, or has wrong colors, verify this first
+  (log the FourCC and bit depth from connect).
+- **ToupTek live ROI.** `put_Roi` is applied without stopping pull
+  mode (the delivery mode where Polaris asks the SDK for each frame)
+  and the frame buffer re-sizes from `get_Size` per frame; on
+  sensors that will not change ROI live, this may need a stop and
+  restart of pull mode around `ApplyRoi`.
+- **ToupTek OEM rebadges.** Omegon, RisingCam, and similar brands are
+  ToupTek-based and enumerate under the same SDK, but only genuine
+  ToupTek units are expected to work as-is; OEM product IDs may need
+  adding to the udev rule.
+- **Altair.** Altair Astro cameras have their own vendor SDK drop
+  (`camera_sdk/Altair`, `libaltaircam`) and a dedicated "Altair (SDK,
+  native)" picker entry, separate from ToupTek. It is the same
+  ToupTek-derived API surface (Altair is a ToupTek OEM), so the same
+  ROI, raw-format, and pull-mode notes apply. Vendor udev IDs are
+  `04b4`, `0547`, and `16d0`.
+- **PlayerOne config-value union.** A developer-level detail: the
+  SDK hands settings back in `POAConfigValue`, a C union (one memory
+  slot that can hold a `long`, a `double`, or a `POABool`), which
+  Polaris reads through an explicit-layout struct overlapping `int`
+  and `double` at offset 0. If gain, exposure, or temperature come
+  back nonsensical, this translation is the prime suspect.
+- **ROI alignment (all SDK backends).** Sub-frame width and height
+  are snapped to the vendor's required multiples (ZWO width % 8 and
+  height % 2; PlayerOne width % 4 and height % 2; ToupTek even). A
+  camera that rejects a subframe or returns a shifted image usually
+  means the alignment or offset math needs tightening for that
+  sensor.
+- **USB udev IDs (Linux).** The PlayerOne vendor id `a0a0` is
+  confirmed from the SDK header; ToupTek uses `04b4` and `0547`. A
+  camera that connects as root but not as the `polaris` service user
+  means its vendor or product id is not covered by
+  `/lib/udev/rules.d/99-polaris-{playerone,touptek}.rules`; add it
+  and reload udev.
+
+The ToupTek backend uses the vendor's official cross-platform C#
+binding, the glue code that lets Polaris call the vendor library
+(`camera_sdk/ToupTek/dotnet/toupcam.cs`), in callback (pull)
+mode. The vendor SDK binaries under `camera_sdk/` are redistributed
+under their respective vendor licenses; see that folder's vendor
+readme files.
+
+## Common pitfalls
+
+**Cards show empty dropdowns even after INDI connects.** INDI has not
+finished listing its devices yet. Click **Refresh** in the connection
+strip, or wait one or two seconds.
+
+**The camera connects but sensor dimensions are 0×0.** The driver
+does not populate `CCD_INFO` until the first exposure. Take a 0.1 s
+snap from the PREVIEW tab (@sec-preview) and the dimensions populate.
+
+**Switching rigs does not disconnect the old devices.** This is by
+design. Disconnect manually before swapping setups; otherwise INDI
+ends up with multiple devices "connected" to the same hardware.
+
+<!-- consolidated from: docs/user-guide/rigs.md,
+docs/user-guide/indi-web.md, docs/user-guide/ascom-com.md,
+docs/user-guide/native-camera-sdk.md -->

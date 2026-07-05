@@ -1,0 +1,172 @@
+# Mounts and WiFi Accessories {#sec-mounts}
+
+Polaris already drives the vast majority of WiFi-capable telescope
+mounts on the market through INDI, the open-source driver system
+astronomy gear speaks on Linux (@sec-rigs): `indiserver`, the small
+background program that hosts INDI drivers, runs on
+the host (a Raspberry Pi or mini-PC) and the INDI mount driver speaks
+WiFi on Polaris's behalf. This chapter maps which mounts work that
+way today, walks through a typical setup, and covers the direct
+drivers that let Polaris talk to a mount with no `indiserver` at all.
+
+## WiFi mounts through INDI
+
+Pick **INDI** as the driver in the RIGS tab's Mount card, then
+connect. No extra Polaris setup is required beyond installing the
+INDI driver package on the host.
+
+| Brand | Bodies | INDI driver |
+|---|---|---|
+| Sky-Watcher | AZ-GTi, AZ-EQ5, EQ5-Pro, HEQ5 Pro, EQ6-R Pro, EQ8-R Pro, AZ-EQ6, GoTo Dobsonians, AllView | `indi_skywatcherAltAzMount` / `indi_eqmod_telescope` |
+| Celestron | CGX, CGX-L, CGEM II, AVX, NexStar SE/Evolution, CPC, StarSense Explorer | `indi_celestron_aux` / `indi_celestron_gps` |
+| iOptron | CEM26, CEM40 (+EC), CEM70 (+EC), CEM120, HEM27, HEM44, HEM47, GEM28, GEM45, SkyTracker, SkyGuider Pro | `indi_ioptron_v3` |
+| Meade | LX200 / LX200GPS, LX600, LX850 (with Stella WiFi adapter) | `indi_lx200gps` / `indi_lx200_OnStep` |
+| Astro-Physics | 1100 GTO, 1600 GTO, Mach1, Mach2 | `indi_lx200_OnStep` (Keypad) / `indi_apgto` |
+| 10Micron | GM-1000, GM-2000, GM-3000, GM-4000, AZ-2000 | `indi_lx200_10micron` |
+| Vixen | SXP, SXP2, AXJ, SXD2 | `indi_lx200_classic` |
+| Losmandy | G-11, G-11G, GM-8, GM-811G | `indi_lx200gps` |
+| ZWO | AM3, AM5, AM5N | `indi_skywatcherAltAzMount` (compatible protocol) |
+| StarAid | Revolution standalone autoguider, pairs with the mount via the standalone STA-1 cable | `indi_celestron_aux` |
+| Generic | Anything that speaks LX200 / NexStar / SynScan over TCP/IP | `indi_lx200generic` |
+
+On Windows, Polaris also accepts ASCOM Alpaca mounts (ASCOM is the
+long-standing Windows standard for astronomy drivers; Alpaca is its
+network flavour): the
+manufacturer's official driver (Celestron PWI, SkyWatcher SynScan,
+iOptron Commander) typically exposes ASCOM, which Alpaca converts to
+ordinary web traffic that Polaris consumes [@ascom_alpaca]. On
+Windows the direct ASCOM door (COM, the Windows plumbing that lets
+one program call directly into another) works too; see @sec-rigs.
+
+## Setup walkthrough: Sky-Watcher AZ-GTi
+
+1. On the AZ-GTi, switch the small slider on the side to **WiFi AP
+   mode** (AP means access point: the mount broadcasts its own WiFi
+   network; this is the factory default).
+2. From the Polaris host, join the `SynScan_xxxx` network broadcast
+   by the mount.
+3. Install the EQMod or AltAz driver package on the host:
+
+   ```bash
+   sudo apt install indi-eqmod indi-skywatcherAltAzMount
+   ```
+
+4. Start `indiserver` pointing at the WiFi driver:
+
+   ```bash
+   indiserver -v indi_skywatcherAltAzMount
+   ```
+
+   or use the embedded INDI drivers manager (@sec-rigs) to start a
+   profile that includes it.
+5. In the RIGS tab's Mount card, pick **INDI** in the driver
+   dropdown, choose `SkyWatcher Alt-Az WiFi` (or whatever name the
+   driver reports), and click **Connect**.
+
+The same recipe works with `indi_celestron_aux` for Celestron WiFi
+accessories (SkyPortal, StarSense Explorer) and with
+`indi_ioptron_v3` for iOptron mounts with built-in WiFi.
+
+## Direct drivers, no indiserver
+
+For users who would rather skip the `indiserver` step, or who run
+Polaris on a host without it, Polaris's mount layer has slots
+for direct drivers that speak the mount's own network protocol over
+UDP or TCP (the two basic ways programs send data across a network;
+TCP confirms delivery, UDP just sends and hopes). One of them has
+shipped; the others are tracked backlog
+and appear as *(not installed)* in the driver dropdown until their
+backend lands.
+
+### SynScan WiFi (UDP), Sky-Watcher: shipped
+
+The **Sky-Watcher SynScan (Wi-Fi UDP)** driver is implemented and
+selectable in the Mount card today. It talks directly to the mount's
+own UDP server on port `11880` using the SynScan App protocol,
+skipping the INDI and ASCOM layers entirely; this is the natural path
+for the typical AZ-GTi user with a phone-only setup adapting to a
+Polaris host.
+
+- **Bodies**: anything with a SynScan-compatible handset, the WiFi
+  adapter, or built-in WiFi (AZ-GTi, AllView, EQ8-R Pro, EQM-35 Pro,
+  AZ-EQ6 GT with the WiFi accessory, GoTo Dobsonians). It likely also
+  drives the ZWO AM5N and AM7 in SynScan-compatible mode.
+- **Address**: the device id is a `host[:port]` string, defaulting to
+  `192.168.4.1:11880`, the mount's factory access-point address.
+- **Authentication**: none. Anyone on the WiFi network can drive the
+  mount.
+- **Protocol shape**: plain-text (ASCII) command frames over UDP,
+  similar to the serial command language of Meade's classic LX200
+  telescopes, which many other mounts adopted (`:e1` reads RA/Dec,
+  the sky coordinates right ascension and declination; `:Sr` / `:Sd`
+  set the target, `:MS` slews, `:Q` aborts, `:Mn` / `:Ms` / `:Me` /
+  `:Mw` jog). The reference is the SynScan WiFi protocol PDF
+  published by Sky-Watcher on their developer site.
+
+The driver covers slewing (with sync: telling the mount where it is
+really pointing so it can correct its aim), position readout,
+tracking on
+and off, park and unpark, and guide-rate control, so the sequencer,
+Slew & Center, and the meridian-flip machinery (the mount swinging
+the telescope to the pier's other side as the target crosses the
+meridian) all work through it
+unchanged.
+
+### NexStar WiFi (TCP), Celestron: backlog
+
+- **Protocol**: the Celestron NexStar serial protocol wrapped in TCP
+  on port `2000`.
+- **Bodies**: any mount with the SkyPortal WiFi accessory or the
+  StarSense Explorer WiFi dongle (CGX, CGEM II, AVX, NexStar SE,
+  NexStar Evolution).
+- **Authentication**: none.
+- **Protocol shape**: raw NexStar serial bytes, one byte per command
+  with fixed-length responses (`e` reads precise RA/Dec, `s` syncs,
+  `r` slews to precise RA/Dec, `M` cancels, `P` moves an axis at a
+  rate).
+
+Pure TCP with no vendor library to load, cross-platform; the
+estimated effort is about a day.
+
+### LX200 TCP, Meade and friends: backlog
+
+- **Protocol**: the same plain-text LX200 command language, over
+  TCP. The port varies: typically
+  `4030` on the Meade Stella WiFi adapter and `4000` with most
+  bridges for OnStep (a popular DIY telescope-controller firmware)
+  and SkySafari (the popular planetarium app).
+- **Bodies**: Meade LX200, LX600, and LX850 with the Stella WiFi
+  accessory, plus dozens of clones, OnStep builds, the Pegasus
+  NYX-101, and iOptron iEQ-series mounts with the iOS-style hand
+  controller.
+- **Effort**: about half a day once SynScan-style plumbing exists,
+  since the command set is similar (`:GR` / `:GD` / `:Sr` / `:Sd` /
+  `:MS` / `:Q`).
+
+### Choosing a driver
+
+| Setup | Recommended driver |
+|---|---|
+| RPi / mini-PC with `indiserver` running | **INDI** (one driver list to maintain, every mount supported) |
+| Windows with ASCOM installed | **Alpaca** or **ASCOM (COM, direct)** |
+| Linux / Mac, no `indiserver`, no ASCOM, just Polaris | **SynScan WiFi** today; **NexStar WiFi** / **LX200 TCP** when they land |
+| Anything else | INDI on the host, period |
+
+## Bluetooth: out of scope
+
+The current mount market is essentially WiFi-only. Bluetooth shipped
+on a handful of older bodies (the Celestron NexStar SE with the
+optional SkyAlign BT module, a few SynScan Hand-Controller v3
+firmwares), the device pairing on the BT side never standardised, and
+modern bodies dropped it entirely. If a real user shows up needing
+BT, the path would be to pick a target body (likely a NexStar SE with
+the BT module), use each OS's own Bluetooth machinery for discovery
+(not cross-platform out of the box), and wrap the same NexStar serial
+protocol over RFCOMM (Bluetooth's emulation of a serial cable). It
+is not on the roadmap; WiFi
+covers every mount worth tracking.
+
+<!-- consolidated from: docs/mounts-wifi.md (driver availability
+updated against src/NINA.Polaris/Services/EquipmentManager.cs and
+src/NINA.Mount.SynScanWifi/ARCHITECTURE.md: SynScan WiFi has since
+shipped; NexStar TCP and LX200 TCP remain pending) -->

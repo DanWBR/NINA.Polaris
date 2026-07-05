@@ -1,0 +1,354 @@
+# API and Configuration {#sec-api}
+
+Everything the Polaris web UI does goes through the HTTP API
+described here, so anything you can click is also scriptable: a
+cron job can start a sequence, a home-automation system can watch
+the guider, an observatory dashboard can subscribe to the status
+stream. This chapter maps the integration surface: the REST
+endpoints under `/api`, the three WebSocket streams, and the
+configuration system (`appsettings.json` and environment
+variables).
+
+This is a reference chapter, and deliberately not an exhaustive
+one. The endpoint catalog in `docs/api-reference.md` in the
+repository is the living, complete reference and is updated with
+the code; the `Endpoints/` folder in `src/NINA.Polaris` is the
+ground truth (a few newer endpoint groups, such as the ONNX
+save and editor upload routes, appear there before the catalog
+catches up). Here the endpoints are grouped by area with
+representative examples so you can see the shape of the API and
+know where to look.
+
+## Ports and transports
+
+The server configures its listeners explicitly (in `Program.cs`)
+rather than through the generic ASP.NET Core URL settings:
+
+| Listener | Port | Bind | Purpose |
+|---|---|---|---|
+| HTTPS | 5000 | all interfaces | The main entry point. Self-signed certificate generated on first run. |
+| HTTP | 5080 | loopback only | Plaintext service port for the relay tunnel and `curl`-from-the-host scripts. |
+
+Port 5000 carrying HTTPS (not plain HTTP) is deliberate: browsers
+only unlock WebGPU and multi-threaded WebAssembly on secure
+origins, so the URL a user naturally types must be the secure one.
+When the HTTP-to-HTTPS redirect is enabled (the default), the HTTP
+listener is also exposed on the LAN, but it only ever answers with
+a redirect to the HTTPS endpoint; no content is served over
+plaintext. Older documentation that mentions plain HTTP on 5000,
+port 5001, or `ASPNETCORE_URLS` as the way to change the listen
+address predates this arrangement; the `Server:*` keys below are
+what the code reads.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `Server:Https:Enabled` | `true` | Serve HTTPS |
+| `Server:Https:Port` | `5000` | HTTPS port |
+| `Server:Http:Enabled` | `true` | Serve HTTP |
+| `Server:Http:Port` | `5080` | HTTP port |
+| `Server:Http:Bind` | `loopback` | `any` exposes plaintext HTTP to the LAN |
+| `Server:Http:RedirectToHttps` | `true` | Answer LAN HTTP with a redirect to HTTPS |
+
+All REST endpoints live under `/api/*` and speak JSON. Long-running
+operations return `202` with a `{ jobId }`; the caller either polls
+the matching `.../status` endpoint or watches the job's sub-object
+on `/ws/status`. Errors that map naturally to HTTP arrive as 400,
+404, or 409 with a message; unexpected failures arrive as 500 with
+`{ error: "..." }`.
+
+## REST endpoints by area
+
+### Equipment and rigs
+
+Device discovery, connection, and the multi-rig profile model
+(@sec-rigs).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/equipment/devices` | List all discovered INDI devices |
+| POST | `/api/equipment/connect` | Connect all selected devices |
+| GET | `/api/equipment/status` | Aggregated status of every selected device |
+| GET | `/api/equipment/rigs` | All rigs plus the active rig id |
+| POST | `/api/equipment/rigs` | Create an empty rig `{ name }` |
+| PUT | `/api/equipment/rigs/{id}` | Update a rig (device selections, optics, PHD2 endpoint) |
+| POST | `/api/equipment/rigs/{id}/activate` | Switch to this rig |
+
+A companion group under `/api/indi/properties` exposes the raw INDI
+property browser: the full device-to-property tree, property set
+operations, cache refresh, the driver's save/load/default
+configuration actions, and the operator's per-property notes.
+
+### Devices
+
+Each device kind has its own group with the same select, connect,
+act, and status shape. Representative examples:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/camera/capture` | Capture `{ exposure, gain, binning, filter }` |
+| POST | `/api/camera/cooler` | Set cooler `{ enabled, targetTemperature }` |
+| POST | `/api/telescope/slew` | Slew to `{ ra, dec }` |
+| POST | `/api/telescope/move/{direction}` | Manual move (north, south, east, west, stop) |
+| POST | `/api/telescope/abort` | Emergency stop |
+| POST | `/api/focuser/move/absolute` | Move to `{ position }` |
+| POST | `/api/filterwheel/position/{slot}` | Move to a filter slot |
+
+Alpaca devices get a parallel group (`/api/alpaca/*`) covering UDP
+discovery on port 32227, direct device listing, camera and
+telescope probes, and connect and disconnect; a small
+`/api/stellarium/*` group pulls the selected object and view
+direction from a running Stellarium's Remote Control plugin.
+
+### Imaging and the image stream
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/image/latest/preview` | Latest image as JPEG |
+| GET | `/api/image/latest/stats?withStars` | Dimensions plus mean, median, min, max, standard deviation, MAD, and optional star statistics |
+| GET | `/api/image/latest/histogram?bins=256` | Pixel-value histogram |
+| GET | `/api/image/latest/stars?maxStars&sigma` | Detected stars with position, HFR, flux, and peak |
+| GET | `/api/image/stream/clients` | Per-client WebSocket diagnostics (mode, latency, streaks) |
+| POST | `/api/image/stream/adaptive` | Toggle adaptive bandwidth `{ enabled }` |
+
+### Guiding
+
+The largest group, `/api/guider/*`, mirrors the depth of the PHD2
+integration (@sec-guiding): connection and state
+(`/connect`, `/status`, `/steps?limit=N`), guiding actions
+(`/guide`, `/dither`, `/stop`, `/loop`, `/pause`, `/resume`),
+PHD2 profile management and per-rig profile sync
+(`/profiles`, `/profile/sync`), exposure and declination-mode
+control, PHD2 process lifecycle (`/process/launch`,
+`/process/shutdown`, `/install-info`), the smart calibration job
+(`/calibrate/smart`, returning a `jobId`), guiding algorithm
+presets and live parameters (`/algo-presets`, `/algo-params`), and
+the embedded PHD2 GUI session (`/gui-session/*`, Linux only, with
+`/phd2-gui/{**}` reverse-proxied to the xpra HTML5 client).
+
+### Capture automation
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/autofocus/start` | Start a V-curve run `{ steps, stepSize, exposureSeconds, minStars, backlashSteps }` |
+| GET | `/api/autofocus/result` | Last completed run with fitted curve coefficients |
+| GET | `/api/meridianflip/status` | State, sidereal time, hour angle, minutes to meridian |
+| POST | `/api/meridianflip/trigger` | Manual flip `{ ra, dec }` |
+| POST | `/api/flatwizard/start` | Automated flats `{ filters, framesPerFilter, targetAdu, tolerance, ... }` |
+| GET | `/api/flatwizard/trained` | Persisted filter-and-binning to exposure dictionary |
+
+### Sequencing
+
+Three engines, three groups (@sec-autorun, @sec-adv-sequencer,
+@sec-night-planner):
+
+- `/api/sequence/*`: the simple flat list. Load a JSON array of
+  items, then `start`, `pause`, `resume`, `stop`, and read
+  `status`. A `/api/sequence/dither` pair reads and updates the
+  dither settings.
+- `/api/sequencer/*`: the advanced tree-based sequencer. Get and
+  set the `SequenceDocument` (as an object or as raw JSON for
+  save-to-file and load-from-file), `start`, `stop`, `validate`,
+  list the palette of available instruction types, and manage
+  named templates.
+- `/api/mosaic/*`: the mosaic planner; compute panels and time
+  estimates from a `MosaicRequest`, or lower the plan directly
+  into a `SequenceDocument`, optionally loading it into the
+  engine.
+
+### Live stacking and planetary
+
+`/api/livestack/*` offers `start`, `stop`, `reset`, and `status`
+(@sec-live-stacking). Planetary video recording and stacking are
+driven through their own endpoints and report through the
+`videoRecording` and `videoStack` sub-objects of the status stream
+(@sec-planetary).
+
+### Sky, planning, and plate solving
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/sky/catalog/search?query=M31` | Search the embedded deep-sky catalog |
+| GET | `/api/sky/altitude?ra&dec&stepMinutes` | Tonight's altitude track with twilight transitions |
+| GET | `/api/sky/tonights-best?lat=&lon=&limit=` | Ranked observable targets for tonight |
+| GET | `/api/weather/forecast?lat=&lon=` | 3-day astronomy forecast in 3-hour slots, server-cached 15 minutes |
+| GET | `/api/sky/solver/list` | The plate-solver backends with availability flags |
+| POST | `/api/sky/slew-and-center` | Start a slew-and-center job `{ ra, dec, toleranceArcsec }` |
+
+### STUDIO
+
+`/api/studio/*` powers the post-processing library and its batch
+jobs (@sec-studio): `rescan` walks the image output directory and
+upserts the SQLite index; `frames` queries the paginated library
+with filter, target, and date criteria; per-frame routes serve
+thumbnails, stretched previews, statistics, and exports; and the
+job routes (`masters`, `calibrate`, `integrate`) start master-frame
+integration, light calibration, and batch stacking, each returning
+a `jobId` with a matching status route. Single-frame operations
+(`debayer`, `bgextract`, `nr`, `sharpen`) run synchronously.
+
+### System
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/system/status` | CPU, RAM, uptime (also the Docker health check) |
+| GET | `/api/system/relay` | Relay tunnel status (`state`, `hostname`, `lastError`) |
+| GET | `/api/system/profiles` | List profiles |
+| PUT | `/api/system/profile` | Update settings |
+| POST | `/api/system/factory-reset` | Wipe profiles, rigs, auth, and settings (keeps captured images) |
+| GET | `/api/plugins` | Loaded plugins with name, version, and contributed types |
+
+## WebSocket streams
+
+| Endpoint | Type | Description |
+|----------|------|-------------|
+| `/ws/status` | JSON | Full application state at 1 Hz |
+| `/ws/image-stream` | Binary | Live frames, JPEG or raw with LZ4 compression |
+| `/ws/terminal` | Mixed | SSH bridge for the in-browser terminal |
+
+### The status stream
+
+Every connected client receives the same once-per-second payload;
+each service contributes its own sub-object, and new services add
+new keys. A trimmed example:
+
+```json
+{
+  "type": "status",
+  "equipment": {
+    "indi": { "connected": true },
+    "camera": { "name": "ZWO ASI2600MC", "temperature": -10.0 },
+    "telescope": { "ra": 0.713, "dec": 41.27, "tracking": true,
+                   "slewing": false },
+    "focuser": { "position": 12500, "temperature": 15.2 },
+    "filterWheel": { "position": 3, "currentFilter": "Ha",
+                     "filters": ["L","R","G","B","Ha","OIII","SII"] }
+  },
+  "liveStack": { "isRunning": true, "frameCount": 42 },
+  "sequence": { "state": "running", "currentItemIndex": 1,
+                "totalFrames": 100, "totalFramesCompleted": 37 }
+}
+```
+
+Further sub-objects cover the guider (with its profile-sync,
+calibration-job, and GUI-session children), autofocus, meridian
+flip, camera stream, video recording and stacking, slew preview,
+host metrics, and external-tool jobs. The full composition is
+described in @sec-architecture.
+
+### The image stream
+
+After connecting, the client selects a format by sending
+`{"mode":"jpeg"}` or `{"mode":"raw"}`. JPEG mode delivers
+ready-to-display frames; raw mode delivers LZ4-compressed 16-bit
+sensor data, bayer pattern intact, for the browser's own WebGL2
+debayer and stretch. If a client cannot keep up, frames are dropped
+rather than queued, and the adaptive bandwidth service can fall a
+slow client back from raw to JPEG automatically
+(`/api/image/stream/clients` shows the per-client state).
+
+### The terminal stream
+
+One WebSocket is one SSH session. The first frame must be
+`{"type":"auth", "host", "port", "user", "password", "cols",
+"rows"}`; credentials are held only in memory for the socket's
+lifetime. Subsequent text frames carry keystrokes in and terminal
+output back, and `{"type":"resize", "cols", "rows"}` resizes the
+remote pseudo-terminal. The endpoint returns 403 unless enabled via
+the `Terminal:Enabled` key or the **Settings** toggle, and idle
+sessions are closed after ten minutes (@sec-administration).
+
+## Configuration
+
+### appsettings.json
+
+The file ships nearly empty; every section below has code-side
+defaults and only needs to appear when you override something. A
+representative override:
+
+```json
+{
+  "Indi": {
+    "Host": "localhost",
+    "Port": 7624
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information"
+    }
+  }
+}
+```
+
+The recognized sections are `Server` (listeners, above), `Indi`,
+`PHD2`, `PlateSolve`, `Sequencer`, `Plugins`, `Mdns`, `Relay`,
+`Terminal`, `Kestrel`, and `Logging`. `appsettings.Development.json`
+overlays the base file during development.
+
+### Environment variables
+
+Every configuration key can also be set as an environment variable,
+using `__` (double underscore) in place of `:`; this is the natural
+mechanism for Docker and systemd deployments (@sec-installation).
+The commonly used ones:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DOTNET_gcServer` | `0` | Workstation garbage collector; saves RAM on a Raspberry Pi |
+| `Indi__Host` | `localhost` | INDI server hostname |
+| `Indi__Port` | `7624` | INDI server port |
+| `PHD2__Host` / `PHD2__Port` | `localhost` / `4400` | PHD2 event server endpoint |
+| `PHD2__ExecutablePath` | auto-detected | Override the PHD2 binary path; by default the standard install paths per OS are searched |
+| `PHD2__InstanceNumber` | `1` | PHD2 `-i N` instance number |
+| `PHD2__AutoStart` | `false` | Fallback for the per-profile auto-start flag; the GUIDE tab checkbox is the normal way |
+| `Sequencer__TemplateDir` | `sequencer-templates` | Folder holding advanced-sequencer templates, one JSON file each |
+| `Plugins__Enabled` | `true` | Set `false` to skip the plugin scan |
+| `Plugins__Directory` | `plugins` | Folder scanned at startup for plugin `.dll` files |
+| `PlateSolve__PrimarySolver` | `astap` | One of `astap`, `platesolve3`, `astrometry-net-online`, `astrometry-net-local` |
+| `PlateSolve__BlindSolver` | `astrometry-net-online` | Fallback when the primary fails |
+| `PlateSolve__UseBlindFallback` | `true` | Set `false` to lock to the primary only |
+| `PlateSolve__AstapPath` | auto | ASTAP executable path |
+| `PlateSolve__PlateSolve3Path` | none | PlateSolve3 executable path |
+| `PlateSolve__SolveFieldPath` | `/usr/bin/solve-field` | Local Astrometry.net binary |
+| `PlateSolve__AstrometryApiKey` | none | nova.astrometry.net API key |
+| `Mdns__Enabled` | `true` | mDNS announcer |
+| `Mdns__InstanceName` | `polaris-app-XXXX` | Advertised name; auto-generated per device from the hardware id unless set |
+| `Terminal__Enabled` | `false` | Enable the `/ws/terminal` SSH bridge |
+| `Relay__Enabled` | `false` | Enable the reverse-tunnel client |
+| `Relay__ServerUrl` | none | For example `wss://relay.example.com/_tunnel` |
+| `Relay__Token` | none | Bearer token matching a tenant on the relay server |
+| `Relay__ClientCertPath` | none | `.pfx` client certificate for mutual TLS on the tunnel |
+| `Relay__ClientCertPassword` | none | Password for the `.pfx`, if any |
+
+Older references to `ASPNETCORE_URLS` (default
+`http://0.0.0.0:5000`) describe the pre-HTTPS arrangement; current
+builds configure Kestrel from the `Server:*` keys and serve HTTPS
+on port 5000 regardless, so prefer those keys.
+
+### Relay server configuration
+
+The relay server is a separate process with its own
+`appsettings.json` (@sec-networking covers deployment). Its keys,
+using the same `__` convention:
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `Relay__TenantsFile` | `tenants.json` | JSON tenant store, hot-reloaded on change |
+| `Relay__UsageStateFile` | `tenant-state.json` | Persistent monthly byte counters |
+| `Proxy__TimeoutSeconds` | `60` | Per-request timeout (long enough for plate-solve uploads) |
+| `Proxy__HostnameSuffix` | none | For example `.relay.example.com` to enable subdomain routing |
+| `Admin__Password` | empty | Password for `/_admin/*` and the admin UI; empty disables the admin API (503) |
+| `Audit__Enabled` | `true` | Per-request audit log |
+| `Audit__Path` | `audit.log` | JSON-lines audit file |
+| `Audit__MaxFileBytes` | `52428800` | Rotate at this size (50 MB) |
+| `Audit__RingBufferSize` | `5000` | In-memory ring for the admin audit view |
+| `Tls__Mode` | `off` | `off`, `pfx`, or `letsencrypt` |
+| `Tls__ClientCertificateMode` | `request` | `none`, `request`, or `require` (mutual TLS) |
+| `Tls__HttpsPort` | `443` | HTTPS bind port when TLS is enabled |
+| `Tls__RedirectHttpToHttps` | `false` | Redirect plain HTTP to HTTPS |
+| `Tls__PfxPath` / `Tls__PfxPassword` | none | Static certificate when `Tls:Mode=pfx` |
+| `Tls__LetsEncrypt__Domains` | none | Domains for automatic certificate issuance |
+| `Tls__LetsEncrypt__EmailAddress` | none | Contact address for Let's Encrypt |
+| `Tls__LetsEncrypt__UseStaging` | `false` | Use the Let's Encrypt staging API while testing |
+
+<!-- consolidated from: docs/api-reference.md,
+src/NINA.Polaris/Program.cs (port defaults) -->

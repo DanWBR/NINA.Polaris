@@ -1,0 +1,154 @@
+# Planetary and Lucky Imaging {#sec-planetary}
+
+Deep-sky imaging fights noise with long exposures; planetary imaging
+fights the atmosphere with short ones. Lucky imaging [@law2006lucky]
+records thousands of very short frames, keeps only those captured in
+the fleeting instants of steady seeing (seeing is the astronomer's
+word for how much the atmosphere blurs and shimmers the view), and
+stacks the survivors into
+an image sharper than any single long exposure could be. The VIDEO tab
+implements this workflow in two panes: **Capture** records continuous
+high-frame-rate video to SER files [@ser_format] (SER is a simple raw
+video format shared by planetary imaging tools), and **Process** runs
+them through the built-in lucky-imaging stack pipeline.
+
+## The Capture sub-tab
+
+A live preview canvas fills the available area, and the controls
+alongside it configure the stream:
+
+- **Exposure (s)**, typically 5-50 ms for planetary work;
+- **Gain** (the camera's amplification setting), camera-dependent;
+  planetary imaging favors high gain;
+- **Bin**, usually 1x1, or 2x2 if you are undersampled. Binning
+  merges adjacent pixels into one larger pixel; undersampled means
+  each pixel covers more sky than the finest detail your telescope
+  delivers;
+- **Target name**, which becomes the folder name (Jupiter, Saturn,
+  Moon, and so on);
+- **Max duration (s)**, an auto-stop after N seconds, where 0 means
+  no cap;
+- **White balance R / B sliders**, visible only for one-shot-colour
+  (OSC) cameras whose INDI driver (INDI is the open-source framework
+  Polaris uses to talk to equipment) exposes the `WB_R` and `WB_B`
+  properties (ZWO, QHY); mono cameras hide the row.
+
+Two buttons drive the capture. **Start Stream** opens the camera
+stream, using the driver's built-in video mode (`CCD_VIDEO_STREAM`)
+if the driver supports it; otherwise Polaris falls back to taking
+rapid single exposures in a loop on the server. The button label
+shows the live frame rate. **Record** is enabled only while streaming
+and begins writing every frame to a SER file at
+`{ImageOutputDir}/{Rig}/planetary/{target}/{ISO-timestamp}.ser`. A
+counter shows frames and bytes written, with a dropped-frame warning
+if the writer cannot keep up with the stream.
+
+![The Capture sub-tab streaming the Moon: the live preview, scroller
+controls for exposure, gain, and more, the record shutter, the live
+capture and transmit frame rates on the Stop Stream button, and the
+mount jog pad for nudging the framing.](images/video.jpg){#fig-video-capture}
+
+### Suggested capture settings
+
+Capture settings are saved per rig. As starting points, for Jupiter
+or Saturn on an 8-inch SCT (Schmidt-Cassegrain telescope): exposure
+8-12 ms, gain around 350 (ZWO IMX462
+or IMX664 sensors), and a max duration of 120 s in good seeing or 90 s
+to stay under the planet's rotation cap (record longer and Jupiter's
+fast spin starts to smear the detail). For the Moon at high
+magnification: exposure 1-2 ms, low gain (0-100), and 30-60 s per
+region, assembling a mosaic later.
+
+## The Process sub-tab
+
+The Process sub-tab drives the built-in stacker (the
+`PlanetaryStackerService`):
+
+1. The **SER file** dropdown is populated recursively from
+   `{ImageOutputDir}/planetary/`, with a **Refresh** button to rescan.
+2. **Keep top X%** is the quality cutoff, default 50%. The stacker
+   picks the sharpest X% of frames; smaller values give a sharper but
+   noisier result.
+3. **Output name** sets the base filename for the stacked result.
+4. **Stack** kicks off the job, and **Abort** cancels it mid-run.
+
+### The seven-phase pipeline
+
+A status bar shows the phase live as the job progresses:
+
+1. **Reading**: opens the SER file and lists its frames.
+2. **Analyzing**: scores every frame's sharpness by computing its
+   Laplacian variance.^[A Laplacian filter responds strongly to fine
+   edges; the variance of its output is high for crisp frames and low
+   for blurry ones.]
+   This phase parallelizes well; a typical Raspberry Pi 4 takes about
+   30 s for 1000 frames of 800x600 16-bit video.
+3. **Ranking**: sorts frames by quality, descending, and takes the
+   top slice set by **Keep top X%**.
+4. **Aligning**: finds the centroid (the brightness-weighted center
+   point) of the brightest region in each kept frame and lines the
+   frames up on it, refined to sub-pixel accuracy with a parabolic
+   fit.
+5. **Stacking**: a mean stack with a per-pixel count, producing
+   uint16 output (16-bit unsigned integers, the same precision as the
+   camera's raw data).
+6. **Writing**: saves the result under `planetary/{target}/stacked/`
+   as a FITS file (FITS is the standard astronomy image format).
+7. **Ok / Fail**: the terminal state.
+
+## The quality metric
+
+Frame quality is the variance of a 3x3 Laplacian filter applied to
+the centred region of interest (ROI) of each frame, a standard
+sharpness metric [@pertuz2013focus]. Higher variance
+means a sharper frame. The cutoff slider lets you discard
+atmospheric-blur frames: pick an aggressive cut (top 20%) for the best
+detail, or a lenient one (top 80%) for lower noise at the cost of a
+slightly softer result.
+
+## Alignment
+
+Alignment uses the brightest-pixel centroid, refined parabolically on
+a 5x5 neighborhood for sub-pixel accuracy. This works well for bright
+targets with a single brightness peak: the Moon, Jupiter, Mars, and
+the body of Saturn.
+
+The limitation is extended sources without a single peak, such as
+Saturn's rings, where alignment shifts can drift. The workaround is to
+stack in smaller batches per processing pass; future versions will add
+a thresholded centroid and better alignment for extended objects.
+
+## Output
+
+The stacked result lands at
+`{ImageOutputDir}/{Rig}/planetary/{target}/stacked/{outputName}_{ts}.fits`
+as a 16-bit mono FITS. Open it in PixInsight, the free Siril
+[@siril], or
+Photoshop and apply wavelet sharpening (the multi-scale sharpening
+technique planetary imagers favor) and saturation in your
+favorite tool; the Polaris EDITOR (@sec-editor) targets deep-sky
+post-processing, so planetary finishing is best done externally.
+
+## Common pitfalls
+
+**The frame rate caps at about 5 fps even though the camera supports
+a native stream.** Check that `CCD_VIDEO_STREAM` is actually exposed
+by your driver. Some INDI drivers default it to off, and it needs to
+be enabled in the indiserver parameters.
+
+**Dropped-frames warning.** The writer cannot keep up with the stream
+cadence. Reduce the ROI, the region of interest, by capturing a
+smaller sub-frame (smaller frames write faster), lower the
+binning, or lower the target frame rate via the driver's
+`STREAMING_DELAY` property.
+
+**The stacked output is dark.** The frames were mostly cropped to a
+small bright region. Try a wider ROI, or increase the keep percentage
+to include more frames.
+
+**Storage explodes.** Sixty seconds at 30 fps of 800x600 uint16 video
+is roughly 1.7 GB. Watch your disk; planetary captures fill SD cards
+fast. @sec-files covers where captures live and how to move them off
+the host.
+
+<!-- consolidated from: docs/user-guide/video-planetary.md -->

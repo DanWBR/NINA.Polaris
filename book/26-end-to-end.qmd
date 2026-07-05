@@ -1,0 +1,295 @@
+# A Complete Night, End to End {#sec-end-to-end}
+
+Every chapter so far has taken one tool apart. This one puts them
+back together: a single continuous session, from "the scope is on
+the tripod" to "the final image is exported as a JPEG", with
+pointers into the deeper chapters when you want the detail behind a
+step. If you just want the speed-run, follow the numbered stages;
+nothing here teaches anything new.
+
+The walkthrough assumes Polaris is installed (@sec-installation) and
+reachable in a browser, say at `https://polaris.local:5001`, and
+that you have done at least one first night (@sec-first-night), so
+rigs, drivers, and the PHD2 connection are familiar. It follows a
+deep-sky target shot with a one-shot colour (OSC) camera or DSLR;
+mono shooters follow the same arc with one detour noted at the
+integration step, and planetary lucky imaging is a parallel workflow
+of its own (@sec-planetary).
+
+Expect roughly **3 hours of capture** plus **30 minutes of
+processing**, and most of the capture time is the camera doing its
+job while you do something else.
+
+```
+1. Setup        RIGS → PHD2 → SKY (location, target)
+   └─ ~15 min, once per night
+
+2. Acquire      FOCUS → AUTORUN (or ADV) + LIVE
+   └─ ~3 hours, mostly unattended
+
+3. Calibrate    STUDIO masters + light calibration
+   └─ ~10 min, automation
+
+4. Integrate    STUDIO batch stack
+   └─ ~10 min, automation
+
+5. AI cleanup   GraXpert BGE → Denoise → Decon (browser ONNX)
+   └─ ~5 min, browser inference
+
+6. Edit         EDITOR sliders + sidecar
+   └─ ~10 min, hands on
+
+7. Export       JPEG/PNG/TIFF with resize and quality
+   └─ ~1 min
+```
+
+One artefact flows down the whole chain: lights and calibration
+frames land on disk, STUDIO turns them into a master, the browser
+AI cleans the master, the EDITOR adds the creative pass, and the
+export drops the deliverable in `processed/{target}/edited/`.
+
+## Setup, about fifteen minutes
+
+**Load the rig.** Open RIGS and pick the rig you saved on a
+previous night from the dropdown at the top; every device
+selection, focal length, gain default, and PHD2 profile binding
+comes back. For a new equipment combination, @sec-rigs walks the
+cards one by one; the minimum for tonight is a telescope card, a
+connected camera with its cooler target set, a connected mount with
+tracking confirmed, a connected focuser, and the filter wheel if
+you have one. Click **Save selections** so next time is a
+one-click load.
+
+**Hook up guiding.** In GUIDE, click **Launch PHD2** (or
+**Connect** if it is already running), activate the PHD2 profile
+that matches your guide camera and mount (Polaris syncs to it
+automatically when the rig and profile names match), then
+**Connect equipment**, **Loop**, **Find Star**, and **Smart
+Calibrate** if the calibration is stale; Polaris computes the
+calibration step from your pixel scale and guide rate. Everything
+about guiding, including the built-in guider alternative, is in
+@sec-guiding.
+
+**Confirm the location.** In SETTINGS, check **Observatory
+location**. Altitude scoring, meridian-flip math, tonight's-best
+filtering, and twilight badges all read from this single source, so
+fix it now if you travelled.
+
+**Polar align, only if needed.** If the mount just came off the
+tripod, open POLAR and run TPPA: pick a suggested reference target
+from the chip row, **Go to**, then **Start TPPA**; the mount slews
+three points along an arc, plate-solves each (matching the stars in
+a photo against a catalog to find exactly where the scope points),
+and shows the polar axis error as a vector you correct with the altitude and azimuth
+knobs, optionally with live **Refinement**. A permanent pier skips
+this entirely. Details in @sec-polar-alignment.
+
+**Pick the target.** Open SKY, search by name (M31, NGC 7000,
+Caldwell 14) or take a suggestion from the TONIGHT tab, then click
+**Slew & Center**. Polaris slews, plate-solves, and re-slews until
+the target sits within 30 arcseconds of centre, typically in 30
+seconds to 2 minutes. The sky atlas and mosaic planner live in
+@sec-sky-explorer.
+
+## Acquire, about three hours
+
+**Focus.** In FOCUS, either step the focuser manually while
+watching the star-size readout drop, or (recommended) run the
+V-curve auto-focus: set the step size and sample count and press
+**Start AF**; Polaris samples positions, fits a curve, and moves to
+its minimum. See @sec-focusing.
+
+**Snap a test frame.** In PREVIEW, take one shot at the exposure
+you plan to sequence. Confirm the target is centred, the stars are
+tight, and the histogram is healthy: background just clear of the
+left edge, nothing clipped on the right. Fix anything that is off
+before committing to a three-hour run. See @sec-preview.
+
+**Build the sequence.** For one target with one filter set, AUTORUN
+is the right tool: **+ Add target** pre-fills with your current SKY
+target; set filter, exposure, count, and optionally gain, offset,
+and binning, and add more rows for LRGB or extra targets. The
+collapsible panels hold dithering (tiny random nudges of the mount
+between frames so fixed-pattern noise does not pile up; 5 pixels
+every frame is a normal choice), the automated meridian flip if
+your target will cross (the side swap a German equatorial mount
+performs as a target crosses the meridian), and
+the end actions: park the mount, warm the camera, stop PHD2,
+**Auto-GraXpert BGE on each light** (worth ticking; it will save
+you a step tomorrow, see @sec-ai-cleanup), and on Linux a server
+shutdown. Press **Start sequence**. For multi-target nights with
+conditional logic, use ADV instead (@sec-adv-sequencer), or let the
+night planner drive several targets (@sec-night-planner). Details
+in @sec-autorun.
+
+**Watch it run, or do not.** Open LIVE and each frame appears as it
+is captured, mirroring the file landing in
+`{ImageOutputDir}/{Rig}/lights/{Target}/{Filter}/{Date}/`. Toggle
+**Stack ON** for a live integration you can show around while the
+sequence runs, and open the **Triggers** panel to arm auto
+re-focus on star-size or temperature drift and auto re-centre on
+plate-solve drift (@sec-live-stacking). Then close the browser tab
+and walk away; the server keeps running. Come back in the morning.
+
+## Calibrate, about ten minutes
+
+You need calibration frames, bias, darks, and flats (the frames
+that map the camera's own electronic and optical signature so it
+can be subtracted from the lights), shot for this camera; if you do not have them yet, capture them as separate
+AUTORUN passes with the corresponding image type, or use the flat
+wizard (@sec-autorun). With everything on disk, switch to STUDIO
+(@sec-studio for every dialog described briefly here).
+
+**Build masters.** Filter the frame browser by type (Bias, then
+Dark, then Flat), select each matching set, and click **Create
+master**. Polaris reads the frame type from the FITS header and
+pre-selects the master type; the sigma-clipped mean default is
+right for most cases. Masters land in
+`{ImageOutputDir}/{Rig}/calibration/masters/`. Repeat per
+calibration type and key: per filter for flats, per exposure and
+gain for darks.
+
+**Calibrate the lights.** Filter by tonight's lights, select all,
+click **Calibrate**. The auto-match picker shows which master dark,
+flat, and bias it paired with each group, with per-group overrides.
+Calibrated frames land in
+`calibrated/{Target}/{Filter}/cal_{originalName}.fits` and get a
+badge in the browser.
+
+## Integrate, about ten minutes
+
+Filter STUDIO to the calibrated frames you just produced, select
+them all, and click **Integrate**. Sigma-clipped average is the
+recommended method for stacks of ten or more, scale-to-mean
+normalization is a safe default, and per-frame star-size weighting
+helps when the seeing varied across the night. The output is your
+**master light**:
+
+```
+integrated/{Target}/{Filter}/master_{Target}_{Filter}_{N}x{Exp}s.fits
+```
+
+Two detours belong here:
+
+- **Mono shooters**: integration produces one master per filter.
+  Jump to @sec-mono-lrgb to combine the per-filter masters into a
+  single RGB or LRGB file with STUDIO's **Combine**, then return
+  with the composed master.
+- **Neutral colour before the AI step**: run the colour
+  calibration tools of @sec-color-calibration on the master.
+  Background neutralization handles a simple cast in seconds;
+  photometric calibration fits per-channel gains against a star
+  catalog for science-grade colour. Optional, but recommended when
+  the master has a visible tint.
+
+## AI cleanup, about five minutes
+
+Open the master in FILES. The GraXpert models run locally in your
+browser, so this step costs the host nothing and works from
+whatever device you are holding; the whole pipeline, including the
+one-time model download, is @sec-ai-cleanup. The recommended order
+is **BGE → Denoise → Decon**, and each step writes a sibling FITS,
+so the chain reads like a history of the file:
+
+```
+master_M31_L_120x180s.fits             ← integration output
+master_M31_L_120x180s_bge.fits         ← after BGE
+master_M31_L_120x180s_bge_denoise.fits ← after Denoise
+master_M31_L_120x180s_bge_denoise_decon_objects.fits
+```
+
+Run **BGE** on the master (the smoothing default suits most light
+pollution), **Denoise** on the `_bge` output with the strength
+slider around 0.5, and **Decon** on the `_bge_denoise` output,
+choosing **Objects** to sharpen nebula structure or **Stars** to
+tighten stellar profiles, one or the other. If you ticked
+**Auto-GraXpert BGE** in the AUTORUN end actions, the `_bge`
+siblings for every light already exist; integrate those directly
+and skip the BGE step here. And if you want the stars processed
+separately from the nebula, the star-removal detour of
+@sec-star-removal slots in right after cleanup.
+
+## Edit, about ten minutes
+
+Select the final `_decon_*.fits` and open it in the EDITOR (from
+STUDIO's **Open in editor** or FILES' **Edit**). The source opens
+decoded and auto-stretched, and if you saved edits on this file
+before, every slider comes back. The full slider reference is
+@sec-editor; as a route through it: set **Exposure** and
+**Contrast** first, recover star cores with negative
+**Highlights**, lift the nebula with positive **Shadows**, and set
+**Whites** and **Blacks** just short of clipping; then **Temp** and
+**Tint** if the white balance is off, and **Vibrance** rather than
+**Saturation** to boost colour without blowing the star cores; then
+a touch of **Clarity** and **Texture**, and finally restrained
+**Sharpen** and low-strength **Noise reduce**, since the real
+denoising already happened. Hold **Hold to compare** often. When it
+looks right, **Save edits** writes the sidecar next to the source.
+
+## Export, one minute
+
+Click **Export**: JPEG for sharing (quality around 90), PNG for
+lossless, 16-bit TIFF for further editing elsewhere, with an
+optional resize. The file lands in
+`{sourceDir}/edited/{stem}__edited_{timestamp}.{ext}`, and you can
+download it from FILES or pull it off the host however you like
+(a network share, `scp`, a sync folder). Remote options are in
+@sec-networking.
+
+## Worked example: M31, one night
+
+Wall-clock times with a Raspberry Pi 5 host, a ZWO ASI2600MC Pro
+camera, an EQ6-R Pro mount, an Askar FRA600 telescope, and PHD2 on
+a 50 mm guide scope (RMS is the root-mean-square guiding error in
+arcseconds; HFR, half-flux radius, is the star-size measure of
+focus quality):
+
+| Step | Time | Output |
+|---|---|---|
+| RIGS load, PHD2 connect, calibrate | 8 min | Guiding RMS 0.6" |
+| Auto-focus | 3 min | HFR 1.8 px |
+| PREVIEW snap, framing tweak | 2 min | |
+| AUTORUN (120 × 180 s) | 6 hours | 120 lights on disk |
+| Build masters (frames already on disk) | 1 min | bias, dark, flat masters |
+| Calibrate 120 lights | 3 min | 120 `cal_*.fits` |
+| Integrate | 4 min | `master_M31_L_120x180s.fits` |
+| GraXpert BGE in browser | 30 s | `_bge.fits` |
+| GraXpert Denoise (FP32, desktop) | 90 s | `_bge_denoise.fits` |
+| GraXpert Decon Objects | 2 min | `_bge_denoise_decon_objects.fits` |
+| EDITOR tone work | 10 min | `.edit.json` sidecar |
+| Export JPEG, quality 92, 50% resize | 3 s | `…__edited_2026-05-26.jpg` |
+
+The night itself is about 8 hours of clock time. Active human work
+is under 30 minutes; the camera and Polaris handle the other 7.5.
+
+## Pitfalls
+
+- **The integration produced a noisy master**: you probably stacked
+  uncalibrated lights. Check that STUDIO was filtered to the
+  `cal_*.fits` outputs, not the raw lights.
+- **BGE made it worse**: the smoothing was too low and the AI fit
+  real local brightness as gradient. Raise smoothing toward 1.0 and
+  re-run.
+- **Decon Stars ringed the stars**: the FWHM estimate was too
+  small. Run STUDIO's star detector on the source for a real
+  number, then re-run with that value.
+- **Editor sliders feel laggy on a Pi**: every slider movement is a
+  server-side render; drag in small increments rather than
+  continuous scrubs.
+- **Export filename collision**: the timestamp suffix should
+  prevent it; if you see one, you exported twice within a second.
+  Re-export.
+
+Anything else: @sec-troubleshooting and @sec-faq.
+
+## Where to go next
+
+You have shot, calibrated, stacked, AI-cleaned, edited, and
+exported one target end to end. From here: multi-target unattended
+nights with the advanced sequencer (@sec-adv-sequencer) or the
+night planner (@sec-night-planner), mosaics with the sky explorer's
+planner (@sec-sky-explorer), planetary lucky imaging
+(@sec-planetary), and access from outside your network through the
+relay (@sec-networking).
+
+<!-- consolidated from: docs/user-guide/end-to-end-workflow.md -->

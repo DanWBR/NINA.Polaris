@@ -1,0 +1,202 @@
+# The Equipment Simulator {#sec-simulator}
+
+Polaris ships with a one-click button that spawns a fake telescope,
+camera, focuser, and filter wheel, so you can drive the whole
+pipeline, sequencer, plate solving (matching the stars in a photo
+against a catalog to learn exactly where the telescope is pointing),
+live stacking (combining frames as they arrive so the image deepens
+on screen), and auto-focus
+without plugging in a single cable. It is the right tool for
+smoke-testing a fresh install on a new Pi or mini-PC, demoing the UI
+to someone before sunset, iterating on Polaris itself during the day,
+and practicing the workflow, Slew & Center, dithering (small
+deliberate nudges of the framing between exposures), and meridian
+flips (the mount swinging the telescope to the pier's other side as
+the target crosses the meridian), when it is cloudy or before your
+first real session
+(@sec-first-night).
+
+What makes it genuinely useful rather than a toy is that the
+simulated camera renders real stars from the GSC catalog (the Hubble
+Guide Star Catalog, a real star database) based on the
+simulated mount's RA/Dec, its right ascension and declination, the
+sky's coordinates. Slew to M31 and you see M31; bump the
+focuser and the HFR (half-flux radius, the star-size number Polaris
+uses to score focus) climbs; trigger a dither and the field shifts.
+It
+is not a flat synthetic pattern, it is a believable mini-sky, which
+is why plate solving and auto-focus work against it for real.
+
+## Picking a backend
+
+Polaris picks a simulator backend automatically based on the host
+OS. On Linux and macOS the fake devices come from the simulator
+drivers of INDI, the open-source driver system astronomy gear speaks
+on Linux (@sec-rigs); on Windows they come from the Alpaca Omni
+Simulator, a free program from the ASCOM project (ASCOM is the
+Windows standard for astronomy drivers, and Alpaca its network
+flavour) that pretends to be a full set of gear:
+
+| Host OS | Backend | Source |
+|---|---|---|
+| Raspberry Pi OS, Ubuntu, Debian | INDI simulators (`indi_simulator_ccd`, ...) | `apt install indi-bin` |
+| macOS | INDI simulators | `brew install indi-bin` |
+| Windows | Alpaca Omni Simulator | ASCOMSimulators releases [@ascom_omnisim] |
+
+Open SETTINGS and find the **Equipment simulator** section. The panel
+shows which backend it picked and whether the binaries are installed;
+if they are not, a banner shows the exact install command.
+
+## Step by step on Linux and macOS
+
+1. Install the binaries (one time):
+
+   ```bash
+   sudo apt install indi-bin       # Debian / Ubuntu / Raspberry Pi OS
+   brew install indi-bin           # macOS
+   ```
+
+2. In SETTINGS, open **Equipment simulator** and click
+   **Re-detect**. The status flips to "Installed v2.x.x" and the list
+   of available devices populates.
+3. Pick devices. The default set, Camera + Telescope + Focuser +
+   Filter Wheel, is sensible for most testing; Guide, Dome, and
+   Weather are optional checkboxes to toggle on when you want to test
+   dithering through PHD2 (the free autoguiding program most amateur
+   astrophotographers use), dome slaving (keeping the dome's slit
+   lined up with the telescope), or weather-safety triggers.
+4. Set the INDI port. The default is 7624; leave it alone unless
+   something else on the host already uses it.
+5. Optionally tick **Auto-start when Polaris boots** if you want the
+   simulator stack to come up automatically with the app.
+6. Click **Launch simulators**. Within about two seconds the chip
+   flips to "Running" and the picked drivers appear in the bottom
+   hint: "Running: ccd, telescope, focus, wheel".
+7. Go to the RIGS tab (@sec-rigs). Each device dropdown now lists
+   "Simulator ..." options, because `indiserver` (the background
+   program that hosts INDI drivers) is up with those
+   drivers. Pick "Simulator CCD" as the Camera, "Simulator Telescope"
+   as the Mount, and so on, then click **Connect** on each card.
+8. In the PREVIEW tab (@sec-preview), **Take snap**: you see a real
+   star field rendered at whatever RA/Dec the simulated mount thinks
+   it is pointing at (by default a chunk of Vela or Vega, depending
+   on the version).
+9. In the SKY tab (@sec-sky-explorer), search M31 and **Go to**: the
+   simulated mount slews, and the next capture shows M31's stars.
+   Plate solving actually works against this; it is a real catalog
+   projection, not noise.
+10. Turn live stacking on (@sec-live-stacking): frames accumulate
+    normally, and HFR stays consistent because the simulated focuser
+    is perfect by default. Move the focuser position from the FOCUS
+    tab to make HFR climb; auto-focus picks up the V-curve (the
+    V-shaped plot of star size against focuser position) correctly
+    (@sec-focusing).
+
+<!-- screenshot: SETTINGS Equipment simulator panel with the
+simulator running and the device checklist -->
+
+## Step by step on Windows
+
+1. Download the Alpaca Omni Simulator from the ASCOMSimulators
+   releases page [@ascom_omnisim]. It is a single `.exe` that exposes
+   a camera, telescope, focuser, and the rest over a local Alpaca
+   HTTP server; no ASCOM Platform install is required for the Alpaca
+   side. Install to the default location
+   (`C:\Program Files\ASCOM\OmniSimulators\`) so Polaris can find it.
+2. In SETTINGS, open **Equipment simulator** and click **Re-detect**;
+   the status shows "Installed v1.x.x".
+3. Click **Launch simulators**. Polaris spawns
+   `AlpacaOmniSimulator.exe` minimized to the system tray, and within
+   about five seconds the chip flips to Running. The management
+   endpoint (a status web address the simulator serves) at
+   `http://localhost:32323/management/v1/configureddevices` returns
+   the device list.
+4. In the RIGS tab's Camera card, pick the **Alpaca** driver and
+   click **Detect**; "Alpaca Camera Sim" appears. Connect, then
+   repeat for the Mount, Focuser, and Filter Wheel.
+5. The rest of the workflow is identical to Linux.
+
+Two Windows-specific notes. First, there is no live add and remove of
+devices: the Omni Simulator serves every device type simultaneously,
+and there is no equivalent to the INDI FIFO (the command pipe
+through which Polaris toggles drivers on a running INDI server). The
+device-list checkboxes in the
+SETTINGS panel hide their live-toggle behaviour on Windows and show a
+banner saying so; to change which devices are available you stop the
+simulator and restart it. In practice this rarely matters, since the
+Omni Simulator runs all device types out of the box and you pick
+which to *connect* in RIGS. Second, Polaris adopts an already-running
+Omni Simulator: if you started it from the Start menu before opening
+Polaris, **Re-detect** picks it up, **Launch** becomes a no-op
+success, and **Shutdown** will close it cleanly.
+
+## What is running, where
+
+On Linux, `indiserver` runs as a child process of Polaris; when you
+click **Stop**, or shut Polaris down without auto-restart, the
+simulator drivers go with it. The simulator's normal and error
+output (stdout and stderr) lands
+in the Polaris log at `Debug` level; tail `journalctl -u polaris`
+(the log viewer of systemd, the Linux service manager) or the
+terminal where you launched Polaris to see driver
+output in real time. If `indiserver` crashes mid-session, the chip
+flips to "Stopped" within about 30 seconds (a background health probe
+watches it); click **Launch** again to bring it back.
+
+If you use the embedded INDI drivers manager, note that it and the
+simulator service both want to own `indiserver`; pick one owner per
+session, as explained in @sec-rigs.
+
+## What works and what does not
+
+Plate solving works, because the simulated CCD renders real stars;
+ASTAP and Astrometry.net (the two plate-solving programs Polaris
+supports) solve normally. Auto-focus works, because
+the simulated focuser has a built-in parabolic (U-shaped) HFR curve.
+Dithering
+via PHD2 works if you also tick the **Guide** checkbox, which spawns
+`indi_simulator_guide` for the guide camera.
+
+Two things are out of reach. The DSLR-specific paths (Canon EDSDK,
+Nikon SDK, Sony SDK) do not appear, since the simulator is INDI and
+Alpaca only; testing those code paths needs the real vendor SDK
+(@sec-dslr). And hardware-specific failure modes, USB disconnects,
+cooler runaway, USB-power brownouts, are not reproducible; the
+simulator is too clean, so real-hardware testing is still required
+for the recovery behavior Polaris implements around them.
+
+## Troubleshooting
+
+**"Port 7624 already in use".** Another `indiserver` is running
+outside Polaris. Either stop it (`pkill indiserver`) or pick a
+different port in the SETTINGS panel.
+
+**Devices show up in RIGS but Connect fails.** The simulator driver
+started but the device-specific connect sequence failed. Tail the
+Polaris log; `indi_simulator_*` prints a clear error per device. A
+common cause is simulating a filter wheel with zero filter slots;
+stop and relaunch.
+
+**Auto-start does not fire.** The toggle lives in
+`UserProfile.SimulatorAutoStart`, persisted to `profile.json`. If you
+changed it via the API (Polaris's machine-readable interface, rather
+than the UI), restart Polaris; the toggle is only read once
+at boot. Changes made from the UI are picked up immediately for the
+next manual launch, but the auto-start service only checks once per
+app start.
+
+**Windows: the Omni Simulator is detected but Connect fails.**
+Confirm the simulator is actually serving by opening
+`http://localhost:32323/management/v1/configureddevices` in a
+browser; you should see a JSON list (a structured text listing). If
+it returns 404 (the web's not-found error), the Omni
+Simulator is not running or is on a different port.
+
+For deeper control of the simulated CCD (star width as FWHM, jitter,
+noise), the
+knobs are INDI properties you can edit from the INDI control panel
+described in @sec-rigs; the upstream INDI CCD Simulator documentation
+at <https://www.indilib.org/devices/auxiliary/ccd-simulator.html>
+lists what each one does [@downey_indi].
+
+<!-- consolidated from: docs/user-guide/simulator-mode.md -->
