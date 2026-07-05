@@ -6,10 +6,18 @@
     "title": "Author & contact",
     "intro": "Created and maintained by",
     "name": "Daniel Wagner Oliveira de Medeiros",
+    "role": "Chemical engineer & software developer",
+    "photo": "/assets/daniel-medeiros.jpg",
+    "bio": [
+      "Daniel is a chemical engineer (UFRN, Brazil) and an experienced software developer with 21+ years of experience. He designs and ships production software across Windows Desktop, Linux and macOS, on mobile (Android and iOS with Xamarin), and increasingly with on-device AI.",
+      "His main project is DWSIM, a free, open-source, CAPE-OPEN-compliant chemical process simulator he has developed since 2008. DWSIM models entire chemical plants: rigorous thermodynamics and phase equilibria, dozens of unit operations, petroleum characterization and dynamic simulation, running on Windows, Linux, macOS and even Android and iOS. It is used worldwide by students, universities and process engineers as an open alternative to commercial simulators, and it won the 2012 CAPE-OPEN Award.",
+      "N.I.N.A. Polaris draws on that same background: real numerical and scientific code, from astrometry, guiding and plate solving to image stacking, colour calibration and AI processing, engineered to run reliably on modest hardware like a Raspberry Pi or a mini PC. It is a serious piece of engineering, not a quick prototype. DWSIM shows what the toolchain behind Polaris is capable of; Polaris is where that experience meets a night under the stars."
+    ],
     "email": "",
     "github": "https://github.com/DanWBR",
     "linkedin": "https://www.linkedin.com/in/daniel-medeiros-6a3b9124/",
-    "astrobin": "https://app.astrobin.com/u/DanielWagner#gallery"
+    "astrobin": "https://app.astrobin.com/u/DanielWagner#gallery",
+    "dwsim": "https://dwsim.org"
   },
   "license": {
     "title": "Open-source & license",

@@ -34,15 +34,27 @@ import { site, aboutContent as a } from '../data/site';
             </p>
           </article>
 
-          <article class="card">
+          <article class="card author-card">
             <header class="card-head"><span class="sq-icon" style="--ic: #e11d6b">👤</span><h2>{a.author.title}</h2></header>
-            <p>{a.author.intro} <strong>{a.author.name}</strong>.</p>
-            {a.author.email && <p>Contact: <a href={`mailto:${a.author.email}`}>{a.author.email}</a></p>}
-            <p class="links">
-              <a href={a.author.github} target="_blank" rel="noopener">GitHub</a>
-              <a href={a.author.linkedin} target="_blank" rel="noopener">LinkedIn</a>
-              <a href={a.author.astrobin} target="_blank" rel="noopener">AstroBin</a>
-            </p>
+            <div class="author-body">
+              {a.author.photo && (
+                <img class="author-photo" src={a.author.photo} alt={a.author.name}
+                     width="150" height="200" loading="lazy" />
+              )}
+              <div class="author-text">
+                <p class="author-name">
+                  {a.author.intro} <strong>{a.author.name}</strong>{a.author.role && <span class="author-role"> — {a.author.role}</span>}.
+                </p>
+                {a.author.bio && a.author.bio.map((para) => <p>{para}</p>)}
+                {a.author.email && <p>Contact: <a href={`mailto:${a.author.email}`}>{a.author.email}</a></p>}
+                <p class="links">
+                  <a href={a.author.github} target="_blank" rel="noopener">GitHub</a>
+                  <a href={a.author.linkedin} target="_blank" rel="noopener">LinkedIn</a>
+                  {a.author.dwsim && <a href={a.author.dwsim} target="_blank" rel="noopener">DWSIM</a>}
+                  <a href={a.author.astrobin} target="_blank" rel="noopener">AstroBin</a>
+                </p>
+              </div>
+            </div>
           </article>
 
           <article class="card">
@@ -157,6 +169,25 @@ import { site, aboutContent as a } from '../data/site';
   .card a { color: var(--accent); }
   .card .links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 6px; }
   .support-btns { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+
+  /* Author bio card: photo + biography */
+  .author-body { display: flex; gap: 18px; align-items: flex-start; }
+  .author-photo {
+    flex-shrink: 0;
+    width: 128px;
+    height: 170px;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+  .author-text { min-width: 0; }
+  .author-name { color: var(--text) !important; font-size: 15px !important; }
+  .author-role { color: var(--text-muted); font-weight: 500; }
+  @media (max-width: 520px) {
+    .author-body { flex-direction: column; align-items: center; text-align: left; }
+    .author-photo { width: 140px; height: 186px; }
+  }
 
   .sq-icon {
     --ic: var(--accent);
