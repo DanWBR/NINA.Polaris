@@ -9988,6 +9988,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon">✏</span>
                         <span class="files-icon-label">Rename</span>
                     </button>
+                    <!-- Selection helpers: select every file in this folder
+                         (directories excluded) / invert the current file
+                         selection. Always available. -->
+                    <button class="btn btn-sm btn-icon"
+                            @click="filesSelectAllFiles()"
+                            :disabled="!files.entries.some(e => !e.isDirectory)"
+                            title="Select all files in this folder (folders excluded)"
+                            aria-label="Select all">
+                        <span class="files-icon">☑️</span>
+                        <span class="files-icon-label">Select all</span>
+                    </button>
+                    <button class="btn btn-sm btn-icon"
+                            @click="filesInvertSelection()"
+                            :disabled="!files.entries.some(e => !e.isDirectory)"
+                            title="Invert selection: select the files that aren't selected, deselect the rest"
+                            aria-label="Invert selection">
+                        <span class="files-icon">🔀</span>
+                        <span class="files-icon-label">Invert</span>
+                    </button>
+                    <span class="files-actions-sep" aria-hidden="true"></span>
                     <!-- Batch rename FITS files from their header fields
                          (e.g. {OBJECT}_{FILTER}_{EXPTIME}s_{n:03}). Preview
                          before applying. Enabled for one or more selected. -->
@@ -17043,7 +17063,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260705-spcc1"></script>
+    <script src="/js/app.js?v=20260705-spcc2"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

@@ -13601,6 +13601,24 @@ function ninaApp() {
                 : [];
         },
 
+        // Toolbar "Select all": every FILE in the current folder (folders and
+        // the up-one-level row are excluded, since processing tools act on
+        // files).
+        filesSelectAllFiles() {
+            this.files.selectedPaths = this.files.entries
+                .filter(e => !e.isDirectory)
+                .map(e => e.fullPath);
+        },
+
+        // Toolbar "Invert selection": among the files (not folders), select
+        // the ones that aren't currently selected and drop the ones that are.
+        filesInvertSelection() {
+            const sel = new Set(this.files.selectedPaths);
+            this.files.selectedPaths = this.files.entries
+                .filter(e => !e.isDirectory && !sel.has(e.fullPath))
+                .map(e => e.fullPath);
+        },
+
         filesSelectionSize() {
             const set = new Set(this.files.selectedPaths);
             return this.files.entries
