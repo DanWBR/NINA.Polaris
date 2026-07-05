@@ -9870,7 +9870,7 @@ function ninaApp() {
             this._assistantLoadPos();
             this._assistantLoadPanel();
             this._assistantLoadDock();
-            window.addEventListener('resize', () => { this._assistantClampPos(); this._assistantClampPanel(); });
+            window.addEventListener('resize', () => this._assistantOnResize());
 
             this._assistantInstallBridge();
             this.asst.ready = true;
@@ -10382,6 +10382,25 @@ function ninaApp() {
                 left: Math.max(gap, Math.min(p.left, vw - sz - gap)),
                 top: Math.max(gap, Math.min(p.top, vh - sz - gap)),
             };
+        },
+        // Keep every assistant surface inside the viewport when the window is
+        // resized (or the device rotates), so nothing can end up off-screen and
+        // unreachable: the FAB/badge launcher, the floating chat panel, and the
+        // docked column/strip sizes. Runs on every resize; persists the clamped
+        // geometry so a later reload doesn't restore an off-screen position.
+        _assistantOnResize() {
+            const vw = window.innerWidth, vh = window.innerHeight;
+            // Docked side-column width / bottom-strip height can't exceed the
+            // viewport (the render style also caps these, but store sane values).
+            this.asst.dockW = Math.max(280, Math.min(this.asst.dockW, vw - 40));
+            this.asst.dockH = Math.max(240, Math.min(this.asst.dockH, vh - 40));
+            this._assistantClampPos();     // launcher (FAB/badge)
+            this._assistantClampPanel();   // floating chat panel (incl. mobile-free)
+            try {
+                if (this.asst.pos) this._assistantSavePos();
+                if (this.asst.panel) this._assistantSavePanel();
+                this._assistantSaveDock();
+            } catch (_) { /* private mode etc. */ }
         },
         assistantDismissBadge() {
             this.asst.badgeVisible = false;
