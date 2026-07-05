@@ -380,9 +380,9 @@ A licensing note: the classical filters (SCNR, GHS and asinh
 stretches, cosmetic correction, star reduction) and the multiscale
 and tonal operations (wavelets, HDR, CLAHE, highlight recovery) are
 re-implemented from scratch from published algorithms and the Siril
-sources' documented behavior; no third-party code is bundled.
-<!-- TODO cite: SASpro (Seti Astro Suite), named as inspiration for
-the wavelet and narrowband tools in the source docs -->
+sources' documented behavior; no third-party code is bundled. The
+wavelet and narrowband tools take their inspiration from Seti Astro
+Suite Pro [@marek_saspro].
 
 ## Stacking with Siril
 
