@@ -116,7 +116,28 @@
     font-weight: 600;
     color: var(--text-primary);
     font-size: 13px;
+    cursor: move;
+    touch-action: none; /* let the pointer-drag move the panel on touch */
+    user-select: none;
+    -webkit-user-select: none;
 }
+/* While dragging/resizing, stop the iframe from swallowing pointer moves. */
+.assistant-panel.asst-dragging .assistant-iframe { pointer-events: none; }
+/* Resize grip (bottom-right corner). */
+.assistant-panel-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 18px;
+    height: 18px;
+    cursor: nwse-resize;
+    touch-action: none;
+    z-index: 2;
+    background:
+        linear-gradient(135deg, transparent 0 50%, var(--text-secondary) 50% 60%, transparent 60% 70%, var(--text-secondary) 70% 80%, transparent 80%);
+    opacity: 0.55;
+}
+.assistant-panel-resize:hover { opacity: 0.9; }
 .assistant-panel-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .assistant-panel-icon { font-size: 16px; line-height: 1; flex: none; }
 .assistant-panel-header button {

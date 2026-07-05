@@ -75,6 +75,8 @@ function ninaApp() {
             iframeLoaded: false,  // iframe src set (lazy)
             iframeSrc: 'about:blank',
             pos: null,            // {left, top} px if the user dragged the launcher; else default corner
+            panel: null,          // {left, top, w, h} px if the user moved/resized the chat panel
+            panelDragging: false, // true while dragging/resizing (disables iframe hit-testing)
         },
         // On-screen keyboard mode (Settings → Appearance). The actual
         // behaviour lives in /js/virtual-keyboard.js; this just mirrors the
@@ -9857,7 +9859,8 @@ function ninaApp() {
             try { dismissed = localStorage.getItem('polaris.assistant.badgeDismissed') === '1'; } catch (_) {}
 
             this._assistantLoadPos();
-            window.addEventListener('resize', () => this._assistantClampPos());
+            this._assistantLoadPanel();
+            window.addEventListener('resize', () => { this._assistantClampPos(); this._assistantClampPanel(); });
 
             this._assistantInstallBridge();
             this.asst.ready = true;
@@ -10074,11 +10077,17 @@ function ninaApp() {
             return { left: p.left + 'px', top: p.top + 'px', right: 'auto', bottom: 'auto' };
         },
         _assistantPanelStyle() {
-            const p = this.asst.pos;
             const vw = window.innerWidth, vh = window.innerHeight;
-            // On phones the panel is a full-width bottom sheet (CSS media query);
-            // don't override that, and don't reposition if the user never dragged.
-            if (!p || vw <= 480) return {};
+            if (vw <= 480) return {}; // phone: full-width bottom sheet (CSS)
+            // A geometry the user set by dragging/resizing wins over auto-placement.
+            const g = this.asst.panel;
+            if (g) return {
+                left: g.left + 'px', top: g.top + 'px', width: g.w + 'px', height: g.h + 'px',
+                right: 'auto', bottom: 'auto', maxHeight: 'none', maxWidth: 'none',
+            };
+            const p = this.asst.pos;
+            // Don't reposition if the user never dragged the launcher.
+            if (!p) return {};
             const sz = 56, gap = 10;
             const Wp = Math.min(400, vw - 2 * gap);
             const Hp = Math.min(560, vh - 120);
@@ -10121,6 +10130,81 @@ function ninaApp() {
             try {
                 if (this.asst.pos) localStorage.setItem('polaris.assistant.launcherPos', JSON.stringify(this.asst.pos));
             } catch (_) {}
+        },
+
+        // ---- draggable + resizable chat panel -------------------------------
+        _assistantPanelRect(ev) {
+            const panel = ev.currentTarget.closest('.assistant-panel');
+            return { panel, rect: panel.getBoundingClientRect() };
+        },
+        assistantPanelDragStart(ev) {
+            if (ev.button != null && ev.button !== 0) return;
+            if (ev.target.closest('button')) return; // let the close button work
+            if (window.innerWidth <= 480) return;     // phone bottom sheet: no drag
+            const { rect } = this._assistantPanelRect(ev);
+            const offX = ev.clientX - rect.left, offY = ev.clientY - rect.top;
+            const w = rect.width, h = rect.height, gap = 4;
+            this.asst.panelDragging = true;
+            const onMove = (e) => {
+                const vw = window.innerWidth, vh = window.innerHeight;
+                let left = Math.max(gap, Math.min(e.clientX - offX, vw - w - gap));
+                let top = Math.max(gap, Math.min(e.clientY - offY, vh - h - gap));
+                this.asst.panel = { left, top, w, h };
+            };
+            const onUp = () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                this.asst.panelDragging = false;
+                this._assistantSavePanel();
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+        },
+        assistantPanelResizeStart(ev) {
+            if (ev.button != null && ev.button !== 0) return;
+            ev.stopPropagation(); ev.preventDefault();
+            if (window.innerWidth <= 480) return;
+            const { rect } = this._assistantPanelRect(ev);
+            const startX = ev.clientX, startY = ev.clientY, startW = rect.width, startH = rect.height;
+            const left = (this.asst.panel && this.asst.panel.left != null) ? this.asst.panel.left : rect.left;
+            const top = (this.asst.panel && this.asst.panel.top != null) ? this.asst.panel.top : rect.top;
+            const MINW = 300, MINH = 340;
+            this.asst.panelDragging = true;
+            const onMove = (e) => {
+                const vw = window.innerWidth, vh = window.innerHeight;
+                let w = Math.max(MINW, Math.min(startW + (e.clientX - startX), vw - left - 4));
+                let h = Math.max(MINH, Math.min(startH + (e.clientY - startY), vh - top - 4));
+                this.asst.panel = { left, top, w, h };
+            };
+            const onUp = () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                this.asst.panelDragging = false;
+                this._assistantSavePanel();
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+        },
+        _assistantSavePanel() {
+            try {
+                if (this.asst.panel) localStorage.setItem('polaris.assistant.panelGeom', JSON.stringify(this.asst.panel));
+            } catch (_) {}
+        },
+        _assistantLoadPanel() {
+            let g = null;
+            try { const s = localStorage.getItem('polaris.assistant.panelGeom'); if (s) g = JSON.parse(s); } catch (_) {}
+            if (g && typeof g.left === 'number' && typeof g.w === 'number') { this.asst.panel = g; this._assistantClampPanel(); }
+        },
+        _assistantClampPanel() {
+            const g = this.asst.panel;
+            if (!g) return;
+            const vw = window.innerWidth, vh = window.innerHeight, gap = 4;
+            const w = Math.min(g.w, vw - 2 * gap), h = Math.min(g.h, vh - 2 * gap);
+            this.asst.panel = {
+                w, h,
+                left: Math.max(gap, Math.min(g.left, vw - w - gap)),
+                top: Math.max(gap, Math.min(g.top, vh - h - gap)),
+            };
         },
         _assistantLoadPos() {
             let p = null;
