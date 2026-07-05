@@ -362,26 +362,30 @@ public class ColorCalibrationService {
         var detectedGrid = new NINA.Image.ImageAnalysis.SpatialGrid<StarPhotometer.StarPhotometry>(matchRadiusPx);
         foreach (var p in phots)
             if (!p.Saturated) detectedGrid.Add(p.X, p.Y, p);
-        // External plate-solves (e.g. a Siril result.fit) can store the WCS
-        // with the opposite vertical convention to how Polaris loads the
-        // pixels, misaligning every catalog star except near the centre row.
-        // Try both Y orientations and keep whichever aligns more stars; a
-        // Polaris-solved frame is self-consistent so the flip finds ~none.
-        List<ColorCalibrationMath.CalibrationStar> MatchAll(bool flipY) {
+        // An external plate-solve (or a ROWORDER=TOP-DOWN frame) can store the
+        // WCS with a different pixel-axis convention (vertical and/or
+        // horizontal flip, or a 180° rotation) than how Polaris loads the
+        // pixels, misaligning every catalog star except near the centre. Try
+        // all four axis orientations and keep whichever aligns most; a
+        // Polaris-native frame wins un-flipped so this is a no-op there.
+        List<ColorCalibrationMath.CalibrationStar> MatchAll(bool flipX, bool flipY) {
             var m = new List<ColorCalibrationMath.CalibrationStar>();
             foreach (var c in catalogStars) {
                 if (c.Bv == null) continue;
                 var (px, py) = wcs.RaDecToPixel(c.Ra, c.Dec);
                 if (double.IsNaN(px) || double.IsNaN(py)) continue;
+                double qx = flipX ? (W + 1 - px) : px;
                 double qy = flipY ? (H + 1 - py) : py;
-                if (detectedGrid.TryNearest(px, qy, matchRadiusPx, out var best, out _))
+                if (detectedGrid.TryNearest(qx, qy, matchRadiusPx, out var best, out _))
                     m.Add(new ColorCalibrationMath.CalibrationStar(Photometry: best, Bv: c.Bv.Value));
             }
             return m;
         }
-        var mNormal = MatchAll(false);
-        var mFlip = MatchAll(true);
-        matched = mFlip.Count > mNormal.Count ? mFlip : mNormal;
+        matched = MatchAll(false, false);
+        foreach (var (fx, fy) in new[] { (true, false), (false, true), (true, true) }) {
+            var m = MatchAll(fx, fy);
+            if (m.Count > matched.Count) matched = m;
+        }
         if (matched.Count < 5) {
             throw new InvalidOperationException(
                 $"PCC: only {matched.Count} catalog stars matched to " +
