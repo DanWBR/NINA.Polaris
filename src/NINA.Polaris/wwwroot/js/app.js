@@ -75,8 +75,12 @@ function ninaApp() {
             iframeLoaded: false,  // iframe src set (lazy)
             iframeSrc: 'about:blank',
             pos: null,            // {left, top} px if the user dragged the launcher; else default corner
-            panel: null,          // {left, top, w, h} px if the user moved/resized the chat panel
+            panel: null,          // {left, top, w, h} px if the user moved/resized the chat panel (float)
             panelDragging: false, // true while dragging/resizing (disables iframe hit-testing)
+            dock: 'float',        // 'float' | 'left' | 'right' | 'bottom'
+            dockW: 360,           // docked side-column width
+            dockH: 300,           // docked bottom-strip height
+            dockHint: null,       // edge being hovered during a drag ('left'|'right'|'bottom')
         },
         // On-screen keyboard mode (Settings → Appearance). The actual
         // behaviour lives in /js/virtual-keyboard.js; this just mirrors the
@@ -9860,6 +9864,7 @@ function ninaApp() {
 
             this._assistantLoadPos();
             this._assistantLoadPanel();
+            this._assistantLoadDock();
             window.addEventListener('resize', () => { this._assistantClampPos(); this._assistantClampPanel(); });
 
             this._assistantInstallBridge();
@@ -10079,7 +10084,21 @@ function ninaApp() {
         _assistantPanelStyle() {
             const vw = window.innerWidth, vh = window.innerHeight;
             if (vw <= 480) return {}; // phone: full-width bottom sheet (CSS)
-            // A geometry the user set by dragging/resizing wins over auto-placement.
+            // Docked to an edge: fill that side.
+            const d = this.asst.dock;
+            if (d === 'left' || d === 'right') {
+                const w = Math.min(this.asst.dockW, vw - 60);
+                const s = { top: '0', bottom: '0', height: vh + 'px', width: w + 'px',
+                            maxHeight: 'none', maxWidth: 'none', borderRadius: '0' };
+                if (d === 'left') { s.left = '0'; s.right = 'auto'; } else { s.right = '0'; s.left = 'auto'; }
+                return s;
+            }
+            if (d === 'bottom') {
+                const h = Math.min(this.asst.dockH, vh - 60);
+                return { left: '0', right: '0', bottom: '0', top: 'auto', width: vw + 'px', height: h + 'px',
+                         maxHeight: 'none', maxWidth: 'none', borderRadius: '0' };
+            }
+            // Floating: a geometry the user set by dragging/resizing wins over auto-placement.
             const g = this.asst.panel;
             if (g) return {
                 left: g.left + 'px', top: g.top + 'px', width: g.w + 'px', height: g.h + 'px',
@@ -10142,23 +10161,72 @@ function ninaApp() {
             if (ev.target.closest('button')) return; // let the close button work
             if (window.innerWidth <= 480) return;     // phone bottom sheet: no drag
             const { rect } = this._assistantPanelRect(ev);
-            const offX = ev.clientX - rect.left, offY = ev.clientY - rect.top;
+            // Pull out of any dock and follow the cursor as a floating window.
+            this.asst.dock = 'float';
             const w = rect.width, h = rect.height, gap = 4;
+            const offX = Math.min(ev.clientX - rect.left, w - 20), offY = ev.clientY - rect.top;
+            this.asst.panel = { left: rect.left, top: rect.top, w, h };
             this.asst.panelDragging = true;
+            const EDGE = 40;
             const onMove = (e) => {
                 const vw = window.innerWidth, vh = window.innerHeight;
                 let left = Math.max(gap, Math.min(e.clientX - offX, vw - w - gap));
                 let top = Math.max(gap, Math.min(e.clientY - offY, vh - h - gap));
                 this.asst.panel = { left, top, w, h };
+                // Edge-snap hint based on cursor proximity to a viewport edge.
+                this.asst.dockHint = e.clientX <= EDGE ? 'left'
+                    : e.clientX >= vw - EDGE ? 'right'
+                    : e.clientY >= vh - EDGE ? 'bottom' : null;
             };
             const onUp = () => {
                 window.removeEventListener('pointermove', onMove);
                 window.removeEventListener('pointerup', onUp);
                 this.asst.panelDragging = false;
-                this._assistantSavePanel();
+                const hint = this.asst.dockHint;
+                this.asst.dockHint = null;
+                if (hint) { this.asst.dock = hint; this._assistantSaveDock(); }
+                else { this._assistantSavePanel(); this._assistantSaveDock(); }
             };
             window.addEventListener('pointermove', onMove);
             window.addEventListener('pointerup', onUp);
+        },
+        assistantDockResizeStart(ev) {
+            if (ev.button != null && ev.button !== 0) return;
+            ev.stopPropagation(); ev.preventDefault();
+            const d = this.asst.dock;
+            const startX = ev.clientX, startY = ev.clientY, startW = this.asst.dockW, startH = this.asst.dockH;
+            this.asst.panelDragging = true;
+            const onMove = (e) => {
+                const vw = window.innerWidth, vh = window.innerHeight;
+                if (d === 'left') this.asst.dockW = Math.max(280, Math.min(startW + (e.clientX - startX), vw - 60));
+                else if (d === 'right') this.asst.dockW = Math.max(280, Math.min(startW - (e.clientX - startX), vw - 60));
+                else if (d === 'bottom') this.asst.dockH = Math.max(240, Math.min(startH - (e.clientY - startY), vh - 60));
+            };
+            const onUp = () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                this.asst.panelDragging = false;
+                this._assistantSaveDock();
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+        },
+        _assistantSaveDock() {
+            try {
+                localStorage.setItem('polaris.assistant.dock', JSON.stringify({
+                    dock: this.asst.dock, dockW: this.asst.dockW, dockH: this.asst.dockH,
+                }));
+            } catch (_) {}
+        },
+        _assistantLoadDock() {
+            try {
+                const s = localStorage.getItem('polaris.assistant.dock');
+                if (!s) return;
+                const g = JSON.parse(s);
+                if (['float', 'left', 'right', 'bottom'].includes(g.dock)) this.asst.dock = g.dock;
+                if (typeof g.dockW === 'number') this.asst.dockW = g.dockW;
+                if (typeof g.dockH === 'number') this.asst.dockH = g.dockH;
+            } catch (_) {}
         },
         assistantPanelResizeStart(ev) {
             if (ev.button != null && ev.button !== 0) return;

@@ -138,6 +138,33 @@
     opacity: 0.55;
 }
 .assistant-panel-resize:hover { opacity: 0.9; }
+
+/* Docked panels sit flush against an edge (no rounded corner there). */
+.assistant-panel.dock-left, .assistant-panel.dock-right, .assistant-panel.dock-bottom {
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.55);
+}
+.assistant-panel.dock-left .assistant-panel-resize,
+.assistant-panel.dock-right .assistant-panel-resize,
+.assistant-panel.dock-bottom .assistant-panel-resize { display: none; }
+/* Edge resize handle (docked): a thin bar on the inner edge. */
+.assistant-panel-dockresize { position: absolute; z-index: 3; background: transparent; }
+.assistant-panel-dockresize:hover { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.assistant-panel.dock-left  .assistant-panel-dockresize { top: 0; bottom: 0; right: -1px; width: 7px; cursor: ew-resize; }
+.assistant-panel.dock-right .assistant-panel-dockresize { top: 0; bottom: 0; left: -1px; width: 7px; cursor: ew-resize; }
+.assistant-panel.dock-bottom .assistant-panel-dockresize { left: 0; right: 0; top: -1px; height: 7px; cursor: ns-resize; }
+
+/* Drop-zone preview while dragging toward an edge. */
+.assistant-dock-preview {
+    position: fixed;
+    z-index: 139;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    border: 2px dashed color-mix(in srgb, var(--accent) 70%, transparent);
+    border-radius: var(--radius, 10px);
+}
+.assistant-dock-preview.dock-left   { left: 0; top: 0; bottom: 0; width: 360px; }
+.assistant-dock-preview.dock-right  { right: 0; top: 0; bottom: 0; width: 360px; }
+.assistant-dock-preview.dock-bottom { left: 0; right: 0; bottom: 0; height: 300px; }
 .assistant-panel-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .assistant-panel-icon { font-size: 16px; line-height: 1; flex: none; }
 .assistant-panel-header button {

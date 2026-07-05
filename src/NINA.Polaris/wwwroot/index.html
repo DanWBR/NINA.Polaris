@@ -62,7 +62,7 @@
     <link rel="stylesheet" href="/css/parts/12-tour.css?v=20260624-tour1">
     <!-- Optional external assistant module chrome (badge / FAB / iframe panel).
          Inert unless a manifest URL is configured (assistant-config.json). -->
-    <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist11">
+    <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist12">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -16901,7 +16901,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260705-assist11"></script>
+    <script src="/js/app.js?v=20260705-assist12"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
@@ -16969,9 +16969,14 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <span x-text="asst.manifest.iframe.fabIconEmoji || asst.manifest.product.iconEmoji || '✨'"></span>
             </button>
 
+            <!-- Dock drop-zone preview (shown while dragging near an edge) -->
+            <div class="assistant-dock-preview" x-show="asst.open && asst.dockHint" x-cloak
+                 :class="'dock-' + asst.dockHint"></div>
+
             <!-- Chat panel: external iframe host -->
             <div class="assistant-panel" x-show="asst.open" x-cloak x-transition.opacity
-                 :style="_assistantPanelStyle()" :class="{ 'asst-dragging': asst.panelDragging }">
+                 :style="_assistantPanelStyle()"
+                 :class="('dock-' + asst.dock) + (asst.panelDragging ? ' asst-dragging' : '')">
                 <div class="assistant-panel-header" @pointerdown="assistantPanelDragStart($event)">
                     <span class="assistant-panel-title">
                         <span class="assistant-panel-icon"
@@ -16983,8 +16988,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <iframe id="assistantFrame" :src="asst.iframeSrc" class="assistant-iframe"
                         :sandbox="asst.manifest.iframe.sandbox || 'allow-scripts allow-forms allow-popups allow-same-origin'"
                         title="Assistant"></iframe>
-                <div class="assistant-panel-resize" @pointerdown="assistantPanelResizeStart($event)"
-                     title="Resize"></div>
+                <div class="assistant-panel-resize" x-show="asst.dock === 'float'"
+                     @pointerdown="assistantPanelResizeStart($event)" title="Resize"></div>
+                <div class="assistant-panel-dockresize" x-show="asst.dock !== 'float'"
+                     @pointerdown="assistantDockResizeStart($event)" title="Resize"></div>
             </div>
         </div>
     </template>
