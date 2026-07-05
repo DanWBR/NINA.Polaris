@@ -1,0 +1,281 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Footer from '../components/Footer.astro';
+import { assistantPage as p } from '../data/site';
+
+// Screenshots are spaced through the page. Each is full-width; until a real
+// image is dropped in (set `src`), a full-width placeholder box is shown.
+const shots = p.screenshots ?? [];
+---
+
+<Layout
+  title="Polaris Assistant — AI co-pilot for N.I.N.A. Polaris"
+  description="Polaris Assistant is an optional AI companion for N.I.N.A. Polaris: it plans your night, drives the rig with your approval, inspects your frames, and answers astrophotography questions — inside the Polaris web UI. US$4.99/mo with a 7-day free trial."
+>
+  <main>
+
+    <!-- ── Hero ─────────────────────────────────────────────────── -->
+    <header class="page-head">
+      <div class="container">
+        <a class="back" href="/">← Back to home</a>
+        <div class="head-label">POLARIS ASSISTANT</div>
+        <h1>{p.title}</h1>
+        {p.tagline && <p class="tagline">{p.tagline}</p>}
+        <p class="lede">{p.lede}</p>
+        <div class="hero-meta">
+          <span class="pill">{p.pricing.price} {p.pricing.period}</span>
+          <span class="pill pill-accent">{p.pricing.trial}</span>
+          <span class="pill pill-ghost">Optional · opt-in</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── At a glance ──────────────────────────────────────────── -->
+    {p.glance && p.glance.length > 0 && (
+      <section class="section section-alt">
+        <div class="container">
+          <h2 class="block-title">{p.glanceTitle}</h2>
+          <div class="glance-grid">
+            {p.glance.map((g) => (
+              <div class="glance">
+                <span class="glance-dot" aria-hidden="true"></span>
+                <p><strong>{g.label}</strong> {g.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    )}
+
+    <!-- ── Screenshot 1 (full width) ─────────────────────────────── -->
+    {shots[0] && (
+      <section class="section shot-section">
+        <div class="container">
+          <figure class="shot">
+            {shots[0].src
+              ? <img src={shots[0].src} alt={shots[0].caption} loading="lazy" />
+              : <div class="shot-ph"><span class="shot-ph-icon">🔭</span><span class="shot-ph-tag">Screenshot</span></div>}
+            <figcaption>{shots[0].caption}</figcaption>
+          </figure>
+        </div>
+      </section>
+    )}
+
+    <!-- ── Features ──────────────────────────────────────────────── -->
+    <section class="section">
+      <div class="container">
+        <h2 class="block-title">{p.featuresTitle}</h2>
+        <div class="panels">
+          {p.features.map((f) => (
+            <article class="panel">
+              <header class="panel-head">
+                <span class="sq-icon" style={f.color ? `--ic: ${f.color}` : undefined}>{f.icon}</span>
+                <div class="panel-id"><h3>{f.title}</h3></div>
+              </header>
+              {f.intro && <p class="panel-intro">{f.intro}</p>}
+              <ul class="panel-list">
+                {f.items.map((it) => (
+                  <li>
+                    {it.label && <strong>{it.label}</strong>}
+                    {it.label && it.text ? ' ' : ''}
+                    {it.text}
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Screenshot 2 (full width) ─────────────────────────────── -->
+    {shots[1] && (
+      <section class="section shot-section section-alt">
+        <div class="container">
+          <figure class="shot">
+            {shots[1].src
+              ? <img src={shots[1].src} alt={shots[1].caption} loading="lazy" />
+              : <div class="shot-ph"><span class="shot-ph-icon">🗓️</span><span class="shot-ph-tag">Screenshot</span></div>}
+            <figcaption>{shots[1].caption}</figcaption>
+          </figure>
+        </div>
+      </section>
+    )}
+
+    <!-- ── How it works ──────────────────────────────────────────── -->
+    <section class="section">
+      <div class="container">
+        <h2 class="block-title">{p.howTitle}</h2>
+        <p class="section-lede">{p.howLede}</p>
+        <div class="how-grid">
+          {p.how.map((h, i) => (
+            <div class="how-card">
+              <span class="how-num">{i + 1}</span>
+              <p><strong>{h.label}</strong> {h.text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Screenshot 3 (full width) ─────────────────────────────── -->
+    {shots[2] && (
+      <section class="section shot-section">
+        <div class="container">
+          <figure class="shot">
+            {shots[2].src
+              ? <img src={shots[2].src} alt={shots[2].caption} loading="lazy" />
+              : <div class="shot-ph"><span class="shot-ph-icon">📷</span><span class="shot-ph-tag">Screenshot</span></div>}
+            <figcaption>{shots[2].caption}</figcaption>
+          </figure>
+        </div>
+      </section>
+    )}
+
+    <!-- ── Pricing ───────────────────────────────────────────────── -->
+    <section class="section section-alt">
+      <div class="container">
+        <div class="price-card">
+          <div class="price-main">
+            <span class="price-amount">{p.pricing.price}</span>
+            <span class="price-period">{p.pricing.period}</span>
+          </div>
+          <div class="price-body">
+            <p class="price-trial">✨ {p.pricing.trial}</p>
+            <p class="price-note">{p.pricing.note}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Footer CTA ────────────────────────────────────────────── -->
+    <section class="section cta-section">
+      <div class="container cta-inner">
+        <p class="cta-text">{p.ctaText}</p>
+        <a class="btn-primary" href={p.ctaHref}>{p.ctaButton}</a>
+      </div>
+    </section>
+
+  </main>
+  <Footer />
+</Layout>
+
+<style>
+  /* ── Layout helpers (shared look with the AI Tools page) ──── */
+  .section       { padding: 56px 0; }
+  .section-alt   { background: var(--panel); }
+  .block-title   { font-size: clamp(22px, 3vw, 30px); font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
+  .section-lede  { font-size: 15px; color: var(--text-muted); max-width: 72ch; line-height: 1.6; margin-bottom: 32px; }
+
+  /* ── Page header ────────────────────────────────────────── */
+  .page-head { padding: 56px 0 40px; border-bottom: 1px solid var(--border); }
+  .back { display: inline-block; font-size: 14px; margin-bottom: 18px; color: var(--text-muted); }
+  .back:hover { color: var(--accent); text-decoration: none; }
+  .head-label { font-size: 12px; font-weight: 700; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; margin-bottom: 10px; }
+  .page-head h1 { font-size: clamp(30px, 5vw, 48px); font-weight: 800; letter-spacing: -1px; margin-bottom: 10px; }
+  .tagline { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
+  .lede { font-size: 17px; color: var(--text-muted); max-width: 80ch; line-height: 1.6; }
+  .hero-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+  .pill {
+    font-size: 13px; font-weight: 600; padding: 6px 13px; border-radius: 99px;
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+  }
+  .pill-accent {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+    color: color-mix(in srgb, var(--accent) 90%, var(--text));
+  }
+  .pill-ghost { color: var(--text-muted); }
+
+  /* ── At a glance ────────────────────────────────────────── */
+  .glance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .glance { display: flex; gap: 12px; align-items: flex-start; }
+  .glance-dot { margin-top: 8px; width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.7); }
+  .glance p { font-size: 15px; color: var(--text-muted); line-height: 1.55; }
+  .glance strong { color: var(--text); }
+
+  /* ── Full-width screenshots ─────────────────────────────── */
+  .shot-section { padding: 40px 0; }
+  .shot { width: 100%; margin: 0; }
+  .shot img,
+  .shot-ph {
+    display: block; width: 100%; border-radius: 14px;
+    border: 1px solid var(--border);
+  }
+  .shot img { height: auto; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35); }
+  .shot-ph {
+    aspect-ratio: 16 / 9;
+    display: grid; place-content: center; gap: 8px; justify-items: center;
+    background:
+      repeating-linear-gradient(45deg, color-mix(in srgb, var(--accent) 5%, transparent) 0 12px, transparent 12px 24px),
+      var(--panel);
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+    color: var(--text-muted);
+  }
+  .shot-ph-icon { font-size: 40px; opacity: 0.85; }
+  .shot-ph-tag { font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+  .shot figcaption { margin-top: 12px; font-size: 14px; color: var(--text-muted); text-align: center; }
+
+  /* ── Feature panels ─────────────────────────────────────── */
+  .panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 24px; align-items: start; }
+  .panel { background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
+  .section-alt .panel { background: var(--bg); }
+  .panel-head { display: flex; align-items: center; gap: 13px; margin-bottom: 12px; }
+  .sq-icon {
+    --ic: var(--accent);
+    width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center; font-size: 20px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--ic) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ic) 40%, transparent);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--ic) 22%, transparent);
+  }
+  .panel-id { min-width: 0; }
+  .panel-id h3 { font-size: 17px; font-weight: 800; letter-spacing: 0.2px; line-height: 1.1; }
+  .panel-intro { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 14px; }
+  .panel-list { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+  .panel-list li { position: relative; padding-left: 18px; font-size: 13.5px; color: var(--text-muted); line-height: 1.55; }
+  .panel-list li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 70%, transparent); }
+  .panel-list strong { color: var(--text); font-weight: 600; }
+
+  /* ── How it works ───────────────────────────────────────── */
+  .how-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+  .how-card { background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 22px; display: flex; gap: 14px; align-items: flex-start; }
+  .how-num {
+    flex-shrink: 0; width: 30px; height: 30px; display: grid; place-items: center;
+    border-radius: 50%; font-size: 14px; font-weight: 800; color: #fff; background: var(--accent);
+  }
+  .how-card p { font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+  .how-card strong { color: var(--text); }
+
+  /* ── Pricing ────────────────────────────────────────────── */
+  .price-card {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 28px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 16px; padding: 28px 32px;
+    max-width: 620px;
+  }
+  .price-main { display: flex; align-items: baseline; gap: 8px; }
+  .price-amount { font-size: 40px; font-weight: 800; letter-spacing: -1px; color: var(--text); }
+  .price-period { font-size: 15px; color: var(--text-muted); }
+  .price-body { min-width: 220px; flex: 1; }
+  .price-trial { font-size: 15px; font-weight: 700; color: color-mix(in srgb, var(--accent) 90%, var(--text)); margin-bottom: 4px; }
+  .price-note { font-size: 13.5px; color: var(--text-muted); line-height: 1.55; }
+
+  /* ── CTA ─────────────────────────────────────────────────── */
+  .cta-section { padding: 48px 0; }
+  .cta-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+  .cta-text { font-size: 17px; font-weight: 600; color: var(--text); max-width: 60ch; }
+  .btn-primary {
+    display: inline-block; padding: 12px 28px; background: var(--accent); color: #fff;
+    border-radius: 8px; font-size: 15px; font-weight: 700; text-decoration: none; white-space: nowrap; transition: opacity 0.15s;
+  }
+  .btn-primary:hover { opacity: 0.88; text-decoration: none; }
+
+  /* ── Responsive ──────────────────────────────────────────── */
+  @media (max-width: 600px) {
+    .panels, .how-grid { grid-template-columns: 1fr; }
+    .glance-grid { grid-template-columns: 1fr; }
+    .cta-inner { flex-direction: column; align-items: flex-start; }
+    .price-card { flex-direction: column; align-items: flex-start; gap: 16px; }
+  }
+</style>
