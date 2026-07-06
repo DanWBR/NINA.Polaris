@@ -122,11 +122,29 @@ public sealed class SmbStorageTarget : IStorageTarget {
     }
 
     private static IPAddress ResolveIPv4(string host) {
+        host = (host ?? "").Trim().TrimStart('\\').TrimEnd('\\');
         if (IPAddress.TryParse(host, out var ip)) return ip;
-        var addrs = Dns.GetHostAddresses(host);
-        return addrs.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-               ?? addrs.FirstOrDefault()
-               ?? throw new IOException($"Could not resolve host: {host}");
+
+        // Try the name as given, then an mDNS `.local` fallback. Bare Windows/
+        // NetBIOS box names (e.g. "DESKTOP-ABC") aren't resolvable by a plain
+        // DNS lookup on the SBC — getaddrinfo returns "Name or service not
+        // known". Most Windows/NAS boxes with Bonjour/avahi also answer at
+        // "<name>.local", which the SBC can resolve via mDNS (avahi/libnss-mdns).
+        var candidates = new List<string> { host };
+        if (!host.Contains('.')) candidates.Add(host + ".local");
+        foreach (var name in candidates) {
+            try {
+                var addrs = Dns.GetHostAddresses(name);
+                var v4 = addrs.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+                if (v4 != null) return v4;
+                if (addrs.Length > 0) return addrs[0];
+            } catch (System.Net.Sockets.SocketException) {
+                // Unresolvable; fall through to the next candidate.
+            }
+        }
+        throw new IOException(
+            $"Could not resolve host '{host}'. Use the server's IP address " +
+            $"(e.g. 192.168.1.50), or a name the network can resolve such as '{host}.local'.");
     }
 
     public void Disconnect() {

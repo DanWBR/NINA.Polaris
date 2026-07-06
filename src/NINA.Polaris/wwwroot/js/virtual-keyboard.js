@@ -19,6 +19,22 @@
     'use strict';
 
     var MODE_KEY = 'polaris-vkbd-mode'; // 'auto' | 'on' | 'off'
+    var POS_KEY = 'polaris-vkbd-pos';   // {left, top} px once the user drags it
+
+    // User-chosen panel position (null = default bottom-right corner).
+    var savedPos = (function () {
+        try {
+            var raw = localStorage.getItem(POS_KEY);
+            if (!raw) return null;
+            var p = JSON.parse(raw);
+            if (p && typeof p.left === 'number' && typeof p.top === 'number') return p;
+        } catch (e) { /* ignore */ }
+        return null;
+    })();
+    function savePos(p) {
+        savedPos = p;
+        try { localStorage.setItem(POS_KEY, JSON.stringify(p)); } catch (e) { /* private mode */ }
+    }
 
     // iOS ignores inputmode="none", so there we fall back to the readonly
     // trick (which blocks the native keyboard on every platform but loses
@@ -87,6 +103,7 @@
             '.pvk-panel.pvk-show{display:flex;animation:pvk-in .12s ease}',
             '@keyframes pvk-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}',
             '.pvk-head{display:flex;align-items:center;gap:8px;padding:6px 8px;',
+            '  cursor:move;touch-action:none;', // drag handle: reposition the panel
             '  background:var(--bg-tertiary,#0f3460);border-bottom:1px solid var(--border,#2a2a4a)}',
             '.pvk-title{flex:1;min-width:0;font-size:12px;color:var(--text-secondary,#a0a0b0);',
             '  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
@@ -146,6 +163,43 @@
         root.addEventListener('pointerdown', onPointerDown, true);
         // Belt-and-suspenders for browsers that still emit mousedown.
         root.addEventListener('mousedown', function (e) { e.preventDefault(); }, true);
+
+        // Drag the panel by its header to reposition it. Starts from the head
+        // only (not the ✕ close button), keeps input focus (preventDefault),
+        // and persists the position so it stays put across sessions.
+        head.addEventListener('pointerdown', startDrag);
+        // Keep the panel on-screen if the viewport shrinks / rotates.
+        window.addEventListener('resize', function () { if (savedPos) applyPos(savedPos.left, savedPos.top); });
+    }
+
+    // Clamp + apply an absolute left/top, switching off the default
+    // right/bottom corner anchoring.
+    function applyPos(left, top) {
+        if (!root) return;
+        var w = root.offsetWidth || 320, h = root.offsetHeight || 300;
+        left = Math.min(Math.max(0, left), Math.max(0, window.innerWidth - w));
+        top = Math.min(Math.max(0, top), Math.max(0, window.innerHeight - h));
+        root.style.left = left + 'px';
+        root.style.top = top + 'px';
+        root.style.right = 'auto';
+        root.style.bottom = 'auto';
+    }
+
+    function startDrag(e) {
+        // Let the ✕ (and any future header buttons) work normally.
+        if (e.target.closest && e.target.closest('[data-action]')) return;
+        e.preventDefault();
+        var rect = root.getBoundingClientRect();
+        var offX = e.clientX - rect.left, offY = e.clientY - rect.top;
+        function move(ev) { applyPos(ev.clientX - offX, ev.clientY - offY); }
+        function up() {
+            document.removeEventListener('pointermove', move, true);
+            document.removeEventListener('pointerup', up, true);
+            var r = root.getBoundingClientRect();
+            savePos({ left: r.left, top: r.top });
+        }
+        document.addEventListener('pointermove', move, true);
+        document.addEventListener('pointerup', up, true);
     }
 
     // ---- Layout definitions ---------------------------------------------
@@ -411,6 +465,9 @@
         renderLayout(kind);
         titleEl.textContent = title;
         root.classList.add('pvk-show');
+        // Restore the user's dragged position now the panel has real dimensions
+        // (clamping needs offsetWidth/Height, which are 0 while display:none).
+        if (savedPos) applyPos(savedPos.left, savedPos.top);
     }
     function hide() {
         if (root) root.classList.remove('pvk-show');
