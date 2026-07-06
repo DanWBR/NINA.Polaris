@@ -73,7 +73,17 @@ public sealed class SvbonySdkCamera : ICamera {
     public bool IsConnected => _connected;
     public CameraStates State { get; private set; } = CameraStates.NoState;
 
-    public double Temperature => _connected ? ReadControl(SVB_CONTROL_TYPE.SVB_CURRENT_TEMPERATURE) / 10.0 : double.NaN;
+    // Cache the last valid reading so WrapFrame can stamp CCD-TEMP into the
+    // FITS without an extra locked SDK read on every streamed frame (the WS
+    // status tick refreshes this every ~2 s).
+    private double _lastTempC = double.NaN;
+    public double Temperature {
+        get {
+            var t = _connected ? ReadControl(SVB_CONTROL_TYPE.SVB_CURRENT_TEMPERATURE) / 10.0 : double.NaN;
+            if (!double.IsNaN(t)) _lastTempC = t;
+            return t;
+        }
+    }
     public bool CoolerOn => _connected && _supportsCooler && ReadControl(SVB_CONTROL_TYPE.SVB_COOLER_ENABLE) != 0;
     public double CoolerPower => _connected && _supportsCooler ? ReadControl(SVB_CONTROL_TYPE.SVB_COOLER_POWER) : 0;
     public int BinX => _bin;
@@ -463,6 +473,12 @@ public sealed class SvbonySdkCamera : ICamera {
         // EXPOSURE (and DATE-AVG). Without this, SVBony SDK frames saved with
         // no exposure value.
         meta.Exposure.ExposureTime = exposureSec;
+        // Binning (XBINNING/YBINNING) + sensor temperature (CCD-TEMP) — both
+        // essential for matching calibration frames (darks/flats) and were
+        // otherwise absent from native-SDK FITS.
+        meta.Camera.BinX = (short)_bin;
+        meta.Camera.BinY = (short)_bin;
+        if (!double.IsNaN(_lastTempC)) meta.Camera.Temperature = _lastTempC;
         meta.Camera.PixelSizeX = _pixelSize;
         meta.Camera.PixelSizeY = _pixelSize;
         // The FITS/XISF writers stamp BAYERPAT from meta.Camera.BayerPattern,

@@ -70,7 +70,17 @@ public sealed class AsiSdkCamera : ICamera {
     public bool IsConnected => _connected;
     public CameraStates State { get; private set; } = CameraStates.NoState;
 
-    public double Temperature => _connected ? ReadControl(ASI_CONTROL_TYPE.ASI_TEMPERATURE) / 10.0 : double.NaN;
+    // Cache the last valid reading so WrapFrame can stamp CCD-TEMP into the
+    // FITS without an extra locked SDK read on every streamed frame (the WS
+    // status tick refreshes this every ~2 s).
+    private double _lastTempC = double.NaN;
+    public double Temperature {
+        get {
+            var t = _connected ? ReadControl(ASI_CONTROL_TYPE.ASI_TEMPERATURE) / 10.0 : double.NaN;
+            if (!double.IsNaN(t)) _lastTempC = t;
+            return t;
+        }
+    }
     public bool CoolerOn => _connected && _supportsCooler && ReadControl(ASI_CONTROL_TYPE.ASI_COOLER_ON) != 0;
     public double CoolerPower => _connected && _supportsCooler ? ReadControl(ASI_CONTROL_TYPE.ASI_COOLER_POWER_PERC) : 0;
     public int BinX => _bin;
@@ -363,6 +373,13 @@ public sealed class AsiSdkCamera : ICamera {
         meta.Camera.Offset = _offset;
         meta.Camera.PixelSizeX = _pixelSize;
         meta.Camera.PixelSizeY = _pixelSize;
+        // Binning + sensor temperature (essential for calibration matching) and
+        // the Bayer pattern (was missing entirely, so OSC ASI colour frames
+        // saved with no BAYERPAT and couldn't be debayered downstream).
+        meta.Camera.BinX = (short)_bin;
+        meta.Camera.BinY = (short)_bin;
+        if (!double.IsNaN(_lastTempC)) meta.Camera.Temperature = _lastTempC;
+        meta.Camera.BayerPattern = _bayer;
         return new BaseImageData(pixels, props, meta);
     }
 
