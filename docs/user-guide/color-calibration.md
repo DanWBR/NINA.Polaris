@@ -251,6 +251,13 @@ grounded in your specific gear rather than a generic star-colour rule.
 Open it from the STUDIO stack workspace: add the plate-solved integrated RGB
 master to the Lights slot, then press **SPCC** (next to **Color Cal (PCC)**).
 
+When the modal opens it reads the master's FITS header (INSTRUME + BAYERPAT)
+and **pre-selects** the sensor and OSC/mono type for you - e.g. a frame from a
+"ZWO ASI2600MC Pro" auto-picks the Sony IMX571 (OSC) curve, and a mono
+ASI183MM picks IMX183 (mono). A short note says what it matched; you can always
+override it. If the camera isn't in the curve database it falls back to the
+generic sensor of the right type.
+
 In the SPCC modal you pick:
 
 - **Sensor** - an OSC camera (its Bayer CFA response is built in) or a mono
