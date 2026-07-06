@@ -9925,6 +9925,14 @@ function ninaApp() {
                 try { if (window.PolarisKeyboard) window.PolarisKeyboard.setSuspended(!!open); } catch (_) {}
             });
 
+            // Re-fit the launcher whenever it switches which element is shown:
+            // the wide "Meet…" badge and the round FAB share one saved position,
+            // and a left anchored for the 56px FAB lets the wide badge overflow
+            // the right edge. Measure after the DOM updates. (Registered before
+            // badgeVisible is set below so the initial show is caught too.)
+            this.$watch('asst.badgeVisible', v => { if (v) this.$nextTick(() => this._assistantFitLauncher()); });
+            this.$watch('asst.subscribed', v => { if (v) this.$nextTick(() => this._assistantFitLauncher()); });
+
             if (!this.asst.subscribed && (!m.badge || m.badge.show !== false) && !dismissed) {
                 this.asst.badgeVisible = true;
             }
@@ -10433,6 +10441,27 @@ function ninaApp() {
                 top: Math.max(gap, Math.min(p.top, vh - sz - gap)),
             };
         },
+        // Width-aware clamp: the launcher position is stored as a top-left
+        // anchor, but the round FAB (56px) and the much wider "Meet …" badge
+        // share it. A left computed while the FAB was showing lets the wide
+        // badge overflow the right edge. Once the launcher has rendered, measure
+        // its ACTUAL box and keep it fully on-screen — which, for the wide badge
+        // dragged toward the right, naturally right-aligns it with a gap. No-op
+        // when there's no saved position (CSS anchors it to the bottom-right).
+        _assistantFitLauncher() {
+            const p = this.asst.pos;
+            if (!p) return;
+            const eln = this.asst.badgeVisible ? this.$refs.asstBadge
+                : (this.asst.subscribed ? this.$refs.asstFab : null);
+            const w = (eln && eln.offsetWidth) || 56;
+            const h = (eln && eln.offsetHeight) || 56;
+            const vw = window.innerWidth, vh = window.innerHeight, gap = 6;
+            this.asst.pos = {
+                left: Math.max(gap, Math.min(p.left, vw - w - gap)),
+                top: Math.max(gap, Math.min(p.top, vh - h - gap)),
+            };
+            try { this._assistantSavePos(); } catch (_) {}
+        },
         // Keep every assistant surface inside the viewport when the window is
         // resized (or the device rotates), so nothing can end up off-screen and
         // unreachable: the FAB/badge launcher, the floating chat panel, and the
@@ -10444,7 +10473,8 @@ function ninaApp() {
             // viewport (the render style also caps these, but store sane values).
             this.asst.dockW = Math.max(280, Math.min(this.asst.dockW, vw - 40));
             this.asst.dockH = Math.max(240, Math.min(this.asst.dockH, vh - 40));
-            this._assistantClampPos();     // launcher (FAB/badge)
+            this._assistantClampPos();     // launcher (FAB/badge), coarse 56px
+            this._assistantFitLauncher();  // …then re-fit using the real width
             this._assistantClampPanel();   // floating chat panel (incl. mobile-free)
             try {
                 if (this.asst.pos) this._assistantSavePos();

@@ -17261,7 +17261,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260706-asstbadge"></script>
+    <script src="/js/app.js?v=20260706-asstfit"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
@@ -17280,7 +17280,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <template x-if="asst.ready">
         <div>
             <!-- Intro badge (before opt-in) -->
-            <button class="assistant-badge" x-show="asst.badgeVisible" x-cloak
+            <button class="assistant-badge" x-ref="asstBadge" x-show="asst.badgeVisible" x-cloak
                     x-transition.opacity @click="assistantOpenIntro()"
                     @pointerdown="assistantDragStart($event)" :style="_assistantLauncherStyle()">
                 <span class="assistant-badge-icon" x-text="asst.manifest.product.iconEmoji || '✨'"></span>
@@ -17322,7 +17322,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </div>
 
             <!-- Floating action button (after subscription) -->
-            <button class="assistant-fab" x-show="asst.subscribed" x-cloak
+            <button class="assistant-fab" x-ref="asstFab" x-show="asst.subscribed" x-cloak
                     :class="{ 'active': asst.open }" @click="assistantToggle()"
                     @pointerdown="assistantDragStart($event)" :style="_assistantLauncherStyle()"
                     :title="asst.manifest.iframe.fabLabel || asst.manifest.product.name">
