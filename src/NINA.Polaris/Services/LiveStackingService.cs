@@ -276,6 +276,11 @@ public class LiveStackingService {
     // frames stack.
     public double LastFrameSnr { get; private set; }
     public double CumulativeSnr { get; private set; }
+    // Plain mean of the latest incoming sub, surfaced for the LIVE-tab
+    // "Mean" readout. Populated every frame regardless of mono/colour or
+    // compute mode (the client stats bar used to only get this from the
+    // retired client-side capture loop, so it read blank in server-owned live).
+    public double LastFrameMean { get; private set; }
 
     // 16-bit luminance histogram + stats of the latest colour stack, surfaced
     // over the WS status so the LIVE histogram panel shows the real 16-bit data
@@ -513,6 +518,7 @@ public class LiveStackingService {
             LastFrameStarCount = 0;
             LastFrameSnr = 0;
             CumulativeSnr = 0;
+            LastFrameMean = 0;
             RejectedFrames = 0;
             LastRejectReason = null;
             LastRejectAt = null;
@@ -925,6 +931,7 @@ public class LiveStackingService {
         //   InjectCumulativeSnr() below (no buffer here to inspect).
         try {
             LastFrameSnr = ComputeFrameSnr(imageData.Data);
+            LastFrameMean = ImageStatistics.ComputeMean(imageData.Data);
             if (mode == StackMode.Full) {
                 CumulativeSnr = ComputeCumulativeSnrFromAccumulator();
             }

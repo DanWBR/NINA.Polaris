@@ -58,7 +58,7 @@ public class ColorCalibrationServiceTests {
         // (the "catalog missing" error). BG + Manual tests don't
         // touch the catalog at all.
         var env = new FakeWebHostEnvironment(_tmpRoot);
-        var catalog = new ApassCatalog(env, NullLogger<ApassCatalog>.Instance);
+        var catalog = new ApassCatalog(env, _profile, NullLogger<ApassCatalog>.Instance);
         _svc = new ColorCalibrationService(_library, _profile, catalog,
             NullLogger<ColorCalibrationService>.Instance);
     }

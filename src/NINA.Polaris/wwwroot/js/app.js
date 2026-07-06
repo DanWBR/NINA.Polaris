@@ -33976,6 +33976,22 @@ function ninaApp() {
                 // waiting for the next sub.
                 if (msg.liveStack.isRunning) {
                     try { this._maybeRestoreLiveStackPreview(msg.liveStack.frameCount); } catch (e) {}
+                    // Feed the stats bar (Stars / HFR / Mean / SNR) from the
+                    // server's per-frame live-stack metrics. These used to be
+                    // populated ONLY by the retired client-driven capture loop
+                    // (/api/camera/capture), so in server-owned LIVE they read
+                    // blank. The server computes them every frame in both Full
+                    // and MetricsOnly modes, so read them here.
+                    const ls = msg.liveStack;
+                    if (typeof ls.lastFrameStarCount === 'number' && ls.lastFrameStarCount > 0)
+                        this.stats.starCount = ls.lastFrameStarCount;
+                    if (typeof ls.lastFrameHfr === 'number' && ls.lastFrameHfr > 0)
+                        this.stats.hfr = ls.lastFrameHfr.toFixed(2);
+                    if (typeof ls.lastFrameMean === 'number' && ls.lastFrameMean > 0)
+                        this.stats.mean = Math.round(ls.lastFrameMean);
+                    if (typeof ls.lastFrameSnr === 'number' && ls.lastFrameSnr > 0)
+                        this.stats.snr = ls.lastFrameSnr.toFixed(1);
+                    if (ls.width > 0) { this.stats.width = ls.width; this.stats.height = ls.height; }
                 }
             }
             if (msg.plan !== undefined) {

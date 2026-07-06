@@ -123,6 +123,7 @@ public class RealDataPipelineTests {
             "src", "NINA.Polaris", "wwwroot");
         _apass = new ApassCatalog(
             new FakeWebHostEnvironment(repoWebRoot),
+            _profile,
             NullLogger<ApassCatalog>.Instance);
         _colorcal = new ColorCalibrationService(_library, _profile, _apass,
             NullLogger<ColorCalibrationService>.Instance);

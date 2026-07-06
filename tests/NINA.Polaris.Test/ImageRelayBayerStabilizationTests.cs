@@ -27,8 +27,9 @@ namespace NINA.Polaris.Test;
 /// mid-session; without stabilization that single frame relays as mono and
 /// the client-side debayer paints a grey / raw-mosaic frame ("frame não
 /// debayerado" during live stacking). The relay now reuses the last good
-/// pattern for a short run of None frames, but never forces colour onto a
-/// genuinely mono source. LatestImage is populated even with no WS clients,
+/// pattern for any run of None frames once a real pattern is known, but never
+/// forces colour onto a genuinely mono source (last-good never set).
+/// LatestImage is populated even with no WS clients,
 /// so we can assert the wire-side pattern without a socket.
 /// </summary>
 [TestFixture]
@@ -74,20 +75,20 @@ public class ImageRelayBayerStabilizationTests {
     }
 
     [Test]
-    public async Task SustainedNone_StopsSubstitutingAfterCap() {
+    public async Task SustainedNone_KeepsStabilizingOncePatternKnown() {
         var relay = NewRelay();
         await relay.RelayImageAsync(Frame(BayerPatternEnum.RGGB));
 
-        // A short burst of None frames is treated as a dropout and stabilized,
-        // but a long run (e.g. after switching to a mono rig) must fall back to
-        // true mono rather than forcing colour forever.
-        for (int i = 0; i < 5; i++) {
+        // Once a real pattern is locked for the session, a long run of None
+        // frames is a CCD_CFA dropout (some OSC INDI drivers only publish the
+        // pattern intermittently), so reuse is UNBOUNDED — the old 5-frame cap
+        // flashed the LIVE view mono a few seconds after each stack (field
+        // report). A genuine OSC->mono change only happens on a camera
+        // reconnect, which builds a fresh relay with _lastRelayBayer = None.
+        for (int i = 0; i < 40; i++) {
             await relay.RelayImageAsync(Frame(BayerPatternEnum.None));
             Assert.That(relay.LatestImage!.BayerPattern, Is.EqualTo(BayerPatternEnum.RGGB),
                 $"dropout frame {i + 1} should still be stabilized");
         }
-        // Past the cap: stop substituting, let true mono through.
-        await relay.RelayImageAsync(Frame(BayerPatternEnum.None));
-        Assert.That(relay.LatestImage!.BayerPattern, Is.EqualTo(BayerPatternEnum.None));
     }
 }

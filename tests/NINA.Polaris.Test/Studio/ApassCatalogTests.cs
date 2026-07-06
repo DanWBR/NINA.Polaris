@@ -14,9 +14,11 @@
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
+using NINA.Polaris.Services;
 using NINA.Polaris.Services.Sky;
 
 namespace NINA.Polaris.Test.Studio;
@@ -34,7 +36,20 @@ public class ApassCatalogTests {
     private string _tmpRoot = null!;
     private string _dbPath = null!;
     private FakeWebHostEnvironment _env = null!;
+    private ProfileService _profiles = null!;
     private ApassCatalog _cat = null!;
+
+    // The catalog's writable DB path lives under ProfileService.DataDir
+    // (= Profiles:Directory); point it at _tmpRoot so it resolves to the same
+    // apass.db the tests seed.
+    private ProfileService MakeProfiles() {
+        var cfg = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> {
+                ["Profiles:Directory"] = _tmpRoot
+            })
+            .Build();
+        return new ProfileService(cfg, NullLogger<ProfileService>.Instance);
+    }
 
     [SetUp]
     public void Setup() {
@@ -43,7 +58,8 @@ public class ApassCatalogTests {
         Directory.CreateDirectory(Path.Combine(_tmpRoot, "catalogs", "apass"));
         _dbPath = Path.Combine(_tmpRoot, "catalogs", "apass", "apass.db");
         _env = new FakeWebHostEnvironment(_tmpRoot);
-        _cat = new ApassCatalog(_env, NullLogger<ApassCatalog>.Instance);
+        _profiles = MakeProfiles();
+        _cat = new ApassCatalog(_env, _profiles, NullLogger<ApassCatalog>.Instance);
     }
 
     [TearDown]
@@ -60,7 +76,7 @@ public class ApassCatalogTests {
     public void QueryRegionAsync_NoDb_ThrowsActionable() {
         var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _cat.QueryRegionAsync(0, 0, 1));
-        Assert.That(ex!.Message, Does.Contain("APASS").And.Contain("download-apass"));
+        Assert.That(ex!.Message, Does.Contain("APASS").And.Contain("Download"));
     }
 
     [Test]
@@ -76,7 +92,7 @@ public class ApassCatalogTests {
             (Ra: 10.0,  Dec: 25.0,  V: 11.5, B: 12.1),  // 5.0° away (Dec), no match
         });
         // Force the star-count cache to invalidate.
-        _cat = new ApassCatalog(_env, NullLogger<ApassCatalog>.Instance);
+        _cat = new ApassCatalog(_env, _profiles, NullLogger<ApassCatalog>.Instance);
 
         var stars = await _cat.QueryRegionAsync(raDeg: 10.0, decDeg: 20.0,
             radiusDeg: 0.5);
@@ -106,7 +122,7 @@ public class ApassCatalogTests {
             (10.05, 20.05, 12.0, 12.5),   // dim, should be filtered
             (10.1, 20.1, 14.0, 14.6),     // also dim
         });
-        _cat = new ApassCatalog(_env, NullLogger<ApassCatalog>.Instance);
+        _cat = new ApassCatalog(_env, _profiles, NullLogger<ApassCatalog>.Instance);
 
         var bright = await _cat.QueryRegionAsync(10.0, 20.0, 0.5, magLimit: 10.0);
         Assert.That(bright.Count, Is.EqualTo(1),
@@ -129,7 +145,7 @@ public class ApassCatalogTests {
             (Ra: 359.7, Dec: 20.0, V: 9.0, B: 9.5),
             (Ra: 358.0, Dec: 20.0, V: 9.0, B: 9.5),    // too far west, no match
         });
-        _cat = new ApassCatalog(_env, NullLogger<ApassCatalog>.Instance);
+        _cat = new ApassCatalog(_env, _profiles, NullLogger<ApassCatalog>.Instance);
 
         var stars = await _cat.QueryRegionAsync(raDeg: 0.5, decDeg: 20.0,
             radiusDeg: 1.0);
@@ -144,7 +160,7 @@ public class ApassCatalogTests {
             (2.0, 2.0, 9.0, 9.5),
             (3.0, 3.0, 10.0, 10.5),
         });
-        _cat = new ApassCatalog(_env, NullLogger<ApassCatalog>.Instance);
+        _cat = new ApassCatalog(_env, _profiles, NullLogger<ApassCatalog>.Instance);
         Assert.That(_cat.StarCount, Is.EqualTo(3));
     }
 

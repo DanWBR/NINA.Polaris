@@ -63,7 +63,6 @@ public class ImageRelayService : IDisposable {
     // pattern so it can be reused verbatim.
     private BayerPatternEnum _lastRelayBayer = BayerPatternEnum.None;
     private int _bayerDropoutRun;
-    private const int MaxBayerDropoutSubstitutions = 5;
 
     /// <summary>The most recently relayed frame, as a decoded
     /// ushort[] pixel buffer with width/height. Null until the first
@@ -275,13 +274,21 @@ public class ImageRelayService : IDisposable {
         if (effectiveBayer != BayerPatternEnum.None && effectiveBayer != BayerPatternEnum.Auto) {
             _lastRelayBayer = effectiveBayer;
             _bayerDropoutRun = 0;
-        } else if (_lastRelayBayer != BayerPatternEnum.None
-                && _bayerDropoutRun < MaxBayerDropoutSubstitutions) {
+        } else if (_lastRelayBayer != BayerPatternEnum.None) {
+            // Source reported Bayer=None but we've already locked a real pattern
+            // this session, so this is a CCD_CFA dropout (some INDI OSC drivers
+            // only publish the pattern intermittently, not every frame) — keep
+            // colouring. Reuse is UNBOUNDED on purpose: the previous 5-frame cap
+            // meant a driver that dropped the pattern for >5 subs flashed the
+            // LIVE view mono a few seconds after each stack (field report). A
+            // genuine OSC→mono change only happens on a camera reconnect, which
+            // rebuilds this session and resets _lastRelayBayer to None.
             _bayerDropoutRun++;
             resolved = _lastRelayBayer;
-            _logger.LogDebug(
-                "Relay: source reported Bayer=None; reusing last good {Pattern} (dropout {N}/{Max})",
-                _lastRelayBayer, _bayerDropoutRun, MaxBayerDropoutSubstitutions);
+            if (_bayerDropoutRun == 1 || _bayerDropoutRun % 50 == 0)
+                _logger.LogDebug(
+                    "Relay: source reported Bayer=None; reusing last good {Pattern} (dropout run {N})",
+                    _lastRelayBayer, _bayerDropoutRun);
         }
         var buffer = ImageBuffer.FromImageData(sourceData, resolved);
         _latestImage = buffer;
@@ -421,6 +428,10 @@ public class ImageRelayService : IDisposable {
             // what's on the LIVE canvas, so annotate should target it.
             _latestImage = buffer;
             _latestImageData = rgb;
+            // Invalidate the cached one-shot JPEG (as RelayImageAsync does) so
+            // /api/livestack/preview re-encodes from THIS colour stack instead of
+            // serving a stale JPEG left over from an earlier raw/mono frame.
+            _latestJpeg = null;
             var header = buffer.GetStreamHeader((int)kind);
             var frame = new byte[4 + header.Length + jpeg.Length];
             BitConverter.GetBytes(header.Length).CopyTo(frame, 0);

@@ -123,6 +123,27 @@ public class ImageStatistics : IImageStatistics {
     }
 
     /// <summary>
+    /// Plain arithmetic mean of the pixel values. Used for the live-view
+    /// "Mean" readout. A single memory-bound pass, parallelized in local
+    /// partition sums so it's cheap enough to run on every live-stack frame
+    /// even on a Pi (much lighter than the median/MAD SNR pass above).
+    /// </summary>
+    public static double ComputeMean(ushort[] data) {
+        if (data == null || data.Length == 0) return 0;
+        long total = 0;
+        object gate = new();
+        System.Threading.Tasks.Parallel.ForEach(
+            System.Collections.Concurrent.Partitioner.Create(0, data.Length),
+            () => 0L,
+            (range, _, local) => {
+                for (int i = range.Item1; i < range.Item2; i++) local += data[i];
+                return local;
+            },
+            local => { lock (gate) total += local; });
+        return (double)total / data.Length;
+    }
+
+    /// <summary>
     /// Background SNR. Two-pass single-iteration: pass 1 classifies
     /// pixels + accumulates background mean/M2 (Welford's algorithm
     /// for numerically stable stdev) and signal sum/count. SNR =

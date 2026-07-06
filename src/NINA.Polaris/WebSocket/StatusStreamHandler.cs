@@ -340,6 +340,7 @@ public static class StatusStreamHandler {
                             referenceStarCount = liveStack.GetStatus().ReferenceStarCount,
                             lastFrameHfr = liveStack.LastFrameMedianHfr,
                             lastFrameStarCount = liveStack.LastFrameStarCount,
+                            lastFrameMean = liveStack.LastFrameMean,
                             // CLST-1/CLST-4: "full" (server-side accumulator) or
                             // "metricsonly" (client owns the accumulator via WASM).
                             // The client only routes raw frames through its WASM
