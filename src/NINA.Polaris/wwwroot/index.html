@@ -17160,7 +17160,14 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             title="Close session" @click="termCloseModal()">✕</button>
                 </span>
             </div>
-            <div class="term-window-body" x-ref="termMount"></div>
+            <!-- data-no-vkbd: the Polaris on-screen keyboard types into a
+                 field's .value, but xterm reads its own hidden helper
+                 <textarea> via key events (not .value), so the internal
+                 keyboard showed but did nothing here AND suppressed the native
+                 one. Excluding the mount lets the OS keyboard drive the live
+                 terminal. The connect form (host/user/password) is outside this
+                 element, so it keeps the internal keyboard. -->
+            <div class="term-window-body" x-ref="termMount" data-no-vkbd></div>
             <div class="term-window-footer" x-show="term.lastError" x-cloak>
                 <span class="text-warn" x-text="term.lastError"></span>
             </div>
