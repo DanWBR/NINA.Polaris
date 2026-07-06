@@ -53,12 +53,28 @@ jobs:
           fi
           echo "OK: clean render."
 
-      - name: Build plain-text edition (llms.txt) and check cleanup
+      - name: Build machine-readable editions and verify them
         run: |
-          bash book/scripts/build-llms-txt.sh
-          # The cleanup regex must leave no Quarto-only markup behind.
-          if grep -nE '\[@|\{#|^:::|@sec-|<!--' book/_build/llms-full.txt; then
-            echo "::error::Residual Quarto markup in llms-full.txt; fix book/scripts/build-llms-txt.sh."
-            exit 1
-          fi
-          echo "OK: clean plain-text export."
+          python3 book/scripts/build-handbook-corpus.py
+          # The cleanup must leave no Quarto-only markup behind, and every
+          # RAG deep link must point at a real anchor in the rendered HTML.
+          python3 - <<'PY'
+          import json, re, sys, pathlib
+          full = pathlib.Path("book/_build/llms-full.txt").read_text(encoding="utf-8")
+          for pat in (r"\[@", r"\{#", r"(?m)^:::", "@sec-", "<!--"):
+              if re.search(pat, full):
+                  sys.exit(f"::error::Residual markup {pat!r} in llms-full.txt")
+          recs = [json.loads(l) for l in open("book/_build/handbook.jsonl", encoding="utf-8")]
+          bad = 0
+          for r in recs:
+              if "#" not in r["url"]:
+                  continue
+              stem, anchor = r["id"].split("#", 1)
+              html = pathlib.Path(f"book/_build/{stem}.html")
+              if html.exists() and f'id="{anchor}"' not in html.read_text(encoding="utf-8"):
+                  print(f"::error::Dead RAG anchor: {r['id']}")
+                  bad += 1
+          if bad:
+              sys.exit(f"{bad} RAG deep links point at missing anchors")
+          print(f"OK: {len(recs)} clean RAG chunks, all deep links resolve.")
+          PY

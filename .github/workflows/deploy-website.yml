@@ -37,8 +37,8 @@ jobs:
       - name: Render the handbook (HTML)
         working-directory: book
         run: quarto render --to html
-      - name: Build the plain-text edition for the assistant (llms.txt)
-        run: bash book/scripts/build-llms-txt.sh
+      - name: Build machine-readable editions for the assistant
+        run: python3 book/scripts/build-handbook-corpus.py
       - name: Stage handbook under /handbook
         run: |
           mkdir -p website/public/handbook
