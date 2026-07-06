@@ -198,7 +198,17 @@ rather than a generic star-color rule.
 
 Open it from the Stack workspace: add the plate-solved, integrated
 RGB master to the **Lights** slot, then press **SPCC** (next to
-**Color Cal (PCC)**). In the SPCC modal you pick:
+**Color Cal (PCC)**).
+
+When the modal opens it reads the master's FITS header (the camera
+model in `INSTRUME` and the Bayer pattern in `BAYERPAT`) and
+pre-selects the sensor and the OSC/mono type for you. A frame from a
+"ZWO ASI2600MC Pro" auto-picks the Sony IMX571 (OSC) curve; a mono
+ASI183MM picks IMX183 (mono). A short note says what it matched, and
+you can always override it. If the camera is not in the curve
+database it falls back to the generic sensor of the right type.
+
+In the SPCC modal you pick:
 
 - **Sensor**: an OSC camera (its color-filter-array response is
   built in) or a mono sensor (one QE curve, combined with an RGB
@@ -248,17 +258,31 @@ right.](images/star-color.jpg){#fig-star-color}
 
 ### Filter and sensor curves
 
-The bundled curve database at `wwwroot/catalogs/spcc/curves.json`
-ships generic, idealized curves so SPCC works on any offline install
-out of the box. They are labeled "Generic" and are not measured
-manufacturer data. The set covers a spread of archetypes: OSC
-(neutral, modern back-illuminated with strong red and near-infrared
-response, and older front-illuminated CCD), mono (standard and
-modern high-QE), and filter sets (no filter, UV/IR-cut, broadband
-light-pollution, dual-band Ha+OIII, and RGB for mono).
+Polaris ships two curve databases, both merged into the same
+dropdowns.
 
-For a calibration matched to your real gear, edit that JSON and drop
-in your filter transmission and sensor QE curves. Each curve is:
+The first, `wwwroot/catalogs/spcc/curves.json`, holds generic,
+idealized curves so SPCC works on any offline install out of the
+box. They are labeled "Generic" and are not measured manufacturer
+data. The set covers a spread of archetypes: OSC (neutral, modern
+back-illuminated with strong red and near-infrared response, and
+older front-illuminated CCD), mono (standard and modern high-QE),
+and filter sets (no filter, UV/IR-cut, broadband light-pollution,
+dual-band Ha+OIII, and RGB for mono).
+
+The second, `wwwroot/catalogs/spcc/curves-siril.json`, is the
+community-curated **Siril SPCC database** [@siril] imported into the
+same schema. It carries real measured QE and transmission curves for
+dozens of actual cameras (Sony, Canon, Nikon, Kodak sensors) and
+filters (Antlia, Astronomik, Baader, Optolong, ZWO, and more),
+labeled "(Siril)". It is distributed under the GPL v3 with
+attribution (see `wwwroot/catalogs/spcc/LICENSE.txt`); regenerate it
+with `python scripts/download-siril-spcc.py --src <clone of the
+Siril SPCC repo>`. If your exact camera and filter are in the list,
+pick those for a much closer match than the generic archetypes.
+
+For gear in neither list, edit `curves.json` and drop in your own
+filter transmission and sensor QE curves. Each curve is:
 
 ```json
 { "wl": [400, 450, ...], "v": [0.32, 0.61, ...] }
@@ -270,8 +294,8 @@ with wavelengths in nanometers, strictly increasing, and values from
 You can check what is installed under **SETTINGS → Colour
 calibration data**: the APASS catalog status, which SPCC spectral
 sources are present (Blackbody always, Pickles bundled, Gaia
-planned), the count of sensor and filter curves, and the path to
-`curves.json` for editing.
+planned), the count of sensor and filter curves (generic and Siril
+combined), and the path to `curves.json` for editing.
 
 ### The method, for the curious
 

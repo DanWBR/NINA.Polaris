@@ -74,6 +74,10 @@ between them in one click. → [rigs.md](user-guide/rigs.md)
 - **Embedded INDI Drivers Manager** — the indi-web (indiwebmanager) UI
   inside the panel via iframe, so you can add/remove INDI drivers and
   start/stop the indiserver without SSH. → [indi-web.md](user-guide/indi-web.md)
+- **Wedged-driver watchdog** — a single INDI driver that stops
+  delivering frames (dropped BLOB) is restarted on its own, and every
+  running driver has a one-click restart, without touching the rest of
+  the server. → [indi-web.md](user-guide/indi-web.md)
 - **Live INDI property tree** — browse and set any INDI property directly.
 
 ---
@@ -311,6 +315,13 @@ Browse, calibrate, and integrate your captured frames on the host.
   - **Manual** (background patch + white-reference patch),
   - **PCC** — Photometric Color Calibration against the bundled APASS DR10
     star catalog for science-grade color.
+  - **SPCC** — SpectroPhotometric Color Calibration: integrates each
+    catalog star's spectrum through your sensor and filter response
+    (bundled Pickles library + the imported **Siril SPCC database** of
+    real measured curves for dozens of cameras and filters). Auto-selects
+    the sensor and OSC/mono type from the frame's FITS header.
+  - Both PCC and SPCC finish with a **white-balance summary** plot
+    (measured vs expected channel ratios, robust fit).
   → [color-calibration.md](user-guide/color-calibration.md)
 - **Quick processing** — debayer, background extraction, noise reduction,
   and sharpening passes.
