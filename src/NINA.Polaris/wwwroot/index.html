@@ -1096,6 +1096,15 @@
                         </span>
                         <span class="hcg-badge" x-show="isHcgActive(gain)" x-cloak
                               :title="'High Conversion Gain active (gain >= ' + hcgThreshold() + ')'">HCG</span>
+                        <!-- Filter selector: shown below Gain and above the BIN
+                             buttons whenever a filter wheel is connected. -->
+                        <label x-show="filterWheel.connected">Filter<select class="input-sm"
+                            @change="setFilter($event.target.value)"
+                            :value="filterWheel.currentFilter">
+                            <template x-for="f in filterWheel.filters" :key="f">
+                                <option :value="f" x-text="f" :selected="f === filterWheel.currentFilter"></option>
+                            </template>
+                        </select></label>
                         <span class="bin-presets" role="group" aria-label="Binning">
                             <template x-for="b in ['1','2','3','4']" :key="b">
                                 <button type="button" class="bin-preset"
@@ -1104,13 +1113,6 @@
                                         x-text="'BIN' + b"></button>
                             </template>
                         </span>
-                        <label x-show="filterWheel.connected">Filter<select class="input-sm"
-                            @change="setFilter($event.target.value)"
-                            :value="filterWheel.currentFilter">
-                            <template x-for="f in filterWheel.filters" :key="f">
-                                <option :value="f" x-text="f" :selected="f === filterWheel.currentFilter"></option>
-                            </template>
-                        </select></label>
                     </div>
                     <!-- Target identification. Stamped into saved frames
                          (FITS OBJECT) and auto-filled after a plate-solved
