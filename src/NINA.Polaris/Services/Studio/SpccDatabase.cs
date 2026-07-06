@@ -39,10 +39,13 @@ public class SpccDatabase {
     private readonly ILogger<SpccDatabase> _logger;
     private readonly string _spccDir;
     private readonly string _curvesPath;
+    private readonly string _sirilPath;
     private readonly string _picklesPath;
     private readonly string _gaiaPath;
 
     private JsonDocument? _curves;
+    private JsonDocument? _siril;
+    private bool _sirilLoaded;
     private PicklesLibrary? _pickles;
     private bool _picklesLoaded;
 
@@ -56,11 +59,13 @@ public class SpccDatabase {
         var webRoot = env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot");
         _spccDir = Path.Combine(webRoot, "catalogs", "spcc");
         _curvesPath = Path.Combine(_spccDir, "curves.json");
+        _sirilPath = Path.Combine(_spccDir, "curves-siril.json");
         _picklesPath = Path.Combine(_spccDir, "pickles.json");
         _gaiaPath = Path.Combine(_spccDir, "gaia-spcc.db");
     }
 
     public bool CurvesAvailable => File.Exists(_curvesPath);
+    public bool SirilAvailable => File.Exists(_sirilPath);
     public bool PicklesAvailable => File.Exists(_picklesPath);
     public bool GaiaAvailable => File.Exists(_gaiaPath);
     public string CurvesPath => _curvesPath;
@@ -78,6 +83,35 @@ public class SpccDatabase {
         return _curves;
     }
 
+    /// <summary>The optional imported Siril SPCC curve database
+    /// (<c>curves-siril.json</c>, GPLv3, produced by
+    /// <c>scripts/download-siril-spcc.py</c>). Merged with the generic
+    /// <c>curves.json</c> so its sensors/filters/white-refs appear in the same
+    /// dropdowns. Missing or malformed = silently ignored.</summary>
+    private JsonDocument? Siril() {
+        if (_sirilLoaded) return _siril;
+        _sirilLoaded = true;
+        if (!SirilAvailable) return null;
+        try {
+            _siril = JsonDocument.Parse(File.ReadAllText(_sirilPath));
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "SPCC: failed to load Siril curve database {Path}", _sirilPath);
+            _siril = null;
+        }
+        return _siril;
+    }
+
+    /// <summary>Enumerate the named array (sensors / filterSets / whiteRefs)
+    /// across every loaded curve database (generic first, then Siril).</summary>
+    private IEnumerable<JsonElement> EnumerateAll(string array) {
+        foreach (var e in Curves().RootElement.GetProperty(array).EnumerateArray())
+            yield return e;
+        var siril = Siril();
+        if (siril != null && siril.RootElement.TryGetProperty(array, out var arr))
+            foreach (var e in arr.EnumerateArray())
+                yield return e;
+    }
+
     // ── UI options ───────────────────────────────────────────────────────
 
     public record CurveOption(string Id, string Name, string Kind);
@@ -85,24 +119,24 @@ public class SpccDatabase {
     /// <summary>Lists for the SPCC modal's dropdowns plus which spectral
     /// sources are installed.</summary>
     public object Options() {
-        var root = Curves().RootElement;
-        var sensors = root.GetProperty("sensors").EnumerateArray()
+        var sensors = EnumerateAll("sensors")
             .Select(s => new CurveOption(
                 s.GetProperty("id").GetString()!,
                 s.GetProperty("name").GetString()!,
                 s.GetProperty("type").GetString()!)).ToList();
-        var filters = root.GetProperty("filterSets").EnumerateArray()
+        var filters = EnumerateAll("filterSets")
             .Select(f => new CurveOption(
                 f.GetProperty("id").GetString()!,
                 f.GetProperty("name").GetString()!,
                 f.TryGetProperty("for", out var fr) ? fr.GetString()! : "any")).ToList();
-        var whiteRefs = root.GetProperty("whiteRefs").EnumerateArray()
+        var whiteRefs = EnumerateAll("whiteRefs")
             .Select(w => new CurveOption(
                 w.GetProperty("id").GetString()!,
                 w.GetProperty("name").GetString()!,
                 w.GetProperty("kind").GetString()!)).ToList();
         return new {
             curvesAvailable = CurvesAvailable,
+            sirilCurves = SirilAvailable,
             sensors,
             filterSets = filters,
             whiteRefs,
@@ -122,10 +156,9 @@ public class SpccDatabase {
     /// Mono: sensor.qe × filter.{r,g,b}.</summary>
     public (SpccMath.ResponseCurve R, SpccMath.ResponseCurve G, SpccMath.ResponseCurve B)
             BuildResponses(string sensorId, string filterSetId) {
-        var root = Curves().RootElement;
-        var sensor = FindById(root, "sensors", sensorId)
+        var sensor = FindById("sensors", sensorId)
             ?? throw new ArgumentException($"Unknown SPCC sensor '{sensorId}'.");
-        var filter = FindById(root, "filterSets", filterSetId)
+        var filter = FindById("filterSets", filterSetId)
             ?? throw new ArgumentException($"Unknown SPCC filter set '{filterSetId}'.");
         var type = sensor.GetProperty("type").GetString();
 
@@ -149,8 +182,7 @@ public class SpccDatabase {
 
     /// <summary>The white-reference spectrum on the standard grid.</summary>
     public SpccMath.Spectrum BuildWhiteRef(string whiteRefId) {
-        var root = Curves().RootElement;
-        var w = FindById(root, "whiteRefs", whiteRefId)
+        var w = FindById("whiteRefs", whiteRefId)
             ?? throw new ArgumentException($"Unknown SPCC white reference '{whiteRefId}'.");
         var kind = w.GetProperty("kind").GetString();
         return kind switch {
@@ -197,8 +229,8 @@ public class SpccDatabase {
 
     // ── JSON helpers ─────────────────────────────────────────────────────
 
-    private static JsonElement? FindById(JsonElement root, string array, string id) {
-        foreach (var e in root.GetProperty(array).EnumerateArray())
+    private JsonElement? FindById(string array, string id) {
+        foreach (var e in EnumerateAll(array))
             if (e.GetProperty("id").GetString() == id) return e;
         return null;
     }

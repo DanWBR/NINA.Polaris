@@ -286,23 +286,33 @@ A **Before / after** button opens the comparator (colour calibration uses an
 
 ### Filter / QE curves
 
-The bundled curve database at `wwwroot/catalogs/spcc/curves.json` ships
-**generic, idealised** curves so SPCC works on any offline install out of the
-box. They are labelled "Generic" and are **not** measured manufacturer data. It
-covers a spread of archetypes to choose from - OSC (neutral, modern back-
-illuminated with strong red/NIR, and older front-illuminated CCD), mono
-(standard and modern high-QE), and filter sets (no filter, UV/IR-cut,
-broadband light-pollution, dual-band Ha+OIII, and RGB for mono).
+Polaris ships **two** curve databases, both merged into the same dropdowns:
 
-For a calibration matched to your real gear, edit that JSON and drop in your
-filter transmission and sensor QE curves - each is `{ "wl": [nm...],
-"v": [0..1...] }` with wavelength strictly increasing. Channel total response
-is `sensor x filter`.
+- **Generic archetypes** (`wwwroot/catalogs/spcc/curves.json`) - hand-built,
+  idealised curves so SPCC works on any offline install out of the box. They are
+  labelled "Generic" and are **not** measured manufacturer data. They cover a
+  spread of archetypes - OSC (neutral, modern back-illuminated with strong
+  red/NIR, and older front-illuminated CCD), mono (standard and modern high-QE),
+  and filter sets (no filter, UV/IR-cut, broadband light-pollution, dual-band
+  Ha+OIII, and RGB for mono).
+- **Real measured curves from the Siril SPCC database**
+  (`wwwroot/catalogs/spcc/curves-siril.json`) - dozens of actual cameras
+  (Sony/Canon/Nikon/Kodak sensors) and filters (Antlia, Astronomik, Baader,
+  Optolong, ZWO, ...), labelled "(Siril)". These are the same community-curated,
+  measured QE / transmission curves Siril's SPCC uses, imported under GPLv3 with
+  attribution (see `wwwroot/catalogs/spcc/LICENSE.txt`). Regenerate them with
+  `python scripts/download-siril-spcc.py --src <clone of the Siril SPCC repo>`.
+  If your exact camera + filter is in the list, pick those for a much closer
+  match than the generic archetypes.
+
+For gear that is in neither list, edit `curves.json` and drop in your own filter
+transmission and sensor QE curves - each is `{ "wl": [nm...], "v": [0..1...] }`
+with wavelength strictly increasing. Channel total response is `sensor x filter`.
 
 You can check what's installed under **Config -> Colour calibration data**: the
 APASS catalog status, which SPCC spectral sources are present (Blackbody always,
-Pickles bundled, Gaia planned), and the count of sensor/filter curves, plus the
-path to `curves.json` for editing.
+Pickles bundled, Gaia planned), and the count of sensor/filter curves (generic +
+Siril combined), plus the path to `curves.json` for editing.
 
 ### Method (for the curious)
 

@@ -1,0 +1,47 @@
+N.I.N.A. Polaris bundled SPCC curve databases
+=============================================
+
+This folder holds the reference data the SpectroPhotometric Color
+Calibration (SPCC) integrates against: sensor quantum-efficiency curves,
+filter transmission curves and white-reference spectra.
+
+-------------------------------------------------------------------
+1. curves.json  --  generic archetype curves
+-------------------------------------------------------------------
+   Origin:  hand-built generic OSC/mono sensor + filter archetypes,
+            authored for Polaris. Part of the Polaris source tree and
+            covered by the Polaris project license.
+
+-------------------------------------------------------------------
+2. pickles.json  --  Pickles stellar spectral library
+-------------------------------------------------------------------
+   Source:  A. J. Pickles, "A Stellar Spectral Flux Library:
+            1150 - 25000 A" (PASP 110, 863, 1998), via the STScI
+            CDBS distribution. Public reference data.
+   Build:   scripts/download-pickles.py
+
+-------------------------------------------------------------------
+3. curves-siril.json  --  imported Siril SPCC database
+-------------------------------------------------------------------
+   Source:  Siril SPCC database by Team free-astro
+            https://gitlab.com/free-astro/siril-spcc-database
+   License: GNU General Public License v3.0 or later (GPL-3.0-or-later),
+            as stated in that repository's LICENSE.md. GPLv3 is
+            compatible with the copyleft terms Polaris ships under.
+   Build:   scripts/download-siril-spcc.py converts the upstream
+            per-device JSON files into Polaris's curve schema. Only the
+            wavelength/response numbers are reused; nothing is presented
+            as original Polaris data.
+   Attribution:
+      "Sensor QE, filter transmission and white-reference curves from
+       the Siril SPCC database (Team free-astro), GPLv3."
+   Upstream provenance:
+      Each converted entry keeps a `source` field naming where free-astro
+      obtained that specific curve -- manufacturer-published /
+      scanned QE and transmission data, the SVO Filter Profile Service,
+      and the Pickles / Bessell / SWIRE reference series. Those upstream
+      series carry their own terms; free-astro compiled and released the
+      collection under GPLv3, which is what Polaris redistributes.
+
+A full copy of the GNU GPL v3 is available at
+https://www.gnu.org/licenses/gpl-3.0.txt
