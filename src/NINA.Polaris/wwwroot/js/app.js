@@ -18095,11 +18095,14 @@ function ninaApp() {
             try {
                 const r = await this.apiFetch('/api/plan/plans');
                 this.plans = await r.json() || [];
-                // Keep the current selection if it still exists, else pick the first.
+                // Keep the current selection if it still exists, else pick the
+                // newest plan (last in insertion order) so a just-created plan —
+                // e.g. one the assistant just built — is auto-selected instead of
+                // leaving the picker on an older entry.
                 if (this.planSelectedId && this.plans.some(p => p.id === this.planSelectedId)) {
                     this.selectPlan(this.planSelectedId);
                 } else if (this.plans.length) {
-                    this.selectPlan(this.plans[0].id);
+                    this.selectPlan(this.plans[this.plans.length - 1].id);
                 } else {
                     this.plan = null; this.planSelectedId = '';
                 }
