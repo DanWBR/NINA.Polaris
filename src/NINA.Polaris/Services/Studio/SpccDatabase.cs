@@ -149,6 +149,117 @@ public class SpccDatabase {
         };
     }
 
+    // ── Auto-select from FITS header ─────────────────────────────────────
+
+    /// <param name="Type">"osc" or "mono", from the Bayer header.</param>
+    /// <param name="SensorId">Best-matching sensor id, or null if no
+    /// confident match.</param>
+    /// <param name="Reason">Human-readable note on how the match was made.</param>
+    public record SpccSuggestion(
+        string Type, string? Camera, string? Bayer, string? Filter,
+        string? SensorId, string? SensorName,
+        string? FilterSetId, string? FilterSetName, string Reason);
+
+    /// <summary>
+    /// Best-effort mapping from a FITS <c>INSTRUME</c> camera model to the
+    /// sensor chip our curve database is keyed by, for the common astro
+    /// cameras (which the Siril DB lists by chip, e.g. "Sony IMX571", not by
+    /// camera). Keys are matched as substrings of the normalised camera name.
+    /// Only well-established camera↔chip identities are included; anything not
+    /// here falls back to direct token matching (which already covers DSLRs
+    /// named by model). This is a suggestion the user can always override.
+    /// </summary>
+    private static readonly (string CamKey, string Chip)[] CameraChipAliases = {
+        ("asi2600", "imx571"), ("qhy268", "imx571"), ("poseidon", "imx571"),
+        ("asi6200", "imx455"), ("qhy600", "imx455"),
+        ("asi2400", "imx410"), ("qhy410", "imx410"),
+        ("asi294", "imx294"), ("qhy294", "imx294"), ("sv405", "imx294"),
+        ("asi533", "imx533"), ("qhy533", "imx533"), ("sv605", "imx533"), ("uranus", "imx533"),
+        ("asi183", "imx183"), ("qhy183", "imx183"),
+        ("asi178", "imx178"), ("qhy178", "imx178"),
+        ("asi385", "imx385"), ("asi224", "imx224"), ("asi462", "imx462"),
+        ("asi482", "imx482"), ("asi585", "imx585"), ("sv705", "imx585"),
+        ("asi676", "imx676"), ("asi678", "imx678"), ("asi715", "imx715"),
+        ("asi269", "imx269"), ("asi477", "imx477"),
+        ("seestar s50", "seestar s50"), ("seestar s30", "seestar s30"),
+        ("asi1600", "asi1600"),
+    };
+
+    private static string NormAlnum(string? s) {
+        if (string.IsNullOrEmpty(s)) return "";
+        var sb = new System.Text.StringBuilder(s.Length);
+        foreach (var ch in s) if (char.IsLetterOrDigit(ch)) sb.Append(char.ToLowerInvariant(ch));
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Suggest the sensor + filter set + white-reference type for a frame,
+    /// from its camera model and Bayer header. OSC vs mono comes from the
+    /// Bayer pattern (present + not "NONE" ⇒ OSC). The sensor is matched by an
+    /// alias table (camera→chip) first, then by shared alphanumeric tokens
+    /// against the merged sensor list (generic + Siril), gated to the frame's
+    /// type. Returns nulls for anything it can't match confidently.
+    /// </summary>
+    public SpccSuggestion Suggest(string? camera, string? bayer, string? filter) {
+        var bayerNorm = (bayer ?? "").Trim().ToUpperInvariant();
+        var isOsc = bayerNorm.Length > 0 && bayerNorm != "NONE" && bayerNorm != "MONO";
+        var type = isOsc ? "osc" : "mono";
+
+        var (sensorId, sensorName, reason) = MatchSensor(camera, type);
+
+        // Sensible default filter set for the type; the user refines it.
+        string? fsId = null, fsName = null;
+        var wantFor = isOsc ? "osc" : "mono";
+        // OSC: prefer "no filter"; mono: prefer a generic RGB set.
+        foreach (var f in EnumerateAll("filterSets")) {
+            var id = f.GetProperty("id").GetString();
+            var forVal = f.TryGetProperty("for", out var fr) ? fr.GetString() : "any";
+            var isNone = id == "none";
+            if (isOsc && isNone) { fsId = id; fsName = f.GetProperty("name").GetString(); break; }
+            if (!isOsc && forVal == "mono" && fsId == null) {
+                fsId = id; fsName = f.GetProperty("name").GetString();
+                if (id == "rgb-generic") break;   // preferred mono default
+            }
+        }
+
+        return new SpccSuggestion(type, camera, bayer, filter,
+            sensorId, sensorName, fsId, fsName, reason);
+    }
+
+    private (string? id, string? name, string reason) MatchSensor(string? camera, string type) {
+        var cam = NormAlnum(camera);
+        if (cam.Length < 3) return (null, null, "no camera model in header");
+
+        // Alias table: map the camera to a sensor-chip token if we know it.
+        string? chip = null;
+        foreach (var (camKey, c) in CameraChipAliases)
+            if (cam.Contains(NormAlnum(camKey))) { chip = NormAlnum(c); break; }
+
+        var camTokens = (camera ?? "")
+            .Split(new[] { ' ', '-', '_', '/', '(', ')' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(NormAlnum).Where(t => t.Length >= 3).ToArray();
+
+        string? bestId = null, bestName = null; int bestScore = 0, bestLenDiff = int.MaxValue;
+        foreach (var s in EnumerateAll("sensors")) {
+            if (s.GetProperty("type").GetString() != type) continue;
+            var name = s.GetProperty("name").GetString() ?? "";
+            var sn = NormAlnum(name.Replace("(Siril)", ""));
+            int score = 0;
+            if (chip != null && sn.Contains(chip)) score += 100 + chip.Length;
+            foreach (var t in camTokens) if (sn.Contains(t)) score += t.Length;
+            if (score == 0) continue;
+            var lenDiff = Math.Abs(sn.Length - cam.Length);
+            if (score > bestScore || (score == bestScore && lenDiff < bestLenDiff)) {
+                bestScore = score; bestLenDiff = lenDiff;
+                bestId = s.GetProperty("id").GetString(); bestName = name;
+            }
+        }
+
+        if (bestId == null) return (null, null, "no sensor matched the camera model");
+        var how = chip != null && bestScore >= 100 ? $"matched chip {chip.ToUpperInvariant()}" : "matched camera model";
+        return (bestId, bestName, how);
+    }
+
     // ── Channel responses (filter × QE) ──────────────────────────────────
 
     /// <summary>Build the three channel total-response curves for a

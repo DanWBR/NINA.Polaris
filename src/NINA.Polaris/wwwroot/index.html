@@ -16639,6 +16639,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <p x-show="spcc.loading" class="text-muted" style="font-size:12px">Loading options…</p>
             <template x-if="spcc.options">
                 <div>
+                    <p x-show="spcc.autoNote" x-text="spcc.autoNote"
+                       style="font-size:11px;color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:4px;padding:5px 8px;margin:0 0 8px"></p>
                     <label class="editor-slider-row" style="display:flex;align-items:center;gap:8px;margin:8px 0">
                         <span style="min-width:90px">Sensor</span>
                         <select class="input-sm" style="flex:1" x-model="spcc.sensorId">
@@ -17201,7 +17203,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260705-spcc6"></script>
+    <script src="/js/app.js?v=20260706-spccsuggest"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

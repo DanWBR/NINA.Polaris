@@ -351,6 +351,19 @@ public static class StudioEndpoints {
             return p == null ? Results.NotFound() : Results.Ok(p);
         });
 
+        // Auto-select from the frame's FITS header: reads INSTRUME + BAYERPAT
+        // and suggests the OSC/mono type, sensor id and a default filter set so
+        // the SPCC modal opens pre-filled. The user can still override.
+        g.MapGet("/spcc/suggest", (SpccService svc, string framePath) => {
+            if (string.IsNullOrWhiteSpace(framePath))
+                return Results.BadRequest(new { error = "framePath required." });
+            try {
+                return Results.Ok(svc.Suggest(framePath));
+            } catch (ArgumentException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
         // SPCC pre-flight for the modal: available sensors / filter sets /
         // white references / spectral sources, plus the catalog status
         // (SPCC needs a plate-solved frame + APASS like PCC).

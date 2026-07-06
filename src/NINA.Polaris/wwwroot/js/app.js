@@ -3008,7 +3008,7 @@ function ninaApp() {
             modalOpen: false, busy: false, framePath: '', stage: '', error: '',
             loading: false, options: null, catalog: null, curvesPath: '',
             sensorId: '', filterSetId: '', whiteRefId: '', source: 'auto',
-            result: null,
+            result: null, autoNote: '',
         },
 
         // Settings › Colour calibration data card: read-only status of the
@@ -28264,7 +28264,7 @@ function ninaApp() {
             if (!framePath) { this.toast?.('Add the integrated master to the Lights slot first', 'warn'); return; }
             this.spcc.framePath = framePath;
             this.spcc.busy = false; this.spcc.stage = ''; this.spcc.error = '';
-            this.spcc.result = null; this.spcc.modalOpen = true;
+            this.spcc.result = null; this.spcc.modalOpen = true; this.spcc.autoNote = '';
             this.spcc.loading = true; this.spcc.options = null; this.spcc.catalog = null;
             try {
                 const r = await this.apiFetch('/api/studio/spcc/options');
@@ -28280,11 +28280,42 @@ function ninaApp() {
                     if (whites.length && !whites.some(w => w.id === this.spcc.whiteRefId))
                         this.spcc.whiteRefId = whites[0].id;
                     this._spccDefaultFilter();
+                    // Auto-select sensor/filter from the frame's FITS header
+                    // (camera model + Bayer). Best-effort; the user can override.
+                    await this._spccApplySuggestion(framePath);
                 } else {
                     this.spcc.error = 'Could not load SPCC options (HTTP ' + r.status + ')';
                 }
             } catch (e) { this.spcc.error = String((e && e.message) || e); }
             this.spcc.loading = false;
+        },
+        // Ask the server what the FITS header implies (INSTRUME + BAYERPAT) and
+        // pre-fill the dropdowns when it finds a confident sensor match.
+        async _spccApplySuggestion(framePath) {
+            try {
+                const r = await this.apiFetch('/api/studio/spcc/suggest?framePath=' +
+                    encodeURIComponent(framePath));
+                if (!r.ok) return;
+                const s = await r.json();
+                const sensors = this.spcc.options?.sensors || [];
+                if (s.sensorId && sensors.some(x => x.id === s.sensorId)) {
+                    this.spcc.sensorId = s.sensorId;
+                    this._spccDefaultFilter();                      // keep filter set valid for the new sensor
+                    if (s.filterSetId &&
+                        this.spccFilterSetsForSensor().some(f => f.id === s.filterSetId))
+                        this.spcc.filterSetId = s.filterSetId;
+                    const typeLbl = (s.type || '').toUpperCase();
+                    this.spcc.autoNote = 'Auto-selected ' + (s.sensorName || s.sensorId) +
+                        (typeLbl ? ' (' + typeLbl + ')' : '') +
+                        (s.camera ? ' from "' + s.camera + '"' : '') + ' — you can change it.';
+                } else if (s.camera) {
+                    // Header had a camera but we couldn't match it to a curve.
+                    this.spcc.autoNote = 'Camera "' + s.camera + '" (' +
+                        ((s.type || '').toUpperCase() || '?') +
+                        ') not in the curve database — using the generic ' +
+                        ((s.type === 'osc') ? 'OSC' : 'mono') + ' sensor; pick a closer one if you like.';
+                }
+            } catch { /* suggestion is optional */ }
         },
         async spccRun() {
             const src = this.spcc.framePath;

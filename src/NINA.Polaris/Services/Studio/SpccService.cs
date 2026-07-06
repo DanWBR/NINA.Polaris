@@ -72,6 +72,30 @@ public class SpccService {
     public SpccProgress? GetStatus(string jobId)
         => _jobs.TryGetValue(jobId, out var p) ? p : null;
 
+    /// <summary>
+    /// Read only the FITS header of a frame and suggest the SPCC sensor +
+    /// filter set + OSC/mono type from it (camera model in INSTRUME, Bayer in
+    /// BAYERPAT). Used by the modal to pre-select the dropdowns; the user can
+    /// always override. Never throws for a missing/odd header — returns a
+    /// mono/no-match suggestion instead.
+    /// </summary>
+    public SpccDatabase.SpccSuggestion Suggest(string framePath) {
+        if (string.IsNullOrWhiteSpace(framePath) || !File.Exists(framePath))
+            throw new ArgumentException($"Frame missing on disk: {framePath}");
+        string camera = "", bayer = "", filter = "";
+        try {
+            using var fs = File.OpenRead(framePath);
+            var headers = FITSReader.ReadHeadersOnly(fs);
+            string H(string k) => headers.TryGetValue(k, out var c) ? c.Value?.Trim() ?? "" : "";
+            camera = H("INSTRUME");
+            bayer = H("BAYERPAT");
+            filter = H("FILTER");
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "SPCC suggest: header read failed for {Path}", framePath);
+        }
+        return _db.Suggest(camera, bayer, filter);
+    }
+
     private void RunJob(string jobId, SpccRequest req) {
         try {
             _jobs[jobId] = _jobs[jobId] with { Stage = "loading" };
