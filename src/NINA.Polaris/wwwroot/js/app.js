@@ -23890,6 +23890,19 @@ function ninaApp() {
             const card = ev.target.closest('.settings-section');
             if (card) card.classList.toggle('is-collapsed');
         },
+        // Jump to Settings and open a specific card. Actions elsewhere in
+        // the app (activity-bar chips, prompts) use this to land the user on
+        // the right card ready to act. The accordion starts every card
+        // collapsed, so scrolling alone is not enough: expand it too.
+        openSettingsCard(id) {
+            this.tab = 'settings';
+            this.$nextTick(() => {
+                const card = id && document.getElementById(id);
+                if (!card) return;
+                card.classList.remove('is-collapsed');
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+        },
         // Start every settings card collapsed (called from the grid's x-init).
         collapseAllSettings(gridEl) {
             if (!gridEl) return;
@@ -33048,20 +33061,46 @@ function ninaApp() {
         },
 
         // Tooltip, cumulative session totals + the current window.
+        // Live state of the network-storage push, for the activity-bar chip.
+        // The push worker connects lazily on the first saved image, so "not
+        // connected" on its own is NOT an error: it just means nothing has
+        // been pushed yet. Red is reserved for a real problem (a file gave
+        // up, or the connection dropped on an error). One of:
+        //   'busy'      actively uploading            (accent + pulse)
+        //   'error'     something failed / dropped     (red)
+        //   'connected' connected, queue empty         (neutral)
+        //   'idle'      enabled, waiting for 1st image  (neutral)
+        storagePushState() {
+            const s = this.storagePushStatus;
+            const busy = (s.queued || 0) > 0 || !!s.currentFile;
+            if (busy) return 'busy';
+            if ((s.failed || 0) > 0 || (s.lastError && !s.connected)) return 'error';
+            return s.connected ? 'connected' : 'idle';
+        },
+        storagePushIcon() {
+            return { busy: '↑', error: '⚠', connected: '🗄', idle: '○' }[this.storagePushState()];
+        },
         // Tooltip for the activity-bar network-storage chip (SMB/SFTP push).
         storagePushTooltip() {
             const s = this.storagePushStatus;
             const kind = (s.kind || 'smb').toUpperCase();
-            if (!s.connected) {
-                return `${kind} push: not connected`
-                    + (s.lastError ? `\n${s.lastError}` : '\nClick to check Settings');
+            const state = this.storagePushState();
+            if (state === 'idle') {
+                return `${kind} push: idle, nothing pushed yet`
+                    + `\nConnects on the next saved image. Click to open Settings.`;
             }
-            const lines = [`${kind} push — connected`];
+            if (state === 'error') {
+                const lines = [`${kind} push: error`];
+                if (s.lastError) lines.push(s.lastError);
+                if ((s.failed || 0) > 0) lines.push(`Failed: ${s.failed} (open Settings to retry)`);
+                lines.push('Click to open Settings');
+                return lines.join('\n');
+            }
+            const lines = [state === 'busy' ? `${kind} push — uploading` : `${kind} push — connected`];
             if (s.currentFile) lines.push(`Uploading: ${s.currentFile.split(/[\\/]/).pop()}`);
             if (s.queued > 0) lines.push(`Queued: ${s.queued}`);
             if (s.queued === 0 && !s.currentFile) lines.push('Idle (queue empty)');
             lines.push(`Uploaded: ${s.uploaded}${s.failed ? ` · Failed: ${s.failed}` : ''}`);
-            if (s.lastError) lines.push(`Last error: ${s.lastError}`);
             lines.push('Click to open Settings');
             return lines.join('\n');
         },

@@ -11465,7 +11465,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <!-- Auto-push captured images to network storage (SMB / SFTP /
                      mounted path). Mirrors the capture folder tree onto the
                      target; the local copy is kept. -->
-                <div class="settings-section" x-init="loadStorageConfig()">
+                <div class="settings-section" id="storage-push-card" x-init="loadStorageConfig()">
                     <h3 data-tour="set-storage"><span class="settings-card-icon">📤</span>Auto-push to network storage</h3>
                     <p class="hint" style="margin-top:0">
                         Copy every saved image to a NAS, network share or SSH box as it's
@@ -14115,14 +14115,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
              Click jumps to Settings. -->
         <div class="activity-storage" x-show="storagePushStatus.enabled" x-cloak
              :class="{
-                 'activity-storage-busy': (storagePushStatus.queued > 0 || !!storagePushStatus.currentFile),
-                 'activity-storage-error': !storagePushStatus.connected
-                     || (!!storagePushStatus.lastError && storagePushStatus.queued === 0 && !storagePushStatus.currentFile)
+                 'activity-storage-busy': storagePushState() === 'busy',
+                 'activity-storage-error': storagePushState() === 'error'
              }"
              :title="storagePushTooltip()"
-             @click="tab = 'settings'" style="cursor:pointer">
-            <span class="activity-storage-icon"
-                  x-text="!storagePushStatus.connected ? '⚠' : ((storagePushStatus.queued > 0 || storagePushStatus.currentFile) ? '↑' : '🗄')"></span>
+             @click="openSettingsCard('storage-push-card')" style="cursor:pointer">
+            <span class="activity-storage-icon" x-text="storagePushIcon()"></span>
             <span class="activity-storage-label" x-text="(storagePushStatus.kind || 'smb').toUpperCase()"></span>
             <!-- Uploading: show the remaining queue depth. -->
             <span x-show="storagePushStatus.queued > 0 || storagePushStatus.currentFile"
@@ -14159,7 +14157,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             <span class="activity-host-stat activity-host-clock"
                   x-show="clockSkewLabel() !== null"
                   :title="'Server: ' + clockSync.serverUtc + ' (UTC)\nDifference vs this device: ' + clockSync.skewSeconds + 's\nClick to open Settings → Clock'"
-                  @click="tab = 'settings'; $nextTick(() => document.getElementById('clock-card')?.scrollIntoView({behavior:'smooth', block:'center'}))"
+                  @click="openSettingsCard('clock-card')"
                   style="cursor:pointer">
                 <span class="activity-host-icon">⏰</span>
                 <span class="activity-host-value" :class="clockSkewClass()"

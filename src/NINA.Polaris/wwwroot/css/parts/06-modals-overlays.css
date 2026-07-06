@@ -1653,7 +1653,9 @@
     border-color: var(--accent);
     animation: activity-storage-pulse 1.4s ease-in-out infinite;
 }
-/* Not connected / last upload errored: red. */
+/* A real problem (a file gave up, or the connection dropped on an error):
+   red. Note "not connected" alone is NOT an error, it is the neutral idle
+   state before the first image is pushed (see storagePushState in app.js). */
 .activity-storage.activity-storage-error {
     color: var(--danger, #e25555);
     border-color: var(--danger, #e25555);
