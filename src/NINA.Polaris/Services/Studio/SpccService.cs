@@ -165,7 +165,7 @@ public class SpccService {
                 "SPCC: source FITS has no WCS (plate-solve) headers. Solve it first.");
         if (!_catalog.IsAvailable)
             throw new InvalidOperationException(
-                "SPCC: APASS catalog is not installed. Run `python scripts/download-apass.py`.");
+                "SPCC: APASS catalog is not installed. Download it from the color calibration panel (~80 MB).");
 
         // Channel responses + white reference from the selected gear.
         var (respR, respG, respB) = _db.BuildResponses(req.SensorId, req.FilterSetId);
@@ -244,9 +244,8 @@ public class SpccService {
                 $"APASS stars in the field ({withBv} with a usable B-V colour); " +
                 $"only {spccStars.Count} aligned within {matchRadiusPx:0}px.";
             string hint = withBv < 5
-                ? "The catalog is sparse in this field. Try a wider field, or deepen " +
-                  "APASS by re-running scripts/download-apass.py with a higher " +
-                  "--mag-limit (the bundled catalog is capped at V=13)."
+                ? "The catalog is sparse in this field. Try a wider field " +
+                  "(the installed APASS catalog is capped at about V=13)."
                 : "There are enough catalog stars but few line up with detected " +
                   "stars, so the plate-solve (WCS) is likely inaccurate. Re-solve " +
                   "the master (STUDIO -> Solve) and try again.";

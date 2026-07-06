@@ -326,8 +326,22 @@ public static class StudioEndpoints {
                 available = cat.IsAvailable,
                 dbPath = cat.DbPath,
                 starCount = cat.IsAvailable ? cat.StarCount : 0,
-                source = "APASS DR10",
+                source = "APASS DR9",
             });
+        });
+
+        // Download the APASS catalog in-app (no shell / no script) straight
+        // into the writable data dir. Start returns immediately; the UI polls
+        // /colorcal/download-apass/status for progress.
+        g.MapPost("/colorcal/download-apass", (NINA.Polaris.Services.Sky.ApassDownloadService dl) => {
+            bool started = dl.Start();
+            return Results.Ok(new { started, status = dl.Status() });
+        });
+        g.MapGet("/colorcal/download-apass/status",
+            (NINA.Polaris.Services.Sky.ApassDownloadService dl) => Results.Ok(dl.Status()));
+        g.MapPost("/colorcal/download-apass/cancel", (NINA.Polaris.Services.Sky.ApassDownloadService dl) => {
+            dl.Cancel();
+            return Results.Ok(dl.Status());
         });
 
         // --- SPCC: SpectroPhotometric Color Calibration --------------

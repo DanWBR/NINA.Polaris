@@ -3020,6 +3020,12 @@ function ninaApp() {
             sensorCount: 0, filterCount: 0,
         },
 
+        // In-app APASS catalog download (PCC/SPCC pre-flight). Replaces the old
+        // "run scripts/download-apass.py on the server" instruction with a
+        // button + progress; the server streams the catalog from VizieR into
+        // the writable data dir. Shared across the PCC, SPCC and CC modals.
+        apassDl: { state: 'idle', progress: 0, message: '', poll: null },
+
         // White-balance summary shown after PCC/SPCC: the Siril/PixInsight-style
         // scatter of measured vs expected channel ratio (B/G and R/G) with a
         // robust line fit. Data comes from the job result's `whiteBalance`.
@@ -5127,7 +5133,7 @@ function ninaApp() {
                             'Add the plate-solved master to the Lights slot, hit the Color Cal action button. Polaris queries the APASS catalog for stars in your field, matches them with the stars it detects, fits per-channel gains that minimize the color error.',
                             'Output: a new color-calibrated master appears in the browser. Single-select it and click the Edit icon to continue in the editor modal.'
                         ],
-                        warn: 'APASS bundled dataset (~80 MB) needs to be downloaded once. Run scripts/download-apass.py on the server. Polaris prints a clear error pointing at this if the DB is missing.'
+                        warn: 'The APASS star catalog (~80 MB) is downloaded once from inside Polaris: open the Color Calibration panel and click "Download APASS catalog". Photometric mode needs it; Background mode does not.'
                     }
                 ],
 
@@ -28291,6 +28297,48 @@ function ninaApp() {
                 }
             } catch { /* card just shows placeholders */ }
             this.ccData.loading = false;
+        },
+
+        // ── APASS catalog: in-app download (no script) ─────────────────
+        async apassDownloadStart() {
+            if (this.apassDl.state === 'running') return;
+            this.apassDl.state = 'running'; this.apassDl.progress = 0;
+            this.apassDl.message = 'Starting…';
+            try {
+                const r = await this.apiFetch('/api/studio/colorcal/download-apass', { method: 'POST' });
+                if (!r.ok) throw new Error('start failed');
+            } catch (e) {
+                this.apassDl.state = 'error';
+                this.apassDl.message = 'Could not start download.';
+                return;
+            }
+            if (this.apassDl.poll) clearInterval(this.apassDl.poll);
+            this.apassDl.poll = setInterval(() => this.apassDownloadPoll(), 1500);
+        },
+        async apassDownloadPoll() {
+            try {
+                const r = await this.apiFetch('/api/studio/colorcal/download-apass/status');
+                if (!r.ok) return;
+                const s = await r.json();
+                this.apassDl.state = s.state; this.apassDl.progress = s.progress || 0;
+                this.apassDl.message = s.message || '';
+                if (s.state === 'done' || s.state === 'error' || s.state === 'idle') {
+                    clearInterval(this.apassDl.poll); this.apassDl.poll = null;
+                    if (s.state === 'done') {
+                        // Refresh whichever modal's catalog badge is on screen.
+                        const cat = { available: s.installed, starCount: s.stars, source: 'APASS DR9' };
+                        if (this.spcc) this.spcc.catalog = cat;
+                        if (this.pcc) this.pcc.catalog = cat;
+                        this.ccData.catalog = cat;
+                        this.toast && this.toast('APASS catalog installed (' + (s.stars || 0).toLocaleString() + ' stars)', 'success');
+                    }
+                }
+            } catch { /* keep polling */ }
+        },
+        async apassDownloadCancel() {
+            try { await this.apiFetch('/api/studio/colorcal/download-apass/cancel', { method: 'POST' }); } catch {}
+            if (this.apassDl.poll) { clearInterval(this.apassDl.poll); this.apassDl.poll = null; }
+            this.apassDl.state = 'idle';
         },
 
         // ── SPCC modal (SpectroPhotometric Color Calibration) ──────────

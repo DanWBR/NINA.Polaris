@@ -12227,8 +12227,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <template x-if="ccData.catalog && ccData.catalog.available">
                                 <span class="text-ok">✓ ready · <strong x-text="(ccData.catalog.starCount||0).toLocaleString()"></strong> stars</span>
                             </template>
-                            <template x-if="ccData.catalog && !ccData.catalog.available">
-                                <span class="text-warn">⚠ not installed — run <code>scripts/download-apass.py</code> on the server</span>
+                            <template x-if="ccData.catalog && !ccData.catalog.available && apassDl.state !== 'running'">
+                                <span style="display:flex; align-items:center; gap:8px">
+                                    <span class="text-warn">⚠ not installed</span>
+                                    <button class="btn btn-xs" @click="apassDownloadStart()">Download (~80 MB)</button>
+                                </span>
+                            </template>
+                            <template x-if="apassDl.state === 'running'">
+                                <span class="text-muted" x-text="'Downloading… ' + Math.round((apassDl.progress||0)*100) + '%'"></span>
                             </template>
                             <span x-show="!ccData.catalog" class="text-muted">…</span>
                         </div>
@@ -16659,11 +16665,24 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <option value="bg">Background neutralise only (no catalog)</option>
                 </select>
             </label>
-            <p x-show="pcc.mode==='pcc' && pcc.catalog" class="hint"
-               :style="pcc.catalog && pcc.catalog.available ? 'color:var(--ok,#4c8)' : 'color:var(--danger,#e66)'"
-               x-text="pcc.catalog && pcc.catalog.available
-                   ? ('APASS ready · ' + (pcc.catalog.starCount||0).toLocaleString() + ' stars')
-                   : 'APASS catalog not installed — run scripts/download-apass.py, or use Background mode.'"></p>
+            <p x-show="pcc.mode==='pcc' && pcc.catalog && pcc.catalog.available" class="hint" style="color:var(--ok,#4c8)"
+               x-text="'APASS ready · ' + ((pcc.catalog&&pcc.catalog.starCount)||0).toLocaleString() + ' stars'"></p>
+            <div x-show="pcc.mode==='pcc' && pcc.catalog && !pcc.catalog.available">
+                <p class="hint" style="color:var(--danger,#e66)">APASS star catalog not installed (needed for photometric mode). You can also use Background mode without it.</p>
+                <template x-if="apassDl.state !== 'running'">
+                    <button class="btn btn-sm" @click="apassDownloadStart()">Download APASS catalog (~80 MB)</button>
+                </template>
+                <template x-if="apassDl.state === 'running'">
+                    <div>
+                        <div style="height:6px;background:var(--panel-2,#223);border-radius:3px;overflow:hidden">
+                            <div :style="'height:100%;width:' + Math.round((apassDl.progress||0)*100) + '%;background:var(--accent,#49f);transition:width .4s'"></div>
+                        </div>
+                        <p class="hint text-muted" style="font-size:11px" x-text="apassDl.message"></p>
+                        <button class="btn btn-sm" @click="apassDownloadCancel()">Cancel</button>
+                    </div>
+                </template>
+                <p x-show="apassDl.state === 'error'" class="hint" style="color:var(--danger,#e66);font-size:11px" x-text="apassDl.message"></p>
+            </div>
             <p x-show="pcc.mode==='pcc'" class="hint text-muted" style="font-size:11px">
                 Needs a plate-solved master (WCS in the FITS header).
             </p>
@@ -16733,13 +16752,30 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             <option value="gaia" :disabled="!spcc.options.sources?.gaia" x-text="'Gaia DR3' + (spcc.options.sources?.gaia ? '' : ' (not installed)')"></option>
                         </select>
                     </label>
-                    <p class="hint" :style="spcc.catalog && spcc.catalog.available ? 'color:var(--ok,#4c8)' : 'color:var(--danger,#e66)'"
-                       x-text="spcc.catalog && spcc.catalog.available
-                           ? ('APASS ready · ' + (spcc.catalog.starCount||0).toLocaleString() + ' stars')
-                           : 'APASS catalog not installed — run scripts/download-apass.py.'"></p>
+                    <template x-if="spcc.catalog && spcc.catalog.available">
+                        <p class="hint" style="color:var(--ok,#4c8)"
+                           x-text="'APASS ready · ' + (spcc.catalog.starCount||0).toLocaleString() + ' stars'"></p>
+                    </template>
+                    <template x-if="spcc.catalog && !spcc.catalog.available">
+                        <div>
+                            <p class="hint" style="color:var(--danger,#e66)">APASS star catalog not installed.</p>
+                            <template x-if="apassDl.state !== 'running'">
+                                <button class="btn btn-sm" @click="apassDownloadStart()">Download APASS catalog (~80 MB)</button>
+                            </template>
+                            <template x-if="apassDl.state === 'running'">
+                                <div>
+                                    <div style="height:6px;background:var(--panel-2,#223);border-radius:3px;overflow:hidden">
+                                        <div :style="'height:100%;width:' + Math.round((apassDl.progress||0)*100) + '%;background:var(--accent,#49f);transition:width .4s'"></div>
+                                    </div>
+                                    <p class="hint text-muted" style="font-size:11px" x-text="apassDl.message"></p>
+                                    <button class="btn btn-sm" @click="apassDownloadCancel()">Cancel</button>
+                                </div>
+                            </template>
+                            <p x-show="apassDl.state === 'error'" class="hint" style="color:var(--danger,#e66);font-size:11px" x-text="apassDl.message"></p>
+                        </div>
+                    </template>
                     <p class="hint text-muted" style="font-size:11px">
-                        Needs a plate-solved RGB master (WCS). Curves are the bundled generic
-                        set — edit <code x-text="spcc.curvesPath || 'catalogs/spcc/curves.json'"></code> for your real gear.
+                        Needs a plate-solved RGB master (WCS). Curves are the bundled generic set.
                     </p>
                 </div>
             </template>
@@ -17261,7 +17297,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260706-plannewest"></script>
+    <script src="/js/app.js?v=20260706-apassdl"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

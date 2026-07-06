@@ -304,9 +304,8 @@ public class ColorCalibrationService {
         // ── 2. Pre-flight: catalog available ──────────────────────────
         if (!_catalog.IsAvailable) {
             throw new InvalidOperationException(
-                "PCC: APASS catalog is not installed. Run " +
-                "`python scripts/download-apass.py` on the server " +
-                "(~80 MB download), then retry.");
+                "PCC: APASS catalog is not installed. Download it from the " +
+                "color calibration panel (~80 MB), then retry.");
         }
 
         // ── 3. Detect stars + measure per-channel photometry ──────────

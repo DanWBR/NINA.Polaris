@@ -40,23 +40,36 @@ namespace NINA.Polaris.Services.Sky;
 /// telling the user to run the download script.
 /// </summary>
 public class ApassCatalog {
-    private readonly string _dbPath;
+    private readonly string _bundledPath;
+    private readonly string _writablePath;
     private readonly ILogger<ApassCatalog> _logger;
     private long? _starCountCache;
 
-    public ApassCatalog(IWebHostEnvironment env, ILogger<ApassCatalog> logger) {
+    public ApassCatalog(IWebHostEnvironment env, ProfileService profiles, ILogger<ApassCatalog> logger) {
         _logger = logger;
         var webRoot = env.WebRootPath
             ?? Path.Combine(env.ContentRootPath, "wwwroot");
-        _dbPath = Path.Combine(webRoot, "catalogs", "apass", "apass.db");
+        // Bundled copy (from a publish that shipped one) is read-only under the
+        // install dir; the in-app downloader writes to the always-writable data
+        // dir. Prefer the downloaded copy when present.
+        _bundledPath = Path.Combine(webRoot, "catalogs", "apass", "apass.db");
+        _writablePath = Path.Combine(profiles.DataDir, "catalogs", "apass", "apass.db");
     }
 
-    /// <summary>Absolute path to the catalog DB on disk.</summary>
-    public string DbPath => _dbPath;
+    /// <summary>Where the in-app downloader writes the catalog (always
+    /// writable, unlike the read-only install dir).</summary>
+    public string WritableDbPath => _writablePath;
 
-    /// <summary>True when the catalog has been populated (the
-    /// download script has run + the .db file is on disk).</summary>
-    public bool IsAvailable => File.Exists(_dbPath);
+    /// <summary>Absolute path to the catalog DB the queries read — the
+    /// downloaded copy when present, else the bundled one.</summary>
+    public string DbPath => File.Exists(_writablePath) ? _writablePath : _bundledPath;
+
+    /// <summary>Forget the cached star count (call after a fresh download).</summary>
+    public void InvalidateCache() => _starCountCache = null;
+
+    /// <summary>True when the catalog has been populated (downloaded in-app
+    /// or bundled) and the .db file is on disk.</summary>
+    public bool IsAvailable => File.Exists(_writablePath) || File.Exists(_bundledPath);
 
     /// <summary>
     /// Total star count, cached after the first query so the status
@@ -68,7 +81,7 @@ public class ApassCatalog {
             if (_starCountCache.HasValue) return _starCountCache.Value;
             if (!IsAvailable) return 0;
             try {
-                using var conn = new SqliteConnection($"Data Source={_dbPath};Mode=ReadOnly");
+                using var conn = new SqliteConnection($"Data Source={DbPath};Mode=ReadOnly");
                 conn.Open();
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = "SELECT COUNT(*) FROM stars";
@@ -106,9 +119,8 @@ public class ApassCatalog {
             double radiusDeg, double? magLimit) {
         if (!IsAvailable) {
             throw new InvalidOperationException(
-                $"APASS catalog not found at {_dbPath}. " +
-                "Run `python scripts/download-apass.py` on the server to " +
-                "populate it (~80 MB download).");
+                "APASS catalog is not installed. Download it from the color " +
+                "calibration panel (about 80 MB), or use Background mode.");
         }
         // Bounding-box pre-filter via R*tree. For a small radius
         // near the celestial pole, RA-bound widens dramatically as
@@ -128,7 +140,7 @@ public class ApassCatalog {
         bool wrap = minRa < 0 || maxRa >= 360;
 
         var results = new List<CatalogStar>();
-        using var conn = new SqliteConnection($"Data Source={_dbPath};Mode=ReadOnly");
+        using var conn = new SqliteConnection($"Data Source={DbPath};Mode=ReadOnly");
         conn.Open();
 
         if (!wrap) {
