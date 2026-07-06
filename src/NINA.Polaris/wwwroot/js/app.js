@@ -10456,6 +10456,19 @@ function ninaApp() {
             this.asst.badgeVisible = false;
             try { localStorage.setItem('polaris.assistant.badgeDismissed', '1'); } catch (_) {}
         },
+        // Undo a badge dismissal (Settings -> Appearance). Clears the
+        // per-browser dismissed flag and re-shows the intro badge, provided the
+        // assistant is configured and the user hasn't subscribed (subscribers
+        // get the always-on FAB, so there's no badge to restore).
+        assistantResetBadge() {
+            try { localStorage.removeItem('polaris.assistant.badgeDismissed'); } catch (_) {}
+            if (this.asst.ready && !this.asst.subscribed) {
+                const show = !this.asst.manifest || !this.asst.manifest.badge
+                    || this.asst.manifest.badge.show !== false;
+                this.asst.badgeVisible = show;
+                this.toast?.(show ? 'Assistant badge restored' : 'Assistant badge is disabled by the module', show ? 'ok' : 'warn');
+            }
+        },
         assistantStart() {
             // "Get started": load the external client, which runs the whole
             // account + subscribe + session flow and reports back subscribed.
