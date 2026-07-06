@@ -132,6 +132,20 @@ const shots = p.screenshots ?? [];
       </section>
     )}
 
+    <!-- ── Screenshot 4 (full width) ─────────────────────────────── -->
+    {shots[3] && (
+      <section class="section shot-section section-alt">
+        <div class="container">
+          <figure class="shot">
+            {shots[3].src && <img src={shots[3].src} alt={shots[3].caption} loading="lazy"
+              onerror="var f=this.closest('.shot');this.remove();var p=f.querySelector('.shot-ph');if(p)p.style.display='grid';" />}
+            <div class="shot-ph" style={shots[3].src ? 'display:none' : undefined}><span class="shot-ph-icon">🖼️</span><span class="shot-ph-tag">Screenshot</span></div>
+            <figcaption>{shots[3].caption}</figcaption>
+          </figure>
+        </div>
+      </section>
+    )}
+
     <!-- ── Pricing ───────────────────────────────────────────────── -->
     <section class="section section-alt">
       <div class="container">

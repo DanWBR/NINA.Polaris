@@ -4,10 +4,22 @@
   "tagline": "Your personal astrophotography co-pilot, built into Polaris.",
   "glanceTitle": "At a glance",
   "glance": [
-    { "label": "Plans your night.", "text": "Suggests targets for your sky, time, and gear, then builds a ready-to-run multi-target plan in PLAN mode for you to review." },
-    { "label": "Drives the rig, with approval.", "text": "Anything that moves hardware or changes a running session is proposed as a plan you approve, review, or reject first — you stay in control." },
-    { "label": "Looks at your images.", "text": "Ask 'is this frame good?' and it inspects the current frame — focus, star shape, trailing, gradients, framing — and tells you what to fix." },
-    { "label": "Knows astrophotography.", "text": "Grounded answers on focusing, guiding, exposure, filters, polar alignment, calibration, and diagnosing bad subs." }
+    {
+      "label": "Plans your night.",
+      "text": "Suggests targets for your sky, time, and gear, then builds a ready-to-run multi-target plan in PLAN mode for you to review."
+    },
+    {
+      "label": "Drives the rig, with approval.",
+      "text": "Anything that moves hardware or changes a running session is proposed as a plan you approve, review, or reject first — you stay in control."
+    },
+    {
+      "label": "Looks at your images.",
+      "text": "Ask 'is this frame good?' and it inspects the current frame — focus, star shape, trailing, gradients, framing — and tells you what to fix."
+    },
+    {
+      "label": "Knows astrophotography.",
+      "text": "Grounded answers on focusing, guiding, exposure, filters, polar alignment, calibration, and diagnosing bad subs."
+    }
   ],
   "featuresTitle": "What it does",
   "features": [
@@ -17,9 +29,18 @@
       "color": "#2563eb",
       "intro": "Tell it what you feel like shooting and it does the legwork.",
       "items": [
-        { "label": "Tonight's best.", "text": "Ranks deep-sky targets, plus the Moon and planets, that are well placed for your location and time window." },
-        { "label": "Checks the essentials.", "text": "Altitude across the night, weather and seeing, and how the Moon affects each target." },
-        { "label": "Builds the plan.", "text": "Assembles a multi-target imaging plan in PLAN mode with sensible exposures, dithering, and refocus — you review, tweak, and start it." }
+        {
+          "label": "Tonight's best.",
+          "text": "Ranks deep-sky targets, plus the Moon and planets, that are well placed for your location and time window."
+        },
+        {
+          "label": "Checks the essentials.",
+          "text": "Altitude across the night, weather and seeing, and how the Moon affects each target."
+        },
+        {
+          "label": "Builds the plan.",
+          "text": "Assembles a multi-target imaging plan in PLAN mode with sensible exposures, dithering, and refocus — you review, tweak, and start it."
+        }
       ]
     },
     {
@@ -28,9 +49,18 @@
       "color": "#0891b2",
       "intro": "It operates Polaris for you, but never behind your back.",
       "items": [
-        { "label": "Approve-first actions.", "text": "Slewing, autofocus, starting a sequence or live stack, meridian flip — each is proposed as a plan you approve or reject." },
-        { "label": "Shows you what it's doing.", "text": "Navigates the Polaris UI to the relevant panel so you can watch focus, guiding, or the live stack as it works." },
-        { "label": "Reads the session.", "text": "Answers 'how's it going?' from live rig status — connection, capture progress, guiding RMS, focus, time to meridian." }
+        {
+          "label": "Approve-first actions.",
+          "text": "Slewing, autofocus, starting a sequence or live stack, meridian flip — each is proposed as a plan you approve or reject."
+        },
+        {
+          "label": "Shows you what it's doing.",
+          "text": "Navigates the Polaris UI to the relevant panel so you can watch focus, guiding, or the live stack as it works."
+        },
+        {
+          "label": "Reads the session.",
+          "text": "Answers 'how's it going?' from live rig status — connection, capture progress, guiding RMS, focus, time to meridian."
+        }
       ]
     },
     {
@@ -39,8 +69,14 @@
       "color": "#7c3aed",
       "intro": "A second pair of (very patient) eyes on every sub.",
       "items": [
-        { "label": "Is this good?", "text": "Inspects the current frame from LIVE, PREVIEW, or AUTORUN and gives a short verdict." },
-        { "label": "Spots problems.", "text": "Elongated or trailed stars, soft focus, gradients and light pollution, satellites, and framing issues — with a concrete fix." }
+        {
+          "label": "Is this good?",
+          "text": "Inspects the current frame from LIVE, PREVIEW, or AUTORUN and gives a short verdict."
+        },
+        {
+          "label": "Spots problems.",
+          "text": "Elongated or trailed stars, soft focus, gradients and light pollution, satellites, and framing issues — with a concrete fix."
+        }
       ]
     },
     {
@@ -49,8 +85,14 @@
       "color": "#16a34a",
       "intro": "Ask anything, get a grounded answer — not a guess.",
       "items": [
-        { "label": "How-to and why.", "text": "Focusing and HFR, autoguiding and dithering, exposure and the histogram, filters and light pollution, polar alignment, calibration frames, planning, and diagnosing bad subs." },
-        { "label": "Curated, not hallucinated.", "text": "Answers are drawn from a curated astrophotography knowledge base and tailored to your question." }
+        {
+          "label": "How-to and why.",
+          "text": "Focusing and HFR, autoguiding and dithering, exposure and the histogram, filters and light pollution, polar alignment, calibration frames, planning, and diagnosing bad subs."
+        },
+        {
+          "label": "Curated, not hallucinated.",
+          "text": "Answers are drawn from a curated astrophotography knowledge base and tailored to your question."
+        }
       ]
     },
     {
@@ -59,8 +101,14 @@
       "color": "#ea580c",
       "intro": "It follows the language you set in Polaris.",
       "items": [
-        { "label": "Localized replies.", "text": "Answers, plans, and questions come back in your Polaris UI language." },
-        { "label": "Familiar look.", "text": "The chat follows your Polaris font, zoom, and spacing, and docks or floats wherever you want it." }
+        {
+          "label": "Localized replies.",
+          "text": "Answers, plans, and questions come back in your Polaris UI language."
+        },
+        {
+          "label": "Familiar look.",
+          "text": "The chat follows your Polaris font, zoom, and spacing, and docks or floats wherever you want it."
+        }
       ]
     },
     {
@@ -69,23 +117,51 @@
       "color": "#334155",
       "intro": "Your conversations aren't ours to keep.",
       "items": [
-        { "label": "Chats are not stored.", "text": "Your messages are processed to generate a reply and then discarded — we don't keep a copy." },
-        { "label": "Minimal account data.", "text": "Only your email, a login token, and your subscription status are stored. Payment is handled by Stripe; we never see your card." }
+        {
+          "label": "Chats are not stored.",
+          "text": "Your messages are processed to generate a reply and then discarded — we don't keep a copy."
+        },
+        {
+          "label": "Minimal account data.",
+          "text": "Only your email, a login token, and your subscription status are stored. Payment is handled by Stripe; we never see your card."
+        }
       ]
     }
   ],
   "screenshotsTitle": "See it in action",
   "screenshots": [
-    { "caption": "The assistant chat docked beside Polaris, planning the night.", "src": "/assets/screenshots/assistant-chat.jpg" },
-    { "caption": "A night plan built in PLAN mode, ready to review and start.", "src": "/assets/screenshots/assistant-plan.jpg" },
-    { "caption": "Frame analysis: the assistant inspecting a sub and flagging trailing.", "src": "/assets/screenshots/assistant-frame.jpg" }
+    {
+      "caption": "“What’s good tonight?” — the assistant reads your sky and weather and suggests targets, right beside Polaris.",
+      "src": "/assets/screenshots/assistant-chat.jpg"
+    },
+    {
+      "caption": "It builds a full night plan in PLAN mode — targets, exposures, autofocus and dither — for you to review before it starts.",
+      "src": "/assets/screenshots/assistant-plan.jpg"
+    },
+    {
+      "caption": "Frame analysis: it inspects the sub you selected and gives a verdict on focus, star shape, tracking and framing.",
+      "src": "/assets/screenshots/assistant-frame.jpg"
+    },
+    {
+      "caption": "The exact frame it looked at — opened straight from your Studio Files, no manual export needed.",
+      "src": "/assets/screenshots/assistant-frame-view.jpg"
+    }
   ],
   "howTitle": "How it works",
   "howLede": "The assistant runs in the cloud, but it never talks to your telescope directly. Your browser is the bridge: it relays the assistant's requests to your local Polaris over your LAN, so your rig stays offline-friendly and under your control.",
   "how": [
-    { "label": "Cloud brain.", "text": "The AI and billing run in the cloud; the assistant only ever proposes actions." },
-    { "label": "Browser bridge.", "text": "Your browser executes approved actions on your local Polaris API and streams status back — no inbound connection to your rig." },
-    { "label": "Opt-in and off by default.", "text": "The open-source Polaris ships a neutral, inactive host. The assistant appears only if you choose to enable it." }
+    {
+      "label": "Cloud brain.",
+      "text": "The AI and billing run in the cloud; the assistant only ever proposes actions."
+    },
+    {
+      "label": "Browser bridge.",
+      "text": "Your browser executes approved actions on your local Polaris API and streams status back — no inbound connection to your rig."
+    },
+    {
+      "label": "Opt-in and off by default.",
+      "text": "The open-source Polaris ships a neutral, inactive host. The assistant appears only if you choose to enable it."
+    }
   ],
   "pricing": {
     "price": "US$4.99",
