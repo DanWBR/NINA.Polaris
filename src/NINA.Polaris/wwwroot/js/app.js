@@ -9913,8 +9913,21 @@ function ninaApp() {
 
             this.asst.manifest = m;
             try { this.asst.subscribed = localStorage.getItem('polaris.assistant.subscribed') === '1'; } catch (_) {}
-            let dismissed = false;
-            try { dismissed = localStorage.getItem('polaris.assistant.badgeDismissed') === '1'; } catch (_) {}
+            // Cloud-controlled badge revision. The badge is dismissable (per
+            // browser), but the cloud can re-surface it once by bumping
+            // badge.rev: we only stay dismissed while the rev we dismissed at is
+            // still current. Legacy dismissers (boolean flag, no stored rev)
+            // count as rev 0, so the first revisioned manifest (rev >= 1)
+            // brings the badge back once.
+            this._asstBadgeRev = (m.badge && Number(m.badge.rev)) || 0;
+            let dismissedRev = 0;
+            try {
+                const raw = localStorage.getItem('polaris.assistant.badgeDismissedRev');
+                if (raw !== null) dismissedRev = Number(raw) || 0;
+                else if (localStorage.getItem('polaris.assistant.badgeDismissed') === '1') dismissedRev = 0;
+                else dismissedRev = -1; // never dismissed -> show at any rev
+            } catch (_) { dismissedRev = -1; }
+            const dismissed = dismissedRev >= this._asstBadgeRev;
 
             this._assistantLoadPos();
             this._assistantLoadPanel();
@@ -10499,14 +10512,22 @@ function ninaApp() {
         },
         assistantDismissBadge() {
             this.asst.badgeVisible = false;
-            try { localStorage.setItem('polaris.assistant.badgeDismissed', '1'); } catch (_) {}
+            // Record the rev we dismissed at so a future rev bump can re-show it
+            // once. Keep the legacy boolean for older code paths / clarity.
+            try {
+                localStorage.setItem('polaris.assistant.badgeDismissedRev', String(this._asstBadgeRev || 0));
+                localStorage.setItem('polaris.assistant.badgeDismissed', '1');
+            } catch (_) {}
         },
         // Undo a badge dismissal (Settings -> Appearance). Clears the
         // per-browser dismissed flag and re-shows the intro badge, provided the
         // assistant is configured and the user hasn't subscribed (subscribers
         // get the always-on FAB, so there's no badge to restore).
         assistantResetBadge() {
-            try { localStorage.removeItem('polaris.assistant.badgeDismissed'); } catch (_) {}
+            try {
+                localStorage.removeItem('polaris.assistant.badgeDismissed');
+                localStorage.removeItem('polaris.assistant.badgeDismissedRev');
+            } catch (_) {}
             if (this.asst.ready && !this.asst.subscribed) {
                 const show = !this.asst.manifest || !this.asst.manifest.badge
                     || this.asst.manifest.badge.show !== false;
