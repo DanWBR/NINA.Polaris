@@ -152,7 +152,15 @@ jobs:
           tinytex: true
 
       - name: Install LaTeX packages the book needs (Inter font, tikz)
-        run: tlmgr install inter pgf || "$HOME"/.TinyTeX/bin/*/tlmgr install inter pgf
+        shell: bash
+        run: |
+          # The quarto action installs TinyTeX but does not put tlmgr on
+          # PATH, and a freshly installed tlmgr can lag the CTAN snapshot
+          # (it refuses to install packages until it updates itself). Add
+          # the arch-specific bin dir, self-update, then install.
+          export PATH="$(dirname "$(find "$HOME/.TinyTeX/bin" -name tlmgr | head -1)"):$PATH"
+          tlmgr update --self
+          tlmgr install inter pgf
 
       - name: Render PDF
         working-directory: book

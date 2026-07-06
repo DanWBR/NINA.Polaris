@@ -52,3 +52,13 @@ jobs:
             exit 1
           fi
           echo "OK: clean render."
+
+      - name: Build plain-text edition (llms.txt) and check cleanup
+        run: |
+          bash book/scripts/build-llms-txt.sh
+          # The cleanup regex must leave no Quarto-only markup behind.
+          if grep -nE '\[@|\{#|^:::|@sec-|<!--' book/_build/llms-full.txt; then
+            echo "::error::Residual Quarto markup in llms-full.txt; fix book/scripts/build-llms-txt.sh."
+            exit 1
+          fi
+          echo "OK: clean plain-text export."

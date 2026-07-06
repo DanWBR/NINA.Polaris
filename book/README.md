@@ -55,7 +55,27 @@ Three workflows keep the book honest (`.github/workflows/`):
   link: `releases/latest/download/The-Polaris-Handbook.pdf`.
 - `deploy-website.yml`: renders the HTML edition and publishes it at
   `polaris-astro.app.br/handbook/` whenever `book/` or `website/`
-  changes on master.
+  changes on master. It also runs `scripts/build-llms-txt.sh` to
+  publish a plain-text edition for machine reading (see below).
+
+## Plain-text edition for the assistant
+
+`scripts/build-llms-txt.sh` concatenates the chapter sources into a
+single lightly-cleaned Markdown file for ingestion by the Polaris
+Assistant (an external service) or any LLM tool, following the
+[llms.txt](https://llmstxt.org) convention. CI publishes two files:
+
+- `polaris-astro.app.br/handbook/llms.txt`, a short index (title,
+  summary, chapter list).
+- `polaris-astro.app.br/handbook/llms-full.txt`, the whole book as
+  one plain-text file (~570 KB), with citations, cross-references,
+  callouts, and figures reduced to readable text.
+
+The assistant is a separate, externally hosted module (the app only
+embeds it via a manifest, see `wwwroot/assistant-config.json`), so
+point its ingestion at the stable `llms-full.txt` URL above; nothing
+in this repo configures the assistant directly. Build locally with
+`bash book/scripts/build-llms-txt.sh` (writes into `book/_build/`).
 
 Practical consequence: when a feature PR changes behavior the book
 describes, update the relevant chapter in the same PR.
