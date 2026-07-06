@@ -33,9 +33,25 @@
        cap them to the column so they shrink with the viewport. */
     .input-sm { max-width: 100%; }
 
-    /* --- File-browser / STUDIO toolbar: ~16 icons in one row overflowed;
-       let it wrap to as many rows as needed. --- */
-    .files-actions-icons { flex-wrap: wrap; }
+    /* --- File-browser / STUDIO toolbars (FILE TOOLS + PROCESSING TOOLS):
+       ~16 labelled icons overflow one row. On a phone, wrapping to many rows
+       eats vertical space and pushes the file list down; scroll the bar
+       horizontally instead (one row, swipe sideways). Children keep their
+       size (flex: 0 0 auto) so they don't squash. --- */
+    .files-actions-icons {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;   /* momentum scroll on iOS */
+        scrollbar-width: thin;
+    }
+    .files-actions-icons > * { flex: 0 0 auto; }
+    /* A slim, unobtrusive horizontal scrollbar so it's clearly swipeable. */
+    .files-actions-icons::-webkit-scrollbar { height: 5px; }
+    .files-actions-icons::-webkit-scrollbar-thumb {
+        background: color-mix(in srgb, var(--accent) 45%, transparent);
+        border-radius: 3px;
+    }
 
     /* --- AF param grid (FOCUS) wraps too. --- */
     .af-params { flex-wrap: wrap; }
