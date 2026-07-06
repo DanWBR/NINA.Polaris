@@ -306,7 +306,7 @@ public sealed class SvbonySdkCamera : ICamera {
                     State = CameraStates.Idle;
                 }
             }
-            return WrapFrame(bytes, w, h);
+            return WrapFrame(bytes, w, h, exposureSeconds >= 0 ? exposureSeconds : _exposureSec);
         }
     }, ct);
 
@@ -397,7 +397,7 @@ public sealed class SvbonySdkCamera : ICamera {
             if (err == SVB_ERROR_CODE.SVB_ERROR_TIMEOUT) continue;
             if (err != SVB_ERROR_CODE.SVB_SUCCESS) continue;
             IImageData frame;
-            try { frame = WrapFrame(buf, w, h); } catch { continue; }
+            try { frame = WrapFrame(buf, w, h, _exposureSec); } catch { continue; }
             foreach (var s in _streamSubs.Values) {
                 try { s(frame); } catch { }
             }
@@ -440,7 +440,7 @@ public sealed class SvbonySdkCamera : ICamera {
         }
     }
 
-    private IImageData WrapFrame(byte[] bytes, int w, int h) {
+    private IImageData WrapFrame(byte[] bytes, int w, int h, double exposureSec) {
         var pixels = new ushort[(long)w * h];
         if (_imgType == SVB_IMG_TYPE.SVB_IMG_RAW16) {
             Buffer.BlockCopy(bytes, 0, pixels, 0, pixels.Length * 2);
@@ -459,6 +459,10 @@ public sealed class SvbonySdkCamera : ICamera {
         meta.Camera.Name = DeviceName;
         meta.Camera.Gain = _gain;
         meta.Camera.Offset = _offset;
+        // Stamp the integration time so the FITS/XISF writers emit EXPTIME /
+        // EXPOSURE (and DATE-AVG). Without this, SVBony SDK frames saved with
+        // no exposure value.
+        meta.Exposure.ExposureTime = exposureSec;
         meta.Camera.PixelSizeX = _pixelSize;
         meta.Camera.PixelSizeY = _pixelSize;
         // The FITS/XISF writers stamp BAYERPAT from meta.Camera.BayerPattern,

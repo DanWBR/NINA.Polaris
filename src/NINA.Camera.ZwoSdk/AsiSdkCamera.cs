@@ -357,6 +357,9 @@ public sealed class AsiSdkCamera : ICamera {
         var meta = new ImageMetaData();
         meta.Camera.Name = DeviceName;
         meta.Camera.Gain = _gain;
+        // Stamp the integration time so the FITS/XISF writers emit EXPTIME /
+        // EXPOSURE (otherwise native-SDK frames saved with no exposure value).
+        meta.Exposure.ExposureTime = _exposureSec;
         meta.Camera.Offset = _offset;
         meta.Camera.PixelSizeX = _pixelSize;
         meta.Camera.PixelSizeY = _pixelSize;
