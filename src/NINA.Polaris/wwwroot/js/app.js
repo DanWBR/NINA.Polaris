@@ -3124,6 +3124,7 @@ function ninaApp() {
         _annotateAbort: null,
         _annotateTimer: null,
         imageViewerPath: '',   // absolute path of the file open in the viewer (FILES); '' for the live frame
+        filesViewerBusy: false, // guards the viewer's discard action
         // LIVE tab image-history + HFR chart are now a semi-transparent
         // overlay over the stacked image. Default hidden so the focus
         // stays on the master being built. User toggles via the
@@ -13961,6 +13962,57 @@ function ninaApp() {
             const entry = this.files.entries.find(
                 e => e.fullPath === this.files.selectedPaths[0]);
             if (entry && !entry.isDirectory) this.filesOpenPreview(entry);
+        },
+
+        // Image files in the current directory, in listing order — the set the
+        // viewer's prev/next and discard-then-advance step through.
+        _filesViewerSiblings() {
+            const imgExts = ['fits','fit','fts','xisf','png','jpg','jpeg','gif','bmp','webp','tif','tiff'];
+            return (this.files.entries || []).filter(e =>
+                !e.isDirectory && imgExts.includes((e.name.toLowerCase().split('.').pop() || '')));
+        },
+        _filesViewerIndex() {
+            return this._filesViewerSiblings().findIndex(e => e.fullPath === this.imageViewerPath);
+        },
+        // Show prev/next only when the open file is one of several images in the dir.
+        filesViewerHasNav() {
+            const sibs = this._filesViewerSiblings();
+            return sibs.length > 1 && this._filesViewerIndex() >= 0;
+        },
+        filesViewerNav(dir) {
+            const sibs = this._filesViewerSiblings();
+            const i = this._filesViewerIndex();
+            if (i < 0 || !sibs.length) return;
+            const next = (i + dir + sibs.length) % sibs.length;   // wrap around
+            this.filesOpenPreview(sibs[next]);
+        },
+        // Silent cull: move the open file to discarded/ at the studio root, then
+        // step to the next image (or close if that was the last one).
+        async filesDiscardCurrent() {
+            if (!this.imageViewerPath || this.filesViewerBusy) return;
+            const path = this.imageViewerPath;
+            const sibs = this._filesViewerSiblings();
+            const i = this._filesViewerIndex();
+            this.filesViewerBusy = true;
+            try {
+                const r = await this.apiPost('/api/files/discard', { path });
+                if (!r.ok) {
+                    let msg = r.status;
+                    try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (_) {}
+                    this.toast('Could not discard: ' + msg, 'error');
+                    return;
+                }
+                this.toast('Moved to discarded/', 'success');
+                // Advance within the pre-removal sibling list, then refresh.
+                const remaining = sibs.filter(e => e.fullPath !== path);
+                const nextEntry = remaining.length ? remaining[Math.min(i, remaining.length - 1)] : null;
+                if (nextEntry) this.filesOpenPreview(nextEntry); else this.closeImageViewer();
+                if (typeof this.filesReload === 'function') this.filesReload();
+            } catch (e) {
+                this.toast('Could not discard: ' + (e.message || e), 'error');
+            } finally {
+                this.filesViewerBusy = false;
+            }
         },
 
         async filesOpenPreview(entry) {

@@ -16022,11 +16022,19 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
     <div class="image-viewer-modal" x-show="imageViewerOpen" x-cloak
          @click.self="closeImageViewer()"
-         @keydown.escape.window="onImageViewerEscape()">
+         @keydown.escape.window="onImageViewerEscape()"
+         @keydown.arrow-left.window="imageViewerOpen && filesViewerHasNav() && filesViewerNav(-1)"
+         @keydown.arrow-right.window="imageViewerOpen && filesViewerHasNav() && filesViewerNav(1)">
         <div class="image-viewer-frame">
             <div class="image-viewer-header">
                 <span x-text="imageViewerTitle"></span>
                 <span style="flex:1"></span>
+                <!-- Prev/next through the sibling image files in this directory
+                     (FILES viewer only). -->
+                <button class="btn btn-sm" x-show="imageViewerPath && filesViewerHasNav()"
+                        @click="filesViewerNav(-1)" title="Previous file (←)">‹</button>
+                <button class="btn btn-sm" x-show="imageViewerPath && filesViewerHasNav()"
+                        @click="filesViewerNav(1)" title="Next file (→)">›</button>
                 <button class="btn btn-sm" @click="osdZoom(1.5)" title="Zoom in">＋</button>
                 <button class="btn btn-sm" @click="osdZoom(1/1.5)" title="Zoom out">－</button>
                 <button class="btn btn-sm" @click="osdHome()" title="Fit to view">⌂</button>
@@ -16065,6 +16073,11 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <span x-show="studioAnnotate.busy" x-cloak>Solving…</span>
                 </button>
                 <button class="btn btn-sm" @click="reloadImageViewer()" title="Reload">↻</button>
+                <!-- Discard: move this file to a `discarded/` folder at the studio
+                     root (recoverable), then advance to the next file. -->
+                <button class="btn btn-sm" x-show="imageViewerPath"
+                        @click="filesDiscardCurrent()" :disabled="filesViewerBusy"
+                        title="Discard (move to discarded/)">🗑</button>
                 <button class="btn btn-sm btn-danger" @click="closeImageViewer()">✕</button>
             </div>
             <!-- Annotate plate-solve in-progress banner: elapsed time, live
@@ -17297,7 +17310,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260706-asstselframe"></script>
+    <script src="/js/app.js?v=20260706-filesdiscard"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

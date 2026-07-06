@@ -483,6 +483,29 @@ public static class FilesEndpoints {
             } catch (Exception ex) { return MapError(ex); }
         });
 
+        // Silent "discard": move a file into a `discarded/` folder at the studio
+        // root instead of deleting it, so a mis-click in the viewer's cull loop
+        // is recoverable. No confirmation — that's the point of a quick cull.
+        // The destination folder is created on demand and names are de-duped.
+        g.MapPost("/discard", async (FileBrowserService svc, ProfileService profiles,
+                                     DiscardRequest req, CancellationToken ct) => {
+            try {
+                var root = profiles.Active.ImageOutputDir;
+                if (string.IsNullOrWhiteSpace(root))
+                    return Results.BadRequest(new { error = "No studio root configured." });
+                var src = svc.ResolveSafe(req.Path, mustExist: true);
+                var discardDir = Path.Combine(root, "discarded");
+                var name = Path.GetFileName(src);
+                var stem = Path.GetFileNameWithoutExtension(name);
+                var ext = Path.GetExtension(name);
+                var dst = Path.Combine(discardDir, name);
+                for (int i = 2; File.Exists(dst); i++)
+                    dst = Path.Combine(discardDir, $"{stem}_{i}{ext}");
+                await svc.MoveAsync(src, dst, overwrite: false, ct);
+                return Results.Ok(new { ok = true, movedTo = dst });
+            } catch (Exception ex) { return MapError(ex); }
+        });
+
         // Delete is the only mutator that requires an explicit
         // confirmed=true flag. The UI sets it after window.confirm().
         // Server-side guard so anything else hitting the API (curl,
@@ -609,6 +632,7 @@ public static class FilesEndpoints {
     // --- DTOs --------------------------------------------------------
 
     public record CopyMoveRequest(string Src, string Dst, bool Overwrite);
+    public record DiscardRequest(string Path);
     public record DeleteRequest(List<string> Paths, bool Confirmed);
     public record MkdirRequest(string Parent, string Name);
     public record RenameRequest(string Path, string NewName);
