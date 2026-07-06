@@ -32,6 +32,9 @@ export const navLinks = [
   { label: 'Assistant', href: '/assistant' },
   { label: 'Get Started', href: '/getting-started' },
   { label: 'Download & Install', href: '/install' },
+  // Static Quarto book rendered into public/handbook/ by CI
+  // (deploy-website.yml), not an Astro route.
+  { label: 'Handbook', href: '/handbook/' },
   { label: 'About', href: '/about' },
   { label: 'Discord ↗', href: site.discord, external: true },
   { label: 'Patreon ↗', href: site.patreon, external: true },
