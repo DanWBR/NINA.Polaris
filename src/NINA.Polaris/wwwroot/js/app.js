@@ -10175,6 +10175,14 @@ function ninaApp() {
                 focus: { hfr: this.lastHfr || 0 },
                 meridian: { minutesToFlip: this.mfTimeToFlipMinutes },
                 liveStack: { active: !!this.liveActive },
+                // The single file the user has selected in the STUDIO Files
+                // browser, so the assistant can analyze it directly (no need to
+                // open the preview modal, which would cover the panel).
+                files: {
+                    selectedPath: (this.tab === 'files' && this.files
+                        && (this.files.selectedPaths || []).length === 1)
+                        ? this.files.selectedPaths[0] : null,
+                },
             };
             this._assistantPost({ v: 1, type: 'host:status', snapshot: snap });
         },
