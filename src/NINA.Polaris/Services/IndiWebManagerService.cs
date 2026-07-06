@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Diagnostics;
+using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 
@@ -268,6 +269,78 @@ public class IndiWebManagerService : BackgroundService {
         await StopAsync(ct);
         try { await Task.Delay(1500, ct); } catch (TaskCanceledException) { return false; }
         return await StartAsync(ct);
+    }
+
+    // ── Per-driver control via the indi-web REST API ─────────────────────
+    // indi-web (knro/indiwebmanager) exposes /api/drivers/{start,stop,restart}
+    // /<label> and /api/server/drivers. Restarting a single driver bounces
+    // just that driver process on the indiserver without dropping the others,
+    // which is exactly what a wedged driver (dropped BLOB) needs — far less
+    // disruptive than RestartAsync (which kills the whole indi-web) or
+    // reconnecting the device (which does not fix a stuck driver process).
+
+    private HttpClient? _http;
+    private HttpClient Http => _http ??= new HttpClient {
+        BaseAddress = new Uri($"http://{BindAddress}:{BindPort}"),
+        Timeout = TimeSpan.FromSeconds(10),
+    };
+
+    /// <summary>The driver <c>label</c>s indi-web currently has running
+    /// (from <c>GET /api/server/drivers</c>). Empty when indi-web is down or
+    /// no server is running. Labels are what the start/stop/restart calls
+    /// take.</summary>
+    public async Task<List<string>> GetRunningDriverLabelsAsync(CancellationToken ct = default) {
+        if (!IsSupportedOs || !Running) return [];
+        try {
+            var drivers = await Http.GetFromJsonAsync<List<IndiWebDriver>>(
+                "/api/server/drivers", ct);
+            return drivers?.Where(d => !string.IsNullOrWhiteSpace(d.Label))
+                          .Select(d => d.Label!).ToList() ?? [];
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "indi-web GET /api/server/drivers failed");
+            return [];
+        }
+    }
+
+    public Task<bool> RestartDriverAsync(string label, CancellationToken ct = default)
+        => DriverActionAsync("restart", label, ct);
+    public Task<bool> StartDriverAsync(string label, CancellationToken ct = default)
+        => DriverActionAsync("start", label, ct);
+    public Task<bool> StopDriverAsync(string label, CancellationToken ct = default)
+        => DriverActionAsync("stop", label, ct);
+
+    private async Task<bool> DriverActionAsync(string action, string label, CancellationToken ct) {
+        if (!IsSupportedOs) { LastError = "OS not supported"; return false; }
+        if (string.IsNullOrWhiteSpace(label)) { LastError = "driver label required"; return false; }
+        if (!Running && !await ProbeHealthAsync(ct)) {
+            LastError = "indi-web is not running";
+            return false;
+        }
+        // Path segment, not a query value — Uri.EscapeDataString keeps spaces
+        // (%20) and other label characters intact for Bottle's route match.
+        var url = $"/api/drivers/{action}/{Uri.EscapeDataString(label)}";
+        try {
+            using var resp = await Http.PostAsync(url, content: null, ct);
+            if (resp.IsSuccessStatusCode) {
+                _logger.LogInformation("indi-web driver {Action}: '{Label}' OK", action, label);
+                LastError = null;
+                return true;
+            }
+            LastError = $"indi-web driver {action} '{label}' returned HTTP {(int)resp.StatusCode}";
+            _logger.LogWarning("{Error}", LastError);
+            return false;
+        } catch (Exception ex) {
+            LastError = $"indi-web driver {action} '{label}' failed: {ex.Message}";
+            _logger.LogWarning(ex, "indi-web driver {Action} '{Label}' failed", action, label);
+            return false;
+        }
+    }
+
+    private sealed class IndiWebDriver {
+        public string? Label { get; set; }
+        public string? Version { get; set; }
+        public string? Binary { get; set; }
+        public string? Family { get; set; }
     }
 
     /// <summary>TCP probe — true if something is listening on

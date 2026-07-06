@@ -667,13 +667,18 @@ public class IndiCamera : ICamera {
         var timeoutMs = (int)Math.Min(int.MaxValue,
             (exposureSeconds * 1000) + 60_000);
         using var timeoutCts = new CancellationTokenSource(timeoutMs);
-        using var timeoutReg = timeoutCts.Token.Register(() => localTcs.TrySetException(
-            new TimeoutException(
+        using var timeoutReg = timeoutCts.Token.Register(() => {
+            // Signal the wedged-driver watchdog before failing the capture.
+            // A missing BLOB after the deadline is the canonical symptom of a
+            // driver that stopped delivering frames (a reconnect won't fix it).
+            _client.RaiseBlobTimeout(DeviceName);
+            localTcs.TrySetException(new TimeoutException(
                 $"INDI camera {DeviceName} did not deliver a BLOB within " +
                 $"{Math.Round((exposureSeconds + 60), 1)} s of starting the exposure. " +
                 $"Common causes: BLOB delivery disabled on the indiserver, " +
                 $"driver crashed mid-exposure, or CCD_EXPOSURE_VALUE never " +
-                $"reached the driver.")));
+                $"reached the driver."));
+        });
 
         try {
             return await localTcs.Task;

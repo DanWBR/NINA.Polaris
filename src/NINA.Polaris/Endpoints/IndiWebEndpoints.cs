@@ -83,6 +83,33 @@ public static class IndiWebEndpoints {
             return Results.Ok(new { running = ok, error = ok ? null : svc.LastError });
         });
 
+        // ----- Per-driver control (item 1) -------------------------------
+        // Bounce a single wedged driver on the indiserver without dropping the
+        // rest, via indi-web's /api/drivers/* REST. Powers the "↻ Restart
+        // driver" buttons in RIGS and is what the wedge watchdog calls.
+        group.MapGet("/drivers", async (IndiWebManagerService svc) =>
+            Results.Ok(new { running = await svc.GetRunningDriverLabelsAsync() }));
+
+        group.MapPost("/drivers/{label}/restart", async (string label, IndiWebManagerService svc) => {
+            var ok = await svc.RestartDriverAsync(label);
+            return Results.Ok(new { ok, error = ok ? null : svc.LastError });
+        });
+        group.MapPost("/drivers/{label}/start", async (string label, IndiWebManagerService svc) => {
+            var ok = await svc.StartDriverAsync(label);
+            return Results.Ok(new { ok, error = ok ? null : svc.LastError });
+        });
+        group.MapPost("/drivers/{label}/stop", async (string label, IndiWebManagerService svc) => {
+            var ok = await svc.StopDriverAsync(label);
+            return Results.Ok(new { ok, error = ok ? null : svc.LastError });
+        });
+
+        // ----- Wedged-driver watchdog (item 4) ---------------------------
+        group.MapGet("/watchdog", (IndiDriverWatchdogService wd) => Results.Ok(wd.Status()));
+        group.MapPost("/watchdog/enable", (bool value, IndiDriverWatchdogService wd) => {
+            wd.SetEnabled(value);
+            return Results.Ok(wd.Status());
+        });
+
         // ----- INDI Control Panel (indi_control_panel) inside the
         // shared xpra display ---------------------------------------------
         // Reuses the Phd2GuiSessionService (the xpra display owner) to

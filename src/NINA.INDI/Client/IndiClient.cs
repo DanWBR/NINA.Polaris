@@ -68,6 +68,19 @@ public class IndiClient : IDisposable {
     public event Action? Disconnected;
     public event Action? Reconnected;
     public event Action<int>? ReconnectAttempt;
+    /// <summary>Fired when a capture's server-side deadline elapses without
+    /// the driver delivering a BLOB (the classic "wedged driver" symptom:
+    /// e.g. indi_asi_ccd dropping the CCD1 BLOB after a mid-exposure event).
+    /// The argument is the INDI device name. A reconnect usually does NOT
+    /// clear this — the driver process itself needs restarting — so a
+    /// consumer (the driver watchdog) can decide to restart the driver.</summary>
+    public event Action<string>? BlobTimeout;
+
+    /// <summary>Raised by device adapters (e.g. <c>IndiCamera</c>) when their
+    /// capture deadline fires with no BLOB. Invoked off the timer thread.</summary>
+    public void RaiseBlobTimeout(string device) {
+        try { BlobTimeout?.Invoke(device); } catch { /* watchdog must never break capture */ }
+    }
 
     public IndiClient(string host = "localhost", int port = 7624) {
         Host = host;

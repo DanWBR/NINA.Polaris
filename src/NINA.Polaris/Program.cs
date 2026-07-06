@@ -272,6 +272,11 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<Phd2VncSessionServ
 // health probe) runs.
 builder.Services.AddSingleton<IndiWebManagerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<IndiWebManagerService>());
+// Wedged-INDI-driver watchdog: on repeated BLOB timeouts, restart just that
+// driver through indi-web (a device reconnect can't fix a stuck driver). Dual
+// registration so the hosted StartAsync subscribes to IndiClient.BlobTimeout.
+builder.Services.AddSingleton<IndiDriverWatchdogService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<IndiDriverWatchdogService>());
 // WIFI-1: NetworkManager-based WiFi mode switch (Hotspot ↔ Station).
 // Same dual-registration shape as Phd2Gui / IndiWeb. Linux-only;
 // gracefully short-circuits on Windows / macOS via IsSupportedOs.
