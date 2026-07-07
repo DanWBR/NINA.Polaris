@@ -960,6 +960,9 @@ function ninaApp() {
         // value takes over again as soon as it agrees (or the window expires).
         _coolerPendingValue: null,
         _coolerPendingUntil: 0,
+        // Identity of the connected native camera(s) the control panel was last
+        // loaded for; drives the auto-load of the RIGS cam-ctrl sub-tab.
+        _camCtrlKey: null,
 
         // Camera driver state (DSLR support). cameraDriver picks
         // which backend the next Select call uses ('indi' default,
@@ -33683,6 +33686,23 @@ function ninaApp() {
                 // ISO, and its device name contains "gphoto"). Reset on a
                 // device/driver change (handled by the $watch below).
                 const camConn = !!eq.camera.connected;
+                // Auto-load the native-camera control panel when a camera
+                // connects, so its RIGS "<camera> settings" sub-tab can appear
+                // on its own. The tab is x-show="camCtrlAny()", which only
+                // turns true after camCtrlLoad() runs — without this trigger it
+                // was a chicken-and-egg (nothing loaded the controls until you
+                // clicked the still-hidden tab). Safe for any camera: non-native
+                // drivers report no controls, so the tab stays hidden. Keyed off
+                // connected main + guide camera identity so it reloads on
+                // connect / device swap, not every 1 Hz tick.
+                const camCtrlKey =
+                    (camConn ? (eq.camera.name || '1') : '') + '|' +
+                    ((this.guider && this.guider.guideCameraConnected)
+                        ? (this.guider.guideCameraName || '1') : '');
+                if (camCtrlKey !== this._camCtrlKey) {
+                    this._camCtrlKey = camCtrlKey;
+                    if (camCtrlKey !== '|') this.camCtrlLoad();
+                }
                 const prevIso = this.equipCameraInfo ? this.equipCameraInfo.supportsIso : false;
                 const prevCool = this.equipCameraInfo ? this.equipCameraInfo.supportsCooler : false;
                 const isoNow = camConn

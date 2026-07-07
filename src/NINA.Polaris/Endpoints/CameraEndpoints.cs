@@ -438,9 +438,19 @@ public static class CameraEndpoints {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected" });
 
-            await equip.Camera.SetCoolerAsync(request.Enabled);
-            if (request.TargetTemperature.HasValue)
-                await equip.Camera.SetTemperatureAsync(request.TargetTemperature.Value);
+            // Only push the target temperature when turning the cooler ON.
+            // Writing the target while disabling re-asserts cooling on some
+            // native drivers (SVBony: setting SVB_TARGET_TEMPERATURE flips
+            // SVB_COOLER_ENABLE back on), so the cooler would switch straight
+            // back on right after the user turned it off. Set the target
+            // first, then enable; on disable, just disable.
+            if (request.Enabled) {
+                if (request.TargetTemperature.HasValue)
+                    await equip.Camera.SetTemperatureAsync(request.TargetTemperature.Value);
+                await equip.Camera.SetCoolerAsync(true);
+            } else {
+                await equip.Camera.SetCoolerAsync(false);
+            }
 
             return Results.Ok(new { coolerOn = request.Enabled, target = request.TargetTemperature });
         });
