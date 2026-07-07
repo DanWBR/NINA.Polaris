@@ -1,0 +1,156 @@
+name: Android build
+
+# Builds the Capacitor Android app (mobile/) on a Linux runner — no local
+# toolchain needed. Two paths:
+#   * debug   — always runs, NO secrets. Produces an installable debug APK
+#               (signed with the auto debug key). Uploaded as an artifact.
+#   * release — opt-in manual dispatch with `release: true` AND the
+#               keystore secrets present. Produces a signed release APK.
+#
+# Trigger from the Actions tab (workflow_dispatch) or on pushes to mobile/.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Also produce a signed release APK (needs keystore secrets)"
+        type: boolean
+        default: false
+  push:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/android.yml'
+
+jobs:
+  # ---- Debug APK: the always-on gate, directly installable (no secrets) ----
+  debug:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install JS deps
+        run: npm install
+
+      - name: Build native ONNX plugin
+        run: npm run plugin:build
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Patch AndroidManifest (largeHeap / hardwareAccelerated)
+        run: ./scripts/android-postadd.sh
+
+      - name: App icons (best-effort)
+        run: npm run icons || true
+
+      - name: Sync web assets + plugins
+        run: npx cap sync android
+
+      - name: Point Gradle at the runner SDK
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Polaris-android-debug-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  # ---- Signed release APK: opt-in, needs a keystore in secrets ----
+  #
+  # Add these repo secrets (Settings -> Secrets and variables -> Actions):
+  #   ANDROID_KEYSTORE_BASE64     base64 of your release .jks/.keystore
+  #                               (`base64 -i polaris-release.jks`)
+  #   ANDROID_KEYSTORE_PASSWORD   store password
+  #   ANDROID_KEY_ALIAS           key alias
+  #   ANDROID_KEY_PASSWORD        key password
+  release:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.release }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install JS deps
+        run: npm install
+
+      - name: Build native ONNX plugin
+        run: npm run plugin:build
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Patch AndroidManifest (largeHeap / hardwareAccelerated)
+        run: ./scripts/android-postadd.sh
+
+      - name: App icons (best-effort)
+        run: npm run icons || true
+
+      - name: Sync web assets + plugins
+        run: npx cap sync android
+
+      - name: Point Gradle at the runner SDK
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+
+      - name: Build unsigned release APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+
+      - name: Sign release APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo -n "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          BUILD_TOOLS=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
+          UNSIGNED="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          ALIGNED="$RUNNER_TEMP/app-release-aligned.apk"
+          SIGNED="$RUNNER_TEMP/app-release.apk"
+          "$BUILD_TOOLS/zipalign" -f -p 4 "$UNSIGNED" "$ALIGNED"
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks "$RUNNER_TEMP/release.jks" \
+            --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --key-pass "pass:$ANDROID_KEY_PASSWORD" \
+            --out "$SIGNED" "$ALIGNED"
+          "$BUILD_TOOLS/apksigner" verify "$SIGNED"
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Polaris-android-release-apk
+          path: ${{ runner.temp }}/app-release.apk
+          if-no-files-found: error
