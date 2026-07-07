@@ -184,6 +184,27 @@ public sealed class ToupTekSdkCamera : ICamera {
         list.Add(new CameraControl("Gain", "Gain", "Analog gain",
             _gain, _gainMin, _gainMax == 0 ? ushort.MaxValue : _gainMax, _gainMin,
             Writable: true, Auto: false, AutoSupported: false, "int"));
+        // Offset / black level. Range scales with the current bit depth.
+        int blackMax = 31 << Math.Max(0, (_bitDepth > 8 ? 16 : 8) - 8);
+        if (_cam.get_Option(Toupcam.eOPTION.OPTION_BLACKLEVEL, out int bl))
+            list.Add(new CameraControl("Offset", "Offset (black level)", "Sensor black level / pedestal",
+                bl, 0, blackMax, 0, Writable: true, Auto: false, AutoSupported: false, "int"));
+        // Gamma (display curve). 100 = linear.
+        if (_cam.get_Gamma(out int gm))
+            list.Add(new CameraControl("Gamma", "Gamma", "Tone curve (100 = linear)",
+                gm, Toupcam.GAMMA_MIN, Toupcam.GAMMA_MAX, Toupcam.GAMMA_DEF,
+                Writable: true, Auto: false, AutoSupported: false, "int"));
+        // USB / frame-speed level. Lower it if the link drops frames.
+        uint maxSpeed = 0;
+        try { maxSpeed = _cam.MaxSpeed; } catch { }
+        if (maxSpeed > 0 && _cam.get_Speed(out ushort sp))
+            list.Add(new CameraControl("Speed", "USB speed level", "Frame speed level; lower on unstable USB",
+                sp, 0, maxSpeed, maxSpeed, Writable: true, Auto: false, AutoSupported: false, "int"));
+        // Saturation only makes sense on colour sensors.
+        if (_isColor && _cam.get_Saturation(out int sat))
+            list.Add(new CameraControl("Saturation", "Saturation", "Colour saturation (128 = neutral)",
+                sat, Toupcam.SATURATION_MIN, Toupcam.SATURATION_MAX, Toupcam.SATURATION_DEF,
+                Writable: true, Auto: false, AutoSupported: false, "int"));
         double temp = double.NaN;
         if (_cam.get_Temperature(out short t)) temp = t / 10.0;
         list.Add(new CameraControl("Temperature", "Sensor temperature", "°C (read-only)",
@@ -208,6 +229,14 @@ public sealed class ToupTekSdkCamera : ICamera {
                     _gain = (int)Math.Round(value);
                     return _cam.put_ExpoAGain((ushort)Math.Clamp(_gain, _gainMin,
                         _gainMax == 0 ? ushort.MaxValue : _gainMax));
+                case "Offset":
+                    return _cam.put_Option(Toupcam.eOPTION.OPTION_BLACKLEVEL, (int)Math.Round(value));
+                case "Gamma":
+                    return _cam.put_Gamma((int)Math.Round(value));
+                case "Speed":
+                    return _cam.put_Speed((ushort)Math.Round(value));
+                case "Saturation":
+                    return _cam.put_Saturation((int)Math.Round(value));
                 case "Cooler":
                     return _cam.put_Option(Toupcam.eOPTION.OPTION_TEC, value != 0 ? 1 : 0);
                 case "TargetTemp":

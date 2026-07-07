@@ -193,10 +193,12 @@ public static class GuiderEndpoints {
             }
         });
 
-        group.MapPost("/camera/connect", async (EquipmentManager equip) => {
+        group.MapPost("/camera/connect", async (EquipmentManager equip, NativeCameraControlStore controlStore) => {
             if (equip.GuideCamera == null)
                 return Results.BadRequest(new { error = "No guide camera selected. Use POST /api/guider/camera/select/{name} first" });
             await equip.GuideCamera.ConnectAsync();
+            // Re-apply the guide camera's persisted native controls (gain, etc.).
+            try { controlStore.ApplySaved(equip.GuideCamera); } catch { /* non-fatal */ }
             return Results.Ok(new { status = "connected", device = equip.GuideCamera.DeviceName });
         });
 

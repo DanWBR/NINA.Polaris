@@ -306,14 +306,19 @@ public static class CameraEndpoints {
             });
         });
 
-        group.MapPost("/controls/{id}", (string id, SetControlRequest body, EquipmentManager equip) => {
+        group.MapPost("/controls/{id}", (string id, SetControlRequest body, EquipmentManager equip,
+                                         NativeCameraControlStore controlStore) => {
             var cam = (body?.Which == "guide") ? equip.GuideCamera : equip.Camera;
             if (cam == null || !cam.IsConnected)
                 return Results.BadRequest(new { error = "Camera not connected" });
-            var ok = cam.SetControl(id, body?.Value ?? 0, body?.Auto ?? false);
+            var auto = body?.Auto ?? false;
+            var ok = cam.SetControl(id, body?.Value ?? 0, auto);
             if (!ok) return Results.BadRequest(new { error = $"Control '{id}' is not writable or unsupported" });
             // Return the fresh control so the UI reflects clamping/rounding.
             var updated = cam.GetControls().FirstOrDefault(c => c.Id == id);
+            // Persist per physical camera so the value survives reconnect/restart.
+            // Store the SDK-clamped value when we have it, else the requested one.
+            controlStore.Set(cam.DeviceName, id, updated?.Value ?? body?.Value ?? 0, updated?.Auto ?? auto);
             return Results.Ok(new { status = "ok", control = updated });
         });
 
@@ -470,11 +475,25 @@ public static class CameraEndpoints {
         group.MapGet("/discover", (EquipmentManager equip, string? driver)
             => Results.Ok(equip.GetDiscoveredCamerasFor(driver ?? "indi")));
 
-        group.MapPost("/connect", async (EquipmentManager equip, ProfileService profileSvc, ILoggerFactory loggerFactory) => {
+        group.MapPost("/connect", async (EquipmentManager equip, ProfileService profileSvc,
+                                         NativeCameraControlStore controlStore, ILoggerFactory loggerFactory) => {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected. Use POST /api/camera/select/{name} first" });
 
             await equip.Camera.ConnectAsync();
+            // Re-apply the native-SDK controls the user tuned last time (gain,
+            // offset, cooler, gamma, USB speed, …). The SDK forgets everything
+            // on close, so this is what makes the config panel "persist".
+            try {
+                var n = controlStore.ApplySaved(equip.Camera);
+                if (n > 0)
+                    loggerFactory.CreateLogger("Polaris.Camera")
+                        .LogInformation("Re-applied {N} saved native control(s) to {Dev}",
+                            n, equip.Camera.DeviceName);
+            } catch (Exception ex) {
+                loggerFactory.CreateLogger("Polaris.Camera")
+                    .LogDebug(ex, "Re-apply of saved native controls skipped (non-fatal)");
+            }
             // Per-rig pixel-size fallback. indi_gphoto (DSLR) leaves CCD_INFO
             // pixel size at 0; push the rig's configured value into the driver
             // so PixelSizeX/Y — and therefore FOV, the plate-solve scale hint,

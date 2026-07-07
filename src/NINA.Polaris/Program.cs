@@ -184,6 +184,9 @@ builder.Services.AddSingleton<LiveStackingService>();
 // camera and mount (driver "sim") couple pulse guides to the star field.
 builder.Services.AddSingleton<NINA.Polaris.Services.Simulator.Gear.SimGearService>();
 builder.Services.AddSingleton<EquipmentManager>();
+// Persists native-SDK camera control values (gain/offset/cooler/…) so they
+// survive disconnect/reconnect and app restarts; re-applied on connect.
+builder.Services.AddSingleton<NativeCameraControlStore>();
 builder.Services.AddSingleton<SequenceEngine>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Sequencer.SequenceTemplateStore>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Workflow.WorkflowStore>();
