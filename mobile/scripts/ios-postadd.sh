@@ -42,10 +42,13 @@ set_string "NSLocalNetworkUsageDescription" \
 "$PB" -c "Add :NSAppTransportSecurity dict" "$PLIST"
 "$PB" -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" "$PLIST"
 
-# Bonjour services advertised by the Pi (for capacitor-zeroconf discovery).
+# Bonjour service type Polaris advertises (MdnsService registers `_nina._tcp`)
+# and that connect.js browses. iOS 14+ BLOCKS an mDNS browse whose type isn't
+# listed here, so this MUST match `_nina._tcp` exactly or discovery finds
+# nothing. (_http._tcp kept as a harmless extra.)
 "$PB" -c "Delete :NSBonjourServices" "$PLIST" 2>/dev/null || true
 "$PB" -c "Add :NSBonjourServices array" "$PLIST"
-"$PB" -c "Add :NSBonjourServices:0 string _polaris._tcp" "$PLIST"
+"$PB" -c "Add :NSBonjourServices:0 string _nina._tcp" "$PLIST"
 "$PB" -c "Add :NSBonjourServices:1 string _http._tcp" "$PLIST"
 
 # ---- Podfile: onnxruntime needs iOS 14 + STATIC linkage ----
