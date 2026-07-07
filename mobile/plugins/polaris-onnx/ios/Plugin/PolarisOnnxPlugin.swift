@@ -127,7 +127,8 @@ public class PolarisOnnxPlugin: CAPPlugin {
         let elem: ORTTensorElementDataType
         switch type {
         case "float32": elem = .float
-        case "float16": elem = .float16
+        // The ORT Objective-C binding has no float16 element type; fp16 stays
+        // internal to the model (CoreML handles it). I/O tensors are float32.
         case "int32":   elem = .int32
         case "int64":   elem = .int64
         case "uint8":   elem = .uInt8
@@ -145,7 +146,6 @@ public class PolarisOnnxPlugin: CAPPlugin {
         let type: String
         switch info.elementType {
         case .float:    type = "float32"
-        case .float16:  type = "float16"
         case .int32:    type = "int32"
         case .int64:    type = "int64"
         case .uInt8:    type = "uint8"
