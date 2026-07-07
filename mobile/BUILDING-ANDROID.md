@@ -179,9 +179,11 @@ Share `app-release.apk`. Installers must allow "unknown sources".
   bundled **jbr (17)**.
 - **Plugin changes not showing**: re-run `npm run plugin:build` then
   `npx cap sync android`.
-- **Self-signed Pi cert**: the app allows it in dev (`capacitor.config`
-  `allowMixedContent`). For a hardened release, pin the fingerprint from
-  `/api/system/server-cert` instead.
+- **Self-signed Pi cert**: accepted natively for LAN hosts by the custom
+  `android-src/MainActivity.java` (a `BridgeWebViewClient` that proceeds on
+  `onReceivedSslError` only for private / link-local / loopback hosts). Public
+  hosts (e.g. the Relay over a real cert) are validated normally. For a
+  hardened release, pin the fingerprint from `/api/system/server-cert` instead.
 - **App freezes / "isn't responding" (ANR) on tablets**: the Polaris UI is
   a WebGL + WASM single-page app. **Every** host — even a single one — now
   loads in a cross-origin `<iframe>` under the shell (`connect.js`,

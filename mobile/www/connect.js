@@ -237,8 +237,9 @@ async function scan() {
         if (!result || result.action !== 'resolved' || !result.service) return;
         const s = result.service;
         // The Pi's self-signed cert SAN lists both its LAN IPs and its
-        // .local names, so the IP is fine to connect with; the only iOS
-        // blocker is trusting that cert (WKWebView has no "proceed anyway").
+        // .local names, so the IP is fine to connect with. The self-signed
+        // cert is accepted natively for LAN hosts (iOS: LANCertTrust.swift,
+        // Android: MainActivity.java), so no cert install is needed.
         const addr = (s.ipv4Addresses && s.ipv4Addresses[0]) || s.hostname;
         if (!addr) return;
         const origin = toOrigin(addr, s.port || 5000);

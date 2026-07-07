@@ -105,27 +105,32 @@ hand, edit `ios/App/App/Info.plist`:
 
 ---
 
-## 3. The self-signed LAN cert (important — iOS is stricter than Android)
+## 3. The self-signed LAN cert (handled natively — no install needed)
 
-On Android we blanket-allow the Pi's self-signed HTTPS (`allowMixedContent`).
-**iOS `WKWebView` does not offer that escape hatch** — it will refuse to
-load `https://polaris-app.local:5000` if the cert isn't trusted, with no
-in-app "accept" UI.
+Polaris serves its UI over HTTPS with a **self-signed** cert (needed for a
+secure browsing context: WebGPU/WASM, geolocation). By default `WKWebView`
+rejects a self-signed cert with no in-app "accept" UI — which left the Polaris
+UI iframe blank.
 
-The supported path is to **trust the Pi's root cert on the device**:
+**The app now accepts the self-signed cert natively for LAN hosts**, so no
+cert install is required on the device:
 
-1. In Polaris, open **Settings → Remote access / TLS → Install root
-   certificate** (the built-in wizard) and download the root CA, or fetch it
-   from `/api/system/server-cert`.
-2. Install it on the iPhone/iPad (AirDrop / email / Files → tap the
-   `.crt` → **Install Profile**).
-3. **Settings → General → VPN & Device Management** → install the profile,
-   then **Settings → General → About → Certificate Trust Settings** →
-   toggle **full trust** on for that root.
-4. Now `https://polaris-app.local:5000` loads cleanly in the app.
+- iOS: `mobile/ios-src/LANCertTrust.swift` adds a server-trust challenge
+  handler to Capacitor's navigation delegate (copied in + registered by
+  `scripts/ios-postadd.sh`).
+- Android: `mobile/android-src/MainActivity.java` installs a
+  `BridgeWebViewClient` that proceeds on `onReceivedSslError` for LAN hosts
+  (copied in by `scripts/android-postadd.sh`).
 
-(Over the Relay you get a real public cert, so this only affects direct-LAN
-HTTPS.)
+Both are **scoped to private / link-local / loopback hosts** (10.0.0.0/8,
+172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, `*.local`, `localhost`, IPv6
+`fe80::`/`fc00::`/`::1`). Any public host — e.g. the Polaris Relay over a real
+LettuceEncrypt cert — is validated normally, so this does not weaken security
+off-LAN.
+
+> Manually trusting the Pi's root cert (Settings → General → About →
+> Certificate Trust Settings) still works and is harmless, but is no longer
+> necessary.
 
 ---
 
@@ -170,9 +175,10 @@ target).
   CocoaPods is current (`sudo gem install cocoapods`).
 - **"Signing requires a development team"**: set the Team under Signing &
   Capabilities; a free Apple ID works for on-device debug.
-- **White screen / can't reach the host**: almost always the **cert trust**
-  step (§3) or a missing **ATS / Local Network** key (§2). Check the Xcode
-  console for an ATS or TLS rejection.
+- **White screen / can't reach the host**: check that `LANCertTrust.swift`
+  was injected + registered (§3) — without it `WKWebView` silently rejects the
+  self-signed cert and the iframe stays blank. Also confirm the **ATS / Local
+  Network** keys (§2). Check the Xcode console for an ATS or TLS rejection.
 - **mDNS host doesn't appear**: iOS needs the **Local Network** permission
   (prompted on first use) plus `NSBonjourServices` (§2). Type the host
   manually (`polaris-app.local:5000`) to confirm the rest works.
@@ -258,7 +264,7 @@ Two paths:
 ## 8. First smoke test
 
 1. Install/run on a device on the same Wi-Fi as the Pi.
-2. Trust the Pi root cert (§3) if using direct-LAN HTTPS.
+2. The self-signed LAN cert is accepted natively (§3) — no cert install.
 3. The **connect** screen should auto-list the host (mDNS), or type
    `polaris-app.local:5000`. Tap to load the live UI in the tab.
 4. **Tools → Aim helper → Polar align** works offline with just your
