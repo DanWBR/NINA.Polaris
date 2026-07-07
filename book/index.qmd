@@ -28,10 +28,10 @@ astrophotography course.
 
 Two audiences share these pages:
 
-- **Users** read Parts I through V: installation, equipment, capture,
-  processing, and remote access. Everything is task-oriented and follows the
-  arc of a real imaging session.
-- **Developers and integrators** add Part VI: the server architecture,
+- **Users** read Parts I through VI: installation, equipment, capture,
+  processing, remote access, and the optional assistant. Everything is
+  task-oriented and follows the arc of a real imaging session.
+- **Developers and integrators** add Part VII: the server architecture,
   the REST and WebSocket APIs (the interfaces other programs use to
   command and monitor Polaris), configuration, and the development
   workflow.
@@ -53,7 +53,10 @@ Two audiences share these pages:
 - **Part V, Remote Access and Administration**: networking, HTTPS, the
   relay, authentication, and keeping a headless box (one that runs
   with no monitor or keyboard attached) healthy.
-- **Part VI, Under the Hood**: architecture, API, configuration, and how to
+- **Part VI, The Optional Assistant**: Polaris Assistant, the paid,
+  opt-in AI companion whose subscription funds Polaris — what it does,
+  how to enable it, and how it handles your telescope and your data.
+- **Part VII, Under the Hood**: architecture, API, configuration, and how to
   build and contribute.
 - **Appendices**: the requirements matrix, glossary, troubleshooting, and
   FAQ.

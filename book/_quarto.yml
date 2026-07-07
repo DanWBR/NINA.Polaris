@@ -48,6 +48,9 @@ book:
       chapters:
         - 27-networking.qmd
         - 28-administration.qmd
+    - part: "The Optional Assistant"
+      chapters:
+        - 32-assistant.qmd
     - part: "Under the Hood"
       chapters:
         - 29-architecture.qmd

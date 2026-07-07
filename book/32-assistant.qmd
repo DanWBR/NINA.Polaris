@@ -1,0 +1,142 @@
+# Polaris Assistant {#sec-assistant}
+
+Everything else in this handbook is free and open source. **Polaris
+Assistant** is the one exception: an optional, paid AI companion that
+rides inside the Polaris web interface, and whose subscription revenue
+funds the ongoing development of Polaris itself. It is entirely
+opt-in — Polaris ships with it switched off, never depends on it, and
+works exactly the same whether or not you ever turn it on. This chapter
+explains what it does, how to enable it, and — just as importantly —
+what it does *not* do with your data or your telescope.
+
+Think of it as a co-pilot rather than an autopilot. It plans the night,
+proposes the actions to get there, inspects your frames, and answers
+astrophotography questions in plain language; but anything that moves
+hardware or changes a running session waits for your approval first.
+
+## What it can do {#sec-assistant-capabilities}
+
+The assistant is built around four jobs.
+
+**It plans the night.** Tell it what you feel like shooting — "a nebula
+that's up now", "something for a two-hour window", "narrowband from a
+Bortle 7 backyard" — and it ranks well-placed deep-sky targets (plus the
+Moon and planets), checks their altitude across the night, the weather
+and the Moon's interference, and then assembles a ready-to-run,
+multi-target plan in the night planner (@sec-night-planner) with sensible
+exposures, dithering, and refocus points. You review and tweak it before
+anything runs.
+
+**It drives the rig, with your approval.** Slewing to a target,
+autofocusing (@sec-focusing), starting a sequence or a live stack,
+dithering, a meridian flip — each is proposed as a plan you **approve**,
+**review**, or **reject**. When it acts, it navigates the Polaris UI to
+the relevant panel so you can watch focus, guiding (@sec-guiding), or the
+stack as it works.
+
+**It looks at your images.** Ask "is this frame any good?" and it
+inspects the current frame — focus and star shape, trailing, gradients,
+framing — and tells you what to fix. It can also grade a folder of subs
+and drive the STUDIO stacking and post-processing tools (@sec-studio) on
+your behalf, again as reviewable steps.
+
+**It knows astrophotography.** Grounded, practical answers on focusing,
+guiding, exposure and histograms, filters, polar alignment
+(@sec-polar-alignment), calibration frames, and diagnosing bad subs —
+drawing on a knowledge base that includes this very handbook.
+
+## Turning it on {#sec-assistant-enable}
+
+The assistant appears as a small, dismissible badge in the bottom-right
+corner of the Polaris interface. The flow from there is deliberately
+short:
+
+1. Click the badge to open a short intro that explains what the assistant
+   is and what it costs.
+2. Choose to subscribe. You create an account with just an email address —
+   there is no password to invent. Polaris sends you a **magic link** (and
+   a short numeric code you can type instead), and clicking it signs you
+   in. The subscription itself is handled by Stripe's secure checkout.
+3. Once you are subscribed, a floating action button replaces the badge.
+   Click it to open the chat panel and start talking to the assistant.
+
+If you dismiss the badge, it stays gone until there is something new to
+show. Nothing about this flow is baked into open-source Polaris: the app
+only knows how to fetch a small manifest from the assistant's cloud and
+render whatever it describes. With no manifest configured, the badge
+never appears at all.
+
+## How it works {#sec-assistant-architecture}
+
+The assistant has three parts, and understanding how they fit together
+explains both its safety model and its privacy model.
+
+- **The cloud service** holds the language model, the account and billing
+  records, and the "agent loop" that turns your requests into a plan of
+  tool calls. It is the only part that talks to the AI.
+- **The chat panel** is a small web app served from that cloud and shown
+  inside Polaris as an embedded frame.
+- **Your browser is the bridge.** This is the important part. The cloud
+  never contacts your telescope. When the agent decides to, say, read the
+  system status or slew the mount, it does not reach into your network —
+  it hands that *intent* to your browser, which executes it against your
+  local Polaris over your LAN, using the session you are already logged
+  into, and hands the result back.
+
+This design has a happy consequence: because the browser is the bridge,
+your Polaris host (@sec-networking) never needs its own internet
+connection. The single-board computer at the telescope can sit on an
+offline field network; as long as the browser you are holding has both
+internet (to reach the cloud) and LAN access (to reach Polaris), the
+assistant works. The telescope stays on your local network, and the AI
+never touches it directly.
+
+## Staying in control {#sec-assistant-safety}
+
+Read-only questions — "what's up tonight?", "how's guiding?", "is this
+sub sharp?" — run freely; they only look. Anything that **moves hardware
+or changes a running session** is different: slewing, autofocus, starting
+or stopping a sequence or live stack, parking, a meridian flip. Those are
+never performed silently. The assistant proposes a plan, and it does
+nothing until you approve it. You can review the exact actions, approve
+them, or reject them outright. The assistant is a co-pilot with its hands
+visible on the yoke, not an autopilot you have to trust blindly.
+
+## Your account and subscription {#sec-assistant-account}
+
+The assistant is a flat monthly subscription (US$4.99/mo at the time of
+writing; the current price is always shown on the subscribe screen), with
+a short free trial for new subscribers. Sign-in is by magic link, so
+there is no password to manage; you can change your email or resend the
+link from the sign-in screen. Billing and cancellation go through Stripe's
+standard customer flow.
+
+To keep the shared AI service fair and its costs predictable, each
+subscriber has a generous monthly usage allowance. In normal use you will
+never notice it; if you ever reach it, the assistant tells you plainly and
+picks up again at the start of the next cycle. Your current usage is shown
+in the assistant's settings menu.
+
+## Privacy {#sec-assistant-privacy}
+
+The assistant is designed to need very little about you. It does not
+upload or store your images. When it "looks at a frame", the analysis
+happens against your local Polaris, and only the *result* — sharpness,
+star shape, a gradient note — travels back as text. Likewise, when it
+needs to know how the session is going, your browser forwards a compact,
+on-demand snapshot of status (not your data) so the agent can reason about
+it. The account itself is just your email address plus the subscription
+state. The full, current privacy policy is linked from the intro screen
+and hosted alongside the service.
+
+## Why it is a separate product {#sec-assistant-boundary}
+
+Polaris is licensed under the AGPLv3, which is what keeps it free and
+open. Polaris Assistant is closed source and commercial, and the two are
+kept cleanly separable on purpose: the assistant runs as an entirely
+separate service and only ever talks to Polaris through the same public
+web API that any other client uses. Nothing in open-source Polaris
+contains the assistant's product logic — the open app is just a generic,
+off-by-default host that renders what the cloud manifest tells it to. That
+boundary is what lets a paid add-on fund a free application without
+compromising either one.
