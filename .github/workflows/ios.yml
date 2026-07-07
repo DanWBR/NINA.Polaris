@@ -137,14 +137,25 @@ jobs:
           echo "PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
           echo "Installed provisioning profile: $PROFILE_NAME"
 
-      - name: Place App Store Connect API key (for signing + upload)
+      - name: Place App Store Connect API key (for TestFlight upload)
         env:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
         run: |
           mkdir -p "$HOME/private_keys"
-          echo -n "$APPSTORE_API_PRIVATE_KEY" | base64 --decode \
-            -o "$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8"
+          KEYFILE="$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8"
+          # Accept the secret either as the raw .p8 PEM text OR base64 of it.
+          if printf '%s' "$APPSTORE_API_PRIVATE_KEY" | grep -q 'BEGIN PRIVATE KEY'; then
+            printf '%s\n' "$APPSTORE_API_PRIVATE_KEY" > "$KEYFILE"
+          else
+            printf '%s' "$APPSTORE_API_PRIVATE_KEY" | base64 --decode > "$KEYFILE"
+          fi
+          # Fail fast (without leaking the key) if it isn't a valid PEM.
+          if ! grep -q 'BEGIN PRIVATE KEY' "$KEYFILE"; then
+            echo "::error::APPSTORE_API_PRIVATE_KEY did not decode to a valid .p8 (no PEM header). Store it as the .p8 file contents or its base64." >&2
+            exit 1
+          fi
+          echo "API key file OK ($(wc -c < "$KEYFILE") bytes)"
 
       - name: Configure the App target for manual signing
         env:
