@@ -22,9 +22,44 @@ public static class SkyEndpoints {
         var group = app.MapGroup("/api/sky");
 
         group.MapPost("/slew-and-center", (SlewAndCenterRequest request,
-            SlewCenterService slewCenter) => {
+            SlewCenterService slewCenter, MountSafetyGuardService guard,
+            EquipmentManager equip, ProfileService profiles) => {
+            // Safety gate #4: after a mount-safety trip, require a re-home first.
+            if (!request.Force && guard.RequireHomeAfterTrip) {
+                return Results.Json(new {
+                    needsConfirm = true,
+                    kind = "safety-stop",
+                    reason = "The mount safety guard has tripped. Find Home to re-establish a "
+                        + "clean pointing model before slewing, or confirm to override.",
+                }, statusCode: 409);
+            }
+
+            // Safety gate #2: flag a large / near-meridian slew, or a target below
+            // the altitude floor, for confirmation before the mount moves. Compute
+            // server-side (has the site + LST). Skip when the caller already
+            // confirmed (Force).
+            if (!request.Force) {
+                var scope = equip.Telescope;
+                double mra = double.NaN, mdec = double.NaN;
+                if (scope is { IsConnected: true }) { mra = scope.RightAscension; mdec = scope.Declination; }
+                var v = MountSlewSafety.Evaluate(
+                    mra, mdec, request.Ra, request.Dec,
+                    profiles.Active.Latitude, profiles.Active.Longitude, DateTime.UtcNow,
+                    guard.AltitudeFloorDeg);
+                if (v.Warn) {
+                    return Results.Json(new {
+                        needsConfirm = true,
+                        kind = "slew-warning",
+                        reason = v.Reason,
+                        moveDeg = double.IsNaN(v.MoveDeg) ? (double?)null : v.MoveDeg,
+                        targetAltDeg = v.TargetAltDeg,
+                        haMinutes = v.HaMinutes,
+                    }, statusCode: 409);
+                }
+            }
+
             var job = slewCenter.StartJob(request.Ra, request.Dec, request.ToleranceArcsec,
-                request.CenterOnly);
+                request.CenterOnly, request.Force);
             return Results.Accepted(value: new {
                 jobId = job.Id,
                 target = new { request.Ra, request.Dec },
@@ -476,7 +511,7 @@ public static class SkyEndpoints {
     }
 
     public record SlewAndCenterRequest(double Ra, double Dec, double ToleranceArcsec = 30.0,
-        bool CenterOnly = false);
+        bool CenterOnly = false, bool Force = false);
 
     /// <summary>POST body for <c>/api/sky/center-body</c>. <c>Body</c> is a
     /// friendly name (Sun/Moon/Mercury…Neptune). <c>OffsetDeg</c> is how far the

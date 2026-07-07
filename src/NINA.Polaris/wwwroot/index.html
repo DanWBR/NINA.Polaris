@@ -5836,14 +5836,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                min="0" step="1" class="input-sm" style="width:80px"
                                                @change="saveMfSettings()">
                                     </label>
+                                    <label>Altitude floor (°)
+                                        <input type="number" x-model.number="mfSettings.minAltitudeLimitDeg"
+                                               min="0" max="60" step="1" class="input-sm" style="width:80px"
+                                               @change="saveMfSettings()">
+                                    </label>
                                 </div>
                                 <label class="seq-dither-checkbox" x-show="mfSettings.safetyStopEnabled">
                                     <input type="checkbox" x-model="mfSettings.parkOnSafetyStop" @change="saveMfSettings()">
                                     Park the mount on safety stop
                                 </label>
+                                <label class="seq-dither-checkbox" x-show="mfSettings.safetyStopEnabled">
+                                    <input type="checkbox" x-model="mfSettings.requireHomeAfterSafetyStop" @change="saveMfSettings()">
+                                    Require Find Home before slewing after a safety stop
+                                </label>
                                 <p class="hint" style="margin:4px 0 0;font-size:11px" x-show="mfSettings.safetyStopEnabled">
                                     Stops tracking + aborts the session if the mount tracks past the
                                     meridian without a flip, or the guider loses the star repeatedly.
+                                    The <b>altitude floor</b> aborts a slew whose OTA drops below it (an
+                                    anti-crash backstop for a wrong-way slew toward the tripod; 0 disables).
                                     0 disables a guard. Global — applies to every rig.
                                 </p>
                             </div>
@@ -17323,7 +17334,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260706-calflip"></script>
+    <script src="/js/app.js?v=20260706-slewsafety"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

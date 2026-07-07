@@ -43,6 +43,7 @@ public class SlewCenterService {
     private readonly ActiveGuiderProvider _guiders;
     private readonly ILogger<SlewCenterService> _logger;
     private readonly NINA.Polaris.Services.PlateSolving.PlateSolveProgressService? _progress;
+    private readonly MountSafetyGuardService? _guard;
 
     private readonly ConcurrentDictionary<string, SlewCenterJob> _jobs = new();
 
@@ -50,7 +51,8 @@ public class SlewCenterService {
         ProfileService profiles, CameraStreamService stream,
         ILogger<SlewCenterService> logger,
         NINA.Polaris.Services.PlateSolving.PlateSolveProgressService? progress = null,
-        ActiveGuiderProvider? guiders = null) {
+        ActiveGuiderProvider? guiders = null,
+        MountSafetyGuardService? guard = null) {
         _equip = equip;
         _solver = solver;
         _profiles = profiles;
@@ -58,16 +60,18 @@ public class SlewCenterService {
         _guiders = guiders;
         _logger = logger;
         _progress = progress;
+        _guard = guard;
     }
 
     public SlewCenterJob StartJob(double ra, double dec, double toleranceArcsec = 30,
-            bool skipInitialSlew = false) {
+            bool skipInitialSlew = false, bool force = false) {
         var job = new SlewCenterJob {
             Id = Guid.NewGuid().ToString("N"),
             TargetRa = ra,
             TargetDec = dec,
             ToleranceArcsec = toleranceArcsec,
             SkipInitialSlew = skipInitialSlew,
+            Force = force,
             State = SlewCenterState.Pending,
             CreatedAt = DateTime.UtcNow
         };
@@ -128,6 +132,38 @@ public class SlewCenterService {
                 job.Error = "No camera connected for plate solving";
                 job.State = SlewCenterState.Failed;
                 return;
+            }
+
+            // Safety gate #4: after a mount-safety trip, don't slew on a
+            // possibly-confused pointing model until the mount is re-homed.
+            // A confirmed override (Force) still gets through.
+            if (!job.Force && _guard is { RequireHomeAfterTrip: true }) {
+                job.Error = "Mount safety stop is active — Find Home before slewing "
+                    + "(or re-run with confirmation to override).";
+                job.State = SlewCenterState.Failed;
+                _logger.LogWarning("Slew-and-center blocked: {Reason}", job.Error);
+                return;
+            }
+
+            // Safety #1: if the mount is already sitting on the target, DON'T
+            // re-command a full GoTo — go straight to center-only. A fresh GoTo
+            // to a target you're already on is what let the AM3 pick the
+            // un-flipped side and swing the long way toward the tripod. Only when
+            // the driver reports a usable position and we weren't already told to
+            // skip the slew.
+            if (!job.SkipInitialSlew) {
+                var m = _equip.Telescope;
+                double mra = m.RightAscension, mdec = m.Declination;
+                if (!double.IsNaN(mra) && !double.IsNaN(mdec) &&
+                        mra >= 0 && mra <= 24 && mdec >= -90 && mdec <= 90) {
+                    double sepDeg = MountSlewSafety.AngularSeparationDeg(mra, mdec, job.TargetRa, job.TargetDec);
+                    if (sepDeg <= MountSlewSafety.AlreadyOnTargetDeg) {
+                        job.SkipInitialSlew = true;
+                        _logger.LogInformation(
+                            "Already on target ({Sep:F2}° away) — center-only, not re-slewing "
+                            + "(avoids an un-flip / wrong-way GoTo).", sepDeg);
+                    }
+                }
             }
 
             // Adaptive centering goal. A flat 30" tolerance is fine on a
@@ -577,6 +613,9 @@ public class SlewCenterJob {
     /// <summary>Center-only mode: skip the initial slew on the first
     /// iteration (the scope is already on the field; just refine).</summary>
     public bool SkipInitialSlew { get; set; }
+    /// <summary>Operator confirmed a flagged slew (large / near-meridian / below
+    /// the altitude floor) or overrode the post-safety-stop home requirement.</summary>
+    public bool Force { get; set; }
     public SlewCenterState State { get; set; }
     public int Iteration { get; set; }
     public double? ActualRa { get; set; }

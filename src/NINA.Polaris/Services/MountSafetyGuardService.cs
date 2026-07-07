@@ -48,11 +48,24 @@ public class MountSafetyGuardService : BackgroundService {
     private readonly ILogger<MountSafetyGuardService> _logger;
 
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(15);
+    // While the mount is slewing we poll fast so the anti-crash altitude floor
+    // can abort a wrong-way slew before the OTA reaches the pier/tripod.
+    private static readonly TimeSpan FastPollInterval = TimeSpan.FromSeconds(1);
 
     // ---- public trip state (read by the meridian-flip /status endpoint + WS) ----
     public bool Tripped { get; private set; }
     public string? TripReason { get; private set; }
     public DateTime? TrippedAt { get; private set; }
+
+    /// <summary>True when a post-trip re-home is required before slewing is
+    /// allowed again (guard tripped + the setting is on). Read by the slew path.</summary>
+    public bool RequireHomeAfterTrip =>
+        Tripped && _meridian.Settings.RequireHomeAfterSafetyStop;
+
+    /// <summary>Configured anti-crash altitude floor (deg, 0 = off). Read by the
+    /// slew pre-check so a below-floor target is flagged before the mount moves.</summary>
+    public double AltitudeFloorDeg =>
+        _meridian.Settings.SafetyStopEnabled ? _meridian.Settings.MinAltitudeLimitDeg : 0;
 
     // ---- meridian-crossing tracking ----
     private double? _prevHa;
@@ -119,7 +132,11 @@ public class MountSafetyGuardService : BackgroundService {
             try { await TickAsync(stoppingToken); }
             catch (OperationCanceledException) { break; }
             catch (Exception ex) { _logger.LogDebug(ex, "Safety-guard tick failed (non-fatal)"); }
-            try { await Task.Delay(PollInterval, stoppingToken); }
+            // Poll fast while the mount is slewing so the anti-crash altitude
+            // floor can abort a wrong-way slew in ~1 s instead of up to 15 s.
+            var scope = _equip.Telescope;
+            var delay = (scope is { IsConnected: true, IsSlewing: true }) ? FastPollInterval : PollInterval;
+            try { await Task.Delay(delay, stoppingToken); }
             catch (OperationCanceledException) { break; }
         }
     }
@@ -133,6 +150,33 @@ public class MountSafetyGuardService : BackgroundService {
         EnsureGuiderSubscription();
 
         var s = _meridian.Settings;
+
+        // ---- Guard 3: anti-crash altitude floor ----
+        // Runs INDEPENDENTLY of a session (a manual SKY "Go To" while idle can
+        // still drive the OTA the wrong way toward the pier/tripod). If the mount
+        // is slewing and its current pointing is below the floor, abort the slew
+        // and stop. This is the backstop that catches a wrong-way slew already in
+        // motion, regardless of why it started.
+        if (s.SafetyStopEnabled && !Tripped && s.MinAltitudeLimitDeg > 0) {
+            var scope = _equip.Telescope;
+            if (scope is { IsConnected: true, IsSlewing: true }) {
+                double ra = scope.RightAscension, dec = scope.Declination;
+                if (!double.IsNaN(ra) && !double.IsNaN(dec)) {
+                    var (altDeg, _) = AltitudeService.RaDecToAltAz(
+                        ra, dec, DateTime.UtcNow, _profile.Active.Latitude, _profile.Active.Longitude);
+                    if (MountSlewSafety.ShouldAbortForAltitude(altDeg, s.MinAltitudeLimitDeg, true)) {
+                        try { await scope.AbortSlewAsync(ct); }
+                        catch (Exception ex) { _logger.LogWarning(ex, "Safety: abort-slew (altitude) failed"); }
+                        await TripAsync(
+                            $"Slew aborted: the OTA dropped to {altDeg:F0}° altitude, below the " +
+                            $"{s.MinAltitudeLimitDeg:F0}° floor — a wrong-way slew heading for the mount/tripod.",
+                            s, ct);
+                        return;
+                    }
+                }
+            }
+        }
+
         bool active = SessionActive;
 
         // Re-arm on a fresh session start (idle → active).

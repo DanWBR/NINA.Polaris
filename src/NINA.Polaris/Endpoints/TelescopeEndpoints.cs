@@ -127,11 +127,14 @@ public static class TelescopeEndpoints {
         // so the UI can toast "this mount doesn't support Find Home"
         // instead of failing silently. Most GEM and alt-az mounts
         // honour it via INDI TELESCOPE_HOME / Alpaca findhome.
-        group.MapPost("/find-home", async (EquipmentManager equip) => {
+        group.MapPost("/find-home", async (EquipmentManager equip, MountSafetyGuardService guard) => {
             if (equip.Telescope == null)
                 return Results.BadRequest(new { error = "No telescope selected" });
             try {
                 await equip.Telescope.FindHomeAsync();
+                // Re-homing re-establishes a clean pointing model, so clear any
+                // standing safety-stop that was blocking slews (guard gate #4).
+                guard.Reset();
                 return Results.Ok(new { status = "homing" });
             } catch (NotSupportedException ex) {
                 return Results.Json(new { error = ex.Message }, statusCode: 501);
@@ -153,7 +156,7 @@ public static class TelescopeEndpoints {
         // for the park/unpark settle waits) -- so we keep this as
         // a separate explicit button, not as the default behaviour
         // of /find-home.
-        group.MapPost("/find-home-reset", async (EquipmentManager equip) => {
+        group.MapPost("/find-home-reset", async (EquipmentManager equip, MountSafetyGuardService guard) => {
             if (equip.Telescope == null)
                 return Results.BadRequest(new { error = "No telescope selected" });
             var t = equip.Telescope;
@@ -184,6 +187,7 @@ public static class TelescopeEndpoints {
                 // Step 3: actual Home. Now the driver knows where it
                 // is and the home target is reachable.
                 await t.FindHomeAsync();
+                guard.Reset();   // re-homed → clear any standing safety-stop (gate #4)
                 return Results.Ok(new {
                     status = "homing",
                     sequence = "park -> unpark -> home"

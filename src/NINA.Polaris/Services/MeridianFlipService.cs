@@ -364,6 +364,19 @@ public class MeridianFlipSettings {
     /// <summary>Also park the mount (not just stop tracking) when the safety
     /// guard trips. Opt-in; default off to avoid an unexpected re-home.</summary>
     public bool ParkOnSafetyStop { get; set; }
+
+    /// <summary>Anti-crash altitude floor (degrees). While the mount is slewing,
+    /// if its pointing drops below this the guard aborts the slew + stops (a
+    /// wrong-way slew driving the OTA down toward the pier/tripod). 0 disables.
+    /// Default 5° — below any sane imaging target, so it only ever catches a
+    /// slew heading for the ground.</summary>
+    public double MinAltitudeLimitDeg { get; set; } = 5.0;
+
+    /// <summary>After a safety-guard trip, block "Go To" / slew-and-center until
+    /// the mount has been re-homed (Find Home), so a post-trip slew can't run on
+    /// a confused pointing model. A confirmed override still gets through.
+    /// Default on.</summary>
+    public bool RequireHomeAfterSafetyStop { get; set; } = true;
 }
 
 public enum MeridianFlipState {

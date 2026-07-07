@@ -3340,7 +3340,9 @@ function ninaApp() {
             safetyStopEnabled: true,
             maxMinutesPastMeridian: 60,
             maxConsecutiveGuideFailures: 20,
-            parkOnSafetyStop: false
+            parkOnSafetyStop: false,
+            minAltitudeLimitDeg: 5,
+            requireHomeAfterSafetyStop: true
         },
         // Safety-guard trip state (from the meridian-flip WS/status payload).
         mfSafetyTripped: false,
@@ -15856,7 +15858,9 @@ function ninaApp() {
                         safetyStopEnabled: data.safetyStopEnabled !== false,
                         maxMinutesPastMeridian: data.maxMinutesPastMeridian ?? 60,
                         maxConsecutiveGuideFailures: data.maxConsecutiveGuideFailures ?? 20,
-                        parkOnSafetyStop: !!data.parkOnSafetyStop
+                        parkOnSafetyStop: !!data.parkOnSafetyStop,
+                        minAltitudeLimitDeg: data.minAltitudeLimitDeg ?? 5,
+                        requireHomeAfterSafetyStop: data.requireHomeAfterSafetyStop !== false
                     };
                 }
             } catch (e) { }
@@ -20392,6 +20396,36 @@ function ninaApp() {
             }
         },
 
+        // Start a slew-and-center job with the mount-slew safety gate.
+        // The server returns 409 when the move is flagged (large / near the
+        // meridian / target below the altitude floor) or when a safety stop is
+        // standing — this confirms with the operator and retries with force.
+        // Returns the started-job data ({ jobId, ... }) or null if declined.
+        // Born from a near tripod-strike on an AM3 after a flip + guard trip.
+        async _postSlewAndCenter(body) {
+            const post = (b) => this.apiPost('/api/sky/slew-and-center', b);
+            let resp = await post(body);
+            if (resp.status === 409) {
+                let info = {};
+                try { info = await resp.json(); } catch { /* ignore */ }
+                const msg = (info.kind === 'safety-stop')
+                    ? ('⚠ ' + (info.reason || 'Mount safety stop is active.')
+                        + '\n\nRunning Find Home first is strongly recommended so the mount '
+                        + 'has a clean pointing model. Slew anyway?')
+                    : ('⚠ This slew was flagged: ' + (info.reason || 'safety check')
+                        + '.\n\nThis is the kind of move that can swing the mount the long way '
+                        + 'toward the pier/tripod. Continue anyway?');
+                if (!confirm(msg)) return null;
+                resp = await post({ ...body, force: true });
+            }
+            if (!resp.ok) {
+                let e = {};
+                try { e = await resp.json(); } catch { /* ignore */ }
+                throw new Error(e.error || ('HTTP ' + resp.status));
+            }
+            return resp.json();
+        },
+
         // Center on the solved coordinates. centerOnly=true skips the
         // initial slew (the scope is already on the field; just refine
         // the framing), centerOnly=false slews there first. The other
@@ -20406,14 +20440,13 @@ function ninaApp() {
                 return;
             }
             try {
-                const resp = await this.apiPost('/api/sky/slew-and-center', {
+                const data = await this._postSlewAndCenter({
                     ra: r.raHours,
                     dec: r.decDeg,
                     toleranceArcsec: 30,
                     centerOnly: !!centerOnly
                 });
-                const data = await resp.json();
-                if (data.jobId) {
+                if (data && data.jobId) {
                     this.slewCenterJobId = data.jobId;
                     this.skySolverHidden = false;
                     this._pollSlewCenter();
@@ -30502,12 +30535,12 @@ function ninaApp() {
             }
             if (this._blockIfBelowHorizon(target.ra, target.dec)) return;
             try {
-                const resp = await this.apiPost('/api/sky/slew-and-center', {
+                const data = await this._postSlewAndCenter({
                     ra: target.ra,
                     dec: target.dec,
                     toleranceArcsec: 30
                 });
-                const data = await resp.json();
+                if (!data) return;   // user declined the safety confirm
                 this.slewCenterJobId = data.jobId;
                 this.slewCenterStatus = { state: 'pending', iteration: 0 };
                 // Clear any leftover console from a previous run + re-open the
