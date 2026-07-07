@@ -77,8 +77,13 @@ jobs:
   #   BUILD_PROVISION_PROFILE_BASE64  base64 of the .mobileprovision
   #   KEYCHAIN_PASSWORD               any throwaway string (temp keychain)
   #   APPLE_TEAM_ID                   your 10-char Team ID
+  # For method=app-store (TestFlight upload), ALSO add:
+  #   APPSTORE_API_KEY_ID             App Store Connect API Key ID
+  #   APPSTORE_API_ISSUER_ID          App Store Connect API Issuer ID
+  #   APPSTORE_API_PRIVATE_KEY        base64 of the AuthKey_XXXXXXXX.p8
   # The provisioning profile must match appId `com.danielmedeiros.polaris`
-  # and (for `development`/`ad-hoc`) include your device UDIDs.
+  # and (for `development`/`ad-hoc`) include your device UDIDs. For
+  # `app-store`, the app record must already exist in App Store Connect.
   ipa:
     runs-on: macos-14
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed }}
@@ -168,3 +173,22 @@ jobs:
           name: Polaris-ios-ipa
           path: ${{ runner.temp }}/export/*.ipa
           if-no-files-found: error
+
+      # Only for app-store exports: push the .ipa to TestFlight so it
+      # installs over-the-air (no cables, no device UDIDs). Needs the
+      # App Store Connect API key secrets and an existing app record.
+      - name: Upload to TestFlight
+        if: ${{ inputs.export_method == 'app-store' }}
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          mkdir -p "$HOME/private_keys"
+          echo -n "$APPSTORE_API_PRIVATE_KEY" | base64 --decode \
+            -o "$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8"
+          IPA=$(ls "$RUNNER_TEMP"/export/*.ipa | head -1)
+          echo "Uploading $IPA to TestFlight…"
+          xcrun altool --upload-app -f "$IPA" --type ios \
+            --apiKey "$APPSTORE_API_KEY_ID" \
+            --apiIssuer "$APPSTORE_API_ISSUER_ID"

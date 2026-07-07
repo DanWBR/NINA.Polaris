@@ -217,7 +217,41 @@ Two paths:
   Apple Developer Program membership is required to create the distribution
   certificate + profile — a free Apple ID can only sign on-device locally
   in Xcode, not export in CI. `ad-hoc` gives you a `.ipa` you install
-  directly on registered devices; `app-store` is for TestFlight upload.
+  directly on registered devices; `app-store` is for TestFlight.
+
+  **TestFlight (method = `app-store`):** the workflow also **uploads** the
+  `.ipa` to App Store Connect, so it installs over-the-air via the
+  TestFlight app — no cables, no device UDIDs. Add three more secrets (an
+  App Store Connect **API key**, created under Users and Access → Integrations
+  → App Store Connect API, with the *App Manager* role):
+
+  | secret | what it is |
+  | --- | --- |
+  | `APPSTORE_API_KEY_ID` | the key's ID (10 chars) |
+  | `APPSTORE_API_ISSUER_ID` | the Issuer ID (UUID) shown above the keys list |
+  | `APPSTORE_API_PRIVATE_KEY` | `base64 -i AuthKey_XXXXXXXX.p8` |
+
+  The app record for `com.danielmedeiros.polaris` must already exist in App
+  Store Connect. After the run, the build shows up in TestFlight in a few
+  minutes (first upload may need export-compliance answered once in the
+  App Store Connect UI).
+
+  **How to create the cert + profile without a working Mac** — generate the
+  CSR with `openssl` (works anywhere), then use the Apple Developer web
+  portal for the rest:
+
+  ```bash
+  openssl genrsa -out ios_dist.key 2048
+  openssl req -new -key ios_dist.key -out ios_dist.csr \
+    -subj "/emailAddress=danielwag@gmail.com/CN=Polaris iOS/C=BR"
+  # Upload ios_dist.csr at developer.apple.com -> Certificates (Apple
+  # Distribution). Download distribution.cer, then:
+  openssl x509 -in distribution.cer -inform DER -out ios_dist.pem -outform PEM
+  openssl pkcs12 -export -inkey ios_dist.key -in ios_dist.pem \
+    -out ios_dist.p12 -passout pass:YOUR_P12_PASSWORD
+  base64 -i ios_dist.p12            # -> BUILD_CERTIFICATE_BASE64
+  base64 -i profile.mobileprovision # -> BUILD_PROVISION_PROFILE_BASE64
+  ```
 
 ---
 
