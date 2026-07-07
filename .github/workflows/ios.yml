@@ -179,6 +179,16 @@ jobs:
           fi
           echo "API key file OK ($(wc -c < "$KEYFILE") bytes)"
 
+      - name: Set a unique build number
+        run: |
+          # App Store Connect rejects a duplicate CFBundleVersion; Capacitor
+          # pins it to "1". Use the workflow run number (monotonic) so every
+          # upload is higher than the last.
+          PLIST="ios/App/App/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GITHUB_RUN_NUMBER" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $GITHUB_RUN_NUMBER" "$PLIST"
+          echo "CFBundleVersion = $GITHUB_RUN_NUMBER"
+
       - name: Configure the App target for manual signing
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
