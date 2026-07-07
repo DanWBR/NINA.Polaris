@@ -386,6 +386,9 @@ jobs:
             Stable link:
             https://github.com/${{ github.repository }}/releases/latest/download/polaris-android.apk
 
+            **iOS** — join the public TestFlight beta:
+            https://testflight.apple.com/join/A3H24grh
+
             ## Manual
 
             `The-Polaris-Handbook.pdf` is the complete manual for this

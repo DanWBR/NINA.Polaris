@@ -193,6 +193,11 @@
             "label": "Android app (.apk)",
             "badge": "android",
             "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-android.apk"
+          },
+          {
+            "label": "iOS app (TestFlight)",
+            "badge": "ios",
+            "url": "https://testflight.apple.com/join/A3H24grh"
           }
         ]
       }
