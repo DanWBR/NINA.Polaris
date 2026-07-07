@@ -182,28 +182,33 @@ Share `app-release.apk`. Installers must allow "unknown sources".
   `allowMixedContent`). For a hardened release, pin the fingerprint from
   `/api/system/server-cert` instead.
 - **App freezes / "isn't responding" (ANR) on tablets**: the Polaris UI is
-  a WebGL + WASM single-page app. When the connect screen hosts a host in a
-  cross-origin `<iframe>`, some Android System WebViews (reported: Xiaomi
-  Pad 7) periodically ANR, while a plain Chrome tab — a top-level load —
-  stays fluid on the same device. `connect.js` therefore takes a **single
-  host top-level** (`window.location.href = origin`, see `openHostDirect`),
-  matching the lighter Chrome-tab path; only the **multi-host** (2+) case
-  still uses iframe tabs. If you do open multiple host tabs and a powerful
-  tablet thrashes GC, the default per-app heap can still ANR. After `cap add
-  android`, add these to `<application>` in
-  `mobile/android/app/src/main/AndroidManifest.xml` (the folder is
-  git-ignored, so re-apply after a fresh `cap add`):
-  ```xml
-  android:hardwareAccelerated="true"
-  android:largeHeap="true"
-  ```
-  `cap sync` does **not** overwrite the manifest, so this only needs
-  re-doing after a full `cap add android`. If the freeze persists, capture
-  the ANR trace: `adb pull /data/anr/traces.txt` (or `adb logcat | grep -i
-  ANR`) and check which thread is blocked — and avoid leaving multiple host
-  tabs open, since each runs the full live pipeline. On the device side, also
-  update **Android System WebView** (Play Store) and disable HyperOS battery
-  restriction for the app.
+  a WebGL + WASM single-page app. **Every** host — even a single one — now
+  loads in a cross-origin `<iframe>` under the shell (`connect.js`,
+  `addInstance`/`openHost`), which is what keeps the tab bar alive: each
+  instance gets a Reload (⟳), a Close (×), the Add (＋)/back-to-picker
+  affordance, and the hardware-back-to-picker gesture. (Earlier a single
+  host was loaded **top-level** via `window.location.href` — an
+  `openHostDirect` path — as an ANR workaround for weak Android System
+  WebViews, e.g. Xiaomi Pad 7. That was **removed**: a top-level load tore
+  down the shell, leaving no tab, no reload, and no way back to the home
+  screen, which is the whole point of the wrapper.) So if a weak WebView
+  ANRs, mitigate it on the device/build side, not by dropping the iframe:
+  - After `cap add android`, add these to `<application>` in
+    `mobile/android/app/src/main/AndroidManifest.xml` (the folder is
+    git-ignored, so re-apply after a fresh `cap add`):
+    ```xml
+    android:hardwareAccelerated="true"
+    android:largeHeap="true"
+    ```
+    `cap sync` does **not** overwrite the manifest, so this only needs
+    re-doing after a full `cap add android`.
+  - Update **Android System WebView** (Play Store) and disable HyperOS /
+    aggressive battery restriction for the app.
+  - Avoid leaving **multiple** host tabs open at once — each runs the full
+    live pipeline (WebGL + WASM), so a powerful tablet can still thrash GC.
+  - If the freeze persists, capture the ANR trace: `adb pull
+    /data/anr/traces.txt` (or `adb logcat | grep -i ANR`) and check which
+    thread is blocked.
 
 ---
 
