@@ -366,27 +366,19 @@ function renderTabs() {
   bar.appendChild(add);
 }
 
-// Single-host fast path: navigate the WebView TOP-LEVEL to the host instead
-// of hosting it in a cross-origin <iframe>. The iframe is noticeably heavier
-// in some Android System WebViews (reported: periodic ANR on a Xiaomi Pad 7
-// where a plain Chrome tab — a top-level load — stays fluid). This matches
-// the Chrome-tab path. The Capacitor bridge + polaris-onnx plugin stay alive
-// on the remote origin via `allowNavigation` in capacitor.config. The Android
-// back button returns here (WebView history) to re-pick a host. Multi-host
-// (2+) still uses the iframe tab bar.
-function openHostDirect(origin) {
-  if (!origin) return;
-  setLastHost(origin);
-  setLastSet([origin]);
-  try { if (KeepAwake) KeepAwake.keepAwake(); } catch { /* not in app */ }
-  window.location.href = origin;
-}
-
-// Open one host the lightest way available: direct top-level load when nothing
-// is open yet, otherwise add it as another iframe tab (multi-instance mode).
+// Open one host as an iframe tab. Every instance — even a single one — is
+// hosted in a cross-origin <iframe> under the shell so the tab bar stays
+// alive: that's what gives each instance a Reload (⟳) button, a Close (×),
+// the Add (＋)/back-to-picker affordance, and the hardware-back-to-picker
+// gesture. (Earlier a single host was loaded TOP-LEVEL via window.location
+// as an ANR workaround for weak Android WebViews, but that tore down the
+// shell — leaving no tab, no reload, and no way back to the home screen,
+// which is the whole point of the wrapper.) The Capacitor bridge +
+// polaris-onnx plugin stay alive on the remote origin via `allowNavigation`
+// in capacitor.config.
 function openHost(origin, name) {
   if (!origin) return;
-  if (instances.size === 0) { openHostDirect(origin); return; }
+  setLastHost(origin);
   addInstance(origin, name, { activate: true });
 }
 
@@ -394,12 +386,6 @@ function openHost(origin, name) {
 function openSelected() {
   const origins = Array.from(selected);
   if (origins.length === 0) return;
-  // One host + nothing open yet → top-level load (lightest, Chrome-like).
-  if (origins.length === 1 && instances.size === 0) {
-    selected.clear();
-    openHostDirect(origins[0]);
-    return;
-  }
   origins.forEach((o, i) => addInstance(o, discovered.get(o)?.name, { activate: i === 0 }));
   setLastHost(origins[origins.length - 1]);
   selected.clear();
@@ -444,12 +430,6 @@ async function refreshPickerExtras() {
     els.reopenLink.textContent = `Reopen last ${set.length > 1 ? set.length + ' instances' : 'instance'}`;
     els.reopenLink.onclick = (e) => {
       e.preventDefault();
-      // A single saved host loads top-level (light, like a Chrome tab);
-      // multiple hosts still come back as iframe tabs.
-      if (set.length === 1 && instances.size === 0) {
-        openHostDirect(set[0]);
-        return;
-      }
       set.forEach((o, i) => addInstance(o, null, { activate: i === 0 }));
       maybeWarnMemory();
     };
