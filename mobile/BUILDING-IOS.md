@@ -185,7 +185,43 @@ target).
 
 ---
 
-## 7. First smoke test
+## 7. Building in CI (no local Mac toolchain)
+
+`.github/workflows/ios.yml` builds on a GitHub **macOS runner** (Xcode +
+CocoaPods preinstalled) — handy when your local Homebrew/CocoaPods is
+broken. Trigger it from the repo's **Actions → iOS build → Run workflow**,
+or it runs automatically on pushes that touch `mobile/**`.
+
+Two paths:
+
+- **`build` (default, no secrets):** an unsigned **simulator** build. It
+  proves the whole native stack compiles — the Swift plugin, the
+  `onnxruntime-objc` pod, Capacitor, `pod install`. This is the CI gate;
+  it does **not** produce something installable on a device.
+- **`ipa` (opt-in, needs an Apple Developer account):** run the workflow
+  manually with **signed = true** (and pick `development` / `ad-hoc` /
+  `app-store`). It archives, signs, exports, and uploads the `.ipa` as a
+  build artifact. Add these repo **secrets** first
+  (Settings → Secrets and variables → Actions):
+
+  | secret | what it is |
+  | --- | --- |
+  | `BUILD_CERTIFICATE_BASE64` | `base64 -i cert.p12` of your signing cert |
+  | `P12_PASSWORD` | password used when exporting the `.p12` |
+  | `BUILD_PROVISION_PROFILE_BASE64` | `base64 -i profile.mobileprovision` |
+  | `KEYCHAIN_PASSWORD` | any throwaway string |
+  | `APPLE_TEAM_ID` | your 10-char Team ID |
+
+  The provisioning profile must match appId `com.danielmedeiros.polaris`;
+  for `development`/`ad-hoc` it must include your device UDIDs. A **paid**
+  Apple Developer Program membership is required to create the distribution
+  certificate + profile — a free Apple ID can only sign on-device locally
+  in Xcode, not export in CI. `ad-hoc` gives you a `.ipa` you install
+  directly on registered devices; `app-store` is for TestFlight upload.
+
+---
+
+## 8. First smoke test
 
 1. Install/run on a device on the same Wi-Fi as the Pi.
 2. Trust the Pi root cert (§3) if using direct-LAN HTTPS.

@@ -1,0 +1,170 @@
+name: iOS build
+
+# Builds the Capacitor iOS app (mobile/) on a macOS runner — no local Mac
+# toolchain needed. Two paths:
+#   * build   — always runs, NO secrets. Unsigned simulator build that proves
+#               the whole native stack (Swift plugin + onnxruntime-objc pod +
+#               Capacitor) compiles. This is the CI gate.
+#   * ipa     — runs only on manual dispatch with `signed: true` AND the
+#               signing secrets present. Produces an installable .ipa.
+#
+# Trigger manually from the Actions tab (workflow_dispatch), or on pushes
+# that touch the mobile app.
+
+on:
+  workflow_dispatch:
+    inputs:
+      signed:
+        description: "Also produce a signed .ipa (needs signing secrets)"
+        type: boolean
+        default: false
+      export_method:
+        description: "Signing/export method for the .ipa"
+        type: choice
+        default: development
+        options: [development, ad-hoc, app-store]
+  push:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/ios.yml'
+
+jobs:
+  # ---- Unsigned build: the always-on CI gate (no secrets required) ----
+  build:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install JS deps
+        run: npm install
+
+      - name: Build native ONNX plugin
+        run: npm run plugin:build
+
+      - name: Add iOS platform (runs pod install)
+        run: npx cap add ios
+
+      - name: Patch Info.plist (geolocation / ATS / Bonjour)
+        run: ./scripts/ios-postadd.sh
+
+      - name: Sync web assets + plugins
+        run: npx cap sync ios
+
+      - name: Build (unsigned, simulator)
+        run: |
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+  # ---- Signed .ipa: opt-in, needs an Apple Developer account + secrets ----
+  #
+  # Add these repo secrets (Settings -> Secrets and variables -> Actions):
+  #   BUILD_CERTIFICATE_BASE64        base64 of your signing cert .p12
+  #                                   (`base64 -i cert.p12 | pbcopy`)
+  #   P12_PASSWORD                    password you set when exporting the .p12
+  #   BUILD_PROVISION_PROFILE_BASE64  base64 of the .mobileprovision
+  #   KEYCHAIN_PASSWORD               any throwaway string (temp keychain)
+  #   APPLE_TEAM_ID                   your 10-char Team ID
+  # The provisioning profile must match appId `com.danielmedeiros.polaris`
+  # and (for `development`/`ad-hoc`) include your device UDIDs.
+  ipa:
+    runs-on: macos-14
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install JS deps
+        run: npm install
+
+      - name: Build native ONNX plugin
+        run: npm run plugin:build
+
+      - name: Add iOS platform (runs pod install)
+        run: npx cap add ios
+
+      - name: Patch Info.plist (geolocation / ATS / Bonjour)
+        run: ./scripts/ios-postadd.sh
+
+      - name: Sync web assets + plugins
+        run: npx cap sync ios
+
+      - name: Install signing cert + provisioning profile
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+          PP_PATH="$RUNNER_TEMP/pp.mobileprovision"
+          KEYCHAIN="$RUNNER_TEMP/app-signing.keychain-db"
+
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERT_PATH"
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o "$PP_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/"
+
+      - name: Archive & export .ipa
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          EXPORT_METHOD: ${{ inputs.export_method }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>${EXPORT_METHOD}</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>compileBitcode</key><false/>
+            <key>stripSwiftSymbols</key><true/>
+          </dict></plist>
+          EOF
+
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            archive
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Polaris-ios-ipa
+          path: ${{ runner.temp }}/export/*.ipa
+          if-no-files-found: error
