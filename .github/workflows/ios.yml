@@ -146,21 +146,44 @@ jobs:
           echo -n "$APPSTORE_API_PRIVATE_KEY" | base64 --decode \
             -o "$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8"
 
+      - name: Configure the App target for manual signing
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          EXPORT_METHOD: ${{ inputs.export_method }}
+        run: |
+          # Signing identity for the chosen method. The profile in
+          # BUILD_PROVISION_PROFILE_BASE64 must match: App Store / Ad Hoc for
+          # app-store/ad-hoc, a Development profile for development.
+          case "$EXPORT_METHOD" in
+            development) IDENTITY="Apple Development" ;;
+            *)           IDENTITY="Apple Distribution" ;;
+          esac
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          export IDENTITY
+
+          # Set manual signing ONLY on the App target (NOT globally on the
+          # CLI — that hit every Pods target, which don't support profiles).
+          gem install --no-document xcodeproj >/dev/null
+          ruby - <<'RUBY'
+          require 'xcodeproj'
+          proj = Xcodeproj::Project.open('ios/App/App.xcodeproj')
+          app = proj.targets.find { |t| t.name == 'App' }
+          app.build_configurations.each do |c|
+            c.build_settings['CODE_SIGN_STYLE'] = 'Manual'
+            c.build_settings['DEVELOPMENT_TEAM'] = ENV['APPLE_TEAM_ID']
+            c.build_settings['PROVISIONING_PROFILE_SPECIFIER'] = ENV['PROFILE_NAME']
+            c.build_settings['CODE_SIGN_IDENTITY'] = ENV['IDENTITY']
+            c.build_settings['CODE_SIGN_IDENTITY[sdk=iphoneos*]'] = ENV['IDENTITY']
+          end
+          proj.save
+          puts "App target signing: #{ENV['IDENTITY']} / #{ENV['PROFILE_NAME']}"
+          RUBY
+
       - name: Archive & export .ipa
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           EXPORT_METHOD: ${{ inputs.export_method }}
         run: |
-          # Signing identity for the chosen export method. The provisioning
-          # profile in BUILD_PROVISION_PROFILE_BASE64 must match: an App
-          # Store / Ad Hoc profile for app-store/ad-hoc, a Development
-          # profile for development.
-          case "$EXPORT_METHOD" in
-            development) IDENTITY="Apple Development" ;;
-            *)           IDENTITY="Apple Distribution" ;;
-          esac
-          echo "Signing '$IDENTITY' with profile '$PROFILE_NAME' (method=$EXPORT_METHOD)"
-
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -168,7 +191,7 @@ jobs:
             <key>method</key><string>${EXPORT_METHOD}</string>
             <key>teamID</key><string>${APPLE_TEAM_ID}</string>
             <key>signingStyle</key><string>manual</string>
-            <key>signingCertificate</key><string>${IDENTITY}</string>
+            <key>signingCertificate</key><string>${SIGN_IDENTITY}</string>
             <key>provisioningProfiles</key>
             <dict>
               <key>com.danielmedeiros.polaris</key><string>${PROFILE_NAME}</string>
@@ -178,20 +201,14 @@ jobs:
           </dict></plist>
           EOF
 
-          # Manual signing with the pre-created profile — no Apple round-trip,
-          # so no API-key auth (the 401 source). Pods are STATIC (see the
-          # Podfile linkage), so they aren't code-signed and the global
-          # profile setting is inert for them.
+          # Signing is now baked into the App target only (Pods keep their
+          # own "no signing"). No signing args on the CLI, no Apple round-trip.
           xcodebuild \
             -workspace ios/App/App.xcworkspace \
             -scheme App \
             -configuration Release \
             -sdk iphoneos \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
-            CODE_SIGN_IDENTITY="$IDENTITY" \
             archive
 
           xcodebuild -exportArchive \
