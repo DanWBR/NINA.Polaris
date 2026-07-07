@@ -236,16 +236,10 @@ async function scan() {
       ZeroConf.watch({ type: MDNS_TYPE, domain: 'local.' }, (result) => {
         if (!result || result.action !== 'resolved' || !result.service) return;
         const s = result.service;
-        // iOS: prefer the `.local` hostname so the URL matches the Pi's
-        // self-signed cert SAN (and iOS resolves .local via Bonjour). Using
-        // the raw IP fails TLS host verification -> blank WKWebView iframe.
-        // Other platforms (Android WebView is lenient): prefer the IP, which
-        // avoids relying on the OS resolving .local.
-        const host = s.hostname ? String(s.hostname).replace(/\.$/, '') : null;
-        const isIOS = !!(window.Capacitor && typeof window.Capacitor.getPlatform === 'function'
-                         && window.Capacitor.getPlatform() === 'ios');
-        const ip = s.ipv4Addresses && s.ipv4Addresses[0];
-        const addr = isIOS ? (host || ip) : (ip || host);
+        // The Pi's self-signed cert SAN lists both its LAN IPs and its
+        // .local names, so the IP is fine to connect with; the only iOS
+        // blocker is trusting that cert (WKWebView has no "proceed anyway").
+        const addr = (s.ipv4Addresses && s.ipv4Addresses[0]) || s.hostname;
         if (!addr) return;
         const origin = toOrigin(addr, s.port || 5000);
         const friendly = (s.txtRecord && s.txtRecord.friendly) || s.name || 'Polaris';
