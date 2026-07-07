@@ -200,6 +200,35 @@ public sealed class AltairSdkCamera : ICamera {
             list.Add(new CameraControl("Saturation", "Saturation", "Colour saturation (128 = neutral)",
                 sat, Altaircam.SATURATION_MIN, Altaircam.SATURATION_MAX, Altaircam.SATURATION_DEF,
                 Writable: true, Auto: false, AutoSupported: false, "int"));
+        // Contrast + brightness apply to mono and colour alike.
+        if (_cam.get_Contrast(out int ct))
+            list.Add(new CameraControl("Contrast", "Contrast", "Display contrast (0 = neutral)",
+                ct, Altaircam.CONTRAST_MIN, Altaircam.CONTRAST_MAX, Altaircam.CONTRAST_DEF,
+                Writable: true, Auto: false, AutoSupported: false, "int"));
+        if (_cam.get_Brightness(out int br))
+            list.Add(new CameraControl("Brightness", "Brightness", "Display brightness (0 = neutral)",
+                br, Altaircam.BRIGHTNESS_MIN, Altaircam.BRIGHTNESS_MAX, Altaircam.BRIGHTNESS_DEF,
+                Writable: true, Auto: false, AutoSupported: false, "int"));
+        // White balance (colour only). Temperature + tint are a paired setter,
+        // surfaced as two controls; setting one reads the other's live value.
+        if (_isColor && _cam.get_TempTint(out int wbTemp, out int wbTint)) {
+            list.Add(new CameraControl("WBTemp", "WB temperature", "White-balance colour temperature (K)",
+                wbTemp, Altaircam.TEMP_MIN, Altaircam.TEMP_MAX, Altaircam.TEMP_DEF,
+                Writable: true, Auto: false, AutoSupported: false, "int"));
+            list.Add(new CameraControl("WBTint", "WB tint", "White-balance tint",
+                wbTint, Altaircam.TINT_MIN, Altaircam.TINT_MAX, Altaircam.TINT_DEF,
+                Writable: true, Auto: false, AutoSupported: false, "int"));
+        }
+        // In-camera denoise strength. Keep at 0 for stacking (denoise later).
+        if (_cam.get_Option(Altaircam.eOPTION.OPTION_DENOISE, out int dn))
+            list.Add(new CameraControl("Denoise", "Denoise", "In-camera denoise strength (0 = off)",
+                dn, 0, 100, 0, Writable: true, Auto: false, AutoSupported: false, "int"));
+        // Cooling fan — only if this model actually has one.
+        uint fanMax = 0;
+        try { fanMax = _cam.FanMaxSpeed; } catch { }
+        if (fanMax > 0 && _cam.get_Option(Altaircam.eOPTION.OPTION_FAN, out int fan))
+            list.Add(new CameraControl("Fan", "Fan speed", "Cooling fan speed (0 = off)",
+                fan, 0, fanMax, fanMax, Writable: true, Auto: false, AutoSupported: false, "int"));
         double temp = double.NaN;
         if (_cam.get_Temperature(out short t)) temp = t / 10.0;
         list.Add(new CameraControl("Temperature", "Sensor temperature", "°C (read-only)",
@@ -232,6 +261,22 @@ public sealed class AltairSdkCamera : ICamera {
                     return _cam.put_Speed((ushort)Math.Round(value));
                 case "Saturation":
                     return _cam.put_Saturation((int)Math.Round(value));
+                case "Contrast":
+                    return _cam.put_Contrast((int)Math.Round(value));
+                case "Brightness":
+                    return _cam.put_Brightness((int)Math.Round(value));
+                case "WBTemp": {
+                    _cam.get_TempTint(out int _, out int curTint);
+                    return _cam.put_TempTint((int)Math.Round(value), curTint);
+                }
+                case "WBTint": {
+                    _cam.get_TempTint(out int curTemp, out int _);
+                    return _cam.put_TempTint(curTemp, (int)Math.Round(value));
+                }
+                case "Denoise":
+                    return _cam.put_Option(Altaircam.eOPTION.OPTION_DENOISE, (int)Math.Round(value));
+                case "Fan":
+                    return _cam.put_Option(Altaircam.eOPTION.OPTION_FAN, (int)Math.Round(value));
                 case "Cooler":
                     return _cam.put_Option(Altaircam.eOPTION.OPTION_TEC, value != 0 ? 1 : 0);
                 case "TargetTemp":
