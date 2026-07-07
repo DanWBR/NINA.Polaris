@@ -821,7 +821,10 @@ function ninaApp() {
             // entry to a JSONL file under {LocalAppData}/NINA.Polaris/logs/.
             // Default OFF; the in-memory ring buffer is enough for most
             // bug-hunting and saves SD-card write cycles on the Pi.
-            logToDisk: false,
+            logToDisk: true,
+            // ASIAIR-style per-session guiding logs (native → PHD2-format,
+            // external PHD2 → copy of PHD2's own log). Default on.
+            saveGuideLogs: true,
             // Boot-time auto-connect, INDI + Alpaca discovery +
             // active-rig device bind. Pushed by HardwareAutoConnectService.
             autoConnectOnStartup: false,
@@ -3344,6 +3347,8 @@ function ninaApp() {
             minAltitudeLimitDeg: 5,
             requireHomeAfterSafetyStop: true
         },
+        // ASIAIR-style session guide logs on disk (loaded on demand in Settings).
+        guideLogs: [],
         // Safety-guard trip state (from the meridian-flip WS/status payload).
         mfSafetyTripped: false,
         mfSafetyReason: null,
@@ -9280,8 +9285,9 @@ function ninaApp() {
                     this.settings.imageNamePattern = data.imageNamePattern || '';
                     this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
                     this.settings.autoConnectOnStartup = !!data.autoConnectOnStartup;
-                    // DBGLOG-9: hydrate the persist-to-disk toggle.
-                    this.settings.logToDisk = !!data.logToDisk;
+                    // DBGLOG-9: hydrate the persist-to-disk toggle (default on).
+                    this.settings.logToDisk = data.logToDisk !== false;
+                    this.settings.saveGuideLogs = data.saveGuideLogs !== false;
                     // Remote-terminal opt-in gate (controls the connect form
                     // vs. the in-app "Enable terminal" button on the card).
                     this.term.serverEnabled = !!data.terminalEnabled;
@@ -16986,6 +16992,27 @@ function ninaApp() {
             } catch (e) { this.toast('Clear failed: ' + (e.message || e), 'error'); }
         },
 
+        // ASIAIR-style session guide logs: list + download the files saved
+        // under logs/guide/ (native PHD2-format logs + external PHD2 copies).
+        async loadGuideLogs() {
+            try {
+                const data = await this.apiGet('/api/logs/guide');
+                this.guideLogs = (data && data.files) || [];
+            } catch { this.guideLogs = []; }
+        },
+        async downloadGuideLog(name) {
+            try {
+                const resp = await this.apiFetch('/api/logs/guide/download?name=' + encodeURIComponent(name));
+                if (!resp || !resp.ok) { this.toast('Download failed', 'error'); return; }
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = name;
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (e) { this.toast('Download failed: ' + (e.message || e), 'error'); }
+        },
+
         // Manually mirror the native calibration for a meridian flip (RA +180°)
         // so guiding can resume without a full recalibration. Needed on mounts
         // whose driver doesn't report pier side, where the automatic post-flip
@@ -19036,6 +19063,7 @@ function ninaApp() {
                         autoConnectOnStartup: this.settings.autoConnectOnStartup,
                         // DBGLOG-9: opt-in disk persistence.
                         logToDisk: this.settings.logToDisk,
+                        saveGuideLogs: this.settings.saveGuideLogs,
                         sirilPath: this.settings.sirilPath,
                         sirilScriptsDir: this.settings.sirilScriptsDir,
                         graxpertPath: this.settings.graxpertPath,

@@ -143,6 +143,9 @@ builder.Logging.Services.AddSingleton<Microsoft.Extensions.Logging.ILoggerProvid
 // service checks profile.LogToDisk per tick so toggling Settings takes
 // effect without a restart.
 builder.Services.AddHostedService<NINA.Polaris.Services.Logging.LogRotatorService>();
+// ASIAIR-style per-session guiding logs: native → PHD2-compatible guide log,
+// external PHD2 → copy of PHD2's own log. Opt-out via profile.SaveGuideLogs.
+builder.Services.AddHostedService<NINA.Polaris.Services.Logging.GuideSessionLogService>();
 builder.Services.AddSingleton<ImageRelayService>();
 builder.Services.AddSingleton<CameraStreamService>();
 // Server-owned LIVE capture loop — now the only LIVE loop (the LIVE shutter

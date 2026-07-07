@@ -12936,12 +12936,38 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <label class="checkbox-label"
                         title="When ON, every log entry is also written to {LocalAppData}/NINA.Polaris/logs/ as JSONL. Files older than 7 days are cleaned up automatically.">
                         <input type="checkbox" x-model="settings.logToDisk" @change="saveSettingsToServer()">
-                        Persist debug log to disk (7-day retention)
+                        Save the Polaris app log to disk (7-day retention)
                     </label>
                     <p class="hint" style="margin-top:6px">
-                        Default OFF. The in-memory log (visible via the LOG badge in the header) survives until the server restarts.<br>
-                        Turn this on when you want logs to survive a reboot of the mini-PC or Raspberry Pi, e.g. while diagnosing an intermittent issue overnight.
+                        Default ON (ASIAIR-style). Every action is written to
+                        <code>logs/polaris-*.jsonl</code> so you can inspect a session later; files older than 7 days are cleaned up.
                     </p>
+
+                    <label class="checkbox-label" style="margin-top:10px"
+                        title="One PHD2-format guide log per guiding session under logs/guide/. Native guider → a PHD2-compatible log; external PHD2 → a copy of PHD2's own log.">
+                        <input type="checkbox" x-model="settings.saveGuideLogs" @change="saveSettingsToServer()">
+                        Save a guide log per session
+                    </label>
+                    <p class="hint" style="margin-top:6px">
+                        Native guiding writes a <b>PHD2-compatible</b> guide log (opens in PHD2 Log Viewer);
+                        external PHD2 copies its own log from <code>~/Documents/PHD2</code>. Saved under <code>logs/guide/</code>.
+                    </p>
+
+                    <div style="margin-top:10px; display:flex; align-items:center; gap:8px">
+                        <button class="btn btn-sm" @click="loadGuideLogs()">Refresh guide logs</button>
+                        <span class="hint" x-show="guideLogs.length===0" style="margin:0">No session guide logs yet.</span>
+                    </div>
+                    <ul x-show="guideLogs.length>0" style="list-style:none; padding:0; margin:8px 0 0; max-height:200px; overflow:auto">
+                        <template x-for="f in guideLogs" :key="f.name">
+                            <li style="display:flex; justify-content:space-between; gap:10px; padding:3px 0; border-bottom:1px solid var(--border, #333)">
+                                <a :href="'/api/logs/guide/download?name=' + encodeURIComponent(f.name)"
+                                   @click.prevent="downloadGuideLog(f.name)" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
+                                   x-text="f.name"></a>
+                                <span class="hint" style="margin:0; white-space:nowrap"
+                                      x-text="(f.size/1024).toFixed(1)+' KB'"></span>
+                            </li>
+                        </template>
+                    </ul>
                 </div>
 
 
@@ -17334,7 +17360,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260706-slewsafety"></script>
+    <script src="/js/app.js?v=20260707-sessionlogs"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

@@ -96,6 +96,31 @@ public static class LogsEndpoints {
             return Results.Empty;
         });
 
+        // ASIAIR-style session guide logs on disk: list + download the files
+        // saved under {LocalAppData}/NINA.Polaris/logs/guide/ (native PHD2-format
+        // logs + copies of external PHD2's own guide log).
+        group.MapGet("/guide", () => {
+            var dir = GuideSessionLogService.GuideLogDir;
+            if (!Directory.Exists(dir)) return Results.Ok(new { files = Array.Empty<object>() });
+            var files = new DirectoryInfo(dir)
+                .EnumerateFiles("*.txt")
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .Take(200)
+                .Select(f => new { name = f.Name, size = f.Length, modifiedUtc = f.LastWriteTimeUtc })
+                .ToList();
+            return Results.Ok(new { files });
+        });
+
+        group.MapGet("/guide/download", (string? name) => {
+            // Path-traversal guard: only a bare .txt file name inside the dir.
+            var safe = Path.GetFileName(name ?? "");
+            if (string.IsNullOrEmpty(safe) || !safe.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest(new { error = "invalid name" });
+            var path = Path.Combine(GuideSessionLogService.GuideLogDir, safe);
+            if (!File.Exists(path)) return Results.NotFound(new { error = "not found" });
+            return Results.File(path, "text/plain", safe);
+        });
+
         group.MapPost("/client", (LogService svc, ClientLogBatch body) => {
             if (body?.Entries == null || body.Entries.Count == 0) {
                 return Results.Ok(new { accepted = 0 });

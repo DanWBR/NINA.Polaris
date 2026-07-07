@@ -261,12 +261,21 @@ public class UserProfile {
     /// {LocalAppData}/NINA.Polaris/logs/polaris-yyyy-MM-dd.jsonl,
     /// with files older than 7 days swept hourly.
     ///
-    /// Default OFF because the in-memory buffer covers ~95% of
-    /// field bug-hunting (operator hits an issue, immediately
-    /// exports the buffer, attaches to the report) and disk writes
-    /// have a measurable cost on the SD card in the Pi.
+    /// Default ON (ASIAIR-style): the app log is written automatically to
+    /// {LocalAppData}/NINA.Polaris/logs/polaris-*.jsonl for later inspection,
+    /// with files older than 7 days swept hourly so the SD card doesn't fill up.
     /// </summary>
-    public bool LogToDisk { get; set; } = false;
+    public bool LogToDisk { get; set; } = true;
+
+    /// <summary>Save a dedicated per-session guiding log under logs/guide/
+    /// (ASIAIR-style). Native guider → a PHD2-compatible Guide Log; external
+    /// PHD2 → a copy of PHD2's own guide log. Default on.</summary>
+    public bool SaveGuideLogs { get; set; } = true;
+
+    /// <summary>Optional override for where the EXTERNAL PHD2 writes its guide
+    /// logs, if not the default ~/Documents/PHD2 or ~/PHD2. Used when copying
+    /// PHD2's guide log into the Polaris logs folder.</summary>
+    public string? Phd2GuideLogDir { get; set; }
 
     /// <summary>
     /// Runtime opt-in for the in-browser SSH remote terminal. The
