@@ -130,36 +130,60 @@ jobs:
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/"
 
+      - name: Place App Store Connect API key (for signing + upload)
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          mkdir -p "$HOME/private_keys"
+          echo -n "$APPSTORE_API_PRIVATE_KEY" | base64 --decode \
+            -o "$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8"
+
       - name: Archive & export .ipa
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           EXPORT_METHOD: ${{ inputs.export_method }}
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
         run: |
+          AUTHKEY="$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8"
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
             <key>method</key><string>${EXPORT_METHOD}</string>
             <key>teamID</key><string>${APPLE_TEAM_ID}</string>
-            <key>signingStyle</key><string>manual</string>
+            <key>signingStyle</key><string>automatic</string>
             <key>compileBitcode</key><false/>
             <key>stripSwiftSymbols</key><true/>
           </dict></plist>
           EOF
 
+          # Automatic signing with the API key: Xcode creates/downloads the
+          # provisioning profile itself (-allowProvisioningUpdates), using the
+          # distribution cert already imported into the keychain. Avoids the
+          # "no profiles were found" failure of unattended manual signing.
           xcodebuild \
             -workspace ios/App/App.xcworkspace \
             -scheme App \
             -configuration Release \
             -sdk iphoneos \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$AUTHKEY" \
+            -authenticationKeyID "$APPSTORE_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             archive
 
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$AUTHKEY" \
+            -authenticationKeyID "$APPSTORE_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID"
 
       - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4
@@ -176,11 +200,7 @@ jobs:
         env:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
-          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
         run: |
-          mkdir -p "$HOME/private_keys"
-          echo -n "$APPSTORE_API_PRIVATE_KEY" | base64 --decode \
-            -o "$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8"
           IPA=$(ls "$RUNNER_TEMP"/export/*.ipa | head -1)
           echo "Uploading $IPA to TestFlight…"
           xcrun altool --upload-app -f "$IPA" --type ios \
