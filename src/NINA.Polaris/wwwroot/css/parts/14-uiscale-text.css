@@ -1,0 +1,30 @@
+/* ───────────────────────────────────────────────────────────────────────
+   14-uiscale-text.css — gentle (half-rate) text scaling under UI zoom.
+
+   The UI-scale slider applies `body { zoom: z }`, which scales EVERYTHING —
+   including prominent prose/titles — by z. When the operator shrinks the UI to
+   fit more on screen, those large texts can get smaller than we'd like.
+
+   These blocks instead scale at HALF the rate: their net size = (1 + z) / 2
+   (so z = 80% → 90%, z = 50% → 75%, z = 100% → 100% = no change). Since the
+   body zoom already multiplies them by z, applying an element-level
+   `zoom: (1 + z) / (2z)` composes to the target (1 + z) / 2. `--ui-zoom` is set
+   from applyUiZoom()/resetUiZoom() in app.js; the fallback keeps this inert if
+   it's ever missing.
+
+   Using `zoom` (not font-size) keeps this base-agnostic — many of these texts
+   inherit their size rather than declaring one — and nothing else sets `zoom`
+   on them, so there are no cascade surprises. Loaded last. */
+:root {
+    --text-rescale: calc((1 + var(--ui-zoom, 1)) / (2 * var(--ui-zoom, 1)));
+}
+
+/* Help/idle blurbs + empty-state lines (e.g. "How TPPA works…",
+   "No saved sets yet."), plan title, the "not tested yet" caution banner,
+   and the advanced-sequencer properties placeholder. */
+.hint,
+.plan-name,
+.feature-untested-warn,
+.advseq-props .muted {
+    zoom: var(--text-rescale, 1);
+}

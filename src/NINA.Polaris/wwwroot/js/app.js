@@ -5869,6 +5869,9 @@ function ninaApp() {
             this.uiZoom = z;
             this.uiZoomDraft = z;
             document.body.style.zoom = String(z);
+            // Expose the zoom to CSS so prominent texts can scale at half rate
+            // (see 14-uiscale-text.css: --text-rescale).
+            document.documentElement.style.setProperty('--ui-zoom', String(z));
             try { localStorage.setItem('nina-ui-zoom', String(z)); }
             catch (_) { /* private mode etc. */ }
             this._assistantPushUi();
@@ -6016,6 +6019,7 @@ function ninaApp() {
             this.uiZoom = z;
             this.uiZoomDraft = z;
             document.body.style.zoom = String(z);
+            document.documentElement.style.setProperty('--ui-zoom', String(z));
             this._assistantPushUi();
         },
 
