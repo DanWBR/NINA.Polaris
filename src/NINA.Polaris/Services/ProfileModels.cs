@@ -257,13 +257,12 @@ public class UserProfile {
     /// false (default), the LogService ring buffer is the only home
     /// for entries — a server restart discards everything. When
     /// true, LogRotatorService subscribes to the Appended event and
-    /// flushes batched entries to
-    /// {LocalAppData}/NINA.Polaris/logs/polaris-yyyy-MM-dd.jsonl,
-    /// with files older than 7 days swept hourly.
+    /// flushes batched entries to disk.
     ///
-    /// Default ON (ASIAIR-style): the app log is written automatically to
-    /// {LocalAppData}/NINA.Polaris/logs/polaris-*.jsonl for later inspection,
-    /// with files older than 7 days swept hourly so the SD card doesn't fill up.
+    /// Default ON (ASIAIR-style): one log file per session is written
+    /// automatically to {LocalAppData}/NINA.Polaris/logs/polaris_&lt;date&gt;_&lt;time&gt;.jsonl
+    /// for later inspection, with files older than 7 days swept hourly so the
+    /// SD card doesn't fill up.
     /// </summary>
     public bool LogToDisk { get; set; } = true;
 

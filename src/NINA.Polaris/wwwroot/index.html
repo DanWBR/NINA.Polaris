@@ -12939,8 +12939,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         Save the Polaris app log to disk (7-day retention)
                     </label>
                     <p class="hint" style="margin-top:6px">
-                        Default ON (ASIAIR-style). Every action is written to
-                        <code>logs/polaris-*.jsonl</code> so you can inspect a session later; files older than 7 days are cleaned up.
+                        Default ON (ASIAIR-style). Every action is written to a
+                        <b>per-session</b> file <code>logs/polaris_&lt;date&gt;_&lt;time&gt;.jsonl</code> (one per Polaris run) so you can inspect a session later; files older than 7 days are cleaned up.
                     </p>
 
                     <label class="checkbox-label" style="margin-top:10px"

@@ -24,7 +24,7 @@ namespace NINA.Polaris.Services.Logging;
 ///
 /// When <see cref="ProfileService.Active.LogToDisk"/> is true, subscribes
 /// to <see cref="LogService.Appended"/> and flushes batched entries every
-/// 2 seconds to <c>{LocalAppData}/NINA.Polaris/logs/polaris-yyyy-MM-dd.jsonl</c>
+/// 2 seconds to a per-session file <c>{LocalAppData}/NINA.Polaris/logs/polaris_yyyy-MM-dd_HHmmss.jsonl</c>
 /// (UTF-8, append-only, one JSON object per line). A second timer (hourly)
 /// sweeps files older than 7 days.
 ///
@@ -42,6 +42,10 @@ public sealed class LogRotatorService : BackgroundService {
     private readonly LogService _logService;
     private readonly ProfileService _profiles;
     private readonly string _logDir;
+    /// <summary>One log file per session (per server run), ASIAIR-style:
+    /// <c>polaris_yyyy-MM-dd_HHmmss.jsonl</c>, fixed for the life of the
+    /// process. Retention still sweeps old sessions so the SD card is safe.</summary>
+    private readonly string _sessionFile;
     private readonly ConcurrentQueue<LogEntry> _pending = new();
     private DateTime _lastRetentionSweep = DateTime.MinValue;
     private bool _subscribed;
@@ -64,6 +68,7 @@ public sealed class LogRotatorService : BackgroundService {
         _logDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA.Polaris", "logs");
+        _sessionFile = Path.Combine(_logDir, $"polaris_{DateTime.Now:yyyy-MM-dd_HHmmss}.jsonl");
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct) {
@@ -120,7 +125,7 @@ public sealed class LogRotatorService : BackgroundService {
 
     private async Task FlushQueueAsync(CancellationToken ct) {
         if (_pending.IsEmpty) return;
-        var path = Path.Combine(_logDir, $"polaris-{DateTime.UtcNow:yyyy-MM-dd}.jsonl");
+        var path = _sessionFile;
         try {
             // Stream-style append: open once per flush, write all queued
             // entries, close. Avoids long-held file handles + lets log
@@ -148,7 +153,9 @@ public sealed class LogRotatorService : BackgroundService {
         _lastRetentionSweep = DateTime.UtcNow;
         try {
             var cutoff = DateTime.UtcNow - Retention;
-            foreach (var path in Directory.EnumerateFiles(_logDir, "polaris-*.jsonl")) {
+            // Match both the per-session files (polaris_*) and any legacy
+            // per-day files (polaris-*) left over from before the switch.
+            foreach (var path in Directory.EnumerateFiles(_logDir, "polaris*.jsonl")) {
                 try {
                     var info = new FileInfo(path);
                     if (info.LastWriteTimeUtc < cutoff) {
