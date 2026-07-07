@@ -174,6 +174,86 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # Android APK, attached to the same GitHub Release. Signed with the
+  # keystore secrets when present (upgrade-in-place across versions);
+  # otherwise a debug-signed APK so the job never blocks the desktop
+  # release. Produces the stable-named polaris-android.apk.
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Derive version
+        id: ver
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VER="${GITHUB_REF_NAME#v}"
+          else
+            VER="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Build the APK
+        env:
+          VER: ${{ steps.ver.outputs.version }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          npm install
+          npm run plugin:build
+          npx cap add android
+          ./scripts/android-postadd.sh
+          npm run icons || true
+          npx cap sync android
+          # versionCode must not decrease across releases; versionName shows
+          # the tag. Best-effort sed of the Capacitor defaults.
+          perl -0pi -e "s/versionCode\s+\d+/versionCode $GITHUB_RUN_NUMBER/" android/app/build.gradle || true
+          perl -0pi -e "s/versionName\s+\"[^\"]*\"/versionName \"$VER\"/" android/app/build.gradle || true
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+          cd android
+          chmod +x gradlew
+          OUT="$GITHUB_WORKSPACE/polaris-android.apk"
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "Signing with release keystore"
+            ./gradlew --no-daemon assembleRelease
+            BT=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
+            echo -n "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+            "$BT/zipalign" -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
+            "$BT/apksigner" sign \
+              --ks "$RUNNER_TEMP/release.jks" --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" --key-pass "pass:$ANDROID_KEY_PASSWORD" \
+              --out "$OUT" "$RUNNER_TEMP/aligned.apk"
+          else
+            echo "No keystore secrets — building a debug-signed APK"
+            ./gradlew --no-daemon assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk "$OUT"
+          fi
+          ls -lh "$OUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: polaris-android.apk
+          if-no-files-found: error
+          retention-days: 30
+
   # Lint .deb files (non-fatal style checks). Only runs when at least
   # one .deb artifact is in the matrix.
   lint-deb:
@@ -198,7 +278,7 @@ jobs:
 
   release:
     name: Attach to GitHub Release
-    needs: [build, book]
+    needs: [build, book, android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -252,6 +332,7 @@ jobs:
             dist/*.tar.gz
             dist/*.zip
             dist/*.pdf
+            dist/*.apk
           fail_on_unmatched_files: true
           generate_release_notes: true
           body: |
@@ -296,6 +377,14 @@ jobs:
             For unattended Windows installs see the optional NSSM /
             scheduled-task recipes in
             [docs/user-guide/installation.md](https://github.com/${{ github.repository }}/blob/master/docs/user-guide/installation.md).
+
+            ### Android companion app (controller for your rig)
+
+            Download `polaris-android.apk`, copy it to your phone, and open
+            it (allow "install from unknown sources"). It connects to a
+            Polaris server running on your imaging computer.
+            Stable link:
+            https://github.com/${{ github.repository }}/releases/latest/download/polaris-android.apk
 
             ## Manual
 
