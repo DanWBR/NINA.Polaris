@@ -82,13 +82,23 @@ jobs:
   # and (for `development`/`ad-hoc`) include your device UDIDs. For
   # `app-store`, the app record must already exist in App Store Connect.
   ipa:
-    runs-on: macos-14
+    runs-on: macos-15
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed }}
     defaults:
       run:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
+
+      # App Store Connect rejects uploads built with an old iOS SDK — it
+      # requires the current SDK (Xcode 26+). Select the newest Xcode on the
+      # runner (macos-15 carries Xcode 26).
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Show Xcode + iOS SDKs
+        run: xcodebuild -version && xcodebuild -showsdks | grep -i iphoneos || true
 
       - uses: actions/setup-node@v4
         with:
