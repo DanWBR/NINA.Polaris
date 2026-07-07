@@ -42,7 +42,7 @@
     color: var(--text-primary, #e6ecf5);
 }
 .tour-tip-title {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     margin-bottom: 6px;
 }

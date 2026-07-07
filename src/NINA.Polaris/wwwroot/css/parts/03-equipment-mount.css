@@ -869,7 +869,7 @@
     to { transform: rotate(360deg); }
 }
 .editor-loading-label {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--text-primary);
     margin: 0;
 }
@@ -1807,7 +1807,7 @@
 .focus-step-input input[type="number"] {
     width: 90px;
     padding: 4px 6px;
-    font-size: 14px;
+    font-size: 13px;
     font-variant-numeric: tabular-nums;
     color: var(--text-primary);
     background: var(--input-bg, rgba(255, 255, 255, 0.05));
@@ -2124,7 +2124,7 @@
     color: var(--text-primary);
     border: 1px solid var(--border);
     border-radius: 4px;
-    font-size: 14px;
+    font-size: 13px;
     /* iOS Safari shows a native rounded-rectangle for input[type=search]
        by default that clashes with our dark theme, strip the chrome. */
     -webkit-appearance: none;
@@ -2217,7 +2217,7 @@
     right: 12px;
     z-index: 2147483647;
     padding: 10px 16px;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: #fff;
     background: rgba(200, 40, 40, 0.92);

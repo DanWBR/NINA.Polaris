@@ -792,7 +792,7 @@
     height: 28px;
     line-height: 28px;
     text-align: center;
-    font-size: 14px;
+    font-size: 13px;
     font-variant-numeric: tabular-nums;
     color: var(--text-muted);
     transition: color 120ms ease, font-size 120ms ease,
@@ -933,7 +933,7 @@
     color: var(--text-primary);
 }
 .manual-focus-metric-trend {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--text-muted);
     margin-left: 6px;
 }
@@ -1076,7 +1076,7 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 13px;
 }
 .auth-field input[type="password"]:focus {
     outline: none;
@@ -1103,7 +1103,7 @@
 .auth-modal .btn-primary {
     width: 100%;
     padding: 10px;
-    font-size: 14px;
+    font-size: 13px;
 }
 
 /* ---- HELP-1: tutorial stepper + landing layout -----------------
@@ -1381,7 +1381,7 @@
 
 @media (max-width: 720px) {
     .help-step-card { padding: 18px 16px; }
-    .help-stepper-title { font-size: 14px; }
+    .help-stepper-title { font-size: 13px; }
     .help-screenshot-placeholder { flex-direction: column; align-items: flex-start; }
 }
 
@@ -1426,7 +1426,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 13px;
     padding: 9px 10px;
     min-height: 38px;
     outline: none;
@@ -1613,7 +1613,7 @@
 }
 .confirm-modal-message {
     margin: 0 0 18px;
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.45;
     color: var(--text-secondary);
     /* Honour \n in messages (several confirms use multi-line bodies). */

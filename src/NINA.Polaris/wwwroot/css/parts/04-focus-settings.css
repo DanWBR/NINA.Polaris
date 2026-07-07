@@ -1181,7 +1181,7 @@
 
     .stepper .btn-lg {
         padding: 8px 12px;
-        font-size: 14px;
+        font-size: 13px;
     }
 }
 
@@ -1647,7 +1647,7 @@
 .tree-node.status-Skipped   { border-left-color: #6b7280; opacity: 0.5; }
 
 .tree-handle {
-    cursor: grab; color: var(--text-muted, #94a3b8); font-weight: 700; font-size: 14px;
+    cursor: grab; color: var(--text-muted, #94a3b8); font-weight: 700; font-size: 13px;
 }
 .tree-type-badge {
     background: rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 2px;
@@ -1673,7 +1673,7 @@
     padding: 9px 10px; min-height: 38px; box-sizing: border-box;
     background: var(--bg, #0f172a);
     border: 1px solid var(--border, #334155); color: var(--text, #e2e8f0);
-    border-radius: 3px; font-size: 14px;
+    border-radius: 3px; font-size: 13px;
 }
 
 /* Inline warning banner (e.g. PHD2 not installed) */

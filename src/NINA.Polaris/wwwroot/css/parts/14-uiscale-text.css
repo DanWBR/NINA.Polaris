@@ -23,7 +23,7 @@
    too large for secondary help text (e.g. the "How TPPA works…" blurb). Give
    them a smaller default. Context-specific `.x .hint` rules (higher
    specificity) still win where they tune it. */
-.hint { font-size: 12px; line-height: 1.5; }
+.hint { font-size: 12px; line-height: 1.4; }
 
 /* Help/idle blurbs + empty-state lines (e.g. "How TPPA works…",
    "No saved sets yet."), plan title, the "not tested yet" caution banner,

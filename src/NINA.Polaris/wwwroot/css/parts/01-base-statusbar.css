@@ -180,8 +180,8 @@ html[data-font="system"] {
     --guide-side-width: 336px;
     --qc-width: 320px;
     --video-qc-width: 340px;
-    --sidebar-width: 72px;
-    --statusbar-height: 40px;
+    --sidebar-width: 64px;
+    --statusbar-height: 36px;
     --activitybar-height: 36px;   /* bottom activity bar (.activity-bar) */
     --statsbar-height: 32px;
     --controls-height: 100px;
@@ -192,7 +192,7 @@ html[data-font="system"] {
 html, body {
     height: 100%;
     font-family: var(--font-body);
-    font-size: 14px;
+    font-size: 13px;
     background: var(--bg-primary);
     color: var(--text-primary);
     overflow: hidden;
@@ -626,7 +626,7 @@ body {
 /* Global panic / abort button in the status bar. Red, pulsing so it reads
    as an emergency control, visible from every tab while a run is active. */
 .status-panic-btn {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.4px;
     padding: 3px 12px;
@@ -641,7 +641,7 @@ body {
 .status-panic-btn:hover { background: #d83030; }
 /* Self-update badge: a gentle green call-to-action in the status bar. */
 .status-update-btn {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.4px;
     padding: 3px 12px;
@@ -684,7 +684,7 @@ body {
 }
 
 .status-indicator {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 600;
     padding: 2px 8px;
     border-radius: 10px;
@@ -839,7 +839,7 @@ body {
 }
 
 .nav-label {
-    font-size: 9px;
+    font-size: 8px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;

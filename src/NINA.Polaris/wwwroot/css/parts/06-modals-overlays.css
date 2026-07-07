@@ -115,7 +115,7 @@
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    font-size: 14px;
+    font-size: 13px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     pointer-events: none;
 }
@@ -292,7 +292,7 @@
     color: var(--accent2);
     text-decoration: none;
     font-weight: 700;
-    font-size: 14px;
+    font-size: 13px;
 }
 .tonight-name:hover { text-decoration: underline; }
 .tonight-common {
@@ -952,7 +952,7 @@
     margin-bottom: 8px;
 }
 .external-tool-head strong {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--text-primary);
 }
 .external-tool-status {
@@ -1280,7 +1280,7 @@
     align-items: center;
     justify-content: center;
     gap: 14px;
-    font-size: 14px;
+    font-size: 13px;
     color: var(--text-secondary);
     background: rgba(11, 14, 20, 0.35);
     z-index: 5;
@@ -1454,7 +1454,7 @@
     background: transparent;
     border: none;
     color: var(--text-muted);
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1;
     cursor: pointer;
     border-radius: 4px;
@@ -1873,7 +1873,7 @@
     /* Bigger font specifically here so the long, dense accessory
        string ('[reducer] SVBony SV209 0.8x...') is easier to read
        at a glance on a sidebar-heavy layout. */
-    font-size: 14px;
+    font-size: 13px;
 }
 .equip-meta-derived {
     /* The 'f/X.Y' badge that sits next to Focal length + Aperture.
@@ -1889,7 +1889,7 @@
     align-self: flex-end;
     margin-bottom: 9px;
     padding: 0 6px;
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.2;
     color: var(--text-primary);
     white-space: nowrap;

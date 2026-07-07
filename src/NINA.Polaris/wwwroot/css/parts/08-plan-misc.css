@@ -497,7 +497,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .plan-select { flex: 1; min-width: 160px; padding: 6px 8px; }
 .plan-empty { color: var(--text-muted, #9aa4b2); padding: 24px 8px; text-align: center; }
 .plan-body { display: flex; flex-direction: column; gap: 12px; }
-.plan-name { font-size: 16px; font-weight: 600; padding: 8px 10px; width: 100%; box-sizing: border-box; }
+.plan-name { font-size: 12px; font-weight: 600; padding: 8px 10px; width: 100%; box-sizing: border-box; }
 
 .plan-settings { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 .plan-set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }

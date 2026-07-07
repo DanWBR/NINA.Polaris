@@ -838,7 +838,7 @@ button,
     width: 28px;
     height: 28px;
     padding: 0;
-    font-size: 14px;
+    font-size: 13px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1220,7 +1220,7 @@ button,
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 13px;
     outline: none;
     transition: border-color var(--transition);
 }
@@ -1249,7 +1249,7 @@ input[data-exposure-presets] {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 13px;
     outline: none;
 }
 
@@ -1271,7 +1271,7 @@ input[data-exposure-presets] {
     border-radius: var(--radius);
     padding: 9px 10px;
     min-height: 38px;
-    font-size: 14px;
+    font-size: 13px;
     outline: none;
     transition: border-color var(--transition);
 }
@@ -1334,7 +1334,7 @@ label select.input-sm {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 13px;
     outline: none;
 }
 
@@ -1725,7 +1725,7 @@ label select.input-sm {
     cursor: pointer;
 }
 .indi-props-subtab .indi-state-dot {
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1;
 }
 .indi-props-subtab .indi-state-ok    { color: #86efac; }
