@@ -68,6 +68,13 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     private double _calAnchorX, _calAnchorY;
     private bool _calAnchorActive;
     private GuideCalibration _calibration = GuideCalibration.Invalid;
+    // Running pier-side reference for the guide loop's meridian-flip watch.
+    // Seeded from the mount at guiding start (and lazily on the first frame that
+    // reports a side). The loop mirrors the calibration only when the pier side
+    // CHANGES relative to this baseline while guiding — it must never mirror a
+    // freshly measured calibration, which is already ground truth for the
+    // current side, just because the side stamped at calibration time is stale.
+    private PierSide _loopPierBaseline = PierSide.pierUnknown;
     // Human-readable calibration step, surfaced to the GUIDE UI so the user
     // sees what's happening (ASIAIR-style "Dec (south) step 4, dist 12.3 px").
     private volatile string? _calProgress;
@@ -293,7 +300,11 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
             SetAppState("Stopped");
             return;
         }
-        if (recalibrate || !_calibration.IsValid) {
+        // A fresh calibration is ground truth for the CURRENT pier side; a reused
+        // (restored) one may be for the other side if a flip happened while we
+        // weren't guiding. Remember which case this is before calibrating.
+        bool freshCal = recalibrate || !_calibration.IsValid;
+        if (freshCal) {
             // Run calibration under a cancellable token so the Stop button can
             // abort it (the request token alone isn't cancelled by /stop).
             _calCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -307,6 +318,29 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
                 return;
             }
         }
+        // Reconcile a REUSED calibration with the current pier side: if the mount
+        // is now on the other side from where the saved calibration was measured
+        // (a meridian flip happened between sessions), mirror it up front so
+        // guiding starts with the right directions. A fresh calibration is exempt
+        // — mirroring it would guide the wrong way, which is exactly the post-flip
+        // recalibration failure. Only when the driver reports a definite side both
+        // then and now, and only in the default "mirror" mode.
+        var startSide = startMount.SideOfPier;
+        var pierMode0 = (Rig.NativePierSideHandling ?? "mirror").Trim().ToLowerInvariant();
+        if (!freshCal && pierMode0 == "mirror" &&
+            startSide != PierSide.pierUnknown &&
+            _calibration.CalibrationPierSide != PierSide.pierUnknown &&
+            startSide != _calibration.CalibrationPierSide) {
+            _calibration = MountCoordTransform
+                .FlipForPierChange(_calibration, Rig.NativeReverseDecAfterFlip)
+                with { CalibrationPierSide = startSide };
+            PersistFlippedCalibration();
+            RaiseInfo("Mirrored the saved calibration for the meridian flip since last guiding.");
+        }
+        // Seed the loop's pier-change watch on the current side so a freshly
+        // measured (or just-reconciled) calibration is never re-mirrored on the
+        // first frame; the loop reacts only to a side that changes while guiding.
+        _loopPierBaseline = startSide;
         if (!_haveLock) {
             await AutoSelectStarAsync(ct);
             if (!_haveLock) {
@@ -520,6 +554,10 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         _raAlgo.Reset();
         _decAlgo.Reset();
         _backlashComp.Reset();
+        // Adopt the mount's current side as the loop baseline so the automatic
+        // pier-change watch doesn't immediately try to revert this manual mirror.
+        var curSide = _equipment.Telescope?.SideOfPier ?? PierSide.pierUnknown;
+        if (curSide != PierSide.pierUnknown) _loopPierBaseline = curSide;
         PersistFlippedCalibration();
         // Rebuild the Review-panel snapshot from the persisted (flipped) record so
         // the camera angle + pier side shown there reflect the mirror. Falls back

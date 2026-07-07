@@ -351,10 +351,19 @@ public sealed partial class NativeGuider {
         var mode = (Rig.NativePierSideHandling ?? "mirror").Trim().ToLowerInvariant();
         if (mode == "off") return;
 
-        var calSide = _calibration.CalibrationPierSide;
         var nowSide = mount.SideOfPier;
-        if (calSide == PierSide.pierUnknown || nowSide == PierSide.pierUnknown) return;
-        if (nowSide == calSide) return; // no flip
+        if (nowSide == PierSide.pierUnknown) return; // driver doesn't report it
+        // Compare against the running baseline seeded at guiding start, NOT the
+        // side stamped into the calibration. A freshly measured (or reconciled)
+        // calibration is ground truth for the current side, so we must never
+        // mirror it on the strength of a stale stamped side — we react only to a
+        // pier side that CHANGES while guiding. (Lazily adopt the baseline here
+        // if it was unknown at start, e.g. the driver only reported it later.)
+        if (_loopPierBaseline == PierSide.pierUnknown) {
+            _loopPierBaseline = nowSide;
+            return;
+        }
+        if (nowSide == _loopPierBaseline) return; // no flip observed
 
         if (mode == "recalibrate") {
             RaiseAlert($"Pier side changed to {nowSide}; recalibrating.");
@@ -367,6 +376,7 @@ public sealed partial class NativeGuider {
                 _raAlgo.Reset();
                 _decAlgo.Reset();
                 _backlashComp.Reset();
+                _loopPierBaseline = nowSide;
                 SetAppState("Guiding");
             } else {
                 RaiseAlert("Recalibration after pier flip failed; guiding paused.");
@@ -378,6 +388,7 @@ public sealed partial class NativeGuider {
         _calibration = MountCoordTransform
             .FlipForPierChange(_calibration, Rig.NativeReverseDecAfterFlip)
             with { CalibrationPierSide = nowSide };
+        _loopPierBaseline = nowSide;
         _raAlgo.Reset();
         _decAlgo.Reset();
         _backlashComp.Reset();
