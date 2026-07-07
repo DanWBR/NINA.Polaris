@@ -130,6 +130,13 @@ jobs:
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/"
 
+          # Read the profile's name + UUID so we can sign manually with it
+          # (no Apple round-trip → avoids the API-key 401 on xcbuild auth).
+          security cms -D -i "$PP_PATH" > "$RUNNER_TEMP/pp.plist"
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" "$RUNNER_TEMP/pp.plist")
+          echo "PROFILE_NAME=$PROFILE_NAME" >> "$GITHUB_ENV"
+          echo "Installed provisioning profile: $PROFILE_NAME"
+
       - name: Place App Store Connect API key (for signing + upload)
         env:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
@@ -143,47 +150,54 @@ jobs:
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           EXPORT_METHOD: ${{ inputs.export_method }}
-          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
-          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
         run: |
-          AUTHKEY="$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8"
+          # Signing identity for the chosen export method. The provisioning
+          # profile in BUILD_PROVISION_PROFILE_BASE64 must match: an App
+          # Store / Ad Hoc profile for app-store/ad-hoc, a Development
+          # profile for development.
+          case "$EXPORT_METHOD" in
+            development) IDENTITY="Apple Development" ;;
+            *)           IDENTITY="Apple Distribution" ;;
+          esac
+          echo "Signing '$IDENTITY' with profile '$PROFILE_NAME' (method=$EXPORT_METHOD)"
+
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
             <key>method</key><string>${EXPORT_METHOD}</string>
             <key>teamID</key><string>${APPLE_TEAM_ID}</string>
-            <key>signingStyle</key><string>automatic</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>${IDENTITY}</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.danielmedeiros.polaris</key><string>${PROFILE_NAME}</string>
+            </dict>
             <key>compileBitcode</key><false/>
             <key>stripSwiftSymbols</key><true/>
           </dict></plist>
           EOF
 
-          # Automatic signing with the API key: Xcode creates/downloads the
-          # provisioning profile itself (-allowProvisioningUpdates), using the
-          # distribution cert already imported into the keychain. Avoids the
-          # "no profiles were found" failure of unattended manual signing.
+          # Manual signing with the pre-created profile — no Apple round-trip,
+          # so no API-key auth (the 401 source). Pods are STATIC (see the
+          # Podfile linkage), so they aren't code-signed and the global
+          # profile setting is inert for them.
           xcodebuild \
             -workspace ios/App/App.xcworkspace \
             -scheme App \
             -configuration Release \
             -sdk iphoneos \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$AUTHKEY" \
-            -authenticationKeyID "$APPSTORE_API_KEY_ID" \
-            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID" \
+            CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+            CODE_SIGN_IDENTITY="$IDENTITY" \
             archive
 
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$AUTHKEY" \
-            -authenticationKeyID "$APPSTORE_API_KEY_ID" \
-            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID"
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
 
       - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4
