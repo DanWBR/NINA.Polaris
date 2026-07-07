@@ -48,20 +48,11 @@ jobs:
       - name: Build native ONNX plugin
         run: npm run plugin:build
 
-      - name: Add iOS platform (pod install redone below)
+      - name: Add iOS platform (its pod install is redone by the script)
         run: npx cap add ios || true
 
-      - name: Pod install (bump iOS deployment target for onnxruntime)
-        run: |
-          cd ios/App
-          sed -i '' "s/platform :ios, '[0-9.]*'/platform :ios, '14.0'/" Podfile
-          pod install
-
-      - name: Patch Info.plist (geolocation / ATS / Bonjour)
+      - name: Patch Info.plist + Podfile, then pod install
         run: ./scripts/ios-postadd.sh
-
-      - name: Sync web assets + plugins
-        run: npx cap sync ios
 
       - name: Build (unsigned, simulator)
         run: |
@@ -109,20 +100,11 @@ jobs:
       - name: Build native ONNX plugin
         run: npm run plugin:build
 
-      - name: Add iOS platform (pod install redone below)
+      - name: Add iOS platform (its pod install is redone by the script)
         run: npx cap add ios || true
 
-      - name: Pod install (bump iOS deployment target for onnxruntime)
-        run: |
-          cd ios/App
-          sed -i '' "s/platform :ios, '[0-9.]*'/platform :ios, '14.0'/" Podfile
-          pod install
-
-      - name: Patch Info.plist (geolocation / ATS / Bonjour)
+      - name: Patch Info.plist + Podfile, then pod install
         run: ./scripts/ios-postadd.sh
-
-      - name: Sync web assets + plugins
-        run: npx cap sync ios
 
       - name: Install signing cert + provisioning profile
         env:
