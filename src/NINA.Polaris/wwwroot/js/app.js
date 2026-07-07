@@ -10226,10 +10226,28 @@ function ninaApp() {
         },
 
         // ---- Draggable, persisted launcher (badge + FAB share one position) ---
+        // Effective CSS `zoom` on <body> (the UI-scale slider + the small-screen
+        // breakpoints both set it). `position: fixed` offsets are resolved in
+        // this zoomed frame, so at 80% a right/bottom-anchored launcher lands
+        // ~80% of the way to the corner instead of at it. Divide offsets by z to
+        // land on the true physical corner — same convention the resize grips use.
+        _assistantEffZoom() {
+            let z = parseFloat(getComputedStyle(document.body).zoom);
+            return (!z || isNaN(z)) ? 1 : z;
+        },
         _assistantLauncherStyle() {
+            const z = this._assistantEffZoom();
             const p = this.asst.pos;
-            if (!p) return {}; // default CSS bottom-right corner
-            return { left: p.left + 'px', top: p.top + 'px', right: 'auto', bottom: 'auto' };
+            if (!p) {
+                // Default bottom-right corner. Under body zoom, CSS `right:20px`
+                // would sit 20/z px short of the edge, so anchor with 20/z here
+                // (z===1 keeps the plain CSS default).
+                if (z === 1) return {};
+                return { right: (20 / z) + 'px', bottom: (20 / z) + 'px' };
+            }
+            // asst.pos is stored in physical px (from clientX during drag); the
+            // element lives in the zoomed frame, so divide to place it there.
+            return { left: (p.left / z) + 'px', top: (p.top / z) + 'px', right: 'auto', bottom: 'auto' };
         },
         _assistantPanelStyle() {
             const vw = window.innerWidth, vh = window.innerHeight;
