@@ -390,6 +390,15 @@ public static class GuiderEndpoints {
             } catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 
+        group.MapPost("/flip-calibration", async (ActiveGuiderProvider guiders) => {
+            var g = guiders.Active;
+            if (!g.IsConnected) return Results.BadRequest(new { error = "Guider not connected" });
+            try {
+                await g.FlipCalibrationAsync();
+                return Results.Ok(new { status = "calibration_flipped" });
+            } catch (Exception ex) { return Results.Problem(ex.Message); }
+        });
+
         group.MapPost("/clear-history", (ActiveGuiderProvider guiders) => {
             guiders.Active.ClearStepHistory();
             return Results.Ok(new { status = "cleared" });

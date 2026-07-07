@@ -147,6 +147,14 @@ public interface IGuider {
 
     Task ClearCalibrationAsync(CancellationToken ct = default);
 
+    /// <summary>Manually mirror the stored calibration for a German-equatorial
+    /// meridian flip (RA angle +180°, optional Dec reverse) without a full
+    /// recalibration. This is the manual counterpart to the native backend's
+    /// automatic pier-side handler, needed when the mount driver does not report
+    /// SideOfPier (so the auto-mirror can never trigger). Default no-op: PHD2
+    /// flips its own calibration server-side.</summary>
+    Task FlipCalibrationAsync(CancellationToken ct = default) => Task.CompletedTask;
+
     // ---- Events ----
 
     event Action<string>? AppStateChanged;

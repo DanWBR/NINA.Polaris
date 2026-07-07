@@ -16982,6 +16982,17 @@ function ninaApp() {
             } catch (e) { this.toast('Clear failed: ' + (e.message || e), 'error'); }
         },
 
+        // Manually mirror the native calibration for a meridian flip (RA +180°)
+        // so guiding can resume without a full recalibration. Needed on mounts
+        // whose driver doesn't report pier side, where the automatic post-flip
+        // mirror can't trigger. The WS tick refreshes calDetails afterwards.
+        async guiderFlipCalibration() {
+            try {
+                await this.apiPost('/api/guider/flip-calibration');
+                this.toast('Calibration mirrored for the meridian flip', 'ok');
+            } catch (e) { this.toast('Flip failed: ' + (e.message || e), 'error'); }
+        },
+
         // Auto-Focus V-curve: HFR vs Position, scatter + fit overlay
         updateAfChart() {
             const t = this._chartTheme();

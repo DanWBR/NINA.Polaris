@@ -491,6 +491,80 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         return Task.CompletedTask;
     }
 
+    /// <summary>Manually mirror the stored calibration for a German-equatorial
+    /// meridian flip: RA angle +180° (and Dec +180° when the rig reverses Dec
+    /// after a flip), per <see cref="MountCoordTransform.FlipForPierChange"/>.
+    /// This is the manual counterpart to the loop's automatic pier-side handler
+    /// (<c>HandlePierSideChangeAsync</c>): that one only fires when the mount
+    /// reports SideOfPier, but many mounts/INDI drivers don't, so restarting
+    /// guiding after a flip silently reused the pre-flip calibration and the
+    /// star ran away. The user flips, taps this, and keeps the existing
+    /// calibration instead of recalibrating. Safe whether stopped or guiding
+    /// (the loop reads <c>_calibration</c> each frame); the flipped calibration
+    /// is persisted so it survives a restart, and the recorded pier side is
+    /// toggled so a later auto-detect stays consistent.</summary>
+    public Task FlipCalibrationAsync(CancellationToken ct = default) {
+        if (!_calibration.IsValid) {
+            RaiseAlert("No calibration to flip — calibrate first.");
+            return Task.CompletedTask;
+        }
+        // Toggle the recorded pier side (East<->West); leave Unknown as Unknown
+        // so drivers that never report it don't get a fabricated side.
+        var oldSide = _calibration.CalibrationPierSide;
+        var newSide = oldSide == PierSide.pierEast ? PierSide.pierWest
+                    : oldSide == PierSide.pierWest ? PierSide.pierEast
+                    : oldSide;
+        _calibration = MountCoordTransform
+            .FlipForPierChange(_calibration, Rig.NativeReverseDecAfterFlip)
+            with { CalibrationPierSide = newSide };
+        _raAlgo.Reset();
+        _decAlgo.Reset();
+        _backlashComp.Reset();
+        PersistFlippedCalibration();
+        // Rebuild the Review-panel snapshot from the persisted (flipped) record so
+        // the camera angle + pier side shown there reflect the mirror. Falls back
+        // to leaving the prior details if nothing was persisted (rare).
+        TryRestoreCalibration();
+        RaiseInfo("Calibration mirrored for meridian flip.");
+        _logger.LogInformation(
+            "Native calibration manually flipped (pier {Old}->{New})", oldSide, newSide);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Write the current (just-flipped) calibration angles + pier side
+    /// back to the persisted record for the active rig so the mirror survives a
+    /// restart. Updates the keyed entry matching the current equipment (or the
+    /// legacy slot on a pre-migration rig) — the same record
+    /// <see cref="TryRestoreCalibration"/> would pick — leaving the rates,
+    /// declination, backlash and scatter untouched.</summary>
+    private void PersistFlippedCalibration() {
+        var cal = _calibration;
+        var key = CalibrationKey();
+        try {
+            _profiles.UpdateEquipmentProfile(Rig.Id, r => {
+                NativeCalibrationData? target = null;
+                if (r.NativeCalibrations is { Count: > 0 }) {
+                    target = r.NativeCalibrations.LastOrDefault(c =>
+                        string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+                }
+                target ??= r.NativeCalibration;   // legacy fallback (pre-migration rig)
+                if (target != null) {
+                    target.XAngle = cal.XAngle;
+                    target.YAngle = cal.YAngle;
+                    target.PierSide = (int)cal.CalibrationPierSide;
+                }
+                // Keep the legacy "last cal" slot in sync when it's a different
+                // record but the same equipment key.
+                if (r.NativeCalibration != null && !ReferenceEquals(r.NativeCalibration, target) &&
+                    string.Equals(r.NativeCalibration.Key, key, StringComparison.OrdinalIgnoreCase)) {
+                    r.NativeCalibration.XAngle = cal.XAngle;
+                    r.NativeCalibration.YAngle = cal.YAngle;
+                    r.NativeCalibration.PierSide = (int)cal.CalibrationPierSide;
+                }
+            });
+        } catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist flipped calibration"); }
+    }
+
     /// <summary>Equipment signature for the active rig: identifies the gear whose
     /// geometry/rates a calibration is valid for. Swapping any of these (guide
     /// camera, its driver, binning, guider focal length, mount, its driver)
