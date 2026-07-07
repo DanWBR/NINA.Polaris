@@ -30,3 +30,26 @@
     padding: calc(10px * var(--pad-scale)) calc(14px * var(--pad-scale));
     gap: calc(8px * var(--pad-scale));
 }
+
+/* Per-view title headers — the bar carrying the panel name (Studio, Plan,
+   Settings, Polar alignment, …). Scales the padding only; the title font
+   stays put so it reads the same at any density. */
+.panel-header { padding: calc(12px * var(--pad-scale)) calc(16px * var(--pad-scale)); }
+
+/* Studio → Files: the address/roots bar ("Jump to root…" row) and the
+   FILE TOOLS / PROCESSING TOOLS toolbars were fixed-height and ignored the
+   density slider, so they stayed bulky. Scale their padding, gaps and the
+   icon-button height. */
+.files-addr {
+    padding: calc(10px * var(--pad-scale)) calc(14px * var(--pad-scale));
+    gap: calc(10px * var(--pad-scale));
+}
+.files-actions {
+    padding: calc(8px * var(--pad-scale)) calc(14px * var(--pad-scale));
+    gap: calc(6px * var(--pad-scale));
+}
+.files-actions-icons { gap: calc(4px * var(--pad-scale)); }
+.files-actions-icons .btn.btn-icon {
+    height: calc(32px * var(--pad-scale));
+    padding: 0 calc(9px * var(--pad-scale)) 0 calc(8px * var(--pad-scale));
+}
