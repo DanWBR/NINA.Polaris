@@ -48,32 +48,18 @@ set_string "NSLocalNetworkUsageDescription" \
 "$PB" -c "Add :NSBonjourServices:0 string _polaris._tcp" "$PLIST"
 "$PB" -c "Add :NSBonjourServices:1 string _http._tcp" "$PLIST"
 
-# ---- Podfile: onnxruntime needs iOS 14 + static linkage ----
+# ---- Podfile: onnxruntime needs iOS 14 + STATIC linkage ----
 if [ -f "$PODFILE" ]; then
   echo "Patching $PODFILE …"
   # onnxruntime-objc / -c require a deployment target >= 14.0; Capacitor's
-  # generated Podfile pins 13.0. (-i.bak works on both BSD + GNU sed.)
-  sed -i.bak "s/platform :ios, '[0-9.]*'/platform :ios, '14.0'/" "$PODFILE"
-  rm -f "$PODFILE.bak"
-  # onnxruntime ships STATIC binaries, which clash with use_frameworks!
-  # (dynamic) that Capacitor sets. Force just those pods to static so
-  # pod install stops erroring on "statically linked binaries".
-  if ! grep -q "POLARIS_ONNX_STATIC" "$PODFILE"; then
-    cat >> "$PODFILE" <<'RUBY'
-
-# POLARIS_ONNX_STATIC — keep the onnxruntime pods statically linked so they
-# don't conflict with Capacitor's dynamic use_frameworks!.
-pre_install do |installer|
-  installer.pod_targets.each do |pod|
-    if ['onnxruntime-objc', 'onnxruntime-c'].include?(pod.name)
-      def pod.build_type
-        Pod::BuildType.static_library
-      end
-    end
-  end
-end
-RUBY
-  fi
+  # generated Podfile pins 13.0.
+  perl -0pi -e "s/platform :ios, '[0-9.]*'/platform :ios, '14.0'/" "$PODFILE"
+  # onnxruntime ships STATIC binaries, which error out under a dynamic
+  # `use_frameworks!` ("transitive dependencies that include statically
+  # linked binaries"). Switch the whole Podfile to STATIC linkage: drop any
+  # existing use_frameworks! line and add a static one after the platform.
+  perl -0pi -e 's/^[ \t]*use_frameworks!.*\n//mg' "$PODFILE"
+  perl -0pi -e "s/(^platform :ios[^\n]*\n)/\$1use_frameworks! :linkage => :static\n/m" "$PODFILE"
 fi
 
 echo "Running pod install …"
