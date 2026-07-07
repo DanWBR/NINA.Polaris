@@ -54,6 +54,12 @@ jobs:
       - name: Patch Info.plist + Podfile, then pod install
         run: ./scripts/ios-postadd.sh
 
+      # Generate the iOS app icons (incl. the opaque 1024 App Store marketing
+      # icon) into the asset catalog from mobile/assets/. App Store Connect
+      # reads the 1024 icon straight from the uploaded build.
+      - name: Generate app icons
+        run: npx capacitor-assets generate --ios --iconBackgroundColor '#102146' --iconBackgroundColorDark '#102146'
+
       - name: Build (unsigned, simulator)
         run: |
           xcodebuild \
@@ -115,6 +121,12 @@ jobs:
 
       - name: Patch Info.plist + Podfile, then pod install
         run: ./scripts/ios-postadd.sh
+
+      # Generate the iOS app icons (incl. the opaque 1024 App Store marketing
+      # icon) into the asset catalog from mobile/assets/. App Store Connect
+      # reads the 1024 icon straight from the uploaded build.
+      - name: Generate app icons
+        run: npx capacitor-assets generate --ios --iconBackgroundColor '#102146' --iconBackgroundColorDark '#102146'
 
       - name: Install signing cert + provisioning profile
         env:
