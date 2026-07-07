@@ -56,3 +56,46 @@
     /* --- AF param grid (FOCUS) wraps too. --- */
     .af-params { flex-wrap: wrap; }
 }
+
+/* ───────────────────────────────────────────────────────────────────────
+   Landscape phones. A phone held sideways (e.g. iPhone 17 Pro Max) is WIDE
+   (~950 px, so the width-keyed zoom above stays at 0.85 on the full desktop
+   layout) but only ~400-450 px TALL. The result: the 15-item nav rail and the
+   panels overflow the short height, and everything feels oversized. The width
+   tiers can't catch this — a landscape phone isn't "narrow". Key off
+   orientation + a short height instead. Tablets in landscape are ≥700 px tall,
+   so they never match; portrait phones are tall, so they keep the 0.75 tier. */
+@media (orientation: landscape) and (max-height: 520px) {
+    /* Scale down further so more fits vertically (and the UI stops feeling
+       huge). On a 3x-retina phone the smaller CSS px stay crisp; this only
+       trims the generous desktop spacing. Wins over the 0.85 width tier
+       because this file loads last. */
+    body { zoom: 0.72; }
+
+    /* Reclaim vertical space from the fixed chrome. */
+    .status-bar { padding-top: 4px; padding-bottom: 4px; }
+
+    /* Compact the nav rail so more of the ~15 tabs are visible before it has
+       to scroll. */
+    .nav-btn { padding: 6px 4px; gap: 2px; }
+
+    /* The "not tested yet" caution banner otherwise eats a big slice of the
+       short viewport. */
+    .feature-untested-warn {
+        padding: 6px 10px !important;
+        margin: 4px 0 !important;
+        line-height: 1.25 !important;
+    }
+
+    /* Landscape is wide, but still apply the reflow niceties so nothing forces
+       a horizontal scroll if a row is unusually long. */
+    .control-row, .control-row.actions, .af-params { flex-wrap: wrap !important; }
+    .input-sm { max-width: 100%; }
+    .files-actions-icons {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+    .files-actions-icons > * { flex: 0 0 auto; }
+}
