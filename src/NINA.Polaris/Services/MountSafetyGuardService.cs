@@ -78,6 +78,17 @@ public class MountSafetyGuardService : BackgroundService {
     private IGuider? _subscribedGuider;
     private bool _wasSessionActive;
 
+    // ---- tracking-drop diagnostic ----
+    // Logs a full mount snapshot whenever tracking stops UNEXPECTEDLY (not a
+    // slew, flip, park or our own safety trip). Built to chase an intermittent
+    // ZWO AM3 that stops tracking near the zenith on the west side: comparing
+    // several events shows which invariant is constant — a fixed hour angle
+    // (meridian/tracking limit), a fixed altitude (altitude limit), or a fixed
+    // RA-axis angle (travel limit / hardware).
+    private bool? _prevTracking;
+    private bool _prevSlewing;
+    public string? LastTrackingDrop { get; private set; }
+
     public MountSafetyGuardService(
             EquipmentManager equip, ProfileService profile, ActiveGuiderProvider guiders,
             SequenceEngine sequence, LiveCaptureService liveCapture, LiveStackingService liveStack,
@@ -149,6 +160,9 @@ public class MountSafetyGuardService : BackgroundService {
     private async Task TickAsync(CancellationToken ct) {
         EnsureGuiderSubscription();
 
+        // Diagnostic: log a snapshot whenever tracking stops unexpectedly.
+        CheckTrackingDropDiagnostic();
+
         var s = _meridian.Settings;
 
         // ---- Guard 3: anti-crash altitude floor ----
@@ -213,6 +227,60 @@ public class MountSafetyGuardService : BackgroundService {
                 $"recovery (limit {s.MaxConsecutiveGuideFailures}) — stopping the session.",
                 s, ct);
         }
+    }
+
+    /// <summary>
+    /// Log a full mount snapshot the instant tracking stops unexpectedly, to
+    /// diagnose an intermittent tracking dropout (e.g. the AM3-near-zenith-west
+    /// report). Skips the legitimate reasons tracking goes off: an in-progress
+    /// slew (or one that just finished), a meridian flip, or our own safety trip.
+    /// Records RA/Dec, hour angle, altitude, azimuth and pier side so several
+    /// events can be compared — whichever value is constant across dropouts
+    /// points at the cause (fixed HA = meridian limit, fixed altitude = altitude
+    /// limit, fixed RA-axis angle = travel limit / hardware).
+    /// </summary>
+    private void CheckTrackingDropDiagnostic() {
+        var scope = _equip.Telescope;
+        if (scope == null || !scope.IsConnected || !scope.Capabilities.SupportsTrackingToggle) {
+            _prevTracking = null; _prevSlewing = false;
+            return;
+        }
+
+        bool tracking = scope.IsTracking;
+        bool slewing = scope.IsSlewing;
+        bool wasTracking = _prevTracking ?? tracking;   // first sample: no transition
+        bool prevSlewing = _prevSlewing;
+        _prevTracking = tracking;
+        _prevSlewing = slewing;
+
+        // Only care about a genuine on -> off transition.
+        if (!(wasTracking && !tracking)) return;
+        // Expected reasons tracking is off — not a fault:
+        //  • slewing now, or slewing on the previous tick (tracking re-engages a
+        //    beat after a GoTo completes);
+        //  • a meridian flip in progress;
+        //  • our own safety guard stopped it.
+        if (slewing || prevSlewing) return;
+        if (_meridian.State != MeridianFlipState.Idle) return;
+        if (Tripped) return;
+
+        double ra = scope.RightAscension, dec = scope.Declination;
+        if (double.IsNaN(ra) || double.IsNaN(dec)) return;
+
+        double lst = MeridianFlipService.ComputeLstHours(DateTime.UtcNow, _profile.Active.Longitude);
+        double haMin = MountSlewSafety.TargetHaMinutes(ra, lst);
+        var (alt, az) = AltitudeService.RaDecToAltAz(
+            ra, dec, DateTime.UtcNow, _profile.Active.Latitude, _profile.Active.Longitude);
+        var pier = scope.Capabilities.SupportsPierSide ? scope.SideOfPier.ToString().Replace("pier", "") : "n/a";
+
+        string snap =
+            $"RA={ra:F4}h Dec={dec:F3}° HA={Math.Abs(haMin):F0} min {(haMin >= 0 ? "west" : "east")} " +
+            $"Alt={alt:F1}° Az={az:F1}° pier={pier}";
+        LastTrackingDrop = $"{DateTime.UtcNow:HH:mm:ss}Z  {snap}";
+        _logger.LogWarning(
+            "MOUNT TRACKING STOPPED unexpectedly (diagnostic — not a slew/flip/safety-stop): {Snap}. " +
+            "Compare several of these: constant HA ⇒ meridian/tracking limit; constant Alt ⇒ altitude limit; " +
+            "constant RA/pier ⇒ RA-axis travel limit or hardware.", snap);
     }
 
     /// <summary>
