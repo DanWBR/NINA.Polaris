@@ -385,7 +385,15 @@ public sealed partial class NativeGuider {
         // lock star on the new side.
         _haveLock = false;
         await AutoSelectStarAsync(ct);
-        if (_haveLock) await BuildMultiStarAsync(ct);
+        if (_haveLock) {
+            await BuildMultiStarAsync(ct);
+            // AutoSelectStarAsync set the state to "Selected"; we're still
+            // actively guiding on the new side, so restore "Guiding" —
+            // otherwise the badge stays stuck on "Selected" after the flip
+            // even though the loop keeps correcting (as the recalibrate branch
+            // above already does on success).
+            SetAppState("Guiding");
+        }
         RaiseAlert($"Pier side changed to {nowSide}; calibration mirrored.");
     }
 

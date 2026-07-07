@@ -339,6 +339,12 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     public Task PauseAsync(CancellationToken ct = default) {
         if (IsGuiding) {
             _paused = true;
+            // A pause (e.g. during a meridian flip) supersedes any in-flight
+            // dither/settle, so the UI shows "Paused" (waiting) instead of
+            // staying stuck on the "Dithering" banner through the whole flip.
+            IsDithering = false;
+            IsSettling = false;
+            _settleActive = false;
             SetAppState("Paused");
         }
         return Task.CompletedTask;
