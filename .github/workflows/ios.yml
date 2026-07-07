@@ -48,8 +48,14 @@ jobs:
       - name: Build native ONNX plugin
         run: npm run plugin:build
 
-      - name: Add iOS platform (runs pod install)
-        run: npx cap add ios
+      - name: Add iOS platform (pod install redone below)
+        run: npx cap add ios || true
+
+      - name: Pod install (bump iOS deployment target for onnxruntime)
+        run: |
+          cd ios/App
+          sed -i '' "s/platform :ios, '[0-9.]*'/platform :ios, '14.0'/" Podfile
+          pod install
 
       - name: Patch Info.plist (geolocation / ATS / Bonjour)
         run: ./scripts/ios-postadd.sh
@@ -103,8 +109,14 @@ jobs:
       - name: Build native ONNX plugin
         run: npm run plugin:build
 
-      - name: Add iOS platform (runs pod install)
-        run: npx cap add ios
+      - name: Add iOS platform (pod install redone below)
+        run: npx cap add ios || true
+
+      - name: Pod install (bump iOS deployment target for onnxruntime)
+        run: |
+          cd ios/App
+          sed -i '' "s/platform :ios, '[0-9.]*'/platform :ios, '14.0'/" Podfile
+          pod install
 
       - name: Patch Info.plist (geolocation / ATS / Bonjour)
         run: ./scripts/ios-postadd.sh
