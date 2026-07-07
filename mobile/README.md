@@ -87,6 +87,8 @@ npx cap sync
 
 > Full Android step-by-step (toolchain, debug + **signed** APK, keystore,
 > troubleshooting) is in [`BUILDING-ANDROID.md`](BUILDING-ANDROID.md).
+> Full iOS step-by-step (Mac + Xcode, signing, the self-signed LAN cert
+> trust, TestFlight) is in [`BUILDING-IOS.md`](BUILDING-IOS.md).
 
 
 ```bash

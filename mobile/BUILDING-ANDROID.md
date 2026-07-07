@@ -3,7 +3,8 @@
 The mobile app is a **Capacitor** project (web UI + a Gradle Android
 host). It is **not** a Visual Studio / .NET project, so the APK is built
 with **Android Studio** or the **Gradle CLI** -- not the C# Visual
-Studio. iOS (`.ipa`) needs macOS + Xcode and is covered separately.
+Studio. iOS (`.ipa`) needs macOS + Xcode — see
+[`BUILDING-IOS.md`](BUILDING-IOS.md).
 
 Everything here happens inside `mobile/`. Nothing touches the rest of
 the repo (`mobile/` is outside `NINA.sln`).
