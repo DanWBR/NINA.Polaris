@@ -19433,9 +19433,20 @@ function ninaApp() {
             // Disabled shutter: no-op (matches the visual cue from
             // aria-disabled="true").
             if (ctx.disabled && ctx.disabled()) return;
-            // Active state ignores long-press entirely — tap = abort
-            // is the only gesture here. The release handler decides.
-            if (ctx.isActive && ctx.isActive()) return;
+            // Active state: STOP on press (not on release). Firing on
+            // pointerdown makes the stop reliable on touchscreens, where a
+            // pointercancel / pointerleave can swallow the pointerup and leave
+            // the loop running — the "I pressed stop but it kept going" bug.
+            // Flag it so the matching pointerup is a no-op (never re-starts).
+            if (ctx.isActive && ctx.isActive()) {
+                this._shutterStoppedOnDown = true;
+                this.armingLoop = false;
+                if (ctx.onAbort) {
+                    try { ctx.onAbort(); }
+                    catch (e) { console.warn('shutter onAbort threw', e); }
+                }
+                return;
+            }
             // Long-press arming starts. We use a separate animator at
             // 60ms cadence so the ring smoothly fills during the
             // 600ms hold and gives the user visual feedback that
@@ -19463,6 +19474,12 @@ function ninaApp() {
             }
             this.armingLoop = false;
             this._shutterArmStartedAt = 0;
+            // Active-state stop already fired on pointerdown — this release is a
+            // no-op so it can't re-trigger onTap (which would re-start the loop).
+            if (this._shutterStoppedOnDown) {
+                this._shutterStoppedOnDown = false;
+                return;
+            }
             if (this._shutterLongPressed) {
                 // Long-press already fired onLongPress in the timeout.
                 // The release is a no-op; we just reset the flag.
@@ -19494,6 +19511,7 @@ function ninaApp() {
             this.armingLoop = false;
             this._shutterLongPressed = false;
             this._shutterArmStartedAt = 0;
+            this._shutterStoppedOnDown = false;
         },
 
         /// Progress used by the ring while the user is holding to arm
@@ -19634,7 +19652,13 @@ function ninaApp() {
         /// builds muscle memory across tabs. Tap-while-active aborts.
         liveShutterCtx() {
             return {
-                isActive: () => this.capturing || this.looping,
+                // Server-authoritative: the LIVE loop is server-owned, so trust
+                // its running flag even if the local looping/capturing flags lag
+                // (fresh reload, tab switch, or a between-frame WS tick). Without
+                // this the button can think LIVE is idle and a stop-press arms a
+                // NEW loop (turns blue) instead of stopping — the reported bug.
+                isActive: () => this.capturing || this.looping
+                    || !!(this.serverLiveCapture && this.serverLiveCapture.running),
                 disabled: () => !this.selectedCamera,
                 onTap: () => this.loopCapture(),
                 onLongPress: () => this.loopCapture(),
