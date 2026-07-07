@@ -1210,8 +1210,7 @@ button,
        Tap-friendly height: ~38 px (9 px vertical padding + 14 px font
        + 2 px border) — comfortable on phones / tablets without feeling
        oversized on desktop. */
-    width: 96px;
-    min-width: 72px;
+    width: 80%;
     max-width: 220px;
     field-sizing: content;
     padding: 9px 10px;

@@ -394,6 +394,43 @@ public sealed class AsiSdkCamera : ICamera {
         return 0;
     }
 
+    // ----- Dynamic control panel (self-describing via ASIGetControlCaps) -----
+
+    public IReadOnlyList<CameraControl> GetControls() {
+        var list = new List<CameraControl>();
+        if (!_connected) return list;
+        try {
+            lock (_sdk) {
+                if (ASIGetNumOfControls(_cameraId, out var n) != ASI_ERROR_CODE.ASI_SUCCESS) return list;
+                for (int i = 0; i < n; i++) {
+                    var caps = new ASI_CONTROL_CAPS();
+                    if (ASIGetControlCaps(_cameraId, i, ref caps) != ASI_ERROR_CODE.ASI_SUCCESS) continue;
+                    var type = (ASI_CONTROL_TYPE)caps.ControlType;
+                    double cur = 0; int isAuto = 0;
+                    if (ASIGetControlValue(_cameraId, type, out var v, out var a) == ASI_ERROR_CODE.ASI_SUCCESS) {
+                        cur = v.Value; isAuto = a;
+                    }
+                    double min = caps.MinValue.Value, max = caps.MaxValue.Value, def = caps.DefaultValue.Value;
+                    string vt = (min == 0 && max == 1) ? "bool" : "int";
+                    string name = string.IsNullOrWhiteSpace(caps.Name) ? type.ToString() : caps.Name.Trim();
+                    list.Add(new CameraControl(type.ToString(), name, caps.Description?.Trim(),
+                        cur, min, max, def, caps.IsWritable != 0, isAuto != 0, caps.IsAutoSupported != 0, vt));
+                }
+            }
+        } catch { }
+        return list;
+    }
+
+    public bool SetControl(string id, double value, bool auto) {
+        if (!_connected || !Enum.TryParse<ASI_CONTROL_TYPE>(id, out var type)) return false;
+        try {
+            lock (_sdk) {
+                return ASISetControlValue(_cameraId, type,
+                    new CLong((nint)(long)Math.Round(value)), auto ? 1 : 0) == ASI_ERROR_CODE.ASI_SUCCESS;
+            }
+        } catch { return false; }
+    }
+
     private static BayerPatternEnum MapBayer(ASI_BAYER_PATTERN p) => p switch {
         ASI_BAYER_PATTERN.ASI_BAYER_RG => BayerPatternEnum.RGGB,
         ASI_BAYER_PATTERN.ASI_BAYER_BG => BayerPatternEnum.BGGR,

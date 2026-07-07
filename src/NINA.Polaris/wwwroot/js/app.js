@@ -1500,6 +1500,16 @@ function ninaApp() {
                 open: false, property: '', label: '', builtin: '', draft: '', saving: false
             }
         },
+        // Native-SDK camera controls (RIGS "camera name" sub-tab). Populated
+        // from GET /api/camera/controls for main + guide cameras; the tab only
+        // renders when at least one exposes controls.
+        camCtrl: {
+            which: 'main',
+            busy: false,
+            lastError: '',
+            main: { supported: false, camera: '', items: [] },
+            guide: { supported: false, camera: '', items: [] },
+        },
         _indiPropsTimer: null,
 
         // Rotator
@@ -32140,6 +32150,71 @@ function ninaApp() {
             } finally {
                 this.indiProps.busy = false;
                 this.indiPropsScheduleRefresh();
+            }
+        },
+
+        // ---- Native-SDK camera controls (RIGS "camera name" sub-tab) ----
+
+        // Whether either camera exposes native controls (drives tab visibility).
+        camCtrlAny() {
+            return this.camCtrl.main.supported || this.camCtrl.guide.supported;
+        },
+        // Currently-selected camera slot; falls back to whichever is supported.
+        camCtrlActive() {
+            let w = this.camCtrl.which;
+            if (w === 'main' && !this.camCtrl.main.supported && this.camCtrl.guide.supported) w = 'guide';
+            if (w === 'guide' && !this.camCtrl.guide.supported && this.camCtrl.main.supported) w = 'main';
+            return this.camCtrl[w] || this.camCtrl.main;
+        },
+        // Tab label = the connected camera's own name.
+        camCtrlTabLabel() {
+            const a = this.camCtrlActive();
+            return a.camera || 'Camera';
+        },
+        // Fetch controls for both main + guide; keep the tab honest.
+        async camCtrlLoad() {
+            if (this.camCtrl.busy) return;
+            this.camCtrl.busy = true;
+            try {
+                for (const which of ['main', 'guide']) {
+                    try {
+                        const r = await this.apiGet('/api/camera/controls?which=' + which);
+                        this.camCtrl[which] = {
+                            supported: !!r?.supported,
+                            camera: r?.camera || '',
+                            items: r?.controls || [],
+                        };
+                    } catch (_) {
+                        this.camCtrl[which] = { supported: false, camera: '', items: [] };
+                    }
+                }
+                // If the selected slot vanished, snap to a supported one.
+                if (!this.camCtrlActive().supported) {
+                    this.camCtrl.which = this.camCtrl.main.supported ? 'main'
+                        : (this.camCtrl.guide.supported ? 'guide' : 'main');
+                }
+                this.camCtrl.lastError = '';
+            } finally {
+                this.camCtrl.busy = false;
+            }
+        },
+        // Write one control, then patch the returned value back into the item.
+        async setCamCtrl(item, value, auto) {
+            if (!item || !item.writable) return;
+            try {
+                const r = await this.apiPost('/api/camera/controls/' + encodeURIComponent(item.id), {
+                    value: Number(value),
+                    auto: auto === undefined ? !!item.auto : !!auto,
+                    which: this.camCtrl.which,
+                });
+                const upd = r?.control;
+                if (upd) {
+                    // Alpine reactivity: replace fields in place.
+                    Object.assign(item, upd);
+                }
+                this.camCtrl.lastError = '';
+            } catch (e) {
+                this.camCtrl.lastError = (item.name || item.id) + ': ' + (e.message || e);
             }
         },
 

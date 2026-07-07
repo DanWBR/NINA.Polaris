@@ -130,6 +130,21 @@ public interface ICamera {
     Task SetWhiteBalanceAsync(double red, double blue, CancellationToken ct = default)
         => Task.CompletedTask;
 
+    // ----- Native-SDK controls (dynamic config panel) -----
+    /// <summary>Live list of the driver/SDK controls this camera exposes
+    /// (gain, offset, cooler, gamma, white balance, USB/FPS limit, flip, …),
+    /// each with its range, default, current value and auto state. Native SDK
+    /// cameras (ASI/SVBony/PlayerOne/ToupTek) populate this; INDI/Alpaca/ASCOM
+    /// return empty (they have their own property trees). Read live under the
+    /// SDK lock.</summary>
+    IReadOnlyList<CameraControl> GetControls() => System.Array.Empty<CameraControl>();
+
+    /// <summary>Set one control by its <see cref="CameraControl.Id"/>. When
+    /// <paramref name="auto"/> is true the driver drives the value itself where
+    /// supported. Returns false if the control is unknown / not writable /
+    /// unsupported by this backend.</summary>
+    bool SetControl(string id, double value, bool auto) => false;
+
     // ----- Native video streaming (optional, gated by Capabilities.SupportsVideoStream) -----
     // Backends without driver-level streaming leave the defaults and
     // CameraStreamService falls back to a server-side capture loop.
@@ -190,6 +205,23 @@ public record CaptureOptions(
     string? ImageType = null,
     string? Filter = null,
     string? TargetName = null);
+
+/// <summary>One native-SDK camera control surfaced to the dynamic config panel.
+/// <c>Id</c> is a stable identifier (the SDK control-type / config name) used to
+/// set the value back; <c>ValueType</c> is "int" | "float" | "bool" so the UI
+/// picks a slider, number field or toggle.</summary>
+public record CameraControl(
+    string Id,
+    string Name,
+    string? Description,
+    double Value,
+    double Min,
+    double Max,
+    double Default,
+    bool Writable,
+    bool Auto,
+    bool AutoSupported,
+    string ValueType);
 
 /// <summary>Optional-feature flags. Used by the UI to decide which
 /// controls to render for the currently-selected camera.</summary>

@@ -285,6 +285,38 @@ public static class CameraEndpoints {
             }
         });
 
+        // ----- Native-SDK camera controls (dynamic config panel) -----
+        // Lists the driver/SDK controls the selected camera exposes (gain,
+        // offset, cooler, gamma, WB, USB/FPS limit, flip, …) with live values +
+        // ranges. `which` = main (default) | guide. Empty for INDI/Alpaca/ASCOM
+        // (they use their own property trees).
+        group.MapGet("/controls", (EquipmentManager equip, string? which) => {
+            var cam = (which == "guide") ? equip.GuideCamera : equip.Camera;
+            if (cam == null || !cam.IsConnected)
+                return Results.Ok(new {
+                    supported = false, which = which ?? "main",
+                    controls = System.Array.Empty<object>()
+                });
+            var controls = cam.GetControls();
+            return Results.Ok(new {
+                supported = controls.Count > 0,
+                which = which ?? "main",
+                camera = cam.DeviceName,
+                controls,
+            });
+        });
+
+        group.MapPost("/controls/{id}", (string id, SetControlRequest body, EquipmentManager equip) => {
+            var cam = (body?.Which == "guide") ? equip.GuideCamera : equip.Camera;
+            if (cam == null || !cam.IsConnected)
+                return Results.BadRequest(new { error = "Camera not connected" });
+            var ok = cam.SetControl(id, body?.Value ?? 0, body?.Auto ?? false);
+            if (!ok) return Results.BadRequest(new { error = $"Control '{id}' is not writable or unsupported" });
+            // Return the fresh control so the UI reflects clamping/rounding.
+            var updated = cam.GetControls().FirstOrDefault(c => c.Id == id);
+            return Results.Ok(new { status = "ok", control = updated });
+        });
+
         group.MapPost("/abort", async (EquipmentManager equip) => {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected" });
@@ -641,4 +673,8 @@ public static class CameraEndpoints {
         bool? ForceLoop = null);
 
     public record StreamParamsRequest(double? Exposure = null, int? Gain = null);
+
+    /// <summary>Body for POST /api/camera/controls/{id}. <c>Which</c> = main
+    /// (default) | guide. <c>Auto</c> hands the value to the driver.</summary>
+    public record SetControlRequest(double Value, bool Auto = false, string? Which = null);
 }

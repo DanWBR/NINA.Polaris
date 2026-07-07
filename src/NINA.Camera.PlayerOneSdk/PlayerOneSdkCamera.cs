@@ -381,6 +381,60 @@ public sealed class PlayerOneSdkCamera : ICamera {
         return double.NaN;
     }
 
+    // ----- Dynamic control panel (self-describing via POAGetConfigAttributes) -----
+
+    public IReadOnlyList<CameraControl> GetControls() {
+        var list = new List<CameraControl>();
+        if (!_connected) return list;
+        try {
+            lock (_sdk) {
+                foreach (POAConfig cfg in Enum.GetValues<POAConfig>()) {
+                    var attr = new POAConfigAttributes();
+                    if (POAGetConfigAttributesByConfigID(_cameraId, cfg, ref attr) != POAErrors.POA_OK) continue;
+                    double min, max, def; string vt;
+                    switch (attr.valueType) {
+                        case POAValueType.VAL_FLOAT:
+                            min = attr.minValue.floatValue; max = attr.maxValue.floatValue;
+                            def = attr.defaultValue.floatValue; vt = "float"; break;
+                        case POAValueType.VAL_BOOL:
+                            min = 0; max = 1; def = attr.defaultValue.intValue; vt = "bool"; break;
+                        default:
+                            min = attr.minValue.intValue; max = attr.maxValue.intValue;
+                            def = attr.defaultValue.intValue; vt = "int"; break;
+                    }
+                    double cur = def; bool isAuto = false;
+                    if (attr.isReadable != 0) {
+                        var val = new POAConfigValue(); var pa = POABool.POA_FALSE;
+                        if (POAGetConfig(_cameraId, cfg, ref val, ref pa) == POAErrors.POA_OK) {
+                            cur = attr.valueType == POAValueType.VAL_FLOAT ? val.floatValue : val.intValue;
+                            isAuto = pa == POABool.POA_TRUE;
+                        }
+                    }
+                    string name = string.IsNullOrWhiteSpace(attr.szConfName) ? cfg.ToString() : attr.szConfName.Trim();
+                    list.Add(new CameraControl(cfg.ToString(), name, attr.szDescription?.Trim(),
+                        cur, min, max, def, attr.isWritable != 0, isAuto, attr.isSupportAuto != 0, vt));
+                }
+            }
+        } catch { }
+        return list;
+    }
+
+    public bool SetControl(string id, double value, bool auto) {
+        if (!_connected || !Enum.TryParse<POAConfig>(id, out var cfg)) return false;
+        try {
+            lock (_sdk) {
+                var attr = new POAConfigAttributes();
+                var vt = POAValueType.VAL_INT;
+                if (POAGetConfigAttributesByConfigID(_cameraId, cfg, ref attr) == POAErrors.POA_OK)
+                    vt = attr.valueType;
+                var cv = vt == POAValueType.VAL_FLOAT
+                    ? POAConfigValue.Float(value)
+                    : POAConfigValue.Int((int)Math.Round(value));
+                return POASetConfig(_cameraId, cfg, cv, auto ? POABool.POA_TRUE : POABool.POA_FALSE) == POAErrors.POA_OK;
+            }
+        } catch { return false; }
+    }
+
     private static BayerPatternEnum MapBayer(POABayerPattern p) => p switch {
         POABayerPattern.POA_BAYER_RG => BayerPatternEnum.RGGB,
         POABayerPattern.POA_BAYER_BG => BayerPatternEnum.BGGR,

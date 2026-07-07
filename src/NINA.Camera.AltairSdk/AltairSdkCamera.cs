@@ -170,6 +170,49 @@ public sealed class AltairSdkCamera : ICamera {
 
     public Task SetIsoAsync(int iso, CancellationToken ct = default) => Task.CompletedTask;
 
+    // ----- Dynamic control panel (curated — the altaircam SDK is option-based,
+    // not self-describing, so we surface a fixed set of well-known controls). -----
+
+    public IReadOnlyList<CameraControl> GetControls() {
+        var list = new List<CameraControl>();
+        if (_cam == null || !_connected) return list;
+        list.Add(new CameraControl("Gain", "Gain", "Analog gain",
+            _gain, _gainMin, _gainMax == 0 ? ushort.MaxValue : _gainMax, _gainMin,
+            Writable: true, Auto: false, AutoSupported: false, "int"));
+        double temp = double.NaN;
+        if (_cam.get_Temperature(out short t)) temp = t / 10.0;
+        list.Add(new CameraControl("Temperature", "Sensor temperature", "°C (read-only)",
+            temp, -50, 50, 0, Writable: false, Auto: false, AutoSupported: false, "float"));
+        if (_supportsCooler) {
+            _cam.get_Option(Altaircam.eOPTION.OPTION_TEC, out int tec);
+            list.Add(new CameraControl("Cooler", "Cooler (TEC)", "Thermoelectric cooler on/off",
+                tec != 0 ? 1 : 0, 0, 1, 0, Writable: true, Auto: false, AutoSupported: false, "bool"));
+            double target = 0;
+            if (_cam.get_Option(Altaircam.eOPTION.OPTION_TECTARGET, out int tt)) target = tt / 10.0;
+            list.Add(new CameraControl("TargetTemp", "Target temperature", "Cooler set-point (°C)",
+                target, -40, 20, 0, Writable: true, Auto: false, AutoSupported: false, "int"));
+        }
+        return list;
+    }
+
+    public bool SetControl(string id, double value, bool auto) {
+        if (_cam == null || !_connected) return false;
+        try {
+            switch (id) {
+                case "Gain":
+                    _gain = (int)Math.Round(value);
+                    return _cam.put_ExpoAGain((ushort)Math.Clamp(_gain, _gainMin,
+                        _gainMax == 0 ? ushort.MaxValue : _gainMax));
+                case "Cooler":
+                    return _cam.put_Option(Altaircam.eOPTION.OPTION_TEC, value != 0 ? 1 : 0);
+                case "TargetTemp":
+                    return _cam.put_Option(Altaircam.eOPTION.OPTION_TECTARGET, (int)Math.Round(value * 10));
+                default:
+                    return false; // Temperature is read-only; unknown ids ignored.
+            }
+        } catch { return false; }
+    }
+
     public Task AbortExposureAsync(CancellationToken ct = default) {
         State = CameraStates.Idle;
         return Task.CompletedTask;
