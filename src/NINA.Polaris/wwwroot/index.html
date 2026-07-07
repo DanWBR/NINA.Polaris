@@ -117,7 +117,12 @@
            - needSetup: first-run wizard, must create password
            - needLogin: returning user, password prompt
          Pinned at z-index: 99999 so nothing else floats over it. -->
-    <div class="auth-overlay" x-transition.opacity.duration.200ms
+    <!-- data-no-vkbd: use the device's native keyboard for login / set-password,
+         not the Polaris on-screen keyboard. On a phone the OS keyboard is the
+         expected way to type a password (autofill, password managers, secure
+         entry), and the floating panel over the modal is awkward. The opt-out
+         applies to every input inside via virtual-keyboard.js `eligible()`. -->
+    <div class="auth-overlay" data-no-vkbd x-transition.opacity.duration.200ms
          x-cloak
          x-show="auth.booting || auth.needSetup || auth.needLogin">
 
