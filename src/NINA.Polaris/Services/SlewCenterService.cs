@@ -43,7 +43,12 @@ public class SlewCenterService {
     private readonly ActiveGuiderProvider _guiders;
     private readonly ILogger<SlewCenterService> _logger;
     private readonly NINA.Polaris.Services.PlateSolving.PlateSolveProgressService? _progress;
-    private readonly MountSafetyGuardService? _guard;
+    // Resolved lazily (not a constructor dependency): the guard sits high in the
+    // DI graph (SequenceEngine/LiveStacking) and a hard ctor edge from this
+    // low-level service would close a cycle. IServiceProvider is not a graph edge.
+    private readonly IServiceProvider? _services;
+    private MountSafetyGuardService? Guard =>
+        _services?.GetService(typeof(MountSafetyGuardService)) as MountSafetyGuardService;
 
     private readonly ConcurrentDictionary<string, SlewCenterJob> _jobs = new();
 
@@ -52,7 +57,7 @@ public class SlewCenterService {
         ILogger<SlewCenterService> logger,
         NINA.Polaris.Services.PlateSolving.PlateSolveProgressService? progress = null,
         ActiveGuiderProvider? guiders = null,
-        MountSafetyGuardService? guard = null) {
+        IServiceProvider? services = null) {
         _equip = equip;
         _solver = solver;
         _profiles = profiles;
@@ -60,7 +65,7 @@ public class SlewCenterService {
         _guiders = guiders;
         _logger = logger;
         _progress = progress;
-        _guard = guard;
+        _services = services;
     }
 
     public SlewCenterJob StartJob(double ra, double dec, double toleranceArcsec = 30,
@@ -137,7 +142,7 @@ public class SlewCenterService {
             // Safety gate #4: after a mount-safety trip, don't slew on a
             // possibly-confused pointing model until the mount is re-homed.
             // A confirmed override (Force) still gets through.
-            if (!job.Force && _guard is { RequireHomeAfterTrip: true }) {
+            if (!job.Force && Guard is { RequireHomeAfterTrip: true }) {
                 job.Error = "Mount safety stop is active — Find Home before slewing "
                     + "(or re-run with confirmation to override).";
                 job.State = SlewCenterState.Failed;
