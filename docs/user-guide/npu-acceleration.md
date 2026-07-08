@@ -144,6 +144,22 @@ version-locked Qualcomm code — see `licenses/QAIRT-LICENSE.txt`).
    (w8a16), then compile→`qnn_context_binary --quantize_io`. Place the result at
    `wwwroot/graxpert/models/qnn/{family}-ai-models/{version}/{family}_v68_int16.bin`.
 
+   For the **Polaris-trained** models (our own weights — the `.bin` is safe to
+   commit, unlike the GraXpert NonCommercial ones) this whole flow is scripted:
+
+   ```bash
+   python3 -m venv ~/qaihub && source ~/qaihub/bin/activate
+   pip install qai-hub onnx numpy
+   qai-hub configure --api_token <YOUR_TOKEN>            # one-time
+   python3 scripts/qnn-convert.py --dry-run              # preview source/output paths
+   python3 scripts/qnn-convert.py                        # convert Polaris BGE + Denoise
+   ```
+
+   It reads the input name/shape from each `model.onnx`, runs the same
+   w8a16 → `qnn_context_binary` flow, and drops `{family}_v68_int16.bin` under
+   the parallel `qnn/` subtree the runtime scans (pass `--int8` for the lossy
+   turbo binary, or `--families family-dir:version-dir` for other versions).
+
 2. **Assemble the QAIRT runtime** for the linux-arm64 publish. There is no public
    download for the device-matched 2.45 runtime (the public x86 SDK is 2.31 and
    is version-locked against the board's firmware), so copy it from the board or
