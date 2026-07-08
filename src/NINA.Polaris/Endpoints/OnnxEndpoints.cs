@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Image.FileFormat.FITS;
+using NINA.Polaris.Services.External;
 using NINA.Polaris.Services.Onnx;
 using NINA.Polaris.Services.Qnn;
 
@@ -216,16 +217,33 @@ public static class OnnxEndpoints {
             if (string.IsNullOrWhiteSpace(req.Path) || !File.Exists(req.Path))
                 return Results.BadRequest(new { error = "Input file not found." });
             var op = (req.Op ?? "").Trim().ToLowerInvariant();
-            if (op != "halo" && op != "upscale")
-                return Results.BadRequest(new { error = "op must be 'halo' or 'upscale'." });
+            if (op != "halo" && op != "upscale" && op != "decon")
+                return Results.BadRequest(new { error = "op must be 'halo', 'upscale' or 'decon'." });
+            // decon → the family depends on the target (stars/objects); check the
+            // right context binary exists before we commit to the NPU path.
+            if (op == "decon") {
+                var probe = new GraXpertOptions(
+                    Operation: GraXpertOperation.Deconvolution,
+                    DeconTarget: string.IsNullOrWhiteSpace(req.Target) ? "stars" : req.Target,
+                    AiVersion: req.Version);
+                if (!qnn.CanHandleDecon(probe, out _, out _, out var fam))
+                    return Results.BadRequest(new { error = $"no NPU context binary for {fam}." });
+            }
 
             try {
                 var result = await Task.Run(() => {
                     NINA.Image.ImageData.BaseImageData img;
                     using (var fs = File.OpenRead(req.Path)) img = FITSReader.Read(fs);
-                    return op == "halo"
-                        ? qnn.RunHalo(img, req.Strength, req.Version)
-                        : qnn.RunUpscale(img, req.Version);
+                    return op switch {
+                        "halo" => qnn.RunHalo(img, req.Strength, req.Version),
+                        "upscale" => qnn.RunUpscale(img, req.Version),
+                        _ => qnn.RunDecon(img, new GraXpertOptions(
+                            Operation: GraXpertOperation.Deconvolution,
+                            DeconTarget: string.IsNullOrWhiteSpace(req.Target) ? "stars" : req.Target,
+                            DeconStrength: req.Strength,
+                            DeconPsfSize: req.PsfPixels,
+                            AiVersion: req.Version)),
+                    };
                 }, ct);
 
                 var data = result.Image.Data;
@@ -235,9 +253,14 @@ public static class OnnxEndpoints {
                 int oh = result.Image.Properties.Height;
                 int ch = result.Image.Properties.Channels;
 
+                string suffix = op switch {
+                    "halo" => "_halo_npu",
+                    "upscale" => "_upscale_npu",
+                    _ => (string.Equals(req.Target, "objects", StringComparison.OrdinalIgnoreCase)
+                            ? "_decon_objects_npu" : "_decon_stars_npu"),
+                };
                 var outPath = await files.SaveSiblingAsync(
-                    req.Path, op == "halo" ? "_halo_npu" : "_upscale_npu",
-                    bytes, ow, oh, ch, ct);
+                    req.Path, suffix, bytes, ow, oh, ch, ct);
                 if (outPath == null) return Results.Problem("Save failed.");
 
                 try { _ = Task.Run(() => library.RescanAsync()); } catch { /* non-fatal */ }
@@ -254,8 +277,11 @@ public static class OnnxEndpoints {
     }
 
     /// <summary>Body for POST /api/onnx/npu-run — run a Polaris AI Tool
-    /// (halo / upscale) on the Hexagon NPU against a FITS on disk.</summary>
-    public record NpuRunRequest(string Op, string Path, double Strength = 0.5, string? Version = null);
+    /// (halo / upscale / decon) on the Hexagon NPU against a FITS on disk.
+    /// <c>Target</c> + <c>PsfPixels</c> only apply to decon.</summary>
+    public record NpuRunRequest(string Op, string Path, double Strength = 0.5,
+                                string? Version = null, string? Target = null,
+                                double PsfPixels = 4.0);
 
     /// <summary>Body for POST /api/onnx/download — the on-disk family dir
     /// (e.g. "nox-color-ai-models") + version to pull from the bucket.</summary>

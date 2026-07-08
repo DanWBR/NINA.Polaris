@@ -12578,27 +12578,34 @@ function ninaApp() {
                 // filenames don't collide between stars/objects runs.
                 const suffix = this.graxpertSuffix(op, runOpts);
 
-                this.editorAi.phase = 'fetching pixels';
-                const raw = await this._onnxFetchSourcePixels(src);
-                if (!raw) throw new Error('Could not decode source');
+                // NPU fast path (Q6A): run halo/upscale/decon on the Hexagon
+                // NPU when available; falls back to the browser pipeline on any
+                // miss/error (missing .bin, non-Qualcomm host, etc).
+                let outPath = await this._npuRunServer(op, src, runOpts,
+                    (p) => { this.editorAi.phase = 'NPU ' + op + ', ' + p; });
+                if (!outPath) {
+                    this.editorAi.phase = 'fetching pixels';
+                    const raw = await this._onnxFetchSourcePixels(src);
+                    if (!raw) throw new Error('Could not decode source');
 
-                this.editorAi.phase = 'running ' + op;
-                const result = await OnnxRegistry.runOneShot(
-                    kind, raw.pixels, raw.width, raw.height,
-                    Object.assign({}, runOpts, {
-                        // GX-9: forward channel count so RGB FITS
-                        // process per-channel.
-                        channels: raw.channels,
-                        onProgress: (phase, frac) => {
-                            this.editorAi.phase = op + ', ' + phase
-                              + (frac != null ? ' ' + Math.round(frac * 100) + '%' : '');
-                        }
-                    }));
+                    this.editorAi.phase = 'running ' + op;
+                    const result = await OnnxRegistry.runOneShot(
+                        kind, raw.pixels, raw.width, raw.height,
+                        Object.assign({}, runOpts, {
+                            // GX-9: forward channel count so RGB FITS
+                            // process per-channel.
+                            channels: raw.channels,
+                            onProgress: (phase, frac) => {
+                                this.editorAi.phase = op + ', ' + phase
+                                  + (frac != null ? ' ' + Math.round(frac * 100) + '%' : '');
+                            }
+                        }));
 
-                this.editorAi.phase = 'saving sibling FITS';
-                const outPath = await this._onnxSaveResult(
-                    src, suffix, result.pixels, result.width,
-                    result.height, result.channels);
+                    this.editorAi.phase = 'saving sibling FITS';
+                    outPath = await this._onnxSaveResult(
+                        src, suffix, result.pixels, result.width,
+                        result.height, result.channels);
+                }
                 if (!outPath) throw new Error('Save failed');
 
                 // Preserve the user's current edits across the source
@@ -12619,6 +12626,47 @@ function ninaApp() {
             } finally {
                 this.editorAi.busy = false;
                 this.editorAi.phase = '';
+            }
+        },
+
+        // Offload an AI Tool (halo / upscale / decon) to the Hexagon NPU via
+        // POST /api/onnx/npu-run when a Qualcomm NPU is present + a matching
+        // context binary exists. Returns the sibling FITS path on success, or
+        // null to fall back to the browser pipeline (non-Qualcomm host, missing
+        // .bin, 'detail' decon model, or any server error — all handled quietly).
+        async _npuRunServer(op, path, runOpts, onPhase) {
+            const serverOp = op === 'halo-removal' ? 'halo'
+                : op === 'upscaling' ? 'upscale'
+                : op === 'deconvolution' ? 'decon' : null;
+            if (!serverOp) return null;
+            if (!this.graxpert?.status?.npuAvailable) return null;
+            // Decon on the NPU only serves the GraXpert stars/objects models —
+            // NOT Polaris "Detail" (different I/O, no context binary). Let those
+            // stay on the browser path.
+            if (serverOp === 'decon') {
+                const fam = String(runOpts.family || '');
+                if (fam.indexOf('decon') !== 0) return null;
+            }
+            try {
+                if (onPhase) onPhase('running on NPU');
+                const r = await this.apiPost('/api/onnx/npu-run', null, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        op: serverOp,
+                        path,
+                        strength: runOpts.strength != null ? runOpts.strength : 0.5,
+                        version: runOpts.version || null,
+                        target: runOpts.target || null,
+                        psfPixels: runOpts.psfPixels != null ? runOpts.psfPixels : 4.0,
+                    }),
+                });
+                const j = await r.json();
+                return (j && j.path) ? j.path : null;
+            } catch (e) {
+                // 400 (no bin / not available) or 500 → fall back to the browser.
+                console.warn('[NPU] server run failed; using browser pipeline', e);
+                return null;
             }
         },
 
@@ -27501,6 +27549,19 @@ function ninaApp() {
                     }
                     const path = paths[idx];
                     const stem = path.split(/[\\/]+/).pop();
+
+                    // NPU fast path (Q6A): run halo/upscale/decon on the Hexagon
+                    // NPU when available; falls back to the browser pipeline below
+                    // on any miss/error.
+                    const npuOut = await this._npuRunServer(op, path, runOpts,
+                        (p) => { this.graxpert.browserPhase = stem + ', NPU ' + op + ', ' + p; });
+                    if (npuOut) {
+                        written.push(npuOut);
+                        this.graxpert.browserDone++;
+                        this.graxpert.browserProgress = (idx + 1) / paths.length;
+                        continue;
+                    }
+
                     this.graxpert.browserPhase = stem + ', fetching pixels';
                     this.graxpert.browserProgress = idx / paths.length;
 
