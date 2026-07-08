@@ -350,6 +350,14 @@ public static class EquipmentEndpoints {
                 // old clients leaves the existing setting alone.
                 if (!string.IsNullOrWhiteSpace(update.LiveStackComputeMode))
                     r.LiveStackComputeMode = update.LiveStackComputeMode.Trim().ToLowerInvariant();
+                // Per-rig mount-slew safety thresholds. Nullable: a PUT that
+                // omits them (e.g. the compute-mode-only save) leaves the
+                // stored value alone; an explicit value (incl. 0 = disable)
+                // is clamped to a sane range and persisted.
+                if (update.SlewConfirmDeg.HasValue)
+                    r.SlewConfirmDeg = Math.Clamp(update.SlewConfirmDeg.Value, 0, 180);
+                if (update.SlewFloorDeg.HasValue)
+                    r.SlewFloorDeg = Math.Clamp(update.SlewFloorDeg.Value, 0, 90);
                 // VIDEO tab FOV / ROI persistence. -1 leaves the field
                 // untouched (lets PUTs that only update other fields
                 // skip ROI), 0 clears, positive sets. Mirrors the

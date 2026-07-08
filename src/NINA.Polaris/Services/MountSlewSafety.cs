@@ -31,8 +31,13 @@ public static class MountSlewSafety {
     /// never re-command a full GoTo the mount could satisfy by un-flipping.</summary>
     public const double AlreadyOnTargetDeg = 2.0;
 
-    /// <summary>A move at least this large is flagged for confirmation.</summary>
-    public const double LargeMoveDeg = 20.0;
+    /// <summary>Default move size (deg) at or above which a slew is flagged for
+    /// confirmation, used when a rig supplies no per-rig override.</summary>
+    public const double LargeMoveDeg = 60.0;
+
+    /// <summary>Default anti-crash altitude floor (deg) used when a rig supplies
+    /// no per-rig override.</summary>
+    public const double AltitudeFloorDeg = 5.0;
 
     /// <summary>A target within this many minutes of the meridian is flagged:
     /// a fresh GoTo can pick the un-flipped pier side and swing the long way.</summary>
@@ -79,7 +84,8 @@ public static class MountSlewSafety {
             double mountRaHours, double mountDecDeg,
             double targetRaHours, double targetDecDeg,
             double latDeg, double lonDeg, DateTime utc,
-            double minAltFloorDeg) {
+            double minAltFloorDeg,
+            double largeMoveDeg = LargeMoveDeg) {
         double lst = MeridianFlipService.ComputeLstHours(utc, lonDeg);
         double haMin = TargetHaMinutes(targetRaHours, lst);
         var (targetAlt, _) = AltitudeService.RaDecToAltAz(targetRaHours, targetDecDeg, utc, latDeg, lonDeg);
@@ -92,7 +98,7 @@ public static class MountSlewSafety {
 
         bool alreadyOnTarget = haveMount && moveDeg <= AlreadyOnTargetDeg;
         bool belowFloor = minAltFloorDeg > 0 && targetAlt < minAltFloorDeg;
-        bool largeMove = haveMount && moveDeg >= LargeMoveDeg;
+        bool largeMove = haveMount && largeMoveDeg > 0 && moveDeg >= largeMoveDeg;
         // Near-meridian only matters if we'd actually issue a fresh GoTo (not
         // already parked on the target) — that's the AM3 un-flip case.
         bool nearMeridian = Math.Abs(haMin) <= NearMeridianMinutes && !alreadyOnTarget;

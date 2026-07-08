@@ -5871,6 +5871,34 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     0 disables a guard. Global — applies to every rig.
                                 </p>
                             </div>
+                            <!-- Slew-confirm thresholds (PER-RIG): how big a GoTo
+                                 move, or how low a target, prompts a confirmation
+                                 before the mount moves. Distinct from the global
+                                 meridian guard above; these ride on the active rig
+                                 so a fixed obs and a grab-and-go rig can differ. -->
+                            <div class="equip-group" style="margin-top:8px" x-show="activeRig" x-cloak>
+                                <div class="equip-group-title">Slew safety (this rig)</div>
+                                <div class="equip-meta-row">
+                                    <label>Confirm slews over (°)
+                                        <input type="number" x-model.number="activeRig.slewConfirmDeg"
+                                               min="0" max="180" step="5" class="input-sm" style="width:90px"
+                                               placeholder="60" @change="saveSlewSafety()">
+                                    </label>
+                                    <label>Altitude floor (°)
+                                        <input type="number" x-model.number="activeRig.slewFloorDeg"
+                                               min="0" max="90" step="1" class="input-sm" style="width:80px"
+                                               placeholder="5" @change="saveSlewSafety()">
+                                    </label>
+                                </div>
+                                <p class="hint" style="margin:4px 0 0;font-size:11px">
+                                    A SKY "Go To" whose swing is at least this many degrees — or whose
+                                    target sits below the floor — asks you to confirm before the mount
+                                    moves (a big swing can make the mount un-flip and take the long way
+                                    toward the tripod). Blank ⇒ defaults (60° / 5°); 0 disables that check.
+                                    The altitude floor also arms the live anti-crash abort (needs the
+                                    global guard above on).
+                                </p>
+                            </div>
                         </div>
                     </div>
 
@@ -17508,7 +17536,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260708-slewconfirm"></script>
+    <script src="/js/app.js?v=20260708-slewperrig"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

@@ -829,6 +829,22 @@ public class EquipmentProfile {
     /// Pi 2/3 → client; Pi 5 / mini-PC → either works.</summary>
     public string LiveStackComputeMode { get; set; } = "auto";
 
+    /// <summary>Per-rig angular move size (deg) at or above which a SKY "Go To"
+    /// is flagged for confirmation before the mount moves. A big swing can make
+    /// the mount un-flip and take the long way toward the pier/tripod (the AM3
+    /// near-crash). <c>null</c> ⇒ use <see cref="MountSlewSafety.LargeMoveDeg"/>
+    /// (60°); 0 disables the large-slew check. Nullable so a partial rig PUT that
+    /// omits it never clobbers a customised value.</summary>
+    public double? SlewConfirmDeg { get; set; }
+
+    /// <summary>Per-rig anti-crash altitude floor (deg). A GoTo target below this
+    /// is flagged for confirmation, and the live safety guard aborts a slew whose
+    /// pointing drops below it. <c>null</c> ⇒ use
+    /// <see cref="MountSlewSafety.AltitudeFloorDeg"/> (5°); 0 disables. Nullable
+    /// for the same partial-PUT reason as <see cref="SlewConfirmDeg"/>. The global
+    /// <c>MeridianFlipSettings.SafetyStopEnabled</c> remains the master on/off.</summary>
+    public double? SlewFloorDeg { get; set; }
+
     /// <summary>When true, each raw frame fed to
     /// <c>LiveStackingService.AddFrameAsync</c> is also persisted to
     /// disk as a regular LIGHT (lands in the same per-target /

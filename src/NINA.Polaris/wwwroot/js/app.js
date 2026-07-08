@@ -8068,6 +8068,36 @@ function ninaApp() {
             }
         },
 
+        // Persist the per-rig mount-slew safety thresholds (confirm-above
+        // move size + anti-crash altitude floor) edited in the mount card.
+        // Same partial-PUT trick as saveLiveStackComputeMode: the server
+        // merges only the fields we send (both are nullable server-side),
+        // so this leaves every other rig field untouched, and the slew
+        // pre-check + live abort pick the new value up immediately. Empty
+        // input ⇒ null ⇒ fall back to the built-in default (60° / 5°).
+        async saveSlewSafety() {
+            try {
+                const rig = this.rigs.find(r => r.id === this.activeRigId);
+                if (!rig) return;
+                const norm = (v) => (v === '' || v === null || v === undefined || Number.isNaN(v))
+                    ? null : Math.max(0, Number(v));
+                const body = {
+                    slewConfirmDeg: norm(rig.slewConfirmDeg),
+                    slewFloorDeg: norm(rig.slewFloorDeg),
+                };
+                await this.apiPost('/api/equipment/rigs/' + encodeURIComponent(rig.id), null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                rig.slewConfirmDeg = body.slewConfirmDeg;
+                rig.slewFloorDeg = body.slewFloorDeg;
+                this.toast('Slew safety thresholds saved', 'ok');
+            } catch (e) {
+                this.toast('Save failed: ' + (e.message || e), 'error');
+            }
+        },
+
         // LIVE tab "Save each frame" toggle. Hits the dedicated
         // endpoint which writes both the runtime flag (LiveStackingService.
         // SaveFramesToDisk, takes effect on the next AddFrameAsync call)

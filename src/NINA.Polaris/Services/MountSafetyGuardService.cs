@@ -62,10 +62,17 @@ public class MountSafetyGuardService : BackgroundService {
     public bool RequireHomeAfterTrip =>
         Tripped && _meridian.Settings.RequireHomeAfterSafetyStop;
 
-    /// <summary>Configured anti-crash altitude floor (deg, 0 = off). Read by the
-    /// slew pre-check so a below-floor target is flagged before the mount moves.</summary>
-    public double AltitudeFloorDeg =>
-        _meridian.Settings.SafetyStopEnabled ? _meridian.Settings.MinAltitudeLimitDeg : 0;
+    /// <summary>Effective anti-crash altitude floor (deg, 0 = off). The value is
+    /// per-rig (<see cref="EquipmentProfile.SlewFloorDeg"/>, null ⇒
+    /// <see cref="MountSlewSafety.AltitudeFloorDeg"/>) but the global
+    /// <c>SafetyStopEnabled</c> stays the master on/off switch. Read by the slew
+    /// pre-check and the live abort poll.</summary>
+    public double AltitudeFloorDeg {
+        get {
+            if (!_meridian.Settings.SafetyStopEnabled) return 0;
+            return _profile.ActiveEquipmentProfile?.SlewFloorDeg ?? MountSlewSafety.AltitudeFloorDeg;
+        }
+    }
 
     // ---- meridian-crossing tracking ----
     private double? _prevHa;
@@ -171,19 +178,23 @@ public class MountSafetyGuardService : BackgroundService {
         // is slewing and its current pointing is below the floor, abort the slew
         // and stop. This is the backstop that catches a wrong-way slew already in
         // motion, regardless of why it started.
-        if (s.SafetyStopEnabled && !Tripped && s.MinAltitudeLimitDeg > 0) {
+        // Per-rig floor via AltitudeFloorDeg (already gated on SafetyStopEnabled;
+        // 0 = off). Keeps the abort backstop in step with the per-rig setting the
+        // slew pre-check uses.
+        double floorDeg = AltitudeFloorDeg;
+        if (!Tripped && floorDeg > 0) {
             var scope = _equip.Telescope;
             if (scope is { IsConnected: true, IsSlewing: true }) {
                 double ra = scope.RightAscension, dec = scope.Declination;
                 if (!double.IsNaN(ra) && !double.IsNaN(dec)) {
                     var (altDeg, _) = AltitudeService.RaDecToAltAz(
                         ra, dec, DateTime.UtcNow, _profile.Active.Latitude, _profile.Active.Longitude);
-                    if (MountSlewSafety.ShouldAbortForAltitude(altDeg, s.MinAltitudeLimitDeg, true)) {
+                    if (MountSlewSafety.ShouldAbortForAltitude(altDeg, floorDeg, true)) {
                         try { await scope.AbortSlewAsync(ct); }
                         catch (Exception ex) { _logger.LogWarning(ex, "Safety: abort-slew (altitude) failed"); }
                         await TripAsync(
                             $"Slew aborted: the OTA dropped to {altDeg:F0}° altitude, below the " +
-                            $"{s.MinAltitudeLimitDeg:F0}° floor — a wrong-way slew heading for the mount/tripod.",
+                            $"{floorDeg:F0}° floor — a wrong-way slew heading for the mount/tripod.",
                             s, ct);
                         return;
                     }

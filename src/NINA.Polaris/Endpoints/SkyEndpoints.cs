@@ -42,10 +42,15 @@ public static class SkyEndpoints {
                 var scope = equip.Telescope;
                 double mra = double.NaN, mdec = double.NaN;
                 if (scope is { IsConnected: true }) { mra = scope.RightAscension; mdec = scope.Declination; }
+                // Per-rig thresholds (null ⇒ built-in defaults). The floor still
+                // flows through the guard so the global SafetyStopEnabled master
+                // switch can zero it out.
+                var rig = profiles.ActiveEquipmentProfile;
+                double largeMoveDeg = rig?.SlewConfirmDeg ?? MountSlewSafety.LargeMoveDeg;
                 var v = MountSlewSafety.Evaluate(
                     mra, mdec, request.Ra, request.Dec,
                     profiles.Active.Latitude, profiles.Active.Longitude, DateTime.UtcNow,
-                    guard.AltitudeFloorDeg);
+                    guard.AltitudeFloorDeg, largeMoveDeg);
                 if (v.Warn) {
                     return Results.Json(new {
                         needsConfirm = true,
