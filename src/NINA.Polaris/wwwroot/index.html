@@ -7210,7 +7210,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
                     </div>
 
-                    <!-- Controls grid -->
+                    <!-- Controls grid. Mirrors the INDI Control Panel structure
+                         exactly (device card → group body → indi-prop rows) so
+                         it inherits the same padding/alignment/theming. -->
                     <div class="indi-props-grid" x-show="camCtrlActive().supported">
                         <div class="indi-device-card">
                             <div class="indi-device-card-header">
@@ -7218,60 +7220,80 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <span x-text="camCtrlActive().camera"></span>
                             </div>
                             <div class="indi-device-card-body">
-                                <template x-for="c in camCtrlActive().items" :key="c.id">
-                                    <div class="indi-prop">
-                                        <div class="indi-prop-header">
-                                            <strong x-text="c.name"></strong>
-                                            <span class="indi-prop-meta"
-                                                  x-text="c.valueType + (c.writable ? '' : ' · read-only')"></span>
-                                        </div>
-                                        <div class="indi-prop-desc" x-show="c.description"
-                                             style="font-size:11px;color:var(--text-muted);margin:2px 0 6px;"
-                                             x-text="c.description"></div>
+                                <div class="indi-group">
+                                    <div class="indi-group-body">
+                                        <template x-for="c in camCtrlActive().items" :key="c.id">
+                                            <div class="indi-prop">
+                                                <div class="indi-prop-header">
+                                                    <span class="indi-state-dot"
+                                                          :class="c.writable ? 'indi-state-ok' : 'indi-state-idle'">●</span>
+                                                    <strong x-text="c.name"></strong>
+                                                    <button class="indi-help-icon" x-show="c.description"
+                                                            :class="{ 'has-desc': !!c.description }"
+                                                            :title="c.description" @click.prevent>?</button>
+                                                    <span class="indi-prop-meta"
+                                                          x-text="c.valueType + (c.writable ? '' : ' · read-only')"></span>
+                                                </div>
 
-                                        <!-- Boolean toggle -->
-                                        <template x-if="c.valueType === 'bool' && c.writable">
-                                            <label class="checkbox-label" style="font-size:13px;">
-                                                <input type="checkbox"
-                                                       :checked="c.value != 0"
-                                                       @change="setCamCtrl(c, $event.target.checked ? 1 : 0)">
-                                                <span x-text="c.value != 0 ? 'On' : 'Off'"></span>
-                                            </label>
-                                        </template>
+                                                <!-- Boolean toggle -->
+                                                <template x-if="c.valueType === 'bool' && c.writable">
+                                                    <div class="indi-switch-row">
+                                                        <label class="indi-switch-label">
+                                                            <input type="checkbox"
+                                                                   :checked="c.value != 0"
+                                                                   @change="setCamCtrl(c, $event.target.checked ? 1 : 0)">
+                                                            <span x-text="c.value != 0 ? 'On' : 'Off'"></span>
+                                                        </label>
+                                                    </div>
+                                                </template>
 
-                                        <!-- Numeric slider + number box -->
-                                        <template x-if="c.valueType !== 'bool' && c.writable">
-                                            <div class="indi-prop-row" style="gap:8px;align-items:center;">
-                                                <input type="range" style="flex:1;min-width:120px;"
-                                                       :min="c.min" :max="c.max"
-                                                       :step="c.valueType === 'float' ? 'any' : 1"
-                                                       :value="c.value"
-                                                       @change="setCamCtrl(c, +$event.target.value)">
-                                                <input type="number" class="input-sm indi-input"
-                                                       style="width:90px;"
-                                                       :min="c.min" :max="c.max"
-                                                       :step="c.valueType === 'float' ? 'any' : 1"
-                                                       :value="c.value"
-                                                       @change="setCamCtrl(c, +$event.target.value)">
-                                                <button class="btn btn-sm" title="Reset to default"
-                                                        @click="setCamCtrl(c, c.default)">↺</button>
-                                                <template x-if="c.autoSupported">
-                                                    <label class="checkbox-label" style="font-size:12px;">
-                                                        <input type="checkbox" :checked="c.auto"
-                                                               @change="setCamCtrl(c, c.value, $event.target.checked)">
-                                                        Auto
-                                                    </label>
+                                                <!-- Numeric slider + number box -->
+                                                <template x-if="c.valueType !== 'bool' && c.writable">
+                                                    <div class="indi-prop-rows">
+                                                        <div class="indi-prop-row">
+                                                            <span class="indi-elem-label"
+                                                                  x-text="c.min + ' – ' + c.max"></span>
+                                                            <input type="range" style="flex:1;min-width:80px;"
+                                                                   :min="c.min" :max="c.max"
+                                                                   :step="c.valueType === 'float' ? 'any' : 1"
+                                                                   :value="c.value"
+                                                                   @change="setCamCtrl(c, +$event.target.value)">
+                                                            <input type="number" class="input-sm indi-input"
+                                                                   style="width:82px;flex:0 0 82px;"
+                                                                   :min="c.min" :max="c.max"
+                                                                   :step="c.valueType === 'float' ? 'any' : 1"
+                                                                   :value="c.value"
+                                                                   @change="setCamCtrl(c, +$event.target.value)">
+                                                            <button class="btn btn-sm" title="Reset to default"
+                                                                    @click="setCamCtrl(c, c.default)">↺</button>
+                                                        </div>
+                                                        <template x-if="c.autoSupported">
+                                                            <div class="indi-prop-row">
+                                                                <span class="indi-elem-label">Auto</span>
+                                                                <label class="indi-switch-label">
+                                                                    <input type="checkbox" :checked="c.auto"
+                                                                           @change="setCamCtrl(c, c.value, $event.target.checked)">
+                                                                    <span x-text="c.auto ? 'On' : 'Off'"></span>
+                                                                </label>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </template>
+
+                                                <!-- Read-only value -->
+                                                <template x-if="!c.writable">
+                                                    <div class="indi-prop-rows">
+                                                        <div class="indi-prop-row">
+                                                            <span class="indi-elem-label">Value</span>
+                                                            <span class="indi-input" style="width:auto;flex:0 0 auto;"
+                                                                  x-text="Number.isFinite(c.value) ? c.value.toFixed(2) : '—'"></span>
+                                                        </div>
+                                                    </div>
                                                 </template>
                                             </div>
                                         </template>
-
-                                        <!-- Read-only value -->
-                                        <template x-if="!c.writable">
-                                            <span class="indi-elem-label"
-                                                  x-text="Number.isFinite(c.value) ? c.value.toFixed(2) : '—'"></span>
-                                        </template>
                                     </div>
-                                </template>
+                                </div>
                             </div>
                         </div>
                     </div>
