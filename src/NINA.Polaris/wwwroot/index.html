@@ -5822,6 +5822,20 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     </button>
                                 </div>
                             </div>
+                            <!-- Safety trip banner stays OUTSIDE the collapsible
+                                 panel so an active safety stop is always visible,
+                                 even when the panel below is collapsed. -->
+                            <div class="safety-banner" x-show="mfSafetyTripped" x-cloak style="margin-top:8px">
+                                <span>🛑 <strong>Mount safety stop</strong> — <span x-text="mfSafetyReason"></span></span>
+                                <button class="btn btn-sm" @click="resetMountSafety()">Dismiss</button>
+                            </div>
+                            <!-- Mount safety + protection, collapsed by default to
+                                 keep the card clean: the GLOBAL meridian/anti-crash
+                                 guard + the PER-RIG slew-confirm thresholds. -->
+                            <details class="mount-safety-panel" style="margin-top:8px">
+                                <summary style="cursor:pointer; color: var(--text-muted); font-size: 11px;">
+                                    🛡 Security and Protection Features
+                                </summary>
                             <!-- Mount safety guard (GLOBAL, not per-rig): anti
                                  cable-wrap past-meridian limit + guide circuit
                                  breaker. Lives on the mount card because it's a
@@ -5829,10 +5843,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                  LIVE / PLAN session. -->
                             <div class="equip-group" style="margin-top:8px">
                                 <div class="equip-group-title">Meridian safety (global)</div>
-                                <div class="safety-banner" x-show="mfSafetyTripped" x-cloak>
-                                    <span>🛑 <strong>Mount safety stop</strong> — <span x-text="mfSafetyReason"></span></span>
-                                    <button class="btn btn-sm" @click="resetMountSafety()">Dismiss</button>
-                                </div>
                                 <label class="seq-dither-toggle">
                                     <input type="checkbox" x-model="mfSettings.safetyStopEnabled" @change="saveMfSettings()">
                                     <span :class="mfSettings.safetyStopEnabled ? 'text-ok' : 'text-muted'"
@@ -5899,6 +5909,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     global guard above on).
                                 </p>
                             </div>
+                            </details>
                         </div>
                     </div>
 
