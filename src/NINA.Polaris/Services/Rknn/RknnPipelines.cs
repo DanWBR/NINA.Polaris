@@ -417,4 +417,140 @@ internal static class RknnPipelines {
     public static (ushort[] starless, ushort[] stars) RunStarRemovalMono(
             IRknnTileRunner runner, ushort[] plane, int width, int height, int passes = 1)
         => RunStarRemoval(runner, plane, width, height, 1, passes);
+
+    // ─── Deconvolution (GraXpert stars/objects, 512 NCHW, 2-input) ────────
+    private const int DeconTile = 512;
+    private const int DeconStride = 448;
+    private const int DeconMargin = (DeconTile - DeconStride) / 2;   // 32
+    private const float DeconEps = 1e-5f;
+
+    /// <summary>
+    /// Map a PSF size (FWHM in pixels) to the model's normalized sigma condition,
+    /// using GraXpert's model-specific formulas (from <c>deconvolution.py</c>):
+    /// FWHM → σ = fwhm/2.355, then a per-target/version linear map, clamped to
+    /// [0.05, 0.95]. Feeding the wrong sigma produces tile-shaped seams, so this
+    /// mirrors <c>DeconPipeline</c> exactly.
+    /// </summary>
+    public static float DeconSigmaNormalized(string target, string version, double psfPixels) {
+        psfPixels = Math.Clamp(psfPixels, 0.05, 15.0);
+        double sigma = psfPixels / 2.355;
+        bool objects = string.Equals(target, "objects", StringComparison.OrdinalIgnoreCase);
+        double v = objects
+            ? (version == "1.0.0" ? (sigma - 1.0) / 5.0 : (sigma - 0.5) / 5.5)
+            : (sigma - 1.5) / 3.0;                                   // stellar (v1.0.0)
+        return (float)Math.Clamp(v, 0.05, 0.95);
+    }
+
+    /// <summary>
+    /// Deconvolution (stars / objects). Ported from <c>DeconPipeline._runMono</c>:
+    /// per plane, pad to a 448-stride grid, tile 512×512 with a 32-px context
+    /// margin, per-tile log-mean-std normalize <c>(log(v−min+ε)−mean)·0.1/std</c>,
+    /// run the model (image tile + <c>[sigmaNorm, effStrength]</c> params), subtract
+    /// the returned residual in the normalized log domain, inverse-log, and keep
+    /// the inner stride×stride region (tiles abut seamlessly). RGB runs the plane
+    /// pipeline three times. Deterministic given the runner, so unit-testable
+    /// without an NPU. <paramref name="strength"/> gets GraXpert's 0.95 cap.
+    /// </summary>
+    public static ushort[] RunDecon(IRknnDeconTileRunner runner, ushort[] pixels,
+                                    int width, int height, int channels,
+                                    string target, string version,
+                                    double psfPixels, double strength) {
+        float sigmaNorm = DeconSigmaNormalized(target, version, psfPixels);
+        float effStrength = (float)(Math.Clamp(strength, 0.0, 1.0) * 0.95);
+        var pars = new[] { sigmaNorm, effStrength };
+
+        int planeLen = width * height;
+        var outPixels = new ushort[pixels.Length];
+        for (int c = 0; c < channels; c++) {
+            var plane = RunDeconPlane(runner, pixels.AsSpan(c * planeLen, planeLen),
+                                      width, height, pars);
+            Array.Copy(plane, 0, outPixels, c * planeLen, planeLen);
+        }
+        return outPixels;
+    }
+
+    private static ushort[] RunDeconPlane(IRknnDeconTileRunner runner, ReadOnlySpan<ushort> plane,
+                                          int width, int height, float[] pars) {
+        const int T = DeconTile, S = DeconStride, M = DeconMargin;
+        const float eps = DeconEps;
+        int itw = (width + S - 1) / S;                  // ceil(width / stride)
+        int ith = (height + S - 1) / S;
+        int padW = itw * S + 2 * M;
+        int padH = ith * S + 2 * M;
+        int offX = (padW - width) / 2;
+        int offY = (padH - height) / 2;
+
+        // Edge-replicate pad, then normalize to [0,1].
+        var planeF = new float[padW * padH];
+        for (int y = 0; y < padH; y++) {
+            int sy = Math.Clamp(y - offY, 0, height - 1);
+            for (int x = 0; x < padW; x++) {
+                int sx = Math.Clamp(x - offX, 0, width - 1);
+                planeF[y * padW + x] = plane[sy * width + sx] / 65535f;
+            }
+        }
+
+        var outF = new float[padW * padH];
+        var tile = new float[T * T];
+        var tensor = new float[T * T];
+        for (int ty = 0; ty < ith; ty++) {
+            for (int tx = 0; tx < itw; tx++) {
+                int sx = tx * S, sy = ty * S;
+
+                // Gather the tile + its min.
+                float minV = float.PositiveInfinity;
+                for (int y = 0; y < T; y++) {
+                    int srcRow = (sy + y) * padW + sx, dstRow = y * T;
+                    for (int x = 0; x < T; x++) {
+                        float v = planeF[srcRow + x];
+                        tile[dstRow + x] = v;
+                        if (v < minV) minV = v;
+                    }
+                }
+
+                // log(v − min + ε), then mean/std.
+                double mean = 0;
+                for (int i = 0; i < tile.Length; i++) {
+                    tile[i] = (float)Math.Log(tile[i] - minV + eps);
+                    mean += tile[i];
+                }
+                mean /= tile.Length;
+                double varSum = 0;
+                for (int i = 0; i < tile.Length; i++) {
+                    double d = tile[i] - mean;
+                    varSum += d * d;
+                }
+                double std = Math.Max(1e-6, Math.Sqrt(varSum / tile.Length));
+
+                // (v − mean) · 0.1/std  (GraXpert convention; NOT / (std·0.1)).
+                double invStd10 = 0.1 / std;
+                for (int i = 0; i < tile.Length; i++)
+                    tensor[i] = (float)((tile[i] - mean) * invStd10);
+
+                var residual = runner.RunTile(tensor, pars);
+
+                // Keep the inner stride×stride: out = inverse-log(normIn − residual).
+                for (int y = 0; y < S; y++) {
+                    int tileRow = (M + y) * T + M;
+                    int outRow = (sy + M + y) * padW + (sx + M);
+                    for (int x = 0; x < S; x++) {
+                        double normOut = tensor[tileRow + x] - residual[tileRow + x];
+                        double logVal = normOut * std / 0.1 + mean;
+                        outF[outRow + x] = (float)(Math.Exp(logVal) + minV - eps);
+                    }
+                }
+            }
+        }
+
+        // Trim padding + denormalize.
+        var dst = new ushort[width * height];
+        for (int y = 0; y < height; y++) {
+            int srcRow = (offY + y) * padW + offX, dstRow = y * width;
+            for (int x = 0; x < width; x++) {
+                int v = (int)Math.Round(outF[srcRow + x] * 65535f);
+                dst[dstRow + x] = (ushort)Math.Clamp(v, 0, 65535);
+            }
+        }
+        return dst;
+    }
 }
