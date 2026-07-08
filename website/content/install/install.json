@@ -130,7 +130,9 @@
         "polaris": "0.89.8 (2026-06-28)",
         "size": "12 GB (.7z)",
         "access": "https://radxa-dragon-q6a.local:5000/",
-        "note": "7-Zip archive; extract before flashing."
+        "note": "7-Zip archive; extract before flashing.",
+        "gpu": "yes",
+        "npu": "yes"
       }
     ],
     "update": {
