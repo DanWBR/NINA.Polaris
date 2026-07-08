@@ -156,12 +156,15 @@ version-locked Qualcomm code — see `licenses/QAIRT-LICENSE.txt`).
    ```
 
    `--all` also converts halo / upscale / decon (the converter handles decon's
-   two inputs — image NCHW 512 + a `params` tensor — automatically). **Decon now
-   runs on the Hexagon NPU** (QNN path, via `QnnInferenceService.RunDecon`) once
-   its `.bin` is present — a GraXpert "AI Sharpen" / decon run on a FITS uses it
-   automatically, same as BGE/Denoise. **halo + upscale** still run browser-side
-   (no server inference path yet), so their `.bin` are staged for later. On the
-   Rockchip (RKNN) path decon also still falls back to the CLI.
+   two inputs — image NCHW 512 + a `params` tensor — automatically). All three
+   now run on the Hexagon NPU (QNN path) once their `.bin` is present:
+   - **Decon** — automatic: a GraXpert "AI Sharpen" / decon run on a FITS takes
+     the NPU like BGE/Denoise (`QnnInferenceService.RunDecon`).
+   - **Halo + Upscale** — via `POST /api/onnx/npu-run { op, path, strength?,
+     version? }` (`RunHalo` reuses the denoise pipeline; `RunUpscale` is the 2×
+     SR path). A FILES/Editor "run on NPU" button is still TODO, so today these
+     are API-only (test with curl). On the Rockchip (RKNN) path halo/upscale/
+     decon still fall back to the browser / CLI.
 
    (`qai_hub` = cloud AI Hub path, in the `qnn` env. `qairt-py` is the separate
    local `qairt-converter` toolchain — same result offline, not used here.)
