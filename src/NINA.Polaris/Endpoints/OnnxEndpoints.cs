@@ -12,7 +12,9 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Image.FileFormat.FITS;
 using NINA.Polaris.Services.Onnx;
+using NINA.Polaris.Services.Qnn;
 
 namespace NINA.Polaris.Endpoints;
 
@@ -198,7 +200,62 @@ public static class OnnxEndpoints {
 
             return Results.Ok(new { path = outPath });
         }).DisableAntiforgery();
+
+        // ─── run Halo / Upscale on the Hexagon NPU (server-side) ─────
+        // Polaris-only AI Tools that normally run in the browser; on a
+        // Qualcomm SBC (Q6A) with the matching *_v68 context binary this
+        // runs them on the NPU instead. Reads the source FITS, runs the
+        // model, and writes a sibling FITS (same mechanism as /save).
+        // Body: { op: "halo"|"upscale", path, strength?, version? }.
+        g.MapPost("/npu-run", async (NpuRunRequest req, QnnInferenceService qnn,
+                                     OnnxFileService files,
+                                     NINA.Polaris.Services.Studio.FrameLibraryService library,
+                                     CancellationToken ct) => {
+            if (!qnn.IsAvailable)
+                return Results.BadRequest(new { error = "NPU not available: " + qnn.Diagnostics });
+            if (string.IsNullOrWhiteSpace(req.Path) || !File.Exists(req.Path))
+                return Results.BadRequest(new { error = "Input file not found." });
+            var op = (req.Op ?? "").Trim().ToLowerInvariant();
+            if (op != "halo" && op != "upscale")
+                return Results.BadRequest(new { error = "op must be 'halo' or 'upscale'." });
+
+            try {
+                var result = await Task.Run(() => {
+                    NINA.Image.ImageData.BaseImageData img;
+                    using (var fs = File.OpenRead(req.Path)) img = FITSReader.Read(fs);
+                    return op == "halo"
+                        ? qnn.RunHalo(img, req.Strength, req.Version)
+                        : qnn.RunUpscale(img, req.Version);
+                }, ct);
+
+                var data = result.Image.Data;
+                var bytes = new byte[data.Length * sizeof(ushort)];
+                Buffer.BlockCopy(data, 0, bytes, 0, bytes.Length);
+                int ow = result.Image.Properties.Width;
+                int oh = result.Image.Properties.Height;
+                int ch = result.Image.Properties.Channels;
+
+                var outPath = await files.SaveSiblingAsync(
+                    req.Path, op == "halo" ? "_halo_npu" : "_upscale_npu",
+                    bytes, ow, oh, ch, ct);
+                if (outPath == null) return Results.Problem("Save failed.");
+
+                try { _ = Task.Run(() => library.RescanAsync()); } catch { /* non-fatal */ }
+                return Results.Ok(new {
+                    path = outPath, width = ow, height = oh, channels = ch,
+                    tiles = result.Tiles, ms = result.ElapsedMs, version = result.Version,
+                });
+            } catch (OperationCanceledException) {
+                return Results.StatusCode(499);
+            } catch (Exception ex) {
+                return Results.Problem($"NPU {op} failed: {ex.Message}");
+            }
+        }).DisableAntiforgery();
     }
+
+    /// <summary>Body for POST /api/onnx/npu-run — run a Polaris AI Tool
+    /// (halo / upscale) on the Hexagon NPU against a FITS on disk.</summary>
+    public record NpuRunRequest(string Op, string Path, double Strength = 0.5, string? Version = null);
 
     /// <summary>Body for POST /api/onnx/download — the on-disk family dir
     /// (e.g. "nox-color-ai-models") + version to pull from the bucket.</summary>

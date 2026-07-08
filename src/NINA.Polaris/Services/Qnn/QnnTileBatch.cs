@@ -377,6 +377,167 @@ public sealed class QnnDeconNetRunBatch : IQnnDeconBatch {
     public void Dispose() { }
 }
 
+// ─── Upscale: single-input, scale×-larger output batch ────────────────────
+
+/// <summary>Batch executor for the Polaris upscale model, which is single-input
+/// like BGE/Denoise but whose OUTPUT tile is <c>Scale</c>× larger than the input
+/// (<c>[1,TileSize,TileSize,3]</c> → <c>[1,TileSize*Scale,TileSize*Scale,3]</c>).
+/// Needs its own batch only because the output length differs from the input.</summary>
+public interface IQnnUpscaleBatch : IDisposable {
+    int TileSize { get; }
+    int Scale { get; }
+    float[][] RunBatch(IReadOnlyList<float[]> tiles);
+}
+
+/// <summary>Pass-1 upscale runner: records each LR input tile, returns a zero HR
+/// output of the model's (scale²·larger) shape (discarded). Pure CPU.</summary>
+public sealed class UpscaleRecordingTileRunner : IRknnUpscaleTileRunner {
+    private readonly int _outLen;
+    public int TileSize { get; }
+    public int Scale { get; }
+    public List<float[]> Inputs { get; } = new();
+
+    public UpscaleRecordingTileRunner(int tileSize, int scale) {
+        TileSize = tileSize;
+        Scale = scale;
+        _outLen = tileSize * scale * tileSize * scale * 3;
+    }
+
+    public float[] RunTile(float[] nhwcInput) {
+        Inputs.Add((float[])nhwcInput.Clone());
+        return new float[_outLen];
+    }
+
+    public void Dispose() { }
+}
+
+/// <summary>Pass-2 upscale runner: returns the pre-computed HR outputs in call
+/// order. Pure CPU.</summary>
+public sealed class UpscaleReplayingTileRunner : IRknnUpscaleTileRunner {
+    private readonly float[][] _outputs;
+    private int _i;
+    public int TileSize { get; }
+    public int Scale { get; }
+
+    public UpscaleReplayingTileRunner(int tileSize, int scale, float[][] outputs) {
+        TileSize = tileSize;
+        Scale = scale;
+        _outputs = outputs;
+    }
+
+    public float[] RunTile(float[] nhwcInput) {
+        if (_i >= _outputs.Length)
+            throw new QnnException($"upscale replay overrun: asked for tile {_i} but only " +
+                                   $"{_outputs.Length} were batched (pass mismatch)");
+        return _outputs[_i++];
+    }
+
+    public void Dispose() { }
+}
+
+/// <summary>Real upscale batch executor. Same single-input <c>qnn-net-run</c> path
+/// as <see cref="QnnNetRunBatch"/>, but each output is <c>(TileSize*Scale)²·3</c>
+/// fp32. Device-validated on the Q6A only (Windows tests inject a fake).</summary>
+public sealed class QnnUpscaleNetRunBatch : IQnnUpscaleBatch {
+    private readonly string _contextBin;
+    private readonly ILogger _logger;
+    private readonly int _outLen;
+    public int TileSize { get; }
+    public int Scale { get; }
+
+    public QnnUpscaleNetRunBatch(string contextBin, int tileSize, int scale, ILogger logger) {
+        _contextBin = contextBin;
+        TileSize = tileSize;
+        Scale = scale;
+        _logger = logger;
+        _outLen = tileSize * scale * tileSize * scale * 3;
+    }
+
+    public float[][] RunBatch(IReadOnlyList<float[]> tiles) {
+        if (tiles.Count == 0) return Array.Empty<float[]>();
+        var work = Directory.CreateTempSubdirectory("polaris-qnn-upscale-");
+        try {
+            var listPath = Path.Combine(work.FullName, "inputs.txt");
+            using (var lw = new StreamWriter(listPath)) {
+                for (int i = 0; i < tiles.Count; i++) {
+                    var raw = Path.Combine(work.FullName, $"in_{i}.raw");
+                    WriteFloats(raw, tiles[i]);
+                    lw.WriteLine(raw);
+                }
+            }
+
+            var htpCfg = Path.Combine(work.FullName, "htp.json");
+            File.WriteAllText(htpCfg, "{ \"devices\": [ { \"dsp_arch\": \"v68\", \"pd_session\": \"unsigned\" } ] }");
+            var beCfg = Path.Combine(work.FullName, "backend_ext.json");
+            File.WriteAllText(beCfg,
+                "{ \"backend_extensions\": { \"shared_library_path\": \"libQnnHtpNetRunExtensions.so\", "
+                + "\"config_file_path\": \"" + htpCfg.Replace("\\", "/") + "\" } }");
+
+            var outDir = Path.Combine(work.FullName, "out");
+            Directory.CreateDirectory(outDir);
+            RunNetRun(listPath, beCfg, outDir);
+
+            var outputs = new float[tiles.Count][];
+            for (int i = 0; i < tiles.Count; i++) {
+                var resultDir = Path.Combine(outDir, $"Result_{i}");
+                var raw = Directory.Exists(resultDir)
+                    ? Directory.EnumerateFiles(resultDir, "*.raw").FirstOrDefault()
+                    : null;
+                if (raw == null)
+                    throw new QnnException($"qnn-net-run produced no output for upscale tile {i} (looked in {resultDir})");
+                outputs[i] = ReadFloats(raw, _outLen);
+            }
+            return outputs;
+        } finally {
+            try { work.Delete(recursive: true); } catch { }
+        }
+    }
+
+    private void RunNetRun(string inputList, string backendExt, string outDir) {
+        var psi = new ProcessStartInfo {
+            FileName = QnnRuntime.NetRunPath,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        psi.ArgumentList.Add("--backend"); psi.ArgumentList.Add(QnnRuntime.HtpBackendPath);
+        psi.ArgumentList.Add("--retrieve_context"); psi.ArgumentList.Add(_contextBin);
+        psi.ArgumentList.Add("--config_file"); psi.ArgumentList.Add(backendExt);
+        psi.ArgumentList.Add("--input_list"); psi.ArgumentList.Add(inputList);
+        psi.ArgumentList.Add("--output_dir"); psi.ArgumentList.Add(outDir);
+        var libDir = Path.Combine(QnnRuntime.QairtRoot, "lib");
+        var existingLd = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
+        psi.Environment["LD_LIBRARY_PATH"] = string.IsNullOrEmpty(existingLd) ? libDir : $"{libDir}:{existingLd}";
+        psi.Environment["ADSP_LIBRARY_PATH"] = QnnRuntime.AdspLibraryPath;
+
+        using var p = Process.Start(psi) ?? throw new QnnException("failed to start qnn-net-run");
+        string stderr = p.StandardError.ReadToEnd();
+        p.StandardOutput.ReadToEnd();
+        p.WaitForExit();
+        if (p.ExitCode != 0)
+            throw new QnnException($"qnn-net-run (upscale) exited {p.ExitCode}: {Tail(stderr)}");
+    }
+
+    private static void WriteFloats(string path, float[] data) {
+        using var fs = File.Create(path);
+        using var bw = new BinaryWriter(fs);
+        foreach (var f in data) bw.Write(f);
+    }
+
+    private static float[] ReadFloats(string path, int expected) {
+        var bytes = File.ReadAllBytes(path);
+        int n = bytes.Length / sizeof(float);
+        var outp = new float[Math.Max(n, expected)];
+        Buffer.BlockCopy(bytes, 0, outp, 0, n * sizeof(float));
+        return outp;
+    }
+
+    private static string Tail(string s, int max = 400) =>
+        string.IsNullOrEmpty(s) ? "(no stderr)" : (s.Length <= max ? s : s[^max..]);
+
+    public void Dispose() { }
+}
+
 /// <summary>Thrown when the QNN/HTP path fails. Callers catch this and fall back
 /// to the GraXpert CLI inference path.</summary>
 public sealed class QnnException : Exception {

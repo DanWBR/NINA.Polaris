@@ -41,14 +41,18 @@ public sealed class QnnInferenceService {
     private readonly ILogger<QnnInferenceService> _logger;
     private readonly Func<string, int, int, IQnnTileBatch> _batchFactory;
     private readonly Func<string, int, IQnnDeconBatch> _deconBatchFactory;
+    private readonly Func<string, int, int, IQnnUpscaleBatch> _upscaleBatchFactory;
 
     private const int Tile = 256;
     private const int ModelChannels = 3;
     private const int DeconTile = 512;
+    private const int UpscaleLrTile = 128;
+    private const int UpscaleScale = 2;
 
     public QnnInferenceService(OnnxModelRegistry registry, ILogger<QnnInferenceService> logger,
                                Func<string, int, int, IQnnTileBatch>? batchFactory = null,
-                               Func<string, int, IQnnDeconBatch>? deconBatchFactory = null) {
+                               Func<string, int, IQnnDeconBatch>? deconBatchFactory = null,
+                               Func<string, int, int, IQnnUpscaleBatch>? upscaleBatchFactory = null) {
         _registry = registry;
         _logger = logger;
         // Default: drive qnn-net-run; tests inject a fake batch.
@@ -56,6 +60,8 @@ public sealed class QnnInferenceService {
             ?? ((bin, tile, ch) => new QnnNetRunBatch(bin, tile, ch, logger));
         _deconBatchFactory = deconBatchFactory
             ?? ((bin, tile) => new QnnDeconNetRunBatch(bin, tile, logger));
+        _upscaleBatchFactory = upscaleBatchFactory
+            ?? ((bin, tile, scale) => new QnnUpscaleNetRunBatch(bin, tile, scale, logger));
     }
 
     /// <summary>True when this machine can run QNN/HTP models at all.</summary>
@@ -194,6 +200,85 @@ public sealed class QnnInferenceService {
         return new QnnResult(
             new BaseImageData(outPixels, img.Properties, img.MetaData),
             null, sw.Elapsed.TotalMilliseconds, tiles, version);
+    }
+
+    /// <summary>Whether a Halo Removal or Upscale context binary is available.
+    /// Both are single-family Polaris models (<c>halo</c> / <c>upscale</c>).</summary>
+    public bool CanHandleFamily(string family, string? version,
+                                out string? binPath, out string resolvedVersion) {
+        binPath = null;
+        resolvedVersion = "";
+        if (!IsAvailable) return false;
+        var resolved = ResolveModel(family, version);
+        if (resolved == null) return false;
+        (binPath, resolvedVersion) = resolved.Value;
+        return true;
+    }
+
+    /// <summary>
+    /// Run Halo Removal on the Hexagon NPU. The halo model shares the Denoise
+    /// contract (single-input NHWC 256, 3→3, per-channel MAD-normalize + strength
+    /// blend) — the browser's HaloRemovalPipeline just runs DenoisePipeline with
+    /// <c>family:'halo'</c> — so this reuses <see cref="RknnPipelines.RunDenoise"/>
+    /// and the standard single-input batch verbatim.
+    /// </summary>
+    public QnnResult RunHalo(BaseImageData img, double strength, string? version = null) {
+        var (binPath, ver) = ResolveModel("halo", version)
+            ?? throw new QnnException($"no QNN context binary for halo ({Arch})");
+
+        int w = img.Properties.Width, h = img.Properties.Height;
+        int channels = img.Properties.Channels >= 3 ? 3 : 1;
+        const double clip = 10.0;   // halo v1.0.0 uses the v2-style clip
+        var sw = Stopwatch.StartNew();
+
+        using var batch = _batchFactory(binPath, Tile, ModelChannels);
+        var rec = new RecordingTileRunner(Tile, ModelChannels);
+        RknnPipelines.RunDenoise(rec, img.Data, w, h, channels, strength, clip);
+        var outs = batch.RunBatch(rec.Inputs);
+        rec.Inputs.Clear();
+        int tiles = outs.Length;
+        var rep = new ReplayingTileRunner(Tile, ModelChannels, outs);
+        var outPixels = RknnPipelines.RunDenoise(rep, img.Data, w, h, channels, strength, clip);
+
+        sw.Stop();
+        _logger.LogInformation("QNN Halo halo/{Ver} {Arch} {W}x{H}c{Ch} {Tiles} tiles in {Ms} ms",
+            ver, Arch, w, h, channels, tiles, sw.ElapsedMilliseconds);
+        return new QnnResult(
+            new BaseImageData(outPixels, img.Properties, img.MetaData),
+            null, sw.Elapsed.TotalMilliseconds, tiles, ver);
+    }
+
+    /// <summary>
+    /// Run super-resolution Upscale on the Hexagon NPU. Single-input but the model
+    /// output is <see cref="UpscaleScale"/>× larger, so it uses
+    /// <see cref="RknnPipelines.RunUpscale"/> + the scale-aware
+    /// <see cref="IQnnUpscaleBatch"/>. The returned <see cref="QnnResult.Image"/>
+    /// carries the enlarged dimensions.
+    /// </summary>
+    public QnnResult RunUpscale(BaseImageData img, string? version = null) {
+        var (binPath, ver) = ResolveModel("upscale", version)
+            ?? throw new QnnException($"no QNN context binary for upscale ({Arch})");
+
+        int w = img.Properties.Width, h = img.Properties.Height;
+        int channels = img.Properties.Channels >= 3 ? 3 : 1;
+        var sw = Stopwatch.StartNew();
+
+        using var batch = _upscaleBatchFactory(binPath, UpscaleLrTile, UpscaleScale);
+        var rec = new UpscaleRecordingTileRunner(UpscaleLrTile, UpscaleScale);
+        RknnPipelines.RunUpscale(rec, img.Data, w, h, channels);
+        var outs = batch.RunBatch(rec.Inputs);
+        rec.Inputs.Clear();
+        int tiles = outs.Length;
+        var rep = new UpscaleReplayingTileRunner(UpscaleLrTile, UpscaleScale, outs);
+        var (outPixels, ow, oh) = RknnPipelines.RunUpscale(rep, img.Data, w, h, channels);
+
+        sw.Stop();
+        var props = img.Properties with { Width = ow, Height = oh };
+        _logger.LogInformation("QNN Upscale upscale/{Ver} {Arch} {W}x{H}->{OW}x{OH}c{Ch} {Tiles} tiles in {Ms} ms",
+            ver, Arch, w, h, ow, oh, channels, tiles, sw.ElapsedMilliseconds);
+        return new QnnResult(
+            new BaseImageData(outPixels, props, img.MetaData),
+            null, sw.Elapsed.TotalMilliseconds, tiles, ver);
     }
 
     /// <summary>
