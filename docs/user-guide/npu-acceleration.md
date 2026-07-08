@@ -152,7 +152,14 @@ version-locked Qualcomm code — see `licenses/QAIRT-LICENSE.txt`).
    qai-hub configure --api_token <YOUR_TOKEN>            # one-time, if not already
    python3 scripts/qnn-convert.py --dry-run              # preview source/output paths
    python3 scripts/qnn-convert.py                        # convert Polaris BGE + Denoise
+   python3 scripts/qnn-convert.py --all                  # + halo, upscale, decon
    ```
+
+   `--all` also converts halo / upscale / decon (the converter handles decon's
+   two inputs — image NCHW 512 + a `params` tensor — automatically). Those
+   `.bin` build fine but the **host QNN path only serves BGE + Denoise today**
+   (`QnnInferenceService.TryFamily`); halo/upscale/decon still run browser-side,
+   so their binaries are staged for when that path is extended, not yet used.
 
    (`qai_hub` = cloud AI Hub path, in the `qnn` env. `qairt-py` is the separate
    local `qairt-converter` toolchain — same result offline, not used here.)
