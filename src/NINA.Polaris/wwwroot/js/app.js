@@ -17289,7 +17289,7 @@ function ninaApp() {
 
         // ---- Equipment rigs ----
 
-        async loadRigs() {
+        async loadRigs(attempt = 0) {
             try {
                 const data = await this.apiGet('/api/equipment/rigs');
                 this.rigs = data.rigs || [];
@@ -17298,7 +17298,19 @@ function ninaApp() {
                 // selections so the user doesn't have to re-select.
                 const active = this.rigs.find(r => r.id === this.activeRigId);
                 if (active) this._applyRigToChoices(active);
-            } catch (e) { /* server may be unreachable on first load */ }
+                // The server always seeds at least one rig, so an empty list
+                // means the call didn't really land. Unlike the WS-fed data,
+                // this is a ONE-SHOT load at startup: in the iOS app the UI
+                // runs in a cross-origin WKWebView iframe whose first requests
+                // can race the connection / self-signed-cert handshake and
+                // fail, leaving the RIGS list empty forever. Retry with backoff.
+                if (this.rigs.length === 0 && attempt < 5) {
+                    setTimeout(() => this.loadRigs(attempt + 1), 800 * (attempt + 1));
+                }
+            } catch (e) {
+                // Same rationale — a transient first-load failure must self-heal.
+                if (attempt < 5) setTimeout(() => this.loadRigs(attempt + 1), 800 * (attempt + 1));
+            }
         },
 
         _applyRigToChoices(rig) {
@@ -20490,11 +20502,17 @@ function ninaApp() {
         // Returns the started-job data ({ jobId, ... }) or null if declined.
         // Born from a near tripod-strike on an AM3 after a flip + guard trip.
         async _postSlewAndCenter(body) {
-            const post = (b) => this.apiPost('/api/sky/slew-and-center', b);
-            let resp = await post(body);
-            if (resp.status === 409) {
+            // apiPost (→ apiFetch) THROWS ApiError on any non-2xx, so a 409
+            // arrives as a thrown error, not a returned Response — we must
+            // catch it (the old `resp.status === 409` check was dead code, which
+            // is why a flagged slew just errored out with no confirm prompt).
+            const post = async (b) => (await this.apiPost('/api/sky/slew-and-center', b)).json();
+            try {
+                return await post(body);
+            } catch (e) {
+                if (!e || e.status !== 409) throw e;   // real failure
                 let info = {};
-                try { info = await resp.json(); } catch { /* ignore */ }
+                try { info = JSON.parse(e.body || '{}'); } catch { /* ignore */ }
                 const msg = (info.kind === 'safety-stop')
                     ? ('⚠ ' + (info.reason || 'Mount safety stop is active.')
                         + '\n\nRunning Find Home first is strongly recommended so the mount '
@@ -20502,15 +20520,9 @@ function ninaApp() {
                     : ('⚠ This slew was flagged: ' + (info.reason || 'safety check')
                         + '.\n\nThis is the kind of move that can swing the mount the long way '
                         + 'toward the pier/tripod. Continue anyway?');
-                if (!confirm(msg)) return null;
-                resp = await post({ ...body, force: true });
+                if (!confirm(msg)) return null;   // declined
+                return await post({ ...body, force: true });
             }
-            if (!resp.ok) {
-                let e = {};
-                try { e = await resp.json(); } catch { /* ignore */ }
-                throw new Error(e.error || ('HTTP ' + resp.status));
-            }
-            return resp.json();
         },
 
         // Center on the solved coordinates. centerOnly=true skips the
