@@ -214,6 +214,169 @@ public sealed class QnnNetRunBatch : IQnnTileBatch {
     public void Dispose() { }
 }
 
+// ─── Deconvolution: two-input (image + params) batch ──────────────────────
+
+/// <summary>Batch executor for the GraXpert deconvolution models, which take a
+/// SECOND input (the <c>params</c> tensor <c>[sigmaNorm, effStrength]</c>) beyond
+/// the image tile. The params are constant for the whole image, so they're
+/// written once and broadcast to every tile's <c>--input_list</c> line.</summary>
+public interface IQnnDeconBatch : IDisposable {
+    int TileSize { get; }
+
+    /// <summary>Run every image tile (row-major <c>[1,1,TileSize,TileSize]</c> fp32)
+    /// paired with the shared <paramref name="pars"/> <c>[sigmaNorm, effStrength]</c>,
+    /// returning one <c>TileSize*TileSize</c> residual per input in order.</summary>
+    float[][] RunBatch(IReadOnlyList<float[]> imageTiles, float[] pars);
+}
+
+/// <summary>Pass-1 decon runner: records each image tile + the (constant) params,
+/// returns a zero residual (discarded). Pure CPU.</summary>
+public sealed class DeconRecordingTileRunner : IRknnDeconTileRunner {
+    public int TileSize { get; }
+    public List<float[]> Inputs { get; } = new();
+    public float[]? Params { get; private set; }
+
+    public DeconRecordingTileRunner(int tileSize) { TileSize = tileSize; }
+
+    public float[] RunTile(float[] chwInput, float[] pars) {
+        Inputs.Add((float[])chwInput.Clone());
+        Params ??= (float[])pars.Clone();
+        return new float[chwInput.Length];
+    }
+
+    public void Dispose() { }
+}
+
+/// <summary>Pass-2 decon runner: returns the pre-computed batch residuals in call
+/// order. Pure CPU.</summary>
+public sealed class DeconReplayingTileRunner : IRknnDeconTileRunner {
+    private readonly float[][] _outputs;
+    private int _i;
+    public int TileSize { get; }
+
+    public DeconReplayingTileRunner(int tileSize, float[][] outputs) {
+        TileSize = tileSize;
+        _outputs = outputs;
+    }
+
+    public float[] RunTile(float[] chwInput, float[] pars) {
+        if (_i >= _outputs.Length)
+            throw new QnnException($"decon replay overrun: asked for tile {_i} but only " +
+                                   $"{_outputs.Length} were batched (pass mismatch)");
+        return _outputs[_i++];
+    }
+
+    public void Dispose() { }
+}
+
+/// <summary>Real decon batch executor. Like <see cref="QnnNetRunBatch"/> but every
+/// <c>--input_list</c> line carries TWO inputs in graph order — the image tile then
+/// the shared params raw — matching the model's <c>[gen_input_image, params]</c>
+/// input order. Device-validated on the Q6A only (Windows tests inject a fake).</summary>
+public sealed class QnnDeconNetRunBatch : IQnnDeconBatch {
+    private readonly string _contextBin;
+    private readonly ILogger _logger;
+    private readonly int _outLen;
+    public int TileSize { get; }
+
+    public QnnDeconNetRunBatch(string contextBin, int tileSize, ILogger logger) {
+        _contextBin = contextBin;
+        TileSize = tileSize;
+        _logger = logger;
+        _outLen = tileSize * tileSize;   // decon output is single-channel [1,1,T,T]
+    }
+
+    public float[][] RunBatch(IReadOnlyList<float[]> tiles, float[] pars) {
+        if (tiles.Count == 0) return Array.Empty<float[]>();
+        var work = Directory.CreateTempSubdirectory("polaris-qnn-decon-");
+        try {
+            // Shared params raw (written once, referenced by every line).
+            var parsPath = Path.Combine(work.FullName, "params.raw");
+            WriteFloats(parsPath, pars);
+
+            var listPath = Path.Combine(work.FullName, "inputs.txt");
+            using (var lw = new StreamWriter(listPath)) {
+                for (int i = 0; i < tiles.Count; i++) {
+                    var raw = Path.Combine(work.FullName, $"in_{i}.raw");
+                    WriteFloats(raw, tiles[i]);
+                    // Two inputs per line, in the model's graph-input order:
+                    // image first, params second.
+                    lw.WriteLine($"{raw} {parsPath}");
+                }
+            }
+
+            var htpCfg = Path.Combine(work.FullName, "htp.json");
+            File.WriteAllText(htpCfg, "{ \"devices\": [ { \"dsp_arch\": \"v68\", \"pd_session\": \"unsigned\" } ] }");
+            var beCfg = Path.Combine(work.FullName, "backend_ext.json");
+            File.WriteAllText(beCfg,
+                "{ \"backend_extensions\": { \"shared_library_path\": \"libQnnHtpNetRunExtensions.so\", "
+                + "\"config_file_path\": \"" + htpCfg.Replace("\\", "/") + "\" } }");
+
+            var outDir = Path.Combine(work.FullName, "out");
+            Directory.CreateDirectory(outDir);
+            RunNetRun(listPath, beCfg, outDir);
+
+            var outputs = new float[tiles.Count][];
+            for (int i = 0; i < tiles.Count; i++) {
+                var resultDir = Path.Combine(outDir, $"Result_{i}");
+                var raw = Directory.Exists(resultDir)
+                    ? Directory.EnumerateFiles(resultDir, "*.raw").FirstOrDefault()
+                    : null;
+                if (raw == null)
+                    throw new QnnException($"qnn-net-run produced no output for decon tile {i} (looked in {resultDir})");
+                outputs[i] = ReadFloats(raw, _outLen);
+            }
+            return outputs;
+        } finally {
+            try { work.Delete(recursive: true); } catch { }
+        }
+    }
+
+    private void RunNetRun(string inputList, string backendExt, string outDir) {
+        var psi = new ProcessStartInfo {
+            FileName = QnnRuntime.NetRunPath,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        psi.ArgumentList.Add("--backend"); psi.ArgumentList.Add(QnnRuntime.HtpBackendPath);
+        psi.ArgumentList.Add("--retrieve_context"); psi.ArgumentList.Add(_contextBin);
+        psi.ArgumentList.Add("--config_file"); psi.ArgumentList.Add(backendExt);
+        psi.ArgumentList.Add("--input_list"); psi.ArgumentList.Add(inputList);
+        psi.ArgumentList.Add("--output_dir"); psi.ArgumentList.Add(outDir);
+        var libDir = Path.Combine(QnnRuntime.QairtRoot, "lib");
+        var existingLd = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
+        psi.Environment["LD_LIBRARY_PATH"] = string.IsNullOrEmpty(existingLd) ? libDir : $"{libDir}:{existingLd}";
+        psi.Environment["ADSP_LIBRARY_PATH"] = QnnRuntime.AdspLibraryPath;
+
+        using var p = Process.Start(psi) ?? throw new QnnException("failed to start qnn-net-run");
+        string stderr = p.StandardError.ReadToEnd();
+        p.StandardOutput.ReadToEnd();
+        p.WaitForExit();
+        if (p.ExitCode != 0)
+            throw new QnnException($"qnn-net-run (decon) exited {p.ExitCode}: {Tail(stderr)}");
+    }
+
+    private static void WriteFloats(string path, float[] data) {
+        using var fs = File.Create(path);
+        using var bw = new BinaryWriter(fs);
+        foreach (var f in data) bw.Write(f);
+    }
+
+    private static float[] ReadFloats(string path, int expected) {
+        var bytes = File.ReadAllBytes(path);
+        int n = bytes.Length / sizeof(float);
+        var outp = new float[Math.Max(n, expected)];
+        Buffer.BlockCopy(bytes, 0, outp, 0, n * sizeof(float));
+        return outp;
+    }
+
+    private static string Tail(string s, int max = 400) =>
+        string.IsNullOrEmpty(s) ? "(no stderr)" : (s.Length <= max ? s : s[^max..]);
+
+    public void Dispose() { }
+}
+
 /// <summary>Thrown when the QNN/HTP path fails. Callers catch this and fall back
 /// to the GraXpert CLI inference path.</summary>
 public sealed class QnnException : Exception {

@@ -453,17 +453,25 @@ public class GraXpertService {
     private GraXpertResult? TryRunQnn(string inputPath, GraXpertOptions opts,
                                       CancellationToken ct, Action<string>? onLog) {
         try {
-            if (!_qnn!.CanHandle(opts.Operation, opts.AiVersion, out _, out var ver))
+            bool decon = opts.Operation == GraXpertOperation.Deconvolution;
+            string ver;
+            if (decon) {
+                if (!_qnn!.CanHandleDecon(opts, out _, out ver, out _))
+                    return null;
+            } else if (!_qnn!.CanHandle(opts.Operation, opts.AiVersion, out _, out ver)) {
                 return null;
+            }
 
-            onLog?.Invoke($"[NPU] running {opts.Operation} on the Qualcomm Hexagon NPU (qnn {ver})");
+            onLog?.Invoke($"[NPU] running {opts.Operation}"
+                + (decon ? $" ({opts.DeconTarget})" : "")
+                + $" on the Qualcomm Hexagon NPU (qnn {ver})");
             var sw = Stopwatch.StartNew();
 
             BaseImageData img;
             using (var fs = File.OpenRead(inputPath)) img = FITSReader.Read(fs);
             ct.ThrowIfCancellationRequested();
 
-            var res = _qnn.Run(img, opts);
+            var res = decon ? _qnn.RunDecon(img, opts) : _qnn.Run(img, opts);
 
             var outputPath = DefaultOutputPath(inputPath, opts);
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);

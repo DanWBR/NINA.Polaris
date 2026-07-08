@@ -68,13 +68,14 @@ DEFAULT_TARGETS = [
     ("denoise-ai-models", "polaris-1.0"),
 ]
 
-# EXTRA (via --all) = families NOT yet wired into the host QNN path. Their `.bin`
-# convert fine (halo/upscale are single-input NHWC like bge; decon has two inputs
-# — image NCHW 512 + a `params` tensor — which the converter handles generically),
-# but QnnInferenceService.TryFamily + the tile pipelines must be extended before
-# the runtime actually uses them (today they run browser-side). Decon versions are
-# GraXpert NonCommercial weights, so those `.bin` stay gitignored like the GraXpert
-# bge/denoise ones; halo/upscale are Polaris weights.
+# EXTRA (via --all). Status per family:
+#   • decon (stars/objects): WIRED on the QNN path (QnnInferenceService.RunDecon,
+#     two inputs — image NCHW 512 + a `params` tensor). Its `.bin` runs on the
+#     Hexagon NPU as soon as it exists. Weights are GraXpert NonCommercial, so
+#     those `.bin` stay gitignored like the GraXpert bge/denoise ones.
+#   • halo, upscale (single-input NHWC, Polaris weights): the `.bin` convert fine
+#     but there's NO server inference path yet (they run browser-side), so these
+#     are staged for a future host extension, not yet used at runtime.
 EXTRA_TARGETS = [
     ("halo-ai-models", "polaris-1.0.0"),
     ("upscale-ai-models", "polaris-1.0.0"),

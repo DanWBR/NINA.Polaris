@@ -32,24 +32,30 @@ namespace NINA.Polaris.Services.Qnn;
 /// The tiling / normalization / artifact-correction math is the canonical
 /// <see cref="RknnPipelines"/> (shared GraXpert-NPU logic), reused unchanged via
 /// the record/replay runners in <see cref="QnnTileBatch"/> so the only
-/// QNN-specific code is the batched <c>qnn-net-run</c> executor. Only BGE and
-/// Denoise are accelerated (decon stays on the CLI, as on the Rockchip path).
+/// QNN-specific code is the batched <c>qnn-net-run</c> executor. BGE, Denoise and
+/// Deconvolution (the two-input stars/objects models, via <see cref="RunDecon"/>)
+/// are accelerated here; on the Rockchip path decon still falls back to the CLI.
 /// </summary>
 public sealed class QnnInferenceService {
     private readonly OnnxModelRegistry _registry;
     private readonly ILogger<QnnInferenceService> _logger;
     private readonly Func<string, int, int, IQnnTileBatch> _batchFactory;
+    private readonly Func<string, int, IQnnDeconBatch> _deconBatchFactory;
 
     private const int Tile = 256;
     private const int ModelChannels = 3;
+    private const int DeconTile = 512;
 
     public QnnInferenceService(OnnxModelRegistry registry, ILogger<QnnInferenceService> logger,
-                               Func<string, int, int, IQnnTileBatch>? batchFactory = null) {
+                               Func<string, int, int, IQnnTileBatch>? batchFactory = null,
+                               Func<string, int, IQnnDeconBatch>? deconBatchFactory = null) {
         _registry = registry;
         _logger = logger;
         // Default: drive qnn-net-run; tests inject a fake batch.
         _batchFactory = batchFactory
             ?? ((bin, tile, ch) => new QnnNetRunBatch(bin, tile, ch, logger));
+        _deconBatchFactory = deconBatchFactory
+            ?? ((bin, tile) => new QnnDeconNetRunBatch(bin, tile, logger));
     }
 
     /// <summary>True when this machine can run QNN/HTP models at all.</summary>
@@ -121,6 +127,73 @@ public sealed class QnnInferenceService {
         _logger.LogInformation("QNN {Op} {Family}/{Ver} {Arch} {W}x{H}c{Ch} {Tiles} tiles in {Ms} ms",
             opts.Operation, family, version, Arch, w, h, channels, tiles, sw.ElapsedMilliseconds);
         return new QnnResult(outImage, bgImage, sw.Elapsed.TotalMilliseconds, tiles, version);
+    }
+
+    /// <summary>
+    /// Whether the NPU can serve a deconvolution run: NPU present, op is
+    /// Deconvolution, and a context binary exists for the target's family
+    /// (<c>decon-stars</c> / <c>decon-objects</c> per <see cref="GraXpertOptions.DeconTarget"/>).
+    /// </summary>
+    public bool CanHandleDecon(GraXpertOptions opts, out string? binPath,
+                               out string version, out string family) {
+        binPath = null;
+        version = "";
+        family = DeconFamily(opts);
+        if (!IsAvailable) return false;
+        if (opts.Operation != GraXpertOperation.Deconvolution) return false;
+        var resolved = ResolveModel(family, opts.AiVersion);
+        if (resolved == null) return false;
+        (binPath, version) = resolved.Value;
+        return true;
+    }
+
+    private static string DeconFamily(GraXpertOptions opts) =>
+        string.Equals(opts.DeconTarget, "objects", StringComparison.OrdinalIgnoreCase)
+            ? "decon-objects" : "decon-stars";
+
+    /// <summary>
+    /// Run deconvolution (stars / objects) on the Hexagon NPU. Unlike BGE/Denoise
+    /// this is a TWO-input model (image tile + <c>[sigmaNorm, effStrength]</c>
+    /// params), so it uses <see cref="RknnPipelines.RunDecon"/> and the two-input
+    /// <see cref="IQnnDeconBatch"/> via the same record → batch → replay trick. The
+    /// params are constant across tiles, so the recording runner captures them once
+    /// and the batch broadcasts them. Caller should have checked
+    /// <see cref="CanHandleDecon"/>; throws on failure so the caller falls back to
+    /// the GraXpert CLI.
+    /// </summary>
+    public QnnResult RunDecon(BaseImageData img, GraXpertOptions opts) {
+        string family = DeconFamily(opts);
+        var (binPath, version) = ResolveModel(family, opts.AiVersion)
+            ?? throw new QnnException($"no QNN context binary for {family} ({Arch})");
+
+        int w = img.Properties.Width, h = img.Properties.Height;
+        int channels = img.Properties.Channels >= 3 ? 3 : 1;
+        var sw = Stopwatch.StartNew();
+
+        using var batch = _deconBatchFactory(binPath, DeconTile);
+
+        // Pass 1: record the ordered image tiles + the (constant) params.
+        var rec = new DeconRecordingTileRunner(DeconTile);
+        RknnPipelines.RunDecon(rec, img.Data, w, h, channels,
+            opts.DeconTarget, version, opts.DeconPsfSize, opts.DeconStrength);
+        var pars = rec.Params
+            ?? throw new QnnException("decon record pass captured no params (empty image?)");
+
+        var outs = batch.RunBatch(rec.Inputs, pars);
+        rec.Inputs.Clear();
+        int tiles = outs.Length;
+
+        // Pass 2: replay the residuals through the same pipeline for the result.
+        var rep = new DeconReplayingTileRunner(DeconTile, outs);
+        var outPixels = RknnPipelines.RunDecon(rep, img.Data, w, h, channels,
+            opts.DeconTarget, version, opts.DeconPsfSize, opts.DeconStrength);
+
+        sw.Stop();
+        _logger.LogInformation("QNN Decon {Family}/{Ver} {Arch} {W}x{H}c{Ch} {Tiles} tiles in {Ms} ms",
+            family, version, Arch, w, h, channels, tiles, sw.ElapsedMilliseconds);
+        return new QnnResult(
+            new BaseImageData(outPixels, img.Properties, img.MetaData),
+            null, sw.Elapsed.TotalMilliseconds, tiles, version);
     }
 
     /// <summary>

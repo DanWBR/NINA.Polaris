@@ -209,6 +209,72 @@ public class QnnLaneTests {
             "record→replay must reproduce the stars plane byte-for-byte");
     }
 
+    // ----- decon (two-input) record/replay -----
+
+    /// <summary>A deterministic "model": residual = 1% of the (normalized) input
+    /// tile. Pure function of the input, so record→replay must reproduce it.</summary>
+    private sealed class ScaleResidualRunner : IRknnDeconTileRunner {
+        public int TileSize => 512;
+        public float[] RunTile(float[] chwInput, float[] pars) {
+            var r = new float[chwInput.Length];
+            for (int i = 0; i < r.Length; i++) r[i] = chwInput[i] * 0.01f;
+            return r;
+        }
+        public void Dispose() { }
+    }
+
+    [Test]
+    public void DeconRecordingRunner_CapturesTilesAndParamsOnce() {
+        var rec = new DeconRecordingTileRunner(512);
+        var t1 = new float[] { 1, 2 };
+        var r = rec.RunTile(t1, new float[] { 0.3f, 0.4f });
+        Assert.That(r, Is.All.EqualTo(0f), "records return a zero residual (discarded)");
+        t1[0] = 999f;                                       // mutate after the call
+        Assert.That(rec.Inputs[0][0], Is.EqualTo(1f), "must capture a defensive copy");
+        rec.RunTile(new float[] { 5, 6 }, new float[] { 0.9f, 0.9f });
+        Assert.That(rec.Params, Is.EqualTo(new float[] { 0.3f, 0.4f }),
+            "params are constant across tiles — captured once from the first call");
+    }
+
+    [Test]
+    public void DeconReplayingRunner_ReturnsInOrder_ThenOverruns() {
+        var outs = new[] { new float[] { 1 }, new float[] { 2 } };
+        var rep = new DeconReplayingTileRunner(512, outs);
+        Assert.That(rep.RunTile(Array.Empty<float>(), Array.Empty<float>())[0], Is.EqualTo(1f));
+        Assert.That(rep.RunTile(Array.Empty<float>(), Array.Empty<float>())[0], Is.EqualTo(2f));
+        Assert.Throws<QnnException>(() => rep.RunTile(Array.Empty<float>(), Array.Empty<float>()));
+    }
+
+    [Test]
+    public void RecordReplay_ReproducesDirectDecon_Exactly() {
+        const int w = 300, h = 220;   // < one 512 tile → exercises padding
+        var plane = Gradient(w, h, 8000, 12000);
+
+        // Direct: the deterministic model straight through the shared pipeline.
+        using var direct = new ScaleResidualRunner();
+        var d = RknnPipelines.RunDecon(direct, plane, w, h, 1, "stars", "1.0.0", 4.0, 0.5);
+
+        // Record pass: capture the ordered image tiles.
+        var rec = new DeconRecordingTileRunner(512);
+        RknnPipelines.RunDecon(rec, plane, w, h, 1, "stars", "1.0.0", 4.0, 0.5);
+
+        // The "NPU batch" applies the SAME model fn to each recorded input.
+        var outs = new float[rec.Inputs.Count][];
+        for (int i = 0; i < outs.Length; i++) {
+            var src = rec.Inputs[i];
+            var o = new float[src.Length];
+            for (int j = 0; j < o.Length; j++) o[j] = src[j] * 0.01f;
+            outs[i] = o;
+        }
+
+        // Replay pass: feed those back → must equal the direct run byte-for-byte.
+        var rep = new DeconReplayingTileRunner(512, outs);
+        var r2 = RknnPipelines.RunDecon(rep, plane, w, h, 1, "stars", "1.0.0", 4.0, 0.5);
+
+        Assert.That(r2, Is.EqualTo(d),
+            "decon record→replay must reproduce the direct pipeline byte-for-byte");
+    }
+
     [Test]
     public void RecordReplay_PerPassBatching_ReproducesDirectMultiPass() {
         // Multi-pass star removal feeds each pass's starless back as the next

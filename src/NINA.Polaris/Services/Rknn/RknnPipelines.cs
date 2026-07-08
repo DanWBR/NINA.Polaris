@@ -22,9 +22,10 @@ namespace NINA.Polaris.Services.Rknn;
 /// <see cref="IRknnTileRunner"/>, so the normalization / tiling / blending can
 /// be unit-tested with a mock runner (no NPU required).
 ///
-/// Only BGE (single forward pass) and Denoise (256/128/64 tiling) are
-/// implemented; deconvolution uses a different tile size (512), layout (NCHW)
-/// and multi-input contract, so it stays on the GraXpert CLI path for now.
+/// BGE (single forward pass), Denoise (256/128/64 tiling) and Deconvolution
+/// (512 NCHW, two-input image+params via <see cref="RunDecon"/>) are implemented.
+/// The QNN/Hexagon lane runs all three on the NPU; the Rockchip <c>RknnSession</c>
+/// only wires the single-input models, so decon there still falls back to the CLI.
 /// </summary>
 internal static class RknnPipelines {
     /// <summary>
