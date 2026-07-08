@@ -30,11 +30,15 @@ visibly lower quality on denoise (offered as the `--int8` "turbo" variant).
     -> submit_compile_job(--target_runtime qnn_context_binary --quantize_io)
     -> download -> wwwroot/graxpert/models/qnn/{family}-ai-models/{ver}/{family}_v68_int16.bin
 
-Requirements (run on a Linux/WSL box with a Qualcomm AI Hub account, NOT here)
------------------------------------------------------------------------------
-    python3 -m venv ~/qaihub && source ~/qaihub/bin/activate
-    pip install qai-hub onnx numpy
-    qai-hub configure --api_token <YOUR_TOKEN>        # one-time
+Requirements (run on the Linux box with a Qualcomm AI Hub account, NOT here)
+---------------------------------------------------------------------------
+This uses the cloud **Qualcomm AI Hub** path (`qai_hub`), which lives in the
+`qnn` env on the build box. (`qairt-py` is the separate *local* QAIRT-converter
+toolchain — `qairt-converter` + `qnn-context-binary-generator` — an alternative
+that does the same job offline; this script does not use it.)
+
+    source ~/qnn/bin/activate                         # env that has qai_hub
+    qai-hub configure --api_token <YOUR_TOKEN>        # one-time, if not already
     python3 scripts/qnn-convert.py                    # bge + denoise Polaris models
 
 The `.bin` this emits is safe to commit (our own weights). Commit it next to
@@ -178,11 +182,10 @@ def main():
             import qai_hub as hub  # type: ignore
             import numpy as np
         except ImportError:
-            print("qai_hub / numpy not found. This step runs on a Linux box with a "
-                  "Qualcomm AI Hub account:\n"
-                  "  python3 -m venv ~/qaihub && source ~/qaihub/bin/activate\n"
-                  "  pip install qai-hub onnx numpy\n"
-                  "  qai-hub configure --api_token <YOUR_TOKEN>\n"
+            print("qai_hub / numpy not found. Run this in the `qnn` env (the one "
+                  "with qai_hub) on the build box:\n"
+                  "  source ~/qnn/bin/activate\n"
+                  "  qai-hub configure --api_token <YOUR_TOKEN>   # if not already\n"
                   "Use --dry-run to preview source/output paths without it.")
             return 1
 

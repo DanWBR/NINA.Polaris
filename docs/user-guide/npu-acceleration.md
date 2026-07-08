@@ -148,12 +148,14 @@ version-locked Qualcomm code — see `licenses/QAIRT-LICENSE.txt`).
    commit, unlike the GraXpert NonCommercial ones) this whole flow is scripted:
 
    ```bash
-   python3 -m venv ~/qaihub && source ~/qaihub/bin/activate
-   pip install qai-hub onnx numpy
-   qai-hub configure --api_token <YOUR_TOKEN>            # one-time
+   source ~/qnn/bin/activate                             # env that has qai_hub
+   qai-hub configure --api_token <YOUR_TOKEN>            # one-time, if not already
    python3 scripts/qnn-convert.py --dry-run              # preview source/output paths
    python3 scripts/qnn-convert.py                        # convert Polaris BGE + Denoise
    ```
+
+   (`qai_hub` = cloud AI Hub path, in the `qnn` env. `qairt-py` is the separate
+   local `qairt-converter` toolchain — same result offline, not used here.)
 
    It reads the input name/shape from each `model.onnx`, runs the same
    w8a16 → `qnn_context_binary` flow, and drops `{family}_v68_int16.bin` under
