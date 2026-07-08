@@ -4,7 +4,7 @@
   "glanceTitle": "At a glance",
   "glance": [
     { "label": "10 tools", "text": "covering background extraction, denoising, deconvolution, star removal, halo removal, and super-resolution upscaling" },
-    { "label": "4 backends", "text": "browser GPU (WebGPU/WebGL), OpenCL, RKNN NPU (Rockchip RK3588), and Qualcomm QAIRT/QNN" },
+    { "label": "5 backends", "text": "browser GPU (WebGPU/WebGL), SBC GPU via OpenCL, Rockchip RKNN NPU, Qualcomm Hexagon NPU (QAIRT), plus an always-available CPU fallback" },
     { "label": "100% local", "text": "all inference runs on your device; models are cached in IndexedDB after the first download" },
     { "label": "4 precisions", "text": "fp32, fp16, int16, and int8 (Quantization-Aware Training) for a range of speed/size trade-offs" }
   ],
@@ -206,13 +206,14 @@
       "icon": "📱",
       "color": "#8b5cf6",
       "title": "QAIRT / QNN",
-      "tag": "Qualcomm Snapdragon",
-      "intro": "Qualcomm AI Runtime (QAIRT) and the QNN SDK target the Hexagon DSP/NPU and Adreno GPU in Snapdragon-based mini PCs such as the Radxa Dragon Q6A. Delivers maximum efficiency on Qualcomm silicon.",
+      "tag": "Qualcomm Hexagon",
+      "intro": "Qualcomm AI Runtime (QAIRT, formerly QNN) runs models on the Hexagon NPU (HTP) in Qualcomm SBCs such as the Radxa Dragon Q6A (QCS6490, Hexagon V68). The Hexagon HTP is integer-only, so Polaris ships int16 models as the default, near-fp16-quality path.",
       "items": [
-        { "label": "Hexagon NPU:", "text": "the QAIRT backend routes int8 models to the Hexagon DSP for the lowest power and latency" },
-        { "label": "Adreno GPU path:", "text": "fp16 models run on the Adreno GPU via the QNN GPU backend when Hexagon is unavailable" },
-        { "label": "QAT int8:", "text": "int8 models produced by Polaris's own Quantization-Aware Training are the primary target for QAIRT deployment" },
-        { "label": "Tested on:", "text": "Radxa Dragon Q6A (Snapdragon 865); CPU benchmark score 296, best-value board in our benchmark table" }
+        { "label": "Hexagon HTP (int16):", "text": "the production path runs int16 models at about 29.5 ms/tile on the Q6A — roughly 150x the CPU onnxruntime baseline — freeing the CPU for live stacking" },
+        { "label": "int8 turbo:", "text": "an int8 model is ~4x faster (~7.3 ms/tile) but visibly lower quality on denoise, so it is an optional 'turbo' mode rather than the default" },
+        { "label": "Integer-only, fp16 falls back:", "text": "the QCS6490 HTP has no fp16; fp16 models run on the GPU or CPU instead. The resolver prefers fp16 → int16 → int8, keeping fp16 for future SoCs whose HTP supports it" },
+        { "label": "Auto-detect + override:", "text": "detected via the Hexagon FastRPC bridge and the bundled QAIRT runtime; force it off with POLARIS_DISABLE_QNN=1" },
+        { "label": "Tested on:", "text": "Radxa Dragon Q6A (QCS6490, Hexagon V68); CPU benchmark score 296, best-value board in our benchmark table" }
       ]
     },
     {
