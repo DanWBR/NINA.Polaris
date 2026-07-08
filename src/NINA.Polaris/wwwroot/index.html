@@ -7223,17 +7223,24 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <div class="indi-group">
                                     <div class="indi-group-body">
                                         <template x-for="c in camCtrlActive().items" :key="c.id">
-                                            <div class="indi-prop">
+                                            <div class="indi-prop" x-data="{ showDesc: false }">
                                                 <div class="indi-prop-header">
                                                     <span class="indi-state-dot"
                                                           :class="c.writable ? 'indi-state-ok' : 'indi-state-idle'">●</span>
                                                     <strong x-text="c.name"></strong>
                                                     <button class="indi-help-icon" x-show="c.description"
                                                             :class="{ 'has-desc': !!c.description }"
-                                                            :title="c.description" @click.prevent>?</button>
+                                                            :title="c.description"
+                                                            @click="showDesc = !showDesc">?</button>
                                                     <span class="indi-prop-meta"
                                                           x-text="c.valueType + (c.writable ? '' : ' · read-only')"></span>
                                                 </div>
+
+                                                <!-- Description, revealed by the ? icon -->
+                                                <div x-show="showDesc &amp;&amp; c.description" x-cloak
+                                                     class="indi-help-builtin"
+                                                     style="margin:2px 0 6px;font-size:11px;"
+                                                     x-text="c.description"></div>
 
                                                 <!-- Boolean toggle -->
                                                 <template x-if="c.valueType === 'bool' && c.writable">
@@ -7256,14 +7263,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                             <input type="range" style="flex:1;min-width:80px;"
                                                                    :min="c.min" :max="c.max"
                                                                    :step="c.valueType === 'float' ? 'any' : 1"
-                                                                   :value="c.value"
-                                                                   @change="setCamCtrl(c, +$event.target.value)">
+                                                                   x-model.number="c.value"
+                                                                   @change="setCamCtrl(c, c.value)">
                                                             <input type="number" class="input-sm indi-input"
                                                                    style="width:82px;flex:0 0 82px;"
                                                                    :min="c.min" :max="c.max"
                                                                    :step="c.valueType === 'float' ? 'any' : 1"
-                                                                   :value="c.value"
-                                                                   @change="setCamCtrl(c, +$event.target.value)">
+                                                                   x-model.number="c.value"
+                                                                   @change="setCamCtrl(c, c.value)">
                                                             <button class="btn btn-sm" title="Reset to default"
                                                                     @click="setCamCtrl(c, c.default)">↺</button>
                                                         </div>
