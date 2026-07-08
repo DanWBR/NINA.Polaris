@@ -554,4 +554,88 @@ internal static class RknnPipelines {
         }
         return dst;
     }
+
+    // ─── Super-resolution / upscaling (Polaris UpscaleNet) ────────────────
+    private const float UpscaleClip = 10.0f;
+
+    /// <summary>
+    /// Super-resolution. Ported from <c>UpscalePipeline</c>: pre-upsampling SR
+    /// where each 128² low-res tile (16-px margin, 96 stride) runs through the
+    /// NHWC model (LR → HR ×scale) and the inner region is stitched into a
+    /// scale×-larger canvas. Per-channel MAD-normalize (×0.04, clip ±10) from the
+    /// LR input; RGB or mono (mono replicates the plane to 3 in, averages the 3
+    /// out). Deterministic given the runner, so unit-testable without an NPU.
+    /// Returns the enlarged image plus its new width/height.
+    /// </summary>
+    public static (ushort[] pixels, int width, int height) RunUpscale(
+            IRknnUpscaleTileRunner runner, ushort[] pixels, int width, int height, int channels) {
+        int tile = runner.TileSize;                 // 128 LR
+        int scale = runner.Scale;                   // 2
+        int margin = tile / 8;                      // 16
+        int stride = tile - 2 * margin;             // 96
+        int planeLen = width * height;
+        channels = channels >= 3 ? 3 : 1;
+
+        // Per-channel robust stats (median/MAD) from the LR input, in [0,1].
+        var med = new float[3];
+        var mad = new float[3];
+        for (int c = 0; c < 3; c++) {
+            int baseOff = channels == 3 ? c * planeLen : 0;
+            var pf = new float[planeLen];
+            for (int i = 0; i < planeLen; i++) pf[i] = pixels[baseOff + i] / 65535f;
+            var (m, a) = RknnImageMath.MedianMadSampled(pf);
+            med[c] = (float)m;
+            mad[c] = (float)Math.Max(a, 1e-6);       // avoid /0 on a flat plane
+        }
+
+        int outW = width * scale, outH = height * scale;
+        var dst = new ushort[outW * outH * channels];
+        int itw = (width + stride - 1) / stride, ith = (height + stride - 1) / stride;
+        int ht = tile * scale, hm = margin * scale, hs = stride * scale;
+        var tensor = new float[tile * tile * 3];
+
+        float Rd(int c, int px, int py) {            // edge-clamped, normalized [0,1]
+            int x = px < 0 ? 0 : (px >= width ? width - 1 : px);
+            int y = py < 0 ? 0 : (py >= height ? height - 1 : py);
+            int baseOff = channels == 3 ? c * planeLen : 0;
+            return pixels[baseOff + y * width + x] / 65535f;
+        }
+
+        for (int ty = 0; ty < ith; ty++) {
+            for (int tx = 0; tx < itw; tx++) {
+                int sx = tx * stride - margin, sy = ty * stride - margin;
+                for (int y = 0; y < tile; y++) {
+                    for (int x = 0; x < tile; x++) {
+                        int b = (y * tile + x) * 3;
+                        for (int c = 0; c < 3; c++) {
+                            float v = (Rd(c, sx + x, sy + y) - med[c]) / mad[c] * 0.04f;
+                            tensor[b + c] = v > UpscaleClip ? UpscaleClip
+                                : (v < -UpscaleClip ? -UpscaleClip : v);
+                        }
+                    }
+                }
+
+                var od = runner.RunTile(tensor);     // [1, ht, ht, 3] NHWC
+                for (int y = 0; y < hs; y++) {
+                    int oy = ty * hs + y;
+                    if (oy >= outH) continue;
+                    int row = (hm + y) * ht;
+                    for (int x = 0; x < hs; x++) {
+                        int ox = tx * hs + x;
+                        if (ox >= outW) continue;
+                        int i3 = (row + hm + x) * 3;
+                        for (int c = 0; c < channels; c++) {
+                            int cc = channels == 3 ? c : 0;
+                            float on = channels == 3
+                                ? od[i3 + c] : (od[i3] + od[i3 + 1] + od[i3 + 2]) / 3f;
+                            float dn = on / 0.04f * mad[cc] + med[cc];
+                            int u = (int)(dn * 65535f + 0.5f);
+                            dst[c * outW * outH + oy * outW + ox] = (ushort)Math.Clamp(u, 0, 65535);
+                        }
+                    }
+                }
+            }
+        }
+        return (dst, outW, outH);
+    }
 }
