@@ -1,10 +1,15 @@
 package com.danielmedeiros.polaris;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Bundle;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebView;
+
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
@@ -26,9 +31,29 @@ import com.getcapacitor.BridgeWebViewClient;
  * delegated to Capacitor's client via {@code super}.
  */
 public class MainActivity extends BridgeActivity {
+    private static final int REQ_LOCATION = 4001;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Ask for location up front. The "Use my location" flow (first-run
+        // observatory setup) drives the shell's navigator.geolocation / the
+        // Capacitor Geolocation plugin — but the Android WebView only returns a
+        // fix once the app HOLDS the runtime location permission, and nothing
+        // else in the app triggers that prompt. Without this, "Use my location"
+        // silently fails with no permission dialog. (The <uses-permission> is
+        // added to the manifest by scripts/android-postadd.sh.)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED
+            && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[] {
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            }, REQ_LOCATION);
+        }
+
         Bridge bridge = getBridge();
         if (bridge != null && bridge.getWebView() != null) {
             bridge.getWebView().setWebViewClient(new LanTolerantWebViewClient(bridge));
