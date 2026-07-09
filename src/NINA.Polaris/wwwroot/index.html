@@ -13417,7 +13417,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="m in (onnx.manifest?.models || [])"
+                                <template x-for="m in [...(onnx.manifest?.models || [])].sort((a,b) => _modelDisplayName(a.family,a.version).localeCompare(_modelDisplayName(b.family,b.version)))"
                                           :key="m.family + '/' + m.version">
                                     <tr>
                                         <!-- Friendly product name w/ provider
@@ -13501,7 +13501,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="c in modelDl.catalog"
+                                    <template x-for="c in [...(modelDl.catalog || [])].sort((a,b) => (a.label||'').localeCompare(b.label||'') || (a.version||'').localeCompare(b.version||''))"
                                               :key="c.dir + '/' + c.version">
                                         <tr>
                                             <td x-text="c.label"></td>
