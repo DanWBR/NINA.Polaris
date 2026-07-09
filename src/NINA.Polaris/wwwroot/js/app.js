@@ -3497,10 +3497,9 @@ function ninaApp() {
             this.$watch('auxCamera', () => { this.auxIsDslr = false; this.auxSupportsCooler = false; });
             this.$watch('auxCameraDriver', () => { this.auxIsDslr = false; this.auxSupportsCooler = false; });
 
-            // Self-update: check on boot, then hourly. No-ops off SBC .deb
-            // installs (server reports supported:false → badge stays hidden).
-            this.checkUpdate();
-            setInterval(() => this.checkUpdate(), 60 * 60 * 1000);
+            // Self-update: the check runs post-auth in _initCore (the endpoint
+            // is gated — running it here, before the login overlay clears, 401s
+            // and the badge stays hidden until a manual refresh). See _initCore.
 
             // FIELD-6: rehydrate persisted chip dismissals. Only
             // uv-past survives reloads (the "Pi was under-voltage
@@ -3649,6 +3648,13 @@ function ninaApp() {
             this.apiGet('/api/system/status', { cache: 'no-store' })
                 .then(s => { if (s && s.version) this.appVersion = s.version; })
                 .catch(() => { /* badge stays as '…', non-fatal */ });
+
+            // Self-update: check now (post-auth — the endpoint is gated) then
+            // hourly. Runs here rather than in the pre-auth boot init so the
+            // badge appears right after login instead of only after a manual
+            // refresh. No-ops off SBC .deb installs (supported:false → hidden).
+            this.checkUpdate();
+            setInterval(() => this.checkUpdate(), 60 * 60 * 1000);
 
             // NET-1: kick the throughput meter immediately. WS opens
             // moments later, by the time the first frames flow the
