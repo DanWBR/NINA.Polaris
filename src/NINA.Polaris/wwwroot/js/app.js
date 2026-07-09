@@ -3159,6 +3159,14 @@ function ninaApp() {
         stretchWhite: 1.0,    // 0..1 normalised (100% = white point at max)
         stretchMid: 0.25,     // MTF midtones coefficient
         _lastRawFrame: null,  // cache: { pixels, width, height, bitDepth, bayerPattern }
+        // Transient CCD_CFA dropout guard for the LIVE canvas: once a colour
+        // (Bayered) LIVE frame has rendered, a later LIVE frame that arrives
+        // mono (BayerPattern=None) is a driver dropout, not a real mono switch.
+        // We hold the last good stacked frame instead of flashing it grey.
+        // Re-armed when the LIVE geometry changes (fresh session / new camera).
+        _liveSawColor: false,
+        _liveColorW: 0,
+        _liveColorH: 0,
         showStretchPanel: false,
 
         // ASIAIR-style histogram mini-panel (bottom of LIVE / PREVIEW /
@@ -6697,6 +6705,14 @@ function ninaApp() {
                         imageData: cctx.getImageData(0, 0, img.width, img.height),
                         width: img.width, height: img.height, frameKind
                     };
+                    // Server colour live stack renders LIVE as an RGB JPEG — arm
+                    // the dropout guard so a later mono raw sub (transient
+                    // CCD_CFA dropout) is held rather than flashed grey.
+                    if (frameKind === 0) {
+                        this._liveSawColor = true;
+                        this._liveColorW = img.width;
+                        this._liveColorH = img.height;
+                    }
                     // A JPEG frame has no raw buffer; clear any stale raw cache
                     // so applyManualStretch routes through the JPEG re-stretch
                     // path instead of re-rendering an old mono frame.
@@ -8523,6 +8539,29 @@ function ninaApp() {
             // and end up clearing every visible canvas. Skip silently.
             if (width <= 0 || height <= 0 || uncompressedSize <= 0) {
                 return;
+            }
+
+            // Transient CCD_CFA dropout guard (LIVE only). Some INDI OSC drivers
+            // occasionally publish one sub with BayerPattern=None mid-session
+            // (not just the first frame). Rendering it flips the colour LIVE view
+            // to grey for a single frame — the "frame preto e branco no live"
+            // field report. Once we've shown a colour LIVE frame, hold the last
+            // good stacked frame instead of painting the mono dropout; the next
+            // real (Bayered) frame from the server or the client stack takes over.
+            // Re-arm on a geometry change (a genuine OSC→mono switch only happens
+            // on a camera reconnect, which restarts the capture at a new size).
+            if (frameKind === 0) {
+                if (width !== this._liveColorW || height !== this._liveColorH) {
+                    this._liveSawColor = false;
+                    this._liveColorW = width;
+                    this._liveColorH = height;
+                }
+                const isColor = (bayerPattern | 0) >= 1 && (bayerPattern | 0) <= 4;
+                if (isColor) {
+                    this._liveSawColor = true;
+                } else if (this._liveSawColor) {
+                    return; // dropout — keep the last good stacked frame on screen
+                }
             }
 
             // LZ4 decompression requires lz4.min.js, fallback to REST JPEG if unavailable
