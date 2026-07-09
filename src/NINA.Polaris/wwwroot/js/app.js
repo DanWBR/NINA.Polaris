@@ -31525,7 +31525,8 @@ function ninaApp() {
         },
         async deleteSeqSet(name) {
             if (!name) return;
-            if (!confirm('Delete the set "' + name + '"?')) return;
+            if (!await this._confirmAsync('Delete the set "' + name + '"?',
+                    { title: 'Delete set', okLabel: 'Delete', cancelLabel: 'Cancel', danger: true })) return;
             try {
                 await this.apiFetch('/api/sequence/sets/' + encodeURIComponent(name), { method: 'DELETE' });
                 this.toast('Deleted set "' + name + '"', 'ok');
@@ -31564,8 +31565,9 @@ function ninaApp() {
         // run. Reuses the /stop endpoint; kept separate so the wording and
         // the confirmation are unambiguous.
         async panicAbortSequence() {
-            if (!confirm('Abort the running sequence now? '
-                + 'The current frame will be discarded.')) return;
+            if (!await this._confirmAsync('Abort the running sequence now? '
+                    + 'The current frame will be discarded.',
+                    { title: 'Abort sequence', okLabel: 'Abort now', cancelLabel: 'Keep running', danger: true })) return;
             try {
                 await this.apiPost('/api/sequence/stop');
                 this.seqState = 'idle';
