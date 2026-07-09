@@ -435,23 +435,9 @@
             <!-- Discovery / connection method badges. Click to jump to the
                  Equipment tab focused on that source. Each badge shows
                  ON / OFF / a count, and uses ok (green) / warn (amber) /
-                 error (red) / off (grey) colour states. -->
-            <span class="status-indicator" :class="indiConnected ? 'ok' : 'off'" data-tour="statusbar-indi"
-                  @click="tab='equip'; equipSource='indi'"
-                  :title="indiConnected ? 'INDI connected' : 'INDI not connected, click to open Equipment'">
-                <span x-text="indiConnected ? 'INDI' : 'INDI OFF'"></span>
-            </span>
-            <span class="status-indicator" data-tour="statusbar-alpaca"
-                  :class="(alpaca.servers && alpaca.servers.length) ? 'ok' : 'off'"
-                  @click="tab='equip'; equipSource='alpaca'"
-                  :title="(alpaca.servers && alpaca.servers.length)
-                          ? alpaca.servers.length + ' Alpaca server(s) discovered, click to open Equipment'
-                          : 'No Alpaca servers found, click to open Equipment'">
-                <span>ALPACA</span>
-                <span x-show="alpaca.servers && alpaca.servers.length"
-                      x-text="alpaca.servers.length"
-                      style="margin-left:4px;opacity:0.85"></span>
-            </span>
+                 error (red) / off (grey) colour states.
+                 (INDI + ALPACA badges removed per request — connection state
+                 lives in the Equipment tab; the PHD2 badge below stays.) -->
             <!-- PHD2 badge: tracks the JSON-RPC connection + live
                  AppState (same source the GUIDE-tab Control panel
                  uses). Single x-text expression, three x-show'd
