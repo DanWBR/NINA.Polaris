@@ -20673,14 +20673,19 @@ function ninaApp() {
                 if (!e || e.status !== 409) throw e;   // real failure
                 let info = {};
                 try { info = JSON.parse(e.body || '{}'); } catch { /* ignore */ }
-                const msg = (info.kind === 'safety-stop')
-                    ? ('⚠ ' + (info.reason || 'Mount safety stop is active.')
+                const safety = info.kind === 'safety-stop';
+                const msg = safety
+                    ? ((info.reason || 'Mount safety stop is active.')
                         + '\n\nRunning Find Home first is strongly recommended so the mount '
                         + 'has a clean pointing model. Slew anyway?')
-                    : ('⚠ This slew was flagged: ' + (info.reason || 'safety check')
+                    : ('This slew was flagged: ' + (info.reason || 'safety check')
                         + '.\n\nThis is the kind of move that can swing the mount the long way '
                         + 'toward the pier/tripod. Continue anyway?');
-                if (!confirm(msg)) return null;   // declined
+                const ok = await this._confirmAsync(msg, {
+                    title: safety ? 'Mount safety stop' : 'Confirm slew',
+                    okLabel: 'Slew anyway', cancelLabel: 'Cancel', danger: true
+                });
+                if (!ok) return null;   // declined
                 return await post({ ...body, force: true });
             }
         },
