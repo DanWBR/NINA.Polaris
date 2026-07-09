@@ -3378,6 +3378,7 @@ function ninaApp() {
         mfLastFlipError: null,
         mfTimeToMeridianMinutes: null,
         mfTimeToFlipMinutes: null,
+        mfTimeToSetMinutes: null,
         mfHourAngleHours: null,
         mfLstHours: null,
         seqMfExpanded: false,
@@ -17336,20 +17337,44 @@ function ninaApp() {
             return `~${h} h ${m} m`;
         },
 
-        // LIVE metrics bar: time until the target transits the meridian.
-        // mfTimeToMeridianMinutes comes from the meridianFlip WS payload
-        // (LST − RA of the live mount pointing). Positive = before the
-        // meridian; negative = already past it (west side), shown with a
-        // leading "+" so the operator knows a flip is overdue.
+        // LIVE metrics bar: for a target still EAST of the meridian, show the
+        // time until it transits (a flip may be needed past it). Once the target
+        // is WEST of the meridian (already crossed), "time until meridian" is
+        // meaningless — switch to the time until it SETS below the horizon, which
+        // is the countdown that actually matters (how long the target is still
+        // usable). hourAngleHours < 0 = east/rising, >= 0 = west/descending.
+        meridianOrSetLabel() {
+            return (this.mfHourAngleHours != null && this.mfHourAngleHours >= 0)
+                ? 'Sets' : 'Meridian';
+        },
+        meridianOrSetTitle() {
+            return (this.mfHourAngleHours != null && this.mfHourAngleHours >= 0)
+                ? 'Time until the target sets below the horizon'
+                : 'Time until the target crosses the meridian (a flip may be needed past it)';
+        },
+        // Whether we have something to show at all (either countdown available).
+        meridianOrSetVisible() {
+            const past = this.mfHourAngleHours != null && this.mfHourAngleHours >= 0;
+            return past ? (this.mfTimeToSetMinutes != null)
+                        : (this.mfTimeToMeridianMinutes != null);
+        },
+        _fmtHm(mins) {
+            const v = Math.abs(Math.round(mins));
+            if (v < 1) return 'now';
+            const h = Math.floor(v / 60), mm = v % 60;
+            return h > 0 ? `${h}h ${mm}m` : `${mm}m`;
+        },
         formatTimeToMeridian() {
+            const past = this.mfHourAngleHours != null && this.mfHourAngleHours >= 0;
+            if (past) {
+                const s = this.mfTimeToSetMinutes;
+                // Null = circumpolar (never sets): the target is always up.
+                if (s == null || !isFinite(s)) return '∞';
+                return this._fmtHm(s);
+            }
             const m = this.mfTimeToMeridianMinutes;
             if (m == null || !isFinite(m)) return '—';
-            const past = m < 0;
-            const mins = Math.abs(Math.round(m));
-            if (mins < 1) return 'now';
-            const h = Math.floor(mins / 60), mm = mins % 60;
-            const txt = h > 0 ? `${h}h ${mm}m` : `${mm}m`;
-            return past ? `+${txt}` : txt;
+            return this._fmtHm(m);
         },
 
         // SNR-7: debounced PUT for the LIVE tab's target-SNR input.
@@ -34159,6 +34184,7 @@ function ninaApp() {
                 this.mfHourAngleHours = mf.hourAngleHours;
                 this.mfTimeToMeridianMinutes = mf.timeToMeridianMinutes;
                 this.mfTimeToFlipMinutes = mf.timeToFlipMinutes;
+                this.mfTimeToSetMinutes = mf.timeToSetMinutes;
                 // Mount safety guard trip (anti cable-wrap / guide breaker).
                 const wasTripped = this.mfSafetyTripped;
                 this.mfSafetyTripped = !!mf.safetyTripped;

@@ -100,6 +100,40 @@ public class AltitudeService {
         return (alt * 180 / Math.PI, azDeg);
     }
 
+    /// <summary>
+    /// Clock hours until the target at (<paramref name="raHours"/>,
+    /// <paramref name="decDeg"/>) sets below <paramref name="horizonDeg"/>
+    /// altitude for an observer at (<paramref name="latDeg"/>,
+    /// <paramref name="lonDeg"/>). Uses the standard rise/set hour-angle formula
+    /// (cos H = (sin h₀ − sin φ sin δ) / (cos φ cos δ)); the setting hour angle is
+    /// the western (positive) root. Returns null when the target never sets
+    /// (circumpolar above the horizon), never rises, or the geometry is
+    /// degenerate (pole / dec at ±90°). Result is ≥ 0: for a still-rising target
+    /// it's the full time until it later descends past the horizon. Converted
+    /// from sidereal to solar clock time.
+    /// </summary>
+    public static double? HoursUntilSet(
+            double raHours, double decDeg, DateTime utc,
+            double latDeg, double lonDeg, double horizonDeg = 0.0) {
+        var decRad = decDeg * Math.PI / 180.0;
+        var latRad = latDeg * Math.PI / 180.0;
+        var h0 = horizonDeg * Math.PI / 180.0;
+        var denom = Math.Cos(latRad) * Math.Cos(decRad);
+        if (Math.Abs(denom) < 1e-9) return null; // pole / dec at zenith — degenerate
+        var cosH = (Math.Sin(h0) - Math.Sin(latRad) * Math.Sin(decRad)) / denom;
+        if (cosH < -1.0 || cosH > 1.0) return null; // circumpolar / never rises
+        // Hour angle at setting (west, positive), in hours.
+        var hSetHours = Math.Acos(cosH) * 12.0 / Math.PI;
+        // Current hour angle, normalised to −12..+12.
+        var lst = MeridianFlipService.ComputeLstHours(utc, lonDeg);
+        var ha = lst - raHours;
+        while (ha > 12) ha -= 24;
+        while (ha < -12) ha += 24;
+        var deltaHours = hSetHours - ha;         // sidereal hours until set
+        while (deltaHours < 0) deltaHours += 24;  // wrap to the next pass
+        return deltaHours * 0.9972695663;         // sidereal → solar clock time
+    }
+
     /// <summary>Low-precision sun position (good to ~1 arcmin).</summary>
     public static (double raHours, double decDeg) SunPosition(DateTime utc) {
         var jd = ToJulianDate(utc);

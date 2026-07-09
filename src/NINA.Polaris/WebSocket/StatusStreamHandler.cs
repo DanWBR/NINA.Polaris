@@ -254,7 +254,7 @@ public static class StatusStreamHandler {
 
                     // Meridian flip live status (LST + time-to-meridian for the current mount RA)
                     double? lstHours = null, hourAngleHours = null, timeToMeridianHours = null;
-                    double? timeToFlipHours = null;
+                    double? timeToFlipHours = null, timeToSetHours = null;
                     if (equip.Telescope != null && equip.Telescope.IsConnected) {
                         var raHours = equip.Telescope.RightAscension;
                         if (!double.IsNaN(raHours)) {
@@ -270,6 +270,16 @@ public static class StatusStreamHandler {
                             timeToFlipHours = MeridianFlipService.HoursUntilFlip(
                                 raHours, DateTime.UtcNow, profile.Active.Longitude,
                                 meridianFlip.Settings.MinutesAfterMeridian);
+                            // Time until the target sets below the horizon. For a
+                            // target already past the meridian (descending west),
+                            // this is the useful countdown — "time until meridian"
+                            // is meaningless there (it already crossed). Needs Dec.
+                            var decDeg = equip.Telescope.Declination;
+                            if (!double.IsNaN(decDeg)) {
+                                timeToSetHours = AltitudeService.HoursUntilSet(
+                                    raHours, decDeg, DateTime.UtcNow,
+                                    profile.Active.Latitude, profile.Active.Longitude);
+                            }
                         }
                     }
 
@@ -285,6 +295,8 @@ public static class StatusStreamHandler {
                         timeToMeridianMinutes = timeToMeridianHours * 60,
                         timeToFlipHours,
                         timeToFlipMinutes = timeToFlipHours * 60,
+                        timeToSetHours,
+                        timeToSetMinutes = timeToSetHours * 60,
                         safetyTripped = safetyGuard.Tripped,
                         safetyReason = safetyGuard.TripReason,
                         safetyTrippedAt = safetyGuard.TrippedAt

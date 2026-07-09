@@ -1851,8 +1851,8 @@
                          until the first frame lands. -->
                     <span>Stacking: <strong
                           x-text="liveStackStatus?.elapsedSeconds > 0 ? formatTime(liveStackStatus?.elapsedSeconds) : '--'">--</strong></span>
-                    <span x-show="mfTimeToMeridianMinutes != null"
-                          title="Time until the target crosses the meridian (a flip may be needed past it)">Meridian: <strong x-text="formatTimeToMeridian()"></strong></span>
+                    <span x-show="meridianOrSetVisible()"
+                          :title="meridianOrSetTitle()"><span x-text="meridianOrSetLabel()">Meridian</span>: <strong x-text="formatTimeToMeridian()"></strong></span>
                     <button class="btn btn-sm" @click="fullStats ? (fullStats = null) : loadFullStats()" style="margin-left:auto;"
                             :class="fullStats ? 'btn-active' : ''"
                             :disabled="!selectedCamera"
@@ -17547,7 +17547,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260709-livemonoguard"></script>
+    <script src="/js/app.js?v=20260709-timetoset"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

@@ -40,6 +40,7 @@ public static class MeridianFlipEndpoints {
             double? hourAngle = null;
             double? lst = null;
             double? timeToFlipHours = null;
+            double? timeToSetHours = null;
 
             if (equip.Telescope != null && equip.Telescope.IsConnected) {
                 var raHours = equip.Telescope.RightAscension;
@@ -50,6 +51,12 @@ public static class MeridianFlipEndpoints {
                 timeToMeridianHours = MeridianFlipService.HoursUntilMeridian(raHours, DateTime.UtcNow, profile.Active.Longitude);
                 timeToFlipHours = MeridianFlipService.HoursUntilFlip(
                     raHours, DateTime.UtcNow, profile.Active.Longitude, mf.Settings.MinutesAfterMeridian);
+                var decDeg = equip.Telescope.Declination;
+                if (!double.IsNaN(decDeg)) {
+                    timeToSetHours = AltitudeService.HoursUntilSet(
+                        raHours, decDeg, DateTime.UtcNow,
+                        profile.Active.Latitude, profile.Active.Longitude);
+                }
             }
 
             return Results.Ok(new {
@@ -64,6 +71,8 @@ public static class MeridianFlipEndpoints {
                 timeToMeridianMinutes = timeToMeridianHours.HasValue ? timeToMeridianHours * 60 : null,
                 timeToFlipHours = timeToFlipHours,
                 timeToFlipMinutes = timeToFlipHours.HasValue ? timeToFlipHours * 60 : null,
+                timeToSetHours = timeToSetHours,
+                timeToSetMinutes = timeToSetHours.HasValue ? timeToSetHours * 60 : null,
                 // Mount safety guard (anti cable-wrap + guide circuit breaker).
                 safetyTripped = guard.Tripped,
                 safetyReason = guard.TripReason,
