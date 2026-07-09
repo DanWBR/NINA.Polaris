@@ -7378,6 +7378,18 @@ function ninaApp() {
             } catch (e) { /* ignore */ }
         },
 
+        // Axis tick label for the mini-panel histogram. pos is 0..1 across the
+        // drawn width; returns the raw 16-bit value at that position. Must track
+        // the zoom (dispLo/dispHi) so the axis numbers match where the bars and
+        // handles actually sit — otherwise Zoom compresses the bars into the
+        // populated band while the axis still reads 0 / 32768 / 65535 and the
+        // graph no longer corresponds to its own scale.
+        histoAxisLabel(pos) {
+            const mv = this.histo._maxVal || 65535;
+            const lo = this.histo.dispLo ?? 0, hi = this.histo.dispHi ?? 1;
+            return Math.round((lo + pos * (hi - lo)) * mv);
+        },
+
         // Handle X position (%) within the drawn range, for the draggable
         // pill overlays.
         histoMarkerPct(which) {

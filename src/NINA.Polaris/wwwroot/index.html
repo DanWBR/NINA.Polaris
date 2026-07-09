@@ -1037,7 +1037,7 @@
                         </div>
                         <div class="histo-graph">
                             <canvas id="histoCanvas-live" class="histo-canvas"></canvas>
-                            <div class="histo-axis"><span>0</span><span>32768</span><span>65535</span></div>
+                            <div class="histo-axis"><span x-text="histoAxisLabel(0)">0</span><span x-text="histoAxisLabel(0.5)">32768</span><span x-text="histoAxisLabel(1)">65535</span></div>
                             <div class="histo-handle histo-handle-black"
                                  :style="'left:' + histoMarkerPct('black') + '%'"
                                  @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
@@ -2838,7 +2838,7 @@
                         </div>
                         <div class="histo-graph">
                             <canvas id="histoCanvas-preview" class="histo-canvas"></canvas>
-                            <div class="histo-axis"><span>0</span><span>32768</span><span>65535</span></div>
+                            <div class="histo-axis"><span x-text="histoAxisLabel(0)">0</span><span x-text="histoAxisLabel(0.5)">32768</span><span x-text="histoAxisLabel(1)">65535</span></div>
                             <div class="histo-handle histo-handle-black"
                                  :style="'left:' + histoMarkerPct('black') + '%'"
                                  @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
@@ -9673,7 +9673,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
                         <div class="histo-graph">
                             <canvas id="histoCanvas-autorun" class="histo-canvas"></canvas>
-                            <div class="histo-axis"><span>0</span><span>32768</span><span>65535</span></div>
+                            <div class="histo-axis"><span x-text="histoAxisLabel(0)">0</span><span x-text="histoAxisLabel(0.5)">32768</span><span x-text="histoAxisLabel(1)">65535</span></div>
                             <div class="histo-handle histo-handle-black"
                                  :style="'left:' + histoMarkerPct('black') + '%'"
                                  @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
@@ -17547,7 +17547,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260708-npuaitools"></script>
+    <script src="/js/app.js?v=20260709-histoaxis"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>
