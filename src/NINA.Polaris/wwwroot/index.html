@@ -1316,17 +1316,6 @@
                             ⚠ No output folder set — frames are NOT being saved.
                             Set an image output folder in the FILES tab.
                         </div>
-                        <!-- Colour (OSC) live stacking is now always engaged:
-                             OSC cameras stack in colour automatically (the only
-                             mode), and mono rigs fall back to plain
-                             accumulation since their frames carry no Bayer
-                             pattern. No toggle — a read-only indicator shows
-                             when colour is actually active this session. -->
-                        <div class="livestack-save-frames-label"
-                             x-show="liveStackColorActive"
-                             title="One-shot-colour camera detected: each frame is debayered to RGB and integrated in colour. For mono rigs this stays plain accumulation automatically.">
-                            🌈 Colour stacking (OSC) <span class="text-muted">active</span>
-                        </div>
                     </div>
 
                     <!-- Part B4: meridian flip from the LIVE panel. The
