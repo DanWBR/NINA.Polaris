@@ -23,6 +23,7 @@ Browser (laptop / tablet / phone)        Raspberry Pi / Mini PC
 ## Contents
 
 - [Features](#features) · full list in **[docs/FEATURES.md](docs/FEATURES.md)**
+- [Tested hardware](#tested-hardware)
 - [Documentation](#documentation)
 - [Architecture](#architecture) · [Technology Stack](#technology-stack)
 - [Getting Started](#getting-started)
@@ -68,6 +69,27 @@ post-processing suite with in-browser AI. Highlights:
   relay server for remote access without port-forwarding, WiFi hotspot↔station
   switch, mDNS (`nina.local`), remote terminal (SSH in the browser), debug
   logging, polar alignment (TPPA + rudimentary), and SBC self-update.
+
+## Tested hardware
+
+Polaris supports a huge range of gear through INDI (400+ Linux drivers),
+ASCOM/Alpaca, and the native camera SDKs — far more than any one person can
+own. The list below is the hardware that has actually been used with Polaris in
+the field, as a starting point; anything INDI/ASCOM/Alpaca-compatible should
+work even if it isn't listed. Reports of other working (or broken) gear are
+welcome via an issue or PR.
+
+| Category | Tested devices |
+|---|---|
+| **Mounts** | ZWO AM3 · AM3N · AM5 · OnStep (LX200) |
+| **Cameras (OSC / DSLR)** | ZWO ASI585MC Pro · ASI678MC · ASI715MC · SVBony SV405CC · SV605CC · SV105 · Canon EOS Rebel T100 (4000D) · Canon EOS Rebel SL2 (200D) |
+| **Focus motors** | ZWO EAF · Gemini Focusing Motor / Focuser Pro |
+| **Guide cameras** | ZWO ASI120MM |
+| **Filter wheels** | ZWO EFW Mini |
+| **SBCs (server host)** | Raspberry Pi 4 (8 GB) · Raspberry Pi 5 (4 GB) · Orange Pi 4 Pro (4 GB) · Orange Pi 5 Pro (4 GB) · Radxa Dragon Q6A (6 GB) |
+
+> Windows and x86 Linux mini-PCs also run the backend (see [Deployment](#deployment)).
+> For benchmark scores per board, see the benchmark reference in the user guide.
 
 ## Documentation
 
