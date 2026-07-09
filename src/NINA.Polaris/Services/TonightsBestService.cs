@@ -145,6 +145,13 @@ public class TonightsBestService {
                 minPeakAlt: 15, baseBoost: 0);
         }
 
+        // The Lynds catalogues (LBN bright + LDN dark nebulae) have thousands of
+        // magnitude-less, size-ranked entries that would otherwise crowd out
+        // everything else. Cap the POOL to the 10 highest-scored of each BEFORE
+        // the global cutoff so the freed slots go to other objects.
+        items = CapCatalogue(items, "LBN", 10);
+        items = CapCatalogue(items, "LDN", 10);
+
         // Cap DSOs + planets + Moon by score first…
         var byScore = items.OrderByDescending(i => i.Score).ToList();
         var ordered = byScore.Take(limit).ToList();
@@ -195,6 +202,27 @@ public class TonightsBestService {
             CameraFovWidthArcmin:  fov?.WidthArcmin,
             CameraFovHeightArcmin: fov?.HeightArcmin,
             Items:             ordered);
+    }
+
+    /// <summary>
+    /// Keep only the <paramref name="max"/> highest-scored candidates whose name
+    /// belongs to the given catalogue prefix (e.g. "LBN", "LDN"), dropping the
+    /// rest. Non-matching candidates pass through untouched. The prefix must be
+    /// followed by a non-letter (space/digit) so "LBN 552" matches but a
+    /// hypothetical "LBNxyz" does not.
+    /// </summary>
+    private static List<TonightCandidate> CapCatalogue(
+            List<TonightCandidate> items, string prefix, int max) {
+        bool IsMatch(TonightCandidate c) =>
+            c.Category == "Dso" && c.Name != null
+            && c.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            && (c.Name.Length == prefix.Length || !char.IsLetter(c.Name[prefix.Length]));
+        var keep = items.Where(IsMatch)
+                        .OrderByDescending(c => c.Score)
+                        .Take(max)
+                        .Select(c => c.Name)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return items.Where(c => !IsMatch(c) || keep.Contains(c.Name!)).ToList();
     }
 
     private void AddSolarSystem(string name, Body body, string category,

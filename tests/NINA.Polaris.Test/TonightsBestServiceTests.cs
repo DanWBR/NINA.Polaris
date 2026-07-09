@@ -84,6 +84,26 @@ public class TonightsBestServiceTests {
     }
 
     [Test]
+    public void Compute_CapsLbnAndLdnCataloguesAtTen() {
+        // The Lynds bright/dark nebula catalogues are huge and magnitude-less;
+        // Tonight's Best must show at most 10 of each so they don't crowd out
+        // everything else. Use a generous limit so the cap (not the global
+        // cutoff) is what bounds them.
+        var sut = MakeService(lat: -5.18, lng: -37.36);
+        var result = sut.Compute(limit: 500);
+
+        static bool IsCatalogue(string? name, string prefix) =>
+            name != null
+            && name.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase)
+            && (name.Length == prefix.Length || !char.IsLetter(name[prefix.Length]));
+
+        var lbn = result.Items.Count(i => IsCatalogue(i.Name, "LBN"));
+        var ldn = result.Items.Count(i => IsCatalogue(i.Name, "LDN"));
+        Assert.That(lbn, Is.LessThanOrEqualTo(10), "At most 10 LBN objects");
+        Assert.That(ldn, Is.LessThanOrEqualTo(10), "At most 10 LDN objects");
+    }
+
+    [Test]
     public void Compute_IncludesPlanetCategoryWhenVisible() {
         // At least one planet is virtually always above the horizon for
         // some part of any given night anywhere on Earth.
