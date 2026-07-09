@@ -768,7 +768,12 @@
     top: 64px;
     right: 12px;
     width: min(420px, 92vw);
-    max-height: calc(100vh - 150px);
+    max-height: 92vh;
+    /* Repositionable (drag the header) + resizable (drag the bottom-right
+       grip). resize needs overflow != visible, which we already have. */
+    resize: both;
+    min-width: 260px;
+    min-height: 140px;
     overflow: auto;
     z-index: 50;
     background: var(--bg-elev, #11161f);
@@ -793,6 +798,10 @@
     position: sticky;
     top: 0;
     background: var(--bg-elev, #11161f);
+    /* Drag handle for repositioning the panel. */
+    cursor: move;
+    user-select: none;
+    touch-action: none;
 }
 /* Collapsed re-open pill, anchored to the right edge. */
 .sky-solver-pill {

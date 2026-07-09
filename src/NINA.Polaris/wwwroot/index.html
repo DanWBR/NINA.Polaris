@@ -7882,10 +7882,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      pushed the map). The header ▸ hides it to a small pill
                      (.sky-solver-pill) that re-opens it. -->
                 <div class="sky-solver-overlay" x-cloak
+                     :style="skySolverPanelStyle()"
                      x-show="!skySolverHidden && ((slewCenterStatus && slewCenterJobId) || slewCenterFailedLog || solveSyncBusy)">
-                    <div class="sky-solver-overlay-head">
+                    <div class="sky-solver-overlay-head"
+                         @mousedown="skySolverDragStart($event)"
+                         @touchstart="skySolverDragStart($event)"
+                         title="Drag to move · drag the bottom-right corner to resize">
                         <span>Plate solver</span>
                         <button class="btn btn-xs" @click="skySolverHidden = true"
+                                @mousedown.stop @touchstart.stop
                                 title="Hide solver console">▸</button>
                     </div>
                 <div class="sky-slew-progress" x-show="slewCenterStatus && slewCenterJobId">
@@ -17522,7 +17527,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260709-confirmmodals"></script>
+    <script src="/js/app.js?v=20260709-skysolvermove"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

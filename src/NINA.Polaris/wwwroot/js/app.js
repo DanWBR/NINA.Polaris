@@ -722,6 +722,11 @@ function ninaApp() {
         // SKY plate-solver console is a right-edge overlay that the user can
         // collapse to a small pill (it used to push the map content in flow).
         skySolverHidden: false,
+        // Draggable position for the plate-solver overlay. null = use the CSS
+        // default (top/right anchored); once dragged, left/top are applied and
+        // persisted to localStorage. Resizing is pure CSS (resize: both).
+        skySolverPanel: { x: null, y: null },
+        _skySolverDrag: null,
         solveSyncBusy: false,   // guards the SKY "Solve & Sync" recovery
         _slewCenterTimer: null,
         // "Center on Sun/Moon/planet" (solve-near-and-offset). Body picker +
@@ -3665,6 +3670,9 @@ function ninaApp() {
             // by the WebGL shader). Defaults preserved on missing /
             // malformed localStorage.
             this.loadWb();
+
+            // Restore the dragged position of the SKY plate-solver overlay.
+            this._restoreSkySolverPanel();
 
             // AUTORUN rehydration: a sequence can still be running on the
             // server when the browser is restarted / reconnects. Pull the
@@ -22298,6 +22306,83 @@ function ninaApp() {
             window.removeEventListener('touchend', endHandler);
             window.removeEventListener('touchcancel', endHandler);
             this.persistMountPanel();
+        },
+
+        // --- SKY plate-solver overlay: draggable position (resize is CSS) ---
+
+        // Inline style: apply left/top only once the panel has been dragged;
+        // until then return '' so the CSS top/right anchor is used.
+        skySolverPanelStyle() {
+            const p = this.skySolverPanel;
+            if (p.x == null || p.y == null) return '';
+            return `left:${p.x}px; top:${p.y}px; right:auto;`;
+        },
+        _restoreSkySolverPanel() {
+            try {
+                const raw = localStorage.getItem('polaris.skySolverPanel');
+                if (!raw) return;
+                const p = JSON.parse(raw);
+                if (typeof p.x === 'number' && typeof p.y === 'number') {
+                    this.skySolverPanel.x = p.x;
+                    this.skySolverPanel.y = p.y;
+                }
+            } catch { /* private mode / bad JSON — keep default anchor */ }
+        },
+        _persistSkySolverPanel() {
+            try {
+                localStorage.setItem('polaris.skySolverPanel',
+                    JSON.stringify({ x: this.skySolverPanel.x, y: this.skySolverPanel.y }));
+            } catch { /* ignore */ }
+        },
+        skySolverDragStart(ev) {
+            const isTouch = ev.type === 'touchstart';
+            const point = isTouch ? ev.touches[0] : ev;
+            // First drag: seed x/y from the current on-screen rect (until now it
+            // was CSS-anchored top/right) so the panel doesn't jump.
+            if (this.skySolverPanel.x == null || this.skySolverPanel.y == null) {
+                const el = ev.currentTarget.closest('.sky-solver-overlay');
+                const r = el ? el.getBoundingClientRect() : { left: 64, top: 64 };
+                this.skySolverPanel.x = Math.round(r.left);
+                this.skySolverPanel.y = Math.round(r.top);
+            }
+            this._skySolverDrag = {
+                offsetX: point.clientX - this.skySolverPanel.x,
+                offsetY: point.clientY - this.skySolverPanel.y,
+                touch: isTouch
+            };
+            const move = (e) => this._skySolverDragMove(e);
+            const end = () => this._skySolverDragEnd(move, end);
+            if (isTouch) {
+                window.addEventListener('touchmove', move, { passive: false });
+                window.addEventListener('touchend', end);
+                window.addEventListener('touchcancel', end);
+            } else {
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', end);
+            }
+            ev.preventDefault();
+        },
+        _skySolverDragMove(ev) {
+            const d = this._skySolverDrag;
+            if (!d) return;
+            const point = d.touch ? ev.touches[0] : ev;
+            let x = point.clientX - d.offsetX;
+            let y = point.clientY - d.offsetY;
+            // Keep a grabbable sliver on-screen.
+            x = Math.max(0, Math.min(x, window.innerWidth - 60));
+            y = Math.max(0, Math.min(y, window.innerHeight - 40));
+            this.skySolverPanel.x = x;
+            this.skySolverPanel.y = y;
+            if (ev.cancelable) ev.preventDefault();
+        },
+        _skySolverDragEnd(moveHandler, endHandler) {
+            this._skySolverDrag = null;
+            window.removeEventListener('mousemove', moveHandler);
+            window.removeEventListener('mouseup', endHandler);
+            window.removeEventListener('touchmove', moveHandler);
+            window.removeEventListener('touchend', endHandler);
+            window.removeEventListener('touchcancel', endHandler);
+            this._persistSkySolverPanel();
         },
 
         // --- Camera preview floating panel (mirror of mountPanel) ---
