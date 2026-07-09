@@ -45,6 +45,18 @@ public class MeridianFlipAutoLiveService : BackgroundService {
     // Re-armed when HA goes clearly negative again (target rising).
     private bool _flippedThisCrossing;
 
+    // Crossing-observation gate. We only auto-flip a target we actually watched
+    // cross the meridian (HA − → ≥0) WHILE this live stack was running. Without
+    // this, acquiring a target that is ALREADY west of the flip point (e.g. a
+    // fresh SKY GoTo to a NW target just after homing) made the service fire an
+    // immediate, unwanted flip — the mount would un-flip and swing the OTA back
+    // toward the tripod. A GEM slewed straight to a western target is already on
+    // the correct pier side and needs no flip. Mirrors MountSafetyGuardService's
+    // `_sawCrossing` gate. Reset when the live stack isn't running or HA is
+    // clearly east again (new target rising / next night).
+    private double? _prevHa;
+    private bool _sawCrossing;
+
     public MeridianFlipAutoLiveService(
             LiveStackingService liveStack,
             MeridianFlipService meridian,
@@ -57,6 +69,26 @@ public class MeridianFlipAutoLiveService : BackgroundService {
         _profile = profile;
         _logger = logger;
     }
+
+    // ----------------------- pure decision helpers (unit-tested) -----------------
+
+    /// <summary>True when the target just crossed the meridian west-bound between
+    /// two consecutive HA samples (HA − → ≥0). <paramref name="prevHa"/> is null on
+    /// the first sample (no transition yet).</summary>
+    public static bool CrossedMeridianWest(double? prevHa, double ha)
+        => prevHa.HasValue && prevHa.Value < 0 && ha >= 0;
+
+    /// <summary>
+    /// Should the live-stacking auto-flip fire now? A flip is due only when we've
+    /// actually WATCHED the target cross the meridian on this stack
+    /// (<paramref name="sawCrossing"/>) — never for a target acquired already west
+    /// (a fresh GoTo to a western target is on the correct pier side and needs no
+    /// flip; flipping it would un-flip the mount toward the tripod). Given a
+    /// crossing, it's due once HA is at/past the flip point but not absurdly far
+    /// west (~6 h sanity bound).
+    /// </summary>
+    public static bool AutoFlipDue(bool sawCrossing, double hoursUntilFlip)
+        => sawCrossing && hoursUntilFlip <= 0 && hoursUntilFlip > -6.0;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
         // Small startup delay so equipment + profile are settled.
@@ -76,14 +108,41 @@ public class MeridianFlipAutoLiveService : BackgroundService {
 
     private async Task TickAsync(CancellationToken ct) {
         if (!_meridian.Settings.AutoFlipDuringLiveStack) return;
-        // Only while a live stack is actively integrating.
-        if (!_liveStack.IsRunning) return;
+        // Only while a live stack is actively integrating. A stack that isn't
+        // running resets the crossing-observation gate so a fresh stack must
+        // watch its OWN meridian crossing before it may auto-flip.
+        if (!_liveStack.IsRunning) {
+            _prevHa = null;
+            _sawCrossing = false;
+            _flippedThisCrossing = false;
+            return;
+        }
 
         var scope = _equip.Telescope;
         if (scope == null || !scope.IsConnected) return;
 
         var raHours = scope.RightAscension;
         if (double.IsNaN(raHours)) return;
+
+        // Signed hour angle (−12..+12): <0 east of meridian (rising), >0 west.
+        double lst = MeridianFlipService.ComputeLstHours(DateTime.UtcNow, _profile.Active.Longitude);
+        double ha = lst - raHours;
+        while (ha > 12) ha -= 24;
+        while (ha < -12) ha += 24;
+
+        // Target clearly east again → new approach / next night: reset the gate.
+        if (ha < -0.1) {
+            _sawCrossing = false;
+            _flippedThisCrossing = false;
+        }
+        // Meridian crossing observed (HA − → ≥0) while stacking: NOW a flip may
+        // become due. A target acquired already west never trips this, so no
+        // spurious flip on a fresh GoTo to a western target.
+        if (CrossedMeridianWest(_prevHa, ha)) {
+            _sawCrossing = true;
+            _flippedThisCrossing = false;
+        }
+        _prevHa = ha;
 
         var minutesAfter = _meridian.Settings.MinutesAfterMeridian;
         var hoursUntilFlip = MeridianFlipService.HoursUntilFlip(
@@ -96,10 +155,11 @@ public class MeridianFlipAutoLiveService : BackgroundService {
         if (_flippedThisCrossing) return;
         if (_meridian.State != MeridianFlipState.Idle) return;
 
-        // Flip is due: HA has reached/passed the flip point but the target
-        // isn't absurdly far west (sanity bound, ~6 h past meridian).
-        bool due = hoursUntilFlip <= 0 && hoursUntilFlip > -6.0;
-        if (!due) return;
+        // Only fire when we actually watched this target cross the meridian on
+        // this stack AND it's past the flip point — never auto-flip a target
+        // acquired already west (that would un-flip toward the tripod, the field
+        // near-crash report).
+        if (!AutoFlipDue(_sawCrossing, hoursUntilFlip)) return;
 
         var dec = scope.Declination;
         _logger.LogInformation(
