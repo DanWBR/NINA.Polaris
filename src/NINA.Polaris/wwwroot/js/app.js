@@ -10139,6 +10139,7 @@ function ninaApp() {
                     });
                     break;
                 case 'assistant:tool-call': this._assistantExecTool(msg); break;
+                case 'assistant:capture-view': this._assistantCaptureView(msg); break;
                 case 'assistant:ui': this._assistantExecUi(msg); break;
                 case 'assistant:watch': this._asstWatch = !!msg.on; break;
                 case 'assistant:subscribed': this._assistantSetSubscribed(!!msg.subscribed); break;
@@ -10215,6 +10216,84 @@ function ninaApp() {
             cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
             try { bmp.close(); } catch (_) {}
             return cv.toDataURL('image/jpeg', quality);
+        },
+
+        // Capture whatever image is currently shown in the ACTIVE Polaris panel
+        // (LIVE / PREVIEW / FOCUS / VIDEO / AUTORUN / FILES viewer) and hand it
+        // to the assistant's vision model as a size-capped JPEG data URL. This
+        // grabs the on-screen canvas directly (client-side), so it reflects
+        // exactly what the operator sees — the applied stretch, white balance,
+        // stack, etc. — not a re-fetched server frame. Non-destructive; safe to
+        // expose without the API allowlist. Message: { type:'assistant:capture-view',
+        // id, maxDim?, quality? } -> host:tool-result { dataUrl, tab, width, height }.
+        _assistantCaptureView(msg) {
+            const id = msg.id;
+            const reply = (ok, result, error) =>
+                this._assistantPost({ v: 1, type: 'host:tool-result', id, ok, result, error });
+            try {
+                const cv = this._assistantActiveViewCanvas();
+                if (!cv) {
+                    return reply(false, null,
+                        `No image is currently displayed in the active panel (${this.tab}). ` +
+                        'Switch to a panel that shows an image (LIVE, PREVIEW, FOCUS, VIDEO, ' +
+                        'AUTORUN, or open a file in FILES) and try again.');
+                }
+                const maxDim = Math.max(256, Math.min(2048, (msg.maxDim | 0) || 1536));
+                const quality = (typeof msg.quality === 'number' && msg.quality > 0 && msg.quality <= 1)
+                    ? msg.quality : 0.85;
+                const dataUrl = this._assistantCanvasToDataUrl(cv, maxDim, quality);
+                if (!dataUrl) return reply(false, null, 'Could not read the current image (canvas unavailable).');
+                return reply(true, { dataUrl, tab: this.tab, width: cv.width, height: cv.height }, undefined);
+            } catch (e) {
+                reply(false, null, String((e && e.message) || e));
+            }
+        },
+
+        // Find the image canvas the CURRENT tab is displaying. Prefers the
+        // active tab's own canvas; falls back to any visible, drawn image canvas
+        // (e.g. after a tab switch the reactive :src hasn't repainted a hidden
+        // one yet). Returns null when the active view isn't an image (home,
+        // settings, sky iframe, …). offsetParent==null filters display:none tabs.
+        _assistantActiveViewCanvas() {
+            const byTab = {
+                live: ['liveCanvas'],
+                preview: ['previewCanvas'],
+                focus: ['manualFocusCanvas', 'focusCanvas'],
+                video: ['videoCaptureCanvas'],
+                sequence: ['autorunCanvas'],
+                seqadv: ['autorunCanvas'],
+                files: ['#osd-viewer canvas'],
+            };
+            const drawn = (c) => c && c.width > 1 && c.height > 1 && c.offsetParent !== null;
+            const get = (sel) => (sel.startsWith('#') || sel.includes(' '))
+                ? document.querySelector(sel) : document.getElementById(sel);
+            for (const sel of (byTab[this.tab] || [])) {
+                const c = get(sel);
+                if (drawn(c)) return c;
+            }
+            // Fallback: any visible imaging canvas currently holding a frame.
+            for (const id of ['liveCanvas', 'previewCanvas', 'manualFocusCanvas', 'focusCanvas',
+                              'videoCaptureCanvas', 'autorunCanvas', 'slewPreviewCanvas']) {
+                const c = document.getElementById(id);
+                if (drawn(c)) return c;
+            }
+            const osd = document.querySelector('#osd-viewer canvas');
+            return drawn(osd) ? osd : null;
+        },
+
+        // Re-encode a canvas as a size-capped JPEG data URL. Returns null if the
+        // canvas is tainted (cross-origin) — our imaging canvases are same-origin.
+        _assistantCanvasToDataUrl(canvas, maxDim, quality) {
+            try {
+                const scale = Math.min(1, maxDim / Math.max(canvas.width, canvas.height));
+                if (scale >= 1) return canvas.toDataURL('image/jpeg', quality);
+                const w = Math.max(1, Math.round(canvas.width * scale));
+                const h = Math.max(1, Math.round(canvas.height * scale));
+                const cv = document.createElement('canvas');
+                cv.width = w; cv.height = h;
+                cv.getContext('2d').drawImage(canvas, 0, 0, w, h);
+                return cv.toDataURL('image/jpeg', quality);
+            } catch (_) { return null; }
         },
 
         // Match an allowlist path pattern (may contain {placeholders}) to a path.
