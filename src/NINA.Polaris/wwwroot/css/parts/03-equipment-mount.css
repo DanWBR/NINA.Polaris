@@ -1505,6 +1505,77 @@
     user-select: none;
 }
 
+/* files-body / files-toolbars / files-main are pure grouping wrappers:
+   display:contents makes them invisible to layout on normal screens, so
+   the toolbars + banners + list remain direct flex children of
+   .files-left exactly as before the wrappers existed. They only gain a
+   box in the short-viewport media query below. */
+.files-body,
+.files-toolbars,
+.files-main {
+    display: contents;
+}
+
+/* Short viewports (landscape phones, small windows): vertical space is
+   the scarce resource, so the two toolbar ROWS become icon-only vertical
+   RAILS to the RIGHT of the file list — the list gets their height back.
+   Tooltips (title/long-press) still carry each button's name. */
+@media (max-height: 600px) {
+    .files-body {
+        display: flex;
+        flex-direction: row;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+    .files-main {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 0;
+    }
+    .files-toolbars {
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        flex: 0 0 auto;
+        order: 2;              /* right of the list */
+        min-height: 0;
+    }
+    .files-toolbars .files-actions-icons {
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 5px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        border-bottom: none;
+        border-left: 1px solid var(--border);
+    }
+    /* Icon-only in the rails: captions + the FILE/PROCESSING TOOLS
+       labels would force a wide column for no benefit. */
+    .files-toolbars .files-icon-label,
+    .files-toolbars .files-ai-label {
+        display: none;
+    }
+    .files-toolbars .files-actions-icons .btn.btn-icon {
+        width: 34px;
+        padding: 0;
+        justify-content: center;
+    }
+    .files-toolbars .files-actions-icons .btn.btn-icon .files-icon {
+        margin-right: 0;
+    }
+    /* Group dividers turn horizontal. */
+    .files-toolbars .files-actions-sep {
+        width: 20px;
+        height: 1px;
+        margin: 4px 0;
+        flex: 0 0 auto;
+    }
+}
+
 /* The list itself fills the rest of the panel and scrolls. */
 .files-list-wrap {
     flex: 1 1 auto;

@@ -44,7 +44,7 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260704-colorscheme">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260702-lsrej">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260710-afinputs">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260710-toolrails">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260702-stretchsection">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260705-wbsummary">
@@ -10184,6 +10184,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <button class="btn btn-sm" @click="files.clipboard = null">Clear</button>
                 </div>
 
+                <!-- files-body/files-toolbars/files-main are `display:contents`
+                     wrappers on normal screens (zero layout change). On short
+                     viewports (max-height media query) files-body becomes a
+                     row: the two toolbars turn into icon-only vertical rails
+                     on the RIGHT of the list, giving the list their height. -->
+                <div class="files-body">
+                <div class="files-toolbars">
                 <!-- Action toolbar — icon-only. Every button has a
                      `title` for the tooltip; native browser behaviour
                      covers both desktop hover and mobile long-press
@@ -10488,6 +10495,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon-label">Upscale</span>
                     </button>
                 </div>
+                </div><!-- /.files-toolbars -->
+                <div class="files-main">
 
                 <!-- Plate solve in-progress banner: elapsed time + Cancel. -->
                 <div x-show="filesSolveBusy" style="padding: 0 8px 8px;">
@@ -10657,6 +10666,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </tbody>
                     </table>
                 </div>
+                </div><!-- /.files-main -->
+                </div><!-- /.files-body -->
 
                 <!-- Status bar -->
                 <div class="files-statusbar">
