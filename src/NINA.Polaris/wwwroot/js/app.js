@@ -23994,6 +23994,28 @@ function ninaApp() {
         polarAzClass() { return this._polarColorBy(this.polar.azErrorArcsec); },
         polarAltClass() { return this._polarColorBy(this.polar.altErrorArcsec); },
         polarTotalClass() { return this._polarColorBy(this.polar.totalErrorArcsec); },
+
+        // Hemisphere-aware knob guidance derived from the TPPA sign
+        // convention (ComputeError: ideal axis az = 0 north / 180 south;
+        // +azErr = mount axis rotated toward INCREASING azimuth from the
+        // ideal, +altErr = axis above the pole). Unlike the canvas arrow —
+        // whose on-image direction depends on camera rotation AND any
+        // optical mirroring the solver's rotation angle can't capture —
+        // this names the unambiguous PHYSICAL direction for the adjusters:
+        //   North: +azErr = axis EAST of pole  → move azimuth west.
+        //   South: +azErr = axis WEST of pole  → move azimuth east
+        //          (azimuth increases 180°→270° = westward at the SCP).
+        //   Both:  +altErr = axis too high     → move altitude down.
+        polarKnobGuidance() {
+            const az = this.polar.azErrorArcsec || 0;
+            const alt = this.polar.altErrorArcsec || 0;
+            if (!az && !alt) return '';
+            const south = (this.settings.latitude || 0) < 0;
+            const parts = [];
+            if (az) parts.push('azimuth ' + (((az > 0) !== south) ? 'west' : 'east'));
+            if (alt) parts.push('altitude ' + (alt > 0 ? 'down' : 'up'));
+            return 'Move ' + parts.join(' · ');
+        },
         _polarColorBy(arcsec) {
             const abs = Math.abs(arcsec || 0) / 60.0; // arcmin
             if (abs < 1.0) return 'text-ok';

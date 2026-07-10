@@ -2038,6 +2038,14 @@
                             x-text="formatArcmin(polar.altErrorArcsec)"></strong></span>
                     <span>Total: <strong :class="polarTotalClass()"
                             x-text="formatArcmin(polar.totalErrorArcsec)"></strong></span>
+                    <!-- Hemisphere-aware knob guidance. Unlike the canvas
+                         arrow (whose on-image direction can mirror with the
+                         optical train), this text names the PHYSICAL
+                         direction to turn the mount adjusters. -->
+                    <span x-show="polarKnobGuidance()"
+                          title="Physical direction to move the mount's azimuth/altitude adjusters. If the error grows after a nudge, reverse that axis — trust the numbers, not the arrow.">
+                        → <strong x-text="polarKnobGuidance()"></strong>
+                    </span>
                 </div>
 
                 <!-- Failure / cancellation message -->
@@ -17556,7 +17564,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260710-hostclient"></script>
+    <script src="/js/app.js?v=20260710-polarcheck"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260710-hostclient"></script>

@@ -313,9 +313,30 @@ public class PolarAlignmentService {
 
             // 2. Three solved points -----------------------------------------
             // Slew step measured in degrees; mount RA is in hours, so
-            // convert via /15. Positive direction; meridian-aware
-            // picker is TODO (see plan edge cases).
+            // convert via /15.
             double slewStepHours = job.Options.SlewStepDegrees / 15.0;
+
+            // Meridian-aware sweep direction: always slew AWAY from the
+            // meridian. A fixed +RA sweep could cross it mid-routine on a
+            // GEM, triggering a pier flip between points — cone error flips
+            // sign across the pier, which shifts the small-circle centre and
+            // silently corrupts the 3-point fit (and some mounts, e.g. the
+            // ZWO AM series over LX200, reject near-limit GoTos outright).
+            // Hour angle of the start position decides: pointing EAST of the
+            // meridian (HA <= 0), +RA moves further east; pointing WEST
+            // (HA > 0), -RA moves further west.
+            {
+                var siteProfile = _profiles.Active;
+                double lst = PolarAlignmentMath.LocalSiderealHours(
+                    DateTime.UtcNow, siteProfile.Longitude);
+                double haHours = lst - ra0;                   // wrap to (-12, +12]
+                haHours = ((haHours + 12.0) % 24.0 + 24.0) % 24.0 - 12.0;
+                if (haHours > 0) slewStepHours = -slewStepHours;
+                _logger.LogInformation(
+                    "Polar align: start HA {HA:F2}h -> sweeping {Dir} in RA ({Step:F1}deg steps)",
+                    haHours, slewStepHours >= 0 ? "east (+RA)" : "west (-RA)",
+                    job.Options.SlewStepDegrees);
+            }
 
             for (int i = 0; i < 3; i++) {
                 ct.ThrowIfCancellationRequested();

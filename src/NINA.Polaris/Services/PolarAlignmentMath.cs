@@ -294,8 +294,10 @@ public static class PolarAlignmentMath {
     /// <summary>Local Sidereal Time at the given UTC instant +
     /// observer longitude (east positive, degrees). Returned in
     /// hours [0, 24). Meeus formula 12.4, good to a few seconds
-    /// over decades, far better than TPPA needs.</summary>
-    private static double LocalSiderealHours(DateTime utc, double longDeg) {
+    /// over decades, far better than TPPA needs. Public so the
+    /// TPPA sweep can pick a meridian-safe slew direction from the
+    /// start position's hour angle.</summary>
+    public static double LocalSiderealHours(DateTime utc, double longDeg) {
         // Julian Date, DateTime.ToOADate() returns days since 1899-12-30 12:00 UT.
         double jd = utc.ToOADate() + 2415018.5;
         double t = (jd - 2451545.0) / 36525.0;
