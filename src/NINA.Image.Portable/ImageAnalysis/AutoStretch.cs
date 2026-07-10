@@ -367,11 +367,14 @@ public static class AutoStretch {
         // BENCH-PERF: build the histogram with per-partition local bins
         // then merge once. Sums are order-independent so the merged
         // histogram (and sampleCount) match the serial version exactly.
+        // MEMOPT: partition-local bins are rented from the shared pool
+        // (256 KB LOH each; this runs on every relayed preview frame).
         var histogram = new int[65536];
         long sampleCount = 0;
         ushort satThreshold0 = satThreshold;
         object histLock = new object();
-        Parallel.ForEach(Partitioner.Create(0, limit), () => (new int[65536], 0L),
+        Parallel.ForEach(Partitioner.Create(0, limit),
+            () => (NINA.Image.ImageData.ImageStatistics.RentClearedHistogram(), 0L),
             (range, _, tl) => {
                 var (bins, cnt) = tl;
                 for (int i = range.Item1; i < range.Item2; i++) {
@@ -383,11 +386,12 @@ public static class AutoStretch {
                 return (bins, cnt);
             },
             tl => {
+                var (bins, cnt) = tl;
                 lock (histLock) {
-                    var (bins, cnt) = tl;
                     for (int b = 0; b < 65536; b++) histogram[b] += bins[b];
                     sampleCount += cnt;
                 }
+                System.Buffers.ArrayPool<int>.Shared.Return(bins);
             });
         if (sampleCount == 0) {
             // Uniformly saturated (or uniformly zero) image. Set
@@ -419,7 +423,8 @@ public static class AutoStretch {
         var devHistogram = new int[65536];
         double median0 = median;
         object devLock = new object();
-        Parallel.ForEach(Partitioner.Create(0, limit), () => new int[65536],
+        Parallel.ForEach(Partitioner.Create(0, limit),
+            NINA.Image.ImageData.ImageStatistics.RentClearedHistogram,
             (range, _, bins) => {
                 for (int i = range.Item1; i < range.Item2; i++) {
                     ushort v = data[i];
@@ -433,6 +438,7 @@ public static class AutoStretch {
                 lock (devLock) {
                     for (int b = 0; b < 65536; b++) devHistogram[b] += bins[b];
                 }
+                System.Buffers.ArrayPool<int>.Shared.Return(bins);
             });
         cumulative = 0;
         double mad = 0;

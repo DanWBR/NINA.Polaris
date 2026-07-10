@@ -10,6 +10,13 @@ WorkingDirectory=/opt/nina-polaris
 Environment=DOTNET_gcServer=0
 Environment=ASPNETCORE_URLS=http://0.0.0.0:5000
 Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+# MEMOPT: keep the RSS fixes in sync with the .deb unit
+# (packaging/deb/lib/systemd/system/polaris.service) — glibc otherwise
+# spawns one malloc arena per core (~64 MB each of mostly-empty VM on
+# an 8-core SBC) and the GC keeps freed segments reserved.
+Environment=DOTNET_GCConserveMemory=5
+Environment=MALLOC_ARENA_MAX=2
+Environment=MALLOC_TRIM_THRESHOLD_=131072
 Restart=always
 RestartSec=10
 User=nina

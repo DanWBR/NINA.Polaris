@@ -223,7 +223,11 @@ public class ImageStatistics : IImageStatistics {
         int med = (int)median;
         var histogram = new int[65536];
         var hl = new object();
-        Parallel.ForEach(Partitioner.Create(0, data.Length), () => new int[65536],
+        // MEMOPT: partition-local bins are rented, not allocated — a fresh
+        // int[65536] is 256 KB (LOH) PER PARTITION per pass, and this runs
+        // several times per live-stack frame; on a many-core host that was
+        // tens of MB of per-frame churn.
+        Parallel.ForEach(Partitioner.Create(0, data.Length), RentClearedHistogram,
             (range, _, bins) => {
                 for (int i = range.Item1; i < range.Item2; i++) {
                     int d = Math.Abs(data[i] - med);
@@ -231,7 +235,10 @@ public class ImageStatistics : IImageStatistics {
                 }
                 return bins;
             },
-            bins => { lock (hl) { for (int b = 0; b < 65536; b++) histogram[b] += bins[b]; } });
+            bins => {
+                lock (hl) { for (int b = 0; b < 65536; b++) histogram[b] += bins[b]; }
+                System.Buffers.ArrayPool<int>.Shared.Return(bins);
+            });
 
         long half = data.Length / 2;
         long cumulative = 0;
@@ -243,16 +250,31 @@ public class ImageStatistics : IImageStatistics {
     }
 
     /// <summary>Parallel partition-local value histogram (0..65535).
-    /// Merged once; identical to a serial count.</summary>
+    /// Merged once; identical to a serial count. MEMOPT: partition-local
+    /// bins come from the shared pool (see ComputeMAD note); only the
+    /// merged result, which escapes to the caller, is allocated.</summary>
     private static int[] BuildHistogramParallel(ushort[] data) {
         var histogram = new int[65536];
         var hl = new object();
-        Parallel.ForEach(Partitioner.Create(0, data.Length), () => new int[65536],
+        Parallel.ForEach(Partitioner.Create(0, data.Length), RentClearedHistogram,
             (range, _, bins) => {
                 for (int i = range.Item1; i < range.Item2; i++) bins[data[i]]++;
                 return bins;
             },
-            bins => { lock (hl) { for (int b = 0; b < 65536; b++) histogram[b] += bins[b]; } });
+            bins => {
+                lock (hl) { for (int b = 0; b < 65536; b++) histogram[b] += bins[b]; }
+                System.Buffers.ArrayPool<int>.Shared.Return(bins);
+            });
         return histogram;
+    }
+
+    /// <summary>Rent a 65536-bin histogram from the shared pool, cleared.
+    /// The pool may hand back a longer array; every consumer indexes
+    /// strictly below 65536 and merges exactly 65536 bins, so the extra
+    /// tail is inert.</summary>
+    internal static int[] RentClearedHistogram() {
+        var bins = System.Buffers.ArrayPool<int>.Shared.Rent(65536);
+        Array.Clear(bins, 0, 65536);
+        return bins;
     }
 }

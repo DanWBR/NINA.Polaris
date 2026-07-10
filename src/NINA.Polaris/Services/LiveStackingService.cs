@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Collections.Concurrent;
+using System.Runtime;
 using System.Threading.Tasks;
 using NINA.Core.Enum;
 using NINA.Image.Gpu;
@@ -177,6 +178,24 @@ public class LiveStackingService {
     // channel accumulators aren't a luminance.
     private float[]? _m2Buffer;
     private float[]? _lumSumBuffer;
+
+    // MEMOPT: session-scoped scratch buffers for the per-frame transients
+    // that never leave AddFrameAsync (calibrated frame, debayered planes,
+    // warped planes, SNR reconstruction). Frame geometry is constant within
+    // a session, so reusing these instead of new[]-ing per frame removes
+    // ~150 MB of large-object-heap churn PER FRAME on a 9 MP OSC camera —
+    // the churn (not the accumulators) was what ballooned RSS to ~1 GB.
+    // Only buffers that are consumed inside AddFrameAsync may live here;
+    // anything handed to the relay/writer escapes and must stay per-frame.
+    // All are lazily sized on first use and nulled in Reset().
+    private ushort[]? _scratchCal;
+    private ushort[]? _dbR, _dbG, _dbB;
+    private ushort[]? _warpR, _warpG, _warpB, _warpMono;
+    private ushort[]? _scratchSnr;
+
+    private static void EnsureScratch(ref ushort[]? buf, int length) {
+        if (buf == null || buf.Length != length) buf = new ushort[length];
+    }
 
     /// <summary>Count of individual pixel samples rejected as outliers during
     /// the current session (diagnostic; surfaced on the status payload).</summary>
@@ -499,6 +518,10 @@ public class LiveStackingService {
             _stackB = null;
             _m2Buffer = null;
             _lumSumBuffer = null;
+            _scratchCal = null;
+            _dbR = null; _dbG = null; _dbB = null;
+            _warpR = null; _warpG = null; _warpB = null; _warpMono = null;
+            _scratchSnr = null;
             RejectedPixels = 0;
             _colorActive = false;
             _bayerPattern = BayerPatternEnum.None;
@@ -531,6 +554,15 @@ public class LiveStackingService {
             _serverBgeUnavailable = false;   // re-probe BGE backend next session
             _logger.LogInformation("Live stacking reset");
         }
+        // MEMOPT: a session just released ~300+ MB of accumulators, scratch
+        // and master-cache LOH arrays. Without an explicit compacting
+        // collection the freed segments linger as fragmented LOH and RSS
+        // never comes down on the SBC. Reset is a user-paced action
+        // (target switch / stop), so a one-off blocking full GC here is
+        // invisible; NEVER do this per frame. Outside the lock so a
+        // concurrent frame isn't stalled behind the collection.
+        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
     }
 
     /// <summary>Arm stacking AND clear the current accumulator. The
@@ -639,7 +671,12 @@ public class LiveStackingService {
         // live source of truth (also valid while idle) the WS payload reads.
         PreProcStatus.BgeSupportedThisSession = BgeSupported;
         if (preProcSettings.CalibrationEnabled && _preProcessor != null) {
-            var res = await _preProcessor.ApplyAsync(imageData, preProcSettings, ct);
+            // MEMOPT: calibrated pixels never escape AddFrameAsync (the relay
+            // retains the RAW frame, the writer saves the RAW frame), so the
+            // calibrated copy is written into session scratch instead of a
+            // fresh ~18 MB array per frame.
+            EnsureScratch(ref _scratchCal, imageData.Data.Length);
+            var res = await _preProcessor.ApplyAsync(imageData, preProcSettings, _scratchCal, ct);
             if (res.Success && (res.MasterDarkUsed != null
                                 || res.MasterFlatUsed != null
                                 || res.MasterBiasUsed != null)) {
@@ -699,12 +736,14 @@ public class LiveStackingService {
                     _width = props.Width;
                     _height = props.Height;
                     int pixelCount = _width * _height;
-                    _stackBuffer = new float[pixelCount];
                     _countBuffer = new int[pixelCount];
                     _referenceStars = stars;
                     // Colour session? OSC frame + the per-rig toggle. Allocate
                     // the 3 plane accumulators once; the rest of the session
-                    // debayers + integrates in colour.
+                    // debayers + integrates in colour. The mono accumulator is
+                    // only allocated in the mono branch — a colour session
+                    // never writes it, so allocating it there was ~35 MB of
+                    // dead weight on a 9 MP sensor (MEMOPT).
                     _bayerPattern = props.BayerPattern;
                     _colorActive = ColorStacking && props.IsBayered
                         && _bayerPattern != BayerPatternEnum.None
@@ -714,6 +753,8 @@ public class LiveStackingService {
                         _stackG = new float[pixelCount];
                         _stackB = new float[pixelCount];
                         _logger.LogInformation("Live stack: colour mode ON (pattern {P})", _bayerPattern);
+                    } else {
+                        _stackBuffer = new float[pixelCount];
                     }
                     // Kappa-sigma rejection buffers (opt-in). Mono reuses
                     // _stackBuffer as the running sum + one M2 buffer; colour
@@ -773,12 +814,23 @@ public class LiveStackingService {
                     // reference, no warp). Interpolation stays within a
                     // colour channel, so no CFA smear. Accumulate per channel
                     // into the 3 buffers, sharing one coverage count.
-                    var ch = BayerDebayer.Bilinear(data, _width, _height, _bayerPattern);
-                    ushort[] r = ch.R, g = ch.G, b = ch.B;
+                    // MEMOPT: both stages write into session scratch — these
+                    // planes are consumed by the accumulate loop below and
+                    // never escape, so 6× ushort[N] (~108 MB on 9 MP) of
+                    // per-frame LOH churn becomes a fixed session allocation.
+                    int pc = _width * _height;
+                    EnsureScratch(ref _dbR, pc);
+                    EnsureScratch(ref _dbG, pc);
+                    EnsureScratch(ref _dbB, pc);
+                    BayerDebayer.Bilinear(data, _width, _height, _bayerPattern, _dbR!, _dbG!, _dbB!);
+                    ushort[] r = _dbR!, g = _dbG!, b = _dbB!;
                     if (usedTransform != null) {
-                        r = ImageResampler.ApplyTransform(r, _width, _height, usedTransform);
-                        g = ImageResampler.ApplyTransform(g, _width, _height, usedTransform);
-                        b = ImageResampler.ApplyTransform(b, _width, _height, usedTransform);
+                        EnsureScratch(ref _warpR, pc);
+                        EnsureScratch(ref _warpG, pc);
+                        EnsureScratch(ref _warpB, pc);
+                        r = ImageResampler.ApplyTransform(r, _width, _height, usedTransform, _warpR!);
+                        g = ImageResampler.ApplyTransform(g, _width, _height, usedTransform, _warpG!);
+                        b = ImageResampler.ApplyTransform(b, _width, _height, usedTransform, _warpB!);
                     }
                     int accN = Math.Min(r.Length, _stackR!.Length);
                     bool rej = SigmaRejection && _m2Buffer != null && _lumSumBuffer != null;
@@ -1025,7 +1077,12 @@ public class LiveStackingService {
     /// the canonical fallback whenever the GPU declines.</summary>
     private ushort[] Warp(ushort[] data, AffineTransform t) {
         if (_gpu.TryWarpAffine(data, _width, _height, t, out var warped)) return warped;
-        return ImageResampler.ApplyTransform(data, _width, _height, t);
+        // MEMOPT: the CPU-warped mono frame is only accumulated, never
+        // retained, so it reuses one session scratch instead of a fresh
+        // ~18 MB LOH array per frame. (The GPU path keeps its own output
+        // buffer — changing IGpuCompute isn't worth it for that branch.)
+        EnsureScratch(ref _warpMono, _width * _height);
+        return ImageResampler.ApplyTransform(data, _width, _height, t, _warpMono!);
     }
 
     private static List<DetectedStar> Rotate180Stars(List<DetectedStar> stars, int w, int h) {
@@ -1127,19 +1184,45 @@ public class LiveStackingService {
         // serialized it against the next frame's accumulate. Now the lock
         // is held only for the parallel reconstruction; the three SNR
         // passes happen on the local snapshot with the lock released.
+        // MEMOPT: reconstruct into session scratch (frames are strictly
+        // sequential through AddFrameAsync, so the scratch is never read
+        // and rewritten concurrently). Cells with no coverage are zeroed
+        // explicitly — the scratch carries the previous frame's values.
         ushort[] stacked;
         lock (_lock) {
-            if (_stackBuffer == null || _countBuffer == null) return 0;
-            var n = _stackBuffer.Length;
-            var sb = _stackBuffer;
+            if (_countBuffer == null) return 0;
+            var n = _countBuffer.Length;
             var cb = _countBuffer;
-            stacked = new ushort[n];
-            Parallel.ForEach(Partitioner.Create(0, n), range => {
-                for (int i = range.Item1; i < range.Item2; i++) {
-                    if (cb[i] > 0)
-                        stacked[i] = (ushort)Math.Clamp(sb[i] / cb[i], 0, 65535);
-                }
-            });
+            EnsureScratch(ref _scratchSnr, n);
+            stacked = _scratchSnr!;
+            if (_colorActive && _stackR != null && _stackG != null && _stackB != null) {
+                // Colour: the mono accumulator doesn't exist; reconstruct the
+                // Rec.601 luminance of the running mean. (Before MEMOPT this
+                // path read the never-written mono buffer and reported the SNR
+                // of an all-zero image, so colour sessions always showed
+                // cumulative SNR 0 — reconstructing luminance fixes that.)
+                var r = _stackR; var g = _stackG; var b = _stackB;
+                Parallel.ForEach(Partitioner.Create(0, n), range => {
+                    for (int i = range.Item1; i < range.Item2; i++) {
+                        int c = cb[i];
+                        stacked[i] = c > 0
+                            ? (ushort)Math.Clamp(
+                                (0.299 * r[i] + 0.587 * g[i] + 0.114 * b[i]) / c, 0, 65535)
+                            : (ushort)0;
+                    }
+                });
+            } else if (_stackBuffer != null) {
+                var sb = _stackBuffer;
+                Parallel.ForEach(Partitioner.Create(0, n), range => {
+                    for (int i = range.Item1; i < range.Item2; i++) {
+                        stacked[i] = cb[i] > 0
+                            ? (ushort)Math.Clamp(sb[i] / cb[i], 0, 65535)
+                            : (ushort)0;
+                    }
+                });
+            } else {
+                return 0;
+            }
         }
         return ComputeFrameSnr(stacked);
     }

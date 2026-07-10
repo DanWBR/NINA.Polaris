@@ -36,11 +36,15 @@ namespace NINA.Polaris.Services.Studio;
 /// pass bias OR dark, not both.
 /// </summary>
 public static class CalibrationMath {
-    /// <summary>Public surface of the parallel pixel loop. Allocates
-    /// a fresh ushort[] same size as <paramref name="light"/> and
-    /// returns the calibrated copy; the input buffer is never
-    /// mutated (callers downstream still need the raw frame for
-    /// other purposes, e.g. live preview before calibration).
+    /// <summary>Public surface of the parallel pixel loop. Writes the
+    /// calibrated copy into <paramref name="dest"/> when supplied
+    /// (MEMOPT: the live stacker reuses one session scratch instead
+    /// of allocating ~18 MB per frame), otherwise allocates a fresh
+    /// ushort[] same size as <paramref name="light"/>. The input
+    /// buffer is never mutated (callers downstream still need the raw
+    /// frame for other purposes, e.g. live preview before
+    /// calibration); a dest that aliases the light is ignored and a
+    /// fresh array is used instead.
     ///
     /// Throws InvalidOperationException if any of dark/bias/flat
     /// don't match the light's pixel count -- caller must validate
@@ -49,7 +53,8 @@ public static class CalibrationMath {
             ushort[] light,
             ushort[]? dark,
             ushort[]? bias,
-            (double[] norm, double mean)? flat) {
+            (float[] norm, double mean)? flat,
+            ushort[]? dest = null) {
         if (light == null) throw new ArgumentNullException(nameof(light));
         if (dark != null && dark.Length != light.Length)
             throw new InvalidOperationException("Master dark dimensions don't match light.");
@@ -58,7 +63,9 @@ public static class CalibrationMath {
         if (flat.HasValue && flat.Value.norm.Length != light.Length)
             throw new InvalidOperationException("Master flat dimensions don't match light.");
 
-        var pixels = new ushort[light.Length];
+        var pixels = (dest != null && dest.Length == light.Length && !ReferenceEquals(dest, light))
+            ? dest
+            : new ushort[light.Length];
         // Local copies so the lambda doesn't capture nullable structs each iteration.
         var darkPx = dark;
         var biasPx = (dark == null) ? bias : null;   // dark wins over bias
@@ -78,20 +85,24 @@ public static class CalibrationMath {
     }
 
     /// <summary>Build the normalised flat: subtract a bias/dark-flat
-    /// calibrator if available, divide by mean. Returns a per-pixel
-    /// double[] (precision matters for the division) plus the mean
-    /// for diagnostics. Caller caches the result -- it's expensive
-    /// to recompute and identical across all lights of the same
-    /// (filter, gain).</summary>
-    public static (double[] norm, double mean) NormalizeFlat(BaseImageData flat, BaseImageData? cal) {
+    /// calibrator if available, divide by mean. The per-pixel result
+    /// is stored as float[] — MEMOPT: it's the largest master buffer
+    /// cached for a whole session (69 MB as double[] on a 9 MP
+    /// sensor, half that as float[]) and a normalised flat lives in
+    /// [~0.5, ~2.0] where float's 24-bit mantissa is ~1e-7 relative
+    /// error, far below photon noise. The mean and the subtraction
+    /// are still computed in double. Caller caches the result -- it's
+    /// expensive to recompute and identical across all lights of the
+    /// same (filter, gain).</summary>
+    public static (float[] norm, double mean) NormalizeFlat(BaseImageData flat, BaseImageData? cal) {
         var n = flat.Data.Length;
-        var corrected = new double[n];
+        var corrected = new float[n];
         double sum = 0;
         if (cal != null && cal.Data.Length == n) {
             for (int i = 0; i < n; i++) {
                 var v = (double)flat.Data[i] - cal.Data[i];
                 if (v < 0) v = 0;
-                corrected[i] = v;
+                corrected[i] = (float)v;
                 sum += v;
             }
         } else {
@@ -102,7 +113,7 @@ public static class CalibrationMath {
         }
         var mean = sum / n;
         if (mean < 1) mean = 1;   // pathological flat; avoid divide-by-zero
-        for (int i = 0; i < n; i++) corrected[i] /= mean;
+        for (int i = 0; i < n; i++) corrected[i] = (float)(corrected[i] / mean);
         return (corrected, mean);
     }
 

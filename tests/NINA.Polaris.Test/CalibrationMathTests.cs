@@ -76,7 +76,7 @@ public class CalibrationMathTests {
         // doubles the corresponding pixels; division by 1.0 leaves
         // them; division by 2.0 halves them.
         var light = new ushort[] { 1000, 1000, 1000 };
-        var norm  = new double[] { 0.5, 1.0, 2.0 };
+        var norm  = new float[] { 0.5f, 1.0f, 2.0f };
         var result = CalibrationMath.CalibratePixels(light, dark: null, bias: null,
             flat: (norm, 100.0));
         Assert.That(result, Is.EqualTo(new ushort[] { 2000, 1000, 500 }));
@@ -88,7 +88,7 @@ public class CalibrationMathTests {
         // Dark of 0 + flat divide by 0.0001 explodes -> clamp to 65535.
         var light = new ushort[] { 50, 50000 };
         var dark  = new ushort[] { 200, 0 };
-        var norm  = new double[] { 1.0, 0.0001 };
+        var norm  = new float[] { 1.0f, 0.0001f };
         var result = CalibrationMath.CalibratePixels(light, dark, bias: null,
             flat: (norm, 1.0));
         Assert.That(result[0], Is.EqualTo(0), "underflow should clamp");
@@ -102,7 +102,7 @@ public class CalibrationMathTests {
         // (minus dark, if any). Keeps live-stack robust against a
         // single bad pixel in the flat.
         var light = new ushort[] { 1000 };
-        var norm  = new double[] { 0.0 };
+        var norm  = new float[] { 0.0f };
         var result = CalibrationMath.CalibratePixels(light, dark: null, bias: null,
             flat: (norm, 1.0));
         Assert.That(result[0], Is.EqualTo(1000));
@@ -125,8 +125,8 @@ public class CalibrationMathTests {
         var flat = MakeImage(new ushort[] { 100, 200, 300, 400 });
         var (norm, mean) = CalibrationMath.NormalizeFlat(flat, cal: null);
         Assert.That(mean, Is.EqualTo(250.0).Within(1e-6));
-        Assert.That(norm[0], Is.EqualTo(100.0 / 250.0).Within(1e-9));
-        Assert.That(norm[3], Is.EqualTo(400.0 / 250.0).Within(1e-9));
+        Assert.That(norm[0], Is.EqualTo(100.0 / 250.0).Within(1e-6));  // float storage (MEMOPT)
+        Assert.That(norm[3], Is.EqualTo(400.0 / 250.0).Within(1e-6));
     }
 
     [Test]
@@ -137,7 +137,7 @@ public class CalibrationMathTests {
         var bias = MakeImage(new ushort[] { 20, 20, 20, 20 });
         var (norm, mean) = CalibrationMath.NormalizeFlat(flat, bias);
         Assert.That(mean, Is.EqualTo(230.0).Within(1e-6));
-        Assert.That(norm[0], Is.EqualTo(80.0 / 230.0).Within(1e-9));
+        Assert.That(norm[0], Is.EqualTo(80.0 / 230.0).Within(1e-6));
     }
 
     // ---------- FindNearestDark / FindMatchingFlat / FindMatchingBias ----------

@@ -60,7 +60,7 @@ public class CalibrationServiceTests {
         var (norm, mean) = InvokeNormalizeFlat(flat, bias);
         Assert.That(mean, Is.EqualTo(150).Within(0.01));
         // Uniform flat → uniform normalised values of 1.0.
-        foreach (var v in norm) Assert.That(v, Is.EqualTo(1.0).Within(1e-9));
+        foreach (var v in norm) Assert.That(v, Is.EqualTo(1.0).Within(1e-6));  // float storage (MEMOPT)
     }
 
     [Test]
@@ -130,7 +130,7 @@ public class CalibrationServiceTests {
 
     // --- Reflection helpers --------------------------------------
 
-    private static (double[] norm, double mean) InvokeNormalizeFlat(ushort[] flat, ushort[]? cal) {
+    private static (float[] norm, double mean) InvokeNormalizeFlat(ushort[] flat, ushort[]? cal) {
         var baseImageDataType = Type.GetType("NINA.Image.ImageData.BaseImageData, NINA.Image.Portable")!;
         var imagePropsType = Type.GetType("NINA.Image.ImageData.ImageProperties, NINA.Image.Portable")!;
         var props = Activator.CreateInstance(imagePropsType)!;
@@ -149,7 +149,7 @@ public class CalibrationServiceTests {
         }
         var result = PrivateStatic("NormalizeFlat").Invoke(null, new[] { flatImg, calImg })!;
         var resultType = result.GetType();
-        var norm = (double[])resultType.GetField("Item1")!.GetValue(result)!;
+        var norm = (float[])resultType.GetField("Item1")!.GetValue(result)!;
         var mean = (double)resultType.GetField("Item2")!.GetValue(result)!;
         return (norm, mean);
     }

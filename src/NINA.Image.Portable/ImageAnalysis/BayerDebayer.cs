@@ -53,15 +53,28 @@ public static class BayerDebayer {
     public record Channels(ushort[] R, ushort[] G, ushort[] B);
 
     public static Channels Bilinear(ushort[] cfa, int width, int height, BayerPatternEnum pattern) {
+        int n = width * height;
+        return Bilinear(cfa, width, height, pattern,
+            new ushort[n], new ushort[n], new ushort[n]);
+    }
+
+    /// <summary>Destination-buffer overload (MEMOPT): writes the three
+    /// planes into caller-owned buffers so per-frame consumers (the live
+    /// stacker) can reuse session scratch instead of allocating 3×W*H
+    /// ushort[] per frame. Every output pixel is written, so the buffers
+    /// don't need clearing. Buffers must be at least W*H long and must
+    /// not alias the CFA input.</summary>
+    public static Channels Bilinear(ushort[] cfa, int width, int height, BayerPatternEnum pattern,
+            ushort[] r, ushort[] g, ushort[] b) {
         if (pattern == BayerPatternEnum.None || pattern == BayerPatternEnum.Auto)
             throw new ArgumentException("Pattern must be RGGB / GRBG / GBRG / BGGR.", nameof(pattern));
         if (cfa.Length < width * height)
             throw new ArgumentException("CFA buffer too small for declared dimensions.", nameof(cfa));
-
         int n = width * height;
-        var r = new ushort[n];
-        var g = new ushort[n];
-        var b = new ushort[n];
+        if (r.Length < n || g.Length < n || b.Length < n)
+            throw new ArgumentException("Destination channel buffers too small for declared dimensions.");
+        if (ReferenceEquals(r, cfa) || ReferenceEquals(g, cfa) || ReferenceEquals(b, cfa))
+            throw new ArgumentException("Destination channel buffers must not alias the CFA input.");
 
         // For each output pixel, identify which CFA colour it has and
         // bilinear-interpolate the other two from neighbours. The colour

@@ -24,6 +24,7 @@
 // GNU Affero General Public License v3.0 (see LICENSE.txt and NOTICE), at the
 // recipient's option, pursuant to MPL-2.0 section 3.3.
 
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
 
@@ -81,23 +82,34 @@ public class StarDetector {
         // last-resort floor.
         if (threshold <= stats.median + 0.5) threshold = stats.median + 5;
 
-        var visited = new bool[width * height];
+        // MEMOPT: Detect runs once per frame in the live pipelines and a
+        // fresh bool[W*H] is ~9 MB of LOH churn each call on a 9 MP
+        // sensor. Rent from the shared pool instead (may return a longer
+        // array — every index used is < width*height, so that's fine)
+        // and clear only the region we use.
+        int visitedLen = width * height;
+        var visited = ArrayPool<bool>.Shared.Rent(visitedLen);
+        Array.Clear(visited, 0, visitedLen);
         var stars = new List<DetectedStar>();
 
-        for (int y = BorderExclusion; y < height - BorderExclusion; y++) {
-            for (int x = BorderExclusion; x < width - BorderExclusion; x++) {
-                int idx = y * width + x;
-                if (visited[idx] || data[idx] < threshold) continue;
+        try {
+            for (int y = BorderExclusion; y < height - BorderExclusion; y++) {
+                for (int x = BorderExclusion; x < width - BorderExclusion; x++) {
+                    int idx = y * width + x;
+                    if (visited[idx] || data[idx] < threshold) continue;
 
-                var pixels = FloodFill(data, width, height, x, y, threshold, visited);
-                if (pixels.Count < MinStarSize || pixels.Count > MaxStarSize) continue;
+                    var pixels = FloodFill(data, width, height, x, y, threshold, visited);
+                    if (pixels.Count < MinStarSize || pixels.Count > MaxStarSize) continue;
 
-                var star = CurveOfGrowthHfr
-                    ? ComputeStarPropertiesCurveOfGrowth(data, width, height, pixels)
-                    : ComputeStarProperties(data, width, pixels);
-                if (star.HFR > MinHfr && star.HFR < MaxHfr)
-                    stars.Add(star);
+                    var star = CurveOfGrowthHfr
+                        ? ComputeStarPropertiesCurveOfGrowth(data, width, height, pixels)
+                        : ComputeStarProperties(data, width, pixels);
+                    if (star.HFR > MinHfr && star.HFR < MaxHfr)
+                        stars.Add(star);
+                }
             }
+        } finally {
+            ArrayPool<bool>.Shared.Return(visited);
         }
 
         stars.Sort((a, b) => b.Flux.CompareTo(a.Flux));
@@ -322,10 +334,14 @@ public class StarDetector {
         // the merged counts are identical to the serial scan (sums are
         // order-independent). The flood-fill detection below stays serial
         // because it shares the visited[] mask.
+        // MEMOPT: partition-local bins are rented from the shared pool —
+        // a fresh int[65536] is a 256 KB LOH array per partition per pass,
+        // and Detect runs on every live frame.
         var histogram = new int[65536];
         long nonZeroL = 0;
         object statLock = new object();
-        Parallel.ForEach(Partitioner.Create(0, data.Length), () => (new int[65536], 0L),
+        Parallel.ForEach(Partitioner.Create(0, data.Length),
+            () => (ImageData.ImageStatistics.RentClearedHistogram(), 0L),
             (range, _, tl) => {
                 var (bins, nz) = tl;
                 for (int i = range.Item1; i < range.Item2; i++) {
@@ -336,11 +352,12 @@ public class StarDetector {
                 return (bins, nz);
             },
             tl => {
+                var (bins, nz) = tl;
                 lock (statLock) {
-                    var (bins, nz) = tl;
                     for (int b = 0; b < 65536; b++) histogram[b] += bins[b];
                     nonZeroL += nz;
                 }
+                System.Buffers.ArrayPool<int>.Shared.Return(bins);
             });
         int nonZero = (int)Math.Min(nonZeroL, int.MaxValue);
 
@@ -370,7 +387,8 @@ public class StarDetector {
         bool excludeZeros0 = excludeZeros;
         double median1 = median;
         object devStatLock = new object();
-        Parallel.ForEach(Partitioner.Create(0, data.Length), () => new int[65536],
+        Parallel.ForEach(Partitioner.Create(0, data.Length),
+            ImageData.ImageStatistics.RentClearedHistogram,
             (range, _, bins) => {
                 for (int i = range.Item1; i < range.Item2; i++) {
                     var v = data[i];
@@ -384,6 +402,7 @@ public class StarDetector {
                 lock (devStatLock) {
                     for (int b = 0; b < 65536; b++) devHist[b] += bins[b];
                 }
+                System.Buffers.ArrayPool<int>.Shared.Return(bins);
             });
 
         cumulative = 0;

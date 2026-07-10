@@ -69,9 +69,17 @@ public class LiveStackPreProcessor {
     /// spirit but exposed as Task for symmetry with the live-stack
     /// frame handler chain. Returns the raw pixel array on the result
     /// when calibration is disabled OR fails -- the caller never sees
-    /// a null buffer.</summary>
+    /// a null buffer.
+    ///
+    /// MEMOPT: <paramref name="dest"/> is an optional caller-owned
+    /// buffer the calibrated pixels are written into (must match the
+    /// frame's pixel count and must not be the frame's own buffer);
+    /// when null a fresh array is allocated per call. The live stacker
+    /// passes its session scratch so calibration stops allocating an
+    /// ~18 MB LOH array per frame.</summary>
     public Task<PreProcessResult> ApplyAsync(IImageData frame,
-            LiveStackPreProcSettings settings, CancellationToken ct = default) {
+            LiveStackPreProcSettings settings, ushort[]? dest = null,
+            CancellationToken ct = default) {
         if (!settings.CalibrationEnabled) {
             // Pre-processing disabled -> pass through unchanged.
             return Task.FromResult(new PreProcessResult(
@@ -99,7 +107,8 @@ public class LiveStackPreProcessor {
                 frame.Data,
                 dark: masters.Dark,
                 bias: masters.Bias,
-                flat: masters.Flat);
+                flat: masters.Flat,
+                dest: dest);
             return Task.FromResult(new PreProcessResult(
                 Success: true, Pixels: calibrated,
                 MasterDarkUsed: masters.DarkName,
@@ -167,7 +176,7 @@ public class LiveStackPreProcessor {
         ushort[]? darkBuf = darkRow != null ? LoadFitsPixels(darkRow.Path) : null;
         ushort[]? biasBuf = (darkRow == null && biasRow != null) ? LoadFitsPixels(biasRow.Path) : null;
 
-        (double[] norm, double mean)? flat = null;
+        (float[] norm, double mean)? flat = null;
         if (flatRow != null) {
             var flatImg = LoadFitsImage(flatRow.Path);
             // Flat calibrator: prefer a dark-flat sized for the flat's
@@ -210,8 +219,12 @@ public class LiveStackPreProcessor {
 
     private record MasterKey(int Gain, double ExposureSec, string Filter, short BinningX);
 
+    // MEMOPT: the normalised flat is stored as float[] — on a 9 MP
+    // sensor that's 34.5 MB resident instead of 69 MB as double[],
+    // and float's 24-bit mantissa is ~1e-7 relative error on a flat
+    // that lives in [~0.5, ~2.0], far below photon noise.
     private record CachedMasterSet(
-        ushort[]? Dark, ushort[]? Bias, (double[] norm, double mean)? Flat,
+        ushort[]? Dark, ushort[]? Bias, (float[] norm, double mean)? Flat,
         string? DarkName, string? FlatName, string? BiasName);
 }
 

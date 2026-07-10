@@ -105,8 +105,8 @@ public class CalibrationService {
                 return img;
             }
 
-            var flatCache = new Dictionary<(string flat, string? cal), (double[] norm, double mean)>();
-            (double[] norm, double mean) GetNormalizedFlat(string flatPath, string? calibratorPath) {
+            var flatCache = new Dictionary<(string flat, string? cal), (float[] norm, double mean)>();
+            (float[] norm, double mean) GetNormalizedFlat(string flatPath, string? calibratorPath) {
                 var key = (flatPath, calibratorPath);
                 if (flatCache.TryGetValue(key, out var cached)) return cached;
                 var flat = LoadMaster(flatPath);
@@ -170,7 +170,7 @@ public class CalibrationService {
     private void CalibrateOne(
             string lightPath, CalibrationRequest req, MasterIndex masters,
             Func<string, BaseImageData> loadMaster,
-            Func<string, string?, (double[] norm, double mean)> getNormFlat,
+            Func<string, string?, (float[] norm, double mean)> getNormFlat,
             string outRoot, string rigName) {
         if (!File.Exists(lightPath))
             throw new InvalidOperationException($"Light missing on disk: {lightPath}");
@@ -225,7 +225,7 @@ public class CalibrationService {
         // Dimension validation also lives there (throws on mismatch).
         ushort[]? darkPx = darkPath != null ? loadMaster(darkPath).Data : null;
         ushort[]? biasPx = (darkPath == null && biasPath != null) ? loadMaster(biasPath).Data : null;
-        (double[] norm, double mean)? flat = flatPath != null
+        (float[] norm, double mean)? flat = flatPath != null
             ? getNormFlat(flatPath, flatCalibrator)
             : null;
         var pixels = CalibrationMath.CalibratePixels(light.Data, darkPx, biasPx, flat);

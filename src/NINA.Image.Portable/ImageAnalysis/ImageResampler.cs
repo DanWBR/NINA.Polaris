@@ -30,7 +30,23 @@ namespace NINA.Image.ImageAnalysis;
 
 public static class ImageResampler {
     public static ushort[] ApplyTransform(ushort[] source, int width, int height, AffineTransform transform) {
-        var result = new ushort[width * height];
+        return ApplyTransform(source, width, height, transform, new ushort[width * height]);
+    }
+
+    /// <summary>Destination-buffer overload (MEMOPT): resamples into a
+    /// caller-owned buffer so per-frame consumers (the live stacker) can
+    /// reuse session scratch instead of allocating W*H ushort[] per warped
+    /// plane per frame. Out-of-canvas pixels are explicitly zeroed (a
+    /// reused buffer carries the previous frame). Returns the destination
+    /// — or the SOURCE unchanged when the transform is degenerate, so
+    /// callers must use the return value, not assume dest was filled.
+    /// dest must be at least W*H long and must not alias the source.</summary>
+    public static ushort[] ApplyTransform(ushort[] source, int width, int height,
+            AffineTransform transform, ushort[] result) {
+        if (result.Length < width * height)
+            throw new ArgumentException("Destination buffer too small for declared dimensions.", nameof(result));
+        if (ReferenceEquals(result, source))
+            throw new ArgumentException("In-place resampling is not supported.", nameof(result));
 
         // Invert the transform: for each output pixel, find source pixel
         // output = M * input + T => input = M^-1 * (output - T)
@@ -61,7 +77,13 @@ public static class ImageResampler {
                 int x0 = (int)Math.Floor(srcX);
                 int y0 = (int)Math.Floor(srcY);
 
-                if (x0 < 0 || x0 >= width - 1 || y0 < 0 || y0 >= height - 1) continue;
+                // Off-canvas: write 0 explicitly (a fresh array is already
+                // zero, but a reused destination buffer carries the previous
+                // frame's pixels).
+                if (x0 < 0 || x0 >= width - 1 || y0 < 0 || y0 >= height - 1) {
+                    result[rowOut + x] = 0;
+                    continue;
+                }
 
                 double fx = srcX - x0;
                 double fy = srcY - y0;

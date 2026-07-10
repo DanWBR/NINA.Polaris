@@ -53,8 +53,13 @@ RUN useradd --create-home --shell /bin/bash --uid 1000 nina
 COPY --from=build --chown=nina:nina /app/publish ./
 
 # Workstation GC: smaller heap is better for RPi-class machines than the
-# server GC's per-CPU heap fragmentation.
+# server GC's per-CPU heap fragmentation. MEMOPT: the arena cap + trim
+# threshold + GCConserveMemory mirror the .deb systemd unit — without
+# them glibc spawns one malloc arena per core and RSS balloons.
 ENV DOTNET_gcServer=0 \
+    DOTNET_GCConserveMemory=5 \
+    MALLOC_ARENA_MAX=2 \
+    MALLOC_TRIM_THRESHOLD_=131072 \
     ASPNETCORE_URLS=http://0.0.0.0:5000
 
 # Bind-mounts for persistence — profiles live here, image archive lives here.
