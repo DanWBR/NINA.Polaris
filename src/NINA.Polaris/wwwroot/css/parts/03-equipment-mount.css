@@ -2445,6 +2445,16 @@
     gap: 3px;
 }
 
+/* .input-sm is width:80% of its flex-column label, and these labels are
+   sized by their own text — so short-labelled number fields (Step Size,
+   Frames/pt, Min Stars, Top stars) collapsed to the label's text width
+   and cropped the value behind the native spinner. Fixed width instead;
+   matches the 100px the exposure-preset inputs already use. Selects
+   (Fit / Crop / Optical train) keep their intrinsic option width. */
+.af-params input.input-sm {
+    width: 100px;
+}
+
 .af-actions {
     display: flex;
     gap: 8px;
