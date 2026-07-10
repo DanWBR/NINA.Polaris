@@ -50,11 +50,11 @@ public class LiveStackTriggers {
     /// successful AF run. 0 = disabled.</summary>
     public double RefocusHfrIncreasePercent { get; set; }
 
-    /// <summary>Per-AF-run sweep configuration. Reused verbatim when the
-    /// orchestrator calls <see cref="AutoFocusService.Start"/>.</summary>
-    public AutoFocusRequest RefocusRequest { get; set; } = new() {
-        Steps = 9, StepSize = 50, ExposureSeconds = 3, MinStars = 5, BacklashSteps = 0
-    };
+    /// <summary>Per-AF-run overrides passed when the orchestrator calls
+    /// <see cref="AutoFocusService.Start"/>. AFPORT: all-null by default so
+    /// triggered refocus follows the rig's AutoFocus profile settings; old
+    /// profiles that persisted explicit values keep them as overrides.</summary>
+    public AutoFocusRequest RefocusRequest { get; set; } = new();
 
     // ----- Auto re-center block -----
 

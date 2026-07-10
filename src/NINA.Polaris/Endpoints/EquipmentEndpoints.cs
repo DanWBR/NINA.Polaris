@@ -144,6 +144,9 @@ public static class EquipmentEndpoints {
                 r.VerticalFlipImage = update.VerticalFlipImage;
                 r.FocuserStepSize = update.FocuserStepSize;
                 r.FocuserBacklashSteps = update.FocuserBacklashSteps;
+                // AFPORT: per-rig autofocus settings. Null from an old client
+                // must NOT blank the stored block (rig-persistence guard).
+                r.AutoFocus = update.AutoFocus ?? r.AutoFocus;
                 // Polar alignment (TPPA) tunables. Defensive: zero from
                 // an old client should not nuke the defaults, clamp.
                 if (update.PolarAlignSlewDegrees > 0)

@@ -38,7 +38,7 @@ public class SequenceEngineDitherTests {
         var slewCenter = new SlewCenterService(equip, plateSolve, profile, stream, NullLogger<SlewCenterService>.Instance);
         var native = new NativeGuider(equip, profile, NullLogger<NativeGuider>.Instance);
         var guiders = new ActiveGuiderProvider(profile, phd2, native);
-        var autoFocus = new AutoFocusService(equip, relay, guiders, NullLogger<AutoFocusService>.Instance);
+        var autoFocus = new AutoFocusService(equip, relay, guiders, profile, NullLogger<AutoFocusService>.Instance);
         var meridianFlip = new MeridianFlipService(equip, guiders, slewCenter, autoFocus, profile,
             NullLogger<MeridianFlipService>.Instance);
         var imageWriter = new ImageWriterService(equip, profile, NullLogger<ImageWriterService>.Instance);

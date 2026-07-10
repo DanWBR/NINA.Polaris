@@ -2650,19 +2650,13 @@
                         }" x-text="autoFocus.state === 'running' ? 'RUNNING' :
                                    (autoFocus.success === true ? 'OK' :
                                     (autoFocus.success === false ? 'FAILED' : 'IDLE'))"></span>
-                        <!-- Which sweep is actually running, straight from the server,
-                             so a mismatch with the Smart checkbox is obvious at a glance. -->
+                        <!-- AFPORT: which fitting method + attempt is running. -->
                         <span x-show="autoFocus.state === 'running'" class="status-indicator-sm"
-                              x-text="autoFocus.mode === 'adaptive' ? 'SMART' : 'GRID'"></span>
+                              x-text="(autoFocus.method || 'V-CURVE').toUpperCase() + (autoFocus.attempt > 1 ? (' · TRY ' + autoFocus.attempt) : '')"></span>
                     </div>
                     <div class="af-params">
-                        <label style="display:flex; flex-direction:row; align-items:center; gap:6px" title="ASIAIR-style: no point count — seed 3 points, auto-detect direction, grow the V-curve until the fit is confident, then stop. Uncheck for the fixed Steps×Step-Size grid.">
-                            <input type="checkbox" x-model="afParams.adaptive"
-                                   :disabled="autoFocus.state === 'running'">
-                            Smart (auto V-curve)
-                        </label>
-                        <label x-show="!afParams.adaptive">Steps
-                            <input type="number" x-model.number="afParams.steps" min="3" max="25" step="2" class="input-sm"
+                        <label title="Points required on EACH arm of the V-curve. The sweep starts OffsetSteps×StepSize out, samples inward, then keeps adding points to whichever arm is short — so the curve always gets built on BOTH sides of focus.">Points/side
+                            <input type="number" x-model.number="afParams.offsetSteps" min="1" max="10" step="1" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
                         <label>Step Size
@@ -2674,12 +2668,44 @@
                                    list="exposure-presets" min="0" step="any" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
+                        <label title="Curve model that determines the focus position. TrendHyperbolic (default): weighted hyperbola cross-validated against the trendline intersection — the NINA desktop recommendation.">Fit
+                            <select class="input-sm" x-model="afParams.method"
+                                    :disabled="autoFocus.state === 'running'">
+                                <option value="TRENDHYPERBOLIC">Trend + Hyperbolic</option>
+                                <option value="HYPERBOLIC">Hyperbolic</option>
+                                <option value="TRENDLINES">Trendlines</option>
+                                <option value="TRENDPARABOLIC">Trend + Parabolic</option>
+                                <option value="PARABOLIC">Parabolic</option>
+                            </select>
+                        </label>
+                        <label title="Exposures averaged per sweep point. 1 = fastest; more reduces seeing noise.">Frames/pt
+                            <input type="number" x-model.number="afParams.framesPerPoint" min="1" max="10" step="1" class="input-sm"
+                                   :disabled="autoFocus.state === 'running'">
+                        </label>
                         <label>Min Stars
                             <input type="number" x-model.number="afParams.minStars" min="1" step="1" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
-                        <label>Backlash
-                            <input type="number" x-model.number="afParams.backlashSteps" min="0" step="1" class="input-sm"
+                        <label title="Backlash compensation moving INWARD (focuser steps). With only Backlash In set, the sweep direction auto-reverses so every sample move loads the gears the same way (overshoot model).">Backlash In
+                            <input type="number" x-model.number="afParams.backlashIn" min="0" step="1" class="input-sm"
+                                   :disabled="autoFocus.state === 'running'">
+                        </label>
+                        <label title="Backlash compensation moving OUTWARD (focuser steps).">Backlash Out
+                            <input type="number" x-model.number="afParams.backlashOut" min="0" step="1" class="input-sm"
+                                   :disabled="autoFocus.state === 'running'">
+                        </label>
+                        <label title="Central crop used for AF frames. 1 = full frame; 0.5 analyses the central half (faster on big sensors, avoids corner aberrations skewing HFR). Cameras with ROI support read out only the crop.">Crop
+                            <select class="input-sm" x-model.number="afParams.innerCropRatio"
+                                    :disabled="autoFocus.state === 'running'">
+                                <option :value="1">Full frame</option>
+                                <option :value="0.8">80%</option>
+                                <option :value="0.6">60%</option>
+                                <option :value="0.5">50%</option>
+                                <option :value="0.3">30%</option>
+                            </select>
+                        </label>
+                        <label title="Track only the N brightest stars across the whole sweep (same physical stars at every point). 0 = use all detected stars.">Top stars
+                            <input type="number" x-model.number="afParams.useBrightestStars" min="0" max="50" step="1" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
                         <!-- Optical train: pairs the camera + focuser of the same
@@ -2700,6 +2726,9 @@
                                 :disabled="autoFocus.state !== 'running'">Abort AF</button>
                         <button class="btn btn-danger" @click="focusAbort()"
                                 :disabled="!focusConnected || !focusMoving">Stop Focuser</button>
+                        <button class="btn" @click="saveAfParamsToRig()"
+                                :disabled="autoFocus.state === 'running'"
+                                title="Persist these values as the rig's auto-focus defaults — the sequencer AF instruction and every AF trigger will use them too.">Save as rig default</button>
                     </div>
 
                     <!-- Live progress -->
@@ -17527,7 +17556,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260710-fieldbatch"></script>
+    <script src="/js/app.js?v=20260710-afport"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260624-tour6"></script>

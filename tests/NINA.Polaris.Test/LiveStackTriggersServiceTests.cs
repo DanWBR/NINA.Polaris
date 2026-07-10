@@ -122,7 +122,7 @@ public class LiveStackTriggersServiceTests {
         var phd2 = new PHD2Client(NullLogger<PHD2Client>.Instance);
         var native = new NativeGuider(equip, profiles, NullLogger<NativeGuider>.Instance);
         var guiders = new ActiveGuiderProvider(profiles, phd2, native);
-        var autoFocus = new AutoFocusService(equip, relay, guiders, NullLogger<AutoFocusService>.Instance);
+        var autoFocus = new AutoFocusService(equip, relay, guiders, profiles, NullLogger<AutoFocusService>.Instance);
         return new LiveStackTriggersService(stack, profiles, equip, autoFocus, slew, solver,
             guiders, NullLogger<LiveStackTriggersService>.Instance);
     }

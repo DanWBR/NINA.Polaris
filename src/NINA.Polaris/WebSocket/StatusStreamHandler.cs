@@ -312,7 +312,13 @@ public static class StatusStreamHandler {
                         bestPosition = autoFocus.LastResult?.BestPosition,
                         bestHfr = autoFocus.LastResult?.BestPredictedHfr,
                         success = autoFocus.LastResult?.Success,
-                        mode = autoFocus.Progress.Mode
+                        mode = autoFocus.Progress.Mode,
+                        // AFPORT (additive): live fit parameters + method +
+                        // attempt so the chart draws the hyperbola/trendlines
+                        // while the sweep grows.
+                        method = autoFocus.Progress.Method,
+                        attempt = autoFocus.Progress.Attempt,
+                        fits = autoFocus.Progress.Fits
                     };
 
                     // Compact summaries for the activity bar. Full job

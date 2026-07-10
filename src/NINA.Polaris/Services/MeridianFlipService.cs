@@ -228,10 +228,10 @@ public class MeridianFlipService {
                 State = MeridianFlipState.AutoFocusing;
                 _logger.LogInformation("Meridian flip: running auto-focus after flip");
                 try {
-                    _autoFocus.Start(new AutoFocusRequest {
-                        Steps = 9, StepSize = 50, ExposureSeconds = 2.0,
-                        MinStars = 5, BacklashSteps = 0, TakeConfirmationFrame = false
-                    });
+                    // AFPORT: run with the rig's AutoFocus profile settings;
+                    // only skip the confirmation frame (the flip sequence
+                    // resumes imaging right away anyway).
+                    _autoFocus.Start(new AutoFocusRequest { TakeConfirmationFrame = false });
                     while (_autoFocus.State == AutoFocusState.Running) {
                         _cts.Token.ThrowIfCancellationRequested();
                         await Task.Delay(1000, _cts.Token);

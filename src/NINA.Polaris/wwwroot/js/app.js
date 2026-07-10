@@ -3263,7 +3263,10 @@ function ninaApp() {
             bestPosition: null,
             bestHfr: null,
             success: null,
-            mode: 'grid'
+            mode: 'vcurve',
+            method: '',
+            attempt: 1,
+            fits: null
         },
         // PA-4: TPPA polar alignment state. Mirrors the WS payload's
         // polarAlignment sub-object. completedOk + isActive are
@@ -3324,23 +3327,26 @@ function ninaApp() {
             history: [],         // [{ totalErrorArcsec, atUtc }]
             _skyMapReady: false
         },
+        // AFPORT: profile-backed AF parameters (mirrors the active rig's
+        // AutoFocus settings block; loadAfParams() seeds these on rig load
+        // and on FOCUS tab entry, "Save as rig default" persists them).
         afParams: {
-            steps: 9,
+            offsetSteps: 4,          // points per V-curve arm
             stepSize: 50,
             exposureSeconds: 2.0,
+            framesPerPoint: 1,
+            method: 'TRENDHYPERBOLIC',
             minStars: 5,
-            backlashSteps: 0,
+            backlashIn: 0,
+            backlashOut: 0,
+            backlashModel: 'OVERSHOOT',
+            innerCropRatio: 1.0,
+            useBrightestStars: 0,
             // Optical train to auto-focus: 'main' | 'aux' | 'guide'. Pairs the
             // camera + focuser of the same OTA (a V-curve needs the camera that
             // sees through the focuser being moved).
-            focuserSource: 'main',
-            // ASIAIR-style adaptive sweep: no point count — seed 3 points, detect
-            // direction, grow the V-curve until confident. stepSize is still the
-            // move unit. Default on; uncheck for the fixed Steps×stepSize grid.
-            adaptive: true
+            focuserSource: 'main'
         },
-        afChartW: 600,
-        afChartH: 180,
 
         // Dither settings (mirrors server-side DitherSettings)
         ditherSettings: {
@@ -3598,6 +3604,10 @@ function ninaApp() {
                     // No-op on desktop — the /sky/ perf guard only installs
                     // itself on phones/tablets.
                     this._skySendMessage({ type: 'set-render-paused', paused: v !== 'sky' });
+                    // AFPORT: FOCUS panel mirrors the active rig's AutoFocus
+                    // settings on every entry (a rig switch elsewhere would
+                    // otherwise leave stale values in the form).
+                    if (v === 'focus') this.loadAfParams();
                 });
                 // Tonight's Best: the altitude charts must be redrawn whenever
                 // the filter or FOV toggle changes the shown set (Alpine remounts
@@ -17381,7 +17391,13 @@ function ninaApp() {
                         // excluded from the V-curve.
                         { label: 'Ignored', data: [], pointBackgroundColor: '#ef5350',
                           pointBorderColor: '#ef5350', pointRadius: 6,
-                          pointStyle: 'crossRot', pointBorderWidth: 2 }
+                          pointStyle: 'crossRot', pointBorderWidth: 2 },
+                        // AFPORT: weighted trendline arms (left/right). Their
+                        // intersection cross-validates the hyperbola minimum.
+                        { label: 'Left trend', data: [], showLine: true, borderColor: 'rgba(91,141,255,0.55)',
+                          borderDash: [6, 4], backgroundColor: 'transparent', pointRadius: 0, borderWidth: 1 },
+                        { label: 'Right trend', data: [], showLine: true, borderColor: 'rgba(255,82,82,0.55)',
+                          borderDash: [6, 4], backgroundColor: 'transparent', pointRadius: 0, borderWidth: 1 }
                     ]
                 },
                 options: {
@@ -17412,26 +17428,49 @@ function ninaApp() {
             c.data.datasets[3].data = finitePts
                 .filter(p => p.rejected)
                 .map(p => ({ x: p.position, y: p.hfr }));
-            // Generate fitted parabola curve if we have a best position
-            if (this.autoFocus.bestPosition && pts.length >= 3) {
-                const bestX = this.autoFocus.bestPosition;
-                const bestY = this.autoFocus.bestHfr || 0;
-                const minP = Math.min(...pts.map(p => p.position));
-                const maxP = Math.max(...pts.map(p => p.position));
-                const halfRange = Math.max(bestX - minP, maxP - bestX, 1);
-                const leftMax = pts.filter(p => p.position < bestX).reduce((m, p) => Math.max(m, p.hfr), 0);
-                const rightMax = pts.filter(p => p.position > bestX).reduce((m, p) => Math.max(m, p.hfr), 0);
-                const a = Math.max(0, (Math.max(leftMax, rightMax) - bestY) / (halfRange * halfRange));
+            // AFPORT: draw the SERVED fits — the hyperbola (or the weighted
+            // parabola when the method is parabolic) plus both trendline arm
+            // segments — instead of re-deriving a heuristic parabola.
+            const fits = this.autoFocus.fits;
+            if (fits && finitePts.length >= 3) {
+                const minP = Math.min(...finitePts.map(p => p.position));
+                const maxP = Math.max(...finitePts.map(p => p.position));
                 const fit = [];
-                for (let i = 0; i <= 40; i++) {
-                    const x = minP + (maxP - minP) * i / 40;
-                    fit.push({ x, y: a * (x - bestX) * (x - bestX) + bestY });
+                const N = 60;
+                if (fits.hasHyperbolic && fits.hyperbolicB) {
+                    for (let i = 0; i <= N; i++) {
+                        const x = minP + (maxP - minP) * i / N;
+                        const t = (fits.hyperbolicP - x) / fits.hyperbolicB;
+                        fit.push({ x, y: fits.hyperbolicA * Math.cosh(Math.asinh(t)) });
+                    }
+                } else if (fits.hasQuad) {
+                    for (let i = 0; i <= N; i++) {
+                        const x = minP + (maxP - minP) * i / N;
+                        fit.push({ x, y: fits.quadA2 * x * x + fits.quadA1 * x + fits.quadA0 });
+                    }
                 }
                 c.data.datasets[1].data = fit;
-                c.data.datasets[2].data = [{ x: bestX, y: bestY }];
+                // Trendline arms clipped to their own side of the vertex.
+                const seg = (slope, intercept, lo, hi) => (hi > lo ? [
+                    { x: lo, y: slope * lo + intercept },
+                    { x: hi, y: slope * hi + intercept }
+                ] : []);
+                const vx = fits.intersectionX || (minP + maxP) / 2;
+                if (c.data.datasets[4]) c.data.datasets[4].data = fits.leftPoints >= 2
+                    ? seg(fits.leftSlope, fits.leftIntercept, minP, Math.min(vx, maxP)) : [];
+                if (c.data.datasets[5]) c.data.datasets[5].data = fits.rightPoints >= 2
+                    ? seg(fits.rightSlope, fits.rightIntercept, Math.max(vx, minP), maxP) : [];
+                // Best/final marker: the accepted result when idle, the live
+                // fit's derived focus point while the sweep runs.
+                const bx = this.autoFocus.bestPosition ?? fits.finalX;
+                const by = this.autoFocus.bestHfr ?? fits.finalY;
+                c.data.datasets[2].data = (bx && Number.isFinite(by))
+                    ? [{ x: bx, y: Math.max(0, by) }] : [];
             } else {
                 c.data.datasets[1].data = [];
                 c.data.datasets[2].data = [];
+                if (c.data.datasets[4]) c.data.datasets[4].data = [];
+                if (c.data.datasets[5]) c.data.datasets[5].data = [];
             }
             c.update('none');
         },
@@ -17627,6 +17666,9 @@ function ninaApp() {
                 // selections so the user doesn't have to re-select.
                 const active = this.rigs.find(r => r.id === this.activeRigId);
                 if (active) this._applyRigToChoices(active);
+                // AFPORT: mirror the active rig's AutoFocus block into the
+                // FOCUS panel fields.
+                this.loadAfParams();
                 // The server always seeds at least one rig, so an empty list
                 // means the call didn't really land. Unlike the WS-fed data,
                 // this is a ONE-SHOT load at startup: in the iOS app the UI
@@ -21041,9 +21083,10 @@ function ninaApp() {
                 // VIDEO capture
                 'video.exposure', 'video.gain', 'video.binning',
                 'video.maxDurationSec', 'video.wbR', 'video.wbB',
-                // Auto-focus parameters
-                'afParams.steps', 'afParams.stepSize', 'afParams.exposureSeconds',
-                'afParams.minStars', 'afParams.backlashSteps', 'afParams.adaptive',
+                // Auto-focus: only the optical-train choice persists locally —
+                // the sweep parameters are profile-backed (rig.autoFocus) since
+                // AFPORT and reload from the rig on FOCUS tab entry.
+                'afParams.focuserSource',
                 // Shared target name
                 'targetName'
             ];
@@ -23522,16 +23565,69 @@ function ninaApp() {
             return 'manual-focus-metric--bad';
         },
 
+        // AFPORT: pull the FOCUS panel fields from the active rig's AutoFocus
+        // settings block. Called after the rigs load and on FOCUS tab entry so
+        // the panel always mirrors the persisted per-rig tuning; edits stay
+        // session-local until "Save as rig default".
+        loadAfParams() {
+            const rig = this.rigs?.find(r => r.id === this.activeRigId);
+            const af = rig?.autoFocus;
+            if (!af) return;
+            this.afParams.offsetSteps = af.offsetSteps ?? 4;
+            this.afParams.stepSize = af.stepSize ?? 50;
+            this.afParams.exposureSeconds = af.exposureSeconds ?? 2.0;
+            this.afParams.framesPerPoint = af.framesPerPoint ?? 1;
+            this.afParams.method = af.method || 'TRENDHYPERBOLIC';
+            this.afParams.minStars = af.minStars ?? 5;
+            this.afParams.backlashIn = af.backlashIn ?? 0;
+            this.afParams.backlashOut = af.backlashOut ?? 0;
+            this.afParams.backlashModel = af.backlashModel || 'OVERSHOOT';
+            this.afParams.innerCropRatio = af.innerCropRatio ?? 1.0;
+            this.afParams.useBrightestStars = af.useBrightestStars ?? 0;
+        },
+
+        _afParamsBlock() {
+            return {
+                offsetSteps: parseInt(this.afParams.offsetSteps) || 4,
+                stepSize: parseInt(this.afParams.stepSize) || 50,
+                exposureSeconds: parseFloat(this.afParams.exposureSeconds) || 2.0,
+                framesPerPoint: parseInt(this.afParams.framesPerPoint) || 1,
+                method: this.afParams.method || 'TRENDHYPERBOLIC',
+                minStars: parseInt(this.afParams.minStars) || 5,
+                backlashIn: parseInt(this.afParams.backlashIn) || 0,
+                backlashOut: parseInt(this.afParams.backlashOut) || 0,
+                backlashModel: this.afParams.backlashModel || 'OVERSHOOT',
+                innerCropRatio: parseFloat(this.afParams.innerCropRatio) || 1.0,
+                useBrightestStars: parseInt(this.afParams.useBrightestStars) || 0
+            };
+        },
+
+        // Persist the panel values as the rig's AutoFocus defaults — the same
+        // values the sequencer AF instruction and every AF trigger use.
+        async saveAfParamsToRig() {
+            const rig = this.rigs?.find(r => r.id === this.activeRigId);
+            if (!rig) { this.toast('No active rig', 'warn'); return; }
+            const block = { ...(rig.autoFocus || {}), ...this._afParamsBlock() };
+            // RSquaredThreshold / Attempts / MaxHfrRatio keep whatever the rig
+            // already stores (not exposed on the panel).
+            try {
+                await this.apiPost('/api/equipment/rigs/' + encodeURIComponent(rig.id), null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...rig, autoFocus: block })
+                });
+                rig.autoFocus = block;
+                this.toast('Auto-focus defaults saved to rig', 'ok');
+            } catch (e) {
+                this.toast('AF settings save failed: ' + (e.message || ''), 'error');
+            }
+        },
+
         async startAutoFocus() {
             try {
                 await this.apiPost('/api/autofocus/start', {
-                    steps: this.afParams.steps,
-                    stepSize: this.afParams.stepSize,
-                    exposureSeconds: this.afParams.exposureSeconds,
-                    minStars: this.afParams.minStars,
-                    backlashSteps: this.afParams.backlashSteps,
+                    ...this._afParamsBlock(),
                     focuserSource: this.afParams.focuserSource || 'main',
-                    adaptive: !!this.afParams.adaptive,
                     takeConfirmationFrame: true
                 });
                 this.toast('Auto-focus started', 'ok');
@@ -23913,78 +24009,8 @@ function ninaApp() {
             return sign + arcmin.toFixed(2) + "'";
         },
 
-        // ---- AF chart helpers ----
-        get afChartXRange() {
-            const pts = this.autoFocus.points || [];
-            if (pts.length === 0) return { min: 0, max: 1 };
-            let lo = Infinity, hi = -Infinity;
-            for (const p of pts) { if (p.position < lo) lo = p.position; if (p.position > hi) hi = p.position; }
-            if (this.autoFocus.bestPosition) {
-                if (this.autoFocus.bestPosition < lo) lo = this.autoFocus.bestPosition;
-                if (this.autoFocus.bestPosition > hi) hi = this.autoFocus.bestPosition;
-            }
-            if (hi === lo) hi = lo + 1;
-            const pad = (hi - lo) * 0.05;
-            return { min: lo - pad, max: hi + pad };
-        },
-        get afChartHfrMax() {
-            const pts = this.autoFocus.points || [];
-            let max = 1;
-            // FIELD2-1: ignore NaN / 0 HFR samples so the y-axis
-            // auto-scale isn't pulled to ~1 just because the sweep
-            // extremes returned no stars (NaN < 1 is false but a
-            // mixed dataset with one good HFR ≈ 8 + several NaNs
-            // used to scale to 8*1.15 fine; this just guards the
-            // future case where Number.isFinite catches NaN/-Inf).
-            for (const p of pts) {
-                if (Number.isFinite(p.hfr) && p.hfr > max) max = p.hfr;
-            }
-            return max * 1.15;
-        },
-        get afChartHasFit() {
-            return this.autoFocus.bestPosition !== null && this.autoFocus.bestPosition !== undefined;
-        },
-        afPointX(pos) {
-            const r = this.afChartXRange;
-            return ((pos - r.min) / (r.max - r.min)) * this.afChartW;
-        },
-        afPointY(hfr) {
-            const max = this.afChartHfrMax;
-            const clamped = Math.max(0, Math.min(max, hfr));
-            // hfr=0 → bottom (y=h); hfr=max → top (y=0)
-            return this.afChartH - (clamped / max) * this.afChartH;
-        },
-        // Draw fitted parabola sampled at 30 x-values across the range
-        buildAfFitPath() {
-            const result = this.autoFocus;
-            // We don't get a/b/c on the status stream, derive from points if absent.
-            // For the live chart we just draw a smooth quadratic going through best
-            // position (vertex) and the two extreme samples.
-            if (!result || !result.bestPosition || (result.points || []).length < 3) return '';
-            const pts = result.points;
-            const minP = pts[0].position, maxP = pts[pts.length - 1].position;
-            const bestX = result.bestPosition;
-            const bestY = result.bestHfr || 0;
-            // Solve a*(x-bestX)^2 + bestY = sample HFR using extremes
-            // Use the average of two extreme samples to estimate "a"
-            const leftHfr = pts.reduce((m, p) => p.position < bestX && p.hfr > m ? p.hfr : m, 0);
-            const rightHfr = pts.reduce((m, p) => p.position > bestX && p.hfr > m ? p.hfr : m, 0);
-            const extremeHfr = Math.max(leftHfr, rightHfr);
-            const halfRange = Math.max(bestX - minP, maxP - bestX, 1);
-            const a = Math.max(0, (extremeHfr - bestY) / (halfRange * halfRange));
-
-            const steps = 40;
-            const r = this.afChartXRange;
-            let d = '';
-            for (let i = 0; i <= steps; i++) {
-                const x = r.min + (r.max - r.min) * i / steps;
-                const y = a * (x - bestX) * (x - bestX) + bestY;
-                const sx = this.afPointX(x).toFixed(1);
-                const sy = this.afPointY(y).toFixed(1);
-                d += (i === 0 ? 'M' : 'L') + sx + ',' + sy + ' ';
-            }
-            return d.trim();
-        },
+        // (AFPORT: the legacy SVG V-curve helpers were removed — the chart is
+        // Chart.js in updateAfChart and draws the SERVED fit parameters.)
 
         // --- Filter Wheel ---
 
@@ -34470,7 +34496,12 @@ function ninaApp() {
                     bestPosition: af.bestPosition ?? null,
                     bestHfr: af.bestHfr ?? null,
                     success: af.success ?? null,
-                    mode: af.mode || 'grid'
+                    mode: af.mode || 'vcurve',
+                    // AFPORT: fit parameters (hyperbola + trendlines) + method
+                    // + attempt for the live chart overlay.
+                    method: af.method || '',
+                    attempt: af.attempt || 1,
+                    fits: af.fits || null
                 };
             }
             if (msg.guider) {

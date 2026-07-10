@@ -141,6 +141,12 @@ public class ProfileService {
         // who turns them off AFTER this migration stays off.
         MigrateLoggingDefaults();
 
+        // AFPORT: rigs saved before the AutoFocus settings block existed get
+        // one seeded from the legacy manual-focus fields, so an upgraded
+        // install's first profile-driven AF run uses the step size + backlash
+        // the operator had already dialed in.
+        MigrateAutoFocusSettings();
+
         // Deployment-time override for the capture root. Useful for
         // distribution images (Pi systemd unit, Docker, etc.) that
         // want a sensible default like /home/polaris/files without
@@ -365,6 +371,23 @@ public class ProfileService {
             VerticalFlipImage = src.VerticalFlipImage,
             FocuserStepSize = src.FocuserStepSize,
             FocuserBacklashSteps = src.FocuserBacklashSteps,
+            // AFPORT: per-rig autofocus tuning travels with the clone.
+            AutoFocus = src.AutoFocus == null ? null : new AutoFocusSettings {
+                StepSize = src.AutoFocus.StepSize,
+                OffsetSteps = src.AutoFocus.OffsetSteps,
+                ExposureSeconds = src.AutoFocus.ExposureSeconds,
+                FramesPerPoint = src.AutoFocus.FramesPerPoint,
+                Method = src.AutoFocus.Method,
+                RSquaredThreshold = src.AutoFocus.RSquaredThreshold,
+                Attempts = src.AutoFocus.Attempts,
+                MaxHfrRatio = src.AutoFocus.MaxHfrRatio,
+                InnerCropRatio = src.AutoFocus.InnerCropRatio,
+                UseBrightestStars = src.AutoFocus.UseBrightestStars,
+                BacklashIn = src.AutoFocus.BacklashIn,
+                BacklashOut = src.AutoFocus.BacklashOut,
+                BacklashModel = src.AutoFocus.BacklashModel,
+                MinStars = src.AutoFocus.MinStars
+            },
             FocalLengthMm = src.FocalLengthMm,
             ApertureMm = src.ApertureMm,
             TelescopeBrand = src.TelescopeBrand,
@@ -576,6 +599,28 @@ public class ProfileService {
     /// populate the table.</summary>
     public IReadOnlyDictionary<string, CameraQuirks> ListCameraQuirks() {
         return new Dictionary<string, CameraQuirks>(_activeProfile.CameraQuirks);
+    }
+
+    /// <summary>AFPORT: seed a missing per-rig <see cref="AutoFocusSettings"/>
+    /// block from the legacy FocuserStepSize / FocuserBacklashSteps fields.
+    /// Runs on every load but only touches rigs whose block is null, so a
+    /// user's later edits are never overwritten.</summary>
+    private void MigrateAutoFocusSettings() {
+        if (_activeProfile.EquipmentProfiles == null) return;
+        var seeded = 0;
+        foreach (var rig in _activeProfile.EquipmentProfiles) {
+            if (rig.AutoFocus != null) continue;
+            rig.AutoFocus = new AutoFocusSettings {
+                StepSize = rig.FocuserStepSize > 0 ? rig.FocuserStepSize : 50,
+                BacklashIn = Math.Max(0, rig.FocuserBacklashSteps)
+            };
+            seeded++;
+        }
+        if (seeded > 0) {
+            Save();
+            _logger.LogInformation(
+                "AF settings migration: seeded AutoFocus block on {N} rig(s) from legacy focuser fields", seeded);
+        }
     }
 
     /// <summary>One-time re-seed of the logging defaults on profiles saved by

@@ -395,6 +395,14 @@ public class EquipmentProfile {
     public int FocuserStepSize { get; set; } = 50;
     public int FocuserBacklashSteps { get; set; }
 
+    /// <summary>Per-rig autofocus configuration (AFPORT). The sequencer AF
+    /// instruction, all AF triggers and the FOCUS tab resolve their run
+    /// parameters from here; explicit request fields override per run.
+    /// Nullable so <see cref="ProfileService"/> can detect a pre-AFPORT
+    /// profile on load and seed it from the legacy FocuserStepSize /
+    /// FocuserBacklashSteps fields exactly once.</summary>
+    public AutoFocusSettings? AutoFocus { get; set; }
+
     /// <summary>FIELD-2: per-rig Bayer mosaic override. Null = honour
     /// whatever the camera / FITS header reports (current behaviour).
     /// One of "RGGB" / "BGGR" / "GBRG" / "GRBG" forces the corresponding
@@ -965,4 +973,69 @@ public class CameraQuirks {
     /// inside <see cref="ImageRelayService"/> so the final pattern
     /// on the wire stays aligned with the new buffer orientation.</summary>
     public bool VerticalFlipImage { get; set; }
+}
+/// <summary>
+/// Per-rig autofocus configuration (AFPORT: N.I.N.A. desktop algorithm port).
+/// Persisted on the <see cref="EquipmentProfile"/> so sequenced/triggered AF
+/// runs use the same tuning as interactive ones; every field can still be
+/// overridden per run by the corresponding nullable
+/// <see cref="AutoFocusRequest"/> field.
+/// </summary>
+public class AutoFocusSettings {
+    /// <summary>Distance in focuser steps between consecutive sweep points.</summary>
+    public int StepSize { get; set; } = 50;
+
+    /// <summary>Points required on EACH trendline arm (desktop
+    /// AutoFocusInitialOffsetSteps). The initial pass moves OUT by
+    /// OffsetSteps*StepSize then sweeps IN through OffsetSteps+1 points; the
+    /// planner then extends one point at a time until both arms reach this
+    /// count.</summary>
+    public int OffsetSteps { get; set; } = 4;
+
+    public double ExposureSeconds { get; set; } = 2.0;
+
+    /// <summary>Exposures averaged per sweep point (desktop
+    /// AutoFocusNumberOfFramesPerPoint). 1 = fastest.</summary>
+    public int FramesPerPoint { get; set; } = 1;
+
+    /// <summary>Curve fitting method: TRENDLINES | PARABOLIC | TRENDPARABOLIC
+    /// | HYPERBOLIC | TRENDHYPERBOLIC (default).</summary>
+    public string Method { get; set; } = "TRENDHYPERBOLIC";
+
+    /// <summary>Minimum R² the fits used by <see cref="Method"/> must reach
+    /// (including BOTH trendline arms for TREND* methods). 0 disables.</summary>
+    public double RSquaredThreshold { get; set; } = 0.7;
+
+    /// <summary>Full-sweep attempts before giving up when a quality gate fails.</summary>
+    public int Attempts { get; set; } = 2;
+
+    /// <summary>Reject a run whose confirmation HFR is worse than the starting
+    /// HFR by more than this factor. 0 disables.</summary>
+    public double MaxHfrRatio { get; set; } = 1.15;
+
+    /// <summary>Centered crop ratio used for AF exposures/detection
+    /// (1 = full frame). When the camera supports subframing the crop is a
+    /// REAL sensor ROI (faster readout + transfer); otherwise the detection
+    /// runs on a software-cropped buffer.</summary>
+    public double InnerCropRatio { get; set; } = 1.0;
+
+    /// <summary>Track only the N brightest stars across the whole sweep
+    /// (desktop AutoFocusUseBrightestStars). 0 = use all detected stars.</summary>
+    public int UseBrightestStars { get; set; }
+
+    /// <summary>Backlash compensation when moving INWARD (position
+    /// decreasing), in focuser steps.</summary>
+    public int BacklashIn { get; set; }
+
+    /// <summary>Backlash compensation when moving OUTWARD (position
+    /// increasing), in focuser steps.</summary>
+    public int BacklashOut { get; set; }
+
+    /// <summary>OVERSHOOT (default; overshoot past the target then approach)
+    /// or ABSOLUTE (persistent offset applied on direction reversal).</summary>
+    public string BacklashModel { get; set; } = "OVERSHOOT";
+
+    /// <summary>A sample below this star count is soft-rejected (measure 0,
+    /// huge error) instead of feeding a bogus HFR into the fit.</summary>
+    public int MinStars { get; set; } = 5;
 }
