@@ -88,16 +88,30 @@ public class CometEphemerisServiceTests {
         public string EnvironmentName { get; set; } = "Test";
 
         private static string LocateWwwroot() {
-            // tests/NINA.Polaris.Test/bin/Debug/net10.0 → walk up to repo root,
-            // then descend into src/NINA.Polaris/wwwroot.
-            var dir = AppContext.BaseDirectory;
+            // Primary: walk up from THIS SOURCE FILE (tests/NINA.Polaris.Test/…)
+            // to the repo root. Walking up from AppContext.BaseDirectory broke
+            // whenever the test run used `--artifacts-path` (bin/ redirected to
+            // a temp dir outside the repo), which made comets.json "missing"
+            // and these tests fail for a purely environmental reason.
+            var fromSource = WalkUpFor(SourceDir());
+            if (fromSource != null) return fromSource;
+            // Fallback: the classic bin-relative walk (works for plain builds).
+            return WalkUpFor(AppContext.BaseDirectory) ?? "wwwroot";
+        }
+
+        private static string? WalkUpFor(string start) {
+            var dir = start;
             for (var i = 0; i < 8; i++) {
                 var candidate = Path.Combine(dir, "src", "NINA.Polaris", "wwwroot");
                 if (Directory.Exists(candidate)) return candidate;
                 dir = Path.GetDirectoryName(dir) ?? "";
                 if (string.IsNullOrEmpty(dir)) break;
             }
-            return "wwwroot";
+            return null;
         }
+
+        private static string SourceDir(
+            [System.Runtime.CompilerServices.CallerFilePath] string sourceFile = "")
+            => Path.GetDirectoryName(sourceFile) ?? "";
     }
 }

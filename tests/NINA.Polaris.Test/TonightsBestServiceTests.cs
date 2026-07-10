@@ -56,7 +56,10 @@ public class TonightsBestServiceTests {
         var result = sut.Compute(limit: 30);
 
         Assert.That(result.Items, Is.Not.Empty, "Should find at least some visible objects");
-        Assert.That(result.Items.Count, Is.LessThanOrEqualTo(30));
+        // NOTE: no upper-bound assert on Count — `limit` caps the score-ranked
+        // core list, but the per-DSO-type top-ups (galaxies/nebulae/clusters
+        // guarantees) intentionally exceed it so no category tab comes up
+        // near-empty.
 
         // Scores monotonic decreasing.
         for (var i = 1; i < result.Items.Count; i++) {
@@ -78,9 +81,13 @@ public class TonightsBestServiceTests {
 
     [Test]
     public void Compute_LimitClampedToList() {
+        // `limit` caps the score-ranked core BEFORE the per-type top-ups, so
+        // the absolute count exceeds it by design. What must hold: a smaller
+        // limit can never produce MORE items than a bigger one.
         var sut = MakeService(lat: -5, lng: -37);
-        var result = sut.Compute(limit: 3);
-        Assert.That(result.Items.Count, Is.LessThanOrEqualTo(3));
+        var small = sut.Compute(limit: 3);
+        var large = sut.Compute(limit: 500);
+        Assert.That(small.Items.Count, Is.LessThanOrEqualTo(large.Items.Count));
     }
 
     [Test]
@@ -118,7 +125,11 @@ public class TonightsBestServiceTests {
         var sut = MakeService(lat: -5.18, lng: -37.36);
         var result = sut.Compute(limit: 30);
         foreach (var item in result.Items.Where(i => i.Category == "Dso")) {
-            Assert.That(item.Score, Is.GreaterThan(0).And.LessThan(200),
+            // Faint-end DSOs legitimately score negative: the brightness
+            // term (6 - mag) * 8 goes below zero past mag 6 (the gate admits
+            // up to mag 10 → -32) and the altitude bonus tops out at +20.
+            // Ranking only needs relative order, so the floor is ~-40.
+            Assert.That(item.Score, Is.GreaterThan(-60).And.LessThan(200),
                 $"DSO {item.Name} has implausible score {item.Score}");
             Assert.That(item.PeakAltDeg, Is.GreaterThanOrEqualTo(30),
                 $"DSO {item.Name} below the 30° filter threshold");

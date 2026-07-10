@@ -44,14 +44,18 @@ public class SimGearTests {
 
     [Test]
     public void Backlash_DeadbandsSmallReversals() {
-        var b = new BacklashVal(5.0); // baseline upper = amount = 5
+        // PHD2 BacklashVal semantics (the port is line-for-line): Val is the
+        // UPPER bound of the position; forward motion drags it up directly
+        // (upper = cur), a reversal only moves it once cur drops below
+        // upper - amount, and it then lags cur by the backlash amount.
+        var b = new BacklashVal(5.0); // ctor: cur = 0, upper = amount = 5
         Assert.That(b.Val, Is.EqualTo(5.0).Within(1e-9));
-        b.Incr(10.0); // forward past the gap
-        Assert.That(b.Val, Is.EqualTo(15.0).Within(1e-9));
-        b.Incr(-3.0); // small reversal inside the 5px gap -> no movement
-        Assert.That(b.Val, Is.EqualTo(15.0).Within(1e-9));
-        b.Incr(-7.0); // now beyond the gap -> moves, lagging by the backlash
+        b.Incr(10.0); // cur = 10 > upper -> upper follows cur
         Assert.That(b.Val, Is.EqualTo(10.0).Within(1e-9));
+        b.Incr(-3.0); // cur = 7, still >= upper - amount (5) -> deadband
+        Assert.That(b.Val, Is.EqualTo(10.0).Within(1e-9));
+        b.Incr(-7.0); // cur = 0 < upper - amount -> upper = cur + amount
+        Assert.That(b.Val, Is.EqualTo(5.0).Within(1e-9));
     }
 
     // ---- ST4 pulse -> pixel ----

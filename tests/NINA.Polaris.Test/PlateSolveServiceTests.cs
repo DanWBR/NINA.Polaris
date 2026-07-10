@@ -171,8 +171,14 @@ public class PlateSolveServiceTests {
     }
 
     [Test]
-    public void Astap_IsAvailable_WhenPathIsEmptyString_ReturnsFalse() {
-        Assert.That(CreateAstap("").IsAvailable, Is.False);
+    public void Astap_IsAvailable_WhenPathIsEmptyString_FallsBackToAutoDetect() {
+        // An empty configured path means "auto-detect": SolverPath probes the
+        // common install locations, so on a machine WITH ASTAP installed
+        // IsAvailable is legitimately true. The contract to pin is that
+        // IsAvailable always reflects whether the resolved path exists —
+        // deterministic on any machine, unlike the old Is.False assert.
+        var astap = CreateAstap("");
+        Assert.That(astap.IsAvailable, Is.EqualTo(File.Exists(astap.SolverPath)));
     }
 
     // --- SolveAsync guards (via dispatcher) ---

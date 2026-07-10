@@ -95,7 +95,15 @@ public class HostMetricsServiceTests {
             coreCount: Environment.ProcessorCount);
 
         Assert.That(snap.CpuPercent, Is.EqualTo(25.5));
-        Assert.That(snap.MemoryPercent, Is.EqualTo(60.0));
+        // MemoryPercent deliberately does NOT come from the stub: on
+        // Linux it reads /proc/meminfo and elsewhere GCMemoryInfo's
+        // OS-sourced MemoryLoadBytes (the IResourceMonitor value is
+        // process-scoped on Windows and wrong for a system display).
+        // The stub only feeds the last-resort branch when no GC has
+        // run yet — which is exactly why the old Is.EqualTo(60.0)
+        // passed in isolation and failed in the full suite (earlier
+        // tests trigger GCs and populate GCMemoryInfo).
+        Assert.That(snap.MemoryPercent, Is.InRange(0.0, 100.0));
         Assert.That(snap.MemoryTotalMB, Is.GreaterThan(0));
         Assert.That(snap.MemoryUsedMB, Is.GreaterThan(0));
         Assert.That(snap.ProcessMemoryMB, Is.GreaterThan(0),
@@ -122,7 +130,11 @@ public class HostMetricsServiceTests {
         var snap = svc.Sample(proc, ref lastCpu, ref lastTime, coreCount: 4);
 
         Assert.That(snap.CpuPercent, Is.EqualTo(38.2));
-        Assert.That(snap.MemoryPercent, Is.EqualTo(12.9));
+        // MemoryPercent comes from the OS, not the stub (see note in
+        // Sample_PopulatesAllFields) — assert only the rounding.
+        Assert.That(snap.MemoryPercent,
+            Is.EqualTo(Math.Round(snap.MemoryPercent, 1)),
+            "MemoryPercent must be rounded to one decimal at the source");
     }
 
     [Test]

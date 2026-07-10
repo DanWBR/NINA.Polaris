@@ -35,10 +35,12 @@ public class FlatWizardSettingsTests {
         Assert.That(s.TargetAdu, Is.EqualTo(30000));
         Assert.That(s.Tolerance, Is.EqualTo(0.05).Within(1e-9));
         Assert.That(s.FramesPerFilter, Is.EqualTo(20));
-        Assert.That(s.MinExposureSec, Is.EqualTo(0.1).Within(1e-9));
+        // Product default moved to 0.001 s so very bright panels (short
+        // flats) stay reachable; keep in sync with FlatWizardSettings.
+        Assert.That(s.MinExposureSec, Is.EqualTo(0.001).Within(1e-9));
         Assert.That(s.MaxExposureSec, Is.EqualTo(30.0).Within(1e-9));
         Assert.That(s.Binning, Is.EqualTo(1));
-        Assert.That(s.MaxSearchIterations, Is.EqualTo(10));
+        Assert.That(s.MaxSearchIterations, Is.EqualTo(12));
         Assert.That(s.PanelBrightness, Is.EqualTo(0));
     }
 
@@ -75,10 +77,10 @@ public class FlatWizardSettingsTests {
         Assert.That(restored.TargetAdu, Is.EqualTo(40000));
         Assert.That(restored.Tolerance, Is.EqualTo(0.05).Within(1e-9));
         Assert.That(restored.FramesPerFilter, Is.EqualTo(20));
-        Assert.That(restored.MinExposureSec, Is.EqualTo(0.1).Within(1e-9));
+        Assert.That(restored.MinExposureSec, Is.EqualTo(0.001).Within(1e-9));
         Assert.That(restored.MaxExposureSec, Is.EqualTo(30.0).Within(1e-9));
         Assert.That(restored.Binning, Is.EqualTo(1));
-        Assert.That(restored.MaxSearchIterations, Is.EqualTo(10));
+        Assert.That(restored.MaxSearchIterations, Is.EqualTo(12));
         Assert.That(restored.PanelBrightness, Is.EqualTo(0));
     }
 

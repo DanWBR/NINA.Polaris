@@ -93,11 +93,12 @@ public class ImageBufferTests {
 
         var header = buffer.GetStreamHeader();
 
-        // Header layout: 6 int32s = 24 bytes
-        // (width, height, bit depth, bayer, uncompressed size, kind tag).
-        // The trailing `kind` byte was added when the relay envelope grew
-        // to distinguish live-stack vs preview vs sequence frames.
-        Assert.That(header.Length, Is.EqualTo(24));
+        // Header layout: 7 int32s = 28 bytes
+        // (width, height, bit depth, bayer, uncompressed size, kind tag,
+        // calibration flag). `kind` distinguishes live-stack vs preview vs
+        // sequence frames; `calibration` marks BIAS/DARK/FLAT so the client
+        // skips the OSC sky-neutralising stretch on them.
+        Assert.That(header.Length, Is.EqualTo(28));
 
         using var ms = new MemoryStream(header);
         using var br = new BinaryReader(ms);
@@ -107,6 +108,7 @@ public class ImageBufferTests {
         Assert.That(br.ReadInt32(), Is.EqualTo((int)BayerPatternEnum.None), "BayerPattern");
         Assert.That(br.ReadInt32(), Is.EqualTo(pixels.Length * 2), "Uncompressed size");
         Assert.That(br.ReadInt32(), Is.EqualTo(0), "Kind tag default");
+        Assert.That(br.ReadInt32(), Is.EqualTo(0), "Calibration flag default");
     }
 
     [Test]
