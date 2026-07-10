@@ -41,6 +41,8 @@ public class MdnsService : IHostedService, IDisposable {
     private ServiceDiscovery? _discovery;
     private MulticastService? _mdns;
     private string _instanceName = "polaris-app";
+    private Timer? _readvertiseTimer;
+    private readonly object _advertiseLock = new();
 
     /// <summary>The mDNS instance name currently advertised (e.g. polaris-app-a1b2).</summary>
     public string InstanceName => _instanceName;
@@ -57,7 +59,29 @@ public class MdnsService : IHostedService, IDisposable {
             return Task.CompletedTask;
         }
         Advertise();
+        // Re-announce when the machine's addresses change. The A/AAAA
+        // records are snapshotted inside Advertise(), so an interface that
+        // appears AFTER startup — most importantly the hotspot AP interface
+        // when the user (or the auto-fallback watchdog) enables the Polaris
+        // hotspot at runtime — was never advertised and hotspot clients
+        // could not discover the server. Debounced: NetworkAddressChanged
+        // fires in bursts while NetworkManager reconfigures.
+        NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
         return Task.CompletedTask;
+    }
+
+    private void OnNetworkAddressChanged(object? sender, EventArgs e) {
+        lock (_advertiseLock) {
+            _readvertiseTimer?.Dispose();
+            _readvertiseTimer = new Timer(_ => {
+                try {
+                    _logger.LogInformation("Network addresses changed - re-announcing mDNS");
+                    Republish();
+                } catch (Exception ex) {
+                    _logger.LogDebug(ex, "mDNS re-announce after address change failed");
+                }
+            }, null, dueTime: 3000, period: Timeout.Infinite);
+        }
     }
 
     /// <summary>
@@ -67,8 +91,12 @@ public class MdnsService : IHostedService, IDisposable {
     /// </summary>
     public void Republish() {
         if (!_config.GetValue("Mdns:Enabled", true)) return;
-        Teardown();
-        Advertise();
+        // Serialized: callable from the device-name endpoint AND the
+        // address-change debounce timer (threadpool) concurrently.
+        lock (_advertiseLock) {
+            Teardown();
+            Advertise();
+        }
     }
 
     private void Advertise() {
@@ -192,6 +220,11 @@ public class MdnsService : IHostedService, IDisposable {
     }
 
     public Task StopAsync(CancellationToken cancellationToken) {
+        NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged;
+        lock (_advertiseLock) {
+            _readvertiseTimer?.Dispose();
+            _readvertiseTimer = null;
+        }
         Teardown();
         return Task.CompletedTask;
     }

@@ -113,6 +113,12 @@ public class AuthMiddleware {
         if (path.StartsWithSegments("/api/auth")) return true;
         if (path.Equals("/api/system/version",
                 StringComparison.OrdinalIgnoreCase)) return true;
+        // Instance-identify for the mobile app's hotspot discovery
+        // fallback (probing candidate addresses when mDNS multicast
+        // doesn't reach the phone). Exposes only what the mDNS TXT
+        // record already broadcasts.
+        if (path.Equals("/api/identify",
+                StringComparison.OrdinalIgnoreCase)) return true;
         // TLS-A1: cert download + install instructions stay public.
         // The whole point is letting a brand-new device (celular,
         // tablet) grab the root cert BEFORE the user can even hit

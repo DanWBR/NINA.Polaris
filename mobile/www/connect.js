@@ -196,6 +196,57 @@ function rememberOrigin(svcKey, origin) {
   prefSet(KNOWN_ORIGINS_KEY, JSON.stringify(knownOrigins));
 }
 
+// ---------- hotspot / direct-probe discovery fallback ----------
+// mDNS multicast frequently never reaches the phone on hotspot networks —
+// the Polaris SBC's own AP (where the SBC IS the gateway) or the phone's
+// tethering with the SBC as a client — so ZeroConf finds nothing even though
+// the server is one hop away and a manually-typed address works fine.
+// Deterministic fallback that runs alongside every scan: directly probe
+//   1) every origin we've connected to before (knownOrigins + last open set),
+//   2) the well-known hotspot gateway addresses on port 5000.
+// The server's /api/identify is anonymous + CORS-open specifically for this
+// probe (the app shell runs on https://localhost, a different origin). The
+// self-signed cert is accepted natively for LAN hosts (LANCertTrust.swift /
+// MainActivity.java), so fetch() works. Servers older than /api/identify
+// simply fail the probe — manual entry still covers those.
+const HOTSPOT_GATEWAYS = [
+  '10.42.0.1',    // NetworkManager shared mode — the Polaris hotspot
+  '192.168.4.1',  // hostapd/dnsmasq default
+  '10.3.141.1',   // RaspAP default
+];
+
+async function probeOrigin(origin) {
+  if (!origin || discovered.has(origin)) return;
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 3000);
+  try {
+    const r = await fetch(origin + '/api/identify',
+      { signal: ctrl.signal, cache: 'no-store' });
+    if (!r.ok) return;
+    const info = await r.json();
+    if (!info || info.app !== 'polaris') return;
+    if (discovered.has(origin)) return;   // mDNS beat us to it — keep its entry
+    discovered.set(origin, {
+      name: info.friendly || info.instance || hostLabel(origin),
+      addr: hostLabel(origin)
+    });
+    // Key by the mDNS instance name so a later mDNS-based discovery of the
+    // same box reuses this origin (stable localStorage / auth token).
+    if (info.instance) rememberOrigin(info.instance, origin);
+    els.scanHint.textContent = `${discovered.size} found.`;
+    renderList();
+  } catch { /* unreachable, or a pre-/api/identify server — ignore */ }
+  finally { clearTimeout(t); }
+}
+
+async function probeFallback() {
+  const candidates = new Set();
+  for (const o of Object.values(knownOrigins)) candidates.add(o);
+  try { for (const o of await getLastSet()) candidates.add(o); } catch {}
+  for (const gw of HOTSPOT_GATEWAYS) candidates.add(toOrigin(gw, 5000));
+  for (const o of candidates) probeOrigin(o);   // fire in parallel
+}
+
 // ---------- discovery ----------
 
 function renderList() {
@@ -239,6 +290,11 @@ function clearScanTimers() { _scanTimers.forEach(clearTimeout); _scanTimers = []
 async function scan() {
   discovered.clear();
   renderList();
+  // Direct-probe fallback runs on EVERY scan, in parallel with mDNS —
+  // it's what finds the server on hotspot networks where multicast
+  // discovery comes up empty (see the block above). Fire-and-forget:
+  // results stream into `discovered` as probes resolve.
+  probeFallback();
   if (!ZeroConf) {
     els.scanHint.textContent =
       'Automatic discovery needs the installed app. Enter the address below.';

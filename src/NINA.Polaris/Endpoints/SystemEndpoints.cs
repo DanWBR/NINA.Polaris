@@ -23,6 +23,28 @@ public static class SystemEndpoints {
     public static void MapSystemEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/system");
 
+        // Anonymous instance-identify endpoint for the mobile app's discovery
+        // FALLBACK. On hotspot networks (the SBC's own AP, or the phone
+        // tethering the SBC) mDNS multicast frequently never reaches the
+        // phone, so ZeroConf finds nothing even though the server is one hop
+        // away — the app then probes candidate addresses (known origins +
+        // well-known hotspot gateways) with a plain fetch. CORS-open on
+        // purpose: the Capacitor shell runs on https://localhost and must be
+        // able to READ this reply cross-origin. Exposes only what the mDNS
+        // TXT record already broadcasts to the whole LAN — no secrets, and
+        // auth still gates everything else (exempted in AuthMiddleware).
+        app.MapGet("/api/identify", (ProfileService profiles, MdnsService mdns, HttpContext ctx) => {
+            ctx.Response.Headers.AccessControlAllowOrigin = "*";
+            var friendly = profiles.Active.DeviceFriendlyName;
+            if (string.IsNullOrWhiteSpace(friendly)) friendly = mdns.InstanceName;
+            return Results.Ok(new {
+                app = "polaris",
+                instance = mdns.InstanceName,
+                friendly,
+                hostname = Environment.MachineName
+            });
+        });
+
         group.MapGet("/geocode", async (string query, int? limit, GeocodingService geo) => {
             if (string.IsNullOrWhiteSpace(query))
                 return Results.BadRequest(new { error = "query parameter required" });
