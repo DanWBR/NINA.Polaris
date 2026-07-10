@@ -252,8 +252,12 @@ public static class EquipmentEndpoints {
                 if (update.AuxBinning > 0)
                     r.AuxBinning = Math.Clamp(update.AuxBinning, 1, 4);
                 r.AuxEnabled = update.AuxEnabled;
-                if (update.NativeGuideExposureMs > 0)
-                    r.NativeGuideExposureMs = update.NativeGuideExposureMs;
+                // NativeGuideExposureMs is deliberately NOT copied here. Its
+                // writer is POST /api/guider/exposure (NativeGuider persists
+                // straight to the profile); accepting it on the full-rig PUT
+                // let any client holding a stale rigs list (the GUIDE dropdown
+                // doesn't refresh that list) silently revert the exposure on
+                // the next unrelated rig save — the "always back to 0.1 s" bug.
                 if (update.NativeCalibrationStepMs > 0)
                     r.NativeCalibrationStepMs = update.NativeCalibrationStepMs;
                 if (update.NativeMinMoveRaPx >= 0)

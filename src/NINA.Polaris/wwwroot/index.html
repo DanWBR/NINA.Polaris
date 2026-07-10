@@ -4571,8 +4571,6 @@
                                x-model.number="guideExp"
                                @change="setGuideExposure(guideExp)"
                                title="Guide-camera exposure per frame">
-                        <option :value="100">0.1</option>
-                        <option :value="200">0.2</option>
                         <option :value="500">0.5</option>
                         <option :value="1000">1.0</option>
                         <option :value="1500">1.5</option>
@@ -17564,7 +17562,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260710-chips"></script>
+    <script src="/js/app.js?v=20260710-guideexp"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260710-hostclient"></script>

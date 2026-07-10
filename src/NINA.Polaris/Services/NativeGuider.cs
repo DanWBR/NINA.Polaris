@@ -428,7 +428,11 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
 
     public async Task SetExposureAsync(int milliseconds, CancellationToken ct = default) {
         if (milliseconds <= 0) return;
-        _profiles.UpdateEquipmentProfile(Rig.Id, r => r.NativeGuideExposureMs = milliseconds);
+        // 0.5 s is the product minimum for guide exposures (shorter ones
+        // chase seeing and starve the pulse-guide dwell); keep stored values
+        // inside the range the GUIDE dropdown offers.
+        var ms = Math.Clamp(milliseconds, 500, 30000);
+        _profiles.UpdateEquipmentProfile(Rig.Id, r => r.NativeGuideExposureMs = ms);
         await Task.CompletedTask;
     }
 

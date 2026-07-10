@@ -147,6 +147,10 @@ public class ProfileService {
         // the operator had already dialed in.
         MigrateAutoFocusSettings();
 
+        // Sub-500ms guide exposures are junk from the stale-rig-PUT echo bug
+        // (and below the new 0.5 s product minimum); re-seed them to 1 s.
+        MigrateGuideExposureFloor();
+
         // Deployment-time override for the capture root. Useful for
         // distribution images (Pi systemd unit, Docker, etc.) that
         // want a sensible default like /home/polaris/files without
@@ -620,6 +624,27 @@ public class ProfileService {
             Save();
             _logger.LogInformation(
                 "AF settings migration: seeded AutoFocus block on {N} rig(s) from legacy focuser fields", seeded);
+        }
+    }
+
+    /// <summary>Guide exposures shorter than the 0.5 s product minimum are
+    /// junk left behind by the stale-rig-PUT echo bug (a full-rig save from a
+    /// client with an outdated rigs list kept reverting the exposure to an
+    /// ancient 100 ms). Re-seed them to the 1 s default. Runs on every load;
+    /// idempotent because valid values are never touched.</summary>
+    private void MigrateGuideExposureFloor() {
+        if (_activeProfile.EquipmentProfiles == null) return;
+        var fixedUp = 0;
+        foreach (var rig in _activeProfile.EquipmentProfiles) {
+            if (rig.NativeGuideExposureMs is > 0 and < 500) {
+                rig.NativeGuideExposureMs = 1000;
+                fixedUp++;
+            }
+        }
+        if (fixedUp > 0) {
+            Save();
+            _logger.LogInformation(
+                "Guide exposure migration: re-seeded {N} rig(s) with sub-500ms guide exposure to 1s", fixedUp);
         }
     }
 

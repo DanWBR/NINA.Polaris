@@ -1050,9 +1050,10 @@ function ninaApp() {
         // option (see _expPresetsMs / _snapExpMs).
         guideExp: 1000,
         // Preset exposures offered by the Exp (s) dropdown, in ms (seconds:
-        // 0.1, 0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0). Keep in sync with the
-        // <option> list in index.html.
-        _expPresetsMs: [100, 200, 500, 1000, 1500, 2000, 3000, 5000],
+        // 0.5, 1.0, 1.5, 2.0, 3.0, 5.0 — 0.5 s is the product minimum; sub-
+        // second guide exposures chase seeing and starve the pulse dwell).
+        // Keep in sync with the <option> list in index.html.
+        _expPresetsMs: [500, 1000, 1500, 2000, 3000, 5000],
         // Retained for back-compat with the WS sync/guider-rebuild guards;
         // the dropdown commits atomically so it stays false in practice.
         _expEditing: false,
@@ -24703,10 +24704,17 @@ function ninaApp() {
         },
 
         async setGuideExposure(value) {
-            const v = Math.max(50, Math.min(10000, Math.round(Number(value) || 0)));
+            const v = Math.max(500, Math.min(10000, Math.round(Number(value) || 0)));
             this.guideExp = v;
             this.guider.exposureMs = v;
             this._expEditing = false;   // commit done; let WS sync resume
+            // Keep the LOCAL rig copy in step. The guider endpoint persists
+            // the exposure server-side, but every _persistRigSelection call
+            // PUTs the whole local rig object — with a stale copy, the next
+            // unrelated rig save (gain, algorithm, camera connect) silently
+            // reverted the exposure to the old value ("always back to 0.1 s").
+            const rig = this.rigs?.find(x => x.id === this.activeRigId);
+            if (rig) rig.nativeGuideExposureMs = v;
             try {
                 await this.apiPost(`/api/guider/exposure/${v}`);
                 this.toast('Guide exposure: ' + (v / 1000).toFixed(1) + ' s', 'ok');
