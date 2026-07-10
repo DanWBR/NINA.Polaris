@@ -107,13 +107,29 @@ public class FlatWizardService {
     /// <summary>
     /// Public lookup into the trained-exposures cache. Returns true and
     /// the cached exposure if a previous wizard run (or auto-find from
-    /// the sequence engine) converged on this (filter, binning). Used
-    /// by AUTORUN's "Auto" flat-exposure toggle to skip the search
-    /// when a recent value is available.
+    /// the sequence engine) converged on this (filter, binning, gain).
+    /// Falls back to the legacy gain-less key so caches written before
+    /// gain became part of the key still seed the search.
+    ///
+    /// NOTE: callers should treat this as a SEED, not a truth — panel
+    /// brightness changes between sessions, so a cached value must be
+    /// validated with a probe frame (AutoFindExposureAsync does exactly
+    /// that: it seeds from this cache and its first iteration confirms
+    /// the median before returning).
     /// </summary>
-    public bool TryGetTrainedExposure(string filter, int binning, out double exposureSec) {
+    public bool TryGetTrainedExposure(string filter, int binning, out double exposureSec, int? gain = null) {
+        if (TrainedExposures.TryGetValue(TrainedKey(filter, binning, gain), out exposureSec))
+            return true;
+        return gain.HasValue
+            && TrainedExposures.TryGetValue(TrainedKey(filter, binning, null), out exposureSec);
+    }
+
+    /// <summary>Cache key for a trained flat exposure. Gain is part of the
+    /// key when known — the same panel needs a very different exposure at
+    /// gain 0 vs gain 300, so a gain-less hit poisons the whole flat set.</summary>
+    private static string TrainedKey(string? filter, int binning, int? gain) {
         var key = $"{filter ?? ""}_bin{Math.Max(1, binning)}";
-        return TrainedExposures.TryGetValue(key, out exposureSec);
+        return (gain.HasValue && gain.Value > 0) ? $"{key}_g{gain.Value}" : key;
     }
 
     /// <summary>
@@ -134,9 +150,10 @@ public class FlatWizardService {
     /// </summary>
     public async Task<double?> AutoFindExposureAsync(
         string filter, int binning,
-        int targetAdu = 33000, double tolerance = 0.05,
+        int targetAdu = 30000, double tolerance = 0.05,
         double minExposure = 0.001, double maxExposure = 30.0,
         int maxIterations = 14,
+        int? gain = null, int? offset = null,
         CancellationToken ct = default) {
         var camera = _equip.Camera ?? throw new InvalidOperationException("No camera connected");
         binning = Math.Max(1, binning);
@@ -148,22 +165,34 @@ public class FlatWizardService {
         // scales ~linearly with exposure — a proportional step (below) lands
         // on target in 2-3 frames, and starting short keeps each probe fast
         // (the old midpoint seed of ~15 s made every iteration crawl).
-        var key = $"{filter ?? ""}_bin{binning}";
-        double exposure = TrainedExposures.TryGetValue(key, out var trained)
+        var key = TrainedKey(filter, binning, gain);
+        double exposure = TryGetTrainedExposure(filter, binning, out var trained, gain)
             ? Math.Clamp(trained, minExposure, maxExposure)
             : Math.Clamp(0.5, minExposure, maxExposure);
 
         try { await camera.SetBinningAsync(binning, binning, ct); }
         catch (Exception ex) { _logger.LogWarning(ex, "Auto-flat: set binning {B} failed", binning); }
 
+        // Probe under the SAME conditions the flats will be captured with.
+        // Without this the search ran at whatever gain/offset the previous
+        // sequence item left on the camera, converged there, and the actual
+        // flats (shot at the item's gain) landed at a completely different
+        // ADU (field report: search "converged" but the histogram only hit
+        // ~30k after manually forcing 0.015 s).
+        var opts = new NINA.Image.Interfaces.CaptureOptions(
+            Gain: (gain.HasValue && gain.Value > 0) ? gain : null,
+            Offset: (offset.HasValue && offset.Value > 0) ? offset : null,
+            BinX: binning, BinY: binning,
+            ImageType: "FLAT");
+
         var lower = targetAdu * (1 - tolerance);
         var upper = targetAdu * (1 + tolerance);
         for (int attempt = 0; attempt < maxIterations; attempt++) {
             ct.ThrowIfCancellationRequested();
-            _logger.LogDebug("Auto-flat search iter {I} for {Filter} bin{B}: trying {Exp}s",
-                attempt + 1, filter, binning, exposure);
+            _logger.LogDebug("Auto-flat search iter {I} for {Filter} bin{B} gain{G}: trying {Exp}s",
+                attempt + 1, filter, binning, gain ?? -1, exposure);
 
-            var img = await CameraCaptureGate.RunAsync(() => camera.CaptureAsync(exposure, ct), ct);
+            var img = await CameraCaptureGate.RunAsync(() => camera.CaptureAsync(exposure, opts, ct), ct);
             img.MetaData.Exposure.ImageType = "FLAT";
             var median = ComputeMedian(img);
 

@@ -325,36 +325,43 @@ public class SequenceEngine {
                 if (imageType == "FLAT" && item.AutoExposure && _equip.Camera != null) {
                     var filterKey = item.Filter ?? "";
                     var binKey = Math.Max(1, item.Binning);
-                    if (_flatWizard.TryGetTrainedExposure(filterKey, binKey, out var cachedExp)) {
-                        _logger.LogInformation(
-                            "Auto-flat: using trained exposure {Exp}s for filter '{F}' bin{B}",
-                            cachedExp, filterKey, binKey);
-                        item.Exposure = cachedExp;
-                    } else {
-                        _logger.LogInformation(
-                            "Auto-flat: no trained exposure for filter '{F}' bin{B}, searching...",
+                    // ALWAYS run the search, never trust the trained cache
+                    // blindly: it seeds from the cache, so a still-valid value
+                    // converges on the FIRST probe frame (a cheap validation),
+                    // while a stale one (panel brightness changed, different
+                    // gain, another session) is corrected instead of poisoning
+                    // the whole flat set. The probes run with THIS item's gain
+                    // + the rig offset — the exact conditions the capture loop
+                    // uses below; probing at whatever gain the previous item
+                    // left on the camera was how "auto" produced flats at a
+                    // completely wrong ADU.
+                    var flatOffset = _profile.ActiveEquipmentProfile?.DefaultOffset ?? 0;
+                    _logger.LogInformation(
+                        "Auto-flat: resolving exposure for filter '{F}' bin{B} gain{G}...",
+                        filterKey, binKey, item.Gain);
+                    double? found;
+                    try {
+                        found = await _flatWizard.AutoFindExposureAsync(
+                            filterKey, binKey,
+                            gain: item.Gain > 0 ? item.Gain : null,
+                            offset: flatOffset > 0 ? flatOffset : null,
+                            ct: ct);
+                    } catch (OperationCanceledException) { throw; }
+                    catch (Exception ex) {
+                        _logger.LogError(ex,
+                            "Auto-flat search threw for '{F}' bin{B}; skipping this flat set",
                             filterKey, binKey);
-                        double? found;
-                        try {
-                            found = await _flatWizard.AutoFindExposureAsync(
-                                filterKey, binKey, ct: ct);
-                        } catch (OperationCanceledException) { throw; }
-                        catch (Exception ex) {
-                            _logger.LogError(ex,
-                                "Auto-flat search threw for '{F}' bin{B}; skipping this flat set",
-                                filterKey, binKey);
-                            LastError = $"Auto-flat failed for '{filterKey}': {ex.Message}";
-                            continue;
-                        }
-                        if (found.HasValue) {
-                            item.Exposure = found.Value;
-                        } else {
-                            _logger.LogWarning(
-                                "Auto-flat did not converge for '{F}' bin{B} (panel too bright/dim for the search range); skipping this flat set",
-                                filterKey, binKey);
-                            LastError = $"Auto-flat for '{filterKey}' could not reach the target ADU; flat set skipped";
-                            continue;
-                        }
+                        LastError = $"Auto-flat failed for '{filterKey}': {ex.Message}";
+                        continue;
+                    }
+                    if (found.HasValue) {
+                        item.Exposure = found.Value;
+                    } else {
+                        _logger.LogWarning(
+                            "Auto-flat did not converge for '{F}' bin{B} (panel too bright/dim for the search range); skipping this flat set",
+                            filterKey, binKey);
+                        LastError = $"Auto-flat for '{filterKey}' could not reach the target ADU; flat set skipped";
+                        continue;
                     }
                 }
 
