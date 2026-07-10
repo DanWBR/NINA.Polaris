@@ -168,7 +168,7 @@
             {
                 target: '.status-clock', placement: 'bottom', skipIfMissing: true,
                 title: 'Chips + clock',
-                body: 'This area shows live chips when relevant — current-exposure progress, camera temperature, stacked-frame count, this device\'s battery — plus the wall clock.'
+                body: 'This area shows live chips when relevant — current-exposure progress, camera temperature, stacked-frame count, this client device\'s battery — plus the wall clock.'
             },
             {
                 target: '.log-badge', placement: 'bottom', skipIfMissing: true,

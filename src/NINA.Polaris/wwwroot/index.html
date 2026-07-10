@@ -201,7 +201,7 @@
                 </label>
                 <label class="auth-remember">
                     <input type="checkbox" x-model="auth.rememberMe" />
-                    <span>Remember on this device</span>
+                    <span>Remember on this client device</span>
                 </label>
                 <p class="auth-error" x-show="auth.loginError"
                    x-text="auth.loginError"></p>
@@ -478,7 +478,7 @@
                  the charge of the tablet / phone / laptop viewing the UI,
                  NOT the telescope computer. Live-updates via the API events. -->
             <span class="status-chip status-battery" x-show="battery.supported" x-cloak
-                  :title="'This device battery: ' + battery.level + '%'
+                  :title="'Client device battery: ' + battery.level + '%'
                           + (battery.charging ? ' (charging)' : '')">
                 <svg viewBox="0 0 24 12" width="22" height="12" aria-hidden="true"
                      style="vertical-align:middle; color:var(--text-secondary)">
@@ -11690,7 +11690,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
 
                         <h4 style="margin:14px 0 6px 0; font-size:13px">
-                            Install on this device
+                            Install on this client device
                         </h4>
                         <div class="tls-os-tabs">
                             <template x-for="g in (tls.guides || [])" :key="g.osKey">
@@ -11956,8 +11956,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </label>
                     <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
                         How sharp the on-screen preview can get when you zoom in.
-                        Higher uses more graphics memory on the device showing the
-                        view (your phone / tablet / PC), not the telescope computer.
+                        Higher uses more graphics memory on the client device showing
+                        the view (your phone / tablet / PC), not the host.
                         Your saved images are always full quality regardless.
                     </p>
 
@@ -12275,10 +12275,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      cloned SD-card image just works; this lets the owner
                      give each one a readable name. -->
                 <div class="settings-section" id="device-name-card">
-                    <h3 data-tour="set-devicename"><span class="settings-card-icon">🔭</span>Device name</h3>
+                    <h3 data-tour="set-devicename"><span class="settings-card-icon">🔭</span>Host name</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
-                        Shown when phones/tablets discover this telescope
-                        computer on the network?. Give it a name you'll
+                        Shown when clients (phones/tablets) discover this
+                        host on the network. Give it a name you'll
                         recognise (e.g. <em>Telescope on the balcony</em>).
                         Leave blank to use the automatic name.
                     </p>
@@ -12501,18 +12501,18 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="settings-section" id="clock-card">
                     <h3 data-tour="set-clock"><span class="settings-card-icon">⏰</span>Clock</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
-                        Sync the Pi's wall clock from this device when
-                        the host is offline (no NTP) and the Pi has no
+                        Sync the host's wall clock from this client device
+                        when the host is offline (no NTP) and has no
                         RTC battery. Action is explicit so the wall
                         clock never jumps during a running sequence.
                     </p>
                     <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px; font-size:12px">
                         <div>
-                            Server UTC:
+                            Host UTC:
                             <strong x-text="clockSync.serverUtc || '—'"></strong>
                         </div>
                         <div>
-                            Difference vs this device:
+                            Difference vs this client device:
                             <strong :class="clockSkewClass()"
                                     x-text="(clockSync.skewSeconds >= 0 ? '+' : '') + clockSync.skewSeconds + 's'"></strong>
                             <span class="text-muted"
@@ -12529,7 +12529,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <button class="btn btn-sm btn-primary"
                                 @click="clockSyncFromClient()"
                                 :disabled="!clockSync.supported || clockSync.busy">
-                            <span x-show="!clockSync.busy">⏱ Sync Pi clock from this device</span>
+                            <span x-show="!clockSync.busy">⏱ Sync host clock from this client device</span>
                             <span x-show="clockSync.busy">Syncing…</span>
                         </button>
                     </div>
@@ -12973,7 +12973,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <span style="font-size:26px;font-weight:700"
                                       x-text="Math.round(bench.lastResult.compositeScore)"></span>
                                 <span class="hint">Polaris score
-                                    (<strong x-text="bench.lastResult.device?.shortLabel || bench.lastResult.device?.model || 'this device'"></strong>,
+                                    (<strong x-text="bench.lastResult.device?.shortLabel || bench.lastResult.device?.model || 'host'"></strong>,
                                     <span x-text="bench.lastResult.device?.cores + ' cores'"></span>)
                                 </span>
                             </div>
@@ -13090,7 +13090,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                     <template x-if="bench.history && bench.history.length">
                         <div style="margin-top:14px">
-                            <div class="hint" style="margin-bottom:4px">History (this device's recent runs)</div>
+                            <div class="hint" style="margin-bottom:4px">History (the host's recent runs)</div>
                             <table style="width:100%;font-size:12px;border-collapse:collapse">
                                 <template x-for="(h, i) in bench.history.slice(0, 10)" :key="i">
                                     <tr>
@@ -13485,7 +13485,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          x-init="modelDlLoad()">
                         <h4 style="margin:0 0 4px 0; font-size:13px">Download models</h4>
                         <p class="hint" style="margin-top:0">
-                            Pull star-removal / GraXpert models onto this device
+                            Pull star-removal / GraXpert models onto the host
                             from the public N.I.N.A. Polaris model repository.
                             Useful for OS images and phones/tablets that don't
                             ship the large model files. Downloads land in your
@@ -14459,7 +14459,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                  Sync without hunting for the card. -->
             <span class="activity-host-stat activity-host-clock"
                   x-show="clockSkewLabel() !== null"
-                  :title="'Server: ' + clockSync.serverUtc + ' (UTC)\nDifference vs this device: ' + clockSync.skewSeconds + 's\nClick to open Settings → Clock'"
+                  :title="'Server: ' + clockSync.serverUtc + ' (UTC)\nDifference vs this client device: ' + clockSync.skewSeconds + 's\nClick to open Settings → Clock'"
                   @click="openSettingsCard('clock-card')"
                   style="cursor:pointer">
                 <span class="activity-host-icon">⏰</span>
@@ -15083,7 +15083,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     Enable local (client) processing
                 </label>
                 <p class="hint" style="margin-top:4px">
-                    If enabled, this device will be used to run the processing model directly, offloading the server. Requires a compatible GPU and a supported browser.
+                    If enabled, this client device will be used to run the processing model directly, offloading the host. Requires a compatible GPU and a supported browser.
                 </p>
                 <!-- GX-10: when the client is on plain HTTP and HTTPS
                      is available, surface the upgrade. Without WebGPU
@@ -17120,8 +17120,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <span x-show="update.assetName" x-text="' · ' + update.assetName + ' (' + updateAssetSizeText() + ')'"></span>
             </p>
             <p style="margin-bottom:8px" x-show="update.offline">
-                <b>Update through this device</b>
-                <span style="opacity:.7"> · the SBC has no internet</span>
+                <b>Update through this client device</b>
+                <span style="opacity:.7"> · the host has no internet</span>
             </p>
             <!-- Changelog: the commits since the installed version (the
                  release body is just download/install instructions, so we
@@ -17165,13 +17165,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
             <!-- Offline relay: the SBC can't reach GitHub but this phone/tablet
                  can. The browser reads the release info from GitHub, you download
-                 the .deb on this device, then pick it to upload + install. -->
+                 the .deb on this client device, then pick it to upload + install. -->
             <template x-if="!update.installing && !update.done && update.offline">
                 <div>
                     <p style="font-size:.82em;opacity:.85;margin-bottom:8px">
-                        Your SBC has no internet, but this device does. Download the
-                        package here, then pick it to send it over to the SBC — it
-                        verifies the checksum before installing.
+                        The host has no internet, but this client device does. Download
+                        the package here, then pick it to send it over to the host —
+                        it verifies the checksum before installing.
                     </p>
 
                     <div x-show="update.relayBusy" style="display:flex;align-items:center;gap:8px;margin:10px 0">
@@ -17308,7 +17308,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                     @click="installVersion(rel)"
                                     x-text="rel.relation === 'older' ? '↩ Roll back' : '⬆ Switch'"></button>
                             <span x-show="!rel.installable" style="opacity:.5;font-size:.78em"
-                                  title="No package for this device architecture">n/a</span>
+                                  title="No package for the host architecture">n/a</span>
                         </div>
                     </div>
                 </template>
@@ -17319,12 +17319,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </div>
 
             <!-- Offline relay (relayOnly rows route here): download the chosen
-                 .deb on this device, then pick it to send to the SBC. -->
+                 .deb on this client device, then pick it to send to the host. -->
             <template x-if="update.relayOpen && update.relayInfo && !update.installing">
                 <div style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:6px">
                     <p style="opacity:.85;font-size:.85em;margin-bottom:8px">
-                        This SBC has no internet. Download
-                        <b x-text="'v' + update.relayInfo.latestVersion"></b> on this device,
+                        This host has no internet. Download
+                        <b x-text="'v' + update.relayInfo.latestVersion"></b> on this client device,
                         then pick the file to send it over (the checksum is verified before install).
                     </p>
                     <ol style="font-size:.85em;padding-left:20px;margin:0 0 12px">
@@ -17556,10 +17556,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260710-afport"></script>
+    <script src="/js/app.js?v=20260710-hostclient"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
-    <script src="/js/tour.js?v=20260624-tour6"></script>
+    <script src="/js/tour.js?v=20260710-hostclient"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

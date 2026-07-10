@@ -4872,7 +4872,7 @@ function ninaApp() {
                         docLink: 'authentication.md',
                         body: [
                             'The first visit shows a full-screen wizard asking you to set a password. There is no default and no skip, this protects the rig from anyone else on the same WiFi.',
-                            'Pick something at least 8 characters. You will use this on every other device that opens Polaris (laptop, phone, second tablet). The "Remember on this device" checkbox at the login screen later persists across browser restarts.'
+                            'Pick something at least 8 characters. You will use this on every other device that opens Polaris (laptop, phone, second tablet). The "Remember on this client device" checkbox at the login screen later persists across browser restarts.'
                         ],
                         warn: 'Forgot it later? SSH to the Pi and clear AuthPasswordHash + AuthPasswordSalt in ~/.config/NINA.Polaris/profiles/active.json, restart the service, set a new one in the wizard.'
                     },
@@ -5360,7 +5360,7 @@ function ninaApp() {
                 const j = await r.json();
                 if (j.ok) {
                     this.clockSync.lastSyncAt = new Date();
-                    this.toast('Pi clock synced from this device', 'ok');
+                    this.toast('Host clock synced from this client device', 'ok');
                     // Force next WS payload to refresh skew quickly.
                     this.clockSync.skewSeconds = 0;
                 } else {
@@ -5963,14 +5963,14 @@ function ninaApp() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name: this.deviceFriendlyName || '' })
                 });
-                if (!r.ok) { this.toast('Could not save device name', 'error'); return; }
+                if (!r.ok) { this.toast('Could not save host name', 'error'); return; }
                 const j = await r.json();
                 this.deviceFriendlyName = j.friendlyName || '';
                 this.deviceMdnsName = j.mdnsName || '';
                 this._applyDeviceTitle();
-                this.toast('Device name saved', 'ok');
+                this.toast('Host name saved', 'ok');
             } catch (e) {
-                this.toast('Could not save device name: ' + e.message, 'error');
+                this.toast('Could not save host name: ' + e.message, 'error');
             }
         },
 
@@ -16351,7 +16351,7 @@ function ninaApp() {
         async clearBenchmarkHistory() {
             const ok = await this._confirmAsync(
                 'Clear benchmark history?',
-                'Removes all saved benchmark runs on this device. This cannot be undone.',
+                'Removes all saved benchmark runs on this host. This cannot be undone.',
                 'Clear history');
             if (!ok) return;
             try {
@@ -16423,7 +16423,7 @@ function ninaApp() {
         async clearSensorAnalysisHistory() {
             const ok = await this._confirmAsync(
                 'Clear sensor analysis history?',
-                'Removes all saved sensor-analysis runs on this device. This cannot be undone.',
+                'Removes all saved sensor-analysis runs on this host. This cannot be undone.',
                 'Clear history');
             if (!ok) return;
             try {
@@ -18254,7 +18254,7 @@ function ninaApp() {
             const delayInput = document.getElementById('newPreDelayMs-' + rig.id);
             const name  = nameInput?.value?.trim();
             const delay = parseInt(delayInput?.value, 10);
-            if (!name) { this.toast('Device name required', 'warn'); return; }
+            if (!name) { this.toast('Host name required', 'warn'); return; }
             if (isNaN(delay) || delay <= 0) {
                 this.toast('Delay must be a positive integer (ms)', 'warn');
                 return;
@@ -32324,7 +32324,7 @@ function ninaApp() {
                 const r = await resp.json();
                 if (r && r.ok) {
                     this.toast(
-                        `Connected to ${ssid}. The Pi is now at https://polaris-pi.local${window.location.port ? ':' + window.location.port : ''}/ on your home network. Reconnect this device to ${ssid}.`,
+                        `Connected to ${ssid}. The Pi is now at https://polaris-pi.local${window.location.port ? ':' + window.location.port : ''}/ on your home network. Reconnect this client device to ${ssid}.`,
                         'ok');
                     this.networkStation.open = false;
                 } else {
@@ -33224,7 +33224,7 @@ function ninaApp() {
                 if (u.error) {
                     this.update.offline = true;
                     this.update.relayOpen = true;
-                    this.toast('Polaris couldn\'t reach GitHub from the SBC — you can update through this device instead.', 'info', 8000);
+                    this.toast('Polaris couldn\'t reach GitHub from the host — you can update through this client device instead.', 'info', 8000);
                     this.openUpdateModal();
                     this.update.modalOpen = true;
                     this.relayCheckGithub();
@@ -33454,7 +33454,7 @@ function ninaApp() {
                 const gh = await fetch('https://api.github.com/repos/' + repo + '/releases?per_page=15', {
                     headers: { 'Accept': 'application/vnd.github+json' }
                 });
-                if (!gh.ok) { this.update.error = 'GitHub returned HTTP ' + gh.status + '. Is this device online?'; this.update.releases = []; return; }
+                if (!gh.ok) { this.update.error = 'GitHub returned HTTP ' + gh.status + '. Is this client device online?'; this.update.releases = []; return; }
                 const rels = await gh.json();
                 this.update.releases = (Array.isArray(rels) ? rels : []).map(rel => {
                     const tag = (rel.tag_name || '').replace(/^v/i, '');
@@ -33509,7 +33509,7 @@ function ninaApp() {
             // allowed for an older target.
             if (rel.relayOnly) {
                 if (!rel.installable || !rel.sha256) {
-                    this.update.error = 'No installable ' + tag + ' package for this device, or its checksum is unknown.';
+                    this.update.error = 'No installable ' + tag + ' package for the host, or its checksum is unknown.';
                     return;
                 }
                 this.update.relayInfo = {
@@ -33580,10 +33580,10 @@ function ninaApp() {
                     const gh = await fetch('https://api.github.com/repos/' + repo + '/releases/latest', {
                         headers: { 'Accept': 'application/vnd.github+json' }
                     });
-                    if (!gh.ok) { this.update.relayError = 'GitHub returned HTTP ' + gh.status + '. Is this device online?'; return; }
+                    if (!gh.ok) { this.update.relayError = 'GitHub returned HTTP ' + gh.status + '. Is this client device online?'; return; }
                     rel = await gh.json();
                 } catch (e) {
-                    this.update.relayError = 'Could not reach GitHub from this device. Check its internet connection.';
+                    this.update.relayError = 'Could not reach GitHub from this client device. Check its internet connection.';
                     return;
                 }
                 const tag = (rel.tag_name || '').replace(/^v/i, '');
@@ -33630,7 +33630,7 @@ function ninaApp() {
             }
             return 0;
         },
-        // User picked the .deb they downloaded on this device. Verify the size
+        // User picked the .deb they downloaded on this client device. Verify the size
         // matches what GitHub reported, then upload it to the SBC with the
         // expected size + SHA-256 (read from the GitHub API) so the server can
         // confirm integrity before the privileged install. Then poll for the
