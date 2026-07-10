@@ -31993,6 +31993,56 @@ function ninaApp() {
                 });
             }
 
+            // PLAN night planner (host-owned: keeps running with every
+            // client closed; this chip reappears on reconnect from the WS
+            // plan payload). Suppresses the generic Adv-sequence chip below
+            // since the plan drives the advanced engine — one chip is enough.
+            const planActive = !!(this.planStatus && this.planStatus.active);
+            if (planActive) {
+                const ps = this.planStatus;
+                const pct = ps.totalFrames
+                    ? Math.round(100 * (ps.totalCompleted || 0) / ps.totalFrames)
+                    : null;
+                out.push({
+                    id: 'plan', icon: '📋', kind: 'info',
+                    label: 'Plan' + (ps.currentTarget ? ': ' + ps.currentTarget : '')
+                         + (ps.totalFrames ? ` ${ps.totalCompleted || 0}/${ps.totalFrames}` : '')
+                         + (ps.phase === 'ending' ? ' · ending' : ''),
+                    progress: pct,
+                    onClick: () => { this.tab = 'plan'; }
+                });
+            }
+
+            // Advanced sequencer (host-owned; summary arrives on the WS
+            // stream so this works without ever opening the ADV tab).
+            if (!planActive && this.advSeq.state === 'Running') {
+                out.push({
+                    id: 'advseq', icon: '🌳', kind: 'info',
+                    label: 'Adv sequence'
+                         + (this.advSeq.framesCompleted ? ` · ${this.advSeq.framesCompleted} frames` : ''),
+                    onClick: () => { this.tab = 'seqadv'; }
+                });
+            }
+
+            // Auto Workflow batch (STUDIO). AMBER on purpose: unlike Plan/
+            // Adv/Autorun this runner is CLIENT-side (browser ONNX), so
+            // closing this tab kills the run — the chip both tracks progress
+            // and reminds the operator to keep the tab open.
+            if (this.workflow.running) {
+                const total = Math.max(1, (this.workflow.sources || []).length || 1);
+                const done = (this.workflow.results || []).length;
+                const nSteps = (this.workflow.steps || []).length;
+                out.push({
+                    id: 'awf', icon: '⚙️', kind: 'warn',
+                    label: `Workflow ${Math.min(done + 1, total)}/${total}`
+                         + (this.workflow.currentStep >= 0 && nSteps
+                             ? ` · step ${this.workflow.currentStep + 1}/${nSteps}` : ''),
+                    progress: Math.round(100 * done / total),
+                    tooltip: 'Auto Workflow runs in THIS browser tab — keep it open until it finishes.',
+                    onClick: () => { this.tab = 'files'; this.setStudioTab && this.setStudioTab('autoworkflow'); }
+                });
+            }
+
             // Auto-focus
             if (this.autoFocus.state === 'running') {
                 const i = this.autoFocus.currentSampleIndex ?? 0;
@@ -34698,6 +34748,16 @@ function ninaApp() {
                         this.stats.snr = ls.lastFrameSnr.toFixed(1);
                     if (ls.width > 0) { this.stats.width = ls.width; this.stats.height = ls.height; }
                 }
+            }
+            if (msg.advSeq) {
+                // Host-owned advanced-sequencer summary on the 1 Hz stream so
+                // the activity chip works from ANY tab and reappears after a
+                // client reconnect (the ADV tab's own 2 s poll only runs
+                // while that tab is open). Only the summary fields — the full
+                // sequence document still comes from loadAdvSeq.
+                this.advSeq.state = msg.advSeq.state || 'Idle';
+                this.advSeq.lastError = msg.advSeq.lastError;
+                this.advSeq.framesCompleted = msg.advSeq.framesCompleted || 0;
             }
             if (msg.plan !== undefined) {
                 this.planStatus = msg.plan;

@@ -58,6 +58,7 @@ public static class StatusStreamHandler {
         var liveStack = context.RequestServices.GetRequiredService<LiveStackingService>();
         var sequence = context.RequestServices.GetRequiredService<SequenceEngine>();
         var planRunner = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Plan.PlanRunnerService>();
+        var advEngine = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Sequencer.AdvancedSequenceEngine>();
         var phd2 = context.RequestServices.GetRequiredService<PHD2Client>();
         var guiders = context.RequestServices.GetRequiredService<ActiveGuiderProvider>();
         var profileSync = context.RequestServices.GetRequiredService<PHD2ProfileSyncService>();
@@ -462,6 +463,17 @@ public static class StatusStreamHandler {
                         autoFocus = autoFocusPayload,
                         meridianFlip = meridianPayload,
                         plan = planRunner.GetStatus(),
+                        // Advanced sequencer runs entirely on the host; put
+                        // its state on the 1 Hz stream so the activity-bar
+                        // chip works from ANY tab and survives a client that
+                        // disconnects and reconnects hours later (the ADV
+                        // tab's 2 s poll only runs while that tab is open).
+                        advSeq = new {
+                            state = advEngine.State.ToString(),
+                            framesCompleted = advEngine.FramesCompleted,
+                            lastError = advEngine.LastError,
+                            startedAt = advEngine.StartedAt
+                        },
                         sequence = new {
                             state = seqStatus.State,
                             currentItemIndex = seqStatus.CurrentItemIndex,
