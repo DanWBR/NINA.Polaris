@@ -46,5 +46,11 @@ public enum FrameKind {
     /// autorunCanvas only — kept distinct from <see cref="Live"/> so a
     /// running sequence's frames don't leak onto the LIVE tab (and the
     /// LIVE live-stack output doesn't leak into the AUTORUN preview).</summary>
-    Autorun = 5
+    Autorun = 5,
+    /// <summary>Server-integrated live-stack OUTPUT (the running master,
+    /// colour JPEG or mono raw). Dedicated kind so the LIVE canvas can show
+    /// ONLY stack results while a server stack runs — any stray kind-0 frame
+    /// (a raw sub, a driver CFA dropout rendering mono) is ignored instead of
+    /// flashing between the colour stack and a B&amp;W frame.</summary>
+    LiveStack = 6
 }

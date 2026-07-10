@@ -867,7 +867,7 @@ public class LiveStackingService {
                 // upscaling a downsized preview. Capped at the stack's native
                 // size by the renderer's scale<=1 clamp.
                 await _relay.RelayRgbJpegAsync(rgbImage, maxDim: 4096, quality: 90,
-                    kind: FrameKind.Live, ct: ct);
+                    kind: FrameKind.LiveStack, ct: ct);
             } else {
                 // Stabilize the relayed Bayer pattern: a single frame whose
                 // CCD_CFA was momentarily empty (BayerPattern=None) must not
@@ -887,7 +887,10 @@ public class LiveStackingService {
                     BayerPattern = relayBayer
                 };
                 var stackedImage = new BaseImageData(stackedPixels, stackedProps, imageData.MetaData);
-                await _relay.RelayImageAsync(stackedImage, ct);
+                // Dedicated stack kind: while a server stack runs the client
+                // paints ONLY LiveStack frames on the LIVE canvas, so a stray
+                // kind-0 frame can never flash B&W between stack updates.
+                await _relay.RelayImageAsync(stackedImage, FrameKind.LiveStack, ct);
             }
         } else {
             // MetricsOnly: bookkeep frame count + dimensions so triggers

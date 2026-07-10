@@ -3590,6 +3590,14 @@ function ninaApp() {
             try {
                 this.$watch('tab', v => {
                     try { sessionStorage.setItem('polaris_tab', v); } catch (_) { /* private mode */ }
+                    // Mobile ANR guard: the SKY engine's WASM render loop
+                    // keeps burning the WebView main thread even while its
+                    // tab is display:none, which is what froze the Android
+                    // app ("Polaris isn't responding"). Drop it to a
+                    // keep-alive rate whenever SKY isn't the active tab.
+                    // No-op on desktop — the /sky/ perf guard only installs
+                    // itself on phones/tablets.
+                    this._skySendMessage({ type: 'set-render-paused', paused: v !== 'sky' });
                 });
                 // Tonight's Best: the altitude charts must be redrawn whenever
                 // the filter or FOV toggle changes the shown set (Alpine remounts
@@ -6626,6 +6634,13 @@ function ninaApp() {
             }
 
             if (isJpeg) {
+                // Dedicated-stack-path gate: while the SERVER is integrating
+                // the stack (full mode), the LIVE canvas shows ONLY LiveStack
+                // (kind 6) frames. Any kind-0 JPEG arriving in that window is
+                // a stray (stale relay, other producer) — drop it so it can't
+                // flash over the colour stack.
+                const jk = headeredJpegBytes !== null ? (headeredJpegKind | 0) : 0;
+                if (jk === 0 && this._serverStackOwnsLive()) return;
                 // Pass the kind through when we got the headered shape
                 // (case b). Bare JPEG falls back to default 0 / Live.
                 if (headeredJpegBytes !== null) {
@@ -6723,7 +6738,8 @@ function ninaApp() {
                     // Server colour live stack renders LIVE as an RGB JPEG — arm
                     // the dropout guard so a later mono raw sub (transient
                     // CCD_CFA dropout) is held rather than flashed grey.
-                    if (frameKind === 0) {
+                    // Kind 6 = the dedicated LiveStack path.
+                    if (frameKind === 0 || frameKind === 6) {
                         this._liveSawColor = true;
                         this._liveColorW = img.width;
                         this._liveColorH = img.height;
@@ -8556,6 +8572,16 @@ function ninaApp() {
                 return;
             }
 
+            // Dedicated-stack-path gate: while the server integrates the stack
+            // (full mode), the LIVE canvas accepts ONLY LiveStack (kind 6)
+            // frames. Kind-0 raw frames in that window (stray sub relays,
+            // driver CFA dropouts rendering mono) are dropped outright — this
+            // is the hard guarantee behind the "B&W frames alternating with
+            // the colour stack" field report.
+            if (frameKind === 0 && this._serverStackOwnsLive()) {
+                return;
+            }
+
             // Transient CCD_CFA dropout guard (LIVE only). Some INDI OSC drivers
             // occasionally publish one sub with BayerPattern=None mid-session
             // (not just the first frame). Rendering it flips the colour LIVE view
@@ -8565,7 +8591,7 @@ function ninaApp() {
             // real (Bayered) frame from the server or the client stack takes over.
             // Re-arm on a geometry change (a genuine OSC→mono switch only happens
             // on a camera reconnect, which restarts the capture at a new size).
-            if (frameKind === 0) {
+            if (frameKind === 0 || frameKind === 6) {
                 if (width !== this._liveColorW || height !== this._liveColorH) {
                     this._liveSawColor = false;
                     this._liveColorW = width;
@@ -8782,11 +8808,26 @@ function ninaApp() {
                 // centre preview — kept separate from Live so a running
                 // sequence doesn't bleed onto the LIVE tab (and vice-versa).
                 case 5:  return ['autorunCanvas'];                          // Autorun
+                // Server live-stack OUTPUT (dedicated kind). Same canvas as
+                // Live, but while a server stack runs the client drops kind-0
+                // frames so ONLY the stack can paint the LIVE view.
+                case 6:  return ['liveCanvas'];                            // LiveStack
                 // Live frames (LIVE-tab capture + live-stack output) go to
                 // liveCanvas only.
                 case 0:
                 default: return ['liveCanvas'];                            // Live
             }
+        },
+
+        // True while the SERVER owns the LIVE display: a live stack is running
+        // in full (server-integrated) mode. In that window the stack arrives
+        // as dedicated LiveStack (kind 6) frames and the client must IGNORE
+        // kind-0 frames on the LIVE canvas — that's what used to flash B&W
+        // between colour stack updates. MetricsOnly (client compute) still
+        // consumes kind-0 raw frames as the WASM stacker input.
+        _serverStackOwnsLive() {
+            return !!this.liveStackEnabled
+                && (this.liveStackStatus?.mode || 'full').toLowerCase() === 'full';
         },
 
         // Backing-store size for a display canvas. We render at the source
@@ -10833,6 +10874,17 @@ function ninaApp() {
                         const queued = this._skyPending || [];
                         this._skyPending = [];
                         for (const q of queued) this._skySendMessage(q);
+                        // Mobile ANR guard: seed the render-idle state at
+                        // boot. The engine typically finishes init while
+                        // the user is still on HOME/LIVE, and without this
+                        // it renders at full rate until the first tab
+                        // switch. AFTER the queue flush so stale queued
+                        // pause states can't override the current tab.
+                        // No-op on desktop.
+                        this._skySendMessage({
+                            type: 'set-render-paused',
+                            paused: this.tab !== 'sky'
+                        });
                         // SWE: honour persisted DSS toggle. The bridge
                         // defaults to ON during data-source registration,
                         // so we only need to push a message if the user
@@ -17072,6 +17124,30 @@ function ninaApp() {
             ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(w, cy);
             ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.stroke();
+            // Regression line per axis: the calibration points ideally lie on a
+            // straight line through the origin along that axis's camera angle.
+            // Total-least-squares direction through the origin (principal
+            // direction): theta = 0.5 * atan2(2*Sxy, Sxx - Syy). Drawn dashed
+            // under the points so the operator sees the fitted axis (and how
+            // scattered the steps are around it).
+            const fitLine = (pts, color) => {
+                if (!pts || pts.length < 2) return;
+                let sxx = 0, syy = 0, sxy = 0;
+                for (const p of pts) { sxx += p[0] * p[0]; syy += p[1] * p[1]; sxy += p[0] * p[1]; }
+                if (sxx + syy < 1e-9) return;
+                const th = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+                const dx = Math.cos(th), dy = Math.sin(th);
+                const L = max * 2;   // spans the whole plot
+                ctx.strokeStyle = color; ctx.lineWidth = 1;
+                ctx.setLineDash([5, 4]);
+                ctx.beginPath();
+                ctx.moveTo(X(-dx * L), Y(-dy * L));
+                ctx.lineTo(X(dx * L), Y(dy * L));
+                ctx.stroke();
+                ctx.setLineDash([]);
+            };
+            fitLine(ra, 'rgba(91,141,255,0.45)');
+            fitLine(dec, 'rgba(255,82,82,0.45)');
             const plot = (pts, color) => {
                 ctx.fillStyle = color;
                 for (const p of pts) { ctx.beginPath(); ctx.arc(X(p[0]), Y(p[1]), 2.5, 0, Math.PI * 2); ctx.fill(); }
@@ -17279,6 +17355,12 @@ function ninaApp() {
             try {
                 await this.apiPost('/api/guider/flip-calibration');
                 this.toast('Calibration mirrored for the meridian flip', 'ok');
+                // The server mirrors the stored plot points too; the WS tick
+                // refreshes calDetails within ~1-2 s. Redraw the open Review
+                // plot then, so the mirrored axes show without reopening it.
+                const redraw = () => { if (this.showCalReview) this.drawCalReviewPlot(); };
+                setTimeout(redraw, 1500);
+                setTimeout(redraw, 3000);
             } catch (e) { this.toast('Flip failed: ' + (e.message || e), 'error'); }
         },
 

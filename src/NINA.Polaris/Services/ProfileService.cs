@@ -134,6 +134,13 @@ public class ProfileService {
         // a stale legacy field on an old rig.
         MigrateLegacyCameraQuirks();
 
+        // Logging defaults: builds prior to the default-ON change persisted
+        // LogToDisk=false into active.json, so upgraded installs never wrote
+        // the app log or the per-session guide log ("logs aren't being
+        // written" field report). Re-seed both flags ON exactly once; a user
+        // who turns them off AFTER this migration stays off.
+        MigrateLoggingDefaults();
+
         // Deployment-time override for the capture root. Useful for
         // distribution images (Pi systemd unit, Docker, etc.) that
         // want a sensible default like /home/polaris/files without
@@ -569,6 +576,24 @@ public class ProfileService {
     /// populate the table.</summary>
     public IReadOnlyDictionary<string, CameraQuirks> ListCameraQuirks() {
         return new Dictionary<string, CameraQuirks>(_activeProfile.CameraQuirks);
+    }
+
+    /// <summary>One-time re-seed of the logging defaults on profiles saved by
+    /// builds where LogToDisk/SaveGuideLogs defaulted OFF (those builds wrote
+    /// `false` into active.json, which then shadowed the new default-ON
+    /// initializers forever). Guarded by <see cref="UserProfile.SettingsMigration"/>
+    /// so it runs once — a deliberate opt-out made after the migration is
+    /// respected on every later load.</summary>
+    private void MigrateLoggingDefaults() {
+        const int LoggingDefaultsOnVersion = 1;
+        if (_activeProfile.SettingsMigration >= LoggingDefaultsOnVersion) return;
+        _activeProfile.LogToDisk = true;
+        _activeProfile.SaveGuideLogs = true;
+        _activeProfile.SettingsMigration = LoggingDefaultsOnVersion;
+        Save();
+        _logger.LogInformation(
+            "Settings migration v{V}: LogToDisk + SaveGuideLogs re-seeded ON (one-time)",
+            LoggingDefaultsOnVersion);
     }
 
     /// <summary>FIELD4-3: hoist legacy per-rig BayerPatternOverride

@@ -266,6 +266,12 @@ public class UserProfile {
     /// </summary>
     public bool LogToDisk { get; set; } = true;
 
+    /// <summary>One-time settings migration marker (see
+    /// ProfileService.MigrateLoggingDefaults). Bumped when a persisted default
+    /// needs to be re-seeded on existing profiles; a user change made AFTER the
+    /// migration ran is never overwritten again.</summary>
+    public int SettingsMigration { get; set; }
+
     /// <summary>Save a dedicated per-session guiding log under logs/guide/
     /// (ASIAIR-style). Native guider → a PHD2-compatible Guide Log; external
     /// PHD2 → a copy of PHD2's own guide log. Default on.</summary>

@@ -174,6 +174,28 @@ const selected = new Set();          // origins ticked on the picker
 const instances = new Map();         // origin -> { origin, name, frame }
 let activeOrigin = null;
 
+// ---------- stable per-service origin ----------
+// The Polaris UI keeps its auth token ("remember this device") and every UI
+// preference in the IFRAME's localStorage, which the browser scopes to the
+// ORIGIN. An SBC usually advertises several IPv4 addresses (wlan + eth +
+// hotspot) and their mDNS ordering varies between launches — so discovery
+// could present the same Polaris from a "different" origin each time, wiping
+// saved settings and asking for the password again. Remember the origin first
+// used for each mDNS service and KEEP using it while that address is still
+// being advertised; only adopt a new address when the old one is gone (real
+// DHCP change / interface removed).
+const KNOWN_ORIGINS_KEY = 'polaris.knownOrigins';
+let knownOrigins = {};               // serviceKey -> origin
+async function loadKnownOrigins() {
+  try { knownOrigins = JSON.parse(await prefGet(KNOWN_ORIGINS_KEY) || '{}') || {}; }
+  catch { knownOrigins = {}; }
+}
+function rememberOrigin(svcKey, origin) {
+  if (!svcKey || !origin || knownOrigins[svcKey] === origin) return;
+  knownOrigins[svcKey] = origin;
+  prefSet(KNOWN_ORIGINS_KEY, JSON.stringify(knownOrigins));
+}
+
 // ---------- discovery ----------
 
 function renderList() {
@@ -240,10 +262,25 @@ async function scan() {
         // .local names, so the IP is fine to connect with. The self-signed
         // cert is accepted natively for LAN hosts (iOS: LANCertTrust.swift,
         // Android: MainActivity.java), so no cert install is needed.
-        const addr = (s.ipv4Addresses && s.ipv4Addresses[0]) || s.hostname;
+        // Sort the advertised addresses so the pick is deterministic, then
+        // prefer the origin we used for this service before (see the
+        // stable-per-service-origin block above) while its address is still
+        // advertised — keeping the iframe origin (and its localStorage:
+        // auth token + UI settings) identical across launches.
+        const addrs = (s.ipv4Addresses || []).filter(Boolean).slice().sort();
+        let addr = addrs[0] || s.hostname;
+        const friendly = (s.txtRecord && s.txtRecord.friendly) || s.name || 'Polaris';
+        const svcKey = s.name || friendly;
+        const remembered = svcKey ? knownOrigins[svcKey] : null;
+        if (remembered) {
+          try {
+            const rHost = new URL(remembered).hostname;
+            if (addrs.includes(rHost) || rHost === s.hostname) addr = rHost;
+          } catch { /* malformed remembered origin — ignore */ }
+        }
         if (!addr) return;
         const origin = toOrigin(addr, s.port || 5000);
-        const friendly = (s.txtRecord && s.txtRecord.friendly) || s.name || 'Polaris';
+        rememberOrigin(svcKey, origin);
         discovered.set(origin, { name: friendly, addr: `${addr}:${s.port || 5000}` });
         els.scanHint.textContent = `${discovered.size} found.`;
         renderList();
@@ -499,6 +536,9 @@ async function requestStartupPermissions() {
   wire();
   wireHardwareBack();
   refreshPickerExtras();
+  // Load the per-service origin memory before discovery kicks in, so the
+  // first scan already reuses each instance's established origin.
+  loadKnownOrigins();
   // Prompt for location right away (see requestStartupPermissions).
   requestStartupPermissions();
   // Defer discovery off the launch critical path: the picker + manual address

@@ -189,10 +189,81 @@
         // Flag the bridge can still consult — kept for backwards
         // compatibility with diagnostic snippets we've shared.
         window.__skyEngineScriptLoaded = false;
+
+        // Perf guard for phones/tablets (Android WebView ANR fix).
+        // The engine glue drives an unconditional 60 fps rAF loop and
+        // renders at full devicePixelRatio; on a phone (DPR ~3) that
+        // is ~4-9x the pixel work of a desktop view, and the long WASM
+        // frames starve the WebView UI thread until Android decides
+        // the app is not responding. Cap DPR + throttle the loop on
+        // mobile only — desktop behaviour is untouched. The parent app
+        // additionally drops the loop to a keep-alive rate while the
+        // SKY tab is not the active Polaris tab (via the bridge's
+        // 'set-render-paused' message → window.__skySetRenderIdle).
+        (function () {
+            var ua = navigator.userAgent || '';
+            var isMobile = /Android|iPhone|iPad|iPod/i.test(ua)
+                || (navigator.maxTouchPoints > 1 && /Mac/.test(ua)); // iPadOS lies
+            if (!isMobile) return;
+
+            // 1) Cap the backing-store resolution. The glue reads
+            // window.devicePixelRatio on every frame, so a shadowing
+            // own property is enough — no engine rebuild needed.
+            var DPR_CAP = 1.5;
+            try {
+                if ((window.devicePixelRatio || 1) > DPR_CAP) {
+                    Object.defineProperty(window, 'devicePixelRatio', {
+                        get: function () { return DPR_CAP; },
+                        configurable: true
+                    });
+                }
+            } catch (e) { /* keep native DPR */ }
+
+            // 2) Throttle every rAF consumer in this document (engine
+            // loop + bridge pan tween) to ~30 fps, and to ~0.5 fps
+            // while the parent reports the SKY tab inactive. Internal
+            // re-arms would break cancelAnimationFrame(id), so hand
+            // out ticket ids and translate them to the live native id
+            // on cancel.
+            var nRAF = window.requestAnimationFrame.bind(window);
+            var nCAF = window.cancelAnimationFrame.bind(window);
+            var ACTIVE_MS = 33;   // ~30 fps while SKY is in use
+            var IDLE_MS = 2000;   // keep-alive while another tab is shown
+            var idle = false;
+            // Very negative so the FIRST frame after boot always runs
+            // immediately (the bridge's initial-centre emission retries
+            // for only ~1 s and needs one _core_update to have run).
+            var last = -1e9;
+            var ticket = 0;
+            var live = {};        // ticket -> pending native id
+            window.__skySetRenderIdle = function (v) { idle = !!v; };
+            window.requestAnimationFrame = function (cb) {
+                var id = ++ticket;
+                var step = function (t) {
+                    var min = idle ? IDLE_MS : ACTIVE_MS;
+                    // t === last: another consumer already ran in this
+                    // native frame — run alongside it instead of being
+                    // pushed to the next bucket forever.
+                    if (t - last < min - 1 && t !== last) {
+                        live[id] = nRAF(step);
+                        return;
+                    }
+                    delete live[id];
+                    last = t;
+                    cb(t);
+                };
+                live[id] = nRAF(step);
+                return id;
+            };
+            window.cancelAnimationFrame = function (id) {
+                if (live[id] !== undefined) { nCAF(live[id]); delete live[id]; }
+                else nCAF(id);
+            };
+        })();
     </script>
     <script src="js/wasm/stellarium-web-engine.js"
             onload="window.__skyEngineScriptLoaded = true;"
             onerror="console.warn('[Sky] engine .js not present yet — run scripts/build-stellarium-web.sh')"></script>
-    <script src="js/sky-bridge.js?v=auxfov1"></script>
+    <script src="js/sky-bridge.js?v=perfguard1"></script>
 </body>
 </html>

@@ -578,6 +578,25 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     private void PersistFlippedCalibration() {
         var cal = _calibration;
         var key = CalibrationKey();
+        // Mirror the recorded plot points to match the flipped axes, so the
+        // Review-Calibration scatter reflects the mirror (the field report:
+        // "flip doesn't change the graph"). A 180° axis rotation negates both
+        // coordinates. RA always flips (+180°); Dec only when the rig reverses
+        // Dec after a flip — the same rule FlipForPierChange applies to the
+        // angles. Applying the mirror twice restores the original (involutive),
+        // consistent with flipping the angles twice.
+        bool reverseDec = Rig.NativeReverseDecAfterFlip;
+        static double[][] Mirror(double[][]? pts) =>
+            (pts ?? Array.Empty<double[]>())
+                .Select(p => p is { Length: >= 2 } ? new[] { -p[0], -p[1] } : p)
+                .ToArray();
+        void Apply(NativeCalibrationData t) {
+            t.XAngle = cal.XAngle;
+            t.YAngle = cal.YAngle;
+            t.PierSide = (int)cal.CalibrationPierSide;
+            t.RaPoints = Mirror(t.RaPoints);
+            if (reverseDec) t.DecPoints = Mirror(t.DecPoints);
+        }
         try {
             _profiles.UpdateEquipmentProfile(Rig.Id, r => {
                 NativeCalibrationData? target = null;
@@ -586,18 +605,12 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
                         string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
                 }
                 target ??= r.NativeCalibration;   // legacy fallback (pre-migration rig)
-                if (target != null) {
-                    target.XAngle = cal.XAngle;
-                    target.YAngle = cal.YAngle;
-                    target.PierSide = (int)cal.CalibrationPierSide;
-                }
+                if (target != null) Apply(target);
                 // Keep the legacy "last cal" slot in sync when it's a different
                 // record but the same equipment key.
                 if (r.NativeCalibration != null && !ReferenceEquals(r.NativeCalibration, target) &&
                     string.Equals(r.NativeCalibration.Key, key, StringComparison.OrdinalIgnoreCase)) {
-                    r.NativeCalibration.XAngle = cal.XAngle;
-                    r.NativeCalibration.YAngle = cal.YAngle;
-                    r.NativeCalibration.PierSide = (int)cal.CalibrationPierSide;
+                    Apply(r.NativeCalibration);
                 }
             });
         } catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist flipped calibration"); }
