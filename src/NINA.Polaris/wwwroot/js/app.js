@@ -15189,14 +15189,16 @@ function ninaApp() {
             let aux = null;
             const afl = this.aux?.focalLengthMm;
             let asw = this.auxSensorWidthMm, ash = this.auxSensorHeightMm;
-            if (!(asw > 0 && ash > 0) && this.aux?.enabled) {
+            if (!(asw > 0 && ash > 0) && (this.aux?.enabled || this.auxCamera)) {
                 // Live dims missing: DSLRs on the aux port (indi_gphoto)
                 // don't publish CCD_INFO — their geometry lives in the rig's
-                // per-aux overrides (the DSLR picker fills auxCameraMaxX/Y +
-                // pixel size). Derive the footprint from those so the pink
-                // rect shows for a configured-but-quiet (or not-yet-
-                // connected) aux camera. Gated on aux.enabled so leftover
-                // fields on a rig with the aux turned off don't draw it.
+                // per-aux overrides (DSLR picker, or learned from the last
+                // connected aux camera in the status ingest). Derive the
+                // footprint from those so the pink rect shows for a
+                // configured-but-quiet (or not-yet-connected) aux camera.
+                // Gated on an aux camera being selected on the rig (or the
+                // capture loop enabled) so leftover fields on a rig whose
+                // aux was removed don't draw it.
                 const ax = Number(this.aux?.maxX) || 0;
                 const ay = Number(this.aux?.maxY) || 0;
                 const ap = Number(this.aux?.pixelSizeUm) || 0;
@@ -15315,7 +15317,14 @@ function ninaApp() {
                 'target=', Number.isFinite(target.raDeg)
                     ? `${target.raDeg.toFixed(2)}°/${target.decDeg.toFixed(2)}° (solved)`
                     : 'screen-centred',
-                'fov=', w.toFixed(2) + '°×' + h.toFixed(2) + '°');
+                'fov=', w.toFixed(2) + '°×' + h.toFixed(2) + '°',
+                // Aux diagnostic: say WHY the pink rect isn't being sent so
+                // "where's my aux FOV?" is answerable from the console.
+                'aux=', aux
+                    ? `${aux.widthDeg.toFixed(2)}°×${aux.heightDeg.toFixed(2)}°`
+                    : (!(afl > 0) ? 'null (no aux focal length)'
+                        : !(asw > 0 && ash > 0) ? 'null (no aux sensor size — connect the aux camera once or set the DSLR pixel/size fields)'
+                        : 'null (no anchor — mount not connected and no aux solve)'));
 
             // mosaicTiles is an Alpine reactive array (a Proxy); postMessage
             // can't structured-clone a Proxy and throws DataCloneError, which
@@ -34468,6 +34477,42 @@ function ninaApp() {
             if (eq.auxCamera && eq.auxCamera.maxX > 0 && eq.auxCamera.pixelSizeX > 0) {
                 this.auxSensorWidthMm  = eq.auxCamera.maxX * eq.auxCamera.pixelSizeX / 1000;
                 this.auxSensorHeightMm = eq.auxCamera.maxY * eq.auxCamera.pixelSizeY / 1000;
+                // Learn the aux sensor geometry onto the rig (same idea as
+                // the OTA/filter-name persistence): the rig fields were only
+                // ever filled by the DSLR picker, so for an astro cam on the
+                // aux port the footprint evaporated with the connection and
+                // the pink SKY FOV rect only existed while the aux was live.
+                // Mirror the driver-reported values into aux.* and persist
+                // (debounced) when they actually changed, so the rect can be
+                // drawn from the rig even before/without the aux connected.
+                if (eq.auxCamera.connected) {
+                    const lpx = Number(eq.auxCamera.pixelSizeX) || 0;
+                    const lmx = Number(eq.auxCamera.maxX) || 0;
+                    const lmy = Number(eq.auxCamera.maxY) || 0;
+                    if (lpx > 0 && lmx > 0 && lmy > 0
+                        && (Math.abs((Number(this.aux.pixelSizeUm) || 0) - lpx) > 0.005
+                            || (Number(this.aux.maxX) || 0) !== lmx
+                            || (Number(this.aux.maxY) || 0) !== lmy)) {
+                        this.aux.pixelSizeUm = lpx;
+                        this.aux.maxX = lmx;
+                        this.aux.maxY = lmy;
+                        if (eq.auxCamera.bitDepth > 0) this.aux.bitDepth = eq.auxCamera.bitDepth;
+                        // Persist ONLY the geometry fields — not the whole
+                        // saveAux() blob (focal length / exposure / gain /
+                        // enabled), which could clobber the rig with client
+                        // defaults if this tick lands before rig hydration.
+                        // _persistRigSelection no-ops until rigs are loaded,
+                        // and the changed-guard above re-fires on the next
+                        // tick after hydration resets aux.* from the rig,
+                        // so this converges to exactly one save.
+                        this._persistRigSelection({
+                            auxCameraPixelSizeUm: lpx,
+                            auxCameraMaxX: lmx,
+                            auxCameraMaxY: lmy,
+                            auxCameraBitDepth: Number(this.aux.bitDepth) || 0
+                        });
+                    }
+                }
                 if (this.tab === 'sky') { try { this._pushSkyFovOverlays(); } catch (_) {} }
             }
             this.auxFocuserConnected = !!(eq.auxFocuser && eq.auxFocuser.connected);

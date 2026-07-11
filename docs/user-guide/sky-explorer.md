@@ -190,9 +190,12 @@ slewing:
   when you're framed correctly.
 - **Pink rectangle** — the **aux camera** FOV, shown when an
   [Auxiliary Camera System](rigs.md#auxiliary-camera-system) is
-  configured (aux focal length set + the aux sensor reported once it
-  connects). The aux rides the same mount, so it's anchored at the
-  mount position.
+  configured (aux focal length set + a sensor footprint). The sensor
+  geometry is learned from the aux camera the first time it connects
+  and remembered on the rig, so the rectangle keeps showing even
+  before the aux is connected; for DSLRs it can also be filled in
+  manually via the aux pixel/size fields. The aux rides the same
+  mount, so it's anchored at the mount position.
 - **Yellow rectangles** — the [mosaic](#mosaic-planner) panels.
 
 ### Confirming the aux camera framing
