@@ -928,10 +928,11 @@
         }
     }
 
-    // Cache + rebuild for the aux-camera FOV rectangle (pink). The aux
-    // camera rides the SAME mount, so it's celestial-anchored at the
-    // mount RA/Dec just like the blue mount rect; rebuilt on pan so its
-    // label stays glued to the top edge.
+    // Cache + rebuild for the aux-camera FOV rectangle (pink) when it is
+    // celestial-anchored (aux plate solve, or the solved target anchor
+    // while imaging); rebuilt on pan so its label stays glued to the top
+    // edge. The screen-anchored concentric-with-target case is a CSS box
+    // instead — see skyUpdateAuxFovBox.
     var __lastAuxFov = null;
 
     function skyRebuildAuxGeoJson() {
@@ -973,6 +974,67 @@
         }
     }
 
+    // Aux-camera FOV, same dual mechanics as the red target: celestial-
+    // anchored geojson when the parent supplies a raDeg/decDeg (the aux's
+    // own plate solve, or the solved target anchor while imaging), else a
+    // screen-anchored pink CSS box (#sky-aux-fov) CONCENTRIC with the red
+    // drag-to-frame box — main and aux ride the same mount, so until an
+    // aux solve says otherwise they're assumed co-pointed.
+    function skyUpdateAuxFovBox(aux) {
+        __lastAuxFov = aux || null;
+        var el = document.getElementById('sky-aux-fov');
+        var celestial = !!(aux && aux.widthDeg > 0
+            && typeof aux.raDeg === 'number' && isFinite(aux.raDeg)
+            && typeof aux.decDeg === 'number' && isFinite(aux.decDeg));
+        if (celestial) {
+            if (el) el.style.display = 'none';
+            skyRebuildAuxGeoJson();
+            console.log('[Sky] aux FOV rect created at RA=' + aux.raDeg.toFixed(2)
+                + '° Dec=' + aux.decDeg.toFixed(2) + '° size=' + aux.widthDeg.toFixed(2)
+                + '°×' + aux.heightDeg.toFixed(2) + '°');
+            return;
+        }
+        // Not celestial — drop any geojson aux left over from a solve.
+        skyRemoveObj('aux');
+        if (!el) return;
+        if (!aux || !(aux.widthDeg > 0)) {
+            el.style.display = 'none';
+            return;
+        }
+        var canvas = document.getElementById('stel-canvas');
+        if (!canvas) { el.style.display = 'none'; return; }
+        var viewW = canvas.clientWidth || canvas.width;
+        var viewH = canvas.clientHeight || canvas.height;
+        var engineFovDeg = 60;
+        try {
+            if (window.__stel && window.__stel.core
+                && typeof window.__stel.core.fov === 'number'
+                && isFinite(window.__stel.core.fov)) {
+                engineFovDeg = window.__stel.core.fov / window.__stel.D2R;
+            }
+        } catch (e) { /* fall through to default */ }
+        if (engineFovDeg <= 0) engineFovDeg = 60;
+        var refPx = Math.min(viewW, viewH);
+        var pxPerDeg = refPx / engineFovDeg;
+        // Same rotation composition as the target box: camera roll +
+        // parallactic at the view centre, so pink and red rotate together.
+        var cameraRollDeg = aux.rotationDeg || 0;
+        var parallacticDeg = 0;
+        var __c = skyGetCenter();
+        if (__c) parallacticDeg = skyParallacticAt(__c.raDeg, __c.decDeg);
+        var rotDeg = cameraRollDeg + parallacticDeg;
+        el.style.width = (aux.widthDeg * pxPerDeg) + 'px';
+        el.style.height = (aux.heightDeg * pxPerDeg) + 'px';
+        var flipTf = aux.flipV ? ' scaleY(-1)' : '';
+        el.style.transform = 'translate(-50%, -50%)' + flipTf
+            + ' rotate(' + rotDeg.toFixed(2) + 'deg)';
+        el.style.display = 'block';
+        var label = document.getElementById('sky-aux-label');
+        if (label) label.textContent =
+            'Aux  ' + aux.widthDeg.toFixed(2) + '° × '
+            + aux.heightDeg.toFixed(2) + '°';
+    }
+
     function skySetFovOverlays(mount, target, mosaic, aux) {
         var stel = window.__stel;
         if (!stel) return;
@@ -980,16 +1042,13 @@
         if (!__skyFovLayer) return;
         // Mount stays as a celestial-anchored geojson (engine renders
         // it where the scope is pointing, even if user drags away).
-        // Mosaic likewise. Aux camera rides the same mount → also
-        // celestial-anchored at the mount RA/Dec, drawn pink.
-        // Target: SCREEN-anchored — pure CSS overlay sized by camera
-        // FOV ratio to engine fov. Always at viewport centre, always
-        // visible, doesn't need any engine round-trip.
+        // Mosaic likewise. Aux + target: dual — celestial geojson when
+        // anchored to a solve, else SCREEN-anchored CSS boxes sized by
+        // camera FOV ratio to engine fov, concentric at the viewport
+        // centre (pink nested inside red).
         skyRemoveObj('mount');
-        skyRemoveObj('aux');
         skyRemoveMosaic();
         __lastMountFov = mount || null;
-        __lastAuxFov = aux || null;
         console.log('[Sky] set-fov-overlays mount=', mount, 'target=', target, 'aux=', aux);
         try {
             if (mount && mount.widthDeg > 0) {
@@ -1001,19 +1060,8 @@
                     + '° Dec=' + mount.decDeg.toFixed(2) + '° size=' + mount.widthDeg.toFixed(2)
                     + '°×' + mount.heightDeg.toFixed(2) + '°');
             }
-            // Aux camera FOV (pink), celestial-anchored like the mount.
-            if (aux && aux.widthDeg > 0
-                && typeof aux.raDeg === 'number' && isFinite(aux.raDeg)) {
-                __skyFovObjs.aux = stel.createObj('geojson', {
-                    data: skyFovGeoJson(aux, '#ec4899', true,
-                        'Aux ' + aux.widthDeg.toFixed(2) + 'x'
-                            + aux.heightDeg.toFixed(2))   // pink, glow
-                });
-                __skyFovLayer.add(__skyFovObjs.aux);
-                console.log('[Sky] aux FOV rect created at RA=' + aux.raDeg.toFixed(2)
-                    + '° Dec=' + aux.decDeg.toFixed(2) + '° size=' + aux.widthDeg.toFixed(2)
-                    + '°×' + aux.heightDeg.toFixed(2) + '°');
-            }
+            // Aux camera FOV (pink): celestial geojson or CSS box.
+            skyUpdateAuxFovBox(aux);
             // Update the screen-anchored target FOV CSS box.
             skyUpdateTargetFovBox(target);
         } catch (e) {
@@ -1178,6 +1226,13 @@
                          && isFinite(__lastTargetFov.raDeg))) {
                     skyUpdateTargetFovBox(__lastTargetFov);
                 }
+                // Screen-anchored pink aux box: same resize/re-rotate
+                // treatment as the red target box it sits inside.
+                if (__lastAuxFov
+                    && !(typeof __lastAuxFov.raDeg === 'number'
+                         && isFinite(__lastAuxFov.raDeg))) {
+                    skyUpdateAuxFovBox(__lastAuxFov);
+                }
                 // The mount geojson's text-rotate depends on BOTH the
                 // rectangle's parallactic angle AND the projection
                 // centre's parallactic angle (see skyFovGeoJson). The
@@ -1217,6 +1272,7 @@
         // canvas dimensions changed.
         window.addEventListener('resize', function () {
             if (__lastTargetFov) skyUpdateTargetFovBox(__lastTargetFov);
+            if (__lastAuxFov) skyUpdateAuxFovBox(__lastAuxFov);
         });
     }
 

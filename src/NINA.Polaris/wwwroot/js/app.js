@@ -15181,55 +15181,6 @@ function ninaApp() {
                 };
             }
 
-            // Aux camera FOV (pink). The aux rides the SAME mount, so it's
-            // anchored at the mount RA/Dec like the blue rect. Shown only
-            // when the aux camera is configured: a focal length + a sensor
-            // footprint (reported once the aux cam connects). No mount
-            // position → nothing to anchor to, so it piggybacks on `mount`.
-            let aux = null;
-            const afl = this.aux?.focalLengthMm;
-            let asw = this.auxSensorWidthMm, ash = this.auxSensorHeightMm;
-            if (!(asw > 0 && ash > 0) && (this.aux?.enabled || this.auxCamera)) {
-                // Live dims missing: DSLRs on the aux port (indi_gphoto)
-                // don't publish CCD_INFO — their geometry lives in the rig's
-                // per-aux overrides (DSLR picker, or learned from the last
-                // connected aux camera in the status ingest). Derive the
-                // footprint from those so the pink rect shows for a
-                // configured-but-quiet (or not-yet-connected) aux camera.
-                // Gated on an aux camera being selected on the rig (or the
-                // capture loop enabled) so leftover fields on a rig whose
-                // aux was removed don't draw it.
-                const ax = Number(this.aux?.maxX) || 0;
-                const ay = Number(this.aux?.maxY) || 0;
-                const ap = Number(this.aux?.pixelSizeUm) || 0;
-                if (ax > 0 && ay > 0 && ap > 0) {
-                    asw = ax * ap / 1000;
-                    ash = ay * ap / 1000;
-                }
-            }
-            if (afl > 0 && asw > 0 && ash > 0) {
-                const auxW = 2 * Math.atan(asw / (2 * afl)) * (180 / Math.PI);
-                const auxH = 2 * Math.atan(ash / (2 * afl)) * (180 / Math.PI);
-                const asf = this.auxSolvedFrame;
-                if (asf && Number.isFinite(asf.raDeg) && Number.isFinite(asf.decDeg)) {
-                    // Real aux footprint from its own plate solve: actual
-                    // sky position + rotation the aux frame comes out with.
-                    aux = {
-                        raDeg: asf.raDeg, decDeg: asf.decDeg,
-                        widthDeg: auxW, heightDeg: auxH,
-                        rotationDeg: Number.isFinite(asf.rotationDeg) ? asf.rotationDeg : mountRot,
-                        flipV: false
-                    };
-                } else if (mount) {
-                    // No aux solve yet: assume it shares the mount pose.
-                    aux = {
-                        raDeg: mount.raDeg, decDeg: mount.decDeg,
-                        widthDeg: auxW, heightDeg: auxH,
-                        rotationDeg: mountRot, flipV: false
-                    };
-                }
-            }
-
             // SWE-5: target rectangle is SCREEN-anchored (always at
             // viewport centre). Bridge renders it as a CSS overlay
             // sized from widthDeg/heightDeg + engine fov. No RA/Dec
@@ -15261,6 +15212,70 @@ function ninaApp() {
                 };
             }
 
+            // Aux camera FOV (pink). Shown when the aux camera is
+            // configured: a focal length + a sensor footprint (live from
+            // the connected aux, else the rig's learned/DSLR fields).
+            // Anchoring, in priority order:
+            //   1. The aux's OWN plate solve (parallel aux solve): the
+            //      real sky position + rotation its frames come out with.
+            //   2. Otherwise CONCENTRIC WITH THE RED TARGET — main and
+            //      aux ride the same mount and are assumed co-pointed
+            //      until an aux solve says how far off they really are.
+            //      That means celestial at the target's solved anchor
+            //      while imaging, else screen-anchored (no raDeg) so the
+            //      bridge draws it as a pink CSS box nested inside the
+            //      red drag-to-frame box at the viewport centre.
+            let aux = null;
+            const afl = this.aux?.focalLengthMm;
+            let asw = this.auxSensorWidthMm, ash = this.auxSensorHeightMm;
+            if (!(asw > 0 && ash > 0) && (this.aux?.enabled || this.auxCamera)) {
+                // Live dims missing: DSLRs on the aux port (indi_gphoto)
+                // don't publish CCD_INFO — their geometry lives in the rig's
+                // per-aux overrides (DSLR picker, or learned from the last
+                // connected aux camera in the status ingest). Derive the
+                // footprint from those so the pink rect shows for a
+                // configured-but-quiet (or not-yet-connected) aux camera.
+                // Gated on an aux camera being selected on the rig (or the
+                // capture loop enabled) so leftover fields on a rig whose
+                // aux was removed don't draw it.
+                const ax = Number(this.aux?.maxX) || 0;
+                const ay = Number(this.aux?.maxY) || 0;
+                const ap = Number(this.aux?.pixelSizeUm) || 0;
+                if (ax > 0 && ay > 0 && ap > 0) {
+                    asw = ax * ap / 1000;
+                    ash = ay * ap / 1000;
+                }
+            }
+            if (afl > 0 && asw > 0 && ash > 0) {
+                const auxW = 2 * Math.atan(asw / (2 * afl)) * (180 / Math.PI);
+                const auxH = 2 * Math.atan(ash / (2 * afl)) * (180 / Math.PI);
+                const asf = this.auxSolvedFrame;
+                if (asf && Number.isFinite(asf.raDeg) && Number.isFinite(asf.decDeg)) {
+                    // Real aux footprint from its own plate solve.
+                    aux = {
+                        raDeg: asf.raDeg, decDeg: asf.decDeg,
+                        widthDeg: auxW, heightDeg: auxH,
+                        rotationDeg: Number.isFinite(asf.rotationDeg) ? asf.rotationDeg : mountRot,
+                        flipV: false
+                    };
+                } else if (Number.isFinite(target.raDeg)) {
+                    // No aux solve yet: concentric with the celestial-
+                    // anchored red target (imaging + recent solve).
+                    aux = {
+                        raDeg: target.raDeg, decDeg: target.decDeg,
+                        widthDeg: auxW, heightDeg: auxH,
+                        rotationDeg: targetRot, flipV: false
+                    };
+                } else {
+                    // No aux solve, idle: concentric with the screen-
+                    // anchored red box (no raDeg → CSS box in the bridge).
+                    aux = {
+                        widthDeg: auxW, heightDeg: auxH,
+                        rotationDeg: targetRot, flipV: false
+                    };
+                }
+            }
+
             // Skip when nothing actually changed since last push.
             // The mount status WS push fires several times per second
             // when slewing, and re-creating the engine geojson objects
@@ -15279,7 +15294,8 @@ function ninaApp() {
                               // refreshed silent solve re-pushes the red rect.
                               r: Number.isFinite(target.raDeg) ? target.raDeg.toFixed(3) : null,
                               d: Number.isFinite(target.decDeg) ? target.decDeg.toFixed(3) : null },
-                a: aux && { r: aux.raDeg.toFixed(3), d: aux.decDeg.toFixed(3),
+                a: aux && { r: Number.isFinite(aux.raDeg) ? aux.raDeg.toFixed(3) : null,
+                            d: Number.isFinite(aux.decDeg) ? aux.decDeg.toFixed(3) : null,
                             w: aux.widthDeg.toFixed(3), h: aux.heightDeg.toFixed(3),
                             rot: (aux.rotationDeg||0).toFixed(2) },
                 // FIELD3-4: include solveRotationDeg in the key so a
@@ -15322,9 +15338,9 @@ function ninaApp() {
                 // "where's my aux FOV?" is answerable from the console.
                 'aux=', aux
                     ? `${aux.widthDeg.toFixed(2)}°×${aux.heightDeg.toFixed(2)}°`
+                        + (Number.isFinite(aux.raDeg) ? ' (celestial)' : ' (concentric with target)')
                     : (!(afl > 0) ? 'null (no aux focal length)'
-                        : !(asw > 0 && ash > 0) ? 'null (no aux sensor size — connect the aux camera once or set the DSLR pixel/size fields)'
-                        : 'null (no anchor — mount not connected and no aux solve)'));
+                        : 'null (no aux sensor size — connect the aux camera once or set the DSLR pixel/size fields)'));
 
             // mosaicTiles is an Alpine reactive array (a Proxy); postMessage
             // can't structured-clone a Proxy and throws DataCloneError, which

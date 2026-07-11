@@ -158,12 +158,41 @@
             margin-bottom: 4px;
             transform: translateX(-50%);
         }
+        /* Aux-camera FOV as a screen-anchored pink box, concentric with
+           the red target box: same mechanics as #sky-target-fov (bridge
+           sizes/rotates it from the aux camera FOV vs engine fov), shown
+           until an aux plate solve promotes the rect to a celestial-
+           anchored geojson at its real sky position. Thinner stroke +
+           no crosshair so it reads as secondary to the red target. */
+        #sky-aux-fov {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid #ec4899;
+            box-shadow: 0 0 8px rgba(236, 72, 153, 0.7),
+                        inset 0 0 8px rgba(236, 72, 153, 0.35);
+            pointer-events: none;
+            display: none;
+            border-radius: 2px;
+            box-sizing: border-box;
+        }
+        #sky-aux-fov .fov-label-top {
+            left: 50%;
+            bottom: 100%;
+            margin-bottom: 4px;
+            transform: translateX(-50%);
+            color: #f9a8d4;
+        }
     </style>
 </head>
 <body>
     <canvas id="stel-canvas"></canvas>
     <div id="sky-target-fov">
         <span class="fov-label fov-label-top" id="sky-target-label">Target</span>
+    </div>
+    <div id="sky-aux-fov">
+        <span class="fov-label fov-label-top" id="sky-aux-label">Aux</span>
     </div>
     <div id="sky-status"><div class="msg">Loading sky engine…</div></div>
     <div id="sky-footer">
@@ -264,6 +293,6 @@
     <script src="js/wasm/stellarium-web-engine.js"
             onload="window.__skyEngineScriptLoaded = true;"
             onerror="console.warn('[Sky] engine .js not present yet — run scripts/build-stellarium-web.sh')"></script>
-    <script src="js/sky-bridge.js?v=fovcd1"></script>
+    <script src="js/sky-bridge.js?v=auxbox1"></script>
 </body>
 </html>

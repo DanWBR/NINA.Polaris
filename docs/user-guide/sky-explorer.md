@@ -194,8 +194,11 @@ slewing:
   geometry is learned from the aux camera the first time it connects
   and remembered on the rig, so the rectangle keeps showing even
   before the aux is connected; for DSLRs it can also be filled in
-  manually via the aux pixel/size fields. The aux rides the same
-  mount, so it's anchored at the mount position.
+  manually via the aux pixel/size fields. It starts out **concentric
+  with the red target box** — main and aux ride the same mount, so
+  they're assumed co-pointed — and moves to the aux camera's real sky
+  position once an aux plate solve reports how far off the two
+  actually are (see below).
 - **Yellow rectangles** — the [mosaic](#mosaic-planner) panels.
 
 ### Confirming the aux camera framing
