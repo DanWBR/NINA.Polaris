@@ -65,24 +65,23 @@
     font-size: 11px;
 }
 
-/* POLARUI: decorative telescope outline behind the TPPA pane. The
-   pane gets its own stacking context (z-index: 0) so the background
-   layer can sit at z-index -1 — above the panel background, below
-   every in-flow child. */
-.polar-tppa-pane {
-    position: relative;
-    z-index: 0;
-}
-.polar-tppa-bg {
-    /* Fills the whole TPPA pane, scaled to cover it, fixed behind the
-       content (z-index -1 in the pane's own stacking context). Low
-       opacity keeps text readable on top of it. */
-    position: absolute;
-    inset: 0;
-    background: url('/img/telescope-outline.svg') no-repeat center bottom / cover;
-    opacity: 0.08;
-    pointer-events: none;
-    z-index: -1;
+/* POLARUI: decorative telescope outline behind the POLAR panel (both
+   the TPPA and Rudimentary sub-panes). Applied to .content — the actual
+   scroll container — so `background-attachment: scroll` (the default)
+   pins it to the panel viewport while the UI scrolls over it, instead
+   of an absolute layer that grew with the content and scrolled away.
+   Scoped by the `polar-bg` class Alpine toggles only on the POLAR tab.
+   The near-opaque panel-coloured gradient layered over the image fades
+   it to a faint watermark while keeping the text fully legible. */
+.content.polar-bg {
+    background-image:
+        linear-gradient(color-mix(in srgb, var(--bg-primary) 92%, transparent),
+                        color-mix(in srgb, var(--bg-primary) 92%, transparent)),
+        url('/img/telescope-outline.svg');
+    background-repeat: no-repeat, no-repeat;
+    background-position: center center, center bottom;
+    background-size: cover, cover;
+    background-attachment: scroll, scroll;
 }
 
 /* RDPA-4: Rudimentary polar alignment sub-pane styles. */

@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260702-stretchsection">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260705-wbsummary">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260628-vidprocess">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260711-polarui2">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260711-polarbg">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260707-landscapephone">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260707-density2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -676,7 +676,7 @@
         </nav>
 
         <!-- Main content area -->
-        <main class="content">
+        <main class="content" :class="{ 'polar-bg': tab === 'polar' }">
 
             <!-- HOME / dashboard landing -->
             <div x-show="tab === 'home'" class="tab-panel home-panel">
@@ -1897,12 +1897,7 @@
                 </div>
 
                 <!-- TPPA sub-pane (original UI wrapped) -->
-                <div x-show="polarTab === 'tppa'" class="polar-tppa-pane">
-
-                <!-- Decorative telescope outline behind the pane content
-                     (ASIAIR-style). Pure decoration: no pointer events,
-                     hidden on narrow screens via CSS. -->
-                <div class="polar-tppa-bg" aria-hidden="true"></div>
+                <div x-show="polarTab === 'tppa'">
 
                 <!-- Parameters form. Bound to per-rig profile fields;
                      changes POST to /api/equipment/rigs/{id} on blur. -->
