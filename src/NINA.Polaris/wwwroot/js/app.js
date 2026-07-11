@@ -15070,6 +15070,17 @@ function ninaApp() {
                 rotationDeg: Number.isFinite(r.rotationDeg) ? r.rotationDeg : 0
             };
             if (Number.isFinite(r.rotationDeg)) this.solveRotationDeg = r.rotationDeg;
+            // CD matrix from the solve: the frame's true sky orientation
+            // INCLUDING parity (mirror), which the scalar rotation can't
+            // express. The SKY bridge draws the exact sensor footprint from
+            // it — this is what fixes the "FOV rectangles mirrored / 180°
+            // off" field report. Cleared when a solve doesn't carry one so
+            // a stale matrix never describes a newer pointing.
+            this.solveCd = (Number.isFinite(r.cd11) && Number.isFinite(r.cd12)
+                    && Number.isFinite(r.cd21) && Number.isFinite(r.cd22)
+                    && (r.cd11 * r.cd22 - r.cd12 * r.cd21) !== 0)
+                ? { cd11: r.cd11, cd12: r.cd12, cd21: r.cd21, cd22: r.cd22 }
+                : null;
             if (this._silentSolve) this._silentSolve.lastAtMs = Date.now();
             else this._silentSolve = { busy: false, lastAtMs: Date.now(), lastMarker: null };
             try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
@@ -15121,6 +15132,19 @@ function ninaApp() {
                 flipV = !!(q && q.verticalFlipImage);
             } catch (e) { /* no quirks loaded yet */ }
 
+            // CD matrix from the last solve (null when none): lets the
+            // bridge draw the exact footprint with parity instead of
+            // guessing from the scalar rotation. Applies to BOTH the mount
+            // (blue) and target (red) rectangles — they describe the same
+            // physical camera. FLATTENED to a fresh plain object: Alpine
+            // wraps this.solveCd in a reactive Proxy, and a Proxy inside
+            // postMessage throws DataCloneError and silently kills the
+            // whole set-fov-overlays message (see SKY postMessage rule).
+            const solveCd = this.solveCd
+                ? { cd11: +this.solveCd.cd11, cd12: +this.solveCd.cd12,
+                    cd21: +this.solveCd.cd21, cd22: +this.solveCd.cd22 }
+                : null;
+
             let mount = null;
             if (this.mount?.connected
                 && Number.isFinite(this.mount.ra)
@@ -15128,7 +15152,8 @@ function ninaApp() {
                 mount = {
                     raDeg: this.mount.ra * 15,
                     decDeg: this.mount.dec,
-                    widthDeg: w, heightDeg: h, rotationDeg: mountRot, flipV: flipV
+                    widthDeg: w, heightDeg: h, rotationDeg: mountRot,
+                    flipV: flipV, cd: solveCd
                 };
             }
 
@@ -15201,11 +15226,12 @@ function ninaApp() {
                     raDeg: sf.raDeg, decDeg: sf.decDeg,
                     widthDeg: w, heightDeg: h,
                     rotationDeg: Number.isFinite(sf.rotationDeg) ? sf.rotationDeg : targetRot,
-                    flipV: flipV
+                    flipV: flipV, cd: solveCd
                 };
             } else {
                 target = {
-                    widthDeg: w, heightDeg: h, rotationDeg: targetRot, flipV: flipV
+                    widthDeg: w, heightDeg: h, rotationDeg: targetRot,
+                    flipV: flipV, cd: solveCd
                 };
             }
 
@@ -15235,6 +15261,13 @@ function ninaApp() {
                 // rectangle even when ra/dec haven't moved.
                 sr: Number.isFinite(this.solveRotationDeg)
                     ? this.solveRotationDeg.toFixed(2) : null,
+                // CD matrix signature: a fresh solve can change parity /
+                // orientation without moving ra/dec or the scalar rotation
+                // (e.g. after a meridian flip) — re-push then too.
+                cd: solveCd
+                    ? [solveCd.cd11, solveCd.cd12, solveCd.cd21, solveCd.cd22]
+                        .map(v => v.toExponential(3)).join(',')
+                    : null,
                 // Mosaic signature: without this the early-return below
                 // swallows the mosaic grid, because opening the planner
                 // (or editing cols/rows/overlap) leaves mount + target

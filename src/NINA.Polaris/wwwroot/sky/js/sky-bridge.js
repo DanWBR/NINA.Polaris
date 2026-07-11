@@ -507,7 +507,7 @@
     // Tangent-plane approximation is sufficient for camera-scale FOVs
     // (< 10°). Returns 5 [ra, dec] pairs (closed polygon — first ==
     // last per the GeoJSON spec).
-    function skyFovRect(raDeg, decDeg, wDeg, hDeg, rotDeg, segments, flipV) {
+    function skyFovRect(raDeg, decDeg, wDeg, hDeg, rotDeg, segments, flipV, axes) {
         // True sensor footprint via INVERSE GNOMONIC (tangent-plane)
         // projection. The old code did ra = ra0 + x/cos(dec0) for every
         // corner, applying the centre's cos(dec) to the whole box -- which
@@ -516,11 +516,21 @@
         // gives the real rectangle the camera sees. Edges are sampled at
         // `segments` points so the slight on-sky curvature of a large FOV
         // renders smoothly instead of as straight chords.
+        //
+        // Orientation comes from ONE of two sources:
+        //   - `axes` (preferred): unit sky-direction vectors of the sensor's
+        //     +x and +y axes, derived from the plate solve's CD matrix. Exact
+        //     — carries PARITY (mirror), which a scalar angle cannot. This is
+        //     what fixed the SV605CC field report of mount/camera FOVs drawn
+        //     mirrored / 180° off.
+        //   - `rotDeg` (fallback, no solve/CD): tangent-plane rotation as
+        //     before.
         segments = segments || 1;
         var rot = (rotDeg || 0) * Math.PI / 180;
         var cosR = Math.cos(rot), sinR = Math.sin(rot);
         var hw = wDeg / 2, hh = hDeg / 2;
-        // Rotated tangent-plane corners (degrees): +x = East/+RA, +y = North/+Dec.
+        // Tangent-plane corners in DISPLAY coords (degrees): +x = sensor
+        // right as shown on the client canvas, +y = sensor up on canvas.
         var corners = [
             [-hw, -hh], [+hw, -hh], [+hw, +hh], [-hw, +hh]
         ];
@@ -530,14 +540,28 @@
 
         function project(lx, ly) {
             // verticalFlipImage rig quirk: the captured frame is shown
-            // mirrored top-for-bottom on the client, but the solve rotation
+            // mirrored top-for-bottom on the client, but the solve geometry
             // is in raw-frame coords. Mirror the sensor's vertical axis so
             // the drawn rectangle (footprint + label edge + crosshair)
             // matches what the operator sees instead of being upside down.
             if (flipV) ly = -ly;
-            // rotate in the tangent plane, then to radians standard coords
-            var xi = (lx * cosR - ly * sinR) * D2R;   // East (RA)
-            var eta = (lx * sinR + ly * cosR) * D2R;  // North (Dec)
+            var xi, eta;
+            if (axes) {
+                // Canvas row 0 renders at the TOP; the FITS handed to the
+                // solver declares its first row per the FITS convention
+                // (+y up), so the solver's frame is the VERTICAL MIRROR of
+                // what the operator sees. Map display-up to FITS -y here,
+                // then through the CD-derived axes. This replaces the old
+                // "+180°" fudge, which rotated instead of mirroring and
+                // left a horizontal mirror behind.
+                var fy = -ly;
+                xi  = (lx * axes.xE + fy * axes.yE) * D2R;   // East (RA)
+                eta = (lx * axes.xN + fy * axes.yN) * D2R;   // North (Dec)
+            } else {
+                // rotate in the tangent plane, then to radians standard coords
+                xi  = (lx * cosR - ly * sinR) * D2R;   // East (RA)
+                eta = (lx * sinR + ly * cosR) * D2R;   // North (Dec)
+            }
             var rho = Math.sqrt(xi * xi + eta * eta);
             if (rho < 1e-12) return [raDeg, decDeg];
             var c = Math.atan(rho);
@@ -561,20 +585,40 @@
         return ring;
     }
 
+    // Unit sky-direction vectors of the sensor axes from the solve's CD
+    // matrix. FITS WCS: (xi, eta) = CD · (dx, dy) with axis 1 = RA-like
+    // (East-positive) and axis 2 = Dec-like (North-positive), so column 1
+    // = sky direction of image +x and column 2 = image +y — parity and
+    // all. Returns null when the matrix is missing/degenerate.
+    function skyAxesFromCd(cd) {
+        if (!cd) return null;
+        var c11 = +cd.cd11, c12 = +cd.cd12, c21 = +cd.cd21, c22 = +cd.cd22;
+        if (!isFinite(c11) || !isFinite(c12) || !isFinite(c21) || !isFinite(c22))
+            return null;
+        var xLen = Math.sqrt(c11 * c11 + c21 * c21);
+        var yLen = Math.sqrt(c12 * c12 + c22 * c22);
+        if (!(xLen > 0) || !(yLen > 0)) return null;
+        return {
+            xE: c11 / xLen, xN: c21 / xLen,
+            yE: c12 / yLen, yN: c22 / yLen
+        };
+    }
+
     function skyFovGeoJson(centre, color, glow, labelOverride) {
         var raDeg = centre.raDeg, decDeg = centre.decDeg;
         var w = centre.widthDeg, h = centre.heightDeg;
-        // +180°: the plate-solve position angle convention used upstream is
-        // opposite to how the rectangle is drawn here, so the FOV rectangle
-        // (its label edge + crosshair, the visible "up") rendered upside
-        // down relative to the captured frame. Flipping the draw rotation by
-        // 180° lines the sky rectangle up with the frame. Applies to both
-        // the mount and target rectangles (both share this draw path).
+        // Preferred orientation source: the CD matrix from the plate solve
+        // (exact, parity included — see skyAxesFromCd/skyFovRect). Fallback
+        // when no solve has run: the scalar rotation with the legacy +180°
+        // convention fudge (the position angle convention used upstream is
+        // opposite to how the rectangle rotation is applied here). The CD
+        // path supersedes the fudge entirely.
+        var axes = skyAxesFromCd(centre.cd);
         var rot = (centre.rotationDeg || 0) + 180;
         var flipV = !!centre.flipV;
         // Sample each edge so a wide FOV's on-sky curvature renders smooth
         // (16 pts/edge); the crosshair lines below stay at 1 (just ends).
-        var ring = skyFovRect(raDeg, decDeg, w, h, rot, 16, flipV);
+        var ring = skyFovRect(raDeg, decDeg, w, h, rot, 16, flipV, axes);
         // Engine geojson parser only knows: stroke, fill, stroke-width,
         // stroke-opacity, fill-opacity, stroke-glow. Plus title +
         // text-anchor + text-offset on Point features.
@@ -590,8 +634,8 @@
         // midpoint to edge midpoint, matching the rotation of the
         // rectangle. Built with the same tangent-plane helper so the
         // dec scaling stays consistent with the perimeter ring.
-        var crossH = skyFovRect(raDeg, decDeg, w, 0, rot, 1, flipV);
-        var crossV = skyFovRect(raDeg, decDeg, 0, h, rot, 1, flipV);
+        var crossH = skyFovRect(raDeg, decDeg, w, 0, rot, 1, flipV, axes);
+        var crossV = skyFovRect(raDeg, decDeg, 0, h, rot, 1, flipV, axes);
         var hLine = [crossH[0], crossH[1]];
         var vLine = [crossV[0], crossV[1]];
         var crossProps = {
@@ -615,6 +659,14 @@
         // "Scope  W° × H°  Rotation X°" came out as "Scope" + "4.01"
         // stacked vertically. Use a single hyphen-joined token with
         // NO inner whitespace so the renderer can't wrap.
+        // When the CD axes drove the geometry, derive the label angle from
+        // them too (the scalar `rot` may not match the drawn rectangle):
+        // display-up (lx=0, ly=+1) maps through fy=-1 to sky direction
+        // (-yE, -yN); its PA east-of-north is atan2(-yE, -yN), and the
+        // fallback geometry satisfies PA_up = -rot, so rot = -PA_up.
+        if (axes) {
+            rot = -Math.atan2(-axes.yE, -axes.yN) * 180 / Math.PI;
+        }
         var rotPositive = ((rot % 360) + 360) % 360;
         var labelText = (labelOverride != null && labelOverride !== '')
             ? labelOverride

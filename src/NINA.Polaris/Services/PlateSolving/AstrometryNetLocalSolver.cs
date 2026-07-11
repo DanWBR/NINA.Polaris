@@ -189,6 +189,19 @@ public class AstrometryNetLocalSolver : IPlateSolver {
                     result = PlateSolveResult.Failed(
                         "solve-field did not produce a solution (no .wcs written)");
                 }
+            } else {
+                // Stdout parsed fine — but the scraped summary carries only a
+                // SCALAR rotation, which cannot express parity (mirror). The
+                // SKY FOV rectangles and annotation projector need the CD
+                // matrix for a correct footprint (the SV605CC field report:
+                // mount/camera FOVs drawn mirrored / 180° off). Merge the CD
+                // + CRPIX from the .wcs solve-field always writes.
+                var fromWcs = TryParseWcsFile(WcsOutputPath(fitsPath));
+                if (fromWcs != null && fromWcs.CD11.HasValue) {
+                    result.CD11 = fromWcs.CD11; result.CD12 = fromWcs.CD12;
+                    result.CD21 = fromWcs.CD21; result.CD22 = fromWcs.CD22;
+                    result.CrPix1 = fromWcs.CrPix1; result.CrPix2 = fromWcs.CrPix2;
+                }
             }
             result.Output = PlateSolveProcessOutput.Combine(SolverPath, args, stdout, stderr, proc.ExitCode);
             return result;

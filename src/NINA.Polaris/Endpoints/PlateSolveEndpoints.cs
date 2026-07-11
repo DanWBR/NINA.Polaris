@@ -167,7 +167,14 @@ public static class PlateSolveEndpoints {
                     raDeg = result.RaDeg,
                     rotationDeg = result.RotationDeg,
                     scaleArcsecPerPixel = result.ScaleArcsecPerPixel,
-                    solverUsed = result.SolverUsed
+                    solverUsed = result.SolverUsed,
+                    // CD matrix (deg/px): carries the frame's true orientation
+                    // INCLUDING parity (mirror), which the scalar rotation
+                    // cannot. The SKY FOV rectangles use it to draw the real
+                    // sensor footprint. Nullable — some solvers (a.net online)
+                    // may not provide it.
+                    cd11 = result.CD11, cd12 = result.CD12,
+                    cd21 = result.CD21, cd22 = result.CD22
                 });
             } catch (OperationCanceledException) {
                 return Results.StatusCode(499);  // client closed request
@@ -652,6 +659,8 @@ public static class PlateSolveEndpoints {
                     rotationDeg = result.RotationDeg,
                     scaleArcsecPerPixel = result.ScaleArcsecPerPixel,
                     solverUsed = result.SolverUsed,
+                    cd11 = result.CD11, cd12 = result.CD12,
+                    cd21 = result.CD21, cd22 = result.CD22,
                     wcsWritten
                 });
             } catch (OperationCanceledException) {
