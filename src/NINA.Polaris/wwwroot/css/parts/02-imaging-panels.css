@@ -371,7 +371,11 @@
     height: 64px;
     flex: 0 0 64px;
 }
-.polaris-shutter.shutter-compact .shutter-countdown { font-size: 10px; }
+/* No counter under the compact AUTORUN ring: the absolute-positioned
+   countdown (bottom:-28px) bled over the "+ Add" button right below the
+   run bar, in red while running (field report). The run-meta text next
+   to the ring already shows percent + frames-done/total + ETA. */
+.polaris-shutter.shutter-compact .shutter-countdown { display: none; }
 .polaris-shutter.shutter-compact .shutter-icon svg { width: 20px; height: 20px; }
 
 /* Histogram docked inside the AUTORUN frame panel, bottom edge, instead
