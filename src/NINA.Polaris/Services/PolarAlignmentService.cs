@@ -519,10 +519,71 @@ public class PolarAlignmentService {
             SetPhase(job, PolarAlignmentPhase.SlewingHome);
             try {
                 await telescope.SlewAsync(ra0, dec0, ct);
-            } catch (Exception ex) {
+                await WaitForSlewCompleteAsync(telescope, ct);
+            } catch (OperationCanceledException) { throw; }
+            catch (Exception ex) {
                 // Don't fail the whole alignment if the home slew
                 // hiccups, the user already has their error vector.
                 _logger.LogWarning(ex, "Polar align: slew back to start failed");
+            }
+
+            // 4b. POLARUI2b: anchor the refinement target NOW, while the
+            //     job still owns the mount and the operator cannot have
+            //     touched the knobs yet. Anchoring lazily on the first
+            //     Refresh (previous behaviour) silently assumed the knobs
+            //     were untouched between TPPA and that refresh — an
+            //     operator who cranks the azimuth right after reading the
+            //     error and THEN hits Refresh got a stale target, and
+            //     walking the dot to that target parked the axis ~1× the
+            //     original error away while the readout showed arcseconds
+            //     (field session 2026-07-10: axis left ~10° off in az
+            //     after "converging" to 2″). One extra capture+solve at
+            //     the end of the sweep closes the race; if it fails we
+            //     fall back to first-Refresh anchoring and say so.
+            try {
+                await Task.Delay(
+                    TimeSpan.FromSeconds(Math.Max(1, job.Options.SettleSeconds)), ct);
+                var anchorImage = await GatedCapture(camera,
+                    job.Options.ExposureSeconds,
+                    new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
+                    ct);
+                var anchorSolve = await SolveOnceAsync(anchorImage, telescope, ct);
+                if (anchorSolve.Success) {
+                    var tAnchor = DateTime.UtcNow;
+                    var (aRa, aDec) = PolarAlignmentMath.PrecessJ2000ToDate(
+                        anchorSolve.RaHours, anchorSolve.DecDeg, tAnchor);
+                    var (tRa, tDec) = PolarAlignmentMath.ComputeRefineTarget(
+                        aRa, aDec, tAnchor,
+                        job.AzErrorArcsec, job.AltErrorArcsec,
+                        userProfile.Latitude, userProfile.Longitude);
+                    job.RefineTargetRaHours = tRa;
+                    job.RefineTargetDecDeg = tDec;
+                    _logger.LogInformation(
+                        "Polar align: refine anchor set at sweep end — pointing {Ra}h/{Dec}° → target {TRa}h/{TDec}°",
+                        aRa.ToString("F4"), aDec.ToString("F4"),
+                        tRa.ToString("F4"), tDec.ToString("F4"));
+                } else {
+                    _logger.LogWarning(
+                        "Polar align: anchor solve failed ({Err}); will anchor on the first Refresh — do NOT adjust knobs before it",
+                        anchorSolve.Error);
+                }
+            } catch (OperationCanceledException) { throw; }
+            catch (Exception ex) {
+                _logger.LogWarning(ex,
+                    "Polar align: anchor capture failed; will anchor on the first Refresh");
+            }
+
+            // With a >1.5° error the axis is far enough out that the
+            // one-shot refinement geometry (and any pointing model the
+            // mount holds) accumulates percent-level cross-terms, and a
+            // single knob turn covers many arcminutes. Rough-correct,
+            // then RE-RUN the sweep — the 3-point fit is the ground
+            // truth; refine is for the final arcminutes.
+            if (job.TotalErrorArcsec > 1.5 * 3600.0) {
+                job.LastError =
+                    $"Large initial error ({job.TotalErrorArcsec / 3600.0:F1}°). " +
+                    "Correct roughly using the knob directions, then re-run the " +
+                    "3-point sweep and use Refresh only for the final arcminutes.";
             }
 
             // 5. Done -------------------------------------------------------
