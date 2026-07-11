@@ -94,6 +94,16 @@ public class PolarAlignmentJob {
     public double? TargetDecDeg { get; set; }
     public string? TargetName { get; set; }
 
+    /// <summary>POLARUI2: refinement anchor — the of-date RA/Dec the
+    /// pointing will land on once the axis error is fully corrected.
+    /// Computed on the FIRST refine solve after TPPA (before the user
+    /// touches the knobs) via PolarAlignmentMath.ComputeRefineTarget
+    /// and held constant afterwards; each Refresh solves once and
+    /// reports the residual rotation to this target. Cleared when a
+    /// new TPPA sweep completes.</summary>
+    public double? RefineTargetRaHours { get; set; }
+    public double? RefineTargetDecDeg { get; set; }
+
     /// <summary>RDPA-2: most recent plate-solved pointing. Used by
     /// the sky-map markers (target vs actual) and the canvas arrow.</summary>
     public double? SolvedRaHours { get; set; }

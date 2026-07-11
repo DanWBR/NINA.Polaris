@@ -295,54 +295,62 @@ public class PolarAlignmentService {
             return false;
         }
 
-        // 3. Sliding-window: evict oldest baseline point, append the
-        //    fresh one. Re-index so they read 0/1/2 in order for the UI
-        //    table. Precess J2000 solve → of-date, same as the TPPA path,
-        //    so refine points share the frame of the carried-over baseline.
-        var refUtc = DateTime.UtcNow;
-        var (refRa, refDec) = PolarAlignmentMath.PrecessJ2000ToDate(
-            solve.RaHours, solve.DecDeg, refUtc);
-        var newPoint = new PolarPoint(
-            Index: 2,
-            RaHours: refRa,
-            DecDeg: refDec,
-            RotationDeg: solve.RotationDeg,
-            AtUtc: refUtc);
-        if (job.Points.Count >= 3) {
-            job.Points.RemoveAt(0);
-        }
-        job.Points.Add(newPoint);
-        for (int i = 0; i < job.Points.Count; i++) {
-            job.Points[i] = job.Points[i] with { Index = i };
+        // 3. POLARUI2: displacement-to-target refinement. Precess the
+        //    solve → of-date, then measure the rotation still needed to
+        //    take the current pointing to the ANCHORED target — the
+        //    RA/Dec the pointing will have once the knobs are fully
+        //    corrected. One solve per refresh; no 3-point re-fit, so
+        //    there is no sliding-window degeneracy at a fixed pointing
+        //    (the old approach froze the error the moment the window
+        //    collapsed, which in the field read as "Refresh does
+        //    nothing").
+        var nowUtc = DateTime.UtcNow;
+        var (raNow, decNow) = PolarAlignmentMath.PrecessJ2000ToDate(
+            solve.RaHours, solve.DecDeg, nowUtc);
+
+        if (job.RefineTargetRaHours == null || job.RefineTargetDecDeg == null) {
+            // First refine solve after TPPA: knobs untouched yet, so
+            // target = current pointing rotated by the full correction.
+            var (tRa, tDec) = PolarAlignmentMath.ComputeRefineTarget(
+                raNow, decNow, nowUtc,
+                job.AzErrorArcsec, job.AltErrorArcsec,
+                userProfile.Latitude, userProfile.Longitude);
+            job.RefineTargetRaHours = tRa;
+            job.RefineTargetDecDeg = tDec;
+            _logger.LogInformation(
+                "Refine anchor set: pointing {Ra}h/{Dec}° → target {TRa}h/{TDec}°",
+                raNow.ToString("F4"), decNow.ToString("F4"),
+                tRa.ToString("F4"), tDec.ToString("F4"));
         }
 
-        // 4. Recompute error — but ONLY if the 3 points still span
-        //    a usable arc. Refinement captures at the current mount
-        //    position (no slew), so as the sliding window fills with
-        //    frames taken seconds apart the three directions collapse
-        //    onto each other; the small-circle cross-product then
-        //    degenerates and the error vector becomes pure noise.
-        //    Require a minimum pairwise separation (the TPPA baseline
-        //    used 30° steps; once any pair drops below ~2° the fit is
-        //    untrustworthy) and otherwise keep the last good value
-        //    plus surface a clear hint instead of broadcasting junk.
-        if (job.Points.Count == 3) {
-            double minSepDeg = MinPairwiseSeparationDeg(job.Points);
-            if (minSepDeg >= 2.0) {
-                var (azErr, altErr) = PolarAlignmentMath.ComputeError(
-                    job.Points[0], job.Points[1], job.Points[2],
-                    userProfile.Latitude, userProfile.Longitude);
-                job.AzErrorArcsec = azErr;
-                job.AltErrorArcsec = altErr;
-                job.TotalErrorArcsec = PolarAlignmentMath.TotalErrorArcsec(azErr, altErr);
-                job.LastError = null;
-            } else {
-                // Window has collapsed — stop pretending we can refit.
-                job.LastError =
-                    "Refine: tracking points have converged; re-run the 3-point " +
-                    "sweep (or use Rudimentary mode) to get a fresh error vector.";
-            }
+        // Guard: a slew (or a bad solve) moved the pointing far away
+        // from the anchor — the knob decomposition would be garbage.
+        double sepDeg = PolarAlignmentMath.AngularSeparationDeg(
+            raNow, decNow, job.RefineTargetRaHours.Value, job.RefineTargetDecDeg.Value);
+        if (sepDeg > 20.0) {
+            job.LastError =
+                "Refine: the mount moved too far from the refinement anchor " +
+                "(did it slew?). Re-run the 3-point sweep to re-measure.";
+            return false;
         }
+
+        var remaining = PolarAlignmentMath.ComputeRefineError(
+            job.RefineTargetRaHours.Value, job.RefineTargetDecDeg.Value,
+            raNow, decNow, nowUtc,
+            userProfile.Latitude, userProfile.Longitude);
+        if (remaining == null) {
+            job.LastError =
+                "Refine: pointing is too close to the zenith or the due " +
+                "east/west horizon for a stable alt/az decomposition — " +
+                "re-run TPPA from a different part of the sky.";
+            return false;
+        }
+
+        var (azErr, altErr) = remaining.Value;
+        job.AzErrorArcsec = azErr;
+        job.AltErrorArcsec = altErr;
+        job.TotalErrorArcsec = PolarAlignmentMath.TotalErrorArcsec(azErr, altErr);
+        job.LastError = null;
         return true;
     }
 
@@ -501,6 +509,11 @@ public class PolarAlignmentService {
             job.AzErrorArcsec = azErr;
             job.AltErrorArcsec = altErr;
             job.TotalErrorArcsec = PolarAlignmentMath.TotalErrorArcsec(azErr, altErr);
+            // POLARUI2: fresh sweep → drop the old refinement anchor;
+            // the first Refresh after this re-anchors from the new
+            // error at the then-current pointing (post home-slew).
+            job.RefineTargetRaHours = null;
+            job.RefineTargetDecDeg = null;
 
             // 4. Cosmetic slew home -----------------------------------------
             SetPhase(job, PolarAlignmentPhase.SlewingHome);
@@ -579,21 +592,6 @@ public class PolarAlignmentService {
             await Task.Delay(1000, ct);
         }
         _logger.LogWarning("Polar align: slew did not complete within 5 minutes; proceeding anyway");
-    }
-
-    /// <summary>Smallest great-circle separation (degrees) among any pair
-    /// of the supplied solved points. Used to detect a degenerate 3-point
-    /// set in refine mode before it poisons the small-circle fit.</summary>
-    private static double MinPairwiseSeparationDeg(IReadOnlyList<PolarPoint> pts) {
-        double min = double.MaxValue;
-        for (int i = 0; i < pts.Count; i++) {
-            for (int j = i + 1; j < pts.Count; j++) {
-                double sep = PolarAlignmentMath.AngularSeparationDeg(
-                    pts[i].RaHours, pts[i].DecDeg, pts[j].RaHours, pts[j].DecDeg);
-                if (sep < min) min = sep;
-            }
-        }
-        return min == double.MaxValue ? 0 : min;
     }
 
     private static PolarAlignmentPhase MovingPhaseFor(int index) => index switch {

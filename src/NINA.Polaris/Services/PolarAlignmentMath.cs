@@ -177,6 +177,96 @@ public static class PolarAlignmentMath {
     }
 
     /// <summary>
+    /// POLARUI2: refinement anchor. Given the pointing at the moment the
+    /// knobs have NOT yet been touched (reference solve) and the axis
+    /// error from TPPA, compute the of-date RA/Dec the SAME pointing
+    /// will have once the user fully corrects the mount.
+    ///
+    /// Why this works: turning the az/alt bolts rotates the ENTIRE mount
+    /// rigidly — the correction rotation C (about the zenith by −azErr,
+    /// about the east-west hinge by the angle that moves the axis
+    /// −altErr) maps every direction, so C·(current pointing) is where
+    /// the pointing lands when the axis lands on the pole. And because
+    /// the pointing tracks about the mount axis while the target RA/Dec
+    /// tracks about the true pole = C·axis, the SAME ground-frame C maps
+    /// pointing→target at every instant: the target RA/Dec is constant
+    /// in time. Each refresh then needs only ONE solve — no 3-point
+    /// re-sweep, no sliding window, no degeneracy. (This is the NINA
+    /// desktop TPPA adjustment-phase approach.)
+    /// </summary>
+    public static (double raHours, double decDeg) ComputeRefineTarget(
+        double refRaHours, double refDecDeg, DateTime atUtc,
+        double azErrSec, double altErrSec,
+        double siteLatDeg, double siteLongDeg) {
+
+        var v = RaDecToAltAzVector(refRaHours, refDecDeg, atUtc, siteLatDeg, siteLongDeg);
+        var (b, a) = KnobAnglesFromError(azErrSec, altErrSec, siteLatDeg);
+        var vt = RotateAboutEast(RotateAzimuth(v, b), a);
+        return AltAzVectorToRaDec(vt, atUtc, siteLatDeg, siteLongDeg);
+    }
+
+    /// <summary>
+    /// POLARUI2: remaining axis error from ONE solve during refinement.
+    /// Decomposes the rotation that takes the current solved pointing to
+    /// the anchored target into the two physical knob rotations (about
+    /// the zenith + about the east-west altitude hinge) via Gauss-Newton
+    /// on the exact rotations, then maps those angles back to the TPPA
+    /// (azErrSec, altErrSec) sign convention. Returns null when the
+    /// pointing direction makes the 2-parameter decomposition
+    /// ill-conditioned (pointing at the zenith, or at the due-east/west
+    /// horizon where the alt hinge can't move it).
+    /// </summary>
+    public static (double azErrSec, double altErrSec)? ComputeRefineError(
+        double targetRaHours, double targetDecDeg,
+        double solvedRaHours, double solvedDecDeg,
+        DateTime atUtc, double siteLatDeg, double siteLongDeg) {
+
+        var vt = RaDecToAltAzVector(targetRaHours, targetDecDeg, atUtc, siteLatDeg, siteLongDeg);
+        var vn = RaDecToAltAzVector(solvedRaHours, solvedDecDeg, atUtc, siteLatDeg, siteLongDeg);
+
+        double b = 0, a = 0;   // azimuth-angle + about-east knob rotations
+        var v = vn;
+        for (int i = 0; i < 12; i++) {
+            var d = Sub(vt, v);
+            // Small-rotation generators at the current iterate:
+            //   ∂v/∂b (azimuth + toward east)  = (v.Y, −v.X, 0)
+            //   ∂v/∂a (right-hand about east)  = x̂×v = (0, −v.Z, v.Y)
+            var g1 = V(v.Y, -v.X, 0);
+            var g2 = V(0, -v.Z, v.Y);
+            double a11 = Dot(g1, g1), a12 = Dot(g1, g2), a22 = Dot(g2, g2);
+            double det = a11 * a22 - a12 * a12;
+            if (det < 1e-9) return null;
+            double r1 = Dot(g1, d), r2 = Dot(g2, d);
+            double db = (a22 * r1 - a12 * r2) / det;
+            double da = (-a12 * r1 + a11 * r2) / det;
+            b += db; a += da;
+            v = RotateAboutEast(RotateAzimuth(vn, b), a);
+            if (db * db + da * da < 1e-20) break;
+        }
+
+        // Invert the knob→error mapping used by ComputeRefineTarget.
+        double aSign = siteLatDeg >= 0 ? 1.0 : -1.0;
+        double azErrSec = -b * 180.0 / Math.PI * 3600.0;
+        double altErrSec = -a * aSign * 180.0 / Math.PI * 3600.0;
+        return (azErrSec, altErrSec);
+    }
+
+    /// <summary>Error → the two physical knob rotation angles (radians).
+    /// b: azimuth-angle added to every direction (rotation about the
+    /// zenith); a: right-hand rotation about the east axis. A rotation
+    /// about east by a changes a direction's altitude by a·cos(azimuth),
+    /// so raising the AXIS by δ needs a = δ (axis toward north, cos=+1)
+    /// or a = −δ (axis toward south, cos=−1). The correction removes the
+    /// error, hence the minus signs.</summary>
+    private static (double b, double a) KnobAnglesFromError(
+            double azErrSec, double altErrSec, double siteLatDeg) {
+        double aSign = siteLatDeg >= 0 ? 1.0 : -1.0;
+        double b = -(azErrSec / 3600.0) * Math.PI / 180.0;
+        double a = -(altErrSec / 3600.0) * Math.PI / 180.0 / aSign;
+        return (b, a);
+    }
+
+    /// <summary>
     /// Precess equatorial coordinates from J2000.0 to the mean equator and
     /// equinox of date (rigorous precession, Meeus "Astronomical Algorithms"
     /// 2nd ed., ch. 21, eqs. 21.2–21.4).
@@ -264,6 +354,54 @@ public static class PolarAlignmentMath {
             cosAlt * Math.Sin(azRad),
             cosAlt * Math.Cos(azRad),
             Math.Sin(altRad));
+    }
+
+    /// <summary>Exact rotation about the UP axis that ADDS b radians to
+    /// the azimuth of every direction (az from north toward east). At
+    /// b→0 the derivative is (v.Y, −v.X, 0), matching the g1 generator
+    /// in ComputeRefineError.</summary>
+    private static Vec3 RotateAzimuth(Vec3 v, double b) {
+        double c = Math.Cos(b), s = Math.Sin(b);
+        return V(v.X * c + v.Y * s,
+                 -v.X * s + v.Y * c,
+                 v.Z);
+    }
+
+    /// <summary>Exact right-hand rotation about the EAST axis (x̂) by a
+    /// radians: raises north-azimuth directions, lowers south ones. At
+    /// a→0 the derivative is x̂×v = (0, −v.Z, v.Y), the g2 generator.</summary>
+    private static Vec3 RotateAboutEast(Vec3 v, double a) {
+        double c = Math.Cos(a), s = Math.Sin(a);
+        return V(v.X,
+                 v.Y * c - v.Z * s,
+                 v.Y * s + v.Z * c);
+    }
+
+    /// <summary>Topocentric (east, north, up) unit vector → of-date
+    /// RA/Dec at the given instant. Inverse of RaDecToAltAzVector
+    /// (standard horizontal → equatorial transform).</summary>
+    private static (double raHours, double decDeg) AltAzVectorToRaDec(
+            Vec3 v, DateTime atUtc, double latDeg, double longDeg) {
+        var (altDeg, azDeg) = AltAzFromVector(v);
+        double alt = altDeg * Math.PI / 180.0;
+        double az = azDeg * Math.PI / 180.0;
+        double lat = latDeg * Math.PI / 180.0;
+
+        double sinDec = Math.Sin(alt) * Math.Sin(lat)
+                      + Math.Cos(alt) * Math.Cos(lat) * Math.Cos(az);
+        double dec = Math.Asin(Math.Clamp(sinDec, -1.0, 1.0));
+        double cosDec = Math.Cos(dec);
+
+        // From cosAlt·sinAz = −cosDec·sinHA and
+        // sinAlt = sinDec·sinLat + cosDec·cosLat·cosHA.
+        double sinHa = -Math.Sin(az) * Math.Cos(alt) / Math.Max(1e-12, cosDec);
+        double cosHa = (Math.Sin(alt) - sinDec * Math.Sin(lat))
+                     / Math.Max(1e-12, cosDec * Math.Cos(lat));
+        double haHours = Math.Atan2(sinHa, cosHa) * 180.0 / Math.PI / 15.0;
+
+        double raH = LocalSiderealHours(atUtc, longDeg) - haHours;
+        raH = ((raH % 24.0) + 24.0) % 24.0;
+        return (raH, dec * 180.0 / Math.PI);
     }
 
     /// <summary>Vector → (altDeg, azDeg). Inverse of RaDecToAltAzVector
