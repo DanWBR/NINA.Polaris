@@ -11125,6 +11125,17 @@ function ninaApp() {
                         }
                         break;
                     case 'center':
+                        // Always remember the latest map centre (drag OR
+                        // programmatic): _pushSkyFovOverlays uses it to
+                        // decide whether the red target box should follow
+                        // the mount (view near the mount) or act as the
+                        // screen-anchored planning box (user panned away).
+                        if (msg.center && Number.isFinite(msg.center.raDeg)
+                            && Number.isFinite(msg.center.decDeg)) {
+                            this._skyLastCenter = {
+                                ra: msg.center.raDeg, dec: msg.center.decDeg
+                            };
+                        }
                         if (this._skyCenterPending) {
                             // Reply to an explicit get-center request.
                             const cb = this._skyCenterPending;
@@ -15224,6 +15235,22 @@ function ninaApp() {
             catch (e) { /* SKY engine may not be live */ }
         },
 
+        // True while the SKY view centre sits reasonably close to where the
+        // mount points. Used to decide whether the red target box follows
+        // the mount (browsing the region being imaged) or serves as the
+        // screen-anchored planning box (user panned off to compose a new
+        // target). 15° is generous: typical browsing FOVs are well under
+        // that, and a deliberate pan to another target exceeds it.
+        _skyViewNearMount(mount) {
+            const c = this._skyLastCenter;
+            if (!c) return true;   // no centre report yet → assume near
+            const d2r = Math.PI / 180;
+            const cosSep = Math.sin(c.dec * d2r) * Math.sin(mount.decDeg * d2r)
+                + Math.cos(c.dec * d2r) * Math.cos(mount.decDeg * d2r)
+                    * Math.cos((c.ra - mount.raDeg) * d2r);
+            return Math.acos(Math.max(-1, Math.min(1, cosSep))) / d2r <= 15;
+        },
+
         _pushSkyFovOverlays() {
             if (!this.aladinShowFov || !(this.fov?.width > 0)) {
                 this._skySendMessage({ type: 'set-fov-overlays',
@@ -15316,6 +15343,20 @@ function ninaApp() {
                     raDeg: sf.raDeg, decDeg: sf.decDeg,
                     widthDeg: w, heightDeg: h,
                     rotationDeg: Number.isFinite(sf.rotationDeg) ? sf.rotationDeg : targetRot,
+                    flipV: flipV, cd: solveCd
+                };
+            } else if (this._skyRedFollowMount && mount && this._skyViewNearMount(mount)) {
+                // Follow-the-mount (field request): after ANY slew the red
+                // box anchors to the mount's live RA/Dec instead of the
+                // screen centre — while tracking it stays glued to the
+                // same stars alongside blue; while NOT tracking the pair
+                // visibly drifts through the starfield together (fixed
+                // alt-az pointing), which is exactly what the rig is doing.
+                // The user panning well away from the mount reverts red to
+                // the screen-anchored drag-to-frame planning box.
+                target = {
+                    raDeg: mount.raDeg, decDeg: mount.decDeg,
+                    widthDeg: w, heightDeg: h, rotationDeg: targetRot,
                     flipV: flipV, cd: solveCd
                 };
             } else {
@@ -34623,6 +34664,14 @@ function ninaApp() {
                 && eq.auxCamera.temperature !== undefined) {
                 this.auxTemp = eq.auxCamera.temperature;
             }
+            // Red-follows-mount arming: any observed slew (from the app, a
+            // planetarium, or the hand controller — the WS mount status
+            // reports them all) means the mount is now deliberately pointed
+            // somewhere, so the red target box should reflect that pointing
+            // instead of floating at the screen centre. See
+            // _pushSkyFovOverlays for how the anchor is picked.
+            if (eq.telescope && eq.telescope.slewing) this._skyRedFollowMount = true;
+
             // Aux sensor footprint (mm) for the pink SKY FOV rectangle.
             // Derived from pixel count × pixel size (µm → mm). Kept on the
             // instance so _pushSkyFovOverlays can size the aux rect from the
