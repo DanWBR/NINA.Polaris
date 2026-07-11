@@ -76,6 +76,40 @@
          Only visible when the picker is summoned over running instances. -->
     <button class="picker-done" id="pickerDoneBtn" type="button" hidden>✕ Back to tabs</button>
 
+    <!-- iOS WKWebView stuck-scroll watchdog. The wrapper is a fixed
+         full-screen layout that never legitimately scrolls, but WebKit
+         scrolls/offsets the OUTER document when focus jumps inside the
+         cross-origin Polaris iframe (keyboard, input reveal) and can
+         leave it displaced permanently — the whole UI shifts with a
+         blank band and never recovers (field report on iPhone). Pin
+         the root back to 0,0 whenever the viewport settles. iOS only:
+         on Android the OS legitimately pans to reveal inputs and the
+         inner app has its own reset. -->
+    <script>
+        (function () {
+            var ua = navigator.userAgent || '';
+            var isIOS = /iPhone|iPad|iPod/i.test(ua)
+                || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            if (!isIOS) return;
+            var t = null;
+            function reset() {
+                var a = document.activeElement;
+                if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) return;
+                var se = document.scrollingElement || document.documentElement;
+                if (se.scrollTop || se.scrollLeft) { se.scrollTop = 0; se.scrollLeft = 0; }
+                if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+            }
+            function arm() { clearTimeout(t); t = setTimeout(reset, 250); }
+            window.addEventListener('focusout', arm);
+            window.addEventListener('orientationchange', function () {
+                clearTimeout(t); t = setTimeout(reset, 350);
+            });
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', arm);
+                window.visualViewport.addEventListener('scroll', arm);
+            }
+        })();
+    </script>
     <!-- Capacitor + the connect logic. onnx-native-shim.js is NOT loaded
          here; it is injected into the remote Polaris UI at document-start
          by the native layer (see plugins/polaris-onnx + README). -->

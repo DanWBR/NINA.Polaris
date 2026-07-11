@@ -7645,8 +7645,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <!-- FIELD-4: lazy iframe src. Same race fix as the
                          PHD2 / INDI Web iframes. /sky/ is gated by
                          AuthMiddleware, so it needs the cookie too. -->
+                    <!-- skySuspended: mobile hard-suspend — after minutes
+                         away from SKY the engine iframe unloads entirely
+                         (Android froze on return otherwise) and reboots
+                         fresh when the tab is reopened. -->
                     <iframe id="skyFrame"
-                            :src="auth.authenticated ? '/sky/' : 'about:blank'"
+                            :src="(auth.authenticated && !skySuspended) ? '/sky/' : 'about:blank'"
                             class="sky-viewer sky-viewer-iframe"
                             style="border:0;"
                             sandbox="allow-scripts allow-same-origin"
@@ -17611,7 +17615,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260711-auxfov2"></script>
+    <script src="/js/app.js?v=20260711-mobilesky"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260710-hostclient"></script>

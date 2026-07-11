@@ -697,6 +697,16 @@ function ninaApp() {
         _skyInfoChart: null,
         skyResults: [],
         skyShowResults: false,
+        // Mobile WebView hard-suspend for the SKY engine iframe: after a
+        // grace period away from the SKY tab the iframe src flips to
+        // about:blank (engine fully unloaded — no WASM loop, no GL
+        // context left for Android to evict), and boots fresh on return.
+        // Field report: coming back to SKY after a long stretch on LIVE
+        // froze the whole Android app; all iframes share the WebView
+        // main thread, so a wedged engine can't be detected from here —
+        // it has to be prevented. Desktop never suspends.
+        skySuspended: false,
+        _skySuspendTimer: null,
         // SKY coordinate-grid toggle: 'none' | 'altaz' | 'eq'. Cycled by the
         // toolbar button; pushed to the engine via the set-grid bridge msg
         // and re-applied whenever the engine (re)loads. Default = equatorial
@@ -3601,7 +3611,71 @@ function ninaApp() {
                         this._lastStackFrameShown = 0;
                         this._lastImageFrameAt = 0;
                     }
+                    // Mobile SKY hard-suspend also covers the whole app
+                    // going to background while the SKY tab is open —
+                    // same Android GL-eviction / freeze-on-return risk
+                    // as sitting on another Polaris tab. On return to a
+                    // visible SKY tab, reboot a suspended engine.
+                    if (this._isMobileClient()) {
+                        if (document.visibilityState === 'hidden') {
+                            clearTimeout(this._skySuspendTimer);
+                            this._skySuspendTimer = setTimeout(() => {
+                                if (!this.skySuspended
+                                    && (this.tab !== 'sky'
+                                        || document.visibilityState === 'hidden')) {
+                                    this._skyBridgeReady = false;
+                                    this.skySuspended = true;
+                                    console.log('[Polaris] SKY engine suspended (app hidden)');
+                                }
+                            }, 180000);
+                        } else if (this.tab === 'sky' && this.skySuspended) {
+                            this._skyBridgeReady = false;
+                            this.skySuspended = false; // :src → '/sky/' reboot
+                        }
+                    }
                 });
+            }
+
+            // iOS WKWebView stuck-scroll watchdog. The app shell is a
+            // fixed flex column — the ROOT document never legitimately
+            // scrolls. But WKWebView scrolls it anyway when the OS
+            // keyboard opens / focus jumps (even with the native
+            // keyboard suppressed) and sometimes never restores it:
+            // the whole UI ends up shifted with a blank band on the
+            // right/bottom that survives until a reload (field report:
+            // "o SKY se desloca no iPhone e não volta"). Pin the root
+            // back to 0,0 whenever the viewport settles — skipped
+            // while an editable element is focused so we never fight
+            // the OS revealing an input on Android.
+            {
+                const editing = () => {
+                    const a = document.activeElement;
+                    return !!(a && (a.tagName === 'INPUT'
+                        || a.tagName === 'TEXTAREA' || a.isContentEditable));
+                };
+                const resetRootScroll = () => {
+                    if (editing()) return;
+                    const se = document.scrollingElement || document.documentElement;
+                    if (se.scrollTop || se.scrollLeft) {
+                        se.scrollTop = 0; se.scrollLeft = 0;
+                    }
+                    if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+                };
+                window.addEventListener('focusout',
+                    () => setTimeout(resetRootScroll, 80));
+                window.addEventListener('orientationchange',
+                    () => setTimeout(resetRootScroll, 300));
+                if (window.visualViewport) {
+                    let vvT = null;
+                    window.visualViewport.addEventListener('resize', () => {
+                        clearTimeout(vvT);
+                        vvT = setTimeout(resetRootScroll, 250);
+                    });
+                    window.visualViewport.addEventListener('scroll', () => {
+                        clearTimeout(vvT);
+                        vvT = setTimeout(resetRootScroll, 250);
+                    });
+                }
             }
 
             // Tab-discard resilience: persist the active tab so a Chrome
@@ -3622,6 +3696,31 @@ function ninaApp() {
                     // No-op on desktop — the /sky/ perf guard only installs
                     // itself on phones/tablets.
                     this._skySendMessage({ type: 'set-render-paused', paused: v !== 'sky' });
+                    // Mobile hard-suspend (see skySuspended). The paused
+                    // keep-alive above is enough for short hops between
+                    // tabs; after minutes away (typically a LIVE session)
+                    // Android can evict the hidden iframe's GL context and
+                    // the engine froze the whole app on return. Unload the
+                    // iframe after a grace period and reboot it fresh when
+                    // the user comes back — the bridge 'ready' handler
+                    // re-hydrates observer/time/overlays automatically.
+                    if (this._isMobileClient()) {
+                        clearTimeout(this._skySuspendTimer);
+                        if (v === 'sky') {
+                            if (this.skySuspended) {
+                                this._skyBridgeReady = false;
+                                this.skySuspended = false; // :src → '/sky/'
+                            }
+                        } else {
+                            this._skySuspendTimer = setTimeout(() => {
+                                if (this.tab !== 'sky' && !this.skySuspended) {
+                                    this._skyBridgeReady = false;
+                                    this.skySuspended = true; // :src → about:blank
+                                    console.log('[Polaris] SKY engine suspended (tab inactive)');
+                                }
+                            }, 180000); // 3 min away → suspend
+                        }
+                    }
                     // AFPORT: FOCUS panel mirrors the active rig's AutoFocus
                     // settings on every entry (a rig switch elsewhere would
                     // otherwise leave stale values in the form).
@@ -9791,19 +9890,29 @@ function ninaApp() {
             }
         },
 
+        // Bounded pre-ready queue. Unbounded before the mobile SKY
+        // hard-suspend existed (not-ready only lasted through page
+        // load); a suspended iframe can now stay down for hours while
+        // status-driven overlay pushes keep arriving, so cap it and
+        // drop the OLDEST — the newest messages carry the state worth
+        // replaying at the next 'ready'.
+        _skyQueuePending(msg) {
+            this._skyPending = this._skyPending || [];
+            this._skyPending.push(msg);
+            if (this._skyPending.length > 60) this._skyPending.shift();
+        },
+
         _skySendMessage(msg) {
             if (!msg || !msg.type) return;
             const frame = document.getElementById('skyFrame');
             if (!frame || !frame.contentWindow) {
                 // Iframe not in DOM yet (page still loading). Queue and
                 // flush when "ready" arrives.
-                this._skyPending = this._skyPending || [];
-                this._skyPending.push(msg);
+                this._skyQueuePending(msg);
                 return;
             }
             if (!this._skyBridgeReady) {
-                this._skyPending = this._skyPending || [];
-                this._skyPending.push(msg);
+                this._skyQueuePending(msg);
                 return;
             }
             try {
@@ -27414,6 +27523,13 @@ function ninaApp() {
             if (navigator.platform === 'MacIntel'
                 && navigator.maxTouchPoints > 1) return true;
             return false;
+        },
+
+        // Phone/tablet detection (Android or iOS) — same surfaces the
+        // /sky/ perf guard installs itself on. Gates the SKY iframe
+        // hard-suspend, which desktop never needs.
+        _isMobileClient() {
+            return /Android/i.test(navigator.userAgent || '') || this._isIOS();
         },
 
         // GX-12n: dynamic Denoise model picker, driven by the ONNX
