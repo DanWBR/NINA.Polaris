@@ -36,7 +36,11 @@ public static class AdvancedSequenceEndpoints {
                 lastError = engine.LastError,
                 startedAt = engine.StartedAt,
                 finishedAt = engine.FinishedAt,
-                abortReason = engine.AbortReason
+                abortReason = engine.AbortReason,
+                // True when a stopped run left partial progress the next
+                // Start can continue from (drives the UI's continue/restart
+                // prompt). In-memory only — a server restart clears it.
+                hasResumableProgress = engine.HasResumableProgress
             };
             return Results.Text(JsonSerializer.Serialize(payload, SequenceJson.Options),
                 "application/json");
@@ -72,8 +76,13 @@ public static class AdvancedSequenceEndpoints {
         });
 
         // ---- Lifecycle ----
-        g.MapPost("/start", (AdvancedSequenceEngine engine) => {
-            engine.Start();
+        // ?resume=1 continues a stopped run from its retained progress
+        // (completed top-level blocks skip; interrupted exposure sets pick
+        // up at the next frame). Without it the tree restarts from zero.
+        g.MapPost("/start", (AdvancedSequenceEngine engine, HttpRequest req) => {
+            bool resume = req.Query.TryGetValue("resume", out var v)
+                && (v == "1" || string.Equals(v, "true", StringComparison.OrdinalIgnoreCase));
+            engine.Start(resume);
             return Results.Ok(new { state = engine.State.ToString(), error = engine.LastError });
         });
 

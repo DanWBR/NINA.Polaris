@@ -9090,6 +9090,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             @click="planIsRunning() ? stopPlan() : startPlan()"
                             :disabled="!plan || planTargetCount() === 0"
                             x-text="planIsRunning() ? 'Stop' : 'Start'"></button>
+                    <!-- Resume the last prematurely-ended plan (stop or
+                         end-time) from its retained progress: completed
+                         targets skip, already-captured frames are kept. -->
+                    <button class="btn"
+                            x-show="!planIsRunning() && planStatus?.canResume" x-cloak
+                            @click="resumePlan()"
+                            :title="'Continue \'' + (planStatus?.resumePlanName || '') + '\' from where it stopped ('
+                                + (planStatus?.resumeDoneFrames || 0) + '/' + (planStatus?.resumeTotalFrames || 0)
+                                + ' frames done). Already-captured frames are kept.'">
+                        ▶ Resume <span x-text="'(' + (planStatus?.resumeDoneFrames || 0) + '/' + (planStatus?.resumeTotalFrames || 0) + ')'"></span>
+                    </button>
                     <div class="plan-runbar-bars">
                         <div class="plan-pbar">
                             <div class="plan-pbar-head">
@@ -17570,6 +17581,30 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- ADV sequencer continue-vs-restart prompt. Same idea as the AUTORUN
+         one above: shown when Start is pressed while the server retains
+         partial progress from a stopped run. Continue keeps the server-side
+         document (completed top-level blocks skip, interrupted exposure sets
+         pick up at the next frame); Restart re-pushes the tree and starts
+         from zero. -->
+    <div class="confirm-modal-overlay"
+         x-show="advSeqResumePrompt" x-cloak
+         @click.self="advSeqResumePrompt = false">
+        <div class="confirm-modal-card">
+            <h3 class="confirm-modal-title">Resume sequence?</h3>
+            <p class="confirm-modal-message">
+                The stopped run left unfinished progress. Continue from where
+                it stopped (already-captured frames are kept), or restart the
+                whole tree from the beginning?
+            </p>
+            <div class="confirm-modal-actions">
+                <button class="btn btn-sm" @click="advSeqResumePrompt = false">Cancel</button>
+                <button class="btn btn-sm btn-danger" @click="_advSeqDoStart(false)">Restart</button>
+                <button class="btn btn-sm btn-primary" @click="_advSeqDoStart(true)">Continue</button>
+            </div>
+        </div>
+    </div>
+
     <!-- INDIPROP: INDI property help / note editor. Reuses the confirm
          modal shell for styling. Shows the built-in English description
          (read-only) plus a textarea for the operator's own note. The
@@ -17618,7 +17653,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260711-mobilesky"></script>
+    <script src="/js/app.js?v=20260711-resume"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260710-hostclient"></script>

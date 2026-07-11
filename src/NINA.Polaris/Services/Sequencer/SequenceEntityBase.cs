@@ -38,6 +38,10 @@ public abstract class SequenceEntityBase : ISequenceEntity {
     /// <summary>
     /// Reset transient state in-place. Called by the engine before every run
     /// so the tree shows a clean slate even if it was edited mid-run.
+    /// Deliberately does NOT clear capture progress (see
+    /// <see cref="ResetProgress"/>): a parent container calls this before
+    /// re-running a child, and a resumed run relies on the child's retained
+    /// frame counter to fast-forward past already-captured frames.
     /// </summary>
     public virtual void ResetRuntimeState() {
         Status = SequenceEntityStatus.Idle;
@@ -45,6 +49,13 @@ public abstract class SequenceEntityBase : ISequenceEntity {
         StartedAt = null;
         FinishedAt = null;
     }
+
+    /// <summary>
+    /// Clear persistent capture progress (e.g. TakeExposure's completed-frame
+    /// counter). Called by the engine only on a FRESH start / document load —
+    /// never between retries or loop passes, and never on a resumed start.
+    /// </summary>
+    public virtual void ResetProgress() { }
 }
 
 /// <summary>
@@ -113,6 +124,11 @@ public abstract class SequenceContainer : SequenceEntityBase, IErrorHandlingEnti
             if (item is SequenceEntityBase b) b.ResetRuntimeState();
         foreach (var t in Triggers) t.ResetRuntimeState();
         foreach (var c in Conditions) c.ResetRuntimeState();
+    }
+
+    public override void ResetProgress() {
+        foreach (var item in Items)
+            if (item is SequenceEntityBase b) b.ResetProgress();
     }
 
     /// <summary>
@@ -221,10 +237,21 @@ public abstract class SequenceContainer : SequenceEntityBase, IErrorHandlingEnti
                 "Container '{Name}' loops with no exit condition; "
                 + "it will repeat until the sequence is stopped.", Name);
         var gateConditions = IsLoop && Conditions.Count > 0;
+        // Resume support: on the FIRST pass of a resumed run, children whose
+        // status is still Completed from the interrupted run are skipped —
+        // they already did their work. Stale statuses can only exist here at
+        // this container's first entry (RunChildAsync resets a child subtree
+        // before executing it), and only pass 1 can see them, so pass 2+ of a
+        // loop runs every child as usual.
+        bool firstPass = true;
         do {
             for (int i = 0; i < Items.Count; i++) {
                 if (ctx.AbortRequested) return;
                 ct.ThrowIfCancellationRequested();
+
+                if (firstPass && ctx.IsResume
+                    && Items[i].Status == SequenceEntityStatus.Completed)
+                    continue;
 
                 // Loop conditions gate EVERY item (NINA parity), so a time /
                 // altitude / safety cut-off stops the block the moment it trips
@@ -239,6 +266,7 @@ public abstract class SequenceContainer : SequenceEntityBase, IErrorHandlingEnti
                 if (await RunChildAsync(Items[i], ctx, ct) == ChildOutcome.StopContainer)
                     return;
             }
+            firstPass = false;
         } while (IsLoop && !ctx.AbortRequested && await AllConditionsHoldAsync(ctx, ct));
     }
 
@@ -249,6 +277,11 @@ public abstract class SequenceContainer : SequenceEntityBase, IErrorHandlingEnti
         for (int i = 0; i < Items.Count; i++) {
             if (ctx.AbortRequested) return;
             ct.ThrowIfCancellationRequested();
+            // Same resume skip as the sequential body (only relevant when
+            // this container is the resumed run's entry container — a parent
+            // RunChildAsync resets the subtree in every other case).
+            if (ctx.IsResume && Items[i].Status == SequenceEntityStatus.Completed)
+                continue;
             await EvaluateTriggersAsync(ctx, ct);
             if (ctx.AbortRequested) return;
             if (await RunChildAsync(Items[i], ctx, ct) == ChildOutcome.StopContainer)

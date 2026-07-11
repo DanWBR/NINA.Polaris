@@ -1647,9 +1647,13 @@ function ninaApp() {
             state: 'Idle', lastError: null, abortReason: null,
             errors: [],
             types: [],              // [{type, category, kind}]
-            selectedId: null
+            selectedId: null,
+            // Server retains partial progress after a stopped run; drives
+            // the continue-vs-restart prompt on the next Start.
+            hasResumableProgress: false
         },
         advSeqDirty: false,
+        advSeqResumePrompt: false,
 
         // Equipment source picker (INDI vs Alpaca/ASCOM)
         equipSource: 'indi',
@@ -19052,6 +19056,23 @@ function ninaApp() {
                 this.toast('Plan stopped', 'ok');
             } catch (e) { this.toast('Stop failed: ' + (e.message || e), 'error'); }
         },
+        // Resume the last prematurely-ended plan (stop / end-time reached)
+        // from its retained progress: completed targets skip, the
+        // interrupted one re-runs its setup (the end actions may have
+        // parked the mount) and continues at the next frame.
+        async resumePlan() {
+            if (!await this.confirmCoolerForSession('the plan')) return;
+            try {
+                const r = await this.apiPost('/api/plan/resume', {});
+                if (!r.ok) {
+                    const j = await r.json().catch(() => ({}));
+                    this.toast(j.error || 'Could not resume the plan', 'error');
+                    return;
+                }
+                this.planStatus = await r.json();
+                this.toast('Plan resumed', 'ok');
+            } catch (e) { this.toast('Resume failed: ' + (e.message || e), 'error'); }
+        },
 
         planIsRunning() { return !!(this.planStatus && this.planStatus.active); },
         planChipLabel() {
@@ -35373,6 +35394,7 @@ function ninaApp() {
                 this.advSeq.state = doc.state;
                 this.advSeq.lastError = doc.lastError;
                 this.advSeq.abortReason = doc.abortReason;
+                this.advSeq.hasResumableProgress = !!doc.hasResumableProgress;
                 // Poll while running so the UI shows live status
                 if (this._advSeqPoll) clearInterval(this._advSeqPoll);
                 this._advSeqPoll = setInterval(() => this._advSeqRefresh(), 2000);
@@ -35412,6 +35434,7 @@ function ninaApp() {
                 this.advSeq.state = doc.state;
                 this.advSeq.lastError = doc.lastError;
                 this.advSeq.abortReason = doc.abortReason;
+                this.advSeq.hasResumableProgress = !!doc.hasResumableProgress;
                 // If the server is running, mirror its live status into the local tree
                 if (doc.state === 'Running' && doc.document?.root) {
                     this._advSeqMergeStatus(this.advSeq.doc.root, doc.document.root);
@@ -35595,11 +35618,26 @@ function ninaApp() {
         _esc(s) { return (s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); },
 
         async advSeqStart() {
-            await this.advSeqSaveDoc();
-            const r = await this.apiPost('/api/sequencer/start');
+            // Continue-or-restart prompt when the server retains partial
+            // progress AND the local tree wasn't edited since — an edited
+            // tree must be re-pushed, and pushing the document resets the
+            // server-side progress by design.
+            if (!this.advSeqDirty && this.advSeq.hasResumableProgress) {
+                this.advSeqResumePrompt = true; return;
+            }
+            await this._advSeqDoStart(false);
+        },
+        // resume=true keeps the server-side document untouched (no re-push)
+        // and continues from its retained progress: completed top-level
+        // blocks skip, interrupted exposure sets pick up at the next frame.
+        async _advSeqDoStart(resume) {
+            this.advSeqResumePrompt = false;
+            if (!resume) await this.advSeqSaveDoc();
+            const r = await this.apiPost('/api/sequencer/start' + (resume ? '?resume=1' : ''));
             this.advSeq.state = r.state;
             this.advSeq.lastError = r.error;
             if (r.error) this.toast('Start failed: ' + r.error, 'error');
+            else this.toast(resume ? 'Sequence resumed' : 'Sequence started', 'ok');
         },
         async advSeqStop() {
             await this.apiPost('/api/sequencer/stop');

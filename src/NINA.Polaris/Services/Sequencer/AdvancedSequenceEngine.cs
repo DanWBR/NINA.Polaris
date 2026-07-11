@@ -69,9 +69,58 @@ public class AdvancedSequenceEngine {
         _logger.LogInformation("Advanced sequence loaded: {Name} (v{Version})", doc.Name, doc.Version);
     }
 
+    /// <summary>
+    /// Re-attach a document WITHOUT clearing its runtime state, so a
+    /// subsequent <see cref="Start"/> with <c>resume=true</c> continues where
+    /// the document's previous run stopped. Used by PLAN resume, which stashes
+    /// the main document before the end-actions document replaces it.
+    /// </summary>
+    public void LoadForResume(SequenceDocument doc) {
+        if (State == AdvancedSequenceState.Running)
+            throw new InvalidOperationException("Cannot load while running");
+        Document = doc;
+        LastError = null;
+        AbortReason = null;
+        _logger.LogInformation("Advanced sequence re-attached for resume: {Name}", doc.Name);
+    }
+
+    /// <summary>
+    /// True when the loaded document carries partial progress a resumed start
+    /// can continue from: the tree ran but didn't complete, and at least one
+    /// entity finished (or captured part of its frame set). Purely in-memory —
+    /// a server restart clears it.
+    /// </summary>
+    public bool HasResumableProgress =>
+        State == AdvancedSequenceState.Idle
+        && Document.Root.Status is SequenceEntityStatus.Skipped
+            or SequenceEntityStatus.Failed
+            or SequenceEntityStatus.Running
+        && HasAnyProgress(Document.Root);
+
+    private static bool HasAnyProgress(ISequenceEntity entity) {
+        if (entity is Instructions.TakeExposureInstruction tx && tx.CompletedCount > 0)
+            return true;
+        if (entity is SequenceContainer c) {
+            foreach (var child in c.Items) {
+                if (child.Status == SequenceEntityStatus.Completed) return true;
+                if (HasAnyProgress(child)) return true;
+            }
+        }
+        return false;
+    }
+
     public IReadOnlyList<string> Validate() => Document.Root.Validate();
 
-    public void Start() {
+    public void Start() => Start(resume: false);
+
+    /// <summary>
+    /// Start the loaded document. With <paramref name="resume"/> true and
+    /// retained partial progress, the tree is NOT reset: top-level entities
+    /// already Completed are skipped, the interrupted one re-runs (its setup
+    /// instructions repeat — the mount may have moved/parked meanwhile) and
+    /// TakeExposure instructions fast-forward past frames already captured.
+    /// </summary>
+    public void Start(bool resume) {
         if (State == AdvancedSequenceState.Running) return;
         // Guard the restart race: Stop() only requests cancellation, so a
         // previous run may still be unwinding (an instruction mid-flight that
@@ -88,15 +137,18 @@ public class AdvancedSequenceEngine {
             return;
         }
 
+        bool doResume = resume && HasResumableProgress;
+
         _cts = new CancellationTokenSource();
         State = AdvancedSequenceState.Running;
         StartedAt = DateTime.UtcNow;
         FinishedAt = null;
         AbortReason = null;
         LastError = null;
-        ResetTree(Document.Root);
+        if (!doResume) ResetTree(Document.Root);
+        else _logger.LogInformation("Advanced sequence resuming from retained progress");
 
-        _runTask = Task.Run(() => RunAsync(_cts.Token));
+        _runTask = Task.Run(() => RunAsync(_cts.Token, doResume));
     }
 
     public void Stop() {
@@ -107,12 +159,13 @@ public class AdvancedSequenceEngine {
         _cts?.Cancel();
     }
 
-    private async Task RunAsync(CancellationToken ct) {
+    private async Task RunAsync(CancellationToken ct, bool isResume = false) {
         // Build a fresh context from DI, pulls in whatever services are alive
         // right now (so a profile switch mid-run takes effect on the next run).
         SequenceContext ctx;
         try {
             ctx = BuildContext();
+            ctx.IsResume = isResume;
             _ctx = ctx;   // expose FramesCompleted for PLAN-mode progress
         } catch (Exception ex) {
             LastError = "DI build failed: " + ex.Message;
@@ -176,7 +229,13 @@ public class AdvancedSequenceEngine {
     }
 
     private void ResetTree(ISequenceEntity entity) {
-        if (entity is SequenceEntityBase b) b.ResetRuntimeState();
+        if (entity is SequenceEntityBase b) {
+            b.ResetRuntimeState();
+            // Fresh start / load also clears capture progress (TakeExposure's
+            // completed-frame counter). ResetRuntimeState deliberately keeps
+            // it (retries + resume rely on that), so clear it explicitly here.
+            b.ResetProgress();
+        }
         if (entity is SequenceContainer container) {
             foreach (var child in container.Items) ResetTree(child);
         }

@@ -66,6 +66,15 @@ public static class PlanEndpoints {
             return Results.Ok(runner.GetStatus());
         });
 
+        // Resume the last prematurely-ended plan (user stop / end-time) from
+        // its retained progress: completed targets skip, the interrupted one
+        // re-runs its setup and continues at the next frame. Available while
+        // /status reports canResume; a server restart clears it.
+        g.MapPost("/resume", (PlanRunnerService runner) => {
+            var (ok, error) = runner.ResumePlan();
+            return ok ? Results.Ok(runner.GetStatus()) : Results.BadRequest(new { error });
+        });
+
         g.MapGet("/status", (PlanRunnerService runner) => Results.Ok(runner.GetStatus()));
 
         // ---- Compile preview (validation + time estimate, no run) ----

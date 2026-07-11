@@ -53,6 +53,15 @@ public class PlanRunnerService : IHostedService {
     private CancellationTokenSource? _cts;
     private Task? _monitor;
 
+    // Resume stash: the main document (with its runtime statuses + per-
+    // instruction frame counters) of a plan whose main phase ended EARLY
+    // (user stop or end-time), kept so ResumePlan can pick up where it
+    // stopped — completed targets skip, the interrupted one re-runs its
+    // setup and fast-forwards past frames already captured. In-memory only;
+    // cleared by a natural full completion or by starting another plan.
+    private ImagingPlan? _resumePlan;
+    private SequenceDocument? _resumeDoc;
+
     private enum Phase { Idle, Main, Ending }
 
     public PlanRunnerService(AdvancedSequenceEngine engine, PlanCompilerService compiler,
@@ -113,6 +122,10 @@ public class PlanRunnerService : IHostedService {
                 return (false, _engine.LastError ?? "The engine refused to start.");
             }
 
+            // A fresh plan supersedes any resumable leftovers.
+            _resumePlan = null;
+            _resumeDoc = null;
+
             _active = plan;
             _userAborted = false;
             _startedAtUtc = DateTime.UtcNow;
@@ -120,6 +133,56 @@ public class PlanRunnerService : IHostedService {
             _phase = Phase.Main;
             _logger.LogInformation("Plan '{Name}' started ({N} targets), ends {Ends}",
                 plan.Name, plan.Targets.Count(t => t.Enabled),
+                _endsAtUtc?.ToString("u") ?? "when all frames are done");
+            return (true, null);
+        }
+    }
+
+    /// <summary>
+    /// Resume the last prematurely-ended plan from its retained progress.
+    /// Completed targets are skipped; the interrupted target re-runs its
+    /// setup (slew / center / guide — the end actions may have parked the
+    /// mount) and its exposure sets continue at the next frame. The end
+    /// condition is re-resolved (Dawn = the coming dawn).
+    /// </summary>
+    public (bool ok, string? error) ResumePlan() {
+        lock (_lock) {
+            if (_active != null)
+                return (false, "A plan is already running. Stop it first.");
+            if (_engine.State == AdvancedSequenceState.Running)
+                return (false, "A sequence is already running (Advanced/Autorun). Stop it first.");
+            if (_resumePlan == null || _resumeDoc == null)
+                return (false, "There is no interrupted plan to resume.");
+
+            var plan = _resumePlan;
+            if (plan.AutoMeridianFlip) {
+                var s = _flip.Settings;
+                _flip.UpdateSettings(new MeridianFlipSettings {
+                    Enabled = true,
+                    MinutesAfterMeridian = plan.MeridianFlipMinutesAfter,
+                    RecenterAfterFlip = plan.MeridianFlipRecenter,
+                    AutoFocusAfterFlip = plan.MeridianFlipAutoFocus,
+                    PauseBeforeMeridianMinutes = s.PauseBeforeMeridianMinutes,
+                    RecenterToleranceArcsec = s.RecenterToleranceArcsec,
+                    SettleSecondsAfterFlip = s.SettleSecondsAfterFlip,
+                    AutoFlipDuringLiveStack = s.AutoFlipDuringLiveStack
+                });
+            }
+
+            _engine.LoadForResume(_resumeDoc);
+            _engine.Start(resume: true);
+            if (_engine.State != AdvancedSequenceState.Running) {
+                return (false, _engine.LastError ?? "The engine refused to resume.");
+            }
+
+            _mainPlannedFrames = CountFrames(_resumeDoc.Root);
+            _active = plan;
+            _userAborted = false;
+            _startedAtUtc = DateTime.UtcNow;
+            _endsAtUtc = ResolveEnd(plan);
+            _phase = Phase.Main;
+            _logger.LogInformation("Plan '{Name}' resumed ({Done}/{Total} frames already captured), ends {Ends}",
+                plan.Name, CountDone(_resumeDoc.Root), _mainPlannedFrames,
                 _endsAtUtc?.ToString("u") ?? "when all frames are done");
             return (true, null);
         }
@@ -145,19 +208,21 @@ public class PlanRunnerService : IHostedService {
             int totalDone = 0, curDone = 0, curTotal = 0;
             if (_active != null) {
                 if (_phase == Phase.Main) {
-                    int fc = _engine.FramesCompleted;
-                    totalDone = Math.Min(fc, totalFrames);
+                    // Progress from the DOCUMENT TREE (per-instruction
+                    // completed-frame counters), not the engine context's
+                    // per-run counter: a resumed run's context starts at 0
+                    // while the tree keeps the frames captured before the
+                    // interruption, so the bars stay truthful across resume.
+                    int fc = Math.Min(CountDone(_engine.Document.Root), totalFrames);
+                    totalDone = fc;
                     if (_engine.Document.Root is SequenceContainer root) {
-                        int prior = 0;
                         foreach (var item in root.Items) {
                             if (item is not DeepSkyObjectContainer dso) continue;
-                            int planned = CountFrames(dso);
-                            if (dso.Status == SequenceEntityStatus.Completed) prior += planned;
-                            else if (dso.Status == SequenceEntityStatus.Running) curTotal = planned;
+                            if (dso.Status == SequenceEntityStatus.Running) {
+                                curTotal = CountFrames(dso);
+                                curDone = CountDone(dso);
+                            }
                         }
-                        // Frames done in the running target = total done minus all
-                        // frames from targets that already finished (sequential run).
-                        curDone = Math.Clamp(fc - prior, 0, curTotal > 0 ? curTotal : fc);
                     }
                 } else if (_phase == Phase.Ending) {
                     // Main capture is over; show the imaging bars complete while
@@ -166,6 +231,10 @@ public class PlanRunnerService : IHostedService {
                     curDone = curTotal = 0;
                 }
             }
+
+            bool canResume = _active == null
+                && _resumePlan != null && _resumeDoc != null
+                && _engine.State == AdvancedSequenceState.Idle;
 
             return new PlanStatus(
                 Active: _active != null,
@@ -179,7 +248,11 @@ public class PlanRunnerService : IHostedService {
                 CurrentItemCompleted: curDone,
                 CurrentItemTotal: curTotal,
                 TotalCompleted: totalDone,
-                TotalFrames: totalFrames);
+                TotalFrames: totalFrames,
+                CanResume: canResume,
+                ResumePlanName: canResume ? _resumePlan!.Name : null,
+                ResumeDoneFrames: canResume && _resumeDoc != null ? CountDone(_resumeDoc.Root) : 0,
+                ResumeTotalFrames: canResume && _resumeDoc != null ? CountFrames(_resumeDoc.Root) : 0);
         }
     }
 
@@ -190,6 +263,18 @@ public class PlanRunnerService : IHostedService {
         if (entity is TakeExposureInstruction tx) sum += Math.Max(0, tx.Count);
         if (entity is SequenceContainer c) {
             foreach (var child in c.Items) sum += CountFrames(child);
+        }
+        return sum;
+    }
+
+    /// <summary>Frames already captured, summed from each TakeExposure's
+    /// retained progress counter (survives stop + resume).</summary>
+    private static int CountDone(ISequenceEntity entity) {
+        int sum = 0;
+        if (entity is TakeExposureInstruction tx)
+            sum += Math.Clamp(tx.CompletedCount, 0, Math.Max(0, tx.Count));
+        if (entity is SequenceContainer c) {
+            foreach (var child in c.Items) sum += CountDone(child);
         }
         return sum;
     }
@@ -226,6 +311,23 @@ public class PlanRunnerService : IHostedService {
             if (_engine.State != AdvancedSequenceState.Idle) return;
 
             if (_phase == Phase.Main) {
+                // Main phase over. If it ended EARLY (user stop / end-time)
+                // with partial progress, stash the main document BEFORE the
+                // end-actions document replaces it on the engine, so the
+                // user can resume tomorrow evening (or after the stop) from
+                // exactly where it left off. A natural full completion has
+                // nothing to resume and clears any older stash.
+                if (_engine.HasResumableProgress) {
+                    _resumePlan = _active;
+                    _resumeDoc = _engine.Document;
+                    _logger.LogInformation(
+                        "Plan '{Name}' main phase ended with partial progress; resume is available",
+                        _active.Name);
+                } else {
+                    _resumePlan = null;
+                    _resumeDoc = null;
+                }
+
                 var endDoc = _compiler.CompileEndActions(_active);
                 if (endDoc != null) {
                     _phase = Phase.Ending;
@@ -310,4 +412,8 @@ public record PlanStatus(
     int CurrentItemCompleted = 0,
     int CurrentItemTotal = 0,
     int TotalCompleted = 0,
-    int TotalFrames = 0);
+    int TotalFrames = 0,
+    bool CanResume = false,
+    string? ResumePlanName = null,
+    int ResumeDoneFrames = 0,
+    int ResumeTotalFrames = 0);

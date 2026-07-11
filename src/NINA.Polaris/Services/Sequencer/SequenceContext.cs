@@ -71,6 +71,15 @@ public class SequenceContext {
     public int IncrementFramesCompleted() => Interlocked.Increment(ref _framesCompleted);
 
     /// <summary>
+    /// True when this run RESUMES a previously interrupted run instead of
+    /// starting fresh. Sequential containers then skip children whose status
+    /// is still <see cref="SequenceEntityStatus.Completed"/> from the earlier
+    /// run (first pass only), and <c>TakeExposureInstruction</c> continues
+    /// from its retained frame counter. Set by the engine, never by entities.
+    /// </summary>
+    public bool IsResume { get; set; }
+
+    /// <summary>
     /// Set by the engine when a <c>SafetyTrigger</c> raises a fatal
     /// condition; honoured by containers to abort the rest of the tree
     /// before falling out of the run.

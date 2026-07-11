@@ -47,6 +47,21 @@ public class TakeExposureInstruction : SequenceInstruction {
     /// <summary>FITS IMAGETYP, LIGHT / DARK / FLAT / BIAS.</summary>
     public string ImageType { get; set; } = "LIGHT";
 
+    /// <summary>
+    /// Frames already captured by this instruction. Runtime-only (excluded
+    /// from the document JSON) and deliberately NOT cleared by
+    /// <see cref="SequenceEntityBase.ResetRuntimeState"/>: it must survive a
+    /// stop so a resumed run (and a retry after a mid-set failure) continues
+    /// at the next frame instead of re-shooting the whole set. Cleared by
+    /// <see cref="ResetProgress"/> on a fresh start / document load, and
+    /// self-clears when re-entered already complete (a loop container's next
+    /// pass captures a full new set).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public int CompletedCount { get; set; }
+
+    public override void ResetProgress() => CompletedCount = 0;
+
     public override IReadOnlyList<string> Validate() {
         var e = new List<string>();
         if (ExposureSeconds <= 0) e.Add("Exposure must be positive");
@@ -87,7 +102,16 @@ public class TakeExposureInstruction : SequenceInstruction {
             Filter: string.IsNullOrEmpty(Filter) ? null : Filter,
             TargetName: string.IsNullOrEmpty(TargetName) ? null : TargetName);
 
-        for (int i = 0; i < Count; i++) {
+        // Fast-forward past frames captured before an interruption (resume /
+        // retry). A fully-complete counter means this is a fresh re-entry
+        // (loop pass) — start a new full set.
+        if (CompletedCount >= Count) CompletedCount = 0;
+        if (CompletedCount > 0)
+            ctx.Logger.LogInformation(
+                "TakeExposure '{Name}': resuming at frame {Next}/{Total}",
+                Name, CompletedCount + 1, Count);
+
+        for (int i = CompletedCount; i < Count; i++) {
             ct.ThrowIfCancellationRequested();
             NINA.Image.Interfaces.IImageData image;
             using (ctx.CaptureProgress.Begin("sequencer", ExposureSeconds))
@@ -125,6 +149,10 @@ public class TakeExposureInstruction : SequenceInstruction {
             }
 
             ctx.IncrementFramesCompleted();
+            // Persist per-instruction progress AFTER the frame is fully
+            // handled (saved + relayed): a stop/crash between frames resumes
+            // at the first frame that didn't complete.
+            CompletedCount = i + 1;
         }
     }
 }
