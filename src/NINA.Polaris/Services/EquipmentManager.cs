@@ -98,6 +98,10 @@ public class EquipmentManager : IDisposable {
         Camera = CreateCamera(driver, deviceId);
         CameraDriver = driver;
         CameraDeviceId = deviceId;
+        // Defensive: if this device was previously the guide camera its
+        // CCD_EXPOSURE writes were demoted to Debug — the imaging camera's
+        // frame requests should log normally again.
+        if (driver == "indi") _indiClient.SetQuietExposureLogging(deviceId, false);
         _logger.LogInformation("Camera selected: driver={Driver}, id={DeviceId}",
             driver, deviceId);
         return Camera;
@@ -159,9 +163,16 @@ public class EquipmentManager : IDisposable {
                 "Guide camera must differ from the imaging camera while it is connected. "
                 + "Disconnect the imaging camera first to share one device.");
         }
+        // Guide-cam frame requests fire every ~1-3 s all night; demote the
+        // INDI CCD_EXPOSURE write log for THIS device to Debug so it stops
+        // drowning the LOG panel. Un-quiet the previous guide device first
+        // so a swapped camera goes back to normal logging.
+        if (GuideCameraDriver == "indi" && !string.IsNullOrEmpty(GuideCameraDeviceId))
+            _indiClient.SetQuietExposureLogging(GuideCameraDeviceId, false);
         GuideCamera = CreateCamera(driver, deviceId);
         GuideCameraDriver = driver;
         GuideCameraDeviceId = deviceId;
+        if (driver == "indi") _indiClient.SetQuietExposureLogging(deviceId, true);
         _logger.LogInformation("Guide camera selected: driver={Driver}, id={DeviceId}",
             driver, deviceId);
         return GuideCamera;

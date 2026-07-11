@@ -575,6 +575,22 @@ public class IndiClient : IDisposable {
         _configSaveTimers[device] = newTimer;
     }
 
+    /// <summary>Devices whose <c>CCD_EXPOSURE</c> writes log at Debug
+    /// instead of Information. A native-guider guide camera requests a
+    /// frame every ~1-3 s all night long; at Information those writes
+    /// drowned everything else in the LOG panel (field report). Marked
+    /// by EquipmentManager when a guide camera is selected. Every other
+    /// property write on the device still logs normally, and the
+    /// missing-property warning below is never demoted.</summary>
+    private readonly ConcurrentDictionary<string, byte> _quietExposureDevices =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    public void SetQuietExposureLogging(string device, bool quiet) {
+        if (string.IsNullOrEmpty(device)) return;
+        if (quiet) _quietExposureDevices[device] = 1;
+        else _quietExposureDevices.TryRemove(device, out _);
+    }
+
     /// <summary>Shared logging path so every INDI write surfaces in the
     /// LOG panel with a uniform shape. Emits the property + element
     /// values AND a warning when the target property doesn't exist on
@@ -587,6 +603,11 @@ public class IndiClient : IDisposable {
     private void LogIndiWrite(string kind, string device, string property, string elementsLog) {
         var exists = Devices.TryGetValue(device, out var props) && props.ContainsKey(property);
         if (exists) {
+            if (property == "CCD_EXPOSURE" && _quietExposureDevices.ContainsKey(device)) {
+                DiagLogger.LogDebug("INDI {Kind} → device='{Device}' property='{Property}' [{Elements}]",
+                    kind, device, property, elementsLog);
+                return;
+            }
             DiagLogger.LogInformation("INDI {Kind} → device='{Device}' property='{Property}' [{Elements}]",
                 kind, device, property, elementsLog);
         } else {
