@@ -3180,7 +3180,11 @@ function ninaApp() {
         // frame; histoZoom narrows the drawn X range to the populated
         // region. blackFrac/whiteFrac are the 0..1 stretch endpoints the
         // two draggable handles sit on (auto-derived when stretchAuto).
-        histoZoom: false,
+        // Zoom defaults ON: the expected behaviour is the histogram framed
+        // to the populated band on every new stacked frame (ASIAIR-style),
+        // not the full 0..65535 axis. The toggle still lets the user open
+        // the full range.
+        histoZoom: true,
         histo: {
             min: 0, max: 0, avg: 0, std: 0,
             bins: null, peak: 1, count: 0,
@@ -6772,11 +6776,14 @@ function ninaApp() {
                     // so applyManualStretch routes through the JPEG re-stretch
                     // path instead of re-rendering an old mono frame.
                     this._lastRawFrame = null;
-                    // JPEG handles live in 8-bit display space, so the
-                    // histogram range is always the full 0..1 (a stale zoom
-                    // range from a previous raw frame would misplace them).
-                    this.histo.dispLo = 0;
-                    this.histo.dispHi = 1;
+                    // NOTE: do NOT reset histo.dispLo/dispHi here. That
+                    // unconditional reset ran on EVERY incoming stack frame —
+                    // snapping the histogram back to the full 0..65535 range
+                    // even mid-drag (bypassing the _histoDrag freeze) and
+                    // wiping the data-framed zoom on each update. The range
+                    // is owned by _histoUpdateEndpoints, which recomputes it
+                    // from the fresh frame's stats and respects the drag
+                    // freeze.
                     // The server already auto-stretched this JPEG. Seed the
                     // handles at identity (black 0, mid 0.5, white 1) so the
                     // first drag flips to manual without a brightness jump.
@@ -7185,6 +7192,13 @@ function ninaApp() {
         // arrived (token guard); endpoint + display range refresh is cheap
         // and runs every draw.
         _ensureHistogram() {
+            // While a handle is being dragged the whole panel must stay
+            // frozen: same bins, same stats, same zoom. A stacked frame
+            // landing mid-drag bumps _histoToken; without this guard the
+            // recompute below would swap the bars (and endpoint math)
+            // under the user's pointer. The bumped token makes the first
+            // redraw after release pick up the fresh frame.
+            if (this._histoDrag && this.histo.bins) return true;
             const f = this._lastRawFrame;
             const hasRaw = !!(f && f.pixels && f.pixels.length);
             // Colour live stack: the frame on screen is an 8-bit JPEG, but the
@@ -7319,8 +7333,18 @@ function ninaApp() {
             if (this.histoZoom) {
                 let lo = (this.histo.min / maxV) - 0.01;
                 let hi = (this.histo.avg + 8 * this.histo.std) / maxV + 0.02;
-                lo = Math.min(lo, this.histo.blackFrac - 0.02);
-                hi = Math.max(hi, this.histo.whiteFrac + 0.02);
+                // Expand the window so a handle the user placed stays
+                // visible — but ONLY for handles meaningfully inside the
+                // range. In the OSC/JPEG flow the auto handles sit at
+                // IDENTITY (0 and 1, "server already stretched"), and
+                // expanding to contain them degenerated the zoom to the
+                // full 0..65535 axis on every new stacked frame, which is
+                // exactly the "histogram updates without zoom" complaint.
+                // Identity-pinned handles simply clamp to the panel edges.
+                if (this.histo.blackFrac > 0.001)
+                    lo = Math.min(lo, this.histo.blackFrac - 0.02);
+                if (this.histo.whiteFrac < 0.999)
+                    hi = Math.max(hi, this.histo.whiteFrac + 0.02);
                 this.histo.dispLo = Math.max(0, lo);
                 this.histo.dispHi = Math.min(1, Math.max(this.histo.dispLo + 0.05, hi));
             } else {
