@@ -11125,16 +11125,26 @@ function ninaApp() {
                         }
                         break;
                     case 'center':
-                        // Always remember the latest map centre (drag OR
-                        // programmatic): _pushSkyFovOverlays uses it to
-                        // decide whether the red target box should follow
-                        // the mount (view near the mount) or act as the
-                        // screen-anchored planning box (user panned away).
+                        // Always remember the latest map centre.
                         if (msg.center && Number.isFinite(msg.center.raDeg)
                             && Number.isFinite(msg.center.decDeg)) {
                             this._skyLastCenter = {
                                 ra: msg.center.raDeg, dec: msg.center.decDeg
                             };
+                        }
+                        // A GENUINE user drag (pose change outside the
+                        // programmatic look-at window) releases the red box
+                        // from follow-the-mount so fine framing adjustments
+                        // work at ANY offset from the current pointing —
+                        // even arcminutes away. The next slew re-arms the
+                        // follow. Programmatic pans (search / auto-center /
+                        // initial framing) run inside the look-at window and
+                        // don't release it.
+                        if (msg.fromDrag && this._skyRedFollowMount
+                            && !(this._skyProgrammaticPanUntil
+                                 && Date.now() < this._skyProgrammaticPanUntil)) {
+                            this._skyRedFollowMount = false;
+                            try { this._pushSkyFovOverlays(); } catch (_) { }
                         }
                         if (this._skyCenterPending) {
                             // Reply to an explicit get-center request.
@@ -15235,22 +15245,6 @@ function ninaApp() {
             catch (e) { /* SKY engine may not be live */ }
         },
 
-        // True while the SKY view centre sits reasonably close to where the
-        // mount points. Used to decide whether the red target box follows
-        // the mount (browsing the region being imaged) or serves as the
-        // screen-anchored planning box (user panned off to compose a new
-        // target). 15° is generous: typical browsing FOVs are well under
-        // that, and a deliberate pan to another target exceeds it.
-        _skyViewNearMount(mount) {
-            const c = this._skyLastCenter;
-            if (!c) return true;   // no centre report yet → assume near
-            const d2r = Math.PI / 180;
-            const cosSep = Math.sin(c.dec * d2r) * Math.sin(mount.decDeg * d2r)
-                + Math.cos(c.dec * d2r) * Math.cos(mount.decDeg * d2r)
-                    * Math.cos((c.ra - mount.raDeg) * d2r);
-            return Math.acos(Math.max(-1, Math.min(1, cosSep))) / d2r <= 15;
-        },
-
         _pushSkyFovOverlays() {
             if (!this.aladinShowFov || !(this.fov?.width > 0)) {
                 this._skySendMessage({ type: 'set-fov-overlays',
@@ -15345,15 +15339,16 @@ function ninaApp() {
                     rotationDeg: Number.isFinite(sf.rotationDeg) ? sf.rotationDeg : targetRot,
                     flipV: flipV, cd: solveCd
                 };
-            } else if (this._skyRedFollowMount && mount && this._skyViewNearMount(mount)) {
+            } else if (this._skyRedFollowMount && mount) {
                 // Follow-the-mount (field request): after ANY slew the red
                 // box anchors to the mount's live RA/Dec instead of the
                 // screen centre — while tracking it stays glued to the
                 // same stars alongside blue; while NOT tracking the pair
                 // visibly drifts through the starfield together (fixed
                 // alt-az pointing), which is exactly what the rig is doing.
-                // The user panning well away from the mount reverts red to
-                // the screen-anchored drag-to-frame planning box.
+                // Released by a genuine user DRAG of the map (see the
+                // 'center' handler) so fine framing adjustments work at any
+                // offset; the next slew re-arms it.
                 target = {
                     raDeg: mount.raDeg, decDeg: mount.decDeg,
                     widthDeg: w, heightDeg: h, rotationDeg: targetRot,
