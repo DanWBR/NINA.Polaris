@@ -135,6 +135,87 @@ public class PolarAlignmentMathTests {
             $"Southern hemisphere: expected alt {expectedAltErrSec}\", got {altErr:F2}\"");
     }
 
+    // ---- Field-report 2026-07-11 verification (Florânia RN) ----------
+    //
+    // The operator ran TPPA from lat −6.2 pointing at alpha Serpentis
+    // (Dec +6.4°) — i.e. the sweep cone sits ~97° from the SCP axis,
+    // CROSSING the celestial equator, with 15° RA steps. None of the
+    // original tests covered a cross-equator cone or 15° steps, and the
+    // field session reported a suspiciously large initial azimuth
+    // error. These pin ComputeError in exactly that regime.
+
+    [TestCase(15.0, TestName = "CrossEquator_PerfectMount_Step+15")]
+    [TestCase(-15.0, TestName = "CrossEquator_PerfectMount_Step-15")]
+    public void ComputeError_PerfectMount_AlphaSerFromFlorania_IsNearZero(double stepDeg) {
+        const double lat = -6.2, lon = -36.8;
+
+        var pts = SynthesizePoints(
+            startRaHours: 15.74, startDecDeg: 6.43,   // alpha Ser
+            slewStepDeg: stepDeg,
+            latDeg: lat, longDeg: lon,
+            mountAzOffsetDeg: 0, mountAltOffsetDeg: 0);
+
+        var (azErr, altErr) = PolarAlignmentMath.ComputeError(
+            pts[0], pts[1], pts[2], lat, lon);
+
+        Assert.That(Math.Abs(azErr), Is.LessThan(10.0),
+            $"Cross-equator cone, perfect mount: az err {azErr:F1}\"");
+        Assert.That(Math.Abs(altErr), Is.LessThan(10.0),
+            $"Cross-equator cone, perfect mount: alt err {altErr:F1}\"");
+    }
+
+    [Test]
+    public void ComputeError_KnownError_AlphaSerFromFlorania_Recovers() {
+        const double lat = -6.2, lon = -36.8;
+        // A realistic rough-setup error: ~10' az, −4' alt.
+        double expectedAzErrSec = 600.0;
+        double expectedAltErrSec = -240.0;
+
+        var pts = SynthesizePoints(
+            startRaHours: 15.74, startDecDeg: 6.43,
+            slewStepDeg: 15.0,
+            latDeg: lat, longDeg: lon,
+            mountAzOffsetDeg: expectedAzErrSec / 3600.0,
+            mountAltOffsetDeg: expectedAltErrSec / 3600.0);
+
+        var (azErr, altErr) = PolarAlignmentMath.ComputeError(
+            pts[0], pts[1], pts[2], lat, lon);
+
+        Assert.That(azErr, Is.EqualTo(expectedAzErrSec).Within(5.0),
+            $"Cross-equator: expected az {expectedAzErrSec}\", got {azErr:F2}\"");
+        Assert.That(altErr, Is.EqualTo(expectedAltErrSec).Within(5.0),
+            $"Cross-equator: expected alt {expectedAltErrSec}\", got {altErr:F2}\"");
+    }
+
+    [Test]
+    public void ComputeError_LargeKnownError_AlphaSerFromFlorania_Recovers() {
+        // The field session reported ~644' — verify the fit is still
+        // faithful at DEGREE scale, not just arcminutes (the small-
+        // offset synth rotations stay valid: they're exact rotations).
+        const double lat = -6.2, lon = -36.8;
+        double expectedAzErrSec = 10.0 * 3600.0;    // 10° east of SCP
+        double expectedAltErrSec = -4.0 * 3600.0;   // 4° below
+
+        var pts = SynthesizePoints(
+            startRaHours: 15.74, startDecDeg: 6.43,
+            slewStepDeg: 15.0,
+            latDeg: lat, longDeg: lon,
+            mountAzOffsetDeg: expectedAzErrSec / 3600.0,
+            mountAltOffsetDeg: expectedAltErrSec / 3600.0);
+
+        var (azErr, altErr) = PolarAlignmentMath.ComputeError(
+            pts[0], pts[1], pts[2], lat, lon);
+
+        // Degree-scale offsets: the synth applies alt-then-az rotations
+        // whose composition differs from the "axis at (az0+Δaz,
+        // alt0+Δalt)" parametrisation by a cross-term ~Δaz·Δalt·sin —
+        // allow 1% of the offset.
+        Assert.That(azErr, Is.EqualTo(expectedAzErrSec).Within(400.0),
+            $"Large error: expected az {expectedAzErrSec}\", got {azErr:F0}\"");
+        Assert.That(altErr, Is.EqualTo(expectedAltErrSec).Within(400.0),
+            $"Large error: expected alt {expectedAltErrSec}\", got {altErr:F0}\"");
+    }
+
     [Test]
     public void TotalErrorArcsec_IsEuclidean() {
         Assert.That(PolarAlignmentMath.TotalErrorArcsec(60, 80), Is.EqualTo(100).Within(1e-9));

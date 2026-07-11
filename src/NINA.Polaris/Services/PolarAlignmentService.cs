@@ -360,6 +360,7 @@ public class PolarAlignmentService {
         // then, but leaving the user 60° off where they expected is
         // surprising).
         double ra0 = 0, dec0 = 0;
+        var mountDecReadings = new List<double>(3);
 
         try {
             // 1. Preflight ----------------------------------------------------
@@ -490,6 +491,24 @@ public class PolarAlignmentService {
                     RotationDeg: result.RotationDeg,
                     AtUtc: ptUtc));
 
+                // POLARUI2c field diagnostics. The 3-point fit is only
+                // valid if the mount rotated PURELY about its RA axis
+                // between points — a firmware pointing model that re-aims
+                // the DEC axis on each GoTo silently breaks that and the
+                // fitted "axis error" becomes garbage. The mount's own
+                // reported coordinates expose it: its Dec reading must sit
+                // at dec0 for all three points. Log both frames per point
+                // so a bad session can be diagnosed from the LOG panel.
+                double mntRa = double.NaN, mntDec = double.NaN;
+                try { mntRa = telescope.RightAscension; mntDec = telescope.Declination; } catch { }
+                mountDecReadings.Add(mntDec);
+                _logger.LogInformation(
+                    "Polar align point {N}: mount reports RA {MRa}h Dec {MDec}° (commanded RA {CRa}h Dec {CDec}°); solved RA {SRa}h Dec {SDec}° (of-date)",
+                    i + 1,
+                    mntRa.ToString("F4"), mntDec.ToString("F4"),
+                    targetRa.ToString("F4"), dec0.ToString("F4"),
+                    raDate.ToString("F4"), decDate.ToString("F4"));
+
                 // Force a WS push so the UI's "Point N of 3 solved"
                 // ticker updates immediately instead of waiting for the
                 // next 1Hz tick.
@@ -509,6 +528,30 @@ public class PolarAlignmentService {
             job.AzErrorArcsec = azErr;
             job.AltErrorArcsec = altErr;
             job.TotalErrorArcsec = PolarAlignmentMath.TotalErrorArcsec(azErr, altErr);
+
+            // POLARUI2c: pure-RA-rotation sanity check. All three GoTos
+            // commanded the SAME Dec; if the mount's own Dec readout
+            // moved by more than a few arcmin between points, its
+            // firmware re-aimed the Dec axis (pointing model / plate-
+            // solve sync interplay) and the cone assumption — hence the
+            // error vector — is invalid. Surface that loudly instead of
+            // letting the user chase a fictitious axis.
+            var validDecs = mountDecReadings.Where(d => !double.IsNaN(d)).ToList();
+            if (validDecs.Count == 3) {
+                double decSpreadDeg = validDecs.Max() - validDecs.Min();
+                if (decSpreadDeg > 0.1) {
+                    _logger.LogWarning(
+                        "Polar align: mount-reported Dec drifted {Spread}° across the sweep (readings: {D0}/{D1}/{D2}) — Dec axis moved between points, fit unreliable",
+                        decSpreadDeg.ToString("F3"),
+                        validDecs[0].ToString("F3"), validDecs[1].ToString("F3"), validDecs[2].ToString("F3"));
+                    job.LastError =
+                        $"Warning: the mount moved its Dec axis between sweep points " +
+                        $"(Dec readout drifted {decSpreadDeg:F2}°). The error vector may be " +
+                        "invalid — disable any hand-controller pointing model / star " +
+                        "alignment and re-run the sweep.";
+                }
+            }
+
             // POLARUI2: fresh sweep → drop the old refinement anchor;
             // the first Refresh after this re-anchors from the new
             // error at the then-current pointing (post home-slew).
@@ -579,7 +622,7 @@ public class PolarAlignmentService {
             // single knob turn covers many arcminutes. Rough-correct,
             // then RE-RUN the sweep — the 3-point fit is the ground
             // truth; refine is for the final arcminutes.
-            if (job.TotalErrorArcsec > 1.5 * 3600.0) {
+            if (job.TotalErrorArcsec > 1.5 * 3600.0 && job.LastError == null) {
                 job.LastError =
                     $"Large initial error ({job.TotalErrorArcsec / 3600.0:F1}°). " +
                     "Correct roughly using the knob directions, then re-run the " +
