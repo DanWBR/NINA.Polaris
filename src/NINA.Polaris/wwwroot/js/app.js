@@ -1031,6 +1031,10 @@ function ninaApp() {
         // Aux camera sensor footprint (mm), hydrated from the WS status when
         // the aux camera reports CCD_INFO. Drives the pink aux FOV rect on SKY.
         auxSensorWidthMm: 0, auxSensorHeightMm: 0,
+        // Display-only colour saturation for preview canvases (1 = neutral).
+        // Persisted; see setDispSaturation/_dispSatFilter.
+        dispSaturation: (v => Number.isFinite(v) ? v : 1)(
+            parseFloat(localStorage.getItem('polaris-disp-saturation') || '')),
         // Result of the parallel aux plate solve (fired alongside the main
         // SKY solve). When present, the pink aux FOV rect anchors to this
         // solved RA/Dec + rotation — the real angle the aux frame comes out
@@ -6992,7 +6996,10 @@ function ninaApp() {
                 const ctx = canvas.getContext('2d');
                 ctx.imageSmoothingEnabled = true;
                 ctx.imageSmoothingQuality = 'high';
+                const sat = this._dispSatFilter();
+                if (sat) ctx.filter = sat;
                 ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+                if (sat) ctx.filter = 'none';
                 if (!firstDrawn) firstDrawn = canvas;
                 drewAny = true;
             }
@@ -7229,6 +7236,32 @@ function ninaApp() {
                 g: this._autoStretchEndpoints(gArr, maxVal),
                 b: this._autoStretchEndpoints(bArr, maxVal)
             };
+        },
+
+        // ── Display colour saturation ────────────────────────────────
+        // DISPLAY-ONLY attenuation applied when frames are blitted to the
+        // visible canvases (fan-out / JPEG paint / tab-switch replay).
+        // Motivation (field report, SV405CC): the per-channel OSC
+        // auto-stretch neutralises the background by construction but
+        // also expands colour differences, so previews read as far more
+        // saturated than the linear data is. The RAWs on disk are never
+        // touched. 1.0 = neutral; <1 desaturates; 0 = grayscale.
+        setDispSaturation(v) {
+            let s = Math.max(0, Math.min(1.5, Number(v)));
+            if (!Number.isFinite(s)) s = 1;
+            this.dispSaturation = s;
+            try { localStorage.setItem('polaris-disp-saturation', String(s)); } catch (_) { }
+            // Re-blit the last frame (raw path re-renders, JPEG path
+            // re-paints the cached decode) so the slider is live.
+            this.applyManualStretch();
+        },
+        // Canvas-2D filter string for the current setting; '' = skip
+        // (identity). ctx.filter is ignored by browsers without support
+        // (pre-16.4 Safari), which degrades to the old behaviour.
+        _dispSatFilter() {
+            const s = this.dispSaturation;
+            return (Number.isFinite(s) && Math.abs(s - 1) > 0.001)
+                ? `saturate(${s})` : '';
         },
 
         // Re-render the cached last frame with current stretch settings.
@@ -9056,7 +9089,10 @@ function ninaApp() {
                     const ctx = canvas.getContext('2d');
                     ctx.imageSmoothingEnabled = true;
                     ctx.imageSmoothingQuality = 'high';
+                    const sat = this._dispSatFilter();
+                    if (sat) ctx.filter = sat;
                     ctx.drawImage(src, 0, 0, canvas.width, canvas.height);
+                    if (sat) ctx.filter = 'none';
                     if (report) report.push(id + '=drew(' + canvas.width + 'x' + canvas.height + ')');
                 } catch (e) {
                     if (report) report.push(id + '=err(' + e.message + ')');
@@ -23311,7 +23347,10 @@ function ninaApp() {
                 const ctx = canvas.getContext('2d');
                 ctx.imageSmoothingEnabled = true;
                 ctx.imageSmoothingQuality = 'high';
+                const sat = this._dispSatFilter();
+                if (sat) ctx.filter = sat;
                 ctx.drawImage(cached.src, 0, 0, canvas.width, canvas.height);
+                if (sat) ctx.filter = 'none';
             } catch (e) { /* defensive: lost source / GC'd ImageBitmap */ }
         },
 

@@ -1196,6 +1196,24 @@ button,
     gap: 6px;
 }
 .histo-actions .btn { min-width: 56px; }
+/* Display-only colour saturation slider under Auto/Zoom. Compact so the
+   histo panel keeps its footprint; label + range stacked in the column. */
+.histo-sat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 56px;
+}
+.histo-sat-label {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+.histo-sat-slider {
+    flex: 1;
+    width: 40px;
+    min-width: 0;
+    accent-color: var(--accent);
+}
 
 .stats-bar strong {
     color: var(--text-primary);
