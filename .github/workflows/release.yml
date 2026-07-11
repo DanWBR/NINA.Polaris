@@ -150,6 +150,12 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
         with:
           tinytex: true
+        env:
+          # The TinyTeX install queries the GitHub API for the latest
+          # rstudio/tinytex-releases tag; unauthenticated requests hit
+          # the shared-runner rate limit (403) and killed the job on
+          # v0.92.2. The default workflow token authenticates it.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install LaTeX packages the book needs (Inter font, tikz)
         shell: bash
