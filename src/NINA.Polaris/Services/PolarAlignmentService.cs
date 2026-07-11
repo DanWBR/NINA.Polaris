@@ -160,6 +160,55 @@ public class PolarAlignmentService {
         }
     }
 
+    /// <summary>True while the continuous refine LOOP is running (as
+    /// opposed to a single-shot <see cref="RefineOnceAsync"/> pass).
+    /// Surfaced on the WS payload so the UI's Auto toggle reflects the
+    /// real server state even across clients/reconnects.</summary>
+    public bool RefineLoopActive => _refineCts != null && !_refineCts.IsCancellationRequested;
+
+    /// <summary>ASIAIR-style MANUAL refresh: one capture → solve →
+    /// sliding-window update → error recompute, then back to Ok. The
+    /// operator adjusts a knob, taps Refresh, reads the new error —
+    /// no continuous loop hammering the camera in between. Returns
+    /// false (with the reason in <c>CurrentJob.LastError</c>) when the
+    /// single pass couldn't produce a solve; the previous error vector
+    /// is preserved either way.</summary>
+    public async Task<bool> RefineOnceAsync(CancellationToken ct = default) {
+        var job = CurrentJob;
+        if (job == null || job.Phase != PolarAlignmentPhase.Ok || job.Points.Count < 3) {
+            throw new InvalidOperationException(
+                "Run TPPA first to establish a 3-point baseline before refreshing.");
+        }
+        if (RefineLoopActive) {
+            throw new InvalidOperationException(
+                "Auto-refine is running; stop it before manual refresh.");
+        }
+        if (Interlocked.CompareExchange(ref _refineOnceBusy, 1, 0) != 0) {
+            throw new InvalidOperationException("A manual refresh is already in progress.");
+        }
+        try {
+            job.Mode = "refine";
+            job.Phase = PolarAlignmentPhase.Refining;
+            job.CompletedAt = null;
+            try { JobUpdated?.Invoke(job); } catch { }
+
+            var camera = _equip.Camera;
+            var telescope = _equip.Telescope;
+            if (camera == null || telescope == null) {
+                job.LastError = "Refresh: camera or telescope disconnected.";
+                return false;
+            }
+            return await RefineStepAsync(job, camera, telescope, _profiles.Active, ct);
+        } finally {
+            job.Mode = "tppa";
+            job.Phase = PolarAlignmentPhase.Ok;
+            job.CompletedAt = DateTime.UtcNow;
+            try { JobUpdated?.Invoke(job); } catch { }
+            Interlocked.Exchange(ref _refineOnceBusy, 0);
+        }
+    }
+
+    private int _refineOnceBusy;
     private CancellationTokenSource? _refineCts;
 
     private async Task RunRefinementAsync(PolarAlignmentJob job, CancellationToken ct) {
@@ -173,91 +222,14 @@ public class PolarAlignmentService {
         var userProfile = _profiles.Active;
         try {
             while (!ct.IsCancellationRequested) {
-                // 1. Capture at the CURRENT mount position (no slew).
-                IImageData image;
+                // One capture → solve → window → error pass (shared with the
+                // manual Refresh path). Failures are non-fatal: the step logs
+                // + records LastError, we settle and try again.
                 try {
-                    image = await GatedCapture(camera, 
-                        job.Options.ExposureSeconds,
-                        new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
-                        ct);
+                    await RefineStepAsync(job, camera, telescope, userProfile, ct);
                 } catch (OperationCanceledException) { break; }
-                catch (Exception ex) {
-                    _logger.LogWarning(ex, "Refine: capture failed; retrying after settle");
-                    try { await Task.Delay(job.Options.SettleSeconds * 1000, ct); } catch { break; }
-                    continue;
-                }
-                if (image == null || image.Properties.Width <= 0) {
-                    try { await Task.Delay(job.Options.SettleSeconds * 1000, ct); } catch { break; }
-                    continue;
-                }
 
-                // 2. Plate solve.
-                PlateSolveResult solve;
-                try {
-                    solve = await SolveOnceAsync(image, telescope, ct);
-                } catch (OperationCanceledException) { break; }
-                catch (Exception ex) {
-                    _logger.LogDebug(ex, "Refine: solve threw, skipping iteration");
-                    try { await Task.Delay(job.Options.SettleSeconds * 1000, ct); } catch { break; }
-                    continue;
-                }
-                if (!solve.Success) {
-                    _logger.LogDebug("Refine: solve failed ({Err}), skipping", solve.Error);
-                    try { await Task.Delay(job.Options.SettleSeconds * 1000, ct); } catch { break; }
-                    continue;
-                }
-
-                // 3. Sliding-window: evict oldest baseline point, append
-                //    the fresh one. Re-index so they read 0/1/2 in
-                //    order for the UI table.
-                // Precess J2000 solve → of-date, same as the TPPA path, so
-                // refine points share the frame of the carried-over baseline.
-                var refUtc = DateTime.UtcNow;
-                var (refRa, refDec) = PolarAlignmentMath.PrecessJ2000ToDate(
-                    solve.RaHours, solve.DecDeg, refUtc);
-                var newPoint = new PolarPoint(
-                    Index: 2,
-                    RaHours: refRa,
-                    DecDeg: refDec,
-                    RotationDeg: solve.RotationDeg,
-                    AtUtc: refUtc);
-                if (job.Points.Count >= 3) {
-                    job.Points.RemoveAt(0);
-                }
-                job.Points.Add(newPoint);
-                for (int i = 0; i < job.Points.Count; i++) {
-                    job.Points[i] = job.Points[i] with { Index = i };
-                }
-
-                // 4. Recompute error — but ONLY if the 3 points still span
-                //    a usable arc. Refinement captures at the current mount
-                //    position (no slew), so as the sliding window fills with
-                //    frames taken seconds apart the three directions collapse
-                //    onto each other; the small-circle cross-product then
-                //    degenerates and the error vector becomes pure noise.
-                //    Require a minimum pairwise separation (the TPPA baseline
-                //    used 30° steps; once any pair drops below ~2° the fit is
-                //    untrustworthy) and otherwise keep the last good value
-                //    plus surface a clear hint instead of broadcasting junk.
-                if (job.Points.Count == 3) {
-                    double minSepDeg = MinPairwiseSeparationDeg(job.Points);
-                    if (minSepDeg >= 2.0) {
-                        var (azErr, altErr) = PolarAlignmentMath.ComputeError(
-                            job.Points[0], job.Points[1], job.Points[2],
-                            userProfile.Latitude, userProfile.Longitude);
-                        job.AzErrorArcsec = azErr;
-                        job.AltErrorArcsec = altErr;
-                        job.TotalErrorArcsec = PolarAlignmentMath.TotalErrorArcsec(azErr, altErr);
-                        job.LastError = null;
-                    } else {
-                        // Window has collapsed — stop pretending we can refit.
-                        job.LastError =
-                            "Refine: tracking points have converged; re-run the 3-point " +
-                            "sweep (or use Rudimentary mode) to get a fresh error vector.";
-                    }
-                }
-
-                // 5. Push update + settle before next iteration.
+                // Push update + settle before next iteration.
                 try { JobUpdated?.Invoke(job); } catch { }
                 try { await Task.Delay(Math.Max(500, job.Options.SettleSeconds * 1000), ct); }
                 catch { break; }
@@ -275,6 +247,103 @@ public class PolarAlignmentService {
             job.CompletedAt = DateTime.UtcNow;
             try { JobUpdated?.Invoke(job); } catch { }
         }
+    }
+
+    /// <summary>One refine pass: capture at the CURRENT mount position
+    /// (no slew) → plate solve → precess J2000→date → sliding-window the
+    /// 3 baseline points → recompute (azErr, altErr) when the window
+    /// still spans a usable arc. Shared by the continuous loop and the
+    /// manual single-shot Refresh. Returns false with the reason in
+    /// <c>job.LastError</c> when the pass produced no usable solve;
+    /// OperationCanceledException propagates to the caller.</summary>
+    private async Task<bool> RefineStepAsync(PolarAlignmentJob job,
+            NINA.Image.Interfaces.ICamera camera,
+            NINA.Image.Interfaces.ITelescope telescope,
+            UserProfile userProfile, CancellationToken ct) {
+        // 1. Capture at the CURRENT mount position (no slew).
+        IImageData image;
+        try {
+            image = await GatedCapture(camera,
+                job.Options.ExposureSeconds,
+                new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
+                ct);
+        } catch (OperationCanceledException) { throw; }
+        catch (Exception ex) {
+            _logger.LogWarning(ex, "Refine: capture failed");
+            job.LastError = "Refine: capture failed — " + ex.Message;
+            return false;
+        }
+        if (image == null || image.Properties.Width <= 0) {
+            job.LastError = "Refine: camera returned an empty frame.";
+            return false;
+        }
+
+        // 2. Plate solve.
+        PlateSolveResult solve;
+        try {
+            solve = await SolveOnceAsync(image, telescope, ct);
+        } catch (OperationCanceledException) { throw; }
+        catch (Exception ex) {
+            _logger.LogDebug(ex, "Refine: solve threw");
+            job.LastError = "Refine: plate solve failed — " + ex.Message;
+            return false;
+        }
+        if (!solve.Success) {
+            _logger.LogDebug("Refine: solve failed ({Err})", solve.Error);
+            job.LastError = "Refine: plate solve failed" +
+                (string.IsNullOrEmpty(solve.Error) ? "." : " — " + solve.Error);
+            return false;
+        }
+
+        // 3. Sliding-window: evict oldest baseline point, append the
+        //    fresh one. Re-index so they read 0/1/2 in order for the UI
+        //    table. Precess J2000 solve → of-date, same as the TPPA path,
+        //    so refine points share the frame of the carried-over baseline.
+        var refUtc = DateTime.UtcNow;
+        var (refRa, refDec) = PolarAlignmentMath.PrecessJ2000ToDate(
+            solve.RaHours, solve.DecDeg, refUtc);
+        var newPoint = new PolarPoint(
+            Index: 2,
+            RaHours: refRa,
+            DecDeg: refDec,
+            RotationDeg: solve.RotationDeg,
+            AtUtc: refUtc);
+        if (job.Points.Count >= 3) {
+            job.Points.RemoveAt(0);
+        }
+        job.Points.Add(newPoint);
+        for (int i = 0; i < job.Points.Count; i++) {
+            job.Points[i] = job.Points[i] with { Index = i };
+        }
+
+        // 4. Recompute error — but ONLY if the 3 points still span
+        //    a usable arc. Refinement captures at the current mount
+        //    position (no slew), so as the sliding window fills with
+        //    frames taken seconds apart the three directions collapse
+        //    onto each other; the small-circle cross-product then
+        //    degenerates and the error vector becomes pure noise.
+        //    Require a minimum pairwise separation (the TPPA baseline
+        //    used 30° steps; once any pair drops below ~2° the fit is
+        //    untrustworthy) and otherwise keep the last good value
+        //    plus surface a clear hint instead of broadcasting junk.
+        if (job.Points.Count == 3) {
+            double minSepDeg = MinPairwiseSeparationDeg(job.Points);
+            if (minSepDeg >= 2.0) {
+                var (azErr, altErr) = PolarAlignmentMath.ComputeError(
+                    job.Points[0], job.Points[1], job.Points[2],
+                    userProfile.Latitude, userProfile.Longitude);
+                job.AzErrorArcsec = azErr;
+                job.AltErrorArcsec = altErr;
+                job.TotalErrorArcsec = PolarAlignmentMath.TotalErrorArcsec(azErr, altErr);
+                job.LastError = null;
+            } else {
+                // Window has collapsed — stop pretending we can refit.
+                job.LastError =
+                    "Refine: tracking points have converged; re-run the 3-point " +
+                    "sweep (or use Rudimentary mode) to get a fresh error vector.";
+            }
+        }
+        return true;
     }
 
     private async Task RunAsync(PolarAlignmentJob job, CancellationToken ct) {

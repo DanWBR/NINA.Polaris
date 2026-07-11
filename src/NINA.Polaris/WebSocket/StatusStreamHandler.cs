@@ -670,6 +670,10 @@ public static class StatusStreamHandler {
                             lastError = polarAlign.CurrentJob.LastError,
                             startedAt = polarAlign.CurrentJob.StartedAt,
                             completedAt = polarAlign.CurrentJob.CompletedAt,
+                            // True only while the CONTINUOUS refine loop runs
+                            // (not during a single-shot manual Refresh) — the
+                            // POLAR tab's Auto toggle mirrors this.
+                            refineLoop = polarAlign.RefineLoopActive,
                             // RDPA-2: rudimentary-mode fields. Null in TPPA
                             // mode (the frontend gates on mode==='rudimentary'
                             // before reading these). Includes target +

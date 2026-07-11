@@ -3283,6 +3283,13 @@ function ninaApp() {
             altErrorArcsec: 0,
             totalErrorArcsec: 0,
             lastError: null,
+            // POLARUI: server-side continuous refine loop running
+            // (mirrors WS refineLoop → the Auto checkbox), single-shot
+            // Refresh in flight, and the bullseye trail of recent
+            // error fixes ({az, alt} in arcmin, newest last).
+            refineLoop: false,
+            refreshBusy: false,
+            errHistory: [],
             // Form-bound (per-rig). Initial values overridden by
             // _hydratePolarSettingsFromRig() after rigs load.
             slewDeg: 30,
@@ -10379,7 +10386,12 @@ function ninaApp() {
                     const NAV = {
                         home: null,
                         equip: () => this.loadOpticsCatalogue && this.loadOpticsCatalogue(),
-                        polar: () => this.loadPolarTargets && this.loadPolarTargets(),
+                        polar: () => {
+                            this.loadPolarTargets && this.loadPolarTargets();
+                            // Canvas was display:none while on other tabs —
+                            // repaint the bullseye once it has real size.
+                            this.$nextTick(() => this.drawPolarBullseye());
+                        },
                         sky: () => this.$nextTick(() => this.initSkyViewer && this.initSkyViewer()),
                         tonight: () => this.loadTonightsBest && this.loadTonightsBest(),
                         weather: () => this.loadWeatherForecast && this.loadWeatherForecast(),
@@ -15334,13 +15346,6 @@ function ninaApp() {
             if (this.annotate.active) this._drawAnnotationsOn(ctx, ovr.width, ovr.height);
             if (this.showCrosshair) this._drawCrosshairOnOverlay(ctx, ovr.width, ovr.height);
             if (this.showGrid) this._drawGridOnOverlay(ctx, ovr.width, ovr.height);
-            // PA-5: polar-alignment error vector. Visible whenever we
-            // have a computed error vector (post-TPPA), so the arrow
-            // stays on-screen during Refine and the user can watch it
-            // shrink while adjusting knobs.
-            if (this.polar && this.polar.totalErrorArcsec > 0) {
-                this._drawPolarErrorVector(ctx, ovr.width, ovr.height);
-            }
         },
 
         // ---- DSO annotation (plate-solve + label the current frame) ----
@@ -15653,98 +15658,11 @@ function ninaApp() {
             if (this.annotate.active) this._drawAnnotationsOn(ctx, ovr.width, ovr.height);
         },
 
-        // PA-5: polar error vector overlay.
-        //
-        // Draws an arrow from the canvas centre pointing in the
-        // direction the user needs to nudge the tripod knobs to
-        // reduce the error to zero. Arrow length is logarithmic in
-        // total arcmin (30' fills, 1' is small but visible) so it
-        // shrinks smoothly during a Refine run. Colour: red > 5',
-        // amber 1-5', green < 1'.
-        //
-        // Direction math: (azErr, altErr) are in arcsec in topocentric
-        // alt/az. The CAMERA frame is rotated by the last solve's
-        // rotationDeg relative to north-up. Rotating the error vector
-        // by -rotationDeg orients the arrow with the camera's view,
-        // up-on-screen corresponds to "up in altitude" only after this
-        // de-rotation.
-        _drawPolarErrorVector(ctx, w, h) {
-            const azErr = this.polar.azErrorArcsec || 0;
-            const altErr = this.polar.altErrorArcsec || 0;
-            const totalArcmin = (this.polar.totalErrorArcsec || 0) / 60.0;
-            if (totalArcmin <= 0) return;
-
-            // Last solve's rotation (camera Y-axis vs sky north).
-            const pts = this.polar.points || [];
-            const rotDeg = pts.length > 0 ? (pts[pts.length - 1].rotationDeg || 0) : 0;
-            const rotRad = -rotDeg * Math.PI / 180.0;
-
-            // Map (azErr, altErr) → screen vector. +alt = up-on-camera
-            // (after de-rotation), +az = east-of-camera. Use Y inverted
-            // because canvas Y grows downward.
-            const cos = Math.cos(rotRad), sin = Math.sin(rotRad);
-            const ex = azErr, ey = altErr;
-            const xUnit =  ex * cos - ey * sin;
-            const yUnit = -(ex * sin + ey * cos);  // invert for screen Y
-
-            // Length scaled logarithmically: 30' → fills, 1' → ~25%
-            const maxLen = Math.min(w, h) * 0.42;
-            const scale = Math.log(1 + totalArcmin) / Math.log(1 + 30);
-            const magn = Math.sqrt(xUnit * xUnit + yUnit * yUnit);
-            const len = maxLen * Math.min(1, scale);
-            const dx = (xUnit / Math.max(1e-9, magn)) * len;
-            const dy = (yUnit / Math.max(1e-9, magn)) * len;
-
-            const cx = w / 2, cy = h / 2;
-            const tipX = cx + dx, tipY = cy + dy;
-
-            // Colour by magnitude.
-            let color;
-            if (totalArcmin > 5) color = 'rgba(239, 68, 68, 0.95)';
-            else if (totalArcmin > 1) color = 'rgba(245, 158, 11, 0.95)';
-            else color = 'rgba(74, 222, 128, 0.95)';
-
-            // Shaft.
-            ctx.save();
-            ctx.strokeStyle = color;
-            ctx.fillStyle = color;
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.lineTo(tipX, tipY);
-            ctx.stroke();
-
-            // Arrowhead, small triangle at the tip.
-            const ang = Math.atan2(dy, dx);
-            const headLen = 14;
-            const headHalf = 7;
-            ctx.beginPath();
-            ctx.moveTo(tipX, tipY);
-            ctx.lineTo(tipX - headLen * Math.cos(ang) + headHalf * Math.sin(ang),
-                       tipY - headLen * Math.sin(ang) - headHalf * Math.cos(ang));
-            ctx.lineTo(tipX - headLen * Math.cos(ang) - headHalf * Math.sin(ang),
-                       tipY - headLen * Math.sin(ang) + headHalf * Math.cos(ang));
-            ctx.closePath();
-            ctx.fill();
-
-            // Centre marker.
-            ctx.beginPath();
-            ctx.arc(cx, cy, 4, 0, 2 * Math.PI);
-            ctx.fill();
-
-            // Label box, top-left.
-            const az = (azErr / 60).toFixed(2);
-            const alt = (altErr / 60).toFixed(2);
-            const tot = totalArcmin.toFixed(2);
-            const label = `Az ${az}'  Alt ${alt}'  Total ${tot}'`;
-            ctx.font = '12px sans-serif';
-            const textW = ctx.measureText(label).width;
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-            ctx.fillRect(8, 8, textW + 12, 22);
-            ctx.fillStyle = color;
-            ctx.fillText(label, 14, 24);
-            ctx.restore();
-        },
+        // (POLARUI: the PA-5 error-vector arrow that used to be drawn
+        // here on the LIVE/PREVIEW overlay was removed — its on-image
+        // direction was ambiguous under optical mirroring, and it lived
+        // on the wrong tab. The POLAR tab now has drawPolarBullseye(),
+        // which plots (azErr, altErr) in mount-axis coordinates.)
 
         _drawStarsOnOverlay(ctx, w, h) {
             if (!this.lastStars) return;
@@ -23696,6 +23614,7 @@ function ninaApp() {
         /// active rig's saved PolarAlign* settings).
         async polarStart() {
             try {
+                this.polar.errHistory = [];
                 await this.apiPost('/api/polar/start', {
                     slewStepDegrees: this.polar.slewDeg,
                     exposureSeconds: this.polar.exposureSec,
@@ -23729,6 +23648,33 @@ function ninaApp() {
                 await this.apiPost('/api/polar/refine/stop');
                 this.toast('Polar refine stopped', 'warn');
             } catch (e) { this.toast('Refine stop failed', 'error'); }
+        },
+
+        // POLARUI: ASIAIR-style manual refresh — ONE capture + solve,
+        // error updates, phase returns to Ok. The operator turns a
+        // knob, taps Refresh, reads the new error. refreshBusy guards
+        // double-taps locally; the server 409s overlaps anyway.
+        async polarRefreshOnce() {
+            if (this.polar.refreshBusy) return;
+            this.polar.refreshBusy = true;
+            try {
+                const r = await this.apiPost('/api/polar/refine/once');
+                if (r && r.solved === false) {
+                    this.toast('Refresh failed: ' + (r.error || 'solve failed'), 'error');
+                }
+            } catch (e) {
+                this.toast('Refresh failed: ' + (e.message || ''), 'error');
+            } finally {
+                this.polar.refreshBusy = false;
+            }
+        },
+
+        // Auto checkbox → the existing continuous refine loop. The
+        // checked state mirrors polar.refineLoop from the WS (server
+        // truth, multi-client safe), so on failure the box snaps back.
+        polarAutoToggle(on) {
+            if (on) this.polarRefineStart();
+            else this.polarRefineStop();
         },
 
         // ---- RDPA-4: Rudimentary single-target polar alignment ----
@@ -24008,14 +23954,126 @@ function ninaApp() {
         //          (azimuth increases 180°→270° = westward at the SCP).
         //   Both:  +altErr = axis too high     → move altitude down.
         polarKnobGuidance() {
-            const az = this.polar.azErrorArcsec || 0;
-            const alt = this.polar.altErrorArcsec || 0;
+            const az = this.polarAzAdvice(), alt = this.polarAltAdvice();
             if (!az && !alt) return '';
-            const south = (this.settings.latitude || 0) < 0;
             const parts = [];
-            if (az) parts.push('azimuth ' + (((az > 0) !== south) ? 'west' : 'east'));
-            if (alt) parts.push('altitude ' + (alt > 0 ? 'down' : 'up'));
+            if (az) parts.push('azimuth ' + az);
+            if (alt) parts.push('altitude ' + alt);
             return 'Move ' + parts.join(' · ');
+        },
+        // Per-axis knob directions (same sign convention as above),
+        // shown next to the bullseye readout.
+        polarAzAdvice() {
+            const az = this.polar.azErrorArcsec || 0;
+            if (!az) return '';
+            const south = (this.settings.latitude || 0) < 0;
+            return ((az > 0) !== south) ? 'west' : 'east';
+        },
+        polarAltAdvice() {
+            const alt = this.polar.altErrorArcsec || 0;
+            if (!alt) return '';
+            return alt > 0 ? 'down' : 'up';
+        },
+
+        // POLARUI: ASIAIR-style bullseye on the POLAR tab. Pole at the
+        // centre, mount RA axis plotted from (azErr, altErr) — these
+        // are MOUNT-AXIS coordinates from ComputeError, so unlike the
+        // old on-image arrow the plot is immune to camera rotation and
+        // optical mirroring.
+        //
+        // Geometry (matches polarKnobGuidance's verified convention,
+        // as seen by the operator standing behind the mount FACING the
+        // pole):
+        //   vertical   = altitude, +altErr (axis above pole) plots UP.
+        //   horizontal = azimuth. North (facing NCP): east is the
+        //     viewer's RIGHT and +azErr = axis east ⇒ plot right.
+        //     South (facing SCP): east is the viewer's LEFT and
+        //     +azErr = axis WEST ⇒ still plot right — only the E/W
+        //     compass labels swap between hemispheres.
+        drawPolarBullseye() {
+            const canvas = this.$refs.polarBullseye;
+            if (!canvas || !canvas.offsetParent) return;   // hidden → skip
+            const { ctx, w, h } = this._fitCanvas(canvas);
+            ctx.clearRect(0, 0, w, h);
+            const cx = w / 2, cy = h / 2;
+            const rad = Math.min(w, h) / 2 - 16;           // margin for labels
+
+            // Auto range in arcmin: smallest step ≥ 1.3× total error,
+            // so the dot sits inside the outer ring with headroom.
+            const totalArcmin = (this.polar.totalErrorArcsec || 0) / 60.0;
+            const steps = [1, 2, 5, 10, 30, 60, 120, 240];
+            const rng = steps.find(s => s >= Math.max(2, totalArcmin * 1.3))
+                     || steps[steps.length - 1];
+            const rOf = a => (a / rng) * rad;
+            const fmtRing = a => a < 60 ? a + '′' : (a / 60) + '°';
+
+            // Rings at ¼, ½, 1× range + crosshair.
+            ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+            ctx.lineWidth = 1;
+            for (const a of [rng * 0.25, rng * 0.5, rng]) {
+                ctx.beginPath(); ctx.arc(cx, cy, rOf(a), 0, Math.PI * 2); ctx.stroke();
+            }
+            ctx.beginPath();
+            ctx.moveTo(cx - rad, cy); ctx.lineTo(cx + rad, cy);
+            ctx.moveTo(cx, cy - rad); ctx.lineTo(cx, cy + rad);
+            ctx.stroke();
+
+            // Ring scale labels (along the upper-right diagonal).
+            ctx.fillStyle = 'rgba(255,255,255,0.45)';
+            ctx.font = '11px sans-serif';
+            ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+            for (const a of [rng * 0.5, rng]) {
+                ctx.fillText(fmtRing(a), cx + rOf(a) * 0.7071 + 3, cy - rOf(a) * 0.7071 - 1);
+            }
+
+            // Compass/axis labels. E/W swap by hemisphere (see header).
+            const south = (this.settings.latitude || 0) < 0;
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(south ? 'W' : 'E', cx + rad + 9, cy);
+            ctx.fillText(south ? 'E' : 'W', cx - rad - 9, cy);
+            ctx.fillText('Up', cx, cy - rad - 9);
+            ctx.fillText('Down', cx, cy + rad + 9);
+
+            // Centre = the celestial pole.
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.font = '11px sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+            ctx.fillText(south ? 'SCP' : 'NCP', cx, cy + 6);
+
+            if (!(totalArcmin > 0)) return;
+
+            // Trail of previous fixes (arcmin), oldest faintest.
+            const trail = this.polar.errHistory || [];
+            const tail = trail.slice(0, Math.max(0, trail.length - 1));
+            for (let i = 0; i < tail.length; i++) {
+                const p = tail[i];
+                const x = cx + rOf(Math.max(-rng, Math.min(rng, p.az)));
+                const y = cy - rOf(Math.max(-rng, Math.min(rng, p.alt)));
+                const age = (i + 1) / tail.length;
+                ctx.fillStyle = `rgba(120,200,255,${0.10 + 0.45 * age})`;
+                ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // Current mount-axis position, coloured by severity using
+            // the same thresholds as _polarColorBy.
+            const azMin = (this.polar.azErrorArcsec || 0) / 60.0;
+            const altMin = (this.polar.altErrorArcsec || 0) / 60.0;
+            const x = cx + rOf(Math.max(-rng, Math.min(rng, azMin)));
+            const y = cy - rOf(Math.max(-rng, Math.min(rng, altMin)));
+            let color;
+            if (totalArcmin > 5) color = 'rgba(239, 68, 68, 0.95)';
+            else if (totalArcmin > 1) color = 'rgba(245, 158, 11, 0.95)';
+            else color = 'rgba(74, 222, 128, 0.95)';
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+            // Halo ring so the dot reads on top of its own trail.
+            ctx.beginPath(); ctx.arc(x, y, 9.5, 0, Math.PI * 2); ctx.stroke();
         },
         _polarColorBy(arcsec) {
             const abs = Math.abs(arcsec || 0) / 60.0; // arcmin
@@ -34963,12 +35021,24 @@ function ninaApp() {
                     this.polar.altErrorArcsec = pa.altErrorArcsec || 0;
                     this.polar.totalErrorArcsec = pa.totalErrorArcsec || 0;
                     this.polar.lastError = pa.lastError || null;
-                    // PA-5: any time the error vector moves, repaint
-                    // the overlay so the arrow tracks fresh values
-                    // during Refine. Cheap (single clear + redraw
-                    // already done at 1Hz for star annotations).
-                    if (this.polar.totalErrorArcsec !== prevTotal) {
-                        this.$nextTick(() => this.redrawOverlay());
+                    this.polar.refineLoop = !!pa.refineLoop;
+                    // Trail for the POLAR-tab bullseye: record each new
+                    // error fix (arcmin) so the operator sees the axis
+                    // walking toward the pole as they adjust knobs.
+                    if (this.polar.totalErrorArcsec > 0
+                            && this.polar.totalErrorArcsec !== prevTotal) {
+                        this.polar.errHistory.push({
+                            az: this.polar.azErrorArcsec / 60.0,
+                            alt: this.polar.altErrorArcsec / 60.0
+                        });
+                        if (this.polar.errHistory.length > 20) this.polar.errHistory.shift();
+                    }
+                    // Repaint the POLAR-tab bullseye (replaces the old
+                    // LIVE-canvas arrow, which was orientation-ambiguous
+                    // and lived on the wrong tab). Cheap small-canvas draw.
+                    if (this.tab === 'polar'
+                            && (this.polar.completedOk || this.polar.phase === 'Refining')) {
+                        this.$nextTick(() => this.drawPolarBullseye());
                     }
                 }
             }

@@ -65,6 +65,33 @@
     font-size: 11px;
 }
 
+/* POLARUI: decorative telescope outline behind the TPPA pane. The
+   pane gets its own stacking context (z-index: 0) so the background
+   layer can sit at z-index -1 — above the panel background, below
+   every in-flow child. */
+.polar-tppa-pane {
+    position: relative;
+    z-index: 0;
+}
+.polar-tppa-bg {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 38%;
+    max-width: 420px;
+    aspect-ratio: 1837 / 1431;   /* the SVG's viewBox */
+    background: url('/img/telescope-outline.svg') no-repeat left bottom / contain;
+    opacity: 0.12;
+    pointer-events: none;
+    z-index: -1;
+    /* Fade toward the top so it never fights the points table. */
+    -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,1) 55%, rgba(0,0,0,0));
+    mask-image: linear-gradient(to top, rgba(0,0,0,1) 55%, rgba(0,0,0,0));
+}
+@media (max-width: 700px) {
+    .polar-tppa-bg { display: none; }
+}
+
 /* RDPA-4: Rudimentary polar alignment sub-pane styles. */
 .polar-tabstrip {
     display: flex;

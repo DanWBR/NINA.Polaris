@@ -67,9 +67,43 @@ public class TonightsBestServiceTests {
                 "Items must be sorted by score descending");
         }
 
-        // The Moon should be in there (always above-horizon-somewhere).
-        Assert.That(result.Items.Any(i => i.Category == "Moon"),
-            "Moon should always be a candidate");
+        // The Moon is only a candidate when it peaks above 10° INSIDE
+        // tonight's night window — near new moon it tracks the Sun and
+        // sits below the horizon all night, so "always present" is
+        // astronomically wrong on some dates (this assert used to be
+        // unconditional and flaked whenever the test ran near new
+        // moon). Mirror the service's gate and only assert when the
+        // real sky is clearly on one side of the threshold.
+        var moonPeak = MoonPeakAltitude(
+            lat: -5.18, lng: -37.36, result.NightStartUtc, result.NightEndUtc);
+        var hasMoon = result.Items.Any(i => i.Category == "Moon");
+        if (moonPeak >= 12) {
+            Assert.That(hasMoon, Is.True,
+                $"Moon peaks at {moonPeak:F1}° tonight, should be a candidate");
+        } else if (moonPeak < 8) {
+            Assert.That(hasMoon, Is.False,
+                $"Moon peaks at only {moonPeak:F1}° tonight, should be excluded");
+        }
+        // 8–12°: too close to the service's 10° gate to assert either
+        // way (the two computations sample the window at slightly
+        // different wall-clock instants).
+    }
+
+    /// <summary>Mirror of TonightsBestService.PeakAltitudeBody for the
+    /// Moon: max altitude over the night window, 30-minute steps.</summary>
+    private static double MoonPeakAltitude(double lat, double lng,
+                                           DateTime from, DateTime to) {
+        var observer = new CosineKitty.Observer(lat, lng, 0);
+        double peak = -90;
+        for (var t = from; t <= to; t = t.AddMinutes(30)) {
+            var time = new CosineKitty.AstroTime(t);
+            var eq = CosineKitty.Astronomy.Equator(CosineKitty.Body.Moon, time, observer,
+                CosineKitty.EquatorEpoch.OfDate, CosineKitty.Aberration.Corrected);
+            var horiz = CosineKitty.Astronomy.Horizon(time, observer, eq.ra, eq.dec,
+                CosineKitty.Refraction.Normal);
+            if (horiz.altitude > peak) peak = horiz.altitude;
+        }
+        return peak;
     }
 
     [Test]

@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260702-stretchsection">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260705-wbsummary">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260628-vidprocess">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260624-untestedwarn">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260710-polarui">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260707-landscapephone">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260707-density2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -1901,7 +1901,12 @@
                 </div>
 
                 <!-- TPPA sub-pane (original UI wrapped) -->
-                <div x-show="polarTab === 'tppa'">
+                <div x-show="polarTab === 'tppa'" class="polar-tppa-pane">
+
+                <!-- Decorative telescope outline behind the pane content
+                     (ASIAIR-style). Pure decoration: no pointer events,
+                     hidden on narrow screens via CSS. -->
+                <div class="polar-tppa-bg" aria-hidden="true"></div>
 
                 <!-- Parameters form. Bound to per-rig profile fields;
                      changes POST to /api/equipment/rigs/{id} on blur. -->
@@ -1950,15 +1955,24 @@
                                 :disabled="polar.isActive || !selectedCamera || !mount?.connected">
                             ▶ Start TPPA
                         </button>
-                        <button class="btn" @click="polarRefineStart()"
-                                :disabled="polar.isActive || !polar.completedOk"
-                                title="Continuous capture+solve loop, see error vector shrink as you adjust knobs">
-                            🔄 Refine
+                        <!-- ASIAIR-style: adjust a knob, tap Refresh, read
+                             the new error. One capture + solve per tap. -->
+                        <button class="btn" @click="polarRefreshOnce()"
+                                :disabled="!polar.completedOk || polar.refineLoop || polar.refreshBusy || polar.phase === 'Refining'"
+                                title="Capture + solve once and update the error. Adjust a knob, then refresh.">
+                            <span x-show="polar.phase !== 'Refining' && !polar.refreshBusy">⟳ Refresh</span>
+                            <span x-show="polar.phase === 'Refining' || polar.refreshBusy">⏳ Solving…</span>
                         </button>
-                        <button class="btn" @click="polarRefineStop()"
-                                :disabled="polar.phase !== 'Refining'">
-                            ⏹ Stop refine
-                        </button>
+                        <!-- Continuous capture+solve loop. Checked state
+                             mirrors the server's refineLoop flag so it's
+                             consistent across multiple clients. -->
+                        <label style="display:inline-flex; align-items:center; gap:6px; align-self:center; cursor:pointer"
+                               title="Auto-refresh: continuously capture + solve while you adjust the knobs">
+                            <input type="checkbox" :checked="polar.refineLoop"
+                                   @change="polarAutoToggle($event.target.checked)"
+                                   :disabled="!polar.completedOk && !polar.refineLoop">
+                            Auto
+                        </label>
                         <button class="btn btn-danger" @click="polarAbort()"
                                 :disabled="!polar.isActive">
                             ⛔ Abort
@@ -2029,23 +2043,50 @@
                     </div>
                 </div>
 
-                <!-- Result block, visible once we have an error vector -->
-                <div class="stats-bar" x-show="polar.completedOk" style="margin-bottom: 12px">
-                    <span class="text-ok">✓ Alignment complete</span>
-                    <span>Azimuth error: <strong :class="polarAzClass()"
-                            x-text="formatArcmin(polar.azErrorArcsec)"></strong></span>
-                    <span>Altitude error: <strong :class="polarAltClass()"
-                            x-text="formatArcmin(polar.altErrorArcsec)"></strong></span>
-                    <span>Total: <strong :class="polarTotalClass()"
-                            x-text="formatArcmin(polar.totalErrorArcsec)"></strong></span>
-                    <!-- Hemisphere-aware knob guidance. Unlike the canvas
-                         arrow (whose on-image direction can mirror with the
-                         optical train), this text names the PHYSICAL
-                         direction to turn the mount adjusters. -->
-                    <span x-show="polarKnobGuidance()"
-                          title="Physical direction to move the mount's azimuth/altitude adjusters. If the error grows after a nudge, reverse that axis — trust the numbers, not the arrow.">
-                        → <strong x-text="polarKnobGuidance()"></strong>
-                    </span>
+                <!-- POLARUI: ASIAIR-style alignment display. Bullseye with
+                     the pole at the centre + the mount's RA axis plotted
+                     from (azErr, altErr) — mount-axis coordinates, immune
+                     to camera rotation/mirroring — plus per-axis readout
+                     with the physical knob directions. -->
+                <div x-show="polar.completedOk || polar.phase === 'Refining'"
+                     style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; margin-bottom: 12px">
+                    <canvas x-ref="polarBullseye"
+                            style="width:min(340px, 100%); height:340px; flex:0 0 auto"></canvas>
+                    <div style="flex:1 1 240px; min-width:220px; display:flex; flex-direction:column; gap:8px">
+                        <div>
+                            <span class="text-ok" x-show="polar.phase === 'Ok'">✓ Alignment measured</span>
+                            <span class="text-warn" x-show="polar.phase === 'Refining'">⏳ Capturing + solving…</span>
+                        </div>
+                        <div>
+                            Total error
+                            <div style="font-size: 30px; line-height: 1.15">
+                                <strong :class="polarTotalClass()"
+                                        x-text="formatArcmin(polar.totalErrorArcsec)"></strong>
+                            </div>
+                        </div>
+                        <div>Altitude <strong :class="polarAltClass()"
+                                x-text="formatArcmin(polar.altErrorArcsec)"></strong>
+                            <span x-show="polarAltAdvice()"
+                                  x-text="'→ move ' + polarAltAdvice()"></span>
+                        </div>
+                        <div>Azimuth <strong :class="polarAzClass()"
+                                x-text="formatArcmin(polar.azErrorArcsec)"></strong>
+                            <span x-show="polarAzAdvice()"
+                                  x-text="'→ move ' + polarAzAdvice()"></span>
+                        </div>
+                        <!-- Knob directions name the PHYSICAL direction to
+                             turn the mount's alt/az adjusters (hemisphere-
+                             aware, same convention as the bullseye). -->
+                        <p class="hint" style="margin: 4px 0 0">
+                            Adjust the mount's alt/az bolts to walk the dot
+                            to the centre, then hit <strong>Refresh</strong>
+                            (or enable Auto) to re-measure. If an error grows
+                            after a nudge, reverse that knob.
+                        </p>
+                        <p class="text-warn" style="margin: 0"
+                           x-show="polar.lastError && polar.phase !== 'Failed'"
+                           x-text="polar.lastError"></p>
+                    </div>
                 </div>
 
                 <!-- Failure / cancellation message -->
@@ -2084,8 +2125,10 @@
                         gives your alignment error.
                     </p>
                     <p>
-                        After TPPA, click <strong>Refine</strong> to enter a live capture/solve loop,
-                        adjust your tripod knobs and watch the error vector shrink in real time.
+                        After TPPA, a bullseye shows the pole at the centre and your mount's
+                        RA axis as a dot. Adjust the tripod knobs, then click <strong>Refresh</strong>
+                        to re-measure — or enable <strong>Auto</strong> for a continuous
+                        capture/solve loop.
                     </p>
                 </div>
                 </div>
@@ -17573,7 +17616,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260710-guideexp"></script>
+    <script src="/js/app.js?v=20260710-polarui"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260710-hostclient"></script>

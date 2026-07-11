@@ -90,6 +90,25 @@ public static class PolarAlignmentEndpoints {
             return Results.Ok(new { stopped = true });
         });
 
+        // ASIAIR-style manual refresh: ONE capture+solve+error update,
+        // then back to Ok. The operator turns a knob, taps Refresh,
+        // reads the new error — no continuous loop in between.
+        group.MapPost("/refine/once", async (PolarAlignmentService svc, CancellationToken ct) => {
+            try {
+                var ok = await svc.RefineOnceAsync(ct);
+                var j = svc.CurrentJob;
+                return Results.Ok(new {
+                    solved = ok,
+                    azErrorArcsec = j?.AzErrorArcsec,
+                    altErrorArcsec = j?.AltErrorArcsec,
+                    totalErrorArcsec = j?.TotalErrorArcsec,
+                    error = j?.LastError
+                });
+            } catch (InvalidOperationException ex) {
+                return Results.Conflict(new { error = ex.Message });
+            }
+        });
+
         group.MapGet("/status", (PolarAlignmentService svc) => {
             var j = svc.CurrentJob;
             if (j == null) {
