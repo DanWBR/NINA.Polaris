@@ -1941,6 +1941,18 @@
                                     @click="applyGainPreset('polar.gain', zwoPresetsForActiveCamera().H); savePolarRigSettings()">H</button>
                         </span>
                     </div>
+                    <!-- TEMPORARY (field diagnosis): flip the displayed
+                         azimuth direction while we confirm the convention
+                         is oriented correctly. Client-only, no re-solve.
+                         Remove once verified. -->
+                    <div class="control-row" style="margin-top: 4px">
+                        <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size: 13px"
+                               title="Diagnostic: reverses the azimuth direction shown in the readout, knob advice and bullseye. Use if the dot moves the wrong way when you turn the azimuth bolt.">
+                            <input type="checkbox" :checked="polar.invertAz"
+                                   @change="toggleInvertAz($event.target.checked)">
+                            Invert azimuth axis <span class="hint" style="margin:0">(temporary)</span>
+                        </label>
+                    </div>
                     <div class="control-row actions">
                         <button class="btn btn-primary" @click="polarStart()"
                                 :disabled="polar.isActive || !selectedCamera || !mount?.connected">
@@ -2044,9 +2056,11 @@
                                   x-text="'→ move ' + polarAltAdvice()"></span>
                         </div>
                         <div>Azimuth <strong :class="polarAzClass()"
-                                x-text="formatArcmin(polar.azErrorArcsec)"></strong>
+                                x-text="formatArcmin(polarAzErrSec())"></strong>
                             <span x-show="polarAzAdvice()"
                                   x-text="'→ move ' + polarAzAdvice()"></span>
+                            <span x-show="polar.invertAz" class="text-warn"
+                                  style="font-size: 11px" title="Temporary diagnostic toggle is on">(az inverted)</span>
                         </div>
                         <!-- Re-measure controls: adjust a knob, tap Refresh
                              (one capture+solve), or enable Auto for the
@@ -17597,7 +17611,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260710-polarui"></script>
+    <script src="/js/app.js?v=20260711-invertaz"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260710-hostclient"></script>

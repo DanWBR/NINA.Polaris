@@ -3290,6 +3290,12 @@ function ninaApp() {
             refineLoop: false,
             refreshBusy: false,
             errHistory: [],
+            // TEMPORARY (field diagnosis): flip the sign of the azimuth
+            // error everywhere it's DISPLAYED (readout, knob advice,
+            // bullseye) so the operator can confirm which way is correct
+            // before we trust the convention. Client-only, persisted in
+            // localStorage; to be removed once the direction is verified.
+            invertAz: (localStorage.getItem('polarInvertAz') === '1'),
             // Form-bound (per-rig). Initial values overridden by
             // _hydratePolarSettingsFromRig() after rigs load.
             slewDeg: 30,
@@ -23961,10 +23967,22 @@ function ninaApp() {
             if (alt) parts.push('altitude ' + alt);
             return 'Move ' + parts.join(' · ');
         },
+        // TEMPORARY: azimuth error after the diagnostic invert toggle.
+        // Everything the OPERATOR sees (readout number, knob advice,
+        // bullseye dot) goes through this so the flip is consistent.
+        polarAzErrSec() {
+            return (this.polar.invertAz ? -1 : 1) * (this.polar.azErrorArcsec || 0);
+        },
+        toggleInvertAz(on) {
+            this.polar.invertAz = !!on;
+            localStorage.setItem('polarInvertAz', on ? '1' : '0');
+            if (this.tab === 'polar') this.$nextTick(() => this.drawPolarBullseye());
+        },
+
         // Per-axis knob directions (same sign convention as above),
         // shown next to the bullseye readout.
         polarAzAdvice() {
-            const az = this.polar.azErrorArcsec || 0;
+            const az = this.polarAzErrSec();
             if (!az) return '';
             const south = (this.settings.latitude || 0) < 0;
             return ((az > 0) !== south) ? 'west' : 'east';
@@ -24046,12 +24064,17 @@ function ninaApp() {
 
             if (!(totalArcmin > 0)) return;
 
+            // TEMPORARY invert-az sign for the horizontal plot (see
+            // toggleInvertAz). Applied to both the trail and the dot so
+            // they move together with the readout/advice.
+            const azSign = this.polar.invertAz ? -1 : 1;
+
             // Trail of previous fixes (arcmin), oldest faintest.
             const trail = this.polar.errHistory || [];
             const tail = trail.slice(0, Math.max(0, trail.length - 1));
             for (let i = 0; i < tail.length; i++) {
                 const p = tail[i];
-                const x = cx + rOf(Math.max(-rng, Math.min(rng, p.az)));
+                const x = cx + rOf(Math.max(-rng, Math.min(rng, azSign * p.az)));
                 const y = cy - rOf(Math.max(-rng, Math.min(rng, p.alt)));
                 const age = (i + 1) / tail.length;
                 ctx.fillStyle = `rgba(120,200,255,${0.10 + 0.45 * age})`;
@@ -24060,7 +24083,7 @@ function ninaApp() {
 
             // Current mount-axis position, coloured by severity using
             // the same thresholds as _polarColorBy.
-            const azMin = (this.polar.azErrorArcsec || 0) / 60.0;
+            const azMin = azSign * (this.polar.azErrorArcsec || 0) / 60.0;
             const altMin = (this.polar.altErrorArcsec || 0) / 60.0;
             const x = cx + rOf(Math.max(-rng, Math.min(rng, azMin)));
             const y = cy - rOf(Math.max(-rng, Math.min(rng, altMin)));
