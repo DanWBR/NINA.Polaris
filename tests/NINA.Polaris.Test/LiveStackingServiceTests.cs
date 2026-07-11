@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using Microsoft.Extensions.Logging.Abstractions;
+using NINA.Core.Enum;
 using NINA.Image.ImageData;
 using NINA.Polaris.Services;
 using NUnit.Framework;
@@ -121,6 +122,73 @@ public class LiveStackingServiceTests {
             "Frame count advances in both modes.");
         Assert.That(svc.GetStackedResult().Length, Is.EqualTo(64 * 64),
             "Existing accumulator from Full mode is preserved; only new MetricsOnly frames skip it.");
+    }
+
+    private static BaseImageData MakeFrame(BayerPatternEnum pattern, int w = 64, int h = 64) {
+        var props = new ImageProperties {
+            Width = w, Height = h, BitDepth = 16,
+            IsBayered = pattern != BayerPatternEnum.None,
+            BayerPattern = pattern,
+        };
+        var buf = new ushort[w * h];
+        for (int i = 0; i < buf.Length; i++) buf[i] = (ushort)(800 + (i % 400));
+        return new BaseImageData(buf, props);
+    }
+
+    [Test]
+    public async Task ColourStack_FirstFrameBayerDropout_DefersInsteadOfLockingMono() {
+        // The recurring field bug: an OSC colour session whose FIRST
+        // frame transiently reports BayerPattern=None (CFA dropout) used
+        // to commit the WHOLE session to mono. Now that None-on-frame-0
+        // is DEFERRED — the frame is dropped, nothing initialises — and
+        // the next frame that actually carries the pattern starts the
+        // colour session correctly.
+        var svc = MakeService();
+        svc.ColorStacking = true;
+        svc.Start();
+
+        // Frame 0 arrives without a CFA pattern: deferred, not stacked.
+        await svc.AddFrameAsync(MakeFrame(BayerPatternEnum.None));
+        Assert.That(svc.FrameCount, Is.EqualTo(0),
+            "a CFA-dropout first frame must be deferred, not integrated");
+        Assert.That(svc.ColorActive, Is.False,
+            "colour must not have been decided yet");
+
+        // Next frame carries the pattern → colour session starts.
+        await svc.AddFrameAsync(MakeFrame(BayerPatternEnum.RGGB));
+        Assert.That(svc.FrameCount, Is.EqualTo(1),
+            "the first good frame initialises the stack");
+        Assert.That(svc.ColorActive, Is.True,
+            "colour session must be active once a real pattern arrives");
+    }
+
+    [Test]
+    public async Task ColourStack_SustainedNoPattern_EventuallyProceedsMono() {
+        // Guard against an infinite defer: a genuinely mono camera left
+        // with colour stacking on (misconfig) must still stack after the
+        // deferral cap, in mono, rather than never producing a frame.
+        var svc = MakeService();
+        svc.ColorStacking = true;
+        svc.Start();
+
+        for (int i = 0; i < 40; i++)
+            await svc.AddFrameAsync(MakeFrame(BayerPatternEnum.None));
+
+        Assert.That(svc.FrameCount, Is.GreaterThan(0),
+            "after the deferral cap the session must proceed (in mono)");
+        Assert.That(svc.ColorActive, Is.False,
+            "no pattern ever arrived, so the session is mono");
+    }
+
+    [Test]
+    public async Task ColourStack_FirstFrameHasPattern_StartsColourImmediately() {
+        var svc = MakeService();
+        svc.ColorStacking = true;
+        svc.Start();
+
+        await svc.AddFrameAsync(MakeFrame(BayerPatternEnum.RGGB));
+        Assert.That(svc.FrameCount, Is.EqualTo(1));
+        Assert.That(svc.ColorActive, Is.True);
     }
 
     [Test]

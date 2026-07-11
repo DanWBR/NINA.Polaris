@@ -90,6 +90,15 @@ public class LiveStackingService {
     // stamp the relayed (mono-branch) frame with this last-good pattern so the
     // client debayers consistently.
     private BayerPatternEnum _lastGoodBayer = BayerPatternEnum.None;
+    // Bayer-dropout guard for the FIRST frame's colour decision. If the very
+    // first frame of a colour session arrives with BayerPattern=None (a CFA
+    // dropout), committing to mono here poisons the WHOLE session — every
+    // subsequent frame stacks as grey until restart. Instead we DEFER: drop
+    // the frame and wait for one that actually carries a pattern (or use the
+    // per-rig override). Capped so a genuinely-mono camera that somehow has
+    // colour stacking enabled still eventually stacks (in mono).
+    private int _colorDeferrals;
+    private const int MaxColorDeferrals = 30;
     private int _width;
     private int _height;
     // Last frame's bit depth + metadata, retained so SaveCurrentStack can
@@ -526,6 +535,7 @@ public class LiveStackingService {
             _colorActive = false;
             _bayerPattern = BayerPatternEnum.None;
             _lastGoodBayer = BayerPatternEnum.None;
+            _colorDeferrals = 0;
             _referenceStars = null;
             _flipped = false;
             _referencePier = PierSide.pierUnknown;
@@ -563,6 +573,33 @@ public class LiveStackingService {
         // concurrent frame isn't stalled behind the collection.
         GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
         GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+    }
+
+    /// <summary>Pick the Bayer pattern to lock for a whole colour session,
+    /// preferring dropout-proof sources over the per-frame CFA:
+    ///   1. The frame's own <c>props.BayerPattern</c> if it carries one.
+    ///   2. The per-rig BayerPatternOverride (camera-quirks map, else the
+    ///      legacy per-rig field) — user-set, so it never drops out.
+    /// Returns None when nothing resolves (mono camera, or an OSC frame-0
+    /// CFA dropout with no override — the caller then DEFERS rather than
+    /// commit the session to mono). Mirrors ImageRelayService's override
+    /// resolution so the stack and the raw relay agree on the pattern.</summary>
+    private BayerPatternEnum ResolveSessionBayer(ImageProperties props) {
+        if (props.BayerPattern != BayerPatternEnum.None
+                && props.BayerPattern != BayerPatternEnum.Auto) {
+            return props.BayerPattern;
+        }
+        var raw = _profiles?.GetActiveCameraQuirks()?.BayerPatternOverride;
+        if (string.IsNullOrWhiteSpace(raw))
+            raw = _profiles?.ActiveEquipmentProfile?.BayerPatternOverride;
+        if (!string.IsNullOrWhiteSpace(raw)
+                && !string.Equals(raw, "Auto", StringComparison.OrdinalIgnoreCase)
+                && Enum.TryParse<BayerPatternEnum>(raw, ignoreCase: true, out var p)
+                && p != BayerPatternEnum.None
+                && p != BayerPatternEnum.Auto) {
+            return p;
+        }
+        return BayerPatternEnum.None;
     }
 
     /// <summary>Arm stacking AND clear the current accumulator. The
@@ -728,6 +765,32 @@ public class LiveStackingService {
 
             lock (_lock) {
                 if (_frameCount == 0) {
+                    // Resolve the effective Bayer pattern for the whole
+                    // session from the most reliable source: the frame's own
+                    // CFA, else the per-rig override (dropout-proof — the user
+                    // set it, it never disappears). See ResolveSessionBayer.
+                    var effectivePattern = ResolveSessionBayer(props);
+                    bool wantColour = ColorStacking;
+                    bool haveUsablePattern = effectivePattern != BayerPatternEnum.None
+                        && effectivePattern != BayerPatternEnum.Auto;
+
+                    // Bayer-dropout DEFER: colour is wanted but the first
+                    // frame carries no pattern and no override is set. Don't
+                    // lock the session to mono on a transient CFA drop — skip
+                    // this frame (LIVE keeps the last good frame) and retry on
+                    // the next, which almost always carries the pattern. Cap
+                    // it so a genuinely-mono setup with colour left on still
+                    // proceeds (in mono) after a few seconds.
+                    if (wantColour && !haveUsablePattern
+                            && _colorDeferrals < MaxColorDeferrals) {
+                        _colorDeferrals++;
+                        _logger.LogWarning(
+                            "Live stack: first frame has no Bayer pattern (CFA dropout) but colour is on — deferring init ({N}/{Max}) instead of falling back to mono",
+                            _colorDeferrals, MaxColorDeferrals);
+                        RecordReject("waiting for a Bayer pattern (CFA dropout on first frame)");
+                        return;
+                    }
+
                     // First frame: initialize buffers and set as reference.
                     // Stamp _startedAt so the elapsed counter + duration
                     // cap have something to reference. Reset clears
@@ -744,10 +807,9 @@ public class LiveStackingService {
                     // only allocated in the mono branch — a colour session
                     // never writes it, so allocating it there was ~35 MB of
                     // dead weight on a 9 MP sensor (MEMOPT).
-                    _bayerPattern = props.BayerPattern;
-                    _colorActive = ColorStacking && props.IsBayered
-                        && _bayerPattern != BayerPatternEnum.None
-                        && _bayerPattern != BayerPatternEnum.Auto;
+                    _bayerPattern = effectivePattern;
+                    _colorActive = wantColour && haveUsablePattern;
+                    if (_colorActive) _lastGoodBayer = effectivePattern;
                     if (_colorActive) {
                         _stackR = new float[pixelCount];
                         _stackG = new float[pixelCount];
