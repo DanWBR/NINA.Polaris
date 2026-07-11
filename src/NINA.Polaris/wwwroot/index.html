@@ -9558,7 +9558,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             Hold to start ·
                             <span x-text="sequence.length + ' item' + (sequence.length === 1 ? '' : 's')"></span>
                         </div>
-                        <div class="text-muted" style="font-size:11px; line-height:1.4"
+                        <!-- White + bold: this is the primary at-a-glance
+                             progress readout while a run is going; muted
+                             grey was hard to see in the field. -->
+                        <div style="font-size:11px; line-height:1.4; color:#fff; font-weight:700"
                              x-show="seqState !== 'idle' && seqStatus">
                             <div x-text="seqProgress() + '% · ' + (seqStatus?.totalFramesCompleted || 0) + '/' + (seqStatus?.totalFrames || 0)"></div>
                             <div x-show="seqStatus?.estimatedRemainingSeconds > 0">
