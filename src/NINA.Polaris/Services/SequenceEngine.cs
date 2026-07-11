@@ -365,8 +365,15 @@ public class SequenceEngine {
                     }
                 }
 
-                // Capture frames
-                int startFrame = (i == Math.Max(0, CurrentItemIndex)) ? CurrentFrameInItem : 0;
+                // Capture frames. Start-frame MUST come from the resume
+                // snapshot taken before the loop: CurrentItemIndex is
+                // rewritten to `i` at the top of every iteration, so
+                // comparing against it is always true and every item after
+                // the first inherited the previous item's finished frame
+                // counter — its for-loop started past Count and the whole
+                // item was skipped (field report: the run "ended" right
+                // after the first card).
+                int startFrame = (i == resumeItem) ? resumeFrame : 0;
                 for (int f = startFrame; f < item.Count; f++) {
                     ct.ThrowIfCancellationRequested();
 
