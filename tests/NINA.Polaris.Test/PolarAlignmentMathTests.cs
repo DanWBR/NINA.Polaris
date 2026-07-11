@@ -217,6 +217,40 @@ public class PolarAlignmentMathTests {
     }
 
     [Test]
+    public void ComputeError_RealFieldData_Florania_20260711() {
+        // REAL field session (Florânia RN, 2026-07-11 ~02:43 UTC,
+        // ZWO AM3 + SV605CC, astrometry.net local solves). The mount's
+        // own Dec readout was pinned at −10.680° across all three
+        // points (pure RA rotation confirmed), yet the solved sky
+        // positions drifted RA +1.8°/Dec −0.43° over the 30° sweep —
+        // a genuinely tilted cone. The app reported az +78.16',
+        // alt +109.07', total 134.19'. Pin that verdict to the raw
+        // solved data so any future regression in the fit (or in the
+        // alt/az conversion) trips against reality, not synthesis.
+        const double lat = -6.2, lon = -36.8;
+        var t0 = new DateTime(2026, 7, 11, 2, 42, 39, DateTimeKind.Utc);
+        var pts = new[] {
+            new PolarPoint(0, 16.6282, -10.7440, 0.0, t0),
+            new PolarPoint(1, 15.6797, -10.8911, 0.0, t0.AddSeconds(15)),
+            new PolarPoint(2, 14.7245, -11.1690, 0.0, t0.AddSeconds(29)),
+        };
+
+        var (azErr, altErr) = PolarAlignmentMath.ComputeError(
+            pts[0], pts[1], pts[2], lat, lon);
+        var total = PolarAlignmentMath.TotalErrorArcsec(azErr, altErr);
+
+        // The exact profile lat/lng of the session differ slightly from
+        // the rounded values here, and the split rotates a little with
+        // LST — assert signs + magnitudes with a generous margin.
+        Assert.That(azErr, Is.EqualTo(78.16 * 60).Within(600),
+            $"az: got {azErr / 60:F1}' (field app reported +78.16')");
+        Assert.That(altErr, Is.EqualTo(109.07 * 60).Within(600),
+            $"alt: got {altErr / 60:F1}' (field app reported +109.07')");
+        Assert.That(total / 60.0, Is.InRange(120.0, 150.0),
+            $"total: got {total / 60:F1}' (field app reported 134.19')");
+    }
+
+    [Test]
     public void TotalErrorArcsec_IsEuclidean() {
         Assert.That(PolarAlignmentMath.TotalErrorArcsec(60, 80), Is.EqualTo(100).Within(1e-9));
         Assert.That(PolarAlignmentMath.TotalErrorArcsec(0, 0), Is.EqualTo(0).Within(1e-9));
