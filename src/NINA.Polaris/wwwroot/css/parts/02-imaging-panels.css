@@ -493,6 +493,30 @@
 .preview-pane > .quick-controls .control-row.actions {
     margin-top: 4px;
 }
+/* Exposure + Gain/ISO 2x3 grid: label | input | help. The label
+   column sizes to the widest label, the input column is a shared 1fr
+   so both inputs get identical width and line up, and the help column
+   holds the "?" (or a 0-width spacer on rows without one). Labels are
+   display:contents so their text/input/help drop straight into the
+   grid tracks. Because these labels are no longer direct children of
+   .control-row, the 50%-right input-pinning rule above no longer
+   applies to them — this grid fully owns their layout. */
+.exp-gain-grid {
+    display: grid;
+    grid-template-columns: max-content 1fr max-content;
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 8px;
+    width: 100%;
+    min-width: 0;
+}
+.exp-gain-grid > label { display: contents; }
+.exp-gain-grid input:not([type="checkbox"]):not([type="radio"]),
+.exp-gain-grid select {
+    width: 100%;
+    min-width: 0;
+}
+.exp-gain-grid .eg-spacer { display: block; }
 /* Inside the sidebar, the trigger details panel + refocus callout
    should not blow up horizontally; rely on wrapping. */
 .live-pane > .quick-controls .livestack-triggers,
