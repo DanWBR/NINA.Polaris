@@ -93,6 +93,36 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 cp -r "$SRC_DEB/." "$BUILD_DIR/"
 
+# 1b. Build the browser-wasm live-stack bundle into wwwroot/js/wasm so the
+#     main publish below picks it up. wwwroot/js/wasm/ is a .gitignored
+#     derived artifact (deploy/build-wasm.ps1 does the same on Windows), so a
+#     clean CI checkout ships none of it — without this the page 404s on
+#     /js/wasm/main.js and the client-side live stacker is unavailable.
+#     browser-wasm is architecture-independent, so we build it once regardless
+#     of $RID. Best-effort: a failure here must never block the .deb (the
+#     server-side app still works), so we warn loudly and carry on.
+WASM_PROJ="$REPO_ROOT/src/NINA.Polaris.Wasm/NINA.Polaris.Wasm.csproj"
+if [[ -f "$WASM_PROJ" ]]; then
+    echo "==> Publishing NINA.Polaris.Wasm (browser-wasm live-stack bundle)"
+    "$DOTNET" workload install wasm-tools 2>/dev/null || true
+    if "$DOTNET" publish "$WASM_PROJ" -c Release --nologo; then
+        WASM_BUNDLE="$REPO_ROOT/src/NINA.Polaris.Wasm/bin/Release/net10.0/browser-wasm/AppBundle"
+        WWWROOT_WASM="$REPO_ROOT/src/NINA.Polaris/wwwroot/js/wasm"
+        if [[ -f "$WASM_BUNDLE/main.js" ]]; then
+            rm -rf "$WWWROOT_WASM"
+            mkdir -p "$WWWROOT_WASM"
+            cp -r "$WASM_BUNDLE/." "$WWWROOT_WASM/"
+            echo "    Mirrored AppBundle -> wwwroot/js/wasm"
+        else
+            echo "WARNING: wasm AppBundle missing main.js at $WASM_BUNDLE;" \
+                 "shipping without the client-side live-stack bundle." >&2
+        fi
+    else
+        echo "WARNING: NINA.Polaris.Wasm publish failed; shipping without the" \
+             "client-side live-stack bundle (/js/wasm/main.js will 404)." >&2
+    fi
+fi
+
 # 2. Publish self-contained Polaris into /opt/polaris
 #    -p:Version forwards the VERSION arg to MSBuild so the
 #    assembly + the UI version banner show the same number that the
