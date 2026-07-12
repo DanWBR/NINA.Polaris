@@ -2348,7 +2348,7 @@
                         <!-- FIELD-4: lazy iframe src; same fix as the
                              main /sky/ iframe below. -->
                         <iframe class="rudimentary-skymap"
-                                :src="auth.authenticated ? '/sky/' : 'about:blank'"
+                                :src="(auth.authenticated || !auth.enabled) ? '/sky/' : 'about:blank'"
                                 referrerpolicy="no-referrer"
                                 @load="rudimentarySkyMapReady()"></iframe>
                     </div>
@@ -4864,7 +4864,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span>Starting PHD2 GUI… (xpra session + PHD2)</span>
                         </div>
                         <iframe class="phd2-gui-iframe"
-                                :src="(auth.authenticated && phd2GuiReady) ? phd2GuiIframeSrc : 'about:blank'"
+                                :src="((auth.authenticated || !auth.enabled) && phd2GuiReady) ? phd2GuiIframeSrc : 'about:blank'"
                                 allow="fullscreen"></iframe>
                     </div>
 
@@ -4953,7 +4953,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
                         <!-- FIELD-4: see /phd2-gui/ comment above. -->
                         <iframe class="phd2-gui-iframe"
-                                :src="auth.authenticated ? '/phd2-vnc/' : 'about:blank'"
+                                :src="(auth.authenticated || !auth.enabled) ? '/phd2-vnc/' : 'about:blank'"
                                 allow="fullscreen"></iframe>
                     </div>
                 </div><!-- /guideTab === 'gui' -->
@@ -7830,7 +7830,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          (Android froze on return otherwise) and reboots
                          fresh when the tab is reopened. -->
                     <iframe id="skyFrame"
-                            :src="(auth.authenticated && !skySuspended) ? '/sky/' : 'about:blank'"
+                            :src="((auth.authenticated || !auth.enabled) && !skySuspended) ? '/sky/' : 'about:blank'"
                             class="sky-viewer sky-viewer-iframe"
                             style="border:0;"
                             sandbox="allow-scripts allow-same-origin"
