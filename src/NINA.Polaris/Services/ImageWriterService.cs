@@ -166,7 +166,7 @@ public class ImageWriterService {
                 : (format switch { "xisf" => ".xisf", _ => ".fits" });
 
             var pattern = string.IsNullOrWhiteSpace(profile.ImageNamePattern)
-                ? "{target}_{filter}_{exposure}s_{date}_{seq}"
+                ? "{target}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}"
                 : profile.ImageNamePattern;
             var fileName = SubstitutePattern(pattern, imageData, _sessionFrameNumber) + extension;
             // Sanitise illegal filename characters

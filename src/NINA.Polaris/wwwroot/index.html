@@ -12977,13 +12977,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <input type="text" class="input-md" style="width:100%;max-width:520px"
                                x-model="settings.imageNamePattern"
                                @change="saveSettingsToServer()"
-                               placeholder="{target}_{filter}_{exposure}s_{date}_{seq}">
+                               placeholder="{target}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}">
                     </label>
                     <p class="hint" style="margin-top:4px">
                         Tokens: <code>{target} {filter} {exposure} {gain} {binning} {bitdepth}
                         {date} {time} {datetime} {framenr} {seq} {camera} {temp} {imagetype}</code>.
                         Leave blank for the default
-                        (<code>{target}_{filter}_{exposure}s_{date}_{seq}</code>).
+                        (<code>{target}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}</code>).
                     </p>
                     <label style="margin-top:10px">Format
                         <select class="input-sm" x-model="settings.imageFormat" @change="saveSettingsToServer()">

@@ -199,7 +199,7 @@ public class UserProfile {
 
     // Image output
     public string ImageOutputDir { get; set; } = "";
-    public string ImageNamePattern { get; set; } = "{target}_{filter}_{exposure}s_{date}_{seq}";
+    public string ImageNamePattern { get; set; } = "{target}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}";
     public string ImageFormat { get; set; } = "fits";
 
     // PHD2 lifecycle preferences (app-global, not per-rig). When true the
