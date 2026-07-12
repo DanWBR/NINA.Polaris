@@ -511,10 +511,18 @@
     min-width: 0;
 }
 .exp-gain-grid > label { display: contents; }
-.exp-gain-grid input:not([type="checkbox"]):not([type="radio"]),
-.exp-gain-grid select {
-    width: 100%;
+/* Fixed input width so both fields are the same size and the Gain "?"
+   help icon keeps its own breathing room instead of being squeezed
+   against a 100%-wide input. */
+.exp-gain-grid input:not([type="checkbox"]):not([type="radio"]) {
+    width: 72px;
+    flex: 0 0 72px;
     min-width: 0;
+}
+.exp-gain-grid select {
+    width: auto;
+    min-width: 64px;
+    flex: 0 1 auto;
 }
 .exp-gain-grid .eg-spacer { display: block; }
 /* Inside the sidebar, the trigger details panel + refocus callout
