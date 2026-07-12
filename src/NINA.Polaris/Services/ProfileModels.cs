@@ -386,6 +386,13 @@ public class EquipmentProfile {
     public string? FlatDevice { get; set; }
     public string? Dome { get; set; }
     public string? Weather { get; set; }
+    /// <summary>Selected power box / switch hub device id (INDI device
+    /// name, ASCOM ProgID, or Alpaca <c>host:port[:devnum]</c>).</summary>
+    public string? Switch { get; set; }
+    /// <summary>Power box backend kind. Same enum as
+    /// <see cref="FilterWheelDriver"/> — <c>indi</c> (default),
+    /// <c>ascom-com</c>, or <c>alpaca</c>.</summary>
+    public string SwitchDriver { get; set; } = "indi";
 
     // Per-rig defaults
     public double CoolerTargetTemperature { get; set; } = -10;

@@ -123,6 +123,9 @@ public static class EquipmentEndpoints {
                 r.FlatDevice = update.FlatDevice;
                 r.Dome = update.Dome;
                 r.Weather = update.Weather;
+                r.Switch = update.Switch;
+                if (!string.IsNullOrWhiteSpace(update.SwitchDriver))
+                    r.SwitchDriver = update.SwitchDriver;
                 r.CoolerTargetTemperature = update.CoolerTargetTemperature;
                 r.DefaultGain = update.DefaultGain;
                 r.DefaultOffset = update.DefaultOffset;

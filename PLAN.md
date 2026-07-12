@@ -13429,3 +13429,33 @@ GPU vs CPU, confirm fp16 runs, before building the lane.
 Related: `polaris-ai/` (the open models this serves), the QNN-NPU section above
 (HTP limits + the parked libQnnGpu spike), and the OCL section (classic-math
 OpenCL, a separate concern — that's image math, this is AI inference).
+
+## PWRBOX — Power Box (Switch) accessory + Advanced Sequencer control (done 2026-07-12)
+
+Added a generic multi-channel **Power Box** device (ASCOM ISwitchV2 semantics)
+so users can drive Pegasus-class power/dew hubs from RIGS and the Advanced
+Sequencer — a common NINA rig accessory that was missing.
+
+- **Device**: new `ISwitchDevice` (`NINA.Image.Portable/Interfaces`) with a
+  `SwitchChannel` model (id/name/boolean/value/min/max/step/writable). Three
+  adapters: `IndiSwitch` (flattens INDI switch/number vectors → channels),
+  `AscomComSwitch` (ISwitchV2 via late-bound COM; added `Switch` to
+  `AscomComRegistry.DeviceType` + "Switch Drivers" subkey), `AlpacaSwitch`
+  (`/api/v1/switch/…`; added an Id-aware `AlpacaClient.GetAsync` overload).
+- **Wiring**: `EquipmentManager.Switch` slot + `SelectSwitch` dispatch +
+  `GetDiscoveredSwitchesFor` + `powerBox` status block; `EquipmentProfile.Switch`
+  + `SwitchDriver`; new `SwitchEndpoints` (`/api/switch/*`) registered in
+  Program.cs; HardwareAutoConnect tuple; EquipmentEndpoints profile PUT.
+- **Sequencer**: `PowerBoxInstructions.cs` — SetPowerOutlet, SetDewHeater,
+  PowerCycleOutlet, SetSwitchValue — registered in `SequenceEntityJsonConverter`
+  (ResolveBuiltIn + `_known`, category "Power Box"). Palette + editor are
+  data-driven, no frontend changes needed for the tree.
+- **Frontend**: RIGS Power Box card (driver picker + per-channel outlet
+  toggles / dew inputs / read-only sensors), Alpine state, connect/toggle/set,
+  WS ingest, auto-connect-all, `app.js` cache-bust.
+- **Tests**: `PowerBoxInstructionsTests` (round-trip, palette registration,
+  Validate) — suite green (1434 passed). Docs updated in rigs.md,
+  adv-sequencer.md, handbook adv-sequencer, and website features.
+
+Scope is the generic ISwitchV2 channel model (no per-brand curation), matching
+how NINA itself treats power boxes.

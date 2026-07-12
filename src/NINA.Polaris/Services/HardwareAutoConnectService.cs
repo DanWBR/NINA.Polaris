@@ -259,6 +259,7 @@ public class HardwareAutoConnectService : IHostedService {
             ("Flat panel",   rig.FlatDevice,  async name => { var p = _equip.SelectFlatDevice(name);                             await p.ConnectAsync(ct); }),
             ("Dome",         rig.Dome,        async name => { var d = _equip.SelectDome(name);                                   await d.ConnectAsync(ct); }),
             ("Weather",      rig.Weather,     async name => { var w = _equip.SelectWeather(name);                                await w.ConnectAsync(ct); }),
+            ("Power box",    rig.Switch,      async name => { var s = _equip.SelectSwitch(rig.SwitchDriver ?? "indi", name);     await s.ConnectAsync(ct); }),
         };
 
         int connected = 0, missing = 0, failed = 0;
@@ -273,6 +274,7 @@ public class HardwareAutoConnectService : IHostedService {
                 "Camera" => (rig.CameraDriver ?? "indi") == "indi",
                 "Guide camera" => (rig.GuideCameraDriver ?? "indi") == "indi",
                 "Mount"  => (rig.TelescopeDriver ?? "indi") == "indi",
+                "Power box" => (rig.SwitchDriver ?? "indi") == "indi",
                 _        => true,
             };
             if (isIndi && !available.Contains(name)) {

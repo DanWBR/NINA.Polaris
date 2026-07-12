@@ -233,6 +233,12 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
         "SetFlatBrightness" => typeof(SetFlatBrightnessInstruction),
         "ToggleFlatLight"   => typeof(ToggleFlatLightInstruction),
 
+        // Power box
+        "SetPowerOutlet"   => typeof(SetPowerOutletInstruction),
+        "SetDewHeater"     => typeof(SetDewHeaterInstruction),
+        "PowerCycleOutlet" => typeof(PowerCycleOutletInstruction),
+        "SetSwitchValue"   => typeof(SetSwitchValueInstruction),
+
         // Rotator
         "RotateToAngle" => typeof(RotateToAngleInstruction),
 
@@ -356,6 +362,11 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
         ("ToggleFlatLight", "Flat Panel", "Instruction"),
 
         ("RotateToAngle", "Rotator", "Instruction"),
+
+        ("SetPowerOutlet", "Power Box", "Instruction"),
+        ("SetDewHeater", "Power Box", "Instruction"),
+        ("PowerCycleOutlet", "Power Box", "Instruction"),
+        ("SetSwitchValue", "Power Box", "Instruction"),
 
         ("WaitForTime", "Flow Control", "Instruction"),
         ("WaitUntilTime", "Flow Control", "Instruction"),

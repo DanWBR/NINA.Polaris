@@ -70,6 +70,13 @@ public class EquipmentManager : IDisposable {
     public IndiFlatDevice? FlatDevice { get; private set; }
     public IndiDome? Dome { get; private set; }
     public IndiWeather? Weather { get; private set; }
+    /// <summary>Currently-selected power box / switch hub (ISwitchV2
+    /// semantics). Multi-driver like the filter wheel: INDI power drivers,
+    /// ASCOM-COM ISwitchV2, or Alpaca <c>/switch/</c>.</summary>
+    public ISwitchDevice? Switch { get; private set; }
+    /// <summary>Driver kind currently bound to <see cref="Switch"/>. Mirrors
+    /// <c>EquipmentProfile.SwitchDriver</c>. Null when none is selected.</summary>
+    public string? SwitchDriver { get; private set; }
 
     public EquipmentManager(IndiClient indiClient, ILogger<EquipmentManager> logger,
                             AlpacaDiscoveryCache alpacaCache, SimGearService simGear) {
@@ -587,6 +594,22 @@ public class EquipmentManager : IDisposable {
         return Array.Empty<DiscoveredCamera>();
     }
 
+    public IReadOnlyList<DiscoveredCamera> GetDiscoveredSwitchesFor(string driver) {
+        driver = (driver ?? "").Trim().ToLowerInvariant();
+        if (driver == "alpaca") {
+            return _alpacaCache.ByType("Switch")
+                .Select(d => new DiscoveredCamera(d.DeviceId, d.DeviceName, d.ServerName))
+                .ToList();
+        }
+        if (driver == "ascom-com" && OperatingSystem.IsWindows()) {
+            return EnumerateAscomDrivers(
+                    NINA.Ascom.Com.AscomComRegistry.DeviceType.Switch)
+                .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
+                .ToList();
+        }
+        return Array.Empty<DiscoveredCamera>();
+    }
+
     /// <summary>Count of registered ASCOM drivers for a given device
     /// type. Used by the driver-catalogue endpoints to decide whether
     /// to advertise the "ascom-com" entry as available. Returns 0 on
@@ -798,6 +821,32 @@ public class EquipmentManager : IDisposable {
         if (!OperatingSystem.IsWindows())
             throw new NotSupportedException("ASCOM COM drivers only run on Windows.");
         return new NINA.Ascom.Com.AscomComFilterWheel(progId);
+    }
+
+    /// <summary>Select a power box / switch hub by driver kind +
+    /// driver-specific device id. Multi-driver like the filter wheel:
+    /// INDI (any power driver the server exposes), ASCOM-COM (ISwitchV2,
+    /// Windows-only), or Alpaca (<c>host:port[:devnum]</c>).</summary>
+    public ISwitchDevice SelectSwitch(string driver, string deviceId) {
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        Switch = driver switch {
+            "indi" => new IndiSwitch(_indiClient, deviceId),
+            "ascom-com" => CreateAscomSwitch(deviceId),
+            "alpaca" => AlpacaSwitch.FromDeviceId(deviceId),
+            _ => throw new NotSupportedException(
+                $"Power box driver '{driver}' is not implemented yet. " +
+                "Use 'indi', 'alpaca', or 'ascom-com'."),
+        };
+        SwitchDriver = driver;
+        _logger.LogInformation("Power box selected: driver={Driver}, id={DeviceId}",
+            driver, deviceId);
+        return Switch;
+    }
+
+    private static ISwitchDevice CreateAscomSwitch(string progId) {
+        if (!OperatingSystem.IsWindows())
+            throw new NotSupportedException("ASCOM COM drivers only run on Windows.");
+        return new NINA.Ascom.Com.AscomComSwitch(progId);
     }
 
     public IndiRotator SelectRotator(string deviceName) {
@@ -1048,6 +1097,24 @@ public class EquipmentManager : IDisposable {
                 position = Safe(Rotator.Position),
                 moving = Rotator.IsMoving,
                 reversed = Rotator.IsReversed
+            };
+        }
+
+        if (Switch != null) {
+            status["powerBox"] = new {
+                name = Switch.DeviceName,
+                connected = Switch.IsConnected,
+                driver = SwitchDriver,
+                channels = Switch.Channels.Select(c => new {
+                    id = c.Id,
+                    name = c.Name,
+                    boolean = c.Boolean,
+                    value = Safe(c.Value),
+                    min = Safe(c.Min),
+                    max = Safe(c.Max),
+                    step = Safe(c.Step),
+                    writable = c.Writable
+                }).ToList()
             };
         }
 

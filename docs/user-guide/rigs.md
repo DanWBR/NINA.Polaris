@@ -165,6 +165,14 @@ accessory has a saved selection.
 - **Dome**: azimuth, shutter, park, slave-to-scope toggle
 - **Weather**: read-only sensor display (cloud, humidity, dewpoint,
   wind, sky temp, MPSAS)
+- **Power Box**: a switch / power-distribution hub (e.g. Pegasus Astro
+  Ultimate Powerbox) over INDI, ASCOM-COM (ISwitchV2) or Alpaca. Pick the
+  driver (INDI / ASCOM / Alpaca) then the device, Connect, and the card
+  lists every channel: on/off buttons for the 12V outlets, a value box +
+  Set for dew-heater / PWM channels, and read-only voltage / current /
+  temperature sensors. Outlets and dew levels are also drivable from the
+  Advanced Sequencer — see the **Power Box** instruction group in
+  [adv-sequencer.md](adv-sequencer.md).
 
 ## Rig management
 

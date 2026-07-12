@@ -48,7 +48,8 @@ public static class AscomComRegistry {
         Rotator,
         Dome,
         FlatPanel,            // CoverCalibrator in ASCOM Platform 6.5+
-        ObservingConditions
+        ObservingConditions,
+        Switch                // ISwitchV2 (power boxes, relay hubs, dew controllers)
     }
 
     /// <summary>One registered driver. <paramref name="ProgId"/> is
@@ -142,6 +143,7 @@ public static class AscomComRegistry {
         DeviceType.Dome                => "Dome Drivers",
         DeviceType.FlatPanel           => "CoverCalibrator Drivers",
         DeviceType.ObservingConditions => "ObservingConditions Drivers",
+        DeviceType.Switch              => "Switch Drivers",
         _ => throw new ArgumentOutOfRangeException(nameof(type))
     };
 }

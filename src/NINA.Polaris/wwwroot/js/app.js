@@ -988,6 +988,12 @@ function ninaApp() {
         equipFlatChoice: '',
         equipDomeChoice: '',
         equipWeatherChoice: '',
+        equipSwitchChoice: '',
+        equipSwitchDriver: 'indi',
+        powerBoxDrivers: [{ id: 'indi', name: 'INDI', available: true }],
+        powerBoxVendorDevices: [],
+        powerBoxDiscovering: false,
+        powerBoxInputs: {},
         equipCoolerTarget: -10,
         // Guards the "Connect all / Disconnect all" buttons while a bulk
         // run is walking the device list sequentially.
@@ -1562,6 +1568,9 @@ function ninaApp() {
             guide: { supported: false, camera: '', items: [] },
         },
         _indiPropsTimer: null,
+
+        // Power box (switch / power distribution)
+        powerBox: { connected: false, name: '', driver: '', channels: [] },
 
         // Rotator
         rotator: { connected: false, name: '', position: null, moving: false, reversed: false },
@@ -4135,6 +4144,7 @@ function ninaApp() {
             this.loadMountDrivers();
             this.loadFocuserDrivers();
             this.loadFilterWheelDrivers();
+            this.loadPowerBoxDrivers();
             this.restoreMountPanel();
             this.restoreCameraPanel();
             window.addEventListener('resize', () => {
@@ -18076,6 +18086,12 @@ function ninaApp() {
             this.equipFlatChoice = rig.flatDevice || '';
             this.equipDomeChoice = rig.dome || '';
             this.equipWeatherChoice = rig.weather || '';
+            this.equipSwitchChoice = rig.switch || '';
+            this.equipSwitchDriver = rig.switchDriver || 'indi';
+            if (this.equipSwitchDriver !== 'indi') {
+                this.powerBoxVendorDevices = [];
+                try { this.detectVendorSwitches(); } catch (e) {}
+            }
             if (rig.coolerTargetTemperature != null) this.equipCoolerTarget = rig.coolerTargetTemperature;
             // Hydrate FAST step from the rig profile (legacy field
             // name kept for backwards compat). SLOW step lives in
@@ -18772,6 +18788,7 @@ function ninaApp() {
             if (this.equipFlatChoice)    n++;
             if (this.equipDomeChoice)    n++;
             if (this.equipWeatherChoice) n++;
+            if (this.equipSwitchChoice)  n++;
             return n;
         },
 
@@ -18818,6 +18835,8 @@ function ninaApp() {
                 flatDevice: this.equipFlatChoice || rig.flatDevice,
                 dome: this.equipDomeChoice || rig.dome,
                 weather: this.equipWeatherChoice || rig.weather,
+                switch: this.equipSwitchChoice || rig.switch,
+                switchDriver: this.equipSwitchDriver || rig.switchDriver || 'indi',
                 coolerTargetTemperature: this.equipCoolerTarget,
                 focuserStepSize: this.focusStep,
                 focalLengthMm: this.settings.focalLength,
@@ -24733,6 +24752,7 @@ function ninaApp() {
                 { has: () => !!this.equipFlatChoice && !this.flatDevice?.connected, fn: () => this.equipConnectFlat() },
                 { has: () => !!this.equipDomeChoice && !this.dome?.connected, fn: () => this.equipConnectDome() },
                 { has: () => !!this.equipWeatherChoice && !this.weather?.connected, fn: () => this.equipConnectWeather() },
+                { has: () => !!this.equipSwitchChoice && !this.powerBox?.connected, fn: () => this.equipConnectSwitch() },
             ];
             const todo = steps.filter(s => s.has());
             if (todo.length === 0) { this.toast('Nothing to connect — pick devices first', 'warn'); return; }
@@ -24746,6 +24766,7 @@ function ninaApp() {
         // connectAll: accessories drop first, mount last.
         async equipDisconnectAll() {
             const steps = [
+                { has: () => !!this.powerBox?.connected, fn: () => this.equipDisconnectSwitch() },
                 { has: () => !!this.weather?.connected, fn: () => this.equipDisconnectWeather() },
                 { has: () => !!this.dome?.connected, fn: () => this.equipDisconnectDome() },
                 { has: () => !!this.flatDevice?.connected, fn: () => this.equipDisconnectFlat() },
@@ -30393,6 +30414,73 @@ function ninaApp() {
             catch (e) { this.toast('Weather refresh failed', 'error'); }
         },
 
+        // --- Power box (switch / power distribution) ---
+        async loadPowerBoxDrivers() {
+            try {
+                this.powerBoxDrivers = await this.apiGet('/api/switch/drivers');
+            } catch (e) {
+                this.powerBoxDrivers = [{ id: 'indi', name: 'INDI', available: true }];
+            }
+        },
+        async detectVendorSwitches() {
+            this.powerBoxDiscovering = true;
+            try {
+                const list = await this.apiGet(
+                    `/api/switch/discover?driver=${encodeURIComponent(this.equipSwitchDriver)}`);
+                this.powerBoxVendorDevices = list || [];
+                if (this.powerBoxVendorDevices.length === 0) {
+                    this.toast('No power boxes detected for ' + this.equipSwitchDriver, 'warn');
+                }
+            } catch (e) {
+                this.toast('Detect failed: ' + (e.message || ''), 'error');
+                this.powerBoxVendorDevices = [];
+            } finally {
+                this.powerBoxDiscovering = false;
+            }
+        },
+        async equipConnectSwitch() {
+            if (!this.equipSwitchChoice) return;
+            try {
+                await this.apiPost(`/api/switch/select/${encodeURIComponent(this.equipSwitchChoice)}?driver=${encodeURIComponent(this.equipSwitchDriver)}`);
+                await this.apiPost('/api/switch/connect');
+                this.powerBox.connected = true;
+                this.powerBox.name = this.equipSwitchChoice;
+                this.toast('Power box connected: ' + this.equipSwitchChoice, 'ok');
+            } catch (e) {
+                this.toast('Power box connection failed: ' + e.message, 'error');
+            }
+        },
+        async equipDisconnectSwitch() {
+            try {
+                await this.apiPost('/api/switch/disconnect');
+                this.powerBox = { connected: false, name: '', driver: '', channels: [] };
+                this.toast('Power box disconnected', 'warn');
+            } catch (e) {
+                this.toast('Power box disconnect failed: ' + e.message, 'error');
+            }
+        },
+        async powerBoxToggle(ch) {
+            try {
+                await this.apiPost('/api/switch/set-bool', { id: ch.id, on: !ch.value });
+            } catch (e) {
+                this.toast('Power box toggle failed: ' + e.message, 'error');
+            }
+        },
+        async powerBoxSetValue(ch) {
+            const v = Number(this.powerBoxInputs[ch.id]);
+            if (!isFinite(v)) { this.toast('Enter a value first', 'warn'); return; }
+            try {
+                await this.apiPost('/api/switch/set-value', { id: ch.id, value: v });
+                this.toast(`${ch.name} = ${v}`, 'ok');
+            } catch (e) {
+                this.toast('Power box set failed: ' + e.message, 'error');
+            }
+        },
+        async powerBoxRefresh() {
+            try { await this.apiPost('/api/switch/refresh'); }
+            catch (e) { this.toast('Power box refresh failed', 'error'); }
+        },
+
         // --- Guider (PHD2) ---
         async guiderConnect() {
             const native = this.guider.backend === 'native';
@@ -35014,6 +35102,20 @@ function ninaApp() {
                     reversed: eq.rotator.reversed
                 };
             }
+            if (eq.powerBox) {
+                this.powerBox = {
+                    connected: eq.powerBox.connected,
+                    name: eq.powerBox.name,
+                    driver: eq.powerBox.driver || '',
+                    channels: eq.powerBox.channels || []
+                };
+                // Seed the pending-value inputs for analog channels once,
+                // so the field shows the current level instead of blank.
+                for (const ch of this.powerBox.channels) {
+                    if (!ch.boolean && ch.writable && this.powerBoxInputs[ch.id] === undefined)
+                        this.powerBoxInputs[ch.id] = ch.value;
+                }
+            }
             if (eq.flatDevice) {
                 this.flatDevice = {
                     connected: eq.flatDevice.connected,
@@ -36046,7 +36148,8 @@ function ninaApp() {
                 rotator: 'rotator',
                 dome: 'dome',
                 covercalibrator: 'covercalibrator',
-                observingconditions: 'observingconditions'
+                observingconditions: 'observingconditions',
+                switch: 'switch'
             })[t] || null;
         },
 

@@ -380,6 +380,143 @@ public class AlpacaCoverCalibrator {
     private static async Task<List<int>?> Safe(Task<List<int>?> t) { try { return await t; } catch { return null; } }
 }
 
+// ---- Switch (ISwitchV2 — power boxes / relay hubs / dew controllers) --------
+/// <summary>
+/// Alpaca ISwitchV2 client exposed through <see cref="ISwitchDevice"/>. The
+/// ISwitchV2 GET verbs take an <c>Id</c> query parameter, so we use the
+/// Id-aware <see cref="AlpacaClient.GetAsync{T}(string, Dictionary{string,string}, CancellationToken)"/>
+/// overload. Static channel descriptors (name/min/max/step/canwrite) are read
+/// once on connect; live values are cached and refreshed on connect, on each
+/// write, and on explicit <see cref="RefreshAsync"/> so the synchronous
+/// <see cref="Channels"/> getter never blocks the status thread on HTTP.
+/// </summary>
+public class AlpacaSwitch : ISwitchDevice {
+    private readonly AlpacaClient _c;
+    private string _deviceName = "Alpaca Switch";
+
+    private readonly record struct Descriptor(string Name, double Min, double Max, double Step, bool Writable, bool Boolean);
+    private readonly List<Descriptor> _descriptors = new();
+    private double[] _values = Array.Empty<double>();
+
+    public AlpacaSwitch(string host, int port, int n = 0) { _c = new(host, port, "switch", n); }
+
+    /// <summary>See <see cref="AlpacaFocuser.FromDeviceId"/>.</summary>
+    public static AlpacaSwitch FromDeviceId(string deviceId) {
+        var parts = (deviceId ?? "").Split(':');
+        if (parts.Length < 2)
+            throw new ArgumentException($"Alpaca device id '{deviceId}' must be host:port[:deviceNumber].",
+                nameof(deviceId));
+        var host = parts[0];
+        var port = int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+        var dev = parts.Length >= 3 && int.TryParse(parts[2],
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0;
+        return new AlpacaSwitch(host, port, dev);
+    }
+
+    public string DeviceName => _deviceName;
+    public bool IsConnected => Safe(_c.GetAsync<bool>("connected")).GetAwaiter().GetResult();
+    public int SwitchCount => _descriptors.Count;
+
+    private static string Q(int i) => i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    public async Task ConnectAsync(CancellationToken ct = default) {
+        await _c.PutAsync("connected", new() { ["Connected"] = "true" }, ct);
+        try { _deviceName = (await _c.GetAsync<string>("name", ct)) ?? "Alpaca Switch"; } catch { }
+        await BuildDescriptorsAsync(ct);
+    }
+
+    public Task DisconnectAsync(CancellationToken ct = default) =>
+        _c.PutAsync("connected", new() { ["Connected"] = "false" }, ct);
+
+    private async Task BuildDescriptorsAsync(CancellationToken ct) {
+        _descriptors.Clear();
+        int count = await Safe(_c.GetAsync<int>("maxswitch", ct));
+        var vals = new double[count];
+        for (int i = 0; i < count; i++) {
+            var id = new Dictionary<string, string> { ["Id"] = Q(i) };
+            var name = (await SafeS(_c.GetAsync<string>("getswitchname", id, ct))) ?? $"Switch {i}";
+            double min = await Safe(_c.GetAsync<double>("minswitchvalue", id, ct));
+            double max = await SafeMax(_c.GetAsync<double>("maxswitchvalue", id, ct));
+            double step = await SafeStep(_c.GetAsync<double>("switchstep", id, ct));
+            bool writable = await Safe(_c.GetAsync<bool>("canwrite", id, ct), true);
+            bool boolean = min == 0 && max == 1 && step == 1;
+            _descriptors.Add(new Descriptor(name, min, max, step, writable, boolean));
+            vals[i] = await Safe(_c.GetAsync<double>("getswitchvalue", id, ct));
+        }
+        _values = vals;
+    }
+
+    public async Task RefreshAsync(CancellationToken ct = default) {
+        if (_descriptors.Count == 0) { await BuildDescriptorsAsync(ct); return; }
+        var vals = new double[_descriptors.Count];
+        for (int i = 0; i < _descriptors.Count; i++)
+            vals[i] = await Safe(_c.GetAsync<double>("getswitchvalue",
+                new Dictionary<string, string> { ["Id"] = Q(i) }, ct));
+        _values = vals;
+    }
+
+    public IReadOnlyList<SwitchChannel> Channels {
+        get {
+            var list = new List<SwitchChannel>(_descriptors.Count);
+            for (int i = 0; i < _descriptors.Count; i++) {
+                var d = _descriptors[i];
+                double value = i < _values.Length ? _values[i] : 0;
+                list.Add(new SwitchChannel(i, d.Name, d.Boolean, value, d.Min, d.Max, d.Step, d.Writable));
+            }
+            return list;
+        }
+    }
+
+    public async Task SetBoolAsync(int id, bool on, CancellationToken ct = default) {
+        var d = Get(id);
+        if (d.Boolean)
+            await _c.PutAsync("setswitch", new() { ["Id"] = Q(id), ["State"] = on ? "true" : "false" }, ct);
+        else
+            await _c.PutAsync("setswitchvalue", new() {
+                ["Id"] = Q(id),
+                ["Value"] = (on ? d.Max : d.Min).ToString(System.Globalization.CultureInfo.InvariantCulture)
+            }, ct);
+        await RefreshOne(id, ct);
+    }
+
+    public async Task SetValueAsync(int id, double value, CancellationToken ct = default) {
+        var d = Get(id);
+        if (d.Boolean)
+            await _c.PutAsync("setswitch", new() { ["Id"] = Q(id), ["State"] = value != 0 ? "true" : "false" }, ct);
+        else {
+            var clamped = d.Max > d.Min ? Math.Clamp(value, d.Min, d.Max) : value;
+            await _c.PutAsync("setswitchvalue", new() {
+                ["Id"] = Q(id),
+                ["Value"] = clamped.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            }, ct);
+        }
+        await RefreshOne(id, ct);
+    }
+
+    private async Task RefreshOne(int id, CancellationToken ct) {
+        try {
+            var v = await _c.GetAsync<double>("getswitchvalue",
+                new Dictionary<string, string> { ["Id"] = Q(id) }, ct);
+            if (id < _values.Length) _values[id] = v;
+        } catch { }
+    }
+
+    private Descriptor Get(int id) {
+        if (id < 0 || id >= _descriptors.Count)
+            throw new ArgumentOutOfRangeException(nameof(id),
+                $"Switch '{_deviceName}' has no channel {id} (have {_descriptors.Count}).");
+        return _descriptors[id];
+    }
+
+    private static async Task<bool> Safe(Task<bool> t, bool fallback = false) { try { return await t; } catch { return fallback; } }
+    private static async Task<int> Safe(Task<int> t)       { try { return await t; }   catch { return 0; } }
+    private static async Task<double> Safe(Task<double> t) { try { return await t; }   catch { return 0; } }
+    private static async Task<double> SafeMax(Task<double> t) { try { var v = await t; return v; } catch { return 1; } }
+    private static async Task<double> SafeStep(Task<double> t) { try { var v = await t; return v > 0 ? v : 1; } catch { return 1; } }
+    private static async Task<string?> SafeS(Task<string?> t) { try { return await t; } catch { return null; } }
+}
+
 // ---- ObservingConditions (weather) ------------------------------------------
 public class AlpacaObservingConditions {
     private readonly AlpacaClient _c;

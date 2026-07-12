@@ -1079,6 +1079,7 @@ app.MapFilterWheelEndpoints();
 // per-device endpoint groups above with ?driver=ascom-com.
 app.MapAscomEndpoints();
 app.MapRotatorEndpoints();
+app.MapSwitchEndpoints();
 app.MapFlatDeviceEndpoints();
 app.MapDomeEndpoints();
 app.MapWeatherEndpoints();

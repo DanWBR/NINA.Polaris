@@ -25,7 +25,7 @@
       "intro": "Multi-rig equipment hub. Define several telescope setups (rigs) and switch between them in one click.",
       "items": [
         { "label": "Multi-rig profiles", "text": "save each optical train (main scope, camera, mount, guider, accessories) as a named rig; the whole app retargets when you switch the active rig." },
-        { "label": "Per-role device cards", "text": "Main Telescope, Camera, Mount, Focuser, Filter Wheel, Guidescope, Guide Camera, Guide Focuser, Rotator, Flat Panel, Dome, and Weather, each with connect/disconnect and live status." },
+        { "label": "Per-role device cards", "text": "Main Telescope, Camera, Mount, Focuser, Filter Wheel, Guidescope, Guide Camera, Guide Focuser, Rotator, Flat Panel, Dome, Weather, and Power Box (switch/dew hubs like Pegasus UPB, over INDI/ASCOM/Alpaca, with per-outlet toggles and dew-heater sliders), each with connect/disconnect and live status." },
         { "label": "Auxiliary camera and focuser", "text": "a second imaging camera on the same mount with its own optics, exposure, and gain, captured in parallel into a separate aux folder and focusable from the FOCUS tab (manual or Auto V-curve)." },
         { "label": "Gain and ISO aware", "text": "astronomy cameras show analogue gain with an ISO explainer; DSLR and mirrorless bodies (gphoto on Linux) get a real ISO dropdown." },
         { "label": "Connection backends in one place", "text": "INDI (TCP/XML) full native client; ASCOM Alpaca (HTTP) auto-discovery and connect; ASCOM Platform (COM) Windows-only direct driver access; native vendor SDKs (ZWO ASI, Svbony, Player One, ToupTek, and Altair) driven directly; DSLR via Canon, Nikon, and Sony on Windows, gphoto2 on Linux." },

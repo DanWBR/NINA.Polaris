@@ -58,6 +58,21 @@ public class AlpacaClient {
         return resp == null ? default : resp.Value;
     }
 
+    /// <summary>GET variant for device verbs that take query parameters —
+    /// e.g. the ISwitchV2 endpoints (<c>getswitchvalue?Id=n</c>). The plain
+    /// <see cref="GetAsync{T}(string, CancellationToken)"/> owns the query
+    /// string (it appends <c>?ClientID=…</c>), so extra params must be woven
+    /// in here rather than baked into the action.</summary>
+    public async Task<T?> GetAsync<T>(string action, Dictionary<string, string> query,
+        CancellationToken ct = default) {
+        var qs = string.Join("&", query.Select(kv =>
+            $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value)}"));
+        var url = $"{Url(action)}?{qs}&ClientID={ClientId}&ClientTransactionID={NextTxn()}";
+        var resp = await SharedHttp.GetFromJsonAsync<AlpacaResponse<T>>(url, ct);
+        ThrowIfError(resp);
+        return resp == null ? default : resp.Value;
+    }
+
     public async Task<JsonElement?> GetRawAsync(string action, CancellationToken ct = default) {
         var url = $"{Url(action)}?ClientID={ClientId}&ClientTransactionID={NextTxn()}";
         using var resp = await SharedHttp.GetAsync(url, ct);

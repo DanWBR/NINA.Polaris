@@ -91,6 +91,10 @@ exhaustive.
   built-in (native) guider only; PHD2 owns its own gain.
 - **Dome / Flat Panel / Rotator**: open and close, slew azimuth, set
   brightness, rotate to angle.
+- **Power Box**: Set Outlet On/Off, Set Dew Heater (a PWM channel
+  level), Power Cycle Outlet (off → wait → on), and Set Switch Value
+  (any ISwitchV2 channel by index). Channel indexes match the RIGS
+  Power Box card; connect a power box in RIGS first.
 - **Flow control**: Wait For Time, Wait Until Above Horizon, Wait For
   Altitude, Wait For Moon Below Horizon, Wait For Sun Below Horizon.
 - **External**: Run External Script, Send HTTP Request, Send Email.
