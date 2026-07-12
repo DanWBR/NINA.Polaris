@@ -47,7 +47,7 @@
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260710-toolrails">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260712-guidetab1">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260712-dsosize1">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260712-hoststats1">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260712-wifibars1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260712-uipolish1">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260712-guidebar2">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260712-rename1">
@@ -12819,7 +12819,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <div class="settings-section" id="power-card">
-                    <h3 data-tour="set-power"><span class="settings-card-icon">⏻</span>Power</h3>
+                    <h3 data-tour="set-power"><span class="settings-card-icon">⏻</span>Power / Software Update</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Restart the Polaris server or reboot the whole device
                         without an SSH session. Handy on a headless SBC at the
@@ -14725,6 +14725,23 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <span class="activity-net-arrow">↑</span>
                 <span class="activity-net-rate" x-text="formatBytesPerSec(net.txRate)"></span>
             </span>
+        </div>
+        <!-- WiFi signal. Sits next to the net rx/tx block. Data is
+             host-owned (NetworkManagerService `network` block over WS):
+             only shown when the host reports a WiFi link (station or
+             hotspot); hidden on wired / unsupported hosts. Bars fill by
+             the reported signal %, coloured by strength. -->
+        <div class="activity-wifi"
+             x-show="network && network.signal != null && (network.mode === 'station' || network.mode === 'hotspot')"
+             x-cloak
+             :title="wifiTooltip()">
+            <svg class="wifi-bars" viewBox="0 0 15 11" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <rect class="wifi-bar" :class="wifiBarTone(1)" x="0"    y="8"   width="2.6" height="3"    rx="0.6"/>
+                <rect class="wifi-bar" :class="wifiBarTone(2)" x="4.13" y="5.5" width="2.6" height="5.5"  rx="0.6"/>
+                <rect class="wifi-bar" :class="wifiBarTone(3)" x="8.27" y="3"   width="2.6" height="8"    rx="0.6"/>
+                <rect class="wifi-bar" :class="wifiBarTone(4)" x="12.4" y="0.5" width="2.6" height="10.5" rx="0.6"/>
+            </svg>
+            <span class="activity-wifi-val" x-text="network.signal + '%'"></span>
         </div>
         <div class="activity-bar-host" x-show="host.cpuPercent != null || host.device" x-cloak>
             <!-- CLOCK-3: wall-clock skew chip. Only shown when the

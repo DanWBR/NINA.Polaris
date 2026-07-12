@@ -34657,6 +34657,28 @@ function ninaApp() {
                  + '  ↑ ' + fmtTotal(this.net.txTotal) + ' sent';
         },
 
+        // ---- WiFi signal indicator (status bar, next to net rx/tx) ----
+        // Data comes from the host's NetworkManagerService `network`
+        // block (signal 0-100, nmcli SIGNAL). Purely reflective — the
+        // browser never touches the radio.
+        _wifiBarsFilled() {
+            const s = this.network && this.network.signal != null ? this.network.signal : 0;
+            return s >= 75 ? 4 : s >= 50 ? 3 : s >= 25 ? 2 : s > 0 ? 1 : 0;
+        },
+        // Per-bar Alpine :class. Lit bars take a strength colour; the rest
+        // fall back to the muted base fill from CSS.
+        wifiBarTone(n) {
+            if (n > this._wifiBarsFilled()) return '';
+            const s = this.network && this.network.signal != null ? this.network.signal : 0;
+            return s >= 60 ? 'wifi-strong' : s >= 30 ? 'wifi-medium' : 'wifi-weak';
+        },
+        wifiTooltip() {
+            const n = this.network || {};
+            const mode = n.mode === 'hotspot' ? 'Hotspot' : 'Station';
+            const ssid = n.ssid ? (' · ' + n.ssid) : '';
+            return 'WiFi ' + mode + ssid + ' · ' + (n.signal != null ? n.signal : 0) + '% signal';
+        },
+
         // Wrap ws.send so it goes through _netTx. Returns the bytes
         // sent so callers that want the count get it back; otherwise
         // they can ignore.

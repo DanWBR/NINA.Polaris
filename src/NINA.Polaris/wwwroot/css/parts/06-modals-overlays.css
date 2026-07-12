@@ -1681,6 +1681,26 @@
 }
 .activity-net-rate { color: var(--text-primary); }
 
+/* WiFi signal indicator, sits next to the net rx/tx block. */
+.activity-wifi {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-right: 10px;
+    flex-shrink: 0;
+    font-size: 10px;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+}
+.activity-wifi .wifi-bars { width: 15px; height: 11px; display: block; }
+/* Unlit bars: subtle base fill. Lit bars get a strength colour below. */
+.activity-wifi .wifi-bar { fill: var(--border, rgba(255, 255, 255, 0.16)); }
+.activity-wifi .wifi-bar.wifi-strong { fill: #86efac; }   /* green  */
+.activity-wifi .wifi-bar.wifi-medium { fill: #fcd34d; }   /* amber  */
+.activity-wifi .wifi-bar.wifi-weak   { fill: #fca5a5; }   /* red    */
+.activity-wifi .activity-wifi-val { color: var(--text-primary); }
+
 /* Host metrics block on the right side. */
 .activity-bar-host {
     display: flex;
