@@ -131,6 +131,13 @@ public class TonightsBestService {
             ));
         }
 
+        // Cross-catalogue de-dup: the same physical object is catalogued
+        // under several designations (M31 = NGC 224, M33 = NGC 598, …),
+        // so it was listed multiple times (field report). Collapse DSOs
+        // that share a sky position to one entry, keeping the most
+        // familiar designation (Messier > Caldwell > NGC > IC > rest).
+        items = DedupDsoByPosition(items);
+
         // --- Solar-system bodies via AstronomyEngine ---
         var observer = new Observer(lat, lng, _profile.Active.Altitude);
         var time = new AstroTime(nowUtc);
@@ -223,6 +230,49 @@ public class TonightsBestService {
                         .Select(c => c.Name)
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
         return items.Where(c => !IsMatch(c) || keep.Contains(c.Name!)).ToList();
+    }
+
+    /// <summary>
+    /// Collapse DSO candidates that refer to the same physical object
+    /// (same sky position under different catalogue designations) to a
+    /// single entry. Non-DSO candidates pass through untouched. Among a
+    /// group the most familiar designation wins — Messier, then Caldwell,
+    /// then NGC, then IC, then everything else; ties break on higher score.
+    /// </summary>
+    private static List<TonightCandidate> DedupDsoByPosition(List<TonightCandidate> items) {
+        // Catalogue familiarity rank (lower = preferred). A code is
+        // "<letters><number>" or "<letters> <number>"; the char after the
+        // letters must be a digit or space so Melotte ("Mel"), Collinder
+        // ("Cr"), etc. aren't mistaken for Messier / Caldwell.
+        static int CatRank(string? name) {
+            if (string.IsNullOrEmpty(name)) return 99;
+            var n = name.TrimStart();
+            bool codeAfter(int i) => n.Length > i && (char.IsDigit(n[i]) || n[i] == ' ');
+            if (n.StartsWith("NGC", StringComparison.OrdinalIgnoreCase)) return 2;
+            if (n.StartsWith("IC",  StringComparison.OrdinalIgnoreCase)) return 3;
+            if (n.StartsWith("M",   StringComparison.OrdinalIgnoreCase) && codeAfter(1)) return 0;
+            if (n.StartsWith("C",   StringComparison.OrdinalIgnoreCase) && codeAfter(1)) return 1;
+            return 10;
+        }
+        // ~2-arcsec position buckets (1800 = 3600 arcsec / 2).
+        static (long, long) PosKey(TonightCandidate c) =>
+            ((long)Math.Round(c.RaHours * 1800.0), (long)Math.Round(c.DecDeg * 1800.0));
+
+        var best = new Dictionary<(long, long), TonightCandidate>();
+        var others = new List<TonightCandidate>();
+        foreach (var c in items) {
+            if (c.Category != "Dso") { others.Add(c); continue; }
+            var key = PosKey(c);
+            if (!best.TryGetValue(key, out var prev)
+                || CatRank(c.Name) < CatRank(prev.Name)
+                || (CatRank(c.Name) == CatRank(prev.Name) && c.Score > prev.Score)) {
+                best[key] = c;
+            }
+        }
+        // Order is irrelevant here — the caller re-sorts by score.
+        var result = new List<TonightCandidate>(others);
+        result.AddRange(best.Values);
+        return result;
     }
 
     private void AddSolarSystem(string name, Body body, string category,

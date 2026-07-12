@@ -169,4 +169,21 @@ public class TonightsBestServiceTests {
                 $"DSO {item.Name} below the 30° filter threshold");
         }
     }
+
+    [Test]
+    public void Compute_DoesNotListTheSameObjectUnderMultipleCatalogues() {
+        // Field report: M31 and NGC 224 (same object) both showed in the
+        // list; likewise M33 / NGC 598. The cross-catalogue de-dup must
+        // collapse DSOs that share a sky position to a single entry.
+        var sut = MakeService(lat: -5.18, lng: -37.36);
+        var result = sut.Compute(limit: 120);
+
+        var seen = new HashSet<(long, long)>();
+        foreach (var item in result.Items.Where(i => i.Category == "Dso")) {
+            var key = ((long)System.Math.Round(item.RaHours * 1800.0),
+                       (long)System.Math.Round(item.DecDeg * 1800.0));
+            Assert.That(seen.Add(key), Is.True,
+                $"Duplicate DSO position for {item.Name} — cross-catalogue de-dup failed");
+        }
+    }
 }
