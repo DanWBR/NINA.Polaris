@@ -485,7 +485,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
    panel's Dithering section now): labels sit inline with their inputs
    and the whole row is centred (field request). */
 .guide-bottombar { flex:0 0 auto; display:flex; flex-wrap:wrap; align-items:center;
-    justify-content:center; gap:8px; padding:8px 10px; margin-top:8px;
+    justify-content:flex-start; gap:8px; padding:8px 10px; margin-top:8px;
     border-top:1px solid #222; background:#0c0c10; border-radius:6px; }
 .guide-bottombar .gb-field { display:flex; flex-direction:row; align-items:center;
     font-size:10px; color:#8a93a6; gap:6px; text-transform:uppercase;
