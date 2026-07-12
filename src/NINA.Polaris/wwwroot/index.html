@@ -43,7 +43,7 @@
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260704-colorscheme">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260712-expgaingrid3">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260712-expgaingrid4">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260710-toolrails">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260712-guidetab1">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260712-dsosize1">
@@ -1079,7 +1079,7 @@
                              line up at the same width. Empty spacer spans keep
                              the rows aligned when a row has no help icon. -->
                         <div class="exp-gain-grid">
-                        <label>Exposure (s)<input type="number" x-model.number="exposure" list="exposure-presets" step="any" min="0" class="input-sm"><span class="eg-spacer"></span></label>
+                        <label>Exp (s)<input type="number" x-model.number="exposure" list="exposure-presets" step="any" min="0" class="input-sm"><span class="eg-spacer"></span></label>
                         <!-- DSLR (indi_gphoto): pick ISO from the camera's list. -->
                         <label x-show="cameraUsesIso()" x-cloak>ISO
                             <select class="input-sm" x-model.number="cameraIso.selected"

@@ -519,6 +519,12 @@
     flex: 0 0 65px;
     min-width: 0;
 }
+/* Exposure field (the only one with a preset datalist) gets a touch
+   more room for longer values like fractional seconds. */
+.exp-gain-grid input[list] {
+    width: 80px;
+    flex: 0 0 80px;
+}
 .exp-gain-grid select {
     width: auto;
     min-width: 64px;
