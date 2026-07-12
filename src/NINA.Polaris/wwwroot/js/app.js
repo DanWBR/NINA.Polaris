@@ -710,6 +710,7 @@ function ninaApp() {
             magnitude: null,
             distanceKm: null,
             radiusKm: null,
+            sizeArcmin: null,      // angular size, from our DSO catalog
             raDeg: null,
             decDeg: null,
             types: null,
@@ -31287,6 +31288,7 @@ function ninaApp() {
                     ? Math.round(obj.distanceMeters / 1000) : null,
                 radiusKm: typeof obj.radiusMeters === 'number'
                     ? Math.round(obj.radiusMeters / 1000) : null,
+                sizeArcmin: typeof obj.sizeArcmin === 'number' ? obj.sizeArcmin : null,
                 raDeg: typeof obj.raDeg === 'number' ? obj.raDeg : null,
                 decDeg: typeof obj.decDeg === 'number' ? obj.decDeg : null,
                 types: obj.types || null,
@@ -31331,6 +31333,24 @@ function ninaApp() {
                     this.skyInfo.imageUrl = r.thumbnailUrl;
                 }
             } catch (e) { /* no photo, keep icon */ }
+
+            // Angular size. The Stellarium engine doesn't hand us a
+            // reliable extent for DSOs, so if the click didn't carry one
+            // look it up in our own catalog by name (same source the
+            // Tonight's Best and search cards use). Best-effort; planets
+            // and unknown objects simply won't show a Size row.
+            if (this.skyInfo.sizeArcmin == null && obj.name) {
+                try {
+                    const s = await this.apiGet(
+                        '/api/sky/catalog/search?query=' + encodeURIComponent(obj.name));
+                    const hit = (s && s.results)
+                        ? s.results.find(o => typeof o.sizeArcmin === 'number' && o.sizeArcmin > 0)
+                        : null;
+                    if (hit && this.skyInfo.title === obj.name) {
+                        this.skyInfo.sizeArcmin = hit.sizeArcmin;
+                    }
+                } catch (e) { /* no catalog match, skip size */ }
+            }
 
             // Altitude chart + meridian/horizon times. Same endpoint
             // Tonight's Best uses (/api/sky/altitude → samples over the

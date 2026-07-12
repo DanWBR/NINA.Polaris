@@ -7774,6 +7774,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <td>Radius</td>
                                 <td x-text="skyInfo.radiusKm != null ? (skyInfo.radiusKm.toLocaleString() + ' km') : ''"></td>
                             </tr>
+                            <tr x-show="formatDsoSize(skyInfo.sizeArcmin)">
+                                <td>Size</td>
+                                <td x-text="formatDsoSize(skyInfo.sizeArcmin)"></td>
+                            </tr>
                             <tr x-show="Number.isFinite(skyInfo.raDeg)">
                                 <td>Ra/Dec</td>
                                 <td>
@@ -17762,7 +17766,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260712-dsosize1"></script>
+    <script src="/js/app.js?v=20260712-dsosize2"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260710-hostclient"></script>
