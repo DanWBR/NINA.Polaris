@@ -35999,14 +35999,23 @@ function ninaApp() {
             // so the user gets feedback for what they explicitly
             // asked for.
             const silent = opts.silent === true;
+            // Connection state is host-owned: the browser must never
+            // auto-connect devices on its own, or every page refresh /
+            // extra client would re-toggle Connected on the hardware and
+            // clients would fight each other. So autoConnect defaults to
+            // true ONLY for an explicit user "Discover" click; the
+            // boot-time per-client discovery passes autoConnect:false and
+            // just lists what's on the LAN (the WS status stream then
+            // reflects whatever the host has connected). Actual connection
+            // is the host's job (startup auto-connect for pinned rigs) or
+            // an explicit Connect/Discover action.
+            const autoConnect = opts.autoConnect !== false;
             this.alpaca.discovering = true;
             try {
-                // Backend handles discovery + auto-connect of every device
-                // in one round-trip. autoConnect=true is the default, set
-                // false only if a future "browse without pairing" mode is
-                // needed. Response carries autoConnected[] so we can
-                // toast per-device success/failure if anything went sideways.
-                const r = await this.apiGet('/api/alpaca/discover?timeoutMs=3000&autoConnect=true');
+                // Response carries autoConnected[] (empty when autoConnect
+                // is false) so we can toast per-device success/failure if
+                // an explicit discover connected anything.
+                const r = await this.apiGet('/api/alpaca/discover?timeoutMs=3000&autoConnect=' + autoConnect);
                 this.alpaca.servers = (r.servers || []).map(s => ({
                     host: s.host, port: s.port,
                     serverName: s.serverName, manufacturer: s.manufacturer,
@@ -36069,7 +36078,12 @@ function ninaApp() {
             if (this._alpacaAutoTried) return;
             this._alpacaAutoTried = true;
             setTimeout(() => {
-                this.discoverAlpaca({ silent: true })
+                // autoConnect:false — boot discovery only LISTS what's on
+                // the LAN so the RIGS pickers populate; it must NOT connect
+                // (connection is host-owned, see discoverAlpaca). This is
+                // what stops every browser refresh / extra client from
+                // re-connecting the Alpaca devices behind the host's back.
+                this.discoverAlpaca({ silent: true, autoConnect: false })
                     .catch(e => console.warn('[Polaris] auto Alpaca discovery rejected:', e));
             }, 1500);
         },

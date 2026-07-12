@@ -44,20 +44,28 @@ public static class AlpacaEndpoints {
             }
             cache.Replace(flat);
 
-            // Default autoConnect=true (the user explicitly asked for it):
-            // PUT connected=true on every discovered device so they're warm
-            // by the time the user picks one in a card dropdown. Each call
-            // is independent + idempotent, run in parallel with a small
-            // cap so we don't hammer a server that lists 10 devices. Errors
-            // are logged + reported but don't block discovery.
+            // autoConnect is true only for an explicit user "Discover"
+            // click (the boot-time per-client discovery passes false — see
+            // discoverAlpaca in app.js). PUT connected=true on each device
+            // so they're warm when the user picks one in a card dropdown.
+            // Truly idempotent: read `connected` first and skip the PUT if
+            // the device is already online. Connection state is host-owned,
+            // so re-toggling a device the host (or another client) already
+            // connected can make some drivers re-initialise and disturb a
+            // live session. Errors are reported but don't block discovery.
             var autoConnected = new List<object>();
             if (autoConnect != false) {
                 var tasks = flat.Select(async d => {
                     try {
                         var http = new AlpacaClient(d.Host, d.Port,
                             d.DeviceType.ToLowerInvariant(), d.DeviceNumber);
-                        await http.PutAsync("connected",
-                            new Dictionary<string, string> { ["Connected"] = "true" });
+                        bool already;
+                        try { already = await http.GetAsync<bool>("connected"); }
+                        catch { already = false; }
+                        if (!already) {
+                            await http.PutAsync("connected",
+                                new Dictionary<string, string> { ["Connected"] = "true" });
+                        }
                         return new { device = d, ok = true, error = (string?)null };
                     } catch (Exception ex) {
                         return new { device = d, ok = false, error = (string?)ex.Message };
