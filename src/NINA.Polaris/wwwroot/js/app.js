@@ -35525,6 +35525,17 @@ function ninaApp() {
             return `${sign}${d}° ${m.toString().padStart(2, '0')}' ${s.toFixed(0).padStart(2, '0')}"`;
         },
 
+        // Human-readable angular size for DSO cards. Input is the major-axis
+        // extent in arcminutes (SizeArcmin from the catalog). Sub-arcminute
+        // objects read in arcseconds, degree-plus objects in degrees.
+        formatDsoSize(arcmin) {
+            const v = Number(arcmin);
+            if (!isFinite(v) || v <= 0) return '';
+            if (v < 1) return Math.round(v * 60) + '″';
+            if (v < 60) return (v < 10 ? v.toFixed(1) : Math.round(v).toString()) + '′';
+            return (v / 60).toFixed(1) + '°';
+        },
+
         formatDeg(val, digits) {
             if (val == null || isNaN(val)) return '--';
             return val.toFixed(digits || 1) + '°';

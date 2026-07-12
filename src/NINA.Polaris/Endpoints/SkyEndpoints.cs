@@ -159,6 +159,7 @@ public static class SkyEndpoints {
                     magnitude = o.Magnitude,
                     type = o.Type,
                     commonName = o.CommonName,
+                    sizeArcmin = o.SizeArcmin,
                     aliases = o.Aliases
                 })
             });

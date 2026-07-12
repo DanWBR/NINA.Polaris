@@ -737,6 +737,11 @@
     font-size: 11px;
 }
 
+.sky-result-size {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
 .sky-viewer {
     flex: 1;
     min-height: 250px;
