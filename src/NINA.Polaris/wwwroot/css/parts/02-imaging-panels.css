@@ -782,6 +782,37 @@ button,
     gap: 6px 8px;
 }
 
+/* ASIAIR-style live-stack session readout: the shutter owns the
+   stack lifecycle, this pill only reports it (state · elapsed ·
+   stacked · discarded). Sits where the old Stack toggle lived. */
+.livestack-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 10px;
+    border: 1px solid var(--border, #2c3444);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 12px;
+    color: var(--text-dim, #8b93a5);
+    white-space: nowrap;
+}
+.livestack-stats .ls-state {
+    font-weight: 600;
+}
+.livestack-stats.ls-on {
+    border-color: rgba(74, 222, 128, 0.45);
+}
+.livestack-stats.ls-on .ls-state {
+    color: var(--ok, #4ade80);
+}
+.livestack-stats .ls-stat {
+    color: var(--text, #d7dce5);
+}
+.livestack-stats .ls-rejected {
+    color: var(--warn, #fbbf24);
+}
+
 .preview-canvas {
     width: 100%;
     height: 100%;

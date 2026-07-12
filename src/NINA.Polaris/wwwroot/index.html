@@ -43,7 +43,7 @@
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260704-colorscheme">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260711-fieldbatch2">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260711-shutterstack1">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260710-toolrails">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260626-cardpadbottom">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260702-stretchsection">
@@ -1139,8 +1139,9 @@
                     </div>
                     </div><!-- /.shutter-inputs -->
 
-                    <!-- SHUT-1: Polaris Shutter. Tap = capture(), long-
-                         press = loopCapture(), tap while active = stopCapture().
+                    <!-- SHUT-1: Polaris Shutter. ASIAIR-style: tap/long-press
+                         = loopCapture() (arms stacking + starts the LIVE
+                         loop), tap while active = stopLiveSession().
                          Visual states defined in app.css .polaris-shutter*.
                          Ring uses SVG stroke-dasharray; dashoffset is
                          289 * (1 - progress) — see app.js
@@ -1180,28 +1181,31 @@
 
                     <div class="shutter-secondary">
                     <div class="control-row">
-                        <!-- Stacking is continuous + automatic by default.
-                             Every frame the camera captures lands in the
-                             running mean as soon as it arrives — no
-                             explicit Start. The pill below is the live
-                             indicator (frame count + elapsed) + a
-                             pause toggle for the rare "raw passthrough"
-                             case. Reset starts a fresh stack (clears the
-                             accumulator) without disarming. -->
-                        <button class="btn" :class="liveStackEnabled ? 'btn-active' : ''"
-                                @click="toggleLiveStack()" data-tour="live-actions"
-                                :title="liveStackEnabled
-                                    ? 'Pause stacking (raw passthrough)'
-                                    : 'Resume continuous stacking'">
-                            <span x-show="liveStackEnabled">
-                                ⚫ Stacking
-                                (<span x-text="liveStackFrames"></span> frames
-                                <template x-if="liveStackStatus?.elapsedSeconds > 0">
-                                    <span> · <span x-text="formatLiveStackElapsed()"></span></span>
-                                </template>)
+                        <!-- ASIAIR-style: the shutter above owns the whole
+                             stack lifecycle (press = start/continue stacking,
+                             press again = stop). This readout is the live
+                             session summary: state, integration time, frames
+                             stacked and frames rejected by the kappa-sigma
+                             guard. Reset stays the explicit "clear the
+                             accumulator" action. -->
+                        <span class="livestack-stats" data-tour="live-actions"
+                              :class="liveStackEnabled ? 'ls-on' : ''"
+                              :title="liveStackEnabled
+                                  ? 'Stacking — press the shutter to stop (the stack is kept)'
+                                  : 'Stopped — press the shutter to start or continue stacking'">
+                            <span class="ls-state" x-text="liveStackEnabled ? '⚫ Stacking' : '⏸ Stopped'"></span>
+                            <span class="ls-stat" title="Total integration time"
+                                  x-show="liveStackStatus?.elapsedSeconds > 0">
+                                ⏱ <span x-text="formatLiveStackElapsed()"></span>
                             </span>
-                            <span x-show="!liveStackEnabled">⏸ Paused</span>
-                        </button>
+                            <span class="ls-stat" title="Frames integrated into the stack">
+                                <span x-text="liveStackFrames"></span> stacked
+                            </span>
+                            <span class="ls-stat ls-rejected" title="Frames discarded (failed alignment or quality gate)"
+                                  x-show="(liveStackStatus?.rejectedFrames || 0) > 0">
+                                <span x-text="liveStackStatus?.rejectedFrames"></span> discarded
+                            </span>
+                        </span>
                         <button class="btn" @click="resetLiveStack()"
                                 title="Clear the accumulator and start a fresh stack on the next frame">
                             ↻ Reset
@@ -17698,7 +17702,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260711-fieldbatch2"></script>
+    <script src="/js/app.js?v=20260711-shutterstack1"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260710-hostclient"></script>

@@ -19908,14 +19908,11 @@ function ninaApp() {
             // Cooler-off pre-flight before starting the LIVE loop (saves frames
             // by default, so warm frames matter here too).
             if (!await this.confirmCoolerForSession('the LIVE loop')) return;
-            // Auto-start stacking when the operator hits the shutter on a fresh,
-            // idle stack (paused with zero frames): the obvious intent is "start
-            // a live stack", so frames actually accumulate instead of looping
-            // un-stacked. A paused stack with frames already (>0) is left alone —
-            // that pause was deliberate (the Resume/Restart choice lives on the
-            // stacking toggle). Cooler was just confirmed above, so skip the
-            // re-prompt that toggleLiveStack would do.
-            await this._autoStartLiveStackIfIdle();
+            // ASIAIR-style: the shutter owns the stack lifecycle. Arm stacking
+            // before starting the loop — fresh/empty stack starts silently, a
+            // stopped stack with frames asks Continue/Restart first. Cooler was
+            // just confirmed above, so no re-prompt inside.
+            await this._armLiveStackForShutter();
             // LIVE capture is ALWAYS server-owned: the server (LiveCaptureService)
             // drives every exposure and keeps going even if the browser drops or
             // the tab is backgrounded — which is why two Polaris tabs can be
@@ -20253,7 +20250,9 @@ function ninaApp() {
                 disabled: () => !this.selectedCamera,
                 onTap: () => this.loopCapture(),
                 onLongPress: () => this.loopCapture(),
-                onAbort: () => this.stopCapture()
+                // Stop-press ends the whole LIVE session: capture loop AND
+                // stacking (accumulator kept; next press offers Continue/Restart).
+                onAbort: () => this.stopLiveSession()
             };
         },
 
@@ -21862,61 +21861,37 @@ function ninaApp() {
             } catch { /* private-browsing / quota — silent */ }
         },
 
-        // Start live stacking automatically when it's idle (paused with no
-        // frames yet) — used by the LIVE shutter so pressing capture on a fresh
-        // session also begins the stack. No-op when stacking is already running
-        // or when a paused stack already has frames (respect a deliberate pause).
+        // ASIAIR-style: the LIVE shutter owns the whole stack lifecycle,
+        // there is no separate Stack toggle. Pressing the shutter arms
+        // stacking (fresh/empty stack starts immediately; a stopped stack
+        // that already has frames asks continue-or-restart), then starts
+        // the capture loop. Pressing again stops both; ↻ Reset stays the
+        // explicit "clear the accumulator" action.
         // Assumes the cooler pre-flight was already handled by the caller.
-        async _autoStartLiveStackIfIdle() {
+        async _armLiveStackForShutter() {
             if (this.liveStackEnabled) return;
-            if ((this.liveStackFrames || 0) > 0) return;
+            // Read-before-flip: ask "continue or restart?" while the
+            // state still reflects how many frames are stacked.
+            const existingFrames = this.liveStackFrames || 0;
+            const trig = this.liveStackTriggers || {};
+            const wantsPrep = trig.refocusOnStart || trig.recenterOnStart;
+
+            // Resume vs fresh start prompt: only when there's already a
+            // stack to continue from. First-ever start and post-Reset
+            // start both skip the prompt.
+            let action = wantsPrep ? 'start-with-prep' : 'start';
+            if (existingFrames > 0) {
+                const choice = await this._confirmAsync(
+                    existingFrames + ' frame(s) already stacked.\n\n' +
+                    '"Continue" keeps adding to the existing stack.\n' +
+                    '"Restart" clears the stack and begins fresh.',
+                    { title: 'Live stacking',
+                      okLabel: 'Continue', cancelLabel: 'Restart' });
+                if (choice) action = 'resume';
+            }
+
             this.liveStackEnabled = true;   // optimistic; rolled back on failure
             try {
-                const trig = this.liveStackTriggers || {};
-                const url = (trig.refocusOnStart || trig.recenterOnStart)
-                    ? '/api/livestack/start-with-prep' : '/api/livestack/start';
-                await this.apiPost(url);
-                this.toast('Live stacking started', 'ok');
-            } catch (e) {
-                this.liveStackEnabled = false;
-                this.toast('Could not auto-start live stacking: ' + (e?.message || ''), 'warn');
-            }
-        },
-
-        async toggleLiveStack() {
-            const enabling = !this.liveStackEnabled;
-            // Cooler-off pre-flight before starting LIVE (skip when stopping).
-            if (enabling && !await this.confirmCoolerForSession('LIVE stacking')) return;
-            // Read-before-flip: if the operator is resuming after a
-            // pause, we want to ask "continue or restart?" while the
-            // current state still reflects how many frames are stacked.
-            const existingFrames = this.liveStackFrames || 0;
-            this.liveStackEnabled = enabling;
-            try {
-                if (!enabling) {
-                    await this.apiPost('/api/livestack/stop');
-                    this.toast('Live stacking paused', 'warn');
-                    return;
-                }
-                const trig = this.liveStackTriggers || {};
-                const wantsPrep = trig.refocusOnStart || trig.recenterOnStart;
-
-                // Resume vs fresh start prompt: only when there's
-                // already a stack to continue from. First-ever start
-                // and post-Reset start both skip the prompt.
-                let action = 'start';   // 'resume' | 'start' | 'start-with-prep'
-                if (existingFrames > 0) {
-                    const choice = await this._confirmAsync(
-                        existingFrames + ' frame(s) already stacked.\n\n' +
-                        '"Continue" keeps adding to the existing stack.\n' +
-                        '"Restart" clears the stack and begins fresh.',
-                        { title: 'Live stacking',
-                          okLabel: 'Continue', cancelLabel: 'Restart' });
-                    action = choice ? 'resume' : (wantsPrep ? 'start-with-prep' : 'start');
-                } else {
-                    action = wantsPrep ? 'start-with-prep' : 'start';
-                }
-
                 let url, label;
                 switch (action) {
                     case 'resume':
@@ -21945,11 +21920,26 @@ function ninaApp() {
                     }
                 }
             } catch (e) {
-                this.toast('Live stack toggle failed: ' + (e?.message || ''), 'error');
-                // Roll back the optimistic flip so the UI state matches
-                // the server (still stopped/started, depending on which
-                // direction we were going).
-                this.liveStackEnabled = !enabling;
+                this.liveStackEnabled = false;
+                this.toast('Could not start live stacking: ' + (e?.message || ''), 'warn');
+            }
+        },
+
+        // Shutter press while LIVE is running: stop the capture loop AND
+        // pause stacking. The accumulator is kept — the next shutter press
+        // offers Continue/Restart; ↻ Reset clears it explicitly.
+        async stopLiveSession() {
+            await this.stopCapture();
+            if (!this.liveStackEnabled) return;
+            this.liveStackEnabled = false;
+            try {
+                await this.apiPost('/api/livestack/stop');
+                const n = this.liveStackFrames || 0;
+                this.toast('LIVE stopped — stack kept (' + n + ' frame' + (n === 1 ? '' : 's') + ')', 'warn');
+            } catch (e) {
+                // Loop is already down, so frames stop arriving either way;
+                // reflect "not stacking" in the UI regardless.
+                this.toast('Live stack stop failed: ' + (e?.message || ''), 'error');
             }
         },
 
