@@ -1675,6 +1675,12 @@
     border: 1px solid var(--border, #334155); color: var(--text, #e2e8f0);
     border-radius: 3px; font-size: 13px;
 }
+/* Enum dropdowns (errorBehavior, focuserTarget, …) fill the props
+   column like the text/number inputs above; the bare select.input-sm
+   90px default left them as cramped stubs (field report). */
+.prop-row select.input-sm {
+    width: 100%;
+}
 
 /* Inline warning banner (e.g. PHD2 not installed) */
 .warn-banner {

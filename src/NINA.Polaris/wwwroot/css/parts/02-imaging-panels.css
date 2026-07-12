@@ -787,7 +787,10 @@ button,
    stacked · discarded). Sits where the old Stack toggle lived. */
 .livestack-stats {
     display: inline-flex;
-    align-items: center;
+    /* Baseline, not center: each stat mixes an emoji glyph with text
+       and emoji boxes are taller, so centering left the text fragments
+       sitting at slightly different heights (field report). */
+    align-items: baseline;
     gap: 10px;
     padding: 5px 10px;
     border: 1px solid var(--border, #2c3444);

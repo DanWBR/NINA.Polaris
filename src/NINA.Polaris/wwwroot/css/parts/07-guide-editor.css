@@ -570,6 +570,16 @@
     align-items: center;
     gap: 4px;
 }
+/* Dropdowns sitting directly in a triggers row (e.g. the BGE
+   Correction picker) grow to the remaining row width instead of the
+   90px standalone default, which truncated "Subtraction" to
+   "Subtractio…" (field report). Same fill-the-column rule the
+   calibration master pickers above already use. */
+.livestack-triggers-row > select.input-sm {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+}
 .livestack-triggers-row label > input[type="number"] {
     margin: 0 2px;
 }
