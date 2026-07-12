@@ -14915,8 +14915,15 @@ function ninaApp() {
         // tracked object don't always trigger re-render in v3).
         tonightThumbFailed(item) {
             const current = this.tonight.thumbs[item.name];
+            // The bundled DSO cutout 404'd (object outside the DSO set —
+            // a planet, comet, or oddly-named entry): fall back to the
+            // online NASA/Wikipedia lookup.
+            if (current?.source === 'dso') {
+                this._tonightLookupThumb(item);
+                return;
+            }
             if (current?.url && current?.remoteUrl && current.url !== current.remoteUrl) {
-                // First failure: fall back to the remote URL.
+                // Local cached url 404'd but a remote is known: try remote once.
                 this.tonight.thumbs = {
                     ...this.tonight.thumbs,
                     [item.name]: { ...current, url: current.remoteUrl }
@@ -14947,39 +14954,57 @@ function ninaApp() {
             for (const item of this.tonight.items) {
                 if (this.tonight.thumbs[item.name]?.url || this.tonight.thumbs[item.name]?.missing) continue;
 
-                const tryNames = [];
-                if (item.commonName) tryNames.push(item.commonName);
-                // Backend routes catalogue codes (M / NGC / IC / Sh2 / Caldwell)
-                // straight to Wikipedia where they hit a reliable per-object
-                // article. The bare item.name covers that path.
-                tryNames.push(item.name);
-
-                let found = null;
-                for (const q of tryNames) {
-                    try {
-                        const r = await this.apiGet(`/api/sky/image?name=${encodeURIComponent(q)}`);
-                        if (r?.available) { found = r; break; }
-                    } catch { /* keep trying remaining variants */ }
+                // Offline-first: the bundled DSO cache (DSS cutouts under
+                // /sky/data/skydata/dso-thumbs/) has full coverage of every
+                // catalogued object, works with no internet, and renders
+                // instantly with no network round-trip. Use it as the
+                // primary thumbnail; the NASA/Wikipedia lookup only runs
+                // (via tonightThumbFailed → _tonightLookupThumb) when a
+                // bundled thumb 404s — planets, comets, or objects outside
+                // the DSO set.
+                const dso = this.dsoThumbUrl({ name: item.name });
+                if (dso) {
+                    this.tonight.thumbs = {
+                        ...this.tonight.thumbs,
+                        [item.name]: { url: dso, source: 'dso', missing: false }
+                    };
+                    continue;
                 }
-
-                // Prefer the local cached-on-disk URL when the backend
-                // downloaded the bytes (PrefetchAsync or a previous
-                // lazy fetch). Falls back to the remote NASA/Wikipedia
-                // URL if local isn't available, so even un-prefetched
-                // sessions keep working with internet. We also remember
-                // the remoteUrl separately so tonightThumbFailed() can
-                // swap to it if the local URL 404s at the browser.
-                this.tonight.thumbs = {
-                    ...this.tonight.thumbs,
-                    [item.name]: found ? {
-                        url:       found.localUrl || found.thumbnailUrl,
-                        remoteUrl: found.thumbnailUrl,
-                        title:     found.title,
-                        credit:    found.credit,
-                        missing:   false
-                    } : { url: null, missing: true }
-                };
+                // No catalogue slug (planet / comet / …): go straight to
+                // the online lookup.
+                await this._tonightLookupThumb(item);
             }
+        },
+
+        // Online thumbnail lookup for a Tonight card via /api/sky/image
+        // (NASA Image Library / Wikipedia). Used as the fallback when the
+        // bundled DSO cutout isn't available for the object. Tries the
+        // common name first (better indexed on NASA), then the catalogue
+        // name. Prefers the backend's local cached-on-disk URL when it
+        // downloaded the bytes; remembers remoteUrl so tonightThumbFailed
+        // can swap to it if the local URL 404s at the browser.
+        async _tonightLookupThumb(item) {
+            const tryNames = [];
+            if (item.commonName) tryNames.push(item.commonName);
+            tryNames.push(item.name);
+            let found = null;
+            for (const q of tryNames) {
+                try {
+                    const r = await this.apiGet(`/api/sky/image?name=${encodeURIComponent(q)}`);
+                    if (r?.available) { found = r; break; }
+                } catch { /* keep trying remaining variants */ }
+            }
+            this.tonight.thumbs = {
+                ...this.tonight.thumbs,
+                [item.name]: found ? {
+                    url:       found.localUrl || found.thumbnailUrl,
+                    remoteUrl: found.thumbnailUrl,
+                    title:     found.title,
+                    credit:    found.credit,
+                    source:    'remote',
+                    missing:   false
+                } : { url: null, missing: true }
+            };
         },
 
         // Trigger the prefetch endpoint that walks the whole catalogue +
