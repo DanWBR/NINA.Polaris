@@ -30,20 +30,29 @@ Frame count + reference star count update each second.
 ## Controls (sidebar)
 
 Right sidebar is split top-to-bottom: inputs (Exp / Gain / Bin /
-Filter) at top, Polaris Shutter centered in the middle, secondary
-toggles at bottom. The shutter unifies Capture / Loop / Stop into
-a single gesture button:
+Filter) at top, Polaris Shutter centered in the middle, the session
+readout + secondary buttons at bottom. **The shutter owns the whole
+live-stack lifecycle (ASIAIR-style) — there is no separate Stack
+toggle:**
 
-- **Tap shutter** when idle, single capture (snap)
-- **Long-press 600ms** when idle, enter loop mode (ring fills
-  amber during the hold to confirm)
-- **Tap shutter** while exposing or looping, abort
+- **Tap the shutter** to start: it arms stacking and begins the LIVE
+  loop. A fresh/empty stack starts silently; a stopped stack that
+  already has frames asks **Continue** (keep adding) or **Restart**
+  (clear and begin fresh).
+- **Tap again** while running to stop: the capture loop and stacking
+  both stop, but the accumulator is **kept** — the next tap offers
+  Continue / Restart.
 
-Secondary toggles + buttons:
+Session readout + buttons at the bottom:
 
-- **Stack ON / Stack**, toggle integration on/off
-- **Reset** (visible when Stack ON), discards the running stack +
-  reference. Next incoming frame becomes the new reference.
+- **Stacking readout** — a compact pill next to the shutter showing
+  state (⚫ Stacking / ⏸ Stopped), total integration time, frames
+  stacked, and frames discarded (rejected by the kappa-sigma quality
+  gate). The integration timer counts only while actively stacking —
+  it freezes on stop and at the duration cap, and resumes on Continue.
+- **↻ Reset**, discards the running stack + reference and starts a
+  fresh stack on the next frame (the explicit "clear the accumulator"
+  action).
 - **⛶ View**, OpenSeadragon viewer on the current stack
 - **Save**, write the current stack to FITS on demand. User-requested
   saves land in a dedicated `stacked/` subfolder (separate from the

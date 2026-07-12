@@ -58,7 +58,7 @@
     {
       "icon": "📸",
       "title": "Capture: live stacking or an autorun",
-      "body": "Two ways to shoot, and you can mix them. For instant EAA-style results, open LIVE and toggle Stack ON: the integrated image builds up live as each frame lands. For a full imaging run, open AUTORUN, add a target row (filter, exposure, count), enable dithering and meridian flip if needed, set your end-actions, and hit Start sequence. Subs are saved to disk for stacking later, and you can still watch them arrive in LIVE.",
+      "body": "Two ways to shoot, and you can mix them. For instant EAA-style results, open LIVE and tap the shutter: it starts the loop and stacks each frame into the live image as it lands (tap again to stop — the stack is kept). For a full imaging run, open AUTORUN, add a target row (filter, exposure, count), enable dithering and meridian flip if needed, set your end-actions, and hit Start sequence. Subs are saved to disk for stacking later, and you can still watch them arrive in LIVE.",
       "tip": "You can close the browser and walk away. The server keeps capturing, so come back in the morning to a folder full of subs.",
       "image": "/assets/screenshots/gs-live.jpg"
     },

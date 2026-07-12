@@ -22,17 +22,34 @@ guide camera is on and the GUIDE backend is `native`.
 
 ## Bottom control bar
 
+The bottom bar holds only the capture/guide actions (Exp / Gain / Bin
+inline and left-aligned); the settle + dither knobs live in the
+**Dithering** section of the **Status** pane on the right.
+
 | Control | Meaning |
 |---|---|
 | **Exp (s)** | Guide-camera exposure per frame, picked from a dropdown of presets (0.1, 0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0 s). Persists to the rig. |
 | **Gain** | Guide-camera gain (native only), picked from a dropdown built from the camera's reported min/max plus evenly spaced intermediate values. |
 | **Bin 2x2** | Bin the guide camera 2×2 for a brighter, smaller frame. |
-| **Settle px / s / Timeout** | Settle tolerance, minimum settled time, hard timeout used after calibration starts and after a dither. |
 | **Loop** | Capture continuously without guiding (framing, focusing the guide scope). |
 | **Start Guiding** | Calibrate if needed, auto-select a star, then guide. |
 | **Auto-select Star** | Pick the brightest suitable star. |
 | **Pause / Resume / Stop** | Pause keeps the lock; Stop ends the loop (and aborts an in-progress calibration). |
-| **Dither / px / RA only** | Manual one-shot dither. (Automatic dithering is driven by the AUTORUN sequencer or the LIVE tab — see below.) |
+
+The **Status / Settings / Calibration** side panel opens directly under
+the **Built-In / External** backend selector — there is no separate
+"PHD2 Native" tab, and there is no Disconnect button (the guider
+connection is managed from **RIGS**). The chart above resizes with the
+window so the graph, guide frame, and control bar stay on screen
+together, and **Clear History** sits in the chart's bottom-right corner.
+
+Settle + dither controls (in **Status → Dithering**):
+
+| Control | Meaning |
+|---|---|
+| **Settle px / s / Timeout s** | Settle tolerance, minimum settled time, and the hard timeout used after calibration starts and after a dither. |
+| **Dither px / RA only** | Dither amplitude and axis restriction for the manual and automatic dithers. |
+| **⤡ Dither now** | Fire a one-shot dither immediately (guiding must be active). |
 
 ## Calibration
 

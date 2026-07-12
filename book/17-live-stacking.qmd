@@ -23,7 +23,7 @@ this chapter covers that mode in detail.
 
 Polaris does not drive the capture from the LIVE tab; it subscribes to
 frames arriving from anywhere: the sequence engine, a PREVIEW snap, or
-the camera stream. When **Stack ON** is enabled, each incoming frame:
+the camera stream. While stacking is active, each incoming frame:
 
 1. has its stars detected,
 2. is aligned against the reference (the first frame's star pattern)
@@ -44,18 +44,25 @@ running statistics along the bottom.](images/live-view.jpg){#fig-live-stacking}
 
 The right sidebar is split top to bottom: the capture inputs (Exp,
 Gain, Bin, Filter) at the top, the Polaris Shutter centered in the
-middle, and secondary toggles at the bottom. The shutter unifies
-Capture, Loop, and Stop into a single gesture button: tap when idle
-for a single capture (a snap), long-press for 600 ms when idle to
-enter loop mode (the ring fills amber during the hold to confirm), and
-tap while exposing or looping to abort.
+middle, and the session readout plus secondary buttons at the bottom.
+The shutter owns the whole live-stack lifecycle, ASIAIR-style — there is
+no separate Stack toggle. Tapping the shutter arms stacking and starts
+the LIVE loop: a fresh, empty stack starts silently, while a stopped
+stack that already has frames asks **Continue** (keep adding) or
+**Restart** (clear and begin fresh). Tapping again while running stops
+both the loop and stacking but *keeps* the accumulator, so the next tap
+offers Continue or Restart.
 
-The secondary toggles and buttons:
+The session readout and buttons:
 
-- **Stack ON / Stack** toggles integration on and off.
-- **Reset**, visible when stacking is on, discards the running stack
-  and the reference; the next incoming frame becomes the new
-  reference.
+- **Stacking readout** is a compact pill next to the shutter showing the
+  state (Stacking / Stopped), total integration time, frames stacked,
+  and frames discarded by the kappa-sigma quality gate. The integration
+  timer counts only while actively stacking — it freezes on stop and at
+  the duration cap, and resumes on Continue.
+- **Reset** discards the running stack and the reference; the next
+  incoming frame becomes the new reference. This is the explicit "clear
+  the accumulator" action.
 - **View** opens a zoomable, pannable viewer (OpenSeadragon) on the
   current stack.
 - **Save** writes the current stack on demand as a FITS file (FITS is

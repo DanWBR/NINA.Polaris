@@ -51,10 +51,14 @@ points.](images/sky-explorer.jpg){#fig-sky-map}
 
 Real deep-sky imagery, the "I can actually see the nebula" background
 familiar from the ASIAIR (ZWO's all-in-one imaging controller), comes
-from the DSS Color survey (the Digitized Sky Survey, a photographic
-atlas of the entire sky), delivered as HiPS tiles (sky images cut
-into small squares that load progressively as you zoom, like an
-online road map). Two modes exist:
+from a HiPS survey (sky images cut into small squares that load
+progressively as you zoom, like an online road map). **DSS Color** (the
+Digitized Sky Survey) is the default. A survey picker next to the
+DSS Img toggle switches the imagery layer to another full-sky survey —
+DSS2 red+blue, Mellinger wide-field colour, 2MASS near-infrared, or
+unWISE infrared — all streamed from CDS/alasky, keeping your current
+pan and zoom. Only DSS Colour ships an offline bundle; the others are
+online-only. Two modes exist for DSS Colour:
 
 - **Online** (the default when no local bundle is present): tiles are
   streamed on demand from CDS Strasbourg (the astronomical data
@@ -111,19 +115,24 @@ Attribution: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg.
 
 ## DSO preview thumbnails
 
-Search results and atlas cards each show a small DSS2 cutout of the
-object, an ASIAIR-style photo per target, so you can tell a galaxy
-from a nebula at a glance, fully offline. The repo bundles Messier
-plus Caldwell coverage (about 206 images, roughly 3 MB) under
-`skydata/dso-thumbs/<SLUG>.jpg` (for example `M42.jpg`, `C14.jpg`),
-tracked with Git LFS. The app derives each file name (the "slug")
-from the result's catalog and id, and hides the image when none is
-bundled.
+Search results, atlas cards, and the **Tonight's Best** list each show
+a small DSS2 cutout of the object, an ASIAIR-style photo per target, so
+you can tell a galaxy from a nebula at a glance, fully offline. The repo
+bundles **full coverage** — every catalogued object with valid
+coordinates (about 17,700 images, roughly 215 MB, across M, C, NGC, IC,
+Arp, HH, LBN, LDN, Sh2, AGC, and HCG) under `skydata/dso-thumbs/<SLUG>.jpg`
+(for example `M42.jpg`, `NGC7000.jpg`, `SH2279.jpg`), tracked with Git
+LFS. The app derives each file name (the "slug") from the result's
+catalog and id, or by parsing the object name, and hides the image when
+none is bundled. Tonight's Best uses these bundled cutouts first, so it
+works instantly and offline; the online NASA/Wikipedia lookup is only a
+fallback for objects with no bundled thumb, such as planets and comets.
 
-To regenerate the set or widen coverage (bright NGC/IC, for example):
+To regenerate the set or widen coverage (`--workers` parallelises the
+fetch, ≤4 to stay polite to the shared CDS service):
 
 ```bash
-python scripts/build-dso-thumbs.py --catalogs M,C,NGC,IC --max-mag 11 --min-size 3
+python scripts/build-dso-thumbs.py --all-catalogs NGC,IC,AGC,HCG --workers 4
 ```
 
 The script is resumable and sources DSS2 Color imagery via the CDS
