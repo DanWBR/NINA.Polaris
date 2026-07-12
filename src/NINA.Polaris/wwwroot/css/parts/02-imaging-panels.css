@@ -515,8 +515,8 @@
    help icon keeps its own breathing room instead of being squeezed
    against a 100%-wide input. */
 .exp-gain-grid input:not([type="checkbox"]):not([type="radio"]) {
-    width: 72px;
-    flex: 0 0 72px;
+    width: 65px;
+    flex: 0 0 65px;
     min-width: 0;
 }
 .exp-gain-grid select {
