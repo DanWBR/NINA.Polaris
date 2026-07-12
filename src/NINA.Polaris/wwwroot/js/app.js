@@ -10161,10 +10161,23 @@ function ninaApp() {
             if (obj.catalog && (obj.catalogId || obj.catalogId === 0)) {
                 slug = ('' + obj.catalog + obj.catalogId).replace(/\s+/g, '').toUpperCase();
             } else if (obj.name) {
-                // "NGC 7000" / "M 42" / "IC 1396" -> NGC7000 (drop spaces +
-                // leading zeros on the number, matching the catalog id form).
-                const m = ('' + obj.name).trim().match(/^([A-Za-z]+)\s*0*(\d+[A-Za-z]?)/);
-                if (m) slug = (m[1] + m[2]).toUpperCase();
+                const raw = ('' + obj.name).trim();
+                // Sharpless is the one catalog whose prefix carries a digit
+                // ("Sh2"), so the generic letters-then-number split below
+                // mis-parses "Sh2 279" as catalog "Sh" + number "2" →
+                // wrong slug SH2 instead of the bundled SH2279. Handle
+                // "Sh2 279" / "Sh2-279" / "Sh 2-279" / "Sharpless 279"
+                // explicitly → SH2<number>.
+                let m = raw.match(/^sh\s*2\s*[-\s]?\s*0*(\d+)/i)
+                     || raw.match(/^sharpless\s*[-\s]?\s*0*(\d+)/i);
+                if (m) {
+                    slug = 'SH2' + m[1];
+                } else {
+                    // "NGC 7000" / "M 42" / "IC 1396" -> NGC7000 (drop spaces
+                    // + leading zeros on the number, matching the id form).
+                    m = raw.match(/^([A-Za-z]+)\s*0*(\d+[A-Za-z]?)/);
+                    if (m) slug = (m[1] + m[2]).toUpperCase();
+                }
             }
             if (!slug) return '';
             return '/sky/data/skydata/dso-thumbs/' + slug + '.jpg';
