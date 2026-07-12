@@ -34116,6 +34116,15 @@ function ninaApp() {
             return `${usedMB} / ${totalMB} MB`;
         },
 
+        // Compact variant for narrow screens: free memory only (the
+        // used/total pair overflowed the activity bar on phones).
+        formatHostRamFree(usedMB, totalMB) {
+            if (!totalMB || totalMB <= 0) return '--';
+            const freeMB = Math.max(0, totalMB - usedMB);
+            if (totalMB >= 1024) return `${(freeMB / 1024).toFixed(1)} GB`;
+            return `${freeMB} MB`;
+        },
+
         // This browser tab's JS heap in MB, or null when the engine doesn't
         // expose it (only Chromium implements performance.memory; Safari and
         // Firefox don't, and there is no portable browser CPU metric). Read

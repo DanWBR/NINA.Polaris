@@ -1707,6 +1707,19 @@
 .host-amber { color: #fcd34d; }
 .host-red   { color: #fca5a5; font-weight: 600; }
 
+/* Narrow screens: the host stats row ate the whole activity bar
+   (field report). Drop the Client + Polaris chips and swap RAM/Disk
+   to their free-only compact values (the markup carries both spans;
+   only one renders per breakpoint). */
+.activity-host-value.host-val-compact { display: none; }
+@media (max-width: 900px) {
+    .activity-host-stat.activity-host-client,
+    .activity-host-stat.activity-host-polaris { display: none; }
+    .activity-host-value.host-val-full { display: none; }
+    .activity-host-value.host-val-compact { display: inline; }
+    .activity-bar-host { gap: 10px; }
+}
+
 /* Hardware identification chip, sits leftmost in the host group
    so the eye lands on "this is Polaris on a Pi 5" before the live
    numbers. Slightly muted compared to CPU/RAM since it's static. */
