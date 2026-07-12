@@ -1261,9 +1261,13 @@
     flex: 0 0 auto;
 }
 .guide-group .equip-driver-row > .input-sm {
-    flex: 1 1 auto;
+    /* Cap the field at 60% of the row and push it to the right edge,
+       so the captions stay left-aligned in their column and the value
+       boxes line up on a consistent right margin (field request). */
+    flex: 0 0 60%;
     min-width: 0;
-    width: auto;
+    width: 60%;
+    margin-left: auto;
 }
 
 /* Install-required banner: vendor SDK selected but the native DLLs
