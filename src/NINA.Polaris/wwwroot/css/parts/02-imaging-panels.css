@@ -511,19 +511,21 @@
     min-width: 0;
 }
 .exp-gain-grid > label { display: contents; }
-/* Fixed input width so both fields are the same size and the Gain "?"
-   help icon keeps its own breathing room instead of being squeezed
-   against a 100%-wide input. */
+/* Compact inputs that keep the Gain "?" help icon from being squeezed.
+   Rely on .input-sm's field-sizing:content (Chromium) so the value is
+   never cropped behind the number-spinner arrows — a hard width would
+   shove the trailing digit under the spinner. min-width sets the resting
+   size; the field grows to fit longer values instead of clipping. */
 .exp-gain-grid input:not([type="checkbox"]):not([type="radio"]) {
-    width: 65px;
-    flex: 0 0 65px;
-    min-width: 0;
+    width: auto;
+    flex: 0 0 auto;
+    min-width: 58px;
 }
-/* Exposure field (the only one with a preset datalist) gets a touch
-   more room for longer values like fractional seconds. */
-.exp-gain-grid input[list] {
-    width: 80px;
-    flex: 0 0 80px;
+/* Exposure field (the only one with a preset datalist) gets a bit more
+   room since it also carries the datalist affordance. */
+.exp-gain-grid input[list],
+.exp-gain-grid input[data-exposure-presets] {
+    min-width: 72px;
 }
 .exp-gain-grid select {
     width: auto;
