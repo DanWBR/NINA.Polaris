@@ -518,13 +518,50 @@ public class AutoFocusService {
             return (0, 1000, stars.Count);
         }
 
-        // Mean HFR + stdev across stars (desktop AverageHFR/HFRStdDev parity;
-        // the stdev is what feeds the 1/σ² fit weights).
-        double mean = stars.Average(s => s.HFR);
-        double variance = stars.Count > 1
-            ? stars.Sum(s => (s.HFR - mean) * (s.HFR - mean)) / (stars.Count - 1)
+        // Robust central HFR across stars. At a fixed focuser position every
+        // real star is defocused by the SAME amount, so their HFRs cluster
+        // tightly; spurious detections — merged donuts, nebula structure, hot
+        // regions — read far larger and, under a plain mean, spike the whole
+        // point (the HFR 28-30 outliers that shatter an otherwise smooth
+        // V-curve). Sigma-clip around the median (MAD-scaled) and average only
+        // the survivors so the point tracks the true defocus size — what keeps
+        // ASIAIR's curve uniform. The survivor stdev still feeds the 1/σ² fit
+        // weights.
+        var (mean, stdev, _) = RobustMeanHfr(stars.Select(s => (double)s.HFR).ToList());
+        return (mean, stdev, stars.Count);
+    }
+
+    /// <summary>Robust per-frame central HFR: sigma-clip the per-star HFRs
+    /// around their median (MAD-scaled, floored so a genuinely tight frame
+    /// isn't over-trimmed) and return the (mean, sample-stdev, kept-count) of
+    /// the survivors. Rejects the spurious large-HFR detections that make a
+    /// plain mean jump around; pure math, unit-tested.</summary>
+    public static (double mean, double stdev, int kept) RobustMeanHfr(IReadOnlyList<double> hfrs) {
+        var h = hfrs.Where(x => x > 0 && !double.IsNaN(x)).OrderBy(x => x).ToList();
+        if (h.Count == 0) return (0, 0, 0);
+        if (h.Count <= 2) { double m0 = h.Average(); return (m0, 0, h.Count); }
+
+        double median = MedianSorted(h);
+        var absdev = h.Select(x => Math.Abs(x - median)).OrderBy(x => x).ToList();
+        double sigma = 1.4826 * MedianSorted(absdev);            // MAD → σ estimate
+        // Clip band: 3σ, but never tighter than a small fraction of the
+        // median (+floor) so a naturally tight distribution keeps all stars.
+        double band = Math.Max(3.0 * sigma, 0.15 * median + 0.05);
+        var kept = h.Where(x => Math.Abs(x - median) <= band).ToList();
+        if (kept.Count == 0) kept = h;
+
+        double mean = kept.Average();
+        double variance = kept.Count > 1
+            ? kept.Sum(x => (x - mean) * (x - mean)) / (kept.Count - 1)
             : 0;
-        return (mean, Math.Sqrt(variance), stars.Count);
+        return (mean, Math.Sqrt(variance), kept.Count);
+    }
+
+    /// <summary>Median of an already-ascending-sorted list.</summary>
+    private static double MedianSorted(IReadOnlyList<double> sorted) {
+        int n = sorted.Count;
+        if (n == 0) return 0;
+        return (n & 1) == 1 ? sorted[n / 2] : 0.5 * (sorted[n / 2 - 1] + sorted[n / 2]);
     }
 
     /// <summary>Fit-space projection of the sampled points: X = position,
