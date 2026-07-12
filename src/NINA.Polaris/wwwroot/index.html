@@ -3908,22 +3908,17 @@
                      calibration); Control is for monitoring + automation
                      after PHD2 is already running.
                      guideTab state is on app.js (default 'gui'). -->
-                <div class="guide-tabstrip">
-                    <!-- Native autoguider: a single "PHD2 Native" tab with the
-                         in-app PHD2-style dashboard. The PHD2 GUI + Control tabs
-                         are PHD2-only and hidden in native mode (and vice
-                         versa). -->
-                    <button class="guide-tab" :class="{ active: guideTab === 'native' }"
-                            x-show="guider.backend === 'native'"
-                            @click="guideTab = 'native'">PHD2 Native</button>
-                    <!-- PHD2 GUI tab is PHD2-only; hidden when the active
-                         rig uses the native autoguider (it has no external
-                         GUI to embed). -->
+                <!-- Tab strip is PHD2-external only: the backend radio above
+                     already says which guiding system is active, so the old
+                     single "PHD2 Native" tab was pure redundancy and the
+                     native dashboard now renders directly (field request).
+                     For the external backend the strip stays — its two tabs
+                     switch between different PANES (embedded PHD2 GUI vs the
+                     JSON-RPC Control panel), not between systems. -->
+                <div class="guide-tabstrip" x-show="guider.backend !== 'native'">
                     <button class="guide-tab" :class="{ active: guideTab === 'gui' }"
-                            x-show="guider.backend !== 'native'"
                             @click="guideTab = 'gui'; loadPhd2VncStatus(); phd2GuiEnsureReady()">PHD2 GUI</button>
                     <button class="guide-tab" :class="{ active: guideTab === 'control' }"
-                            x-show="guider.backend !== 'native'"
                             @click="guideTab = 'control'">Control</button>
                     <!-- Profile-sync indicator chip, lives in the strip so
                          it's visible from either tab. PHD2-only. -->
