@@ -371,33 +371,9 @@
     height: 64px;
     flex: 0 0 64px;
 }
-/* The compact ring alone (10%-white track + small icon) all but
-   disappeared against the dark run bar (field report). Paint a filled
-   disc behind the icon — same blue/red/amber gradients the old
-   .shutter-inner design used — so the Start control reads as the
-   primary button. inset 15% keeps the disc clear of both the outer
-   (r=46) and inner exposure (r=38) SVG rings. */
-.polaris-shutter.shutter-compact::before {
-    content: "";
-    position: absolute;
-    inset: 15%;
-    border-radius: 50%;
-    background: linear-gradient(160deg, #1e3a8a 0%, var(--accent2-deep) 100%);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45),
-                inset 0 1px 2px rgba(255, 255, 255, 0.15);
-    transition: background 0.2s ease;
-}
-.polaris-shutter.shutter-compact.shutter-active::before {
-    background: linear-gradient(160deg, #7f1d1d 0%, #ef4444 100%);
-}
-.polaris-shutter.shutter-compact.shutter-arming::before {
-    background: linear-gradient(160deg, #78350f 0%, #f59e0b 100%);
-}
-/* Brighter idle track so the hold-to-fill ring is visible before the
-   amber arming sweep starts. */
-.polaris-shutter.shutter-compact .shutter-track {
-    stroke: rgba(255, 255, 255, 0.22);
-}
+/* The filled-disc + brighter-track treatment that rescued this compact
+   ring now lives on the base .polaris-shutter rules (see the shutter
+   section below) — all shutters share it. */
 /* No counter under the compact AUTORUN ring: the absolute-positioned
    countdown (bottom:-28px) bled over the "+ Add" button right below the
    run bar, in red while running (field report). The run-meta text next
@@ -645,7 +621,9 @@ button,
 }
 .polaris-shutter .shutter-track {
     fill: none;
-    stroke: rgba(255, 255, 255, 0.10);
+    /* 22% (was 10%) so the idle ring is visible against dark panels
+       before any progress/arming sweep colours it. */
+    stroke: rgba(255, 255, 255, 0.22);
     stroke-width: 4;
 }
 .polaris-shutter .shutter-progress {
@@ -679,7 +657,8 @@ button,
    2π × 38 ≈ 238.76; inline style sets offset = 238.76 × (1 - p). */
 .polaris-shutter .shutter-track-inner {
     fill: none;
-    stroke: rgba(255, 255, 255, 0.10);
+    /* Matches the outer track's 22% bump for visibility. */
+    stroke: rgba(255, 255, 255, 0.22);
     stroke-width: 4;
 }
 .polaris-shutter .shutter-progress-inner {
@@ -695,34 +674,36 @@ button,
     filter: drop-shadow(0 0 2px rgba(34, 211, 238, 0.7));
     transition: stroke-dashoffset 0.2s linear;
 }
-.polaris-shutter .shutter-inner {
-    position: relative;
-    /* ~75% of the outer ring (200px). Keeps the visual ratio that
-       the old 128/96 pair had so the progress ring still reads
-       around the button rather than fused with it. */
-    width: 150px;
-    height: 150px;
+/* Filled disc behind every shutter icon (::before, no markup needed):
+   blue gradient idle, red while running, amber while arming — the
+   look debuted on the compact AUTORUN ring and was promoted to all
+   shutters (user request). inset 15% keeps the disc clear of both
+   the outer (r=46) and the AUTORUN inner exposure (r=38) SVG rings;
+   percentages scale with each pane's shutter size. Replaces the dead
+   .shutter-inner rules (no markup used them anymore). */
+.polaris-shutter::before {
+    content: "";
+    position: absolute;
+    inset: 15%;
     border-radius: 50%;
     background: linear-gradient(160deg, #1e3a8a 0%, var(--accent2-deep) 100%);
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45),
                 inset 0 1px 2px rgba(255, 255, 255, 0.15);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s ease, transform 0.1s ease;
+    transition: background 0.2s ease, transform 0.1s ease,
+                box-shadow 0.2s ease;
 }
-.polaris-shutter.shutter-active .shutter-inner {
+.polaris-shutter.shutter-active::before {
     background: linear-gradient(160deg, #7f1d1d 0%, #ef4444 100%);
 }
-.polaris-shutter.shutter-arming .shutter-inner {
+.polaris-shutter.shutter-arming::before {
     background: linear-gradient(160deg, #78350f 0%, #f59e0b 100%);
     transform: scale(0.97);
 }
-.polaris-shutter:not([aria-disabled="true"]):hover .shutter-inner {
+.polaris-shutter:not([aria-disabled="true"]):hover::before {
     box-shadow: 0 4px 18px rgba(var(--accent2-light-rgb), 0.35),
                 inset 0 1px 2px rgba(255, 255, 255, 0.2);
 }
-.polaris-shutter:not([aria-disabled="true"]):active .shutter-inner {
+.polaris-shutter:not([aria-disabled="true"]):active::before {
     transform: scale(0.94);
 }
 .polaris-shutter .shutter-icon {
