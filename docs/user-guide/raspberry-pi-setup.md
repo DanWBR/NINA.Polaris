@@ -651,7 +651,7 @@ crash. Skip if you used Docker (option B).
 ```bash
 sudo tee /etc/systemd/system/polaris.service > /dev/null <<'EOF'
 [Unit]
-Description=N.I.N.A. Polaris astrophotography server
+Description=Polaris Astro Controller astrophotography server
 After=network-online.target
 Wants=network-online.target
 

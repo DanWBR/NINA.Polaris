@@ -4,7 +4,7 @@ project:
 
 book:
   title: "The Polaris Handbook"
-  subtitle: "Browser-controlled astrophotography with N.I.N.A. Polaris"
+  subtitle: "Browser-controlled astrophotography with Polaris Astro Controller"
   author: "Daniel Wagner Oliveira de Medeiros"
   date: today
   repo-url: https://github.com/DanWBR/NINA.Polaris
@@ -95,7 +95,7 @@ format:
               {\fontsize{37}{44}\selectfont\bfseries The Polaris Handbook}\\[8mm]
               \textcolor{white}{\rule{58mm}{0.5pt}}\\[8mm]
               {\fontsize{13.5}{18}\selectfont Browser-controlled astrophotography}\\[2.2mm]
-              {\fontsize{13.5}{18}\selectfont with N.I.N.A. Polaris}};
+              {\fontsize{13.5}{18}\selectfont with Polaris Astro Controller}};
           \node[anchor=south, text=white, align=center]
             at ([yshift=20mm]current page.south)
             {\fontsize{15}{20}\selectfont Daniel Wagner Oliveira de Medeiros};
@@ -106,7 +106,7 @@ format:
           \vspace*{56mm}
           {\fontsize{28}{34}\selectfont\bfseries The Polaris Handbook\par}
           \vspace{9mm}
-          {\large Browser-controlled astrophotography with N.I.N.A. Polaris\par}
+          {\large Browser-controlled astrophotography with Polaris Astro Controller\par}
           \vfill
           {\large Daniel Wagner Oliveira de Medeiros\par}
           \vspace{5mm}

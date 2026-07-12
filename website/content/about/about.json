@@ -1,7 +1,7 @@
 {
-  "title": "About N.I.N.A. Polaris",
+  "title": "About Polaris Astro Controller",
   "logo": "/favicon-192.png",
-  "lede": "N.I.N.A. Polaris is a self-hosted, browser-based astrophotography control, capture and processing suite. It runs entirely on your own device (a Raspberry Pi, mini PC, or computer) and is reached from any browser on your network, with no app to install on the viewing device. It controls your equipment (INDI, ASCOM, Alpaca, and native camera SDKs), runs live stacking, guiding, focusing, plate solving, and sequencing, and includes a full editor with AI background extraction, denoise, and deconvolution.",
+  "lede": "Polaris Astro Controller is a self-hosted, browser-based astrophotography control, capture and processing suite. It runs entirely on your own device (a Raspberry Pi, mini PC, or computer) and is reached from any browser on your network, with no app to install on the viewing device. It controls your equipment (INDI, ASCOM, Alpaca, and native camera SDKs), runs live stacking, guiding, focusing, plate solving, and sequencing, and includes a full editor with AI background extraction, denoise, and deconvolution.",
   "author": {
     "title": "Author & contact",
     "intro": "Created and maintained by",
@@ -11,7 +11,7 @@
     "bio": [
       "Daniel is a chemical engineer (UFRN, Brazil) and an experienced software developer with 21+ years of experience. He designs and ships production software across Windows Desktop, Linux and macOS, on mobile (Android and iOS with Xamarin), and increasingly with on-device AI.",
       "His main project is DWSIM, a free, open-source, CAPE-OPEN-compliant chemical process simulator he has developed since 2008. DWSIM models entire chemical plants: rigorous thermodynamics and phase equilibria, dozens of unit operations, petroleum characterization and dynamic simulation, running on Windows, Linux, macOS and even Android and iOS. It is used worldwide by students, universities and process engineers as an open alternative to commercial simulators, and it won the 2012 CAPE-OPEN Award.",
-      "N.I.N.A. Polaris brings that same engineering discipline to astrophotography: real numerical and scientific code, from astrometry, guiding and plate solving to image stacking, colour calibration and on-device AI, built to run reliably on hardware as small as a Raspberry Pi. It is where two decades of software engineering meet a lifelong pull toward the night sky."
+      "Polaris Astro Controller brings that same engineering discipline to astrophotography: real numerical and scientific code, from astrometry, guiding and plate solving to image stacking, colour calibration and on-device AI, built to run reliably on hardware as small as a Raspberry Pi. It is where two decades of software engineering meet a lifelong pull toward the night sky."
     ],
     "email": "",
     "github": "https://github.com/DanWBR",
@@ -21,7 +21,7 @@
   },
   "license": {
     "title": "Open-source & license",
-    "pre": "N.I.N.A. Polaris is free, open-source software licensed under the",
+    "pre": "Polaris Astro Controller is free, open-source software licensed under the",
     "licenseName": "GNU Affero General Public License v3.0 (AGPL-3.0)",
     "licenseUrl": "https://www.gnu.org/licenses/agpl-3.0.html",
     "mid": ". It is derived from",
@@ -43,7 +43,7 @@
   },
   "credits": {
     "title": "Credits & acknowledgements",
-    "intro": "N.I.N.A. Polaris stands on the shoulders of a large community of astronomy and open-source projects. Some we derive code from, some we studied as a reference, and many ship inside the capture and processing stack. Thank you to every author below. Full license texts are bundled with the app and in the source repository.",
+    "intro": "Polaris Astro Controller stands on the shoulders of a large community of astronomy and open-source projects. Some we derive code from, some we studied as a reference, and many ship inside the capture and processing stack. Thank you to every author below. Full license texts are bundled with the app and in the source repository.",
     "groups": [
       {
         "title": "Built on N.I.N.A.",

@@ -1,10 +1,10 @@
-# N.I.N.A. Polaris
+# Polaris Astro Controller
 
 **Cross-platform headless astronomy controller for Raspberry Pi, ARM64 SBCs, and Windows mini PCs.**
 
-> ⚠️ **N.I.N.A. Polaris is a community-driven fork of [N.I.N.A.](https://nighttime-imaging.eu/)** It is **not** affiliated with or supported by the official N.I.N.A. development team. Please **don't** ask them for support with this fork, open issues here instead.
+> ⚠️ **Polaris Astro Controller is a community-driven fork of [N.I.N.A.](https://nighttime-imaging.eu/)** It is **not** affiliated with or supported by the official N.I.N.A. development team. Please **don't** ask them for support with this fork, open issues here instead.
 
-N.I.N.A. Polaris is a lightweight, browser-controlled astrophotography system built on ASP.NET Core. It brings the power of [N.I.N.A.](https://nighttime-imaging.eu/) (Nighttime Imaging 'N' Astronomy) to single-board computers and small-form-factor PCs, with a responsive Web UI accessible from any device on the network.
+Polaris Astro Controller is a lightweight, browser-controlled astrophotography system built on ASP.NET Core. It brings the power of [N.I.N.A.](https://nighttime-imaging.eu/) (Nighttime Imaging 'N' Astronomy) to single-board computers and small-form-factor PCs, with a responsive Web UI accessible from any device on the network.
 
 The Raspberry Pi (or Windows mini PC) acts as a data broker, controlling hardware, saving FITS files, and streaming images, while your laptop, tablet, or phone handles all the heavy rendering in the browser.
 
@@ -346,7 +346,7 @@ handshake; per-rig override in the LIVE tab toolbar. See
 
 ## Support the project
 
-If N.I.N.A. Polaris saves you an evening of fiddling with rigs and you want to
+If Polaris Astro Controller saves you an evening of fiddling with rigs and you want to
 chip in for hosting / a coffee / dark-sky travel:
 
 [**❤️ Donate via Stripe**](https://buy.stripe.com/9B68wPeoLcMSgOz2iJbMQ02)
@@ -380,7 +380,7 @@ images calibrated with PCC, please credit:
 
 ## Acknowledgements
 
-N.I.N.A. Polaris stands on the shoulders of a large community of astronomy and
+Polaris Astro Controller stands on the shoulders of a large community of astronomy and
 open-source projects. Some we derive code from, some we studied as a reference,
 and many ship inside the capture and processing stack. The same list is shown
 in-app under **HELP -> Credits & acknowledgements**. Thank you to every author
@@ -464,7 +464,7 @@ used here and not listed, it is an oversight, not an intent, please
 
 ## License
 
-N.I.N.A. Polaris as a whole is licensed under the **GNU Affero General Public
+Polaris Astro Controller as a whole is licensed under the **GNU Affero General Public
 License v3.0** (AGPL-3.0). See [`LICENSE.txt`](LICENSE.txt) and
 [`NOTICE`](NOTICE).
 

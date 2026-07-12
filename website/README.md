@@ -1,6 +1,6 @@
-# N.I.N.A. Polaris website
+# Polaris Astro Controller website
 
-The marketing site for N.I.N.A. Polaris, built with [Astro](https://astro.build)
+The marketing site for Polaris Astro Controller, built with [Astro](https://astro.build)
 and edited visually with [TinaCMS](https://tina.io). Static output, so it deploys
 anywhere (GitHub Pages, Netlify, Vercel, Cloudflare Pages, or bundled into the
 app's `wwwroot/`).

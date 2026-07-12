@@ -1,6 +1,6 @@
 # The Polaris Handbook
 
-The single, organized reference for everything N.I.N.A. Polaris: usage and
+The single, organized reference for everything Polaris Astro Controller: usage and
 internals, built as a [Quarto](https://quarto.org) book. It consolidates the
 fragmented Markdown pages under `docs/` into one coherent narrative.
 

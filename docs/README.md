@@ -1,4 +1,4 @@
-# N.I.N.A. Polaris — Documentation
+# Polaris Astro Controller — Documentation
 
 Everything is organized here. New users want the **User Guide**; integrators
 want the **API & Configuration reference**; the rest are focused setup notes

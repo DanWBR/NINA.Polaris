@@ -1,4 +1,4 @@
-N.I.N.A. Polaris bundled DSO catalog (dso.db)
+Polaris Astro Controller bundled DSO catalog (dso.db)
 ==============================================
 
 This SQLite database aggregates the following astronomical catalogs.

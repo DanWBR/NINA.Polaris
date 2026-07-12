@@ -1,6 +1,6 @@
-# N.I.N.A. Polaris, Requirements
+# Polaris Astro Controller, Requirements
 
-Complete inventory of every piece of software N.I.N.A. Polaris depends on or
+Complete inventory of every piece of software Polaris Astro Controller depends on or
 talks to, split by **required** (the app won't boot or won't have the
 named functionality without it) and **optional** (lights up an extra feature
 when present, gracefully degrades otherwise). Two columns: **Windows** (mini-PC,
@@ -60,7 +60,7 @@ binary.
 Run in **Admin PowerShell**:
 
 ```powershell
-New-NetFirewallRule -DisplayName "N.I.N.A. Polaris" `
+New-NetFirewallRule -DisplayName "Polaris Astro Controller" `
     -Direction Inbound -Protocol TCP -LocalPort 5000 `
     -Action Allow -Profile Private,Domain
 # mDNS (Bonjour) discovery

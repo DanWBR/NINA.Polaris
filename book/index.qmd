@@ -1,6 +1,6 @@
 # Preface {.unnumbered}
 
-N.I.N.A. Polaris grew fast. What started as a lightweight,
+Polaris Astro Controller grew fast. What started as a lightweight,
 browser-controlled fork (an independent offshoot that shares its
 starting code) of N.I.N.A., the popular Windows desktop imaging
 program, built for the Raspberry Pi, is now a complete

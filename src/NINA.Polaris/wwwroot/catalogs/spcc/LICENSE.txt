@@ -1,4 +1,4 @@
-N.I.N.A. Polaris bundled SPCC curve databases
+Polaris Astro Controller bundled SPCC curve databases
 =============================================
 
 This folder holds the reference data the SpectroPhotometric Color

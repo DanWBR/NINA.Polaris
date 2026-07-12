@@ -1,4 +1,4 @@
-N.I.N.A. Polaris
+Polaris Astro Controller
 ================
 
 Copyright (C) 2024-2026 Daniel Wagner (DanWBR) and the N.I.N.A. Polaris
@@ -29,7 +29,7 @@ v3.0 is a "Secondary License", and MPL-covered code that is not Incompatible
 With Secondary Licenses may be combined into a Larger Work distributed under
 that Secondary License. Accordingly:
 
-  * The work as a whole (N.I.N.A. Polaris) is distributed under the terms
+  * The work as a whole (Polaris Astro Controller) is distributed under the terms
     of the GNU Affero General Public License v3.0 (see LICENSE.txt).
 
   * The individual source files derived from N.I.N.A. remain available under
@@ -38,7 +38,7 @@ that Secondary License. Accordingly:
     Larger Work may, at their option, use those specific files under either
     the MPL-2.0 or the AGPL-3.0, as permitted by MPL-2.0 section 3.3.
 
-Files that are original to N.I.N.A. Polaris (not derived from N.I.N.A.) are
+Files that are original to Polaris Astro Controller (not derived from N.I.N.A.) are
 licensed solely under the AGPL-3.0 and carry an AGPL header.
 
 --------------------------------------------------------------------------

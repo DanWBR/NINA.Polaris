@@ -160,7 +160,7 @@ The `.deb` opens these for you; on a portable or Windows install, allow them:
 
 ```powershell
 # Windows (Admin PowerShell)
-New-NetFirewallRule -DisplayName "N.I.N.A. Polaris" -Direction Inbound -Protocol TCP -LocalPort 5000 -Action Allow -Profile Private,Domain
+New-NetFirewallRule -DisplayName "Polaris Astro Controller" -Direction Inbound -Protocol TCP -LocalPort 5000 -Action Allow -Profile Private,Domain
 New-NetFirewallRule -DisplayName "mDNS (Polaris)"   -Direction Inbound -Protocol UDP -LocalPort 5353 -Action Allow -Profile Private,Domain
 ```
 ```bash

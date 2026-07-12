@@ -1,4 +1,4 @@
-# Contributing to N.I.N.A. Polaris
+# Contributing to Polaris Astro Controller
 
 This file is for **developers** who want to fix a bug, add a feature,
 or just understand how Polaris is put together well enough to read

@@ -1,6 +1,6 @@
 # What is Polaris? {#sec-what-is-polaris}
 
-N.I.N.A. Polaris is a self-hosted astrophotography controller: it
+Polaris Astro Controller is a self-hosted astrophotography controller: it
 runs entirely on hardware you own, with no cloud service and no
 account. A single server program lives on a small computer at the
 telescope (a Raspberry Pi, another ARM single-board computer, meaning

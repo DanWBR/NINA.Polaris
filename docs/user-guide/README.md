@@ -1,6 +1,6 @@
-# N.I.N.A. Polaris, User Guide
+# Polaris Astro Controller, User Guide
 
-Welcome. N.I.N.A. Polaris is a browser-controlled astrophotography
+Welcome. Polaris Astro Controller is a browser-controlled astrophotography
 controller running on a Raspberry Pi, mini-PC, or any small Linux/Windows
 host on your network. You point any device (laptop, tablet, phone) at
 the host and get the full equipment + capture + processing workflow

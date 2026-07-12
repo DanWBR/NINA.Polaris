@@ -289,7 +289,7 @@ optionally, a systemd user unit it can restart cleanly:
 
 ```ini
 [Unit]
-Description=N.I.N.A. Polaris
+Description=Polaris Astro Controller
 
 [Service]
 WorkingDirectory=%h/polaris

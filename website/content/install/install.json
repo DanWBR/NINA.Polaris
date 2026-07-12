@@ -289,7 +289,7 @@
   "firewall": {
     "title": "Open the firewall",
     "sub": "Polaris listens on TCP 5000 (HTTP) and UDP 5353 (mDNS, so <hostname>.local resolves). Both are blocked by default.",
-    "windows": "New-NetFirewallRule -DisplayName \"N.I.N.A. Polaris\" -Direction Inbound -Protocol TCP -LocalPort 5000 -Action Allow -Profile Private,Domain\nNew-NetFirewallRule -DisplayName \"mDNS (Polaris)\" -Direction Inbound -Protocol UDP -LocalPort 5353 -Action Allow -Profile Private,Domain",
+    "windows": "New-NetFirewallRule -DisplayName \"Polaris Astro Controller\" -Direction Inbound -Protocol TCP -LocalPort 5000 -Action Allow -Profile Private,Domain\nNew-NetFirewallRule -DisplayName \"mDNS (Polaris)\" -Direction Inbound -Protocol UDP -LocalPort 5353 -Action Allow -Profile Private,Domain",
     "linux": "sudo ufw allow 5000/tcp\nsudo ufw allow 5353/udp",
     "note": "On Linux without ufw: iptables -A INPUT -p tcp --dport 5000 -j ACCEPT. The .deb install handles this for you."
   },

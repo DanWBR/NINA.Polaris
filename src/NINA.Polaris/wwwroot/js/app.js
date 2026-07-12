@@ -1,5 +1,5 @@
 // =====================================================================
-// N.I.N.A. Polaris — frontend application script (Alpine.js)
+// Polaris Astro Controller — frontend application script (Alpine.js)
 // ---------------------------------------------------------------------
 // This is a single large file by design: ninaApp() (below) returns ONE
 // Alpine x-data object (~740 methods) bound to <body> in index.html, so
@@ -6114,7 +6114,7 @@ function ninaApp() {
                 const label = (rig?.name
                     || this.deviceFriendlyName
                     || this.deviceMdnsName || '').trim();
-                document.title = label ? (label + ' - Polaris') : 'N.I.N.A. Polaris';
+                document.title = label ? (label + ' - Polaris') : 'Polaris Astro Controller';
                 // In the Android wrapper the UI runs in a cross-origin
                 // iframe; the shell can't read our document.title, so push
                 // the label up so it can set this instance's tab text.

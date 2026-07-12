@@ -1,6 +1,6 @@
 # Requirements Matrix {#sec-requirements}
 
-This appendix is the complete inventory of everything N.I.N.A. Polaris
+This appendix is the complete inventory of everything Polaris Astro Controller
 depends on or talks to, split into **required** (the server will not
 boot, or a named feature will not exist, without it) and **optional**
 (lights up an extra feature when present, degrades gracefully
@@ -67,7 +67,7 @@ standard Linux firewall front end) by default.
 On Windows, run in an Admin PowerShell:
 
 ```powershell
-New-NetFirewallRule -DisplayName "N.I.N.A. Polaris" `
+New-NetFirewallRule -DisplayName "Polaris Astro Controller" `
     -Direction Inbound -Protocol TCP -LocalPort 5000 `
     -Action Allow -Profile Private,Domain
 # mDNS (Bonjour) discovery

@@ -13,7 +13,7 @@ import assistantJson from '../../content/assistant/assistant.json';
 
 // ---- Static site config (links/meta, not editorial copy) ----
 export const site = {
-  name: 'N.I.N.A. Polaris',
+  name: 'Polaris Astro Controller',
   tagline: 'Browser-controlled astrophotography for any device',
   description:
     "A lightweight, browser-controlled astrophotography control system on ASP.NET Core. Runs on Raspberry Pi, mini PCs, and Windows. INDI + ASCOM/Alpaca, PHD2 guiding, plate solving, live stacking, advanced sequencer, and a relay server for remote access.",

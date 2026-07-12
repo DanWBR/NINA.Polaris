@@ -1,5 +1,5 @@
 {
-  "name": "N.I.N.A. Polaris",
+  "name": "Polaris Astro Controller",
   "short_name": "Polaris",
   "description": "Web-based astrophotography control for INDI / ASCOM / Alpaca rigs — capture, plate-solve, autofocus, polar align, live stack, edit and post-process all from your phone or laptop browser.",
   "start_url": "/",

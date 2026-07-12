@@ -153,7 +153,7 @@ without spinning up the VS SSH machinery. Ships in `deploy/deploy-to-pi.ps1`.
 
    ```ini
    [Unit]
-   Description=N.I.N.A. Polaris
+   Description=Polaris Astro Controller
 
    [Service]
    WorkingDirectory=%h/polaris

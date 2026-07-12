@@ -1,4 +1,4 @@
-// N.I.N.A. Polaris
+// Polaris Astro Controller
 // Copyright (C) 2024-2026 Daniel Wagner (DanWBR) and the N.I.N.A. Polaris contributors
 //
 // This program is free software: you can redistribute it and/or modify it
@@ -31,7 +31,7 @@
         return [
             {
                 center: true,
-                title: 'Welcome to N.I.N.A. Polaris',
+                title: 'Welcome to Polaris Astro Controller',
                 body: 'This quick tour walks through the main screens and the order you use them in on a typical night. You can leave any time with Skip, or replay it later from the Help tab.',
                 before: function (a) { a.tab = 'home'; }
             },
@@ -148,7 +148,7 @@
             {
                 target: '.brand', placement: 'bottom', skipIfMissing: true,
                 title: 'Top bar — app + version',
-                body: 'The N.I.N.A. Polaris logo (click it to jump Home) and the running version number.'
+                body: 'The Polaris Astro Controller logo (click it to jump Home) and the running version number.'
             },
             {
                 target: '[data-tour="statusbar-indi"]', placement: 'bottom', skipIfMissing: true,

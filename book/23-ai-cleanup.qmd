@@ -129,7 +129,7 @@ ready-made `.onnx` files from inside the app:
 
 1. **Settings → AI inference (ONNX) → Download models**, click
    **Refresh catalog**. By default this lists the models hosted in
-   the public N.I.N.A. Polaris model repository on SourceForge; no
+   the public Polaris Astro Controller model repository on SourceForge; no
    configuration needed.
 2. Click **Download** next to a model. It streams into the host's
    writable models directory (resolved through the same priority

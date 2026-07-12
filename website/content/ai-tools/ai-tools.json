@@ -1,6 +1,6 @@
 {
   "title": "AI Tools",
-  "lede": "N.I.N.A. Polaris ships a full suite of AI-powered image processing tools that run entirely on your local hardware. No cloud, no subscriptions, no data leaving your device. From background removal to super-resolution, every tool is available directly in the browser-based interface.",
+  "lede": "Polaris Astro Controller ships a full suite of AI-powered image processing tools that run entirely on your local hardware. No cloud, no subscriptions, no data leaving your device. From background removal to super-resolution, every tool is available directly in the browser-based interface.",
   "glanceTitle": "At a glance",
   "glance": [
     { "label": "10 tools", "text": "covering background extraction, denoising, deconvolution, star removal, halo removal, and super-resolution upscaling" },

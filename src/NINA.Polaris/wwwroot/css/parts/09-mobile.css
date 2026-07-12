@@ -22,6 +22,9 @@
         column-gap: 6px;
     }
     .brand-version { display: none; }
+    /* Compact the wordmark to just "Polaris" on phones — the full
+       "ASTRO CONTROLLER" tag is too wide for the status bar. */
+    .brand-tag { display: none; }
 
     /* --- Param / control rows: wrap so the number inputs stack rather than
        pushing the row wider than the screen (POLAR RA/Exp/Settle/Gain, FOCUS

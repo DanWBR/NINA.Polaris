@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
-  "description": "Marketing website for N.I.N.A. Polaris",
+  "description": "Marketing website for Polaris Astro Controller",
   "scripts": {
     "dev": "tinacms dev -c \"astro dev\"",
     "dev:astro": "astro dev",

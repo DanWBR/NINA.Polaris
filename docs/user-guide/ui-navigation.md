@@ -1,6 +1,6 @@
 # UI navigation — where do I go to do X?
 
-A quick "task → panel → what to click" map of the N.I.N.A. Polaris web UI, for
+A quick "task → panel → what to click" map of the Polaris Astro Controller web UI, for
 when you know *what* you want but not *where* it lives. The left sidebar is the
 main navigation rail; each button opens one panel. Some panels have a pill/tab
 row at the top for sub-views.

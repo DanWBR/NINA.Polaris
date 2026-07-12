@@ -1,4 +1,4 @@
-// N.I.N.A. Polaris — UI internationalization runtime.
+// Polaris Astro Controller — UI internationalization runtime.
 //
 // Model: "English source as key" (gettext-style). The English text that
 // already lives in index.html / app.js IS the lookup key; a per-language
