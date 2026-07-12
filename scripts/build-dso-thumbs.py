@@ -33,9 +33,11 @@ Attribution: DSS2 Color, STScI/NASA, HEALPixed + served by CDS Strasbourg
 (hips2fits). Mirrored locally for offline field use.
 """
 import argparse
+import concurrent.futures
 import os
 import sqlite3
 import sys
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -102,6 +104,9 @@ def main() -> int:
     ap.add_argument("--min-size", type=float, default=3.0,
                     help="include objects at least this many arcmin even if faint")
     ap.add_argument("--limit", type=int, default=0, help="cap object count (0=all)")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="parallel downloads (keep small, <=4, out of respect "
+                         "for the shared CDS hips2fits service)")
     args = ap.parse_args()
 
     if not os.path.exists(DB):
@@ -165,22 +170,44 @@ def main() -> int:
     print(f"{len(rows)} objects selected ({'; '.join(sel)})")
     print(f"-> {OUT}")
 
-    done = skipped = failed = 0
-    for i, row in enumerate(rows, 1):
+    # Split resumable skips out first so the progress ticker reflects
+    # actual network work, then fetch with a small worker pool.
+    pending = []
+    skipped = 0
+    for row in rows:
         slug = slug_for(row["catalog"], row["catalog_id"])
         out_path = os.path.join(OUT, f"{slug}.jpg")
         if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
             skipped += 1
-            continue
-        ra_deg = row["ra_hours"] * 15.0
-        ok = fetch(ra_deg, row["dec_deg"], fov_deg(row["size_arcmin"]), out_path)
-        if ok:
-            done += 1
         else:
-            failed += 1
-        if i % 25 == 0 or i == len(rows):
-            print(f"  {i}/{len(rows)}  (new {done}, skip {skipped}, fail {failed})")
+            pending.append((row, out_path))
+    print(f"{skipped} already cached, {len(pending)} to download")
+
+    done = failed = 0
+    counter_lock = threading.Lock()
+
+    def work(item):
+        nonlocal done, failed
+        row, out_path = item
+        ok = fetch(row["ra_hours"] * 15.0, row["dec_deg"],
+                   fov_deg(row["size_arcmin"]), out_path)
+        with counter_lock:
+            if ok:
+                done += 1
+            else:
+                failed += 1
+            n = done + failed
+            if n % 25 == 0 or n == len(pending):
+                print(f"  {n}/{len(pending)}  (new {done}, fail {failed})", flush=True)
         time.sleep(0.05)  # be polite to the shared CDS service
+
+    workers = max(1, min(args.workers, 4))
+    if workers == 1:
+        for item in pending:
+            work(item)
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+            list(ex.map(work, pending))
 
     print(f"Done. new {done}, skipped {skipped}, failed {failed}")
     print("Commit with Git LFS (already tracked in .gitattributes):")
