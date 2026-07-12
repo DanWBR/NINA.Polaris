@@ -1252,6 +1252,19 @@
 .equip-driver-select {
     flex: 1;
 }
+/* GUIDE side-panel groups (e.g. the Dithering section) pair a short
+   uppercase caption with a value field on one line. Keep the caption
+   on a single line — "SETTLE PX" / "TIMEOUT S" were wrapping to two
+   rows (field report) — and let the input take the remaining width. */
+.guide-group .equip-driver-label {
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+.guide-group .equip-driver-row > .input-sm {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+}
 
 /* Install-required banner: vendor SDK selected but the native DLLs
    aren't reachable. Tints amber and links to the matching install doc. */
