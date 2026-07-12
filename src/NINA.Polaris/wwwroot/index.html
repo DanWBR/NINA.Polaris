@@ -2803,10 +2803,14 @@
                     <div class="af-progress" x-show="autoFocus.state === 'running'">
                         <div class="af-progress-bar">
                             <div class="af-progress-fill"
-                                 :style="'width: ' + Math.round(100 * Math.max(0, (autoFocus.currentSampleIndex + 1)) / Math.max(1, autoFocus.steps)) + '%'"></div>
+                                 :style="'width: ' + Math.round(100 * Math.max(0, (autoFocus.currentSampleIndex + 1)) / Math.max(1, autoFocus.steps, autoFocus.currentSampleIndex + 1)) + '%'"></div>
                         </div>
                         <div class="af-progress-info">
-                            <span>Sample <strong x-text="(autoFocus.currentSampleIndex + 1) + ' / ' + autoFocus.steps"></strong></span>
+                            <!-- `steps` (2*OffsetSteps+1) is the NOMINAL sweep; the trendline-arm
+                                 planner adds refinement points beyond it, so the running count can
+                                 exceed the nominal ("12/11"). Grow the shown total with it so the
+                                 fraction stays valid and the bar never overfills. -->
+                            <span>Sample <strong x-text="(autoFocus.currentSampleIndex + 1) + ' / ' + Math.max(autoFocus.steps, autoFocus.currentSampleIndex + 1)"></strong></span>
                             <span x-show="autoFocus.lastHfr">Last HFR: <strong x-text="autoFocus.lastHfr?.toFixed(2)"></strong></span>
                             <span x-show="autoFocus.lastStarCount">Stars: <strong x-text="autoFocus.lastStarCount"></strong></span>
                         </div>
