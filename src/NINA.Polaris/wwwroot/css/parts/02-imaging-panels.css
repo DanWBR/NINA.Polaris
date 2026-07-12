@@ -535,6 +535,12 @@
     min-width: 72px;
     max-width: none;
 }
+/* Hide the datalist dropdown arrow (▼) on the exposure input — it's
+   redundant next to the number-spinner and clutters the wider field.
+   The preset suggestions still work on focus/typing. */
+.exp-gain-grid input[list]::-webkit-calendar-picker-indicator {
+    display: none;
+}
 .exp-gain-grid select {
     width: auto;
     min-width: 64px;
