@@ -45,11 +45,11 @@
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260704-colorscheme">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260712-shutterdisc1">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260710-toolrails">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260712-uipolish1">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260712-guidetab1">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260702-stretchsection">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260705-wbsummary">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260712-uipolish1">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260711-polarbg">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260712-guidetab1">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260707-landscapephone">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260707-density2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -4046,6 +4046,8 @@
                                 </template>
                             </div>
                         </div>
+                        <button class="btn btn-xs guide-clearhist" @click="guiderClearHistory()"
+                                title="Clear the error history + RMS stats">Clear History</button>
                     </div>
                     <!-- Camera view + right column (bullseye + profile) -->
                     <div class="phd2-grid">
@@ -4168,6 +4170,8 @@
                         <span class="text-muted" style="margin-left:auto"
                               x-text="'tick ' + (guideChartTickCount || 0)"></span>
                     </div>
+                    <button class="btn btn-xs guide-clearhist" @click="guiderClearHistory()"
+                            title="Clear the error history + RMS stats">Clear History</button>
                 </div>
 
 
@@ -4331,6 +4335,43 @@
                             <button class="btn btn-sm btn-icon-only guide-alert-dismiss" title="Dismiss"
                                     @click="guideAlertDismissed = guider.lastAlert">&times;</button>
                         </div>
+                    </div>
+
+                    <!-- Dithering (Status pane). Moved out of the bottom
+                         control bar (field request) so the bar keeps only
+                         capture/guide actions. Same models the bar used. -->
+                    <div class="guide-group"
+                         x-show="guider.connected && (guiderDriver !== 'native' || guideSideTab === 'status')">
+                        <div class="guide-side-title">Dithering</div>
+                        <div class="equip-driver-row">
+                            <label class="equip-driver-label">Settle px</label>
+                            <input type="number" class="input-sm" x-model.number="guiderSettlePixels" step="0.1"
+                                   title="Guiding error must stay below this to count as settled">
+                        </div>
+                        <div class="equip-driver-row">
+                            <label class="equip-driver-label">Settle s</label>
+                            <input type="number" class="input-sm" x-model.number="guiderSettleTime" step="1"
+                                   title="How long the error must stay within tolerance">
+                        </div>
+                        <div class="equip-driver-row">
+                            <label class="equip-driver-label">Timeout s</label>
+                            <input type="number" class="input-sm" x-model.number="guiderSettleTimeout" step="1"
+                                   title="Give up settling after this many seconds">
+                        </div>
+                        <div class="equip-driver-row">
+                            <label class="equip-driver-label">Dither px</label>
+                            <input type="number" class="input-sm" x-model.number="guiderDitherPx" step="0.5" min="0.5" max="20"
+                                   title="Random offset applied per dither, in guide-camera pixels">
+                        </div>
+                        <label class="equip-driver-row" style="gap:6px; cursor:pointer">
+                            <input type="checkbox" x-model="guiderDitherRaOnly">
+                            <span style="font-size:12px">RA only</span>
+                        </label>
+                        <button class="btn btn-sm" style="width:100%; margin-top:6px"
+                                @click="guiderDither()" :disabled="!guider.guiding"
+                                title="Fire a manual dither now (guiding must be active)">
+                            ⤡ Dither now
+                        </button>
                     </div>
 
                     <div x-show="guiderDriver === 'native'">
@@ -4660,15 +4701,12 @@
                     <button class="btn btn-sm" @click="guiderPause()" x-show="guider.guiding && !guider.paused">Pause</button>
                     <button class="btn btn-sm" @click="guiderResume()" x-show="guider.paused">Resume</button>
                     <button class="btn btn-sm btn-danger" @click="guiderStop()">Stop</button>
-                    <span class="gb-sep"></span>
-                    <label class="gb-field">Settle px<input type="number" x-model.number="guiderSettlePixels" step="0.1"></label>
-                    <label class="gb-field">Settle s<input type="number" x-model.number="guiderSettleTime" step="1"></label>
-                    <label class="gb-field">Timeout<input type="number" x-model.number="guiderSettleTimeout" step="1"></label>
-                    <label class="gb-field">Dither px<input type="number" x-model.number="guiderDitherPx" step="0.5" min="0.5" max="20"></label>
-                    <label class="gb-check"><input type="checkbox" x-model="guiderDitherRaOnly"> RA only</label>
-                    <button class="btn btn-sm" @click="guiderDither()" :disabled="!guider.guiding">Dither</button>
-                    <button class="btn btn-sm" @click="guiderClearHistory()" style="margin-left:auto">Clear History</button>
-                    <button class="btn btn-sm btn-danger" @click="guiderDisconnect()">Disconnect</button>
+                    <!-- Dither/settle knobs moved to the side panel's Status
+                         pane ("Dithering" section); Clear History moved onto
+                         the chart itself; the old Disconnect button dropped —
+                         guider connection is managed from RIGS/equipment, so
+                         a bare disconnect here only left the tab in a dead
+                         state (field request). -->
                 </div>
 
                 </div><!-- /guide-shell -->
@@ -17705,7 +17743,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260711-shutterstack1"></script>
+    <script src="/js/app.js?v=20260712-guidetab1"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260710-hostclient"></script>

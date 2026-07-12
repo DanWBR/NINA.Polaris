@@ -128,6 +128,8 @@
 }
 
 .guide-chart {
+    /* relative: anchors the absolute .guide-clearhist corner button */
+    position: relative;
     margin: 12px 14px;
     background: #0d0d18;
     border: 1px solid var(--border);

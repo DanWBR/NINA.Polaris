@@ -314,7 +314,11 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 
 /* ----- PHD2-style native guiding view ----- */
 .phd2-view { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
-.phd2-graph { position:relative; background:#0a0a0c; border:1px solid #222; border-radius:6px; height:200px; }
+/* Responsive graph: viewport-relative height with a floor so the graph
+   + camera frame + bottom bar all fit on screen together instead of the
+   fixed 200px pushing the frame below the fold on short displays. */
+.phd2-graph { position:relative; background:#0a0a0c; border:1px solid #222; border-radius:6px;
+    height:clamp(160px, 24vh, 320px); }
 .phd2-graph-canvas { width:100%; height:100%; display:block; }
 .phd2-graph-hud { position:absolute; top:6px; left:8px; right:8px; display:flex;
     justify-content:space-between; pointer-events:none; font-size:11px; }
@@ -327,7 +331,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .phd2-grid { display:grid; grid-template-columns:1fr 220px; gap:8px; }
 @media (max-width:760px){ .phd2-grid { grid-template-columns:1fr; } }
 .phd2-cam { position:relative; background:#000; border:1px solid #222; border-radius:6px;
-    min-height:260px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+    min-height:min(260px, 32vh); overflow:hidden; display:flex; align-items:center; justify-content:center; }
 /* Zoom/pan wrapper: scaled at the centre so the frame + overlay move as one.
    line-height:0 collapses it to the image box; overflow on .phd2-cam clips the
    zoomed-in content. */
@@ -336,7 +340,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 /* Smooth (bilinear) upscale of the guide preview JPEG: it is rendered small
    server-side, so nearest-neighbour made the stars look blocky/posterized.
    ASIAIR does the same — interpolate for a clean guide image. */
-.phd2-cam-img { max-width:100%; max-height:420px; display:block; image-rendering:auto; cursor:crosshair; }
+.phd2-cam-img { max-width:100%; max-height:min(420px, 44vh); display:block; image-rendering:auto; cursor:crosshair; }
 .phd2-zoom-ctl { position:absolute; top:6px; left:6px; z-index:3; display:flex;
     align-items:center; gap:4px; background:rgba(0,0,0,0.45); border-radius:6px;
     padding:2px 4px; }
@@ -476,12 +480,16 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .guide-backend-radios { display:inline-flex; align-items:center; gap:10px;
     margin-left:12px; font-size:12px; }
 .guide-backend-radios label { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
-/* Single-row control bar pinned to the bottom of the GUIDE panel. */
-.guide-bottombar { flex:0 0 auto; display:flex; flex-wrap:wrap; align-items:flex-end;
-    gap:8px; padding:8px 10px; margin-top:8px; border-top:1px solid #222;
-    background:#0c0c10; border-radius:6px; }
-.guide-bottombar .gb-field { display:flex; flex-direction:column; font-size:10px;
-    color:#8a93a6; gap:3px; text-transform:uppercase; letter-spacing:.04em; }
+/* Single-row control bar pinned to the bottom of the GUIDE panel.
+   Slimmed to capture/guide actions (dither knobs live in the side
+   panel's Dithering section now): labels sit inline with their inputs
+   and the whole row is centred (field request). */
+.guide-bottombar { flex:0 0 auto; display:flex; flex-wrap:wrap; align-items:center;
+    justify-content:center; gap:8px; padding:8px 10px; margin-top:8px;
+    border-top:1px solid #222; background:#0c0c10; border-radius:6px; }
+.guide-bottombar .gb-field { display:flex; flex-direction:row; align-items:center;
+    font-size:10px; color:#8a93a6; gap:6px; text-transform:uppercase;
+    letter-spacing:.04em; }
 .guide-bottombar .gb-field input { width:64px; background:#11151c; color:#e6e9ef;
     border:1px solid #2a3140; border-radius:5px; padding:5px 7px; font-size:13px;
     outline:none; transition:border-color .12s; }
@@ -491,8 +499,13 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     font-size:13px; outline:none; transition:border-color .12s; cursor:pointer; }
 .guide-bottombar .gb-field select:focus { border-color:#2962ff; }
 .guide-bottombar .gb-check { display:flex; align-items:center; gap:5px; font-size:12px;
-    color:#cdd3de; cursor:pointer; align-self:flex-end; padding-bottom:6px; }
+    color:#cdd3de; cursor:pointer; }
 .guide-bottombar .gb-sep { width:1px; align-self:stretch; background:#222; margin:0 4px; }
+/* Clear History pinned to the chart's bottom-right corner (both the
+   native canvas graph and the PHD2 Chart.js panel host one). */
+.guide-clearhist { position:absolute; right:8px; bottom:6px; z-index:4;
+    opacity:0.85; }
+.guide-clearhist:hover { opacity:1; }
 @media (max-width:900px){
     /* Keep the parameters panel as a collapsible right-edge OVERLAY instead of
        stacking it below the graph. On a phone the graph area is precious, so an

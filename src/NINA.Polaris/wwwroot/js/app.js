@@ -30482,16 +30482,9 @@ function ninaApp() {
                 this.toast('PHD2 equipment disconnected', 'warn');
             } catch (e) { this.toast('Disconnect failed: ' + e.message, 'error'); }
         },
-        async guiderDisconnect() {
-            try {
-                await this.apiPost('/api/guider/disconnect');
-                this.guider.connected = false;
-                this.guider.appState = 'Stopped';
-                this.guider.guiding = false;
-                this.guider.recentSteps = [];
-                this.toast('PHD2 disconnected', 'warn');
-            } catch (e) { this.toast('PHD2 disconnect failed', 'error'); }
-        },
+        // (guiderDisconnect removed: the GUIDE tab's Disconnect button was
+        // dropped — guider connection is managed via RIGS/equipment, and a
+        // bare disconnect only left the tab dead until a reconnect there.)
 
         // ----- PH2X-4: Smart Calibrate -----
         async phd2SmartCalibrate() {
