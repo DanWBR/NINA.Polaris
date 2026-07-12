@@ -50,14 +50,14 @@
       "intro": "Plan what to shoot and where to point.",
       "items": [
         { "label": "Offline sky map", "text": "interactive sky atlas with bundled star data; works with no internet at the scope." },
-        { "label": "Offline DSS sky imagery", "text": "an optional real DSS photo background for the map that works fully offline at the telescope (provisionable, roughly 30 MB to 400 MB), with an online fallback when you have internet." },
+        { "label": "Real sky-survey background", "text": "a real photo background for the map, with a survey picker: DSS Colour (the offline-capable default, provisionable roughly 30 MB to 400 MB), plus DSS2, Mellinger, 2MASS, and unWISE streamed from CDS. DSS Colour works fully offline at the telescope, with an online fallback when you have internet." },
         { "label": "Target search", "text": "find deep-sky objects by name or catalog from the bundled DSO database, or enter manual RA/DEC." },
-        { "label": "DSO preview thumbnails", "text": "a small offline DSS thumbnail on every search result and atlas card, so galaxies and nebulae are easy to tell apart at a glance." },
+        { "label": "DSO preview thumbnails", "text": "a real photo of every catalogued object on search results, atlas cards, and the Tonight list — a fully-offline bundled cutout covering every object with coordinates (about 17,700 images across M, C, NGC, IC, Arp, Sh2, and more), so galaxies and nebulae are easy to tell apart at a glance." },
         { "label": "FOV overlays and framing", "text": "draw your camera's field of view on the map, rotate it, and drag to frame a target; the blue (mount) and red (target) rectangles track plate-solve results, plus a pink rectangle for the auxiliary camera's field when an Auxiliary Camera System is configured." },
         { "label": "Aux FOV confirmation", "text": "a plate solve from SKY fires a parallel solve on the auxiliary camera's own hardware, so the pink rectangle reflects the true rotation and scale the aux photo will come out with." },
         { "label": "Slew & center", "text": "send the mount to a target and plate-solve-center on it." },
         { "label": "Mosaic planner", "text": "lay out multi-panel mosaics over a target, with a live preview of the tile grid drawn right on the sky map as you adjust columns, rows, and overlap." },
-        { "label": "Tonight", "text": "altitude curves and the best objects to image for your location and date, with twilight and night windows; the ranking also surfaces large emission and dark nebulae that carry size but no stellar magnitude." },
+        { "label": "Tonight", "text": "altitude curves and the best objects to image for your location and date, with twilight and night windows, one entry per object (designations like M31 and NGC 224 are merged), a preview photo on each card; the ranking also surfaces large emission and dark nebulae that carry size but no stellar magnitude." },
         { "label": "Weather", "text": "current conditions and forecast for the observing site." },
         { "label": "Stellarium sync", "text": "drive the view from and to a Stellarium instance." }
       ]
@@ -121,6 +121,7 @@
       "icon": "📸", "color": "#3b82f6", "title": "LIVE", "tag": "Live stacking (EAA)",
       "intro": "Real-time electronically-assisted-astronomy stacking that builds an image as frames arrive.",
       "items": [
+        { "label": "One-tap shutter", "text": "the shutter runs the whole session ASIAIR-style: tap to start stacking, tap again to stop (the stack is kept, so you can continue or restart), with a live readout of integration time, frames stacked, and frames discarded." },
         { "label": "Continuous integration", "text": "with live alignment (star matching) and a growing preview." },
         { "label": "Per-frame pre-processing", "text": "optional calibration (auto-matched master dark/flat/bias) and GraXpert background extraction applied before each frame is added, running wherever the stack runs: in the browser via WebAssembly and WebGPU, or server-side through the GraXpert CLI or the RK3588 NPU." },
         { "label": "OSC color stacking", "text": "automatic for one-shot-color cameras." },
