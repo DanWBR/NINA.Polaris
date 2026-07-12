@@ -7293,16 +7293,22 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div x-show="equipTab === 'cam-ctrl'" class="indi-props-subtab"
                      style="padding:10px 0;">
 
-                    <!-- Top strip: main/guide selector + camera name + refresh -->
+                    <!-- Top strip: camera picker (ONLY when both the main and
+                         the guide camera expose native controls — with a
+                         single native camera the panel is already exclusive
+                         to it, the tab carries its name and a one-option
+                         dropdown was just noise) + count + refresh. -->
                     <div class="control-row"
                          style="margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;">
-                        <label style="font-size:12px;color:var(--text-muted);">Camera:</label>
-                        <select class="input-sm" x-model="camCtrl.which" @change="camCtrlLoad()">
-                            <option value="main" x-show="camCtrl.main.supported"
-                                    x-text="camCtrl.main.camera || 'Main camera'"></option>
-                            <option value="guide" x-show="camCtrl.guide.supported"
-                                    x-text="camCtrl.guide.camera || 'Guide camera'"></option>
-                        </select>
+                        <template x-if="camCtrl.main.supported && camCtrl.guide.supported">
+                            <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">
+                                Camera:
+                                <select class="input-sm" x-model="camCtrl.which" @change="camCtrlLoad()">
+                                    <option value="main" x-text="camCtrl.main.camera || 'Main camera'"></option>
+                                    <option value="guide" x-text="camCtrl.guide.camera || 'Guide camera'"></option>
+                                </select>
+                            </label>
+                        </template>
                         <span class="status-pill"
                               :class="camCtrlActive().supported ? 'status-ok' : 'status-warn'"
                               x-text="camCtrlActive().items.length + ' control' + (camCtrlActive().items.length === 1 ? '' : 's')"></span>
