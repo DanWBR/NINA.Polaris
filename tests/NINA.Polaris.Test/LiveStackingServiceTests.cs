@@ -192,6 +192,43 @@ public class LiveStackingServiceTests {
     }
 
     [Test]
+    public async Task ElapsedSeconds_FreezesAfterStop() {
+        // Field report: the "Total integration time" counter kept
+        // climbing after the operator pressed Stop. Elapsed must
+        // reflect ACTIVE stacking time, so a stopped stack freezes.
+        var svc = MakeService();
+        svc.Start();
+        await svc.AddFrameAsync(MakeFrame());   // first frame starts the timer
+        Assert.That(svc.FrameCount, Is.EqualTo(1));
+
+        System.Threading.Thread.Sleep(60);
+        svc.Stop();
+        var frozen = svc.ElapsedSeconds;
+        Assert.That(frozen, Is.GreaterThan(0), "some integration time should have accrued");
+
+        System.Threading.Thread.Sleep(120);
+        Assert.That(svc.ElapsedSeconds, Is.EqualTo(frozen),
+            "elapsed must not advance while stopped");
+    }
+
+    [Test]
+    public async Task ElapsedSeconds_ResumesAccruingAfterResume() {
+        // Stop banks the running segment; Resume must continue from
+        // that banked value, not restart at zero and not stay frozen.
+        var svc = MakeService();
+        svc.Start();
+        await svc.AddFrameAsync(MakeFrame());
+        System.Threading.Thread.Sleep(60);
+        svc.Stop();
+        var banked = svc.ElapsedSeconds;
+
+        svc.Resume();
+        System.Threading.Thread.Sleep(80);
+        Assert.That(svc.ElapsedSeconds, Is.GreaterThan(banked),
+            "elapsed should climb again once stacking resumes");
+    }
+
+    [Test]
     public void Reset_PreservesModeSetting() {
         // Mode is configured externally (by CLST-5 handshake or
         // user override); Reset is for the per-session accumulator

@@ -137,6 +137,15 @@ public class LiveStackingService {
     // Start() / Resume() when they want stacking.
     private bool _isRunning = false;
     private DateTime? _startedAt;
+    // Integration-time stopwatch. ElapsedSeconds must reflect the time
+    // spent ACTIVELY stacking, not raw wall-clock since the first frame:
+    // a stopped/paused stack (or one past the duration cap) has to FREEZE
+    // (field report — the "Total integration time" counter kept climbing
+    // after Stop). _elapsedAccrued banks completed running segments;
+    // _elapsedSegmentStart marks the start of the segment currently
+    // running (null while paused/stopped). Reset() clears both.
+    private TimeSpan _elapsedAccrued = TimeSpan.Zero;
+    private DateTime? _elapsedSegmentStart;
 
     /// <summary>When true, every raw frame received via
     /// <see cref="AddFrameAsync"/> is also persisted to disk via
@@ -226,10 +235,17 @@ public class LiveStackingService {
     /// <see cref="MaxDurationSeconds"/>.</summary>
     public DateTime? StartedAt => _startedAt;
 
-    /// <summary>Seconds elapsed since the first frame of the current
-    /// stack. 0 when no frame has been integrated yet.</summary>
-    public double ElapsedSeconds =>
-        _startedAt is { } t ? (DateTime.UtcNow - t).TotalSeconds : 0;
+    /// <summary>Seconds of ACTIVE integration for the current stack:
+    /// banked running segments plus the live segment if stacking is
+    /// currently running. Freezes while stopped/paused and past the
+    /// duration cap. 0 when no frame has been integrated yet.</summary>
+    public double ElapsedSeconds {
+        get {
+            var accrued = _elapsedAccrued;
+            if (_elapsedSegmentStart is { } s) accrued += DateTime.UtcNow - s;
+            return accrued.TotalSeconds;
+        }
+    }
 
     /// <summary>True when <see cref="MaxDurationSeconds"/> is set and
     /// the elapsed time has crossed it. UI uses this to render a
@@ -547,6 +563,8 @@ public class LiveStackingService {
             _lastMetaData = null;
             _lastBitDepth = 16;
             _startedAt = null;
+            _elapsedAccrued = TimeSpan.Zero;
+            _elapsedSegmentStart = null;
             LastFrameMedianHfr = 0;
             LastFrameStarCount = 0;
             LastFrameSnr = 0;
@@ -610,7 +628,32 @@ public class LiveStackingService {
     public void Start() {
         Reset();
         _isRunning = true;
+        // Segment starts when the first frame actually integrates
+        // (BeginElapsedSegment in the AddFrame first-frame path), so
+        // the counter reflects real integration, not arm-to-first-frame
+        // dead time. Reset() already cleared the accumulator.
         _logger.LogInformation("Live stacking started (buffer reset)");
+    }
+
+    /// <summary>Begin (or resume) accruing integration time from now.
+    /// No-op if a segment is already running. Called on the first
+    /// integrated frame and on Resume(). Lock-guarded (Monitor is
+    /// reentrant, so callers already holding _lock are fine).</summary>
+    private void BeginElapsedSegment() {
+        lock (_lock) _elapsedSegmentStart ??= DateTime.UtcNow;
+    }
+
+    /// <summary>Bank the running segment and stop accruing. Freezes
+    /// ElapsedSeconds. Called on Stop() and when the duration cap
+    /// fires. No-op if nothing is running. Lock-guarded so it can't
+    /// race with a concurrent freeze on the frame path.</summary>
+    private void FreezeElapsedSegment() {
+        lock (_lock) {
+            if (_elapsedSegmentStart is { } s) {
+                _elapsedAccrued += DateTime.UtcNow - s;
+                _elapsedSegmentStart = null;
+            }
+        }
     }
 
     /// <summary>Re-arm stacking WITHOUT clearing the accumulator. New
@@ -628,6 +671,9 @@ public class LiveStackingService {
             return;
         }
         _isRunning = true;
+        // Resume accruing integration time from now (banks stay from the
+        // earlier running segment(s)).
+        BeginElapsedSegment();
         _logger.LogInformation("Live stacking resumed at {Count} frames", _frameCount);
     }
 
@@ -637,6 +683,9 @@ public class LiveStackingService {
     /// <see cref="Start"/> to begin a new stack.</summary>
     public void Stop() {
         _isRunning = false;
+        // Freeze the integration-time counter — a stopped stack must
+        // not keep climbing (field report).
+        FreezeElapsedSegment();
         _logger.LogInformation("Live stacking stopped after {Count} frames", _frameCount);
     }
 
@@ -668,6 +717,10 @@ public class LiveStackingService {
         // master that completed at the cap. Reset clears _startedAt
         // and the timer restarts on the next frame.
         if (DurationCapReached) {
+            // Freeze the integration counter at the cap — past-cap frames
+            // are saved/relayed but don't integrate, so they must not
+            // advance the "total integration time" either.
+            FreezeElapsedSegment();
             _logger.LogDebug("Live stack: duration cap reached ({Cap}s), skipping accumulation",
                 MaxDurationSeconds);
             return;
@@ -792,10 +845,11 @@ public class LiveStackingService {
                     }
 
                     // First frame: initialize buffers and set as reference.
-                    // Stamp _startedAt so the elapsed counter + duration
-                    // cap have something to reference. Reset clears
-                    // both — the next first frame restarts the timer.
+                    // Stamp _startedAt (the "stack began" timestamp) and
+                    // start accruing integration time. Reset clears both;
+                    // the next first frame restarts the timer.
                     _startedAt = DateTime.UtcNow;
+                    BeginElapsedSegment();
                     _width = props.Width;
                     _height = props.Height;
                     int pixelCount = _width * _height;
@@ -1017,6 +1071,7 @@ public class LiveStackingService {
             lock (_lock) {
                 if (_frameCount == 0) {
                     _startedAt = DateTime.UtcNow;
+                    BeginElapsedSegment();
                     _width = props.Width;
                     _height = props.Height;
                     _referenceStars = stars;
