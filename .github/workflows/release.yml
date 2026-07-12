@@ -57,6 +57,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          # LFS holds the bundled DSS sky-survey imagery
+          # (wwwroot/sky/data/skydata/surveys/dss/**, ~46 MB) and the
+          # dso-thumbs + ncnn models. Without lfs:true the checkout
+          # materialises pointer stubs, so the published .deb/tar/zip
+          # ships a broken DSS survey — the SKY map renders black on the
+          # SBC (regressed since the DSS-via-LFS migration in 1e87c03a).
+          lfs: true
 
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
