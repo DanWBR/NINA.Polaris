@@ -43,7 +43,7 @@
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260704-colorscheme">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260712-uipolish1">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260712-uipolish2">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260710-toolrails">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260712-uipolish1">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260702-stretchsection">
@@ -9600,7 +9600,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 @click="pauseSequence()"
                                 :disabled="seqState === 'idle'"
                                 x-text="seqState === 'paused' ? '▶ Resume' : '⏸ Pause'"></button>
-                        <div class="text-muted" style="font-size:11px"
+                        <!-- Brighter than text-muted: this is the call to
+                             action for an idle sequence and the grey was
+                             easy to miss in the field. -->
+                        <div style="font-size:11px; color:var(--text-primary); font-weight:600"
                              x-show="seqState === 'idle' && sequence.length > 0">
                             Hold to start ·
                             <span x-text="sequence.length + ' item' + (sequence.length === 1 ? '' : 's')"></span>
