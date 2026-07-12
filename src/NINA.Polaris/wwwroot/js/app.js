@@ -11161,27 +11161,6 @@ function ninaApp() {
                         }
                         break;
                     case 'center':
-                        // Always remember the latest map centre.
-                        if (msg.center && Number.isFinite(msg.center.raDeg)
-                            && Number.isFinite(msg.center.decDeg)) {
-                            this._skyLastCenter = {
-                                ra: msg.center.raDeg, dec: msg.center.decDeg
-                            };
-                        }
-                        // A GENUINE user drag (pose change outside the
-                        // programmatic look-at window) releases the red box
-                        // from follow-the-mount so fine framing adjustments
-                        // work at ANY offset from the current pointing —
-                        // even arcminutes away. The next slew re-arms the
-                        // follow. Programmatic pans (search / auto-center /
-                        // initial framing) run inside the look-at window and
-                        // don't release it.
-                        if (msg.fromDrag && this._skyRedFollowMount
-                            && !(this._skyProgrammaticPanUntil
-                                 && Date.now() < this._skyProgrammaticPanUntil)) {
-                            this._skyRedFollowMount = false;
-                            try { this._pushSkyFovOverlays(); } catch (_) { }
-                        }
                         if (this._skyCenterPending) {
                             // Reply to an explicit get-center request.
                             const cb = this._skyCenterPending;
@@ -15373,21 +15352,6 @@ function ninaApp() {
                     raDeg: sf.raDeg, decDeg: sf.decDeg,
                     widthDeg: w, heightDeg: h,
                     rotationDeg: Number.isFinite(sf.rotationDeg) ? sf.rotationDeg : targetRot,
-                    flipV: flipV, cd: solveCd
-                };
-            } else if (this._skyRedFollowMount && mount) {
-                // Follow-the-mount (field request): after ANY slew the red
-                // box anchors to the mount's live RA/Dec instead of the
-                // screen centre — while tracking it stays glued to the
-                // same stars alongside blue; while NOT tracking the pair
-                // visibly drifts through the starfield together (fixed
-                // alt-az pointing), which is exactly what the rig is doing.
-                // Released by a genuine user DRAG of the map (see the
-                // 'center' handler) so fine framing adjustments work at any
-                // offset; the next slew re-arms it.
-                target = {
-                    raDeg: mount.raDeg, decDeg: mount.decDeg,
-                    widthDeg: w, heightDeg: h, rotationDeg: targetRot,
                     flipV: flipV, cd: solveCd
                 };
             } else {
@@ -33119,6 +33083,7 @@ function ninaApp() {
         async camCtrlLoad() {
             if (this.camCtrl.busy) return;
             this.camCtrl.busy = true;
+            this._camCtrlLastTry = Date.now();
             try {
                 for (const which of ['main', 'guide']) {
                     try {
@@ -33129,13 +33094,25 @@ function ninaApp() {
                             items: r?.controls || [],
                         };
                     } catch (_) {
-                        this.camCtrl[which] = { supported: false, camera: '', items: [] };
+                        // TRANSIENT fetch failure (relay hiccup, server busy
+                        // right at connect): keep whatever state we had.
+                        // Blanking `supported` here made the whole "<camera>
+                        // settings" sub-tab vanish permanently after one
+                        // failed poll (field report with the native SVBony
+                        // driver) — only a definitive supported:false from
+                        // the server may hide it.
                     }
                 }
                 // If the selected slot vanished, snap to a supported one.
                 if (!this.camCtrlActive().supported) {
                     this.camCtrl.which = this.camCtrl.main.supported ? 'main'
                         : (this.camCtrl.guide.supported ? 'guide' : 'main');
+                }
+                // Stranded on an invisible tab (controls gone, e.g. camera
+                // swapped to a driver without them): fall back to the first
+                // sub-tab instead of showing an empty RIGS pane.
+                if (this.equipTab === 'cam-ctrl' && !this.camCtrlAny()) {
+                    this.equipTab = 'equipment';
                 }
                 this.camCtrl.lastError = '';
             } finally {
@@ -34621,6 +34598,15 @@ function ninaApp() {
                 if (camCtrlKey !== this._camCtrlKey) {
                     this._camCtrlKey = camCtrlKey;
                     if (camCtrlKey !== '|') this.camCtrlLoad();
+                } else if (camConn && !this.camCtrlAny() && !this.camCtrl.busy
+                    && Date.now() - (this._camCtrlLastTry || 0) > 15000) {
+                    // Self-heal: the connect-time load is a one-shot — if it
+                    // failed (native SDK still settling, transient relay
+                    // error) the controls tab never appeared for the whole
+                    // session. Re-try every 15 s while a camera is connected
+                    // but no controls are known; no-ops forever for drivers
+                    // that genuinely expose none (INDI/Alpaca/ASCOM).
+                    this.camCtrlLoad();
                 }
                 const prevIso = this.equipCameraInfo ? this.equipCameraInfo.supportsIso : false;
                 const prevCool = this.equipCameraInfo ? this.equipCameraInfo.supportsCooler : false;
@@ -34698,14 +34684,6 @@ function ninaApp() {
                 && eq.auxCamera.temperature !== undefined) {
                 this.auxTemp = eq.auxCamera.temperature;
             }
-            // Red-follows-mount arming: any observed slew (from the app, a
-            // planetarium, or the hand controller — the WS mount status
-            // reports them all) means the mount is now deliberately pointed
-            // somewhere, so the red target box should reflect that pointing
-            // instead of floating at the screen centre. See
-            // _pushSkyFovOverlays for how the anchor is picked.
-            if (eq.telescope && eq.telescope.slewing) this._skyRedFollowMount = true;
-
             // Aux sensor footprint (mm) for the pink SKY FOV rectangle.
             // Derived from pixel count × pixel size (µm → mm). Kept on the
             // instance so _pushSkyFovOverlays can size the aux rect from the

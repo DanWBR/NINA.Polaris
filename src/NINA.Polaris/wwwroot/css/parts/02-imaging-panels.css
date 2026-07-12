@@ -386,7 +386,8 @@
     left: 8px;
     right: 8px;
     bottom: 8px;
-    height: 78px;
+    /* Same growth as .histo-panel: three action rows (Auto/Zoom/Sat). */
+    height: 100px;
     z-index: 3;
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -1106,7 +1107,9 @@ button,
     display: flex;
     align-items: stretch;
     gap: 10px;
-    height: 84px;
+    /* 84px fitted Auto+Zoom; the Sat slider added a third action row and
+       overflowed the LIVE overlay (field report) — grown to fit. */
+    height: 106px;
     flex: 0 0 auto;
     padding: 6px 12px;
     background: var(--bg-primary);

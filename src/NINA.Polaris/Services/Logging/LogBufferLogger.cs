@@ -47,6 +47,19 @@ public sealed class LogBufferLogger : ILogger {
         if (!IsEnabled(logLevel)) return;
         try {
             var message = formatter(state, exception) ?? string.Empty;
+
+            // Guiding traffic is frame-cadence chatter that drowned the main
+            // LOG panel (field report): divert it to the dedicated per-day
+            // file next to the PHD2-format guide logs. Warnings and errors
+            // ALSO stay in the main buffer — a guiding failure must remain
+            // visible without opening the side file.
+            bool guiding = _categoryName.Contains(".NativeGuider", StringComparison.Ordinal)
+                || _categoryName.StartsWith("NINA.Guider", StringComparison.Ordinal);
+            if (guiding) {
+                GuidingDebugLog.Write(MapLevel(logLevel), _categoryName, message, exception);
+                if (logLevel < LogLevel.Warning) return;
+            }
+
             var entry = new LogEntry(
                 Id: 0,                       // assigned by LogService.Append
                 At: DateTime.UtcNow,
