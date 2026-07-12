@@ -503,7 +503,10 @@
    applies to them — this grid fully owns their layout. */
 .exp-gain-grid {
     display: grid;
-    grid-template-columns: max-content 1fr max-content;
+    /* Exposure column takes the leftover width (1fr) so its input can
+       stretch to fill; Gain column hugs its content (label + input +
+       "?") on the right. */
+    grid-template-columns: 1fr max-content;
     align-items: center;
     column-gap: 8px;
     row-gap: 8px;
@@ -521,11 +524,16 @@
     flex: 0 0 auto;
     min-width: 58px;
 }
-/* Exposure field (the only one with a preset datalist) gets a bit more
-   room since it also carries the datalist affordance. */
+/* Exposure field (the only one with a preset datalist) grows to fill
+   the remaining width of its flexible column instead of hugging its
+   value, so it reaches toward the Gain field. */
 .exp-gain-grid input[list],
 .exp-gain-grid input[data-exposure-presets] {
+    flex: 1 1 auto;
+    field-sizing: normal;   /* let flex-grow set the width, not the value */
+    width: auto;
     min-width: 72px;
+    max-width: none;
 }
 .exp-gain-grid select {
     width: auto;
