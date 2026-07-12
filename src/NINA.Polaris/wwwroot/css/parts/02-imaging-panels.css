@@ -493,60 +493,45 @@
 .preview-pane > .quick-controls .control-row.actions {
     margin-top: 4px;
 }
-/* Exposure + Gain/ISO 2x3 grid: label | input | help. The label
-   column sizes to the widest label, the input column is a shared 1fr
-   so both inputs get identical width and line up, and the help column
-   holds the "?" (or a 0-width spacer on rows without one). Labels are
-   display:contents so their text/input/help drop straight into the
-   grid tracks. Because these labels are no longer direct children of
-   .control-row, the 50%-right input-pinning rule above no longer
-   applies to them — this grid fully owns their layout. */
+/* Exposure + Gain/ISO on a single flex row. The Exposure field (the
+   first label) grows to take the leftover width so its input stretches
+   toward the Gain field; Gain stays compact on the right with its "?"
+   help. Flexbox (not grid) so the growth is deterministic — a grid item
+   would not reliably stretch its inner input here. */
 .exp-gain-grid {
-    display: grid;
-    /* Exposure column takes the leftover width (1fr) so its input can
-       stretch to fill; Gain column hugs its content (label + input +
-       "?") on the right. */
-    grid-template-columns: 1fr max-content;
+    display: flex;
     align-items: center;
-    column-gap: 8px;
-    row-gap: 8px;
+    gap: 12px;
     width: 100%;
     min-width: 0;
 }
-.exp-gain-grid > label { display: contents; }
-/* Compact inputs that keep the Gain "?" help icon from being squeezed.
-   Rely on .input-sm's field-sizing:content (Chromium) so the value is
-   never cropped behind the number-spinner arrows — a hard width would
-   shove the trailing digit under the spinner. min-width sets the resting
-   size; the field grows to fit longer values instead of clipping. */
-.exp-gain-grid input:not([type="checkbox"]):not([type="radio"]) {
+.exp-gain-grid > label { min-width: 0; }
+/* Exposure label grows; the others (Gain / ISO) hug their content. */
+.exp-gain-grid > label:first-child { flex: 1 1 auto; }
+/* Gain / ISO inputs: compact, sized to their value via .input-sm's
+   field-sizing:content so nothing clips and the "?" keeps its room. */
+.exp-gain-grid input:not([type="checkbox"]):not([type="radio"]),
+.exp-gain-grid select {
     width: auto;
-    flex: 0 0 auto;
     min-width: 58px;
 }
-/* Exposure field (the only one with a preset datalist) grows to fill
-   the remaining width of its flexible column instead of hugging its
-   value, so it reaches toward the Gain field. */
-.exp-gain-grid input[list],
-.exp-gain-grid input[data-exposure-presets] {
+/* Exposure input fills the remaining width of its growing label.
+   field-sizing:normal lets flex-grow drive the width instead of the
+   value; since it ends up wider than the value there is no clipping. */
+.exp-gain-grid > label:first-child input:not([type="checkbox"]):not([type="radio"]) {
     flex: 1 1 auto;
-    field-sizing: normal;   /* let flex-grow set the width, not the value */
+    field-sizing: normal;
     width: auto;
     min-width: 72px;
     max-width: none;
 }
-/* Hide the datalist dropdown arrow (▼) on the exposure input — it's
-   redundant next to the number-spinner and clutters the wider field.
-   The preset suggestions still work on focus/typing. */
+/* Hide the redundant datalist dropdown arrow (▼) on the exposure input;
+   preset suggestions still work on focus/typing. */
 .exp-gain-grid input[list]::-webkit-calendar-picker-indicator {
     display: none;
 }
-.exp-gain-grid select {
-    width: auto;
-    min-width: 64px;
-    flex: 0 1 auto;
-}
-.exp-gain-grid .eg-spacer { display: block; }
+/* Legacy 3-column spacer spans are unused in the flex layout. */
+.exp-gain-grid .eg-spacer { display: none; }
 /* Inside the sidebar, the trigger details panel + refocus callout
    should not blow up horizontally; rely on wrapping. */
 .live-pane > .quick-controls .livestack-triggers,
