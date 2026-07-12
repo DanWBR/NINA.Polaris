@@ -74,4 +74,22 @@ public class FitsWriterRaTests {
         // 24 h is the upper edge of the hours range → 360°, not pass-through.
         Assert.That(WriteAndReadRa(24.0), Is.EqualTo(360.0).Within(0.01));
     }
+
+    [Test]
+    public void DateObs_is_written_as_utc_start() {
+        // PixInsight/SPCC (and astropy/Siril/ASTAP) read the FITS-standard
+        // DATE-OBS for observation time; a frame lacking it was rejected
+        // (field report). It must carry the UTC start of the exposure.
+        var props = new ImageProperties { Width = 8, Height = 8, BitDepth = 16 };
+        var when = new DateTime(2026, 7, 12, 3, 45, 12, 500, DateTimeKind.Utc);
+        var meta = new ImageMetaData { CreationTime = when };
+        var img = new BaseImageData(new ushort[64], props, meta);
+        var path = Path.Combine(_dir, "dateobs.fits");
+        FITSWriter.Write(img, path);
+
+        using var fs = File.OpenRead(path);
+        var hdr = FITSReader.ReadHeadersOnly(fs);
+        Assert.That(hdr.TryGetValue("DATE-OBS", out var card), Is.True, "DATE-OBS keyword present");
+        Assert.That(card.Value, Is.EqualTo("2026-07-12T03:45:12.500"));
+    }
 }

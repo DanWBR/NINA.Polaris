@@ -120,6 +120,11 @@ public static class FITSWriter {
         }
         var utc = meta.CreationTime.ToUniversalTime();
         var local = meta.CreationTime.ToLocalTime();
+        // DATE-OBS is the FITS-standard UTC start-of-observation keyword,
+        // and the one PixInsight / astropy / Siril / ASTAP read for the
+        // observation time (SPCC refuses a frame without it — field
+        // report). DATE-UTC/DATE-LOC are NINA conveniences kept alongside.
+        AddStr(cards, "DATE-OBS", utc.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture));
         AddStr(cards, "DATE-LOC", local.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture));
         AddStr(cards, "DATE-UTC", utc.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture));
         if (meta.Exposure.ExposureTime > 0) {

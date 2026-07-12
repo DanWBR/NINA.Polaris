@@ -226,6 +226,13 @@ public static class XISFWriter {
                 WriteFitsKeyword(xw, "EXPOSURE", Fmt(meta.Exposure.ExposureTime), "Exposure (s)");
                 WriteFitsKeyword(xw, "EXPTIME", Fmt(meta.Exposure.ExposureTime), "Exposure (s)");
             }
+            // DATE-OBS: FITS-standard UTC observation start. The native
+            // Observation:Time:Start property above covers XISF-aware
+            // tools, but the embedded FITS keywords are what some readers
+            // (and downstream FITS exports) pick up, so mirror it here.
+            WriteFitsKeyword(xw, "DATE-OBS",
+                utc.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture),
+                "UTC start of observation");
             WriteFitsKeyword(xw, "DATE-LOC",
                 meta.CreationTime.ToLocalTime().ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture),
                 null);
