@@ -3032,12 +3032,6 @@
                                 </template>
                             </select>
                         </label>
-                        <label class="seq-dither-checkbox"
-                               title="When ON, snap is written to {rig}/snaps/{filter}_{date}/. When OFF the snap renders here but isn't saved.">
-                            <input type="checkbox" x-model="preview.saveToDisk"
-                                   :disabled="preview.busy">
-                            💾 Save to disk
-                        </label>
                     </div>
                     <!-- Target identification. Names the object being shot;
                          stamped into saved snaps (FITS OBJECT / snaps folder)
@@ -3166,6 +3160,14 @@
                     </div>
 
                     <div class="shutter-secondary">
+                    <div class="control-row">
+                        <label class="seq-dither-checkbox"
+                               title="When ON, snap is written to {rig}/snaps/{filter}_{date}/. When OFF the snap renders here but isn't saved.">
+                            <input type="checkbox" x-model="preview.saveToDisk"
+                                   :disabled="preview.busy">
+                            💾 Save to disk
+                        </label>
+                    </div>
                     <div class="control-row">
                         <!-- Server-side continuous stream. Distinct from
                              snap/loop — keeps its own toggle. Auto-picks
