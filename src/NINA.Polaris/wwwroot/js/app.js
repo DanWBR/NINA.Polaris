@@ -581,6 +581,33 @@ function ninaApp() {
         // | '' (not reported yet). Shown next to the DSS toggle.
         skyDssSourceActive: '',
 
+        // HiPS background-survey picker. The bridge points the engine's
+        // imagery slot (its `dss` module) at whichever survey is chosen.
+        // All are full-sky, well-known HiPS from CDS/alasky — the "most
+        // used, highest coverage" set. Only DSS Colour has a bundled
+        // offline pyramid (localSlug); the others stream from CDS and need
+        // a connection (like DSS with imagery on, offline). Selecting one
+        // keeps the current pan/zoom (no reload). Persisted in localStorage.
+        skySurvey: 'dss',
+        skySurveys: [
+            { id: 'dss', label: 'DSS colour (visible)',
+              remoteUrl: 'https://alasky.cds.unistra.fr/DSS/DSSColor',
+              localSlug: 'surveys/dss',
+              credit: 'DSS Color · STScI/NASA, HEALPixed by CDS' },
+            { id: 'dss2', label: 'DSS2 red+blue (sharper)',
+              remoteUrl: 'https://alasky.cds.unistra.fr/DSS/DSS2Merged',
+              credit: 'DSS2 · STScI/NASA, HEALPixed by CDS' },
+            { id: 'mellinger', label: 'Mellinger (wide-field colour)',
+              remoteUrl: 'https://alasky.cds.unistra.fr/MellingerRGB',
+              credit: 'Mellinger · A. Mellinger, HEALPixed by CDS' },
+            { id: '2mass', label: '2MASS (near-infrared)',
+              remoteUrl: 'https://alasky.cds.unistra.fr/2MASS/Color',
+              credit: '2MASS · IPAC/Caltech & UMass, HEALPixed by CDS' },
+            { id: 'unwise', label: 'unWISE (infrared)',
+              remoteUrl: 'https://alasky.cds.unistra.fr/unWISE/color-W2-W1W2-W1',
+              credit: 'unWISE · D. Lang, HEALPixed by CDS' }
+        ],
+
         // Settings -> Sky imagery (offline DSS). Mirrors the
         // DssDownloadService status; polled while the card is open and
         // while a download runs. installedOrder = -1 means nothing on disk.
@@ -3930,6 +3957,13 @@ function ninaApp() {
             this.$watch('skyDssVisible', (v) => {
                 localStorage.setItem('nina-sky-dss', v ? '1' : '0');
             });
+
+            // HiPS background-survey choice (persisted). Applied on the
+            // bridge 'ready' handler once the engine is up.
+            const survSaved = localStorage.getItem('nina-sky-survey');
+            if (survSaved && (this.skySurveys || []).some(s => s.id === survSaved)) {
+                this.skySurvey = survSaved;
+            }
 
             // Ecliptic line toggle, same persistence pattern.
             const eclSaved = localStorage.getItem('nina-sky-ecliptic');
@@ -10088,6 +10122,31 @@ function ninaApp() {
             this._skySendMessage({ type: 'set-dss-visible', visible: !!this.skyDssVisible });
         },
 
+        // HiPS survey picker → tell the bridge to point the imagery slot at
+        // the chosen survey. Picking one implies imagery ON. DSS is the
+        // default the bridge already registers, so we only push when the
+        // user picks something else (but pushing DSS again is harmless and
+        // keeps it deterministic on reload). localSlug (DSS only) is
+        // resolved to an absolute /sky/data path so the bridge can probe
+        // the offline bundle.
+        _skySetSurvey(id) {
+            const s = (this.skySurveys || []).find(x => x.id === id);
+            if (!s) return;
+            this.skySurvey = id;
+            try { localStorage.setItem('nina-sky-survey', id); } catch { /* quota */ }
+            // Picking a survey means the operator wants imagery — turn the
+            // DSS/imagery toggle on if it was off.
+            if (!this.skyDssVisible) {
+                this.skyDssVisible = true;
+                this._skyToggleDss();
+            }
+            this._skySendMessage({
+                type: 'set-sky-survey',
+                remoteUrl: s.remoteUrl,
+                localUrl: s.localSlug ? ('/sky/data/skydata/' + s.localSlug) : null
+            });
+        },
+
         // Frente B: per-object DSO preview thumbnail. Derives the bundled
         // filename slug from a catalog result's catalog + catalogId (e.g.
         // M42, NGC7000, Sh2279), or as a fallback parses the object name.
@@ -11094,6 +11153,11 @@ function ninaApp() {
                         // ways is harmless and keeps the bridge/UI in
                         // sync deterministically.
                         this._skyToggleDss();
+                        // Honour a persisted survey pick other than the DSS
+                        // default (the bridge already registers DSS at init).
+                        if (this.skySurvey && this.skySurvey !== 'dss') {
+                            this._skySetSurvey(this.skySurvey);
+                        }
                         // SWE-5: ASIAIR-style initial framing. If the
                         // mount is connected at ready time, centre the
                         // view on mount.ra/dec at FOV=15°. Then seed

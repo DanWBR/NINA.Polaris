@@ -7614,6 +7614,20 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                               :style="'font-size:11px; opacity:0.95; font-weight:600; color:' +
                                       (skyDssSourceActive === 'local' ? '#4ade80' : '#0a1f5c')"></span>
                     </button>
+                    <!-- HiPS background-survey picker: swaps the imagery layer
+                         to another full-sky survey (DSS2, Mellinger, 2MASS,
+                         unWISE). Only shown when imagery is on. All but DSS
+                         Colour stream from CDS (need internet); DSS is the
+                         offline-capable default. -->
+                    <label class="sky-survey-pick" x-show="skyDssVisible" x-cloak
+                           :title="(skySurveys.find(s => s.id === skySurvey) || {}).credit || ''">
+                        <select class="input-sm" x-model="skySurvey"
+                                @change="_skySetSurvey(skySurvey)">
+                            <template x-for="s in skySurveys" :key="s.id">
+                                <option :value="s.id" x-text="s.label"></option>
+                            </template>
+                        </select>
+                    </label>
                     <button class="btn btn-sm" @click="skyAutoCenterOnSelect = !skyAutoCenterOnSelect"
                             :class="skyAutoCenterOnSelect ? 'btn-active' : ''"
                             title="When on, picking a target (click on the map, search hit, or Stellarium import) smoothly pans the map to the object. Turn off if you want to keep your current framing while inspecting picks.">🎯 Auto center</button>
@@ -17746,7 +17760,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260712-hoststats1"></script>
+    <script src="/js/app.js?v=20260712-skysurvey1"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260710-hostclient"></script>

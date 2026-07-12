@@ -144,6 +144,48 @@
         }
     }
 
+    // Point the background imagery slot (engine's `dss` HiPS module) at a
+    // survey. remoteUrl is the CDS/alasky HiPS root; localUrl (optional)
+    // is a bundled offline pyramid for the same survey. Offline-first
+    // logic mirrors the original DSS hookup: probe CDS (short timeout),
+    // use it when reachable, else fall back to the local bundle. Used
+    // both for the initial DSS default AND the parent's 'set-sky-survey'
+    // message (the HiPS survey picker). The engine's dss module is a
+    // single-survey HiPS holder, so this swaps the background in place —
+    // the user's pan/zoom/time are preserved (no iframe reload).
+    function swapSkySurvey(core, remoteUrl, localUrl) {
+        if (!core || !core.dss || !remoteUrl) return;
+        var probeRemote = function () {
+            return Promise.race([
+                fetch(remoteUrl + '/properties',
+                      { method: 'GET', cache: 'no-store', mode: 'cors' })
+                    .then(function (r) { return !!(r && r.ok); })
+                    .catch(function () { return false; }),
+                new Promise(function (res) { setTimeout(function () { res(false); }, 3500); })
+            ]);
+        };
+        probeRemote().then(function (remoteOk) {
+            if (remoteOk) return remoteUrl;
+            if (!localUrl) return remoteUrl;   // survey has no offline bundle
+            return fetch(localUrl + '/properties', { method: 'GET' })
+                .then(function (r) { return r && r.ok ? localUrl : remoteUrl; })
+                .catch(function () { return remoteUrl; });
+        }).then(function (url) {
+            try {
+                core.dss.addDataSource({ url: url });
+                core.dss.visible = true;
+                var isLocal = !!(localUrl && url === localUrl);
+                console.log('[Sky] survey source: '
+                    + (isLocal ? 'LOCAL bundle (CDS unreachable)' : 'remote CDS') + ' ' + url);
+                postToParent({
+                    type: 'dss-source',
+                    source: isLocal ? 'local' : 'remote',
+                    __from: 'sky-bridge'
+                });
+            } catch (e) { console.warn('[Sky] survey register failed:', e); }
+        });
+    }
+
     // -----------------------------------------------------------------
     // SWE-4: postMessage RPC handlers — observer, time, look-at,
     // search, get-center. All map onto stellarium-web-engine's
@@ -1428,14 +1470,23 @@
                 } catch (e) { console.warn('[Sky] ecliptic toggle failed:', e); }
                 break;
             case 'set-dss-visible':
-                // Parent toggle for the DSS Color HiPS streamed from
-                // CDS Strasbourg. Turn off when offline (no network) or
-                // when the user prefers the bare vector + bundled
-                // milkyway background.
+                // Parent toggle for the background imagery HiPS (DSS by
+                // default). Turn off when offline (no network) or when the
+                // user prefers the bare vector + bundled milkyway background.
                 try {
                     if (stel.core && stel.core.dss)
                         stel.core.dss.visible = !!msg.visible;
                 } catch (e) { console.warn('[Sky] DSS toggle failed:', e); }
+                break;
+            case 'set-sky-survey':
+                // HiPS survey picker: point the background imagery slot at a
+                // different full-sky survey (2MASS, Mellinger, unWISE, …).
+                // remoteUrl is the CDS/alasky HiPS root; localUrl is the
+                // optional offline bundle (only DSS ships one). Same slot as
+                // the DSS default, so the user's framing is preserved.
+                try {
+                    swapSkySurvey(stel.core, msg.remoteUrl, msg.localUrl || null);
+                } catch (e) { console.warn('[Sky] set-sky-survey failed:', e); }
                 break;
             case 'set-constellations':
                 // Parent toggle for constellation rendering. lines+labels
@@ -1773,62 +1824,21 @@
                     // Attribution: DSS Color, STScI/NASA, healpixed by
                     // CDS — mirrored in our footer per upstream
                     // stellarium-web data-credits-dialog.vue.
+                    // Default background survey = DSS Color, the only survey
+                    // with a bundled offline pyramid (surveys/dss). The parent
+                    // can switch to other full-sky HiPS surveys at runtime via
+                    // the 'set-sky-survey' message (the survey picker); those
+                    // are remote-only (no offline bundle). swapSkySurvey does
+                    // the REMOTE-FIRST probe: CDS serves every order (real
+                    // detail on zoom), the local bundle only holds the coarse
+                    // orders the operator downloaded, so we prefer CDS when
+                    // reachable and fall back to local only when truly offline.
                     try {
-                        var LOCAL_DSS = SKYDATA_BASE + 'surveys/dss';
-                        var REMOTE_DSS = 'https://alasky.cds.unistra.fr/DSS/DSSColor';
-                        // REMOTE-FIRST. The CDS HiPS serves EVERY order, so
-                        // zoom keeps resolving real detail. The LOCAL bundle
-                        // only holds the orders the operator downloaded
-                        // (coarse), so preferring it caps detail whenever a
-                        // connection exists — the "blotches when zoomed out,
-                        // nothing when zoomed in" symptom, since the local
-                        // pyramid simply has no high-order tiles. So: probe
-                        // CDS (short timeout); use it when reachable, and fall
-                        // back to the local bundle only when CDS can't be
-                        // reached (true offline at the scope).
-                        var probeRemote = function () {
-                            return Promise.race([
-                                fetch(REMOTE_DSS + '/properties',
-                                      { method: 'GET', cache: 'no-store', mode: 'cors' })
-                                    .then(function (r) { return !!(r && r.ok); })
-                                    .catch(function () { return false; }),
-                                new Promise(function (res) { setTimeout(function () { res(false); }, 3500); })
-                            ]);
-                        };
-                        probeRemote().then(function (remoteOk) {
-                            if (remoteOk) return REMOTE_DSS;
-                            // CDS unreachable: use the local bundle if present.
-                            return fetch(LOCAL_DSS + '/properties', { method: 'GET' })
-                                .then(function (r) { return r && r.ok ? LOCAL_DSS : REMOTE_DSS; })
-                                .catch(function () { return REMOTE_DSS; });
-                        }).then(function (url) {
-                            try {
-                                core.dss.addDataSource({ url: url });
-                                core.dss.visible = true;
-                                var isLocal = (url === LOCAL_DSS);
-                                console.log('[Sky] DSS source: '
-                                    + (isLocal ? 'LOCAL bundle (CDS unreachable)' : 'remote CDS'));
-                                // Tell the parent which source won so the UI can
-                                // show "remote" vs "local" next to the toggle.
-                                postToParent({
-                                    type: 'dss-source',
-                                    source: isLocal ? 'local' : 'remote',
-                                    __from: 'sky-bridge'
-                                });
-                            } catch (e) { console.warn('[Sky] DSS register failed:', e); }
-                        });
+                        swapSkySurvey(core,
+                            'https://alasky.cds.unistra.fr/DSS/DSSColor',
+                            SKYDATA_BASE + 'surveys/dss');
                     } catch (dssOuter) {
-                        console.warn('[Sky] DSS probe failed:', dssOuter);
-                    }
-                    // Legacy synchronous path kept disabled — replaced by
-                    // the offline-first probe above.
-                    if (false) try {
-                        core.dss.addDataSource({
-                            url: 'https://alasky.cds.unistra.fr/DSS/DSSColor'
-                        });
-                        core.dss.visible = true;
-                    } catch (dssErr) {
-                        console.warn('[Sky] DSS hookup failed:', dssErr);
+                        console.warn('[Sky] DSS init failed:', dssOuter);
                     }
                     core.minor_planets.addDataSource({
                         url: SKYDATA_BASE + 'mpcorb.dat',
