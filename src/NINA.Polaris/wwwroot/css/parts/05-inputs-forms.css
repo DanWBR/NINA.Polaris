@@ -2115,6 +2115,18 @@
    ranks high-Dec objects currently above 30°; UI shows them as a
    pillsy chip grid. Click slews + plate-solves to that target via
    the existing skyTarget + slewAndCenter flow. */
+/* POLAR refine layout: readout on the LEFT, ASIAIR bullseye on the RIGHT.
+   The old inline `flex-wrap: wrap` keyed the stack purely off width, so a
+   tablet in landscape could wrap the bullseye BELOW even with room to spare.
+   Keep it a row everywhere and stack ONLY on a narrow portrait phone. */
+.polar-refine-grid {
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+}
+@media (max-width: 700px) {
+    .polar-refine-grid { flex-direction: column; }
+}
 .polar-targets {
     background: var(--bg-secondary, rgba(255, 255, 255, 0.02));
     border: 1px solid var(--border);

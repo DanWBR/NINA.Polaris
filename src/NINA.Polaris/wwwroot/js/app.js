@@ -11208,6 +11208,15 @@ function ninaApp() {
                             }
                         });
                         this._pushSkyFovOverlays();
+                        // FOV rects sporadically vanished after a reload: the
+                        // mount/target overlay push can land before the engine
+                        // has finished installing its overlay layer, so the
+                        // rects get silently dropped. Re-push a couple of times
+                        // as the engine settles (guarded, so a tab switch or
+                        // re-suspend in the meantime is a no-op).
+                        [700, 2000].forEach(ms => setTimeout(() => {
+                            if (this.tab === 'sky' && this._skyBridgeReady) this._pushSkyFovOverlays();
+                        }, ms));
                         // Forced re-sync after the engine has had time to
                         // settle its data-source pipeline. The first
                         // pushObserverAndTime + lookAt races against
