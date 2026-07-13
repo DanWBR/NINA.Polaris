@@ -244,6 +244,45 @@ public static class FitsThumbnailer {
         return dst;
     }
 
+    /// <summary>Box-average a plane-sequential ushort buffer down by an INTEGER
+    /// factor so its longest side is just above <paramref name="targetMax"/>,
+    /// BEFORE the heavy stretch + RGBA-interleave + SKBitmap steps. Building the
+    /// preview at full sensor resolution and only shrinking the final SKBitmap
+    /// made every live-stack frame briefly allocate ~5x the sensor in transient
+    /// buffers (the 1.4–1.9 GB live-stack peak). We bin to an intermediate that
+    /// is still ≥ targetMax so the caller's final <c>Resize</c> lands on the
+    /// exact target dimension (keeps output size identical to the old path).
+    /// Returns the SAME array + dims when no reduction is needed (source already
+    /// small, or targetMax is the int.MaxValue "full-res" sentinel), so those
+    /// paths stay byte-for-byte unchanged.</summary>
+    private static (ushort[] pix, int w, int h) DownsampleForPreview(
+            ushort[] src, int width, int height, int planes, int targetMax) {
+        int longest = Math.Max(width, height);
+        // floor: guarantees binned longest >= targetMax, so the final Resize is
+        // still a genuine downscale to the exact target (preserves dimensions).
+        int f = targetMax > 0 ? Math.Max(1, longest / targetMax) : 1;
+        if (f <= 1) return (src, width, height);
+        int dw = (width + f - 1) / f, dh = (height + f - 1) / f;
+        var dst = new ushort[dw * dh * planes];
+        for (int pl = 0; pl < planes; pl++) {
+            int sOff = pl * width * height, dOff = pl * dw * dh;
+            for (int by = 0; by < dh; by++) {
+                int y0 = by * f, y1 = Math.Min(y0 + f, height);
+                int drow = dOff + by * dw;
+                for (int bx = 0; bx < dw; bx++) {
+                    int x0 = bx * f, x1 = Math.Min(x0 + f, width);
+                    uint sum = 0; int n = 0;
+                    for (int y = y0; y < y1; y++) {
+                        int srow = sOff + y * width;
+                        for (int x = x0; x < x1; x++) { sum += src[srow + x]; n++; }
+                    }
+                    dst[drow + bx] = (ushort)(n > 0 ? sum / (uint)n : 0);
+                }
+            }
+        }
+        return (dst, dw, dh);
+    }
+
     public static byte[] RenderJpegFromBuffer(ushort[] pixels, int width, int height,
                                               int bitDepth, int maxDim = 256, int quality = 85,
                                               NINA.Image.ImageAnalysis.AutoStretch.StretchParams? overrideParams = null,
@@ -284,6 +323,11 @@ public static class FitsThumbnailer {
         // is cleaner than PHD2 without changing the stretch character. Done on a
         // COPY so the camera's raw buffer (star detection) is never mutated.
         if (guideStretch) pixels = SuppressHotPixels(pixels, width, height);
+
+        // Reduce to ~preview resolution BEFORE the stretch/SKBitmap work so we
+        // don't allocate full-sensor transients just to shrink at the end. No-op
+        // when the source is already <= maxDim (e.g. the full-res sentinel).
+        (pixels, width, height) = DownsampleForPreview(pixels, width, height, 1, maxDim);
 
         // Auto-stretch lives in NINA.Image (vendored portable copy).
         // GX-12c: when overrideParams is set, skip the auto-stretch
@@ -357,6 +401,13 @@ public static class FitsThumbnailer {
             // so the user at least sees something instead of a crash.
             return RenderJpegFromBuffer(pixels, width, height, bitDepth, maxDim, quality,
                 overrideParams != null && overrideParams.Length > 0 ? overrideParams[0] : null);
+
+        // Reduce all three planes to ~preview resolution BEFORE the (heavy)
+        // per-channel stretch + RGBA interleave + SKBitmap steps. This is what
+        // collapses the per-frame live-stack transient from ~5x the sensor to a
+        // few MB. No-op when the source is already <= maxDim.
+        (pixels, width, height) = DownsampleForPreview(pixels, width, height, 3, maxDim);
+        planeSize = width * height;
 
         // Stretch each channel separately. The vendored AutoStretch
         // doesn't take a stride/offset, so we slice into temporary

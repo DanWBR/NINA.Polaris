@@ -1034,7 +1034,7 @@ public class LiveStackingService {
                 // 1280/80 video default so zooming stays sharp instead of
                 // upscaling a downsized preview. Capped at the stack's native
                 // size by the renderer's scale<=1 clamp.
-                await _relay.RelayRgbJpegAsync(rgbImage, maxDim: 4096, quality: 90,
+                await _relay.RelayRgbJpegAsync(rgbImage, maxDim: 1920, quality: 88,
                     kind: FrameKind.LiveStack, ct: ct);
             } else {
                 // Stabilize the relayed Bayer pattern: a single frame whose
