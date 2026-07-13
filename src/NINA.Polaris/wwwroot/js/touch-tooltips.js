@@ -1,25 +1,34 @@
 (function () {
     'use strict';
     // Touch tooltips. HTML `title` tooltips require hover, which touch devices
-    // don't have, so on phones/tablets the "?" help icons and info glyphs are
-    // dead. Surface them as a tap-to-reveal floating bubble.
+    // don't have, so on phones/tablets titled controls are dead. Two reveal
+    // gestures, both coarse-pointer only (desktop keeps its native hover):
     //
-    // Scope is deliberately narrow: only the read-only help affordances
-    //   .gain-help / .indi-help-icon / [role="img"][title] / [data-tip] / .tip-tap
-    // get tap-to-reveal. We do NOT hijack long-press on arbitrary buttons —
-    // the shutter (long-press = loop) and mount jog already own long-press, and
-    // a global handler would fight those gestures. To make a normal titled
-    // control tappable-for-tip, add class "tip-tap" to it.
+    //   1. TAP on a read-only help affordance (the "?" glyphs / info icons):
+    //        .gain-help / .indi-help-icon / [role="img"][title] / [data-tip] /
+    //        .tip-tap        -> they do nothing on tap, so a tap reveals the tip.
     //
-    // Coarse-pointer only, so desktop keeps its native hover tooltips untouched.
-    // The bubble reads `title` live at tap time, so it picks up the i18n
+    //   2. LONG-PRESS on a titled control inside a status bar (top + bottom) or
+    //      any .tip-longpress container. Those chips/icons are CLICKABLE
+    //      (navigate on tap), so we can't steal the tap — long-press reveals the
+    //      tip and cancels the click that would otherwise follow. Scoped to the
+    //      status bars on purpose: elements that own their own long-press
+    //      gesture (the shutter = loop, the mount jog) are NOT in scope, so we
+    //      never fight them.
+    //
+    // The bubble reads `title` live at reveal time, so it picks up the i18n
     // MutationObserver's translation.
     var coarse = false;
     try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch (e) { /* old browser */ }
     if (!coarse && !('ontouchstart' in window) && !(navigator.maxTouchPoints > 0)) return;
 
-    var SEL = '.gain-help, .indi-help-icon, [data-tip], .tip-tap, [role="img"][title]';
+    var TAP_SEL = '.gain-help, .indi-help-icon, [data-tip], .tip-tap, [role="img"][title]';
+    var LP_SCOPE = '.status-bar, .stats-bar, .full-stats-panel, .phd2-statusbar, ' +
+                   '.guide-bottombar, .files-statusbar, .tip-longpress';
+    var LONG_PRESS = 450, MOVE_SLOP = 12, AUTO_HIDE = 6000;
+
     var bubble = null, hideTimer = null;
+    var lpTimer = null, lpFired = false, lpX = 0, lpY = 0;
 
     function ensure() {
         if (bubble) return;
@@ -38,8 +47,8 @@
         ensure();
         bubble.textContent = t;
         bubble.style.maxWidth = Math.min(340, window.innerWidth - 16) + 'px';
-        // Measure off-screen, then place: below the element, flipped above if it
-        // would overflow the viewport, and clamped horizontally.
+        // Measure off-screen, then place near the element, flipped above if it
+        // would overflow, and clamped horizontally.
         bubble.style.left = '-9999px';
         bubble.style.top = '0px';
         bubble.classList.add('show');
@@ -54,17 +63,50 @@
         bubble.style.left = left + 'px';
         bubble.style.top = top + 'px';
         clearTimeout(hideTimer);
-        hideTimer = setTimeout(hide, 6000);
+        hideTimer = setTimeout(hide, AUTO_HIDE);
     }
 
-    // Handle at the click phase (fires after a clean tap, never during a
-    // scroll/drag) and capture so we win before Alpine handlers. Help icons do
-    // nothing on click, so preventing default + propagation is harmless.
+    // Nearest titled ancestor that sits inside a long-press scope container.
+    function titledInScope(node) {
+        var t = node.closest && node.closest('[title], [data-tip]');
+        if (!t || !tipText(t)) return null;
+        return (t.closest && t.closest(LP_SCOPE)) ? t : null;
+    }
+
+    // ----- Long-press (status bars) -----
+    document.addEventListener('pointerdown', function (e) {
+        lpFired = false;
+        clearTimeout(lpTimer); lpTimer = null;
+        if (e.pointerType === 'mouse') return;
+        var el = titledInScope(e.target);
+        if (!el) return;
+        lpX = e.clientX; lpY = e.clientY;
+        lpTimer = setTimeout(function () { lpFired = true; show(el); }, LONG_PRESS);
+    }, true);
+    document.addEventListener('pointermove', function (e) {
+        if (lpTimer && (Math.abs(e.clientX - lpX) > MOVE_SLOP ||
+                        Math.abs(e.clientY - lpY) > MOVE_SLOP)) {
+            clearTimeout(lpTimer); lpTimer = null;
+        }
+    }, true);
+    function endLp() { clearTimeout(lpTimer); lpTimer = null; }
+    document.addEventListener('pointerup', endLp, true);
+    document.addEventListener('pointercancel', endLp, true);
+    // Kill the native long-press context menu / selection inside scopes.
+    document.addEventListener('contextmenu', function (e) {
+        if (titledInScope(e.target)) e.preventDefault();
+    }, true);
+
+    // ----- Click phase: suppress the long-press click, else tap-reveal helps -----
     document.addEventListener('click', function (e) {
-        var el = e.target.closest && e.target.closest(SEL);
+        if (lpFired) {                       // long-press just fired -> don't navigate
+            e.preventDefault(); e.stopPropagation();
+            lpFired = false;
+            return;
+        }
+        var el = e.target.closest && e.target.closest(TAP_SEL);
         if (el && tipText(el)) {
-            e.preventDefault();
-            e.stopPropagation();
+            e.preventDefault(); e.stopPropagation();
             show(el);
             return;
         }
