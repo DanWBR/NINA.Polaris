@@ -2093,3 +2093,29 @@
 .wb-cap-title { color: var(--text); font-weight: 700; font-size: 13px; }
 .wb-canvas-wrap { position: relative; height: 340px; }
 .wb-foot { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 12px; }
+
+/* Touch tooltip bubble (js/touch-tooltips.js): tap-to-reveal for the "?" help
+   icons on touch devices, where hover `title` tooltips never show. Above modals
+   so tips inside dialogs are readable; pointer-events:none so it never eats a
+   tap. */
+.touch-tip {
+    position: fixed;
+    z-index: 1200;
+    left: -9999px;
+    top: 0;
+    max-width: 340px;
+    padding: 8px 11px;
+    border-radius: 8px;
+    background: rgba(20, 26, 38, 0.97);
+    color: #e6edf6;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5);
+    font-size: 12.5px;
+    line-height: 1.4;
+    white-space: normal;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-2px);
+    transition: opacity .12s ease, transform .12s ease;
+}
+.touch-tip.show { opacity: 1; transform: translateY(0); }
