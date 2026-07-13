@@ -686,7 +686,25 @@ public class LiveStackingService {
         // Freeze the integration-time counter — a stopped stack must
         // not keep climbing (field report).
         FreezeElapsedSegment();
+        // MEMOPT2: release the per-frame SCRATCH (~200 MB at 11 MP) while the
+        // stack is stopped/paused. These are all reallocated lazily by
+        // EnsureScratch on the next frame, so dropping them is invisible to a
+        // resume — which CONTINUES the same stack, so the accumulators
+        // (_stackR/G/B, _countBuffer, _m2/_lumSum) must stay resident and are
+        // deliberately NOT freed here (that's what Reset() is for). Under the
+        // lock so we don't null a buffer a frame in flight is mid-write on.
+        lock (_lock) {
+            _scratchCal = null;
+            _dbR = null; _dbG = null; _dbB = null;
+            _warpR = null; _warpG = null; _warpB = null; _warpMono = null;
+            _scratchSnr = null;
+        }
         _logger.LogInformation("Live stacking stopped after {Count} frames", _frameCount);
+        // User-paced action (Stop button): compact the freed LOH scratch so RSS
+        // actually comes back down on the SBC. Same rationale as Reset; NEVER
+        // per frame. Outside the lock so a concurrent frame isn't stalled.
+        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
     }
 
     /// <summary>Record that a frame was dropped (not integrated) with the reason,

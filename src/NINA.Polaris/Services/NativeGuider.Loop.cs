@@ -51,6 +51,14 @@ public sealed partial class NativeGuider {
         IsDithering = false;
         _settleActive = false;
         if (AppState is "Guiding" or "Looping" or "Paused" or "LostLock") SetAppState("Stopped");
+        // MEMOPT2: guiding retains almost nothing but churns ~2-3 full guide
+        // frames + a preview JPEG per capture; under Workstation GC those freed
+        // LOH segments sit as a high plateau (hundreds of MB) until the next
+        // collection. Stopping the loop is a user-paced action, so compact once
+        // here to hand that memory back to the OS on the SBC. Never per frame.
+        System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+            System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
     }
 
     private async Task LoopAsync(LoopMode mode, CancellationToken ct) {
