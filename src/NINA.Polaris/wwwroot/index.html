@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260712-fieldbugs1">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260712-wifibars1">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260712-uipolish1">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260712-guidebar2">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260713-guideoverlay">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260712-rename1">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260707-density2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -4774,6 +4774,9 @@
                     <button class="btn btn-sm" @click="guiderPause()" x-show="guider.guiding && !guider.paused">Pause</button>
                     <button class="btn btn-sm" @click="guiderResume()" x-show="guider.paused">Resume</button>
                     <button class="btn btn-sm btn-danger" @click="guiderStop()">Stop</button>
+                    <button class="btn btn-sm" :class="guideOverlay.on ? 'btn-active' : ''"
+                            @click="toggleGuideOverlay()"
+                            title="Floating always-on guiding graph — draggable &amp; resizable, visible from any tab">Overlay</button>
                     <!-- Dither/settle knobs moved to the side panel's Status
                          pane ("Dithering" section); Clear History moved onto
                          the chart itself; the old Disconnect button dropped —
@@ -17033,6 +17036,33 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- ASIAIR-style floating guiding overlay: translucent, read-only,
+         always-on-top mini graph. Draggable by its header, corner-resizable,
+         visible from any tab. Toggled from the GUIDE bottom bar. Geometry +
+         visibility persist in localStorage. -->
+    <div class="guide-overlay" x-show="guideOverlay.on && guider.connected" x-cloak
+         :style="guideOverlayStyle()">
+        <div class="guide-overlay-head" @pointerdown="guideOverlayDragStart($event)">
+            <span class="guide-overlay-title">Guiding</span>
+            <span class="guide-overlay-state"
+                  :class="guider.guiding ? 'is-guiding' : ''"
+                  x-text="guideOverlayStateLabel()"></span>
+            <button class="guide-overlay-close" @click="toggleGuideOverlay()"
+                    title="Hide overlay">✕</button>
+        </div>
+        <div class="guide-overlay-graph">
+            <canvas x-ref="guideOverlayGraph"></canvas>
+        </div>
+        <div class="guide-overlay-stats">
+            <span><i style="color:#e57373">RA</i> <b x-text="(guider.rmsRA||0).toFixed(2)"></b>"</span>
+            <span><i style="color:#64b5f6">DEC</i> <b x-text="(guider.rmsDec||0).toFixed(2)"></b>"</span>
+            <span><i>Tot</i> <b x-text="(guider.rmsTotal||0).toFixed(2)"></b>"</span>
+            <span class="guide-overlay-dither" x-text="'Dither ' + (guider.dithering ? 'On' : 'Off')"></span>
+        </div>
+        <div class="guide-overlay-resize" @pointerdown="guideOverlayResizeStart($event)"
+             title="Drag to resize"></div>
+    </div>
+
     <!-- Toast notifications -->
     <div class="toast-container">
         <template x-for="t in toasts" :key="t.id">
@@ -17949,7 +17979,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260713-cameraoffset"></script>
+    <script src="/js/app.js?v=20260713-guideoverlay"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

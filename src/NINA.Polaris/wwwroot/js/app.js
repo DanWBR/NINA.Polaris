@@ -1636,6 +1636,12 @@ function ninaApp() {
         guideChartTickCount: 0, // visible heartbeat for the guide chart
         guidePhdScale: 4,       // PHD2-style history y-range (arcsec, ±)
         _guidePhdFrameId: -1,   // last guide-frame id we requested an image for
+        // ASIAIR-style floating guiding overlay: a small translucent, read-only,
+        // always-on-top mini graph the user can drag + resize, visible from any
+        // tab. Geometry + visibility persist in localStorage ('polaris.guideOverlay').
+        guideOverlay: { on: false, left: 90, top: 90, w: 300, h: 150, scale: 4 },
+        _guideOverlayDrag: null,
+        _guideOverlayResize: null,
         guiderEquipment: { camera: null, mount: null, auxMount: null, ao: null },
 
         // PHD2 management state
@@ -3869,6 +3875,9 @@ function ninaApp() {
 
             // Restore the dragged position of the SKY plate-solver overlay.
             this._restoreSkySolverPanel();
+
+            // Restore the floating guiding overlay's visibility + geometry.
+            this._guideOverlayLoad();
 
             // AUTORUN rehydration: a sequence can still be running on the
             // server when the browser is restarted / reconnects. Pull the
@@ -17190,12 +17199,125 @@ function ninaApp() {
         },
 
         drawGuidePhdGraph() {
-            const canvas = this.$refs.guidePhdGraph;
+            this._drawGuidePhdGraphTo(this.$refs.guidePhdGraph, this.guidePhdScale || 4);
+        },
+
+        // Read-only mini copy of the PHD2-style history graph for the floating
+        // guiding overlay. Same draw routine, a different canvas + y-scale, and
+        // it redraws from any tab (see the WS status redraw hook).
+        drawGuideOverlayGraph() {
+            if (!this.guideOverlay.on || !this.guider.connected) return;
+            this._drawGuidePhdGraphTo(this.$refs.guideOverlayGraph,
+                this.guideOverlay.scale || this.guidePhdScale || 4);
+        },
+
+        // --- Floating guiding overlay controls (drag / resize / persist) ---
+        toggleGuideOverlay() {
+            this.guideOverlay.on = !this.guideOverlay.on;
+            this._guideOverlaySave();
+            if (this.guideOverlay.on) this.$nextTick(() => this.drawGuideOverlayGraph());
+        },
+        guideOverlayStyle() {
+            const g = this.guideOverlay;
+            return `left:${g.left}px; top:${g.top}px; width:${g.w}px; height:${g.h}px;`;
+        },
+        guideOverlayStateLabel() {
+            const g = this.guider;
+            if (g.calibrating) return 'Calibrating';
+            if (g.dithering) return 'Dithering';
+            if (g.settling) return 'Settling';
+            if (g.paused) return 'Paused';
+            if (g.guiding) return 'Guiding';
+            if (g.looping) return 'Looping';
+            return g.appState || 'Idle';
+        },
+        _guideOverlayClamp() {
+            const g = this.guideOverlay;
+            g.w = Math.max(200, Math.min(640, g.w));
+            g.h = Math.max(110, Math.min(420, g.h));
+            const maxL = Math.max(0, window.innerWidth - 60);
+            const maxT = Math.max(0, window.innerHeight - 40);
+            g.left = Math.max(0, Math.min(maxL, g.left));
+            g.top = Math.max(0, Math.min(maxT, g.top));
+        },
+        _guideOverlaySave() {
+            try {
+                const g = this.guideOverlay;
+                localStorage.setItem('polaris.guideOverlay', JSON.stringify({
+                    on: g.on, left: g.left, top: g.top, w: g.w, h: g.h, scale: g.scale
+                }));
+            } catch (e) { }
+        },
+        _guideOverlayLoad() {
+            try {
+                const s = JSON.parse(localStorage.getItem('polaris.guideOverlay') || 'null');
+                if (s && typeof s === 'object') {
+                    Object.assign(this.guideOverlay, {
+                        on: !!s.on,
+                        left: Number(s.left) || this.guideOverlay.left,
+                        top: Number(s.top) || this.guideOverlay.top,
+                        w: Number(s.w) || this.guideOverlay.w,
+                        h: Number(s.h) || this.guideOverlay.h,
+                        scale: Number(s.scale) || this.guideOverlay.scale
+                    });
+                }
+            } catch (e) { }
+            this._guideOverlayClamp();
+        },
+        guideOverlayDragStart(ev) {
+            // Don't start a move when the grab began on the close button.
+            if (ev.target.closest('.guide-overlay-close')) return;
+            const g = this.guideOverlay;
+            this._guideOverlayDrag = { sx: ev.clientX, sy: ev.clientY, l0: g.left, t0: g.top };
+            const move = e => this._guideOverlayDragMove(e);
+            const up = () => {
+                window.removeEventListener('pointermove', move);
+                window.removeEventListener('pointerup', up);
+                this._guideOverlayDrag = null;
+                this._guideOverlaySave();
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+            ev.preventDefault();
+        },
+        _guideOverlayDragMove(ev) {
+            const d = this._guideOverlayDrag;
+            if (!d) return;
+            this.guideOverlay.left = d.l0 + (ev.clientX - d.sx);
+            this.guideOverlay.top = d.t0 + (ev.clientY - d.sy);
+            this._guideOverlayClamp();
+        },
+        guideOverlayResizeStart(ev) {
+            const g = this.guideOverlay;
+            this._guideOverlayResize = { sx: ev.clientX, sy: ev.clientY, w0: g.w, h0: g.h };
+            const move = e => this._guideOverlayResizeMove(e);
+            const up = () => {
+                window.removeEventListener('pointermove', move);
+                window.removeEventListener('pointerup', up);
+                this._guideOverlayResize = null;
+                this._guideOverlaySave();
+                this.$nextTick(() => this.drawGuideOverlayGraph());
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+            ev.preventDefault();
+            ev.stopPropagation();
+        },
+        _guideOverlayResizeMove(ev) {
+            const r = this._guideOverlayResize;
+            if (!r) return;
+            this.guideOverlay.w = r.w0 + (ev.clientX - r.sx);
+            this.guideOverlay.h = r.h0 + (ev.clientY - r.sy);
+            this._guideOverlayClamp();
+            this.drawGuideOverlayGraph();
+        },
+
+        _drawGuidePhdGraphTo(canvas, scale) {
             if (!canvas) return;
             const { ctx, w, h } = this._fitCanvas(canvas);
             ctx.clearRect(0, 0, w, h);
             const mid = h / 2;
-            const scale = this.guidePhdScale || 4;
+            scale = scale || 4;
             const yOf = v => mid - (v / scale) * (h / 2 - 6);
 
             // grid
@@ -35716,6 +35838,8 @@ function ninaApp() {
                     if (this.guider.backend === 'native') this.renderGuideView();
                     else this.updateGuideChart();
                 }
+                // Floating guiding overlay redraws from ANY tab while visible.
+                if (this.guideOverlay.on && this.guider.connected) this.drawGuideOverlayGraph();
                 if ((this.autoFocus.points || []).length > 0 && this.tab === 'focus') this.updateAfChart();
                 if (this.tempHistory.length >= 2 && this.tab === 'equip') this.updateTempChart();
             });

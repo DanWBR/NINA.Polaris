@@ -348,6 +348,66 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .phd2-zoom-val { font-size:11px; color:#cfd6e4; min-width:30px; text-align:center; }
 .phd2-cam-overlay { position:absolute; left:0; top:0; pointer-events:none; }
 .phd2-cam-empty { position:absolute; font-size:12px; }
+/* ----- ASIAIR-style floating guiding overlay (read-only, draggable) ----- */
+.guide-overlay {
+    position: fixed;
+    z-index: 900;              /* above panels, below modals (1000) and toasts */
+    display: flex;
+    flex-direction: column;
+    background: rgba(10, 12, 18, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    overflow: hidden;
+    user-select: none;
+    touch-action: none;        /* pointer drag/resize, don't scroll the page */
+}
+.guide-overlay-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    cursor: move;
+    background: rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 11px;
+    flex: 0 0 auto;
+}
+.guide-overlay-title { font-weight: 600; letter-spacing: 0.02em; color: #cfd6e4; }
+.guide-overlay-state { color: #ffb74d; font-size: 10px; }
+.guide-overlay-state.is-guiding { color: #66bb6a; }
+.guide-overlay-close {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: #99a; cursor: pointer;
+    font-size: 12px; line-height: 1;
+    padding: 2px 4px; border-radius: 3px;
+}
+.guide-overlay-close:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.guide-overlay-graph { position: relative; flex: 1 1 auto; min-height: 40px; background: #0a0a0c; }
+.guide-overlay-graph canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.guide-overlay-stats {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    padding: 3px 8px;
+    font-size: 10px; color: #cfd6e4;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    flex: 0 0 auto;
+}
+.guide-overlay-stats i { font-style: normal; opacity: 0.85; }
+.guide-overlay-stats b { font-weight: 600; }
+.guide-overlay-dither { margin-left: auto; opacity: 0.8; }
+/* Bottom-right resize grip (two diagonal ticks). */
+.guide-overlay-resize {
+    position: absolute; right: 0; bottom: 0;
+    width: 16px; height: 16px;
+    cursor: nwse-resize;
+    background:
+        linear-gradient(135deg, transparent 0 50%, rgba(255,255,255,0.35) 50% 60%, transparent 60% 72%, rgba(255,255,255,0.35) 72% 82%, transparent 82%);
+}
+
 .cal-review-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000;
     display:flex; align-items:center; justify-content:center; }
 .cal-review { background:#0d0f15; border:1px solid #333; border-radius:8px; width:min(720px,92vw);
