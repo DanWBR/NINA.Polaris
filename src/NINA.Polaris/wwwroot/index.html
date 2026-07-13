@@ -12304,7 +12304,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
                         How sharp the on-screen preview can get when you zoom in.
                         Higher uses more graphics memory on the client device showing
-                        the view (your phone / tablet / PC), not the host.
+                        the view (your phone / tablet / PC). For <strong>colour
+                        live-stacking</strong> it also sets the resolution the host
+                        renders the stacked preview at, so on a low-RAM host
+                        (Raspberry Pi / SBC) <strong>Standard</strong> noticeably
+                        cuts host memory use during a live stack.
                         Your saved images are always full quality regardless.
                     </p>
 
@@ -17979,7 +17983,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260713-guideoverlay100"></script>
+    <script src="/js/app.js?v=20260713-previewdim"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

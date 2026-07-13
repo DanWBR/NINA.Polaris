@@ -4102,6 +4102,9 @@ function ninaApp() {
                 this.previewFullDebayer =
                     localStorage.getItem('nina-preview-fulldebayer') === '1';
             } catch { /* private mode: keep defaults */ }
+            // Sync the restored Preview quality to the server so the COLOUR
+            // live-stack JPEG honours it (best effort; server default 4096).
+            this.pushPreviewDim();
 
             // Re-render the cached frame whenever the user switches
             // tabs. Fixes the classic "last snap painted on PREVIEW,
@@ -9380,6 +9383,14 @@ function ninaApp() {
             this.previewMaxDim = [2048, 4096, 0].includes(n) ? n : 4096;
             try { localStorage.setItem('nina-preview-maxdim', String(this.previewMaxDim)); } catch { }
             try { this.applyManualStretch(); } catch (e) { /* no frame yet */ }
+            // The COLOUR live-stack preview is a server-rendered JPEG (no raw
+            // render path), so it can't read previewMaxDim locally — push it so
+            // the colour LIVE preview matches "Preview quality" too.
+            this.pushPreviewDim();
+        },
+        pushPreviewDim() {
+            try { this.apiPost('/api/livestack/preview-dim', null, { dim: this.previewMaxDim | 0 }); }
+            catch (e) { /* best effort; server default 4096 */ }
         },
         setPreviewFullDebayer(on) {
             this.previewFullDebayer = !!on;

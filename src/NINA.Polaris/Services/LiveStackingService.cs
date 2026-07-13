@@ -228,6 +228,18 @@ public class LiveStackingService {
     /// Set via PUT /api/livestack/max-duration.</summary>
     public int MaxDurationSeconds { get; set; }
 
+    /// <summary>Max dimension (px, longest side) for the COLOUR live-stack
+    /// preview JPEG. The colour stack has no client-side raw-RGB render path —
+    /// the browser decodes this JPEG — so this is what actually controls the
+    /// LIVE colour preview resolution, and it mirrors the client's Appearance
+    /// "Preview quality" (previewMaxDim: 2048 / 4096 / 0=native). Lower = the
+    /// encoder downsamples the planes before the heavy stretch/RGBA/SKBitmap
+    /// pass (big RAM win on OSC sensors); higher = sharper zoom, more RAM. 0 or
+    /// negative = native (no downscale). Pushed by the client via
+    /// POST /api/livestack/preview-dim. Default 4096 matches the pre-MEMOPT2
+    /// behaviour so an untouched Appearance never regresses.</summary>
+    public int PreviewMaxDim { get; set; } = 4096;
+
     /// <summary>When the current stack started (first frame after
     /// the most recent Reset). Null when no frame has been
     /// integrated yet. Used to drive the elapsed counter shown in
@@ -1052,7 +1064,12 @@ public class LiveStackingService {
                 // 1280/80 video default so zooming stays sharp instead of
                 // upscaling a downsized preview. Capped at the stack's native
                 // size by the renderer's scale<=1 clamp.
-                await _relay.RelayRgbJpegAsync(rgbImage, maxDim: 1920, quality: 88,
+                // Honour the client's Appearance "Preview quality": 0/native ->
+                // full res (int.MaxValue sentinel skips the downscale); else the
+                // chosen cap, which the encoder downsamples the planes to BEFORE
+                // the heavy pass (the RAM lever). Default 4096 = old behaviour.
+                int jpegDim = PreviewMaxDim <= 0 ? int.MaxValue : Math.Clamp(PreviewMaxDim, 512, 8192);
+                await _relay.RelayRgbJpegAsync(rgbImage, maxDim: jpegDim, quality: 90,
                     kind: FrameKind.LiveStack, ct: ct);
             } else {
                 // Stabilize the relayed Bayer pattern: a single frame whose

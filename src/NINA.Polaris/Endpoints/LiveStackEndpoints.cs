@@ -292,6 +292,15 @@ public static class LiveStackEndpoints {
             return Results.Ok(new { saved = true, seconds = secs });
         });
 
+        // Client pushes its Appearance "Preview quality" (previewMaxDim) so the
+        // COLOUR live-stack JPEG is rendered at that resolution (the colour
+        // preview has no client-side raw render path). Not persisted server-side
+        // — it's a client localStorage setting the client re-sends on load.
+        group.MapPost("/preview-dim", (PreviewDimRequest req, LiveStackingService stack) => {
+            stack.PreviewMaxDim = req.Dim;   // 0 = native; clamped when applied
+            return Results.Ok(new { ok = true, dim = req.Dim });
+        });
+
         // ----- CLST-6: persist a client-stacked result as FITS -----
         //
         // When live-stacking happens in the browser (server is in
@@ -449,6 +458,8 @@ public static class LiveStackEndpoints {
     /// unlimited. The LIVE tab posts the user's "stack for N
     /// minutes" input here, converted to seconds.</summary>
     public record MaxDurationRequest(int Seconds);
+
+    public record PreviewDimRequest(int Dim);
 
     /// <summary>Body of PUT /api/livestack/target-snr. null clears
     /// the session-level override so the active rig's TargetSnr
