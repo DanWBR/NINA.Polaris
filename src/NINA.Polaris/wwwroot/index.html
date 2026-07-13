@@ -3033,6 +3033,15 @@
                                    step="10" min="0" class="input-sm"
                                    :disabled="preview.busy">
                         </label>
+                        <!-- Offset: same rig black-level pedestal shown in LIVE
+                             (bound to the shared `offset` state → rig default).
+                             Hidden for DSLR/ISO cameras, like Gain. -->
+                        <label x-show="!previewUsesIso() && !previewAuxUsesIso()">Offset
+                            <input type="number" x-model.number="offset"
+                                   step="1" min="0" class="input-sm"
+                                   :disabled="preview.busy">
+                            <span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens — SV405CC ~30-64.">?</span>
+                        </label>
                         <span class="zwo-gain-presets" x-show="!previewUsesIso() && !previewAuxUsesIso() && zwoPresetsForActiveCamera() && !preview.busy">
                             <button type="button" class="zwo-gain-preset"
                                     :data-active="preview.gain === zwoPresetsForActiveCamera()?.L"
