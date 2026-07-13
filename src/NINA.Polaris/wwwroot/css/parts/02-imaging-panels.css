@@ -498,40 +498,35 @@
    toward the Gain field; Gain stays compact on the right with its "?"
    help. Flexbox (not grid) so the growth is deterministic — a grid item
    would not reliably stretch its inner input here. */
+/* One row per field (Exp / Gain / Offset), each laid out as 3 columns:
+   label · input · help. The <label>s are display:contents so their
+   text/input/help children flow straight into the grid tracks and align
+   into clean columns across the rows (a flat horizontal row crammed the
+   fields once Offset was added). */
 .exp-gain-grid {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
     align-items: center;
-    gap: 12px;
+    gap: 6px 10px;
     width: 100%;
     min-width: 0;
 }
-.exp-gain-grid > label { min-width: 0; }
-/* Exposure label grows; the others (Gain / ISO) hug their content. */
-.exp-gain-grid > label:first-child { flex: 1 1 auto; }
-/* Gain / ISO inputs: compact, sized to their value via .input-sm's
-   field-sizing:content so nothing clips and the "?" keeps its room. */
+.exp-gain-grid > label { display: contents; }
+/* Inputs/selects fill their (middle) column so the values line up. */
 .exp-gain-grid input:not([type="checkbox"]):not([type="radio"]),
 .exp-gain-grid select {
-    width: auto;
+    width: 100%;
     min-width: 58px;
-}
-/* Exposure input fills the remaining width of its growing label.
-   field-sizing:normal lets flex-grow drive the width instead of the
-   value; since it ends up wider than the value there is no clipping. */
-.exp-gain-grid > label:first-child input:not([type="checkbox"]):not([type="radio"]) {
-    flex: 1 1 auto;
     field-sizing: normal;
-    width: auto;
-    min-width: 72px;
-    max-width: none;
 }
 /* Hide the redundant datalist dropdown arrow (▼) on the exposure input;
    preset suggestions still work on focus/typing. */
 .exp-gain-grid input[list]::-webkit-calendar-picker-indicator {
     display: none;
 }
-/* Legacy 3-column spacer spans are unused in the flex layout. */
-.exp-gain-grid .eg-spacer { display: none; }
+/* The Exp/ISO rows have no help "?"; the spacer holds their 3rd column so
+   every row keeps the same label · input · help alignment. */
+.exp-gain-grid .eg-spacer { display: block; }
 /* Inside the sidebar, the trigger details panel + refocus callout
    should not blow up horizontally; rely on wrapping. */
 .live-pane > .quick-controls .livestack-triggers,
