@@ -3000,48 +3000,74 @@
                                 <option value="aux" x-show="auxCameraConnected">Aux</option>
                             </select>
                         </label>
-                        <label>Exposure (s)
-                            <input type="number" x-model.number="preview.exposure"
+                        <!-- Exp / ISO / Gain / Offset as a real table, same as
+                             the LIVE pane: label 50% · input 50% · help auto, so
+                             the "?" gets its own column and every input aligns. -->
+                        <table class="exp-gain-grid">
+                        <colgroup>
+                            <col style="width:50%">
+                            <col style="width:50%">
+                            <col style="width:auto">
+                        </colgroup>
+                        <tbody>
+                        <tr>
+                            <td><label>Exposure (s)</label></td>
+                            <td><input type="number" x-model.number="preview.exposure"
                                    list="exposure-presets" step="any" min="0" class="input-sm"
-                                   :disabled="preview.busy"></label>
+                                   :disabled="preview.busy"></td>
+                            <td></td>
+                        </tr>
                         <!-- DSLR (indi_gphoto) main camera: pick ISO from the
                              camera's list. ISO is a main-camera setting, so it
                              only replaces Gain when the PREVIEW source is Main. -->
-                        <label x-show="previewUsesIso()" x-cloak>ISO
-                            <select class="input-sm" x-model.number="cameraIso.selected"
-                                    @change="setIso(cameraIso.selected)"
-                                    :disabled="preview.busy">
-                                <template x-for="v in cameraIso.options" :key="'piso'+v">
-                                    <option :value="v" x-text="v"></option>
-                                </template>
-                            </select>
-                        </label>
+                        <tr x-show="previewUsesIso()" x-cloak>
+                            <td><label>ISO</label></td>
+                            <td>
+                                <select class="input-sm" x-model.number="cameraIso.selected"
+                                        @change="setIso(cameraIso.selected)"
+                                        :disabled="preview.busy">
+                                    <template x-for="v in cameraIso.options" :key="'piso'+v">
+                                        <option :value="v" x-text="v"></option>
+                                    </template>
+                                </select>
+                            </td>
+                            <td></td>
+                        </tr>
                         <!-- DSLR on the AUX source: gphoto uses ISO, not gain.
                              Standard ISO steps; the driver picks the nearest it
                              supports. Set out-of-band on the aux camera. -->
-                        <label x-show="previewAuxUsesIso()" x-cloak>ISO
-                            <select class="input-sm" x-model.number="auxIso"
-                                    @change="setAuxIso(auxIso)"
-                                    :disabled="preview.busy">
-                                <template x-for="v in [100,200,400,800,1600,3200,6400,12800,25600]" :key="'aiso'+v">
-                                    <option :value="v" x-text="v"></option>
-                                </template>
-                            </select>
-                        </label>
-                        <label x-show="!previewUsesIso() && !previewAuxUsesIso()">Gain
-                            <input type="number" x-model.number="preview.gain"
+                        <tr x-show="previewAuxUsesIso()" x-cloak>
+                            <td><label>ISO</label></td>
+                            <td>
+                                <select class="input-sm" x-model.number="auxIso"
+                                        @change="setAuxIso(auxIso)"
+                                        :disabled="preview.busy">
+                                    <template x-for="v in [100,200,400,800,1600,3200,6400,12800,25600]" :key="'aiso'+v">
+                                        <option :value="v" x-text="v"></option>
+                                    </template>
+                                </select>
+                            </td>
+                            <td></td>
+                        </tr>
+                        <tr x-show="!previewUsesIso() && !previewAuxUsesIso()">
+                            <td><label>Gain</label></td>
+                            <td><input type="number" x-model.number="preview.gain"
                                    step="10" min="0" class="input-sm"
-                                   :disabled="preview.busy">
-                        </label>
+                                   :disabled="preview.busy"></td>
+                            <td></td>
+                        </tr>
                         <!-- Offset: same rig black-level pedestal shown in LIVE
                              (bound to the shared `offset` state → rig default).
                              Hidden for DSLR/ISO cameras, like Gain. -->
-                        <label x-show="!previewUsesIso() && !previewAuxUsesIso()">Offset
-                            <input type="number" x-model.number="offset"
+                        <tr x-show="!previewUsesIso() && !previewAuxUsesIso()">
+                            <td><label>Offset</label></td>
+                            <td><input type="number" x-model.number="offset"
                                    step="1" min="0" class="input-sm"
-                                   :disabled="preview.busy">
-                            <span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens — SV405CC ~30-64.">?</span>
-                        </label>
+                                   :disabled="preview.busy"></td>
+                            <td><span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens — SV405CC ~30-64.">?</span></td>
+                        </tr>
+                        </tbody>
+                        </table>
                         <span class="zwo-gain-presets" x-show="!previewUsesIso() && !previewAuxUsesIso() && zwoPresetsForActiveCamera() && !preview.busy">
                             <button type="button" class="zwo-gain-preset"
                                     :data-active="preview.gain === zwoPresetsForActiveCamera()?.L"
