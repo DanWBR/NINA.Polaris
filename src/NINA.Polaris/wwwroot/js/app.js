@@ -6926,9 +6926,13 @@ function ninaApp() {
                     // CCD_CFA dropout) is held rather than flashed grey.
                     // Kind 6 = the dedicated LiveStack path.
                     if (frameKind === 0 || frameKind === 6) {
+                        // Arm the latch only — do NOT record the JPEG's size as
+                        // the raw-geometry reference. The colour stack JPEG is
+                        // downscaled (maxDim 4096), so its dimensions differ from
+                        // the native raw sub; storing them here made the raw
+                        // dropout guard mistake the size difference for an
+                        // OSC→mono camera swap and paint a mono sub B&W.
                         this._liveSawColor = true;
-                        this._liveColorW = img.width;
-                        this._liveColorH = img.height;
                     }
                     // A JPEG frame has no raw buffer; clear any stale raw cache
                     // so applyManualStretch routes through the JPEG re-stretch
@@ -8830,11 +8834,19 @@ function ninaApp() {
             // Re-arm on a geometry change (a genuine OSC→mono switch only happens
             // on a camera reconnect, which restarts the capture at a new size).
             if (frameKind === 0 || frameKind === 6) {
-                if (width !== this._liveColorW || height !== this._liveColorH) {
+                // Re-arm the colour latch only on a genuine change in the RAW
+                // frame geometry (an OSC→mono camera swap restarts capture at a
+                // new sensor size). Do NOT reset on the FIRST raw frame after
+                // colour was shown via the downscaled JPEG path — its native
+                // size legitimately differs from the JPEG's, and treating that
+                // as a camera swap dropped the latch and let a mono dropout sub
+                // paint the LIVE canvas B&W permanently (field report).
+                if (this._liveColorW != null
+                        && (width !== this._liveColorW || height !== this._liveColorH)) {
                     this._liveSawColor = false;
-                    this._liveColorW = width;
-                    this._liveColorH = height;
                 }
+                this._liveColorW = width;
+                this._liveColorH = height;
                 const isColor = (bayerPattern | 0) >= 1 && (bayerPattern | 0) <= 4;
                 if (isColor) {
                     this._liveSawColor = true;

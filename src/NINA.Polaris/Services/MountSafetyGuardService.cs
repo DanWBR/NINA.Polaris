@@ -140,6 +140,17 @@ public class MountSafetyGuardService : BackgroundService {
     public static bool ShouldTripBreaker(int consecutiveFailures, int threshold)
         => threshold > 0 && consecutiveFailures >= threshold;
 
+    /// <summary>Did the mount just cross the meridian WHILE TRACKING? A crossing
+    /// is HA going − → ≥0 between two consecutive samples. A commanded slew that
+    /// carries HA across 0 (e.g. slewing out of the home position to a target
+    /// just west of the meridian) is NOT a cable-wrap crossing — the mount is
+    /// being driven to a legitimate pointing, not drifting past the meridian on
+    /// the sky — so this returns false while slewing.</summary>
+    public static bool DetectMeridianCrossing(double? prevHa, double ha, bool slewing) {
+        if (slewing) return false;
+        return prevHa.HasValue && prevHa.Value < 0 && ha >= 0;
+    }
+
     // ---------------------------------- loop ------------------------------------
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
@@ -316,6 +327,7 @@ public class MountSafetyGuardService : BackgroundService {
 
         bool supportsPier = scope.Capabilities.SupportsPierSide;
         var pier = scope.SideOfPier;
+        bool slewing = scope.IsSlewing;
 
         // Clearly east again (new approach / next night): reset the machine.
         if (ha < -0.1) {
@@ -324,8 +336,15 @@ public class MountSafetyGuardService : BackgroundService {
             _pierAtCrossing = PierSide.pierUnknown;
         }
 
-        // Detect the meridian crossing (HA goes − → ≥0): record the pier side then.
-        if (_prevHa.HasValue && _prevHa.Value < 0 && ha >= 0) {
+        // Detect the meridian crossing (HA goes − → ≥0): record the pier side
+        // then. Gated on !slewing (see DetectMeridianCrossing) — a commanded slew
+        // that carries HA across 0 (e.g. slewing out of home to a target just
+        // west of the meridian) is not a cable-wrap crossing. Counting it tripped
+        // the guard on a fresh GoTo to a west target (field report: "guard
+        // indevido com alvo 1h depois do meridiano saindo do home"). _prevHa is
+        // refreshed every tick (below), including during the slew, so the first
+        // post-slew tracking tick compares against the SETTLED position.
+        if (DetectMeridianCrossing(_prevHa, ha, slewing)) {
             _sawCrossing = true;
             _pierAtCrossing = pier;
             _flippedSinceCrossing = false;
