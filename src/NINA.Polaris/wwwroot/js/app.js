@@ -17207,8 +17207,12 @@ function ninaApp() {
         // it redraws from any tab (see the WS status redraw hook).
         drawGuideOverlayGraph() {
             if (!this.guideOverlay.on || !this.guider.connected) return;
+            // Only the most recent ~100 steps in the small panel so it rolls
+            // faster/reads clearer than the full 300-sample history graph.
+            const all = this.guider.recentSteps || [];
+            const steps = all.length > 100 ? all.slice(-100) : all;
             this._drawGuidePhdGraphTo(this.$refs.guideOverlayGraph,
-                this.guideOverlay.scale || this.guidePhdScale || 4);
+                this.guideOverlay.scale || this.guidePhdScale || 4, steps);
         },
 
         // --- Floating guiding overlay controls (drag / resize / persist) ---
@@ -17312,7 +17316,7 @@ function ninaApp() {
             this.drawGuideOverlayGraph();
         },
 
-        _drawGuidePhdGraphTo(canvas, scale) {
+        _drawGuidePhdGraphTo(canvas, scale, stepsOverride) {
             if (!canvas) return;
             const { ctx, w, h } = this._fitCanvas(canvas);
             ctx.clearRect(0, 0, w, h);
@@ -17348,7 +17352,7 @@ function ninaApp() {
             lbl(-scale / 2, 'middle');
             lbl(-scale, 'bottom');
 
-            const steps = this.guider.recentSteps || [];
+            const steps = stepsOverride || this.guider.recentSteps || [];
             if (!steps.length) return;
             const n = steps.length;
             const dx = n > 1 ? w / (n - 1) : w;
