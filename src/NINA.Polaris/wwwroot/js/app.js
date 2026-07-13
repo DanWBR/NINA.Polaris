@@ -91,6 +91,13 @@ function ninaApp() {
         // Live View
         exposure: 30,
         gain: 100,
+        // Sensor black-level pedestal (ADU floor). Mirrors `gain`: a live field,
+        // persisted to localStorage, and written to the rig's DefaultOffset on
+        // rig save (the sequencer/AUTORUN capture path already applies
+        // DefaultOffset). A near-zero offset clips the shadow/noise tail (SV405CC
+        // native default black level is ~0); a small positive value fixes that
+        // and keeps calibration clean.
+        offset: 50,
         binning: '1',
         liveActive: false,
         looping: false,
@@ -3561,6 +3568,8 @@ function ninaApp() {
                 if (le !== null && le !== '' && !isNaN(parseFloat(le))) this.exposure = parseFloat(le);
                 const lg = localStorage.getItem('polaris.live.gain');
                 if (lg !== null && lg !== '' && !isNaN(parseInt(lg, 10))) this.gain = parseInt(lg, 10);
+                const lo = localStorage.getItem('polaris.live.offset');
+                if (lo !== null && lo !== '' && !isNaN(parseInt(lo, 10))) this.offset = parseInt(lo, 10);
                 const lb = localStorage.getItem('polaris.live.binning');
                 if (lb) this.binning = lb;
                 const gg = localStorage.getItem('polaris.guide.gamma');
@@ -3569,6 +3578,7 @@ function ninaApp() {
             } catch (e) { /* private mode; ignore */ }
             this.$watch('exposure', v => { try { localStorage.setItem('polaris.live.exposure', String(v)); } catch (e) {} });
             this.$watch('gain', v => { try { localStorage.setItem('polaris.live.gain', String(v)); } catch (e) {} });
+            this.$watch('offset', v => { try { localStorage.setItem('polaris.live.offset', String(v)); } catch (e) {} });
             this.$watch('binning', v => { try { localStorage.setItem('polaris.live.binning', String(v)); } catch (e) {} });
             // VIDEO: push exposure/gain to a live stream as they change (the
             // controls stay enabled while streaming), debounced so dragging the
@@ -19798,6 +19808,7 @@ function ninaApp() {
                         indiPort: this.settings.indiPort,
                         defaultExposure: this.exposure,
                         defaultGain: this.gain,
+                        defaultOffset: this.offset,
                         defaultBinning: parseInt(this.binning),
                         imageFormat: this.settings.imageFormat,
                         imageOutputDir: this.settings.imageOutputDir,

@@ -1089,6 +1089,7 @@
                             </select><span class="eg-spacer"></span>
                         </label>
                         <label x-show="!cameraUsesIso()">Gain<input type="number" x-model.number="gain" step="10" min="0" class="input-sm"><span class="gain-help" tabindex="0" role="img" aria-label="About gain vs ISO" :title="gainIsoHint()">?</span></label>
+                        <label x-show="!cameraUsesIso()">Offset<input type="number" x-model.number="offset" step="1" min="0" class="input-sm"><span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens — SV405CC ~30-64.">?</span></label>
                         </div>
                         <!-- ZWO L/M/H gain presets, render only when the
                              active camera matches a known ZWO model. -->
@@ -17882,7 +17883,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260712-livebwmountguard"></script>
+    <script src="/js/app.js?v=20260713-cameraoffset"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>
