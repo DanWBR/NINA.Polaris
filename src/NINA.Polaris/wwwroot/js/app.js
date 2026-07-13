@@ -8607,7 +8607,7 @@ function ninaApp() {
         // LSPP-5: async because BGE pre-processing (when enabled)
         // runs ORT inference which is fundamentally async. handleImageFrame
         // awaits this -- no caller relies on a sync return.
-        async _stackViaWasm(pixels, width, height) {
+        async _stackViaWasm(pixels, width, height, bayerPattern) {
             const interop = globalThis.NINA.Polaris.Wasm.Interop;
 
             // LSPP-5: BGE per-frame before stacking. Lazy-load the
@@ -8670,7 +8670,10 @@ function ninaApp() {
                 }
             }
 
-            const metrics = interop.AddFrame(asInt32, width, height);
+            // Pass the frame's Bayer code so the stacker can lock a colour
+            // session (debayer + per-plane warp) instead of smearing the raw
+            // CFA mosaic. 0 (None) keeps the mono path.
+            const metrics = interop.AddFrame(asInt32, width, height, bayerPattern | 0);
             // SNR-5: packed return is now int[7]; slots 5 + 6 carry
             // per-frame SNR and cumulative SNR × 100 so the server's
             // LiveStackingService can populate LastFrameSnr /
@@ -8925,7 +8928,7 @@ function ninaApp() {
                     // the WS handler, so returning a Promise from
                     // here is harmless on its own; we await to keep
                     // the downstream `pixels` cache consistent.
-                    pixels = await this._stackViaWasm(pixels, width, height);
+                    pixels = await this._stackViaWasm(pixels, width, height, bayerPattern);
                 } catch (e) {
                     console.warn('[Polaris] WASM stack failed, rendering raw frame as-is:', e);
                 }
