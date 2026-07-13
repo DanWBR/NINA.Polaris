@@ -72,6 +72,7 @@ public sealed partial class NativeGuider {
             mode, Math.Max(50, Rig.NativeGuideExposureMs), Rig.NativeGuideGain, Rig.NativeGuideBin);
         try {
             while (!ct.IsCancellationRequested) {
+                long iterStart = NowMs();
                 try {
                     if (mode == LoopMode.Loop) {
                         var limg = await CaptureFullAsync(cam, ct);
@@ -79,19 +80,31 @@ public sealed partial class NativeGuider {
                             _lastFrame = limg; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
                             BuildView(double.NaN, double.NaN, 0, false);
                         }
-                        continue;
-                    }
-                    if (_paused) {
+                    } else if (_paused) {
                         await SettleAfterPulse(200, ct);
-                        continue;
+                    } else {
+                        await GuideOnceAsync(cam, mount, ct);
                     }
-                    await GuideOnceAsync(cam, mount, ct);
                 } catch (OperationCanceledException) {
                     break;
                 } catch (Exception ex) {
                     // Never throw out of the loop. Log + continue.
                     _logger.LogError(ex, "Native guide loop iteration failed");
                     await SettleAfterPulse(500, ct);
+                }
+                // MEMOPT2: cadence floor. The loop was paced only by the camera
+                // blocking for the exposure; a cam that returns faster than the
+                // nominal exposure (short exposures, cached/streamed frames, or a
+                // capture that fails fast) spun the loop and churned a full guide
+                // frame + preview per iteration — the +500 MB GC plateau. Sleep
+                // the remainder of the exposure period so the loop runs at ~1
+                // frame / exposure. The star-lost + error paths already dwell,
+                // so their elapsed >= period and this adds nothing there.
+                int period = Math.Max(50, Rig.NativeGuideExposureMs);
+                int rest = period - (int)(NowMs() - iterStart);
+                if (rest > 0) {
+                    try { await Task.Delay(rest, ct); }
+                    catch (OperationCanceledException) { break; }
                 }
             }
         } finally {
