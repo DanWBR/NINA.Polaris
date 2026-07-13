@@ -506,7 +506,11 @@
 .exp-gain-grid {
     width: 100%;
     border-collapse: collapse;
-    table-layout: fixed;
+    /* Auto layout (NOT fixed): the two 50% columns are hints that shrink
+       just enough to let the auto help column reserve its content width.
+       With table-layout:fixed, 50%+50% eats the whole row and the auto
+       "?" column collapses to zero and disappears. */
+    table-layout: auto;
 }
 .exp-gain-grid td {
     padding: 3px 5px 3px 0;
