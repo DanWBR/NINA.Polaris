@@ -207,6 +207,31 @@ public class AstrometryNetLocalSolver : IPlateSolver {
             return result;
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             return PlateSolveResult.Failed(ex.Message);
+        } finally {
+            // solve-field drops a fistful of sidecars next to the input FITS;
+            // the caller only deletes the .fits, so without this every local
+            // a.net solve leaked ~8 files into the temp dir over a night.
+            CleanupSidecars(fitsPath);
+        }
+    }
+
+    /// <summary>Delete the intermediate files solve-field writes alongside the
+    /// input FITS. The input .fits itself is owned + deleted by the caller
+    /// (PlateSolveEndpoints), so it is deliberately NOT touched here. Best
+    /// effort: swallow IO races / permission errors. Covers the WCS we pin via
+    /// <c>--wcs</c> plus solve-field's default xylist/corr/match/rdls/solved
+    /// outputs and the index xylist.</summary>
+    internal static void CleanupSidecars(string fitsPath) {
+        var baseNoExt = Path.Combine(
+            Path.GetDirectoryName(fitsPath) ?? ".",
+            Path.GetFileNameWithoutExtension(fitsPath));
+        foreach (var suffix in new[] {
+                     ".wcs", ".axy", ".corr", ".match", ".rdls",
+                     ".solved", ".xyls", "-indx.xyls", ".new", ".ini" }) {
+            try {
+                var p = baseNoExt + suffix;
+                if (File.Exists(p)) File.Delete(p);
+            } catch { /* IO race / perms — best effort, mirrors AstapSolver */ }
         }
     }
 
