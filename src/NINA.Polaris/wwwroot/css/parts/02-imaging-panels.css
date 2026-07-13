@@ -513,7 +513,10 @@
    crammed row) and without subgrid (uneven support). */
 .exp-gain-grid > label {
     display: grid;
-    grid-template-columns: 4rem minmax(72px, 1fr) auto;
+    /* label 50% · input 50% · help auto. 1fr 1fr = equal halves of the
+       width left after the auto help column (a literal 50% 50% auto would
+       overflow, since 50%+50% already fills the row before the help/gaps). */
+    grid-template-columns: 1fr 1fr auto;
     align-items: center;
     column-gap: 10px;
     min-width: 0;
