@@ -82,21 +82,23 @@ public class StarDetector {
         // last-resort floor.
         if (threshold <= stats.median + 0.5) threshold = stats.median + 5;
 
-        // MEMOPT: Detect runs once per frame in the live pipelines and a
-        // fresh bool[W*H] is ~9 MB of LOH churn each call on a 9 MP
-        // sensor. Rent from the shared pool instead (may return a longer
-        // array — every index used is < width*height, so that's fine)
-        // and clear only the region we use.
-        int visitedLen = width * height;
-        var visited = ArrayPool<bool>.Shared.Rent(visitedLen);
-        Array.Clear(visited, 0, visitedLen);
+        // MEMOPT2: Detect runs once per frame in the live pipelines. A
+        // bool[W*H] is ~9 MB of LOH each call on a 9 MP sensor AND exceeds
+        // ArrayPool<bool>'s 2^20-element cap, so Rent/Return was a no-op
+        // (fresh alloc every call). Use a ulong bitset (1 bit per pixel):
+        // 64× fewer elements keeps it UNDER the pool cap up to 64 MP — real
+        // pooling — and it's 8× smaller in bytes, so churn drops 8×. Clear
+        // only the words we use; the pool may hand back a longer array.
+        int visitedWords = (width * height + 63) >> 6;
+        var visited = ArrayPool<ulong>.Shared.Rent(visitedWords);
+        Array.Clear(visited, 0, visitedWords);
         var stars = new List<DetectedStar>();
 
         try {
             for (int y = BorderExclusion; y < height - BorderExclusion; y++) {
                 for (int x = BorderExclusion; x < width - BorderExclusion; x++) {
                     int idx = y * width + x;
-                    if (visited[idx] || data[idx] < threshold) continue;
+                    if ((visited[idx >> 6] & (1UL << (idx & 63))) != 0 || data[idx] < threshold) continue;
 
                     var pixels = FloodFill(data, width, height, x, y, threshold, visited);
                     if (pixels.Count < MinStarSize || pixels.Count > MaxStarSize) continue;
@@ -109,7 +111,7 @@ public class StarDetector {
                 }
             }
         } finally {
-            ArrayPool<bool>.Shared.Return(visited);
+            ArrayPool<ulong>.Shared.Return(visited);
         }
 
         stars.Sort((a, b) => b.Flux.CompareTo(a.Flux));
@@ -120,7 +122,7 @@ public class StarDetector {
     }
 
     private List<(int x, int y)> FloodFill(ushort[] data, int width, int height,
-        int startX, int startY, double threshold, bool[] visited) {
+        int startX, int startY, double threshold, ulong[] visited) {
         var result = new List<(int x, int y)>();
         var stack = new Stack<(int x, int y)>();
         stack.Push((startX, startY));
@@ -130,9 +132,9 @@ public class StarDetector {
             int idx = py * width + px;
 
             if (px < 0 || px >= width || py < 0 || py >= height) continue;
-            if (visited[idx] || data[idx] < threshold) continue;
+            if ((visited[idx >> 6] & (1UL << (idx & 63))) != 0 || data[idx] < threshold) continue;
 
-            visited[idx] = true;
+            visited[idx >> 6] |= 1UL << (idx & 63);
             result.Add((px, py));
 
             stack.Push((px + 1, py));
