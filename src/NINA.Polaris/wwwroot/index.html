@@ -4687,12 +4687,20 @@
                                x-model.number="guideExp"
                                @change="setGuideExposure(guideExp)"
                                title="Guide-camera exposure per frame">
-                        <option :value="500">0.5</option>
-                        <option :value="1000">1.0</option>
-                        <option :value="1500">1.5</option>
-                        <option :value="2000">2.0</option>
-                        <option :value="3000">3.0</option>
-                        <option :value="5000">5.0</option>
+                        <!-- Static value= (not :value): the option values must exist at
+                             parse time so x-model resolves the restored guideExp to a
+                             matching <option> on the FIRST render. With :value (dynamic
+                             bind) the select initialised before the bindings applied and
+                             fell back to the first option (0.5 s); since guideExp already
+                             equalled the persisted value, later WS ticks were no-ops and
+                             never re-synced the DOM — the "guide exp reverts to 0.5 s on
+                             reload" field bug. -->
+                        <option value="500">0.5</option>
+                        <option value="1000">1.0</option>
+                        <option value="1500">1.5</option>
+                        <option value="2000">2.0</option>
+                        <option value="3000">3.0</option>
+                        <option value="5000">5.0</option>
                     </select></label>
                     <label class="gb-field" x-show="guiderDriver === 'native'">Gain<input type="number"
                                :value="guideGain" @change="setGuideGain(Number($event.target.value))"
