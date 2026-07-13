@@ -127,6 +127,12 @@ function ninaApp() {
         _shutterLongPressed: false,
         _shutterArmTimer: null,    // animates the arming ring at 60ms cadence
         _shutterArmStartedAt: 0,
+        // True while a LIVE stop is still settling. Cameras that can't abort
+        // mid-exposure (SVBony native) block the capture-abort until the
+        // in-flight frame finishes; this guard makes the shutter ignore a
+        // re-arm during that window so the stop completes cleanly and the
+        // next arm sees the retained stack (offering Continue/Restart).
+        _liveSessionBusy: false,
         stats: { starCount: '--', hfr: null, mean: null, snr: null, width: 0, height: 0 },
         currentTime: '--:--:--',
         // Battery of the CLIENT device (tablet/phone/laptop showing the
@@ -20039,6 +20045,15 @@ function ninaApp() {
         },
 
         async loopCapture() {
+            // A previous stop is still settling (a non-abortable driver is
+            // finishing its in-flight exposure). Ignore the re-arm until the
+            // stop completes, otherwise we'd arm on inconsistent state and
+            // silently restart the stack from zero instead of offering
+            // Continue/Restart.
+            if (this._liveSessionBusy) {
+                this.toast('Finishing the previous exposure — try again in a moment', 'warn');
+                return;
+            }
             // Cooler-off pre-flight before starting the LIVE loop (saves frames
             // by default, so warm frames matter here too).
             if (!await this.confirmCoolerForSession('the LIVE loop')) return;
@@ -22005,8 +22020,13 @@ function ninaApp() {
         async _armLiveStackForShutter() {
             if (this.liveStackEnabled) return;
             // Read-before-flip: ask "continue or restart?" while the
-            // state still reflects how many frames are stacked.
-            const existingFrames = this.liveStackFrames || 0;
+            // state still reflects how many frames are stacked. Take the max
+            // of the mirrored counter and the last full status payload so a
+            // stale WS tick (e.g. right after a slow non-abortable stop) can't
+            // hide the prompt and silently restart the stack from zero.
+            const existingFrames = Math.max(
+                this.liveStackFrames || 0,
+                this.liveStackStatus?.frameCount || 0);
             const trig = this.liveStackTriggers || {};
             const wantsPrep = trig.refocusOnStart || trig.recenterOnStart;
 
@@ -22063,17 +22083,34 @@ function ninaApp() {
         // pause stacking. The accumulator is kept — the next shutter press
         // offers Continue/Restart; ↻ Reset clears it explicitly.
         async stopLiveSession() {
-            await this.stopCapture();
-            if (!this.liveStackEnabled) return;
-            this.liveStackEnabled = false;
+            if (this._liveSessionBusy) return;   // stop already in flight
+            this._liveSessionBusy = true;
+            const wasStacking = this.liveStackEnabled;
             try {
-                await this.apiPost('/api/livestack/stop');
-                const n = this.liveStackFrames || 0;
-                this.toast('LIVE stopped — stack kept (' + n + ' frame' + (n === 1 ? '' : 's') + ')', 'warn');
-            } catch (e) {
-                // Loop is already down, so frames stop arriving either way;
-                // reflect "not stacking" in the UI regardless.
-                this.toast('Live stack stop failed: ' + (e?.message || ''), 'error');
+                // Pause the STACK FIRST (fast — Stop() keeps the accumulator +
+                // its frame count) and reflect state immediately, BEFORE the
+                // capture-abort. On drivers that can't abort mid-exposure
+                // (SVBony native) stopCapture() blocks until the in-flight
+                // frame finishes; doing the stack-stop up front means that even
+                // if the operator taps the shutter again during that wait, the
+                // stack is already cleanly paused with its N frames retained —
+                // so the re-arm offers Continue/Restart instead of silently
+                // restarting from zero.
+                if (wasStacking) {
+                    this.liveStackEnabled = false;
+                    try {
+                        await this.apiPost('/api/livestack/stop');
+                        const n = this.liveStackFrames || 0;
+                        this.toast('LIVE stopped — stack kept (' + n + ' frame' + (n === 1 ? '' : 's') + ')', 'warn');
+                    } catch (e) {
+                        this.toast('Live stack stop failed: ' + (e?.message || ''), 'error');
+                    }
+                }
+                // Now stop the capture loop (may block on a non-abortable
+                // driver until the current sub completes).
+                await this.stopCapture();
+            } finally {
+                this._liveSessionBusy = false;
             }
         },
 
