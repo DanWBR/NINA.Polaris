@@ -74,6 +74,7 @@ export const hero = home.hero;
 export const featuresSection = home.featuresSection;
 export const features = home.features;
 export const benchmarks = home.benchmarks;
+export const comparison = home.comparison;
 export const closing = home.closing;
 export const gallery = home.gallery;
 

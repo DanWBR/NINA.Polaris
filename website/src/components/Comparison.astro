@@ -1,0 +1,190 @@
+---
+import { comparison } from '../data/site';
+
+// Cell encoding (see content/pages/home.json):
+//   "yes" / "partial" / "no"    -> ✓ / ~ / ✗ mark
+//   "yes:AGPL" / "no:box" / ...  -> mark + small qualifier text
+//   anything else               -> plain small text (e.g. hardware lists)
+type Cell =
+  | { kind: 'mark'; mark: 'yes' | 'partial' | 'no'; note: string }
+  | { kind: 'text'; text: string };
+
+const parseCell = (raw: string): Cell => {
+  const idx = raw.indexOf(':');
+  const key = (idx === -1 ? raw : raw.slice(0, idx)).trim();
+  const note = idx === -1 ? '' : raw.slice(idx + 1).trim();
+  if (key === 'yes' || key === 'partial' || key === 'no') {
+    return { kind: 'mark', mark: key, note };
+  }
+  return { kind: 'text', text: raw };
+};
+
+const markGlyph = { yes: '✓', partial: '~', no: '✗' } as const;
+
+const products: string[] = comparison.products;
+const highlightIdx = products.findIndex((p) => p === comparison.highlightProduct);
+const rows = comparison.rows.filter((r: any) => r.show !== false);
+---
+
+<section id="comparison" class="section">
+  <div class="container">
+    <h2 class="section-title">{comparison.title}</h2>
+    <p class="section-sub">{comparison.sub}</p>
+
+    <div class="cmp-wrap">
+      <table class="cmp">
+        <thead>
+          <tr>
+            <th class="left feat">Feature</th>
+            {products.map((p, i) => (
+              <th class={i === highlightIdx ? 'is-highlight' : ''}>{p}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r: any) => (
+            <tr class={r.star ? 'is-star' : ''}>
+              <td class="left feat">
+                {r.feature}
+                {r.star && <span class="star" title="Unique to Polaris on this list" aria-label="Unique to Polaris">★</span>}
+              </td>
+              {r.cells.map((raw: string, i: number) => {
+                const c = parseCell(raw);
+                const hl = i === highlightIdx;
+                return (
+                  <td class={hl ? 'is-highlight' : ''}>
+                    {c.kind === 'mark' ? (
+                      <span class={`mark m-${c.mark}`}>
+                        <span class="glyph" aria-hidden="true">{markGlyph[c.mark]}</span>
+                        {c.note && <span class="note">{c.note}</span>}
+                      </span>
+                    ) : (
+                      <span class="celltext">{c.text}</span>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    {comparison.legend && <p class="cmp-legend">{comparison.legend}</p>}
+    {comparison.note && <p class="cmp-note">{comparison.note}</p>}
+  </div>
+</section>
+
+<style>
+  .cmp-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+  }
+  .cmp {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 920px;
+    font-size: 14px;
+  }
+  .cmp th,
+  .cmp td {
+    padding: 12px 14px;
+    text-align: center;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+  }
+  .cmp tbody tr:last-child td { border-bottom: 0; }
+  .cmp thead th {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    font-weight: 700;
+    position: sticky;
+    top: 0;
+    background: var(--panel);
+    z-index: 2;
+  }
+
+  /* Sticky feature column so the row label stays visible while scrolling. */
+  .cmp .feat {
+    text-align: left;
+    white-space: normal;
+    min-width: 240px;
+    position: sticky;
+    left: 0;
+    background: var(--panel);
+    z-index: 1;
+  }
+  .cmp thead .feat { z-index: 3; }
+  .cmp tbody .feat { color: var(--text); font-weight: 600; }
+  .cmp tbody tr.is-star .feat { color: var(--text); }
+
+  .star {
+    display: inline-block;
+    margin-left: 6px;
+    color: var(--accent);
+    font-size: 12px;
+    vertical-align: 1px;
+  }
+
+  /* Polaris column tint (header + every body cell in that column). */
+  .cmp .is-highlight { background: rgba(var(--accent-rgb), 0.08); }
+  .cmp thead th.is-highlight {
+    color: var(--accent);
+    box-shadow: inset 0 -2px 0 rgba(var(--accent-rgb), 0.55);
+  }
+  /* Star rows get a faint accent wash to make the differentiators pop. */
+  .cmp tbody tr.is-star { background: rgba(var(--accent-rgb), 0.035); }
+  .cmp tbody tr.is-star .is-highlight { background: rgba(var(--accent-rgb), 0.11); }
+  .cmp tbody tr.is-star .feat { background: rgba(var(--accent-rgb), 0.06); }
+
+  .mark {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    line-height: 1.1;
+  }
+  .glyph { font-size: 15px; font-weight: 800; }
+  .m-yes .glyph { color: var(--success, #22c55e); }
+  .m-partial .glyph { color: var(--warning, #eab308); }
+  .m-no .glyph { color: var(--text-dim, var(--text-muted)); opacity: 0.55; }
+  .note {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  .celltext {
+    color: var(--text-muted);
+    font-size: 12.5px;
+    white-space: normal;
+    display: inline-block;
+    max-width: 180px;
+    line-height: 1.35;
+  }
+
+  .cmp-legend {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    text-align: center;
+    margin: 16px auto 0;
+    letter-spacing: 0.3px;
+  }
+  .cmp-note {
+    font-size: 13px;
+    color: var(--text-muted);
+    max-width: 780px;
+    margin: 10px auto 0;
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 700px) {
+    .cmp th, .cmp td { padding: 10px 12px; }
+    .cmp .feat { min-width: 190px; }
+  }
+</style>

@@ -166,6 +166,40 @@
     "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. The Orange Pi 5 Pro is shown with the OpenCL GPU backend on (242; 227 CPU only) and the Pi 5 at its best, actively cooled run. The Radxa Dragon Q6A is the fastest SBC here and the best value, and runs CPU-only (its Adreno GPU is a net loss). Prices are rough street estimates for the board alone (no SD card, power, or case); the Core i9 row is a full desktop build for reference, not an SBC. Full per-device tables and methodology in the benchmark docs.",
     "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"
   },
+  "comparison": {
+    "title": "How Polaris compares",
+    "sub": "Side by side with the popular dedicated boxes and desktop suites. ★ marks capabilities no other option on this list offers. Cells reflect each product's advertised features and are open to correction.",
+    "products": ["Polaris", "ASIAIR", "StellaVita 2.0", "StellarMate", "KStars/Ekos", "N.I.N.A.", "PINS"],
+    "highlightProduct": "Polaris",
+    "legend": "✓ yes · ~ partial or limited · ✗ no",
+    "note": "Polaris is free and open source — the only spend is a 4 GB single-board computer plus an optional (recommended) inexpensive power box such as the SVBony SV241 or the Gemini Power Box, both frequently on sale. There is no proprietary controller to buy and no paid app, OS, or subscription.",
+    "rows": [
+      { "feature": "Hardware options", "cells": ["RPi · Orange Pi · x86 · Windows", "own box", "own box", "RPi (OS or box)", "Linux · Win · Mac · RPi", "Windows", "Raspberry Pi"] },
+      { "feature": "Full web UI (any browser / device)", "star": true, "cells": ["yes", "no:app", "no:app", "partial:EkosLive / VNC", "partial:EkosLive", "no:desktop", "no:VNC"] },
+      { "feature": "Control multiple hosts from one client", "star": true, "cells": ["yes", "no", "no", "no", "no", "no", "no"] },
+      { "feature": "Open source", "cells": ["yes:AGPL", "no", "no", "partial:core only", "yes:GPL", "yes", "yes:MPL"] },
+      { "feature": "Free (no paid app, OS, or box)", "cells": ["yes", "no:box", "no:box", "no:paid OS / box", "yes", "yes", "yes"] },
+      { "feature": "Multi-brand cameras", "cells": ["yes", "partial:ZWO", "yes", "yes", "yes", "yes", "yes"] },
+      { "feature": "INDI + ASCOM + Alpaca", "cells": ["yes", "no", "partial:INDI", "partial:INDI", "partial:INDI", "partial:ASCOM / Alpaca", "partial:INDI"] },
+      { "feature": "Auxiliary (2nd) camera", "star": true, "cells": ["yes", "no", "no", "no", "no", "no", "no"] },
+      { "feature": "Focuser for aux & guide camera", "star": true, "cells": ["yes", "no", "no", "no", "no", "no", "no"] },
+      { "feature": "Live stacking (EAA)", "cells": ["yes", "yes", "partial", "yes", "yes", "no:plugin", "no"] },
+      { "feature": "Advanced sequencer + multi-target planner", "cells": ["yes", "partial", "partial", "yes:scheduler", "yes:scheduler", "yes", "yes"] },
+      { "feature": "Built-in image editor / post-processing", "cells": ["yes", "partial", "no", "no", "no", "no", "no"] },
+      { "feature": "AI tools (BG extract, denoise, deconv, star removal)", "star": true, "cells": ["yes", "no", "no", "no", "no", "no", "no"] },
+      { "feature": "Processing + AI run on the client / browser", "star": true, "cells": ["yes", "no", "no", "no", "no", "no", "no"] },
+      { "feature": "Auto post-processing workflow", "star": true, "cells": ["yes", "no", "no", "no", "no", "no", "no"] },
+      { "feature": "AI assistant (chat)", "star": true, "cells": ["yes", "no", "no", "no", "no", "no", "no"] },
+      { "feature": "Photometric colour calibration (SPCC / PCC)", "cells": ["yes", "no", "no", "no", "no", "partial:plugin", "partial:plugin"] },
+      { "feature": "Built-in remote internet access", "cells": ["yes", "partial", "no", "yes:EkosLive", "no", "no", "no"] },
+      { "feature": "Runs on your own hardware (no proprietary box)", "show": false, "cells": ["yes", "no", "no", "partial:paid OS or box", "yes", "yes", "yes"] },
+      { "feature": "Autoguiding (native + PHD2)", "show": false, "cells": ["yes", "yes", "yes", "yes", "yes", "yes", "yes"] },
+      { "feature": "Plate solving", "show": false, "cells": ["yes", "yes", "partial", "yes", "yes", "yes", "yes"] },
+      { "feature": "Polar alignment", "show": false, "cells": ["yes", "yes", "yes", "yes", "yes", "partial:plugin", "partial:plugin"] },
+      { "feature": "Auto-focus", "show": false, "cells": ["yes", "yes", "yes", "yes", "yes", "yes", "yes"] },
+      { "feature": "Planetary / video capture + stacking", "show": false, "cells": ["yes", "yes", "partial:record", "partial:record", "partial:record", "no", "no"] }
+    ]
+  },
   "closing": {
     "title": "Free, open-source, and ready to image.",
     "sub": "MIT-style license inherited from upstream N.I.N.A. Bring your own scope."
