@@ -17232,9 +17232,18 @@ function ninaApp() {
             this._guideOverlaySave();
             if (this.guideOverlay.on) this.$nextTick(() => this.drawGuideOverlayGraph());
         },
+        // MUST return an OBJECT, not a style string. Alpine's x-bind:style with
+        // a string calls setAttribute('style', ...), which wipes the inline
+        // display:none that x-show had just set — and since this is re-evaluated
+        // on every WS tick, the overlay resurrected itself right after being
+        // hidden (field report: "empty overlay after refresh that won't close").
+        // The object form sets each property individually and leaves display alone.
         guideOverlayStyle() {
             const g = this.guideOverlay;
-            return `left:${g.left}px; top:${g.top}px; width:${g.w}px; height:${g.h}px;`;
+            return {
+                left: g.left + 'px', top: g.top + 'px',
+                width: g.w + 'px', height: g.h + 'px'
+            };
         },
         guideOverlayStateLabel() {
             const g = this.guider;
@@ -17852,7 +17861,14 @@ function ninaApp() {
                     scales: {
                         x: { ticks: { color: t.tick, font: { size: 10 } }, grid: { color: t.grid },
                              title: { display: true, text: 'Focuser position', color: t.tick, font: { size: 10 } } },
-                        y: { beginAtZero: true, ticks: { color: t.tick, font: { size: 10 } }, grid: { color: t.grid },
+                        // Auto-scale the HFR axis to the sample range instead of
+                        // pinning the floor to 0: a real V-curve spans e.g. 3..8
+                        // HFR, and beginAtZero squashed the whole curve into the
+                        // top half of the panel, hiding the shape that matters.
+                        // `grace` keeps a little headroom so the extremes aren't
+                        // drawn hard against the frame.
+                        y: { beginAtZero: false, grace: '8%',
+                             ticks: { color: t.tick, font: { size: 10 } }, grid: { color: t.grid },
                              title: { display: true, text: 'HFR', color: t.tick, font: { size: 10 } } }
                     }
                 }

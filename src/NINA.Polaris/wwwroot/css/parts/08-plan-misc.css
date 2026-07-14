@@ -389,6 +389,13 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .guide-overlay-close:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
 .guide-overlay-graph { position: relative; flex: 1 1 auto; min-height: 40px; background: #0a0a0c; }
 .guide-overlay-graph canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* Shown instead of a bare blank canvas when there is no step history yet
+   (e.g. right after a browser refresh, which resets the client-side buffer). */
+.guide-overlay-empty {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: #667; pointer-events: none;
+}
 .guide-overlay-stats {
     display: flex; flex-wrap: wrap; gap: 10px;
     padding: 3px 8px;

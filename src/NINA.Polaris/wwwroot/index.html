@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260712-fieldbugs1">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260713-touchtip">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260712-uipolish1">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260713-guideoverlay">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260714-overlayfix">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260712-rename1">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260707-density2">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -17056,6 +17056,11 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
         <div class="guide-overlay-graph">
             <canvas x-ref="guideOverlayGraph"></canvas>
+            <!-- recentSteps is client-accumulated history, so a browser refresh
+                 starts it empty and the canvas would be a blank rectangle until
+                 new steps arrive. Say why it's empty instead of showing nothing. -->
+            <div class="guide-overlay-empty" x-show="!(guider.recentSteps || []).length"
+                 x-text="guider.guiding ? 'Waiting for guide data…' : 'Not guiding'"></div>
         </div>
         <div class="guide-overlay-stats">
             <span><i style="color:#e57373">RA</i> <b x-text="(guider.rmsRA||0).toFixed(2)"></b>"</span>
@@ -17983,7 +17988,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260713-previewdim"></script>
+    <script src="/js/app.js?v=20260714-overlayfix-afyaxis"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>
