@@ -1,5 +1,18 @@
 # N.I.N.A. Polaris — SVBony camera USB access (from the SVBony SDK).
-# Grants non-root read/write so the polaris service user can open the
-# camera over libusb. Reloaded by the package postinst.
+# Bumps usbfs memory so large-frame USB3 transfers have enough buffer, and
+# grants non-root read/write so the polaris service user can open the camera
+# over libusb. Reloaded by the package postinst.
+#
+# The bump is not cosmetic here: usbfs_memory_mb defaults to 16 MB, and a
+# single SV405CC (IMX294) RAW16 frame is 4144*2822*2 ≈ 23 MB — bigger than the
+# entire default budget. Field report: capture died after 4-5 consecutive
+# frames and only an SBC reboot brought it back. usbfs_memory_mb is a GLOBAL
+# usbcore parameter, which is why the symptom hit the native SVBony SDK path
+# and indi_svbony_ccd (a separate process) identically. The sibling ASI and
+# PlayerOne rules have always bumped it and the postinst/docs already claimed
+# SVBony did too; it was the only one missing, because the vendor file this
+# was copied from (SVBCameraSDK/90-ckusb.rules) is permissions-only — ZWO and
+# PlayerOne ship a bump, SVBony never did.
+ACTION=="add", ATTRS{idVendor}=="f266", RUN+="/bin/sh -c '/bin/echo 256 >/sys/module/usbcore/parameters/usbfs_memory_mb'"
 SUBSYSTEMS=="usb", ENV{DEVTYPE}=="usb_device", ATTRS{idVendor}=="f266", ATTRS{idProduct}=="9a0a", MODE="0666"
 SUBSYSTEMS=="usb", ATTR{idVendor}=="f266", MODE="0666"

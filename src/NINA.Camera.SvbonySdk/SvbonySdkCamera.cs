@@ -262,12 +262,19 @@ public sealed class SvbonySdkCamera : ICamera {
                 // SVBGetVideoData block until a single full-length exposure
                 // completes. Mode is restored to NORMAL afterwards so the
                 // video-stream path keeps working.
-                lock (_sdk) {
-                    Check(SVBSetCameraMode(_cameraId, SVB_CAMERA_MODE.SVB_MODE_TRIG_SOFT),
-                        "SVBSetCameraMode(TRIG_SOFT)");
-                    Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
-                }
+                // The mode switch + start MUST sit inside the try: if
+                // SVBStartVideoCapture throws with them outside it, the finally
+                // below never runs and the camera is left latched in TRIG_SOFT
+                // forever — every later capture then waits on a soft trigger the
+                // stream path never fires, so the camera looks dead until it is
+                // physically re-enumerated. The finally is idempotent (both calls
+                // already swallow), so running it after a failed start is safe.
                 try {
+                    lock (_sdk) {
+                        Check(SVBSetCameraMode(_cameraId, SVB_CAMERA_MODE.SVB_MODE_TRIG_SOFT),
+                            "SVBSetCameraMode(TRIG_SOFT)");
+                        Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
+                    }
                     // Re-apply the exposure AFTER the mode switch: some SVBony
                     // bodies reset the exposure control when the camera mode
                     // changes, which made the soft-triggered frame come back at
