@@ -36,9 +36,27 @@ public sealed class PlateSolveProgressService {
     private string? _source;
     private long _seq;       // total lines appended this run (monotonic)
     private bool _truncated; // dropped lines off the head
+    private CancellationTokenSource? _cts;
 
-    /// <summary>Start a new solve run. Returns its run id.</summary>
-    public long Begin(string source) {
+    /// <summary>
+    /// Token for the in-flight solve. Trips when either the request that
+    /// started the run aborts OR <see cref="Cancel"/> is called. Callers pass
+    /// this to <c>SolveAsync</c> instead of the raw request token — the HTTP
+    /// request stays open while the solver runs, so the request token alone
+    /// gave no way to stop a solve short of killing the process by hand
+    /// (field report: "astrometry.net solve isn't cancellable").
+    /// Reads as <see cref="CancellationToken.None"/> when nothing is running.
+    /// </summary>
+    public CancellationToken Token {
+        get { lock (_lock) { return _cts?.Token ?? CancellationToken.None; } }
+    }
+
+    /// <summary>
+    /// Start a new solve run, linking its cancellation to
+    /// <paramref name="linkedTo"/> (normally the request's abort token).
+    /// Returns its run id; take the run's token from <see cref="Token"/>.
+    /// </summary>
+    public long Begin(string source, CancellationToken linkedTo = default) {
         lock (_lock) {
             _runId++;
             _active = true;
@@ -46,7 +64,22 @@ public sealed class PlateSolveProgressService {
             _seq = 0;
             _truncated = false;
             _lines.Clear();
+            _cts?.Dispose();
+            _cts = CancellationTokenSource.CreateLinkedTokenSource(linkedTo);
             return _runId;
+        }
+    }
+
+    /// <summary>
+    /// Cancel the in-flight solve. Returns false when nothing is running, so
+    /// the endpoint can answer honestly instead of pretending it cancelled.
+    /// The solver kills its process tree when the token trips.
+    /// </summary>
+    public bool Cancel() {
+        lock (_lock) {
+            if (!_active || _cts == null) return false;
+            try { _cts.Cancel(); return true; }
+            catch (ObjectDisposedException) { return false; }
         }
     }
 
@@ -67,18 +100,31 @@ public sealed class PlateSolveProgressService {
     /// <summary>Mark the run finished. The last lines stay visible until the
     /// next Begin so the UI can show the final output next to the result.</summary>
     public void End() {
-        lock (_lock) { _active = false; }
+        lock (_lock) {
+            _active = false;
+            // Dispose unregisters the link from the request token; the solve has
+            // already returned by the time End runs, so nobody reads Token after
+            // this. A later Cancel() then correctly reports "nothing running"
+            // instead of tripping a token belonging to a finished run.
+            _cts?.Dispose();
+            _cts = null;
+        }
     }
 
     /// <summary>Immutable snapshot for the status payload.</summary>
     public PlateSolveProgressSnapshot Snapshot() {
         lock (_lock) {
             return new PlateSolveProgressSnapshot(
-                _runId, _active, _source, _seq, _truncated, _lines.ToArray());
+                _runId, _active, _source, _seq, _truncated, _lines.ToArray(),
+                _active && _cts != null);
         }
     }
 }
 
 /// <summary>Point-in-time view of <see cref="PlateSolveProgressService"/>.</summary>
+/// <param name="Cancellable">True while a solve is running that
+/// <c>POST /api/platesolve/cancel</c> can actually stop — drives the UI's
+/// Cancel button.</param>
 public sealed record PlateSolveProgressSnapshot(
-    long RunId, bool Active, string? Source, long Seq, bool Truncated, string[] Lines);
+    long RunId, bool Active, string? Source, long Seq, bool Truncated, string[] Lines,
+    bool Cancellable);

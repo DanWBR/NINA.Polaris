@@ -90,6 +90,10 @@ public class PlateSolve3Solver : IPlateSolver {
             try { await proc.WaitForExitAsync(cts.Token); }
             catch (OperationCanceledException) {
                 try { proc.Kill(entireProcessTree: true); } catch { }
+                // Only the CancelAfter above is a timeout; a trip of the CALLER's
+                // token means the operator cancelled. Rethrow so the endpoint
+                // answers 499 rather than reporting a bogus timeout.
+                ct.ThrowIfCancellationRequested();
                 return PlateSolveResult.Failed("PlateSolve3 timed out");
             }
 

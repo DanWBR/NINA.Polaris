@@ -1237,6 +1237,12 @@ function ninaApp() {
         // Result card render is gated on previewSolveResult !== null.
         previewSolveBusy: false,
         previewSolveResult: null,
+        // FIELD5-1: plate solve cancellation. _plateSolveAc aborts the in-flight
+        // fetch; the real work is stopped server-side by POST
+        // /api/platesolve/cancel, which kills the solver's process tree.
+        // plateSolveCancelling debounces the button while that round-trips.
+        _plateSolveAc: null,
+        plateSolveCancelling: false,
 
         // Server-side continuous video stream. Started by the Stream
         // button in PREVIEW; backend's CameraStreamService auto-picks
@@ -21133,6 +21139,29 @@ function ninaApp() {
         // connected) and pops the result card on success. The
         // server reads the most recent frame off ImageRelayService;
         // the operator doesn't have to re-snap.
+        // Ask the server to abort the in-flight solve, and abort our own fetch
+        // so the UI doesn't sit spinning on a request whose work is already
+        // dead. Server-side is what actually matters: it kills the solver's
+        // process tree. Aborting only the fetch would leave solve-field running
+        // (field report: "had to kill the process by hand").
+        async cancelPlateSolve() {
+            if (this.plateSolveCancelling) return;
+            this.plateSolveCancelling = true;
+            try {
+                const resp = await this.apiPost('/api/platesolve/cancel', {});
+                const r = await resp.json().catch(() => ({}));
+                this.toast(r && r.cancelled
+                    ? 'Plate solve cancelled'
+                    : 'No plate solve was running', r && r.cancelled ? 'ok' : 'warn');
+            } catch (e) {
+                this.toast('Cancel request failed', 'error');
+            } finally {
+                // Drop the client-side wait too; the server has been told.
+                try { this._plateSolveAc?.abort(); } catch (e) { }
+                this.plateSolveCancelling = false;
+            }
+        },
+
         async previewSolve() {
             if (this.previewSolveBusy) return;
             this.previewSolveBusy = true;
@@ -21152,8 +21181,10 @@ function ninaApp() {
                 }
                 // See solve-file: a Pi solve can exceed the default 15s
                 // client timeout, so allow up to 180s (server caps at 120s).
+                this._plateSolveAc = new AbortController();
                 const resp = await this.apiPost(
-                    '/api/platesolve/solve-latest', body, { timeout: 180000 });
+                    '/api/platesolve/solve-latest', body,
+                    { timeout: 180000, signal: this._plateSolveAc.signal });
                 const r = await resp.json();
                 this.previewSolveResult = r || { success: false, error: 'No response' };
                 if (this.previewSolveResult.success) {
@@ -21166,9 +21197,16 @@ function ninaApp() {
                         + (this.previewSolveResult.error || 'unknown'), 'warn');
                 }
             } catch (e) {
-                this.previewSolveResult = { success: false, error: e.message || 'request failed' };
-                this.toast('Plate solve request failed', 'error');
+                // A cancel aborts the fetch; that's the operator's own doing, so
+                // don't cry "request failed" at them.
+                if (e?.name === 'AbortError') {
+                    this.previewSolveResult = { success: false, error: 'Cancelled' };
+                } else {
+                    this.previewSolveResult = { success: false, error: e.message || 'request failed' };
+                    this.toast('Plate solve request failed', 'error');
+                }
             } finally {
+                this._plateSolveAc = null;
                 this.previewSolveBusy = false;
             }
         },
@@ -21289,11 +21327,14 @@ function ninaApp() {
 
         // Cancel the in-flight STUDIO/FILES plate solve. Aborts the HTTP
         // request; the server's CancellationToken then kills the ASTAP process.
-        cancelFilesSolve() {
-            if (this._filesSolveAbort) {
-                this._filesSolveAbort.abort();
-                this.toast('Cancelling plate solve…', 'warn');
-            }
+        // FIELD5-1: aborting only the fetch relied on the client disconnect
+        // propagating to Kestrel's RequestAborted — which doesn't survive the
+        // relay tunnel / a reverse proxy, so the solver kept grinding and had to
+        // be killed by hand. Tell the server explicitly, then drop our own wait.
+        async cancelFilesSolve() {
+            this.toast('Cancelling plate solve…', 'warn');
+            try { await this.apiPost('/api/platesolve/cancel', {}); } catch (e) { }
+            try { this._filesSolveAbort?.abort(); } catch (e) { }
         },
 
         async filesPlateSolve(path, opts) {

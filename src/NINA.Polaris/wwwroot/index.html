@@ -3291,12 +3291,22 @@
                     </div><!-- /.shutter-secondary -->
 
                     <!-- Live solver console while solving (shared
-                         filesSolveLog, streamed via /ws/status plateSolve). -->
-                    <div class="control-row" style="margin-top: 8px;" x-show="previewSolveBusy">
+                         filesSolveLog, streamed via /ws/status plateSolve).
+                         FIELD5-1: Cancel aborts the run server-side (kills the
+                         solver process tree) — a doomed blind solve used to have
+                         to be waited out. -->
+                    <div class="control-row" style="margin-top: 8px; align-items: flex-start;"
+                         x-show="previewSolveBusy">
                         <pre x-show="filesSolveLog"
                              x-text="filesSolveLog"
                              x-effect="filesSolveLog; $el.scrollTop = $el.scrollHeight"
                              class="solver-output-live" style="flex:1;"></pre>
+                        <button class="btn btn-sm btn-warn" @click="cancelPlateSolve()"
+                                :disabled="plateSolveCancelling"
+                                title="Stop the running plate solve">
+                            <span x-show="!plateSolveCancelling">✕ Cancel</span>
+                            <span x-show="plateSolveCancelling">Cancelling…</span>
+                        </button>
                     </div>
 
                     <!-- FIELD4-4: plate solve result card. Renders only
@@ -17988,7 +17998,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260714-overlayfix-afyaxis"></script>
+    <script src="/js/app.js?v=20260714-solvecancel"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

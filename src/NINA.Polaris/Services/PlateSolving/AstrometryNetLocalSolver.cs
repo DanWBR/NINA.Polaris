@@ -159,6 +159,11 @@ public class AstrometryNetLocalSolver : IPlateSolver {
             try { await proc.WaitForExitAsync(cts.Token); }
             catch (OperationCanceledException) {
                 try { proc.Kill(entireProcessTree: true); } catch { }
+                // The linked token trips for two very different reasons. Only the
+                // CancelAfter above is a timeout; if the CALLER's token tripped the
+                // operator cancelled (or the request aborted), and reporting that as
+                // "timed out" is a lie. Rethrow so the endpoint answers 499.
+                ct.ThrowIfCancellationRequested();
                 return PlateSolveResult.Failed("solve-field timed out");
             }
             // Final synchronous wait flushes the async output handlers.

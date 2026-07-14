@@ -54,6 +54,16 @@ public static class PlateSolveEndpoints {
             }));
         });
 
+        // Abort the in-flight solve. The HTTP request that started the solve
+        // stays open for its whole duration, so its abort token alone gave the
+        // operator no way out: a doomed blind solve-field run had to be waited
+        // out or killed by hand (field report). This trips the run's token,
+        // which makes the solver kill its process tree and return promptly.
+        group.MapPost("/cancel", (PlateSolveProgressService progress) => {
+            var cancelled = progress.Cancel();
+            return Results.Ok(new { cancelled });
+        });
+
         // Current plate-solve settings (from the active profile).
         group.MapGet("/config", (ProfileService profiles) => {
             var p = profiles.Active;
@@ -145,10 +155,13 @@ public static class PlateSolveEndpoints {
                     "PREVIEW plate solve: hint RA={Ra} Dec={Dec} radius={Rad}°{Silent}",
                     hintRa, hintDec, options.SearchRadiusDeg, silent ? " (silent)" : "");
 
-                if (!silent) progress.Begin("PREVIEW");
+                if (!silent) progress.Begin("PREVIEW", ct);
                 PlateSolveResult result;
                 try {
-                    result = await solver.SolveAsync(tempFits, options, ct,
+                    // A silent solve is an internal step with no UI to cancel
+                    // from, so it stays on the raw request token.
+                    result = await solver.SolveAsync(tempFits, options,
+                        silent ? ct : progress.Token,
                         silent ? null : progress.Append);
                 } finally { if (!silent) progress.End(); }
 
@@ -251,9 +264,9 @@ public static class PlateSolveEndpoints {
                     HintRa = hintRa, HintDec = hintDec,
                     SearchRadiusDeg = request?.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
                 };
-                progress.Begin("AUX");
+                progress.Begin("AUX", ct);
                 PlateSolveResult result;
-                try { result = await solver.SolveAsync(tempFits, options, ct, progress.Append); }
+                try { result = await solver.SolveAsync(tempFits, options, progress.Token, progress.Append); }
                 finally { progress.End(); }
 
                 if (!result.Success) {
@@ -317,9 +330,9 @@ public static class PlateSolveEndpoints {
                     HintRa = hintRa, HintDec = hintDec,
                     SearchRadiusDeg = request?.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
                 };
-                progress.Begin("ANNOTATE");
+                progress.Begin("ANNOTATE", ct);
                 PlateSolveResult result;
-                try { result = await solver.SolveAsync(tempFits, options, ct, progress.Append); }
+                try { result = await solver.SolveAsync(tempFits, options, progress.Token, progress.Append); }
                 finally { progress.End(); }
 
                 if (!result.Success)
@@ -446,9 +459,9 @@ public static class PlateSolveEndpoints {
                     HintRa = hintRa, HintDec = hintDec,
                     SearchRadiusDeg = request.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
                 };
-                progress.Begin("ANNOTATE-FILE");
+                progress.Begin("ANNOTATE-FILE", ct);
                 PlateSolveResult result;
-                try { result = await solver.SolveAsync(request.Path, options, ct, progress.Append); }
+                try { result = await solver.SolveAsync(request.Path, options, progress.Token, progress.Append); }
                 finally { progress.End(); }
 
                 if (!result.Success)
@@ -602,10 +615,10 @@ public static class PlateSolveEndpoints {
                     "FILES plate solve: {Path} hint RA={Ra} Dec={Dec} fov={Fov:F2}° scale={Scale:F2}\"/px radius={Rad}°",
                     request.Path, hintRa, hintDec, fovDeg, scaleArcsec, options.SearchRadiusDeg);
 
-                progress.Begin("FILES");
+                progress.Begin("FILES", ct);
                 PlateSolveResult result;
                 try {
-                    result = await solver.SolveAsync(request.Path, options, ct, progress.Append);
+                    result = await solver.SolveAsync(request.Path, options, progress.Token, progress.Append);
                 } finally { progress.End(); }
 
                 if (!result.Success) {
