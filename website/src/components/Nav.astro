@@ -134,7 +134,13 @@ import { navLinks } from '../data/site';
       overflow: hidden;
       transition: max-height 0.25s ease;
     }
-    .nav.open .nav-links { max-height: 320px; }
+    /* Tall enough for all 10 links (the old 320px clipped everything past
+       Handbook), capped to the viewport with a scroll fallback on short
+       screens. */
+    .nav.open .nav-links {
+      max-height: min(640px, calc(100vh - 64px));
+      overflow-y: auto;
+    }
     .nav-links a {
       padding: 14px 20px;
       border-top: 1px solid var(--border);
