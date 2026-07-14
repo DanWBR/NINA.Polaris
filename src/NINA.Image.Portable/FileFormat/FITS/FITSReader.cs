@@ -195,10 +195,25 @@ public static class FITSReader {
                 });
                 break;
             case 16:
+                // FITS BITPIX=16 is a SIGNED sample; the unsigned-camera
+                // convention is BZERO=32768 (physical = signed + 32768). Two
+                // real-world encodings must both decode to a correct 0..65535
+                // unsigned pixel:
+                //   (a) standard unsigned: signed sample + BZERO(32768).
+                //   (b) some drivers write raw *unsigned* samples with BZERO=0
+                //       (or omit it). Interpreting those as signed pushes every
+                //       value > 32767 negative, and a (ushort) cast of a
+                //       negative double is 0 — so saturated star cores render
+                //       BLACK. Treat BZERO=0,BSCALE=1 as unsigned instead.
+                // Clamp on every path (case 8 and case 32 already do); the old
+                // 16-bit branch was the only one relying on integer wraparound,
+                // which the double-typed cast doesn't provide.
+                bool unsignedRaw = bzero == 0 && bscale == 1.0;
                 Parallel.ForEach(Partitioner.Create(0L, pixelCount), range => {
                     for (long i = range.Item1; i < range.Item2; i++) {
-                        short val = (short)((rawData[i * 2] << 8) | rawData[i * 2 + 1]); // big-endian
-                        pixels[i] = (ushort)(val * bscale + bzero);
+                        int raw = (rawData[i * 2] << 8) | rawData[i * 2 + 1]; // big-endian, 0..65535
+                        double phys = unsignedRaw ? raw : ((short)raw * bscale + bzero);
+                        pixels[i] = (ushort)Math.Clamp(phys, 0.0, 65535.0);
                     }
                 });
                 break;
