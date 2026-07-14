@@ -188,6 +188,7 @@
       { "feature": "Built-in image editor / post-processing", "cells": ["yes", "partial", "no", "no", "no", "no", "no"] },
       { "feature": "AI tools (BG extract, denoise, deconv, star removal)", "star": true, "cells": ["yes", "no", "no", "no", "no", "no", "no"] },
       { "feature": "Processing + AI run on the client / browser", "star": true, "cells": ["yes", "no", "no", "no", "no", "no", "no"] },
+      { "feature": "GPU / NPU acceleration (OpenCL · RKNN · QNN)", "star": true, "cells": ["yes", "no", "no", "no", "no", "no", "no"] },
       { "feature": "Auto post-processing workflow", "star": true, "cells": ["yes", "no", "no", "no", "no", "no", "no"] },
       { "feature": "AI assistant (chat)", "star": true, "cells": ["yes", "no", "no", "no", "no", "no", "no"] },
       { "feature": "Photometric colour calibration (SPCC / PCC)", "cells": ["yes", "no", "no", "no", "no", "partial:plugin", "partial:plugin"] },
