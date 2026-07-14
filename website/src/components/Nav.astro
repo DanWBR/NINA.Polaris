@@ -60,6 +60,10 @@ import { navLinks } from '../data/site';
     color: inherit;
     padding: 2px 4px;
     border-radius: 6px;
+    /* One-line wordmark: never let "Astro Controller" wrap, and never let the
+       brand shrink when the nav row gets tight. */
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .brand:hover { text-decoration: none; }
   .brand-badge {
@@ -75,6 +79,8 @@ import { navLinks } from '../data/site';
     font-size: 17px;
     letter-spacing: 1px;
     line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
     /* Brand gradient: deep-night blue, icy cyan, stellar white. */
     background: linear-gradient(90deg, #1e3a8a 0%, #0891b2 40%, #67e8f9 75%, #f0f9ff 100%);
     -webkit-background-clip: text;
@@ -108,7 +114,11 @@ import { navLinks } from '../data/site';
     transition: 0.2s;
   }
 
-  @media (max-width: 760px) {
+  /* Collapse to the hamburger while the full row of links would still fit as a
+     single line. The 10 links + wordmark need ~1100px before they crowd /
+     wrap (the "Astro Controller" + "AI Tools" two-line squeeze); below that we
+     hide the inline menu behind the toggle instead of letting it wrap. */
+  @media (max-width: 1100px) {
     .nav { padding: 16px 20px; }
     .nav-toggle { display: flex; }
     .nav-links {
