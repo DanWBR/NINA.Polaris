@@ -61,6 +61,12 @@ public class IndiDriverWatchdogService : IHostedService {
         public readonly List<DateTime> Restarts = new();      // recent driver restarts
         public DateTime LastRestartAt = DateTime.MinValue;
         public bool RestartInFlight;
+        // FIELD6-11: spurious-disconnect reconnects, tracked separately from
+        // driver restarts — they're a different remedy for a different fault and
+        // must not consume each other's budget.
+        public readonly List<DateTime> Reconnects = new();
+        public DateTime LastReconnectAt = DateTime.MinValue;
+        public bool ReconnectInFlight;
     }
     private readonly ConcurrentDictionary<string, DeviceState> _byDevice = new();
 
@@ -91,6 +97,7 @@ public class IndiDriverWatchdogService : IHostedService {
 
     public Task StartAsync(CancellationToken cancellationToken) {
         _indi.BlobTimeout += OnBlobTimeout;
+        _indi.DeviceConnectionLost += OnDeviceConnectionLost;
         _logger.LogInformation(
             "IndiDriverWatchdog armed (enabled={Enabled}, threshold={T} in {W}s, " +
             "min {Min}s between restarts, max {Max}/{RW}s)",
@@ -101,7 +108,78 @@ public class IndiDriverWatchdogService : IHostedService {
 
     public Task StopAsync(CancellationToken cancellationToken) {
         _indi.BlobTimeout -= OnBlobTimeout;
+        _indi.DeviceConnectionLost -= OnDeviceConnectionLost;
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// FIELD6-11: a device we connected dropped its CONNECTION on its own. This
+    /// is NOT the wedge case the rest of this service handles: the driver process
+    /// is alive and answering, it just let go of the hardware, so restarting the
+    /// driver is the wrong (and much more disruptive) hammer — the fix is simply
+    /// to connect it again, exactly what the operator was doing by hand in RIGS.
+    /// Field report: the SV405CC's INDI driver does this mid-session for no
+    /// visible reason; capture then silently stops for the rest of the night
+    /// because nothing was watching this transition.
+    /// Reuses the restart rate limiter's shape so a device that flaps can't spin:
+    /// at most one reconnect per MinRestartInterval, MaxRestartsPerWindow per
+    /// RestartWindow, after which we go quiet and leave it to the operator.
+    /// </summary>
+    private void OnDeviceConnectionLost(string device) {
+        if (!Enabled || string.IsNullOrWhiteSpace(device)) return;
+        var st = _byDevice.GetOrAdd(device, _ => new DeviceState());
+        var now = DateTime.UtcNow;
+        lock (st.Gate) {
+            if (st.ReconnectInFlight) return;
+            if (now - st.LastReconnectAt < MinRestartInterval) {
+                _logger.LogWarning(
+                    "INDI '{Device}' dropped again within {Sec}s of the last reconnect — backing off",
+                    device, MinRestartInterval.TotalSeconds);
+                return;
+            }
+            st.Reconnects.RemoveAll(t => now - t > RestartWindow);
+            if (st.Reconnects.Count >= MaxRestartsPerWindow) {
+                _logger.LogError(
+                    "INDI '{Device}' has dropped {N} times in {Win}min — giving up auto-reconnect. "
+                    + "Reconnect it in RIGS; the driver or the USB link is unhealthy.",
+                    device, st.Reconnects.Count, RestartWindow.TotalMinutes);
+                _notify.Push("error",
+                    $"{device} keeps disconnecting on its own — auto-reconnect gave up. " +
+                    $"Reconnect it in RIGS; the driver or the USB link is unhealthy.", 15000);
+                Record(device, null, "reconnect-gave-up");
+                return;
+            }
+            st.ReconnectInFlight = true;
+            st.LastReconnectAt = now;
+            st.Reconnects.Add(now);
+        }
+
+        _ = Task.Run(async () => {
+            try {
+                _logger.LogWarning("INDI '{Device}': spurious disconnect — reconnecting", device);
+                _notify.Push("warn",
+                    $"{device} disconnected on its own — reconnecting…", 8000);
+                // Let the driver settle before asking again; an immediate CONNECT
+                // on a driver that just dropped tends to be ignored.
+                await Task.Delay(TimeSpan.FromSeconds(2));
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                await _indi.ConnectDeviceAsync(device, cts.Token);
+                bool ok = _indi.GetSwitch(device, "CONNECTION", "CONNECT");
+                if (ok) {
+                    _logger.LogInformation("INDI '{Device}': reconnected", device);
+                    _notify.Push("info", $"{device} reconnected", 6000);
+                } else {
+                    _logger.LogError("INDI '{Device}': reconnect issued but device still reports disconnected", device);
+                }
+                Record(device, null, ok ? "reconnected" : "reconnect-failed");
+            } catch (Exception ex) {
+                _logger.LogError(ex, "INDI '{Device}': reconnect threw", device);
+                Record(device, null, "reconnect-error");
+            } finally {
+                var s = _byDevice.GetOrAdd(device, _ => new DeviceState());
+                lock (s.Gate) s.ReconnectInFlight = false;
+            }
+        });
     }
 
     public void SetEnabled(bool enabled) => Enabled = enabled;

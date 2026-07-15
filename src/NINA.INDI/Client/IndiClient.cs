@@ -109,6 +109,22 @@ public class IndiClient : IDisposable {
 
     private readonly ConcurrentDictionary<string, bool> _lastConnectionState = new();
 
+    /// <summary>Devices WE deliberately connected and have not deliberately
+    /// disconnected. Lets us tell a spurious drop (driver died on its own) from
+    /// an operator/app disconnect, which otherwise look identical on the wire —
+    /// both are just CONNECTION.CONNECT going false.</summary>
+    private readonly ConcurrentDictionary<string, byte> _shouldBeConnected =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Raised when a device we connected reports DISCONNECT without us
+    /// asking. The SV405CC's INDI driver does this mid-session for no visible
+    /// reason (field report): the driver PROCESS stays alive, so the driver
+    /// watchdog — which only restarts dead/wedged drivers — never noticed, and
+    /// capture silently stopped until the operator hit Connect in RIGS by hand.
+    /// Subscribed by IndiDriverWatchdogService, which owns the reconnect policy
+    /// (rate limits + notifications).</summary>
+    public event Action<string>? DeviceConnectionLost;
+
     private void OnPropertyChangedForConfigAutoLoad(string device, IndiProperty prop) {
         if (!string.Equals(prop.Name, "CONNECTION", StringComparison.OrdinalIgnoreCase))
             return;
@@ -117,6 +133,19 @@ public class IndiClient : IDisposable {
 
         var wasConnected = _lastConnectionState.GetValueOrDefault(device, false);
         _lastConnectionState[device] = nowConnected;
+
+        // The CONNECT transition has been handled here since day one; the
+        // DISCONNECT one was never wired, so a driver that dropped its device
+        // mid-session did so silently. Only report drops for devices we asked to
+        // be connected and never asked to disconnect — otherwise a deliberate
+        // disconnect would look identical and we'd fight the operator.
+        if (!nowConnected && wasConnected && _shouldBeConnected.ContainsKey(device)) {
+            DiagLogger.LogWarning(
+                "INDI device '{Device}' reported DISCONNECT but we never asked — spurious drop. "
+                + "The driver process is likely still alive (so the driver watchdog won't fire); "
+                + "handing off to the connection watchdog to reconnect.", device);
+            try { DeviceConnectionLost?.Invoke(device); } catch { /* subscriber must not break the read loop */ }
+        }
 
         if (nowConnected && !wasConnected) {
             // Re-issue a device-scoped getProperties shortly after the
@@ -384,6 +413,10 @@ public class IndiClient : IDisposable {
     /// sleeping briefly before the write when the device has a
     /// per-device delay configured.</summary>
     public async Task ConnectDeviceAsync(string device, CancellationToken ct = default) {
+        // Mark intent BEFORE the write (and even on the already-connected path):
+        // this is what makes a later unrequested DISCONNECT identifiable as
+        // spurious. Set it first so a drop racing the write is still caught.
+        _shouldBeConnected[device] = 1;
         if (GetSwitch(device, "CONNECTION", "CONNECT")) {
             DiagLogger.LogInformation(
                 "INDI device '{Device}' CONNECTION.CONNECT already true — skipping redundant CONNECT (avoids 30s no-reply hang on shared drivers)",
@@ -405,6 +438,10 @@ public class IndiClient : IDisposable {
     /// already disconnected (or never connected), don't send a
     /// redundant DISCONNECT that will hang.</summary>
     public async Task DisconnectDeviceAsync(string device, CancellationToken ct = default) {
+        // Clear intent FIRST: the CONNECTION=false this write provokes must not
+        // be mistaken for a spurious drop and auto-reconnected — that would make
+        // the device impossible to disconnect.
+        _shouldBeConnected.TryRemove(device, out _);
         if (GetSwitch(device, "CONNECTION", "DISCONNECT")) {
             DiagLogger.LogInformation(
                 "INDI device '{Device}' CONNECTION.DISCONNECT already true — skipping redundant DISCONNECT",
