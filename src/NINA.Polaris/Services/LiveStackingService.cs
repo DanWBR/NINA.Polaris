@@ -1037,6 +1037,29 @@ public class LiveStackingService {
                 _lastMetaData = imageData.MetaData;
             }
 
+            // LIVE-TRACE (FIELD6-8): one line per integrated frame answering
+            // "why is the LIVE view mono?" end-to-end. Deliberately verbose and
+            // deliberately at Information so it lands in the in-app LOG panel —
+            // LIVE frames are minutes apart, so this is not spam. Reads:
+            //   in{}      what the camera/driver actually handed us THIS frame
+            //             (bayer=None here on an OSC == a CCD_CFA dropout)
+            //   session{} the decisions latched on frame #0 and never revisited:
+            //             colorActive is THE switch that picks the branch below
+            //   align{}   identity on the reference frame; "warped" afterwards.
+            //             In the mono branch the warp is applied to the RAW CFA
+            //             mosaic, which destroys the Bayer phase — if out{} then
+            //             still claims bayer=<pattern>, the client debayers
+            //             mush and renders grey. That combination is the bug.
+            //   out{}     what we are about to tell the client this frame IS
+            var traceIn = $"in{{bayer={props.BayerPattern} ch={props.Channels} bd={props.BitDepth} {props.Width}x{props.Height}}}";
+            var traceSession = $"session{{colorActive={_colorActive} pattern={_bayerPattern} lastGood={_lastGoodBayer} deferrals={_colorDeferrals} colorStackingToggle={ColorStacking}}}";
+            var traceAlign = $"align{{{(usedTransform == null ? "identity(reference,no-warp)" : "WARPED")}}}";
+            _logger.LogInformation(
+                "LIVE-TRACE frame=#{N} {In} {Session} {Align} out{{branch={Branch}}}",
+                _frameCount, traceIn, traceSession, traceAlign,
+                _colorActive ? "COLOUR(debayer-per-plane -> RGB JPEG)"
+                             : "MONO(raw-CFA stack -> single-channel relay)");
+
             // Generate stacked result and relay to clients.
             if (_colorActive) {
                 // Colour: broadcast the debayered RGB stack as a colour JPEG
@@ -1069,6 +1092,9 @@ public class LiveStackingService {
                 // chosen cap, which the encoder downsamples the planes to BEFORE
                 // the heavy pass (the RAM lever). Default 4096 = old behaviour.
                 int jpegDim = PreviewMaxDim <= 0 ? int.MaxValue : Math.Clamp(PreviewMaxDim, 512, 8192);
+                _logger.LogInformation(
+                    "LIVE-TRACE   -> RelayRgbJpegAsync kind=LiveStack ch=3 bayer=None jpegDim={Dim} q=90 (client shows the JPEG as-is; no client debayer)",
+                    jpegDim == int.MaxValue ? "native" : jpegDim.ToString());
                 await _relay.RelayRgbJpegAsync(rgbImage, maxDim: jpegDim, quality: 90,
                     kind: FrameKind.LiveStack, ct: ct);
             } else {
@@ -1090,9 +1116,18 @@ public class LiveStackingService {
                     BayerPattern = relayBayer
                 };
                 var stackedImage = new BaseImageData(stackedPixels, stackedProps, imageData.MetaData);
-                // Dedicated stack kind: while a server stack runs the client
-                // paints ONLY LiveStack frames on the LIVE canvas, so a stray
-                // kind-0 frame can never flash B&W between stack updates.
+                // LIVE-TRACE: the smoking-gun line. If this says bayer=<pattern>
+                // AND the align{} above said WARPED, we are handing the client a
+                // CFA mosaic whose Bayer phase the warp already destroyed and
+                // telling it to debayer anyway -> grey. Frame #0 (identity) looks
+                // right, every frame after it degrades: exactly "colour flashes,
+                // then B&W". Same defect the WASM client-mode stacker had
+                // (fixed 7f2a7d17 by debayering+warping per plane, then
+                // re-mosaicing) — the server's mono branch never got that fix.
+                _logger.LogInformation(
+                    "LIVE-TRACE   -> RelayImageAsync kind=LiveStack ch=1 isBayered={IsB} bayer={Bayer} (client WILL debayer this) srcBayerThisFrame={Src} usedLastGoodFallback={Fallback}",
+                    stackedProps.IsBayered, relayBayer, props.BayerPattern,
+                    props.BayerPattern != relayBayer);
                 await _relay.RelayImageAsync(stackedImage, FrameKind.LiveStack, ct);
             }
         } else {

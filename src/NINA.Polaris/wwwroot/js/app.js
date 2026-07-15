@@ -6864,6 +6864,19 @@ function ninaApp() {
                 // a stray (stale relay, other producer) — drop it so it can't
                 // flash over the colour stack.
                 const jk = headeredJpegBytes !== null ? (headeredJpegKind | 0) : 0;
+                // LIVE-TRACE (FIELD6-8): the JPEG arm. A LiveStack JPEG is the
+                // server's COLOUR branch (already debayered to RGB server-side —
+                // the client paints it as-is, no debayer). So if the LOG shows
+                // this line for kind=3, the server IS producing colour and any
+                // grey render is downstream of here. If instead the RAW arm's
+                // trace fires for kind=3, the server took the MONO branch.
+                // Exactly one of the two should appear per stacked frame.
+                if (jk === 3) {
+                    console.log('[LIVE-TRACE] JPEG frame kind=' + jk
+                        + ' bytes=' + (headeredJpegBytes?.byteLength ?? arrayBuffer.byteLength)
+                        + ' -> path=RGB JPEG painted as-is (server debayered)'
+                        + ' | stackMode=' + (this.liveStackStatus?.mode || 'full'));
+                }
                 if (jk === 0 && this._serverStackOwnsLive()) return;
                 // Pass the kind through when we got the headered shape
                 // (case b). Bare JPEG falls back to default 0 / Live.
@@ -8840,6 +8853,26 @@ function ninaApp() {
             // all pink under auto-stretch" report); render it neutral instead.
             const calibration = (headerLen >= 28 && arrayBuffer.byteLength >= 32)
                 ? dv.getInt32(28, true) : 0;
+
+            // LIVE-TRACE (FIELD6-8): client half of the server's LIVE-TRACE.
+            // Pairs 1:1 with the "-> RelayImageAsync" line in the app LOG, so a
+            // server line saying bayer=RGGB next to a client line saying
+            // bayer=0/None (or vice versa) localises the mono render to the wire
+            // vs the renderer. Gated on kind=LiveStack(3) only, so the video
+            // stream can't spam DevTools. Frames are minutes apart in LIVE.
+            if (frameKind === 3) {
+                const BAYER = ['None', 'RGGB', 'BGGR', 'GBRG', 'GRBG', 'Auto'];
+                console.log('[LIVE-TRACE] raw frame'
+                    + ' kind=' + frameKind
+                    + ' ' + width + 'x' + height
+                    + ' bitDepth=' + bitDepth
+                    + ' bayer=' + (BAYER[bayerPattern] ?? bayerPattern) + '(' + bayerPattern + ')'
+                    + ' calib=' + calibration
+                    + ' -> path=' + (bayerPattern > 0 ? 'WebGL DEBAYER (colour)'
+                                                      : 'WebGL MONO (grey)')
+                    + ' | serverStackOwnsLive=' + this._serverStackOwnsLive()
+                    + ' | stackMode=' + (this.liveStackStatus?.mode || 'full'));
+            }
 
             // Bail on placeholder / heartbeat frames before they spam
             // the WebGL pipeline. We were seeing periodic 0x0 frames
