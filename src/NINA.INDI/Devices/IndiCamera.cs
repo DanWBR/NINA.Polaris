@@ -275,9 +275,10 @@ public class IndiCamera : ICamera {
             if (ctrl.Values.ContainsKey(candidate)) { key = candidate; break; }
         }
         if (key == null) return;   // CCD_CONTROLS exists but no gain element
+        var wanted = new Dictionary<string, double> { [key] = gain };
+        if (AlreadyAt(ctrl, wanted)) return;   // already at this gain — don't re-send (see CaptureAsync churn note)
         try {
-            await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS",
-                new Dictionary<string, double> { [key] = gain }, ct);
+            await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS", wanted, ct);
         } catch { /* driver rejected the value (out of range?), non-fatal */ }
     }
 
@@ -294,9 +295,10 @@ public class IndiCamera : ICamera {
             if (ctrl.Values.ContainsKey(candidate)) { key = candidate; break; }
         }
         if (key == null) return;   // driver has no offset element
+        var wanted = new Dictionary<string, double> { [key] = offset };
+        if (AlreadyAt(ctrl, wanted)) return;   // already at this offset (see CaptureAsync churn note)
         try {
-            await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS",
-                new Dictionary<string, double> { [key] = offset }, ct);
+            await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS", wanted, ct);
         } catch { /* out of range / rejected — non-fatal */ }
     }
 
@@ -321,6 +323,9 @@ public class IndiCamera : ICamera {
             || !sw.Values.ContainsKey(member)) return;   // driver doesn't expose it / no such member
         // One-of switch: set the chosen member true, the rest false.
         var payload = sw.Values.Keys.ToDictionary(k => k, k => k == member);
+        // Already on this frame type? Don't re-send. A one-of switch is satisfied
+        // when the chosen member is the one that's On (see CaptureAsync churn note).
+        if (sw.Values.TryGetValue(member, out var isOn) && isOn) return;
         try {
             await _client.SetSwitchAsync(DeviceName, "CCD_FRAME_TYPE", payload, ct);
         } catch { /* driver rejected — non-fatal */ }
@@ -545,9 +550,34 @@ public class IndiCamera : ICamera {
     public Task DisconnectAsync(CancellationToken ct = default)
         => _client.DisconnectDeviceAsync(DeviceName, ct);
 
+    /// <summary>True when <paramref name="prop"/> already holds every requested
+    /// value, i.e. writing them again would be pure churn.
+    ///
+    /// Deliberately reads the CLIENT'S PROPERTY SNAPSHOT rather than caching the
+    /// last value we wrote. The snapshot tracks what the driver actually echoed
+    /// back, so it self-heals: when the watchdog restarts a driver the properties
+    /// come back at their defaults (or vanish entirely), the comparison fails, and
+    /// we re-send everything. A local cache would instead "remember" a value the
+    /// restarted driver no longer has and silently skip the write — the exact
+    /// stale-cache trap that made the native ROI guard need a connect-time seed.
+    /// Missing property (null) => not satisfied => write, same as before.</summary>
+    internal static bool AlreadyAt(IndiNumberProperty? prop, IReadOnlyDictionary<string, double> wanted) {
+        if (prop == null) return false;
+        foreach (var kv in wanted) {
+            if (!prop.Values.TryGetValue(kv.Key, out var cur) || cur == null) return false;
+            if (Math.Abs(cur.Value - kv.Value) > 1e-6) return false;
+        }
+        return true;
+    }
+
     public async Task SetBinningAsync(int binX, int binY, CancellationToken ct = default) {
-        await _client.SetNumberAsync(DeviceName, "CCD_BINNING",
-            new Dictionary<string, double> { ["HOR_BIN"] = binX, ["VER_BIN"] = binY }, ct);
+        var wanted = new Dictionary<string, double> { ["HOR_BIN"] = binX, ["VER_BIN"] = binY };
+        // Skip the write when the driver is already binned this way. CaptureAsync
+        // calls this on EVERY frame, so on a guide camera at ~2.4s/frame this was
+        // ~25 pointless CCD_BINNING writes a minute, forever. See the churn note
+        // on CaptureAsync.
+        if (AlreadyAt(_client.GetProperty(DeviceName, "CCD_BINNING") as IndiNumberProperty, wanted)) return;
+        await _client.SetNumberAsync(DeviceName, "CCD_BINNING", wanted, ct);
     }
 
     public async Task SetTemperatureAsync(double temperature, CancellationToken ct = default) {
@@ -639,6 +669,20 @@ public class IndiCamera : ICamera {
 
         // opts overrides honoured per-capture so the sequencer can set
         // binning + gain inline without a separate round-trip.
+        //
+        // CHURN: each of these used to write unconditionally, every frame, even
+        // when the driver was already at the requested value. On the main camera
+        // that's 4 property writes per sub; on a GUIDE camera at ~2.4s/frame it's
+        // ~100 writes a minute, all night, for values that never change. Field log
+        // (2026-07-15): every guide cycle sent ASI678MC CCD_BINNING + CCD_CONTROLS
+        // + CCD_FRAME_TYPE + CCD_EXPOSURE — which is precisely the per-frame
+        // reconfig we already know wedges indi_asi_ccd. The setters are now
+        // idempotent (they compare against the client's property snapshot first),
+        // so a steady-state capture loop sends CCD_EXPOSURE and nothing else.
+        //
+        // This is the INDI twin of the ROI/stop-before-start idempotency added to
+        // the native SDK cameras (SvbonySdk/Zwo/PlayerOne). That guard shipped on
+        // the native side only — while the field failures were worse over INDI.
         if (opts?.BinX is int bx && opts.BinY is int by) {
             await SetBinningAsync(bx, by, ct);
         }
