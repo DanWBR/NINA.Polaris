@@ -531,6 +531,13 @@ public class AstapSolver : IPlateSolver {
                 try { await proc.WaitForExitAsync(cts.Token); }
                 catch (OperationCanceledException) {
                     try { proc.Kill(entireProcessTree: true); } catch { }
+                    // Only the CancelAfter above is a timeout; a trip of the
+                    // CALLER's token means the operator cancelled. Rethrow so the
+                    // endpoint answers 499 rather than reporting a bogus timeout.
+                    // (FIELD5-1 claimed "ASTAP x2" but only patched SolveOnceAsync;
+                    // this proxy path — taken for every NAXIS3>1 frame, i.e. RGB
+                    // masters and OSC — kept lying "timed out" on cancel.)
+                    ct.ThrowIfCancellationRequested();
                     return PlateSolveResult.Failed("ASTAP timed out");
                 }
 
