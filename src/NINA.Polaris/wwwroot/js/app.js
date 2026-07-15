@@ -23115,10 +23115,21 @@ function ninaApp() {
 
         // Inline style: apply left/top only once the panel has been dragged;
         // until then return '' so the CSS top/right anchor is used.
+        // MUST return an OBJECT, not a style string — same Alpine footgun as
+        // guideOverlayStyle(). x-bind:style with a string calls
+        // setAttribute('style', ...), which wipes the display:none that this
+        // element's x-show had set, and the panel un-hides itself. It bites here
+        // WORSE than on the guide overlay: that one's x-show deps (guider.*) are
+        // replaced every WS tick so x-show re-runs ~1Hz and re-asserts the hide,
+        // whereas these deps (slewCenterStatus/JobId/FailedLog/solveSyncBusy) are
+        // only written by the slew-center flows — so nothing ever re-hides it and
+        // the ghost console sits over the sky map until you dismiss it by hand.
+        // Trigger: _restoreSkySolverPanel() runs post-auth, long after x-show
+        // already hid the element, and mutating x/y re-fires this binding.
         skySolverPanelStyle() {
             const p = this.skySolverPanel;
-            if (p.x == null || p.y == null) return '';
-            return `left:${p.x}px; top:${p.y}px; right:auto;`;
+            if (p.x == null || p.y == null) return {};
+            return { left: p.x + 'px', top: p.y + 'px', right: 'auto' };
         },
         _restoreSkySolverPanel() {
             try {
@@ -23128,8 +23139,20 @@ function ninaApp() {
                 if (typeof p.x === 'number' && typeof p.y === 'number') {
                     this.skySolverPanel.x = p.x;
                     this.skySolverPanel.y = p.y;
+                    // Clamp on LOAD, not just on drag: a position saved on a wide
+                    // desktop restores fully off-screen on a phone (position:fixed),
+                    // taking its own hide button with it. The drag handler and every
+                    // sibling restore (_guideOverlayClamp, _assistantClampPos) clamp
+                    // with these same 60/40 margins — this load path was the holdout.
+                    this._clampSkySolverPanel();
                 }
             } catch { /* private mode / bad JSON — keep default anchor */ }
+        },
+        _clampSkySolverPanel() {
+            const p = this.skySolverPanel;
+            if (p.x == null || p.y == null) return;
+            p.x = Math.max(0, Math.min(p.x, window.innerWidth - 60));
+            p.y = Math.max(0, Math.min(p.y, window.innerHeight - 40));
         },
         _persistSkySolverPanel() {
             try {
@@ -23169,13 +23192,12 @@ function ninaApp() {
             const d = this._skySolverDrag;
             if (!d) return;
             const point = d.touch ? ev.touches[0] : ev;
-            let x = point.clientX - d.offsetX;
-            let y = point.clientY - d.offsetY;
-            // Keep a grabbable sliver on-screen.
-            x = Math.max(0, Math.min(x, window.innerWidth - 60));
-            y = Math.max(0, Math.min(y, window.innerHeight - 40));
-            this.skySolverPanel.x = x;
-            this.skySolverPanel.y = y;
+            this.skySolverPanel.x = point.clientX - d.offsetX;
+            this.skySolverPanel.y = point.clientY - d.offsetY;
+            // Keep a grabbable sliver on-screen. Shared with the load path so the
+            // margins can't drift apart again (they were inlined here only, which
+            // is how the restore path ended up with no clamp at all).
+            this._clampSkySolverPanel();
             if (ev.cancelable) ev.preventDefault();
         },
         _skySolverDragEnd(moveHandler, endHandler) {
