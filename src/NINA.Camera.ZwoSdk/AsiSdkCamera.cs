@@ -185,7 +185,21 @@ public sealed class AsiSdkCamera : ICamera {
     public Task SetIsoAsync(int iso, CancellationToken ct = default) => Task.CompletedTask;
 
     public Task AbortExposureAsync(CancellationToken ct = default) {
-        lock (_sdk) { try { ASIStopVideoCapture(_cameraId); } catch { } }
+        // Must stop the EXPOSURE, not the video capture: CaptureAsync uses the
+        // snap API (ASIStartExposure / ASIGetDataAfterExp), and those are
+        // distinct SDK entry points from ASIStartVideoCapture / ASIGetVideoData.
+        // This called ASIStopVideoCapture — a leftover from the snap-mode
+        // migration documented in CaptureAsync itself ("The old path used video
+        // capture..."): the capture path was migrated, this one wasn't. Aborting
+        // a still therefore stopped an idle video engine and left the exposure
+        // integrating, so POST /api/camera/abort silently did nothing (it does
+        // not cancel the capture token either — the poll loop just ran to its
+        // deadline). The guider path masked this: it cancels the token first, so
+        // CaptureAsync's finally cleaned up regardless of what Abort did.
+        // Stills and streams are mutually exclusive (CaptureAsync throws while
+        // _streaming), so there is no case where a stream needs stopping here —
+        // the stream has StopVideoStreamAsync. Mirrors PlayerOne's POAStopExposure.
+        lock (_sdk) { try { ASIStopExposure(_cameraId); } catch { } }
         State = CameraStates.Idle;
         return Task.CompletedTask;
     }
