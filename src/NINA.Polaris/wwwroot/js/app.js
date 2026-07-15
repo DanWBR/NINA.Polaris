@@ -186,6 +186,13 @@ function ninaApp() {
         guideAggr: { ra: 70, dec: 70 },
         _guideAggrEditing: false,
         cameraTemp: null,
+        // Counts captures driven by the CLIENT-side capture() loop. Nothing reads
+        // it any more: the LIVE stats bar used to, but LIVE capture is server-owned
+        // (LiveCaptureService), so capture() never runs for it and the bar read 0
+        // all night. It now reads liveStackFrames / serverLiveCapture.frames off the
+        // WS tick. Kept because capture() still maintains it and would be the counter
+        // again if a client-driven path returns — but it is NOT a session-wide total,
+        // so don't wire it back to a UI that means "frames this session".
         sessionCaptures: 0,
         imageHistory: [],
 

@@ -1865,7 +1865,19 @@
                     <span>SNR: <strong x-text="(liveStackStatus?.cumulativeSnr > 0 ? liveStackStatus?.cumulativeSnr.toFixed(1) : (stats.snr || '--'))">--</strong></span>
                     <span x-show="stats.width > 0">Res: <strong x-text="stats.width + '×' + stats.height">--</strong></span>
                     <span x-show="filterWheel.connected" class="text-ok" x-text="filterWheel.currentFilter"></span>
-                    <span>Frames: <strong x-text="sessionCaptures"></strong></span>
+                    <!-- Server-authoritative frame count. This read `sessionCaptures`,
+                         which is incremented ONLY by the client-driven capture() loop —
+                         dead since LIVE capture became server-owned (LiveCaptureService
+                         drives every exposure; nothing external calls capture() any more).
+                         So it sat at 0 all night while the panel two elements away said
+                         "15 stacked" (field report). Prefer the stack's count while
+                         stacking, else the server's own capture count — liveCapture.frames
+                         was already in the WS payload, just never read here. Both come off
+                         the same tick as the top chip and the LIVE panel, so the three
+                         can't disagree any more. -->
+                    <span>Frames: <strong x-text="liveStackEnabled && liveStackFrames > 0
+                        ? liveStackFrames
+                        : (serverLiveCapture?.frames || 0)"></strong></span>
                     <!-- Live-stacking elapsed integration time (replaces the
                          old wall clock, which read as confusing here). Shows
                          how long the current stack has been integrating; '--'
@@ -18004,7 +18016,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260715-ditherhint"></script>
+    <script src="/js/app.js?v=20260715-framescount"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>
