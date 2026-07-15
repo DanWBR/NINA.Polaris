@@ -289,14 +289,78 @@ public class IndiDriverWatchdogService : IHostedService {
             st.Restarts.Add(now);
             st.Timeouts.Clear();   // give the freshly restarted driver a clean slate
         }
-        Record(device, label, ok ? "restarted" : "restart-failed");
-        if (ok) {
-            _notify.Push("info",
-                $"INDI driver '{label}' restarted. Reconnect the camera if the next " +
-                $"capture doesn't recover on its own.", 8000);
-        } else {
+        if (!ok) {
+            Record(device, label, "restart-failed");
             _notify.Push("error",
                 $"Failed to restart INDI driver '{label}': {_indiWeb.LastError}", 12000);
+            return;
+        }
+
+        // FIELD6-12: a restart is only half the remedy. indiserver tears the
+        // driver down with `FIFO: Shutting down driver` + delProperty, so the
+        // device VANISHES; the fresh process re-announces it CONNECTION=Off.
+        // Restarting and stopping there left the camera disconnected for the
+        // rest of the night, which is exactly the field report "the camera
+        // disconnects for no reason and I just reconnect it in RIGS" — the
+        // reconnect the operator was doing by hand is the missing half.
+        // (The class comment above chose restart "instead of the futile device
+        // reconnect". Correct that a reconnect alone can't fix a wedged driver;
+        // wrong that it's either/or — it's restart THEN reconnect.)
+        var reconnected = await TryReconnectAfterRestartAsync(device, label);
+        Record(device, label, reconnected ? "restarted+reconnected" : "restarted-reconnect-failed");
+        if (reconnected) {
+            _notify.Push("info",
+                $"INDI driver '{label}' restarted and {device} reconnected — capture should resume.", 8000);
+        } else {
+            _notify.Push("warn",
+                $"INDI driver '{label}' restarted, but {device} did not come back. " +
+                $"Reconnect it in RIGS.", 12000);
+        }
+    }
+
+    /// <summary>
+    /// Wait for a just-restarted driver to re-announce the device, then connect
+    /// it. The device is gone from our snapshot at this point (delProperty), so
+    /// poll until its CONNECTION property exists again before writing — a CONNECT
+    /// aimed at a device indiserver hasn't re-announced is silently dropped.
+    /// </summary>
+    private async Task<bool> TryReconnectAfterRestartAsync(string device, string label) {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(
+            _config.GetValue("IndiWatchdog:ReconnectTimeoutSec", 30));
+        try {
+            // 1) Wait for the re-announce.
+            while (DateTime.UtcNow < deadline) {
+                if (_indi.Devices.TryGetValue(device, out var props)
+                        && props.ContainsKey("CONNECTION")) break;
+                await Task.Delay(500);
+            }
+            if (!_indi.Devices.TryGetValue(device, out _)) {
+                _logger.LogError(
+                    "INDI watchdog: '{Device}' never re-appeared after restarting '{Label}'", device, label);
+                return false;
+            }
+            // 2) Honour the per-device pre-connect delay (INDIROB-3) — a driver
+            //    that just started is exactly the case that delay exists for.
+            await Task.Delay(1000);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await _indi.ConnectDeviceAsync(device, cts.Token);
+            // 3) Verify rather than assume: ConnectDeviceAsync returns once the
+            //    write is out, and INDI never acks writes.
+            while (DateTime.UtcNow < deadline) {
+                if (_indi.GetSwitch(device, "CONNECTION", "CONNECT")) {
+                    _logger.LogInformation(
+                        "INDI watchdog: '{Device}' reconnected after restarting '{Label}'", device, label);
+                    return true;
+                }
+                await Task.Delay(500);
+            }
+            _logger.LogError(
+                "INDI watchdog: '{Device}' still reports disconnected after restarting '{Label}'", device, label);
+            return false;
+        } catch (Exception ex) {
+            _logger.LogError(ex,
+                "INDI watchdog: reconnect after restarting '{Label}' threw for '{Device}'", label, device);
+            return false;
         }
     }
 
