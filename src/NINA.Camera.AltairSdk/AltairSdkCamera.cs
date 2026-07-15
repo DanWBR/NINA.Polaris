@@ -66,9 +66,16 @@ public sealed class AltairSdkCamera : ICamera {
     public bool IsConnected => _connected;
     public CameraStates State { get; private set; } = CameraStates.NoState;
 
+    // Cache the last valid reading so WrapFrame can stamp CCD-TEMP into the
+    // FITS without an extra SDK read on every streamed frame (the WS status
+    // tick refreshes this every ~2 s).
+    private double _lastTempC = double.NaN;
     public double Temperature {
         get {
-            if (_cam != null && _connected && _cam.get_Temperature(out short t)) return t / 10.0;
+            if (_cam != null && _connected && _cam.get_Temperature(out short t)) {
+                _lastTempC = t / 10.0;
+                return _lastTempC;
+            }
             return double.NaN;
         }
     }
@@ -425,6 +432,14 @@ public sealed class AltairSdkCamera : ICamera {
         var meta = new ImageMetaData();
         meta.Camera.Name = DeviceName;
         meta.Camera.Gain = _gain;
+        // Stamp the integration time so the FITS/XISF writers emit EXPTIME /
+        // EXPOSURE (otherwise native-SDK frames saved with no exposure value).
+        meta.Exposure.ExposureTime = _exposureSec;
+        // Binning + sensor temperature — essential for matching calibration
+        // frames (darks/flats); otherwise absent from native-SDK FITS.
+        meta.Camera.BinX = (short)_bin;
+        meta.Camera.BinY = (short)_bin;
+        if (!double.IsNaN(_lastTempC)) meta.Camera.Temperature = _lastTempC;
         meta.Camera.PixelSizeX = _pixelSize;
         meta.Camera.PixelSizeY = _pixelSize;
         // FITS/XISF writers stamp BAYERPAT from meta.Camera.BayerPattern, not
