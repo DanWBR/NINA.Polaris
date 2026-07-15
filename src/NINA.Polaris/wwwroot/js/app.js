@@ -32900,11 +32900,18 @@ function ninaApp() {
             // Auto-focus
             if (this.autoFocus.state === 'running') {
                 const i = this.autoFocus.currentSampleIndex ?? 0;
-                const n = this.autoFocus.steps ?? 0;
+                const cur = Math.max(0, i + 1);
+                // `steps` is the PLANNED sample count; the sweep can legitimately
+                // overshoot it (the planner extends an arm when the trendline says
+                // the V isn't bracketed yet), so a raw denominator produced the
+                // nonsense "15/11" and a >100% bar. Widen the total to whatever
+                // we've actually reached — same guard the FOCUS panel already has
+                // (index.html ~2830/2837); this badge was just missed.
+                const n = Math.max(this.autoFocus.steps ?? 0, cur);
                 out.push({
                     id: 'af', icon: '🔄', kind: 'info',
-                    label: `Auto-focus ${Math.max(0, i + 1)}/${n}`,
-                    progress: n ? Math.round(100 * Math.max(0, i + 1) / n) : 0,
+                    label: `Auto-focus ${cur}/${n}`,
+                    progress: n ? Math.round(100 * cur / n) : 0,
                     onClick: () => { this.tab = 'focus'; }
                 });
             }
