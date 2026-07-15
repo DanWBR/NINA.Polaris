@@ -17076,7 +17076,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <span><i style="color:#e57373">RA</i> <b x-text="(guider.rmsRA||0).toFixed(2)"></b>"</span>
             <span><i style="color:#64b5f6">DEC</i> <b x-text="(guider.rmsDec||0).toFixed(2)"></b>"</span>
             <span><i>Tot</i> <b x-text="(guider.rmsTotal||0).toFixed(2)"></b>"</span>
-            <span class="guide-overlay-dither" x-text="'Dither ' + (guider.dithering ? 'On' : 'Off')"></span>
+            <!-- `guider.dithering` is MOMENTARY (a dither in flight right now), not
+                 the dither setting. Rendering it as "Dither Off" therefore read as
+                 "dithering is disabled" for the ~99% of the time no dither is in
+                 progress (field report). Show it only while it IS dithering: the
+                 misleading state can't appear, and the useful one — knowing why the
+                 graph just jumped — still does. -->
+            <span class="guide-overlay-dither" x-show="guider.dithering" x-cloak>Dithering…</span>
         </div>
         <div class="guide-overlay-resize" @pointerdown="guideOverlayResizeStart($event)"
              title="Drag to resize"></div>
@@ -17998,7 +18004,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260715-quiet404"></script>
+    <script src="/js/app.js?v=20260715-ditherhint"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>
