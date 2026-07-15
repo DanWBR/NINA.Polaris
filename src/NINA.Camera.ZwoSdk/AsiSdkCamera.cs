@@ -44,6 +44,13 @@ public sealed class AsiSdkCamera : ICamera {
     private int _gain;
     private double _exposureSec = 0.03;
     private int _roiX, _roiY, _roiW, _roiH, _bin = 1;
+    // Last geometry actually written to the SDK, for ApplyRoi's idempotency
+    // guard. Includes _imgType because ASISetROIFormat takes it too — unlike
+    // SVBony, where the output format is a separate call — so a RAW8<->RAW16
+    // switch must NOT be skipped. Reset on connect.
+    private bool _roiApplied;
+    private int _lastRoiX, _lastRoiY, _lastRoiW, _lastRoiH, _lastRoiBin;
+    private ASI_IMG_TYPE _lastRoiImgType;
     private ASI_IMG_TYPE _imgType = ASI_IMG_TYPE.ASI_IMG_RAW16;
 
     private readonly ConcurrentDictionary<int, Action<IImageData>> _streamSubs = new();
@@ -151,6 +158,11 @@ public sealed class AsiSdkCamera : ICamera {
         _roiX = 0; _roiY = 0; _roiW = _maxX; _roiH = _maxY; _bin = 1;
         ASISetROIFormat(_cameraId, _maxX, _maxY, 1, _imgType);
         ASISetStartPos(_cameraId, 0, 0);
+        // Seed ApplyRoi's idempotency guard with what we just wrote, so the usual
+        // "reset to full frame" calls right after connect are no-ops.
+        _lastRoiX = 0; _lastRoiY = 0; _lastRoiW = _maxX; _lastRoiH = _maxY; _lastRoiBin = 1;
+        _lastRoiImgType = _imgType;
+        _roiApplied = true;
         _gain = ReadControl(ASI_CONTROL_TYPE.ASI_GAIN);
         _offset = ReadControl(ASI_CONTROL_TYPE.ASI_OFFSET);
         _connected = true;
@@ -220,10 +232,27 @@ public sealed class AsiSdkCamera : ICamera {
         if (_streaming) return;
         int w = Math.Max(8, (_roiW / _bin) & ~7); // ASI requires width % 8 == 0
         int h = Math.Max(2, (_roiH / _bin) & ~1); // and height % 2 == 0
+        // Idempotency guard, mirroring SVBony (SvbonySdkCamera.ApplyRoi) and the
+        // INDI CCD_FRAME guard: skip the SDK writes when the geometry already
+        // matches. This matters MORE here than on the other natives: CaptureAsync
+        // re-calls ApplyRoi() on EVERY still, and slew-and-centre / plate solve /
+        // autofocus each call SetSubframeAsync(0,0,0,0) around every capture with
+        // the SAME full-frame geometry — so a burst of solve/AF captures fired two
+        // unconditional SDK writes per frame at a driver whose own comment (above)
+        // says ROI must not change during capture. Also closes most of the
+        // mid-still race: `_streaming` only covers the video stream, so a
+        // SetSubframeAsync landing during a STILL used to write ROI mid-exposure.
+        if (_roiApplied && _lastRoiX == _roiX && _lastRoiY == _roiY
+                && _lastRoiW == w && _lastRoiH == h && _lastRoiBin == _bin
+                && _lastRoiImgType == _imgType) return;
         lock (_sdk) {
             ASISetROIFormat(_cameraId, w, h, _bin, _imgType);
             ASISetStartPos(_cameraId, _roiX / _bin, _roiY / _bin);
         }
+        _lastRoiX = _roiX; _lastRoiY = _roiY;
+        _lastRoiW = w; _lastRoiH = h; _lastRoiBin = _bin;
+        _lastRoiImgType = _imgType;
+        _roiApplied = true;
     }
 
     public Task<IImageData> CaptureAsync(double exposureSeconds, CaptureOptions? opts = null,
@@ -247,7 +276,18 @@ public sealed class AsiSdkCamera : ICamera {
             // frame already in flight, so long subs (15s/60s) came back early
             // instead of integrating the requested time. bIsDark=0 (ASI has no
             // mechanical shutter; the flag is informational).
-            lock (_sdk) Check(ASIStartExposure(_cameraId, 0), "ASIStartExposure");
+            lock (_sdk) {
+                // Defensive stop before start, mirroring PlayerOne and SVBony: if a
+                // previous capture didn't stop cleanly the SDK still thinks it's
+                // exposing, and the next start can wedge the driver. Stills churn a
+                // full start/stop per frame, so bursts of slew+solve / autofocus
+                // captures hit it hardest — that's how the SVBony twin failed in
+                // the field. A stop on an idle camera is a harmless no-op. Rated
+                // lower risk here (the ASI SDK is more tolerant than SVBony's), but
+                // it costs nothing and keeps the natives consistent.
+                try { ASIStopExposure(_cameraId); } catch { }
+                Check(ASIStartExposure(_cameraId, 0), "ASIStartExposure");
+            }
             try {
                 long deadline = Environment.TickCount64 + (long)(exposureSeconds * 1000) + 8000;
                 while (true) {

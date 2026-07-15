@@ -43,6 +43,10 @@ public sealed class PlayerOneSdkCamera : ICamera {
     private int _gain;
     private double _exposureSec = 0.03;
     private int _roiX, _roiY, _roiW, _roiH, _bin = 1;
+    // Last geometry actually written to the SDK, for ApplyRoi's idempotency
+    // guard. Reset on connect, where the camera comes up at its own full frame.
+    private bool _roiApplied;
+    private int _lastRoiX, _lastRoiY, _lastRoiW, _lastRoiH, _lastRoiBin;
     private POAImgFormat _imgFormat = POAImgFormat.POA_RAW16;
 
     private readonly ConcurrentDictionary<int, Action<IImageData>> _streamSubs = new();
@@ -140,6 +144,10 @@ public sealed class PlayerOneSdkCamera : ICamera {
         POASetImageBin(_cameraId, 1);
         POASetImageSize(_cameraId, _maxX, _maxY);
         POASetImageStartPos(_cameraId, 0, 0);
+        // Seed ApplyRoi's idempotency guard with what we just wrote, so the usual
+        // "reset to full frame" calls right after connect are no-ops.
+        _lastRoiX = 0; _lastRoiY = 0; _lastRoiW = _maxX; _lastRoiH = _maxY; _lastRoiBin = 1;
+        _roiApplied = true;
         _gain = ReadInt(POAConfig.POA_GAIN);
         _offset = ReadInt(POAConfig.POA_OFFSET);
         _connected = true;
@@ -196,11 +204,26 @@ public sealed class PlayerOneSdkCamera : ICamera {
         // PlayerOne wants width % 4 == 0 and height % 2 == 0 (post-bin).
         int w = Math.Max(4, (_roiW / _bin) & ~3);
         int h = Math.Max(2, (_roiH / _bin) & ~1);
+        // Idempotency guard, mirroring SVBony (SvbonySdkCamera.ApplyRoi) and the
+        // INDI CCD_FRAME guard: skip the SDK writes when the geometry is already
+        // what we asked for. Slew-and-centre, plate solve and autofocus all call
+        // SetSubframeAsync(0,0,0,0) around every capture — always the SAME
+        // full-frame geometry — so without this each one was three redundant SDK
+        // writes on a driver whose own comment (above) says ROI must not change
+        // during capture. It also closes most of the mid-still race: `_streaming`
+        // only covers the video stream, so a SetSubframeAsync landing during a
+        // STILL used to write ROI mid-exposure; the common no-op case now never
+        // touches the SDK at all.
+        if (_roiApplied && _lastRoiX == _roiX && _lastRoiY == _roiY
+                && _lastRoiW == w && _lastRoiH == h && _lastRoiBin == _bin) return;
         lock (_sdk) {
             POASetImageBin(_cameraId, _bin);
             POASetImageSize(_cameraId, w, h);
             POASetImageStartPos(_cameraId, _roiX / _bin, _roiY / _bin);
         }
+        _lastRoiX = _roiX; _lastRoiY = _roiY;
+        _lastRoiW = w; _lastRoiH = h; _lastRoiBin = _bin;
+        _roiApplied = true;
     }
 
     public Task<IImageData> CaptureAsync(double exposureSeconds, CaptureOptions? opts = null,
@@ -217,7 +240,17 @@ public sealed class PlayerOneSdkCamera : ICamera {
             var bytes = new byte[(long)w * h * BytesPerPixel()];
             int waitMs = (int)(exposureSeconds * 1000 * 2 + 500);
             State = CameraStates.Exposing;
-            lock (_sdk) Check(POAStartExposure(_cameraId, POABool.POA_TRUE), "POAStartExposure");
+            lock (_sdk) {
+                // Same defensive stop the stream path does (see
+                // StartVideoStreamAsync, whose comment names POAStartExposure as
+                // the call that wedges the driver when the SDK still thinks it's
+                // exposing). Stills churn a full start/stop PER FRAME, so bursts
+                // of slew+solve / autofocus captures hit this far harder than
+                // video ever does — that's how the SVBony twin failed in the
+                // field. A stop on an idle camera is a harmless no-op.
+                try { POAStopExposure(_cameraId); } catch { }
+                Check(POAStartExposure(_cameraId, POABool.POA_TRUE), "POAStartExposure");
+            }
             try {
                 POAErrors err;
                 lock (_sdk) err = POAGetImageData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
