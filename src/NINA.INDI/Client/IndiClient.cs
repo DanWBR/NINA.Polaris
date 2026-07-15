@@ -575,20 +575,45 @@ public class IndiClient : IDisposable {
         _configSaveTimers[device] = newTimer;
     }
 
-    /// <summary>Devices whose <c>CCD_EXPOSURE</c> writes log at Debug
+    /// <summary>Devices whose guide-loop property writes log at Debug
     /// instead of Information. A native-guider guide camera requests a
     /// frame every ~1-3 s all night long; at Information those writes
     /// drowned everything else in the LOG panel (field report). Marked
-    /// by EquipmentManager when a guide camera is selected. Every other
-    /// property write on the device still logs normally, and the
-    /// missing-property warning below is never demoted.</summary>
-    private readonly ConcurrentDictionary<string, byte> _quietExposureDevices =
+    /// by EquipmentManager when a guide camera is selected. Property
+    /// writes outside <see cref="QuietGuideCameraProps"/> still log
+    /// normally, and the missing-property warning below is never demoted.
+    /// <para>Originally this demoted only CCD_EXPOSURE. The same field
+    /// report came back: the guide loop also re-writes CCD_FRAME_TYPE,
+    /// CCD_CONTROLS and CCD_BINNING every frame, so the log was still
+    /// unreadable. The whole per-frame set is quiet now.</para></summary>
+    private readonly ConcurrentDictionary<string, byte> _quietGuideDevices =
         new(StringComparer.OrdinalIgnoreCase);
 
-    public void SetQuietExposureLogging(string device, bool quiet) {
+    /// <summary>Properties the guide loop re-writes on the GUIDE CAMERA every
+    /// frame. Demoted to Debug only for devices marked quiet, so the same
+    /// property on the MAIN camera (written once per sub) still logs at
+    /// Information where it is genuinely informative.</summary>
+    private static readonly HashSet<string> QuietGuideCameraProps =
+        new(StringComparer.OrdinalIgnoreCase) {
+            "CCD_EXPOSURE", "CCD_FRAME_TYPE", "CCD_CONTROLS", "CCD_BINNING", "CCD_FRAME"
+        };
+
+    /// <summary>Properties that are guide chatter on ANY device, so they can't
+    /// be keyed off the quiet-device set: pulse guiding targets the MOUNT, which
+    /// is not a "quiet" device (its slews/parks must stay visible). The native
+    /// guider fires these every correction — several per minute, all night.
+    /// They are NOT lost: pulse durations are recorded per frame in the
+    /// PHD2-format session guide log (GuideLogWriter, /api/logs/guide), which is
+    /// where you actually analyse guiding anyway.</summary>
+    private static readonly HashSet<string> AlwaysQuietGuideProps =
+        new(StringComparer.OrdinalIgnoreCase) {
+            "TELESCOPE_TIMED_GUIDE_NS", "TELESCOPE_TIMED_GUIDE_WE"
+        };
+
+    public void SetQuietGuideLogging(string device, bool quiet) {
         if (string.IsNullOrEmpty(device)) return;
-        if (quiet) _quietExposureDevices[device] = 1;
-        else _quietExposureDevices.TryRemove(device, out _);
+        if (quiet) _quietGuideDevices[device] = 1;
+        else _quietGuideDevices.TryRemove(device, out _);
     }
 
     /// <summary>Shared logging path so every INDI write surfaces in the
@@ -603,7 +628,15 @@ public class IndiClient : IDisposable {
     private void LogIndiWrite(string kind, string device, string property, string elementsLog) {
         var exists = Devices.TryGetValue(device, out var props) && props.ContainsKey(property);
         if (exists) {
-            if (property == "CCD_EXPOSURE" && _quietExposureDevices.ContainsKey(device)) {
+            // Guide-loop chatter -> Debug, so "Info+" in the LOG panel shows
+            // events instead of a per-frame protocol dump. Two rules: pulse
+            // guiding is quiet on any device (it targets the mount), and the
+            // guide camera's per-frame reconfig is quiet only on devices
+            // EquipmentManager marked as the guide camera.
+            bool quiet = AlwaysQuietGuideProps.Contains(property)
+                || (_quietGuideDevices.ContainsKey(device)
+                    && QuietGuideCameraProps.Contains(property));
+            if (quiet) {
                 DiagLogger.LogDebug("INDI {Kind} → device='{Device}' property='{Property}' [{Elements}]",
                     kind, device, property, elementsLog);
                 return;
