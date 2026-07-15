@@ -124,8 +124,13 @@ public class SlewCenterService {
         int solveGain = rig.SlewCenterGain > 0 ? rig.SlewCenterGain : 100;
 
         // Live solver console for the SKY tab, same stream the STUDIO/
-        // PREVIEW solves use (one solve at a time).
-        _progress?.Begin("SKY (slew & center)");
+        // PREVIEW solves use (one solve at a time). Link the run to this job's
+        // token: without it the snapshot advertised Cancellable=true and
+        // POST /api/platesolve/cancel tripped a CTS nobody observed, so the API
+        // answered {cancelled:true} while the solve ran on — the exact dishonesty
+        // PlateSolveProgressService.Cancel's own doc-comment warns against. All
+        // five endpoint sites already pass their token here; this caller didn't.
+        _progress?.Begin("SKY (slew & center)", ct);
         try {
             if (_equip.Telescope == null) {
                 job.Error = "No telescope connected";
@@ -393,13 +398,19 @@ public class SlewCenterService {
                     "Solve hints: RA={Ra:F4}h Dec={Dec:F4}° fov={Fov:F2}° scale={Scale:F2}\"/px radius=10°",
                     hintRa, hintDec, fovDeg, scaleArcsec);
 
+                // Observe the progress run's token, not the raw job token: it is
+                // linked to `ct` (see Begin above), so a CancelJob still aborts the
+                // solve, AND the shared solver-console Cancel now works too. Either
+                // way SolveAsync throws OperationCanceled, which the catch at the
+                // bottom already turns into SlewCenterState.Cancelled. Falls back
+                // to ct when there is no progress service (tests / null-object).
                 var solveResult = await _solver.SolveAsync(tempFits, new PlateSolveOptions {
                     HintRa = hintRa,
                     HintDec = hintDec,
                     FovDeg = fovDeg,
                     ScaleArcsecPerPixel = scaleArcsec,
                     SearchRadiusDeg = 10
-                }, ct, _progress != null ? _progress.Append : null);
+                }, _progress?.Token ?? ct, _progress != null ? _progress.Append : null);
 
                 try { File.Delete(tempFits); } catch { }
 
