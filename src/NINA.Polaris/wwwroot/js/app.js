@@ -1230,6 +1230,16 @@ function ninaApp() {
             _snapExposure: 0
         },
 
+        // FIELD6-1: who owns preview.busy / capturing. Set when
+        // _reconcileCaptureTimers() lit the flag on behalf of a SERVER run this
+        // browser didn't start (reconnect / reload mid-exposure). Such a flag has
+        // no local finally to clear it, so the reconciler must release it itself
+        // once the server run is gone — otherwise the shutter reads "activated"
+        // forever off a run that ended. False means a local capture owns the flag
+        // and its own finally will clear it; the release phase must not touch it.
+        _previewBusyAdopted: false,
+        _capturingAdopted: false,
+
         // FIELD4-4: PREVIEW-tab one-shot plate solve. previewSolveBusy
         // gates the button; previewSolveResult is the raw response
         // ({success, raHours, decDeg, rotationDeg, scaleArcsecPerPixel,
@@ -20456,6 +20466,10 @@ function ninaApp() {
                     exposureSeconds: cap?.exposureSeconds || 0,
                     startedAtLocal: 0, runId: cap?.runId || 0
                 };
+                // Still reconcile: adoption used to be one-way, so this early
+                // return was where an adopted flag got stranded. A flag we lit
+                // on behalf of a server run MUST be released when that run ends.
+                this._reconcileCaptureTimers();
                 return;
             }
             const startedMs = Date.parse(cap.startedUtc);
@@ -20485,20 +20499,50 @@ function ninaApp() {
         /// this is a no-op. AUTORUN/sequencer are handled in _autorunSyncFrame.
         _reconcileCaptureTimers() {
             const sc = this.serverCapture;
-            if (!sc.active) return;
+            // --- Release phase ---
+            // Adoption below is on BEHALF of a server run: this browser may never
+            // have started that capture itself (reconnect / reload mid-exposure,
+            // or another client snapped), so no local previewTakeSnap() finally
+            // exists to clear the flag when the run ends. Adoption used to be
+            // one-way, which stranded the flag forever: the shutter read
+            // "activated" off the local flag while the countdown read the (now
+            // gone) server run and showed 0s — field report "preview 2s but
+            // shutter 0s, activated". The camera was free the whole time (live
+            // stacking kept running through CameraCaptureGate's single slot),
+            // proving no capture existed. Only release what WE adopted, so a
+            // genuine local snap — whose own finally owns the flag — is untouched
+            // during the window before the server reports its run.
+            const snapActive = !!(sc && sc.active && sc.source === 'snap');
+            const liveActive = !!(sc && sc.active && sc.source === 'live');
+            if (this._previewBusyAdopted && !snapActive) {
+                this.preview.busy = false;
+                this._previewBusyAdopted = false;
+            }
+            if (this._capturingAdopted && !liveActive) {
+                this.capturing = false;
+                this._capturingAdopted = false;
+            }
+            if (!sc || !sc.active) return;
+            // --- Adopt phase ---
             const drift = (a) => (a ? Math.abs(a - sc.startedAtLocal) : Infinity);
             if (sc.source === 'live') {
                 if (drift(this._captureStartedAt) > 1500) {
                     this._captureStartedAt = sc.startedAtLocal;
                     this._captureExposure = sc.exposureSeconds;
                 }
-                if (!this.capturing && !this.looping) this.capturing = true;
+                if (!this.capturing && !this.looping) {
+                    this.capturing = true;
+                    this._capturingAdopted = true;
+                }
             } else if (sc.source === 'snap') {
                 if (drift(this.preview._snapStartedAt) > 1500) {
                     this.preview._snapStartedAt = sc.startedAtLocal;
                     this.preview._snapExposure = sc.exposureSeconds;
                 }
-                if (!this.preview.busy && !this.preview.looping) this.preview.busy = true;
+                if (!this.preview.busy && !this.preview.looping) {
+                    this.preview.busy = true;
+                    this._previewBusyAdopted = true;
+                }
             }
         },
 
@@ -21038,6 +21082,10 @@ function ninaApp() {
                 return;
             }
             this.preview.busy = true;
+            // We own the flag now — our finally clears it. Drop any adopted
+            // marker so the reconciler's release phase leaves this snap alone
+            // in the window before the server reports its run.
+            this._previewBusyAdopted = false;
             // SHUT-2: snapshot for the PREVIEW shutter ring.
             this.preview._snapStartedAt = Date.now();
             this.preview._snapExposure = Number(this.preview.exposure) || 0;
