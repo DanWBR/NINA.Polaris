@@ -47,6 +47,11 @@ public sealed class SvbonySdkCamera : ICamera {
     private int _gain;
     private double _exposureSec = 0.03;
     private int _roiX, _roiY, _roiW, _roiH, _bin = 1;
+    // Last geometry actually written to the SDK, for ApplyRoi's idempotency
+    // guard. _roiApplied stays false until the first real write (and is reset on
+    // connect, where the camera comes up at its own default full-frame ROI).
+    private bool _roiApplied;
+    private int _lastRoiX, _lastRoiY, _lastRoiW, _lastRoiH, _lastRoiBin;
     private SVB_IMG_TYPE _imgType = SVB_IMG_TYPE.SVB_IMG_RAW16;
 
     private readonly ConcurrentDictionary<int, Action<IImageData>> _streamSubs = new();
@@ -168,6 +173,11 @@ public sealed class SvbonySdkCamera : ICamera {
 
         _roiX = 0; _roiY = 0; _roiW = _maxX; _roiH = _maxY; _bin = 1;
         SVBSetROIFormat(_cameraId, 0, 0, _maxX, _maxY, 1);
+        // Seed ApplyRoi's idempotency guard with what we just wrote, so the
+        // usual "reset to full frame" calls right after connect are no-ops
+        // instead of redundant SDK writes.
+        _lastRoiX = 0; _lastRoiY = 0; _lastRoiW = _maxX; _lastRoiH = _maxY; _lastRoiBin = 1;
+        _roiApplied = true;
 
         _gain = ReadControl(SVB_CONTROL_TYPE.SVB_GAIN);
         // SVBony exposes the sensor bias pedestal ("offset") as the black-level
@@ -232,7 +242,22 @@ public sealed class SvbonySdkCamera : ICamera {
         // SVB wants output (post-bin) dims rounded to multiples of 8.
         int w = Math.Max(8, (_roiW / _bin) & ~7);
         int h = Math.Max(2, (_roiH / _bin) & ~1);
+        // Idempotency guard, mirroring the INDI side's CCD_FRAME guard: skip the
+        // SDK write when the geometry is already what we asked for. Slew-and-
+        // centre, plate solve and autofocus all call SetSubframeAsync(0,0,0,0)
+        // around every capture — always the SAME full-frame geometry — so without
+        // this each one was a redundant SVBSetROIFormat on a driver documented
+        // (see above) to wedge on ROI churn. Those bursts are exactly when the
+        // camera stopped responding in the field. This also closes most of the
+        // mid-still-capture race: _streaming only covers the video stream, so a
+        // SetSubframeAsync landing during a still used to write ROI mid-exposure;
+        // now the common no-op case never touches the SDK at all.
+        if (_roiApplied && _lastRoiX == _roiX && _lastRoiY == _roiY
+                && _lastRoiW == w && _lastRoiH == h && _lastRoiBin == _bin) return;
         lock (_sdk) SVBSetROIFormat(_cameraId, _roiX, _roiY, w, h, _bin);
+        _lastRoiX = _roiX; _lastRoiY = _roiY;
+        _lastRoiW = w; _lastRoiH = h; _lastRoiBin = _bin;
+        _roiApplied = true;
     }
 
     // ----- still capture -----
@@ -273,6 +298,16 @@ public sealed class SvbonySdkCamera : ICamera {
                     lock (_sdk) {
                         Check(SVBSetCameraMode(_cameraId, SVB_CAMERA_MODE.SVB_MODE_TRIG_SOFT),
                             "SVBSetCameraMode(TRIG_SOFT)");
+                        // Same defensive stop the stream path does (see
+                        // StartVideoStreamAsync): if the PREVIOUS capture didn't
+                        // stop cleanly the SDK still thinks it's capturing, and the
+                        // next SVBStartVideoCapture wedges the driver. Stills churn
+                        // a full start/stop per frame, so slew+solve / autofocus —
+                        // which fire captures back-to-back — hit this far harder
+                        // than video does (field: camera stops responding after a
+                        // burst of solve/AF captures). A stop on an idle camera is
+                        // a harmless no-op.
+                        try { SVBStopVideoCapture(_cameraId); } catch { }
                         Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
                     }
                     // Re-apply the exposure AFTER the mode switch: some SVBony
@@ -305,7 +340,13 @@ public sealed class SvbonySdkCamera : ICamera {
                 // a full-length one (capped so an oddly-reporting camera can't
                 // loop forever). Skipped for ~zero exposures (bias) where the
                 // first frame is already correct.
-                lock (_sdk) Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
+                lock (_sdk) {
+                    // Defensive stop before start — see the soft-trigger branch
+                    // above and StartVideoStreamAsync: an unclean previous stop
+                    // leaves the SDK "capturing" and the next start wedges it.
+                    try { SVBStopVideoCapture(_cameraId); } catch { }
+                    Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
+                }
                 try {
                     double minIntegrationMs = exposureSeconds * 1000.0 * 0.6;
                     for (int attempt = 1; ; attempt++) {
