@@ -4320,9 +4320,18 @@ function ninaApp() {
                 // 4xx (including 401 — useful for diagnosing auth churn),
                 // info otherwise. Skip /api/logs/client to break the feedback
                 // loop (POSTing a log entry would log the POST, recursion).
+                // FIELD6-10: `expectStatuses` lets a caller declare which non-2xx
+                // codes are a NORMAL answer for that endpoint rather than a
+                // fault. Those log at debug and do NOT throw — the caller reads
+                // resp.ok itself. Without it a polled endpoint that legitimately
+                // answers 404 ("no stack yet") emitted a warn AND an error every
+                // single tick and buried the LOG panel (field report).
+                const expected = Array.isArray(options.expectStatuses)
+                    && options.expectStatuses.includes(resp.status);
                 if (!url.startsWith('/api/logs')) {
                     const dur = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
-                    const lvl = resp.status >= 500 ? 'error'
+                    const lvl = expected ? 'debug'
+                              : resp.status >= 500 ? 'error'
                               : resp.status >= 400 ? 'warn'
                               : 'info';
                     this._logFromClient(lvl, `${method} ${url} ${resp.status} ${dur.toFixed(0)}ms`, {
@@ -4345,7 +4354,11 @@ function ninaApp() {
                     });
                 }
 
-                if (!resp.ok) {
+                // An expected status is not an exception: hand the response back
+                // so the caller branches on resp.ok. Throwing here is what turned
+                // a normal "nothing to show yet" into an [ERROR] line via the
+                // catch below.
+                if (!resp.ok && !expected) {
                     return resp.text().then(body => {
                         throw new ApiError(resp.status, body);
                     });
@@ -6922,22 +6935,42 @@ function ninaApp() {
             if (this._stackRestoreInFlight) return;
             this._stackRestoreInFlight = true;
             this.restoreLiveStackPreview()
-                .then(ok => { if (ok) this._lastStackFrameShown = frameCount; })
+                .then(res => {
+                    // FIELD6-10: mark this frame count consumed on 'ok' AND on
+                    // 'unavailable'. Only 'ok' used to count, so a server that
+                    // reports frames but holds no stacked image (client/WASM
+                    // compute = MetricsOnly, or a reset racing the tick) left
+                    // _lastStackFrameShown behind forever: the guard above stayed
+                    // true and we re-fetched EVERY tick, ~1/s all night, each
+                    // costing a warn + an error line. That retry loop — not the
+                    // 404 itself — is what buried the LOG panel. A transient
+                    // network 'error' still retries, which is the case retrying
+                    // was actually for.
+                    if (res === 'ok' || res === 'unavailable') this._lastStackFrameShown = frameCount;
+                })
                 .finally(() => { this._stackRestoreInFlight = false; });
         },
 
+        /// Returns 'ok' | 'unavailable' (server has no stacked image — a normal
+        /// answer, do not retry for this frame count) | 'error' (transient, retry).
         async restoreLiveStackPreview() {
             try {
-                const resp = await this.apiFetch('/api/livestack/preview');
-                if (!resp || !resp.ok) return false;
+                // 404 = "No stacked image available": expected, not a fault.
+                const resp = await this.apiFetch('/api/livestack/preview',
+                    { expectStatuses: [404] });
+                if (resp && resp.status === 404) return 'unavailable';
+                if (!resp || !resp.ok) return 'error';
                 const buf = await resp.arrayBuffer();
-                if (!buf || buf.byteLength < 2) return false;
+                // 200 with an empty/short body: the server answered, there is
+                // just nothing to paint. Same class as 404 — don't re-ask for
+                // this frame count.
+                if (!buf || buf.byteLength < 2) return 'unavailable';
                 // Paint as a Live-kind frame so it lands on the LIVE canvas
                 // and mirrors to the preview canvas, exactly like a WS frame.
                 this._renderJpegFrame(buf, 0);
                 this.liveActive = true;
-                return true;
-            } catch (e) { return false; }
+                return 'ok';
+            } catch (e) { return 'error'; }
         },
 
         // JPEG mode: create blob URL, draw to every receiving canvas.
