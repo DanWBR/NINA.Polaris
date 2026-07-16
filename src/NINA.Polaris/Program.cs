@@ -209,6 +209,12 @@ builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.PlateSolveProgr
 // Server-authoritative current-exposure tracker so the per-frame countdown
 // ("Xs of Ys") survives a client reconnect across every capture context.
 builder.Services.AddSingleton<CaptureProgressService>();
+// Shared "wait for the main camera to be ready" gate, so AUTORUN / ADV / LIVE all
+// pause for a driver-restart recovery instead of failing fast. Accessor form so
+// it's testable and carries no hard edge to EquipmentManager.
+builder.Services.AddSingleton(sp => new CameraReadyGate(
+    () => sp.GetRequiredService<EquipmentManager>().Camera,
+    sp.GetRequiredService<ILogger<CameraReadyGate>>()));
 // Walks the cooler setpoint at a controlled °C/min, in both directions, so a
 // fast plunge can't condense dew on the sensor window. Singleton: only one ramp
 // may own the setpoint, and a new request has to cancel the one in flight

@@ -44,6 +44,11 @@ public class SequenceContext {
     /// they're triggered from.</summary>
     public CoolingRampService CoolingRamp { get; }
 
+    /// <summary>Shared "wait for the camera to be ready" gate. A capture
+    /// instruction awaits this before each frame, so a driver restart pauses the
+    /// run instead of throwing it into AbortRun.</summary>
+    public CameraReadyGate CameraReady { get; }
+
     /// <summary>The active rig's ramp rate (°C/min), used when a cooler
     /// instruction doesn't override it. 0 = ramping off (write the setpoint once).</summary>
     public double CoolerRampDegPerMinute =>
@@ -113,6 +118,7 @@ public class SequenceContext {
         ProfileService profiles,
         CaptureProgressService captureProgress,
         CoolingRampService coolingRamp,
+        CameraReadyGate cameraReady,
         ILogger logger) {
         Equipment = equipment;
         Relay = relay;
@@ -126,6 +132,7 @@ public class SequenceContext {
         Profiles = profiles;
         CaptureProgress = captureProgress;
         CoolingRamp = coolingRamp;
+        CameraReady = cameraReady;
         Logger = logger;
         RunStartedAt = DateTime.UtcNow;
     }

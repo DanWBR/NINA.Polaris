@@ -25,6 +25,12 @@ namespace NINA.Polaris.Services.Sequencer.Instructions;
 public class TakeExposureInstruction : SequenceInstruction {
     public override string Type => "TakeExposure";
 
+    /// <summary>Transient in-frame retries before a capture failure is allowed to
+    /// hit the entity's error policy. Small: the gate already waits out the
+    /// disconnect, so each retry is a genuine "the camera is back but this frame
+    /// still failed" attempt, not a spin against a dead device.</summary>
+    private const int MaxCaptureRetries = 2;
+
     /// <summary>Exposure time in seconds.</summary>
     public double ExposureSeconds { get; set; } = 1.0;
 
@@ -113,10 +119,18 @@ public class TakeExposureInstruction : SequenceInstruction {
 
         for (int i = CompletedCount; i < Count; i++) {
             ct.ThrowIfCancellationRequested();
-            NINA.Image.Interfaces.IImageData image;
-            using (ctx.CaptureProgress.Begin("sequencer", ExposureSeconds))
-                image = await NINA.Polaris.Services.CameraCaptureGate.RunAsync(
-                    () => ctx.Equipment.Camera.CaptureAsync(ExposureSeconds, capOpts, ct), ct);
+
+            // Wait for the camera to be ready before EACH frame, then capture with
+            // a wait-and-retry on failure. Previously this loop had no try/catch at
+            // all: a single transient CaptureAsync throw (a BLOB timeout during a
+            // driver restart) escaped to SequenceEntityBase, whose defaults
+            // (Attempts=1, ErrorBehavior=AbortRun) killed the ENTIRE run — and on a
+            // PLAN that could then run end actions and power off the host. A driver
+            // restart is recoverable in tens of seconds; the run just has to wait
+            // for the watchdog. CaptureFrameWithRetryAsync does exactly that, and
+            // CompletedCount (below) already makes a resumed frame idempotent.
+            NINA.Image.Interfaces.IImageData image =
+                await CaptureFrameWithRetryAsync(ctx, capOpts, ct);
 
             image.MetaData.Exposure.ExposureTime = ExposureSeconds;
             if (!string.IsNullOrEmpty(Filter)) image.MetaData.Exposure.Filter = Filter;
@@ -154,6 +168,42 @@ public class TakeExposureInstruction : SequenceInstruction {
             // at the first frame that didn't complete.
             CompletedCount = i + 1;
         }
+    }
+
+    /// <summary>Capture one frame, surviving a driver-restart recovery: wait for
+    /// the camera to be ready, capture, and on a transient failure wait for ready
+    /// again and retry — up to <see cref="MaxCaptureRetries"/> times. Only a
+    /// failure that outlasts the retries (or a cancellation) propagates, so a
+    /// recoverable BLOB timeout no longer trips the run's AbortRun policy.
+    ///
+    /// The gate re-resolves the camera each attempt, so a reconnect that swaps the
+    /// ICamera instance is handled for free. Cancellation (user stop) propagates
+    /// immediately via the gate returning null under a cancelled token.</summary>
+    private async Task<NINA.Image.Interfaces.IImageData> CaptureFrameWithRetryAsync(
+            SequenceContext ctx, NINA.Image.Interfaces.CaptureOptions capOpts, CancellationToken ct) {
+        Exception? last = null;
+        for (int attempt = 0; attempt <= MaxCaptureRetries; attempt++) {
+            ct.ThrowIfCancellationRequested();
+            var cam = await ctx.CameraReady.WaitAsync("ADV capture", ct);
+            if (cam == null) ct.ThrowIfCancellationRequested();   // null ⇒ cancelled
+            try {
+                using (ctx.CaptureProgress.Begin("sequencer", ExposureSeconds))
+                    return await NINA.Polaris.Services.CameraCaptureGate.RunAsync(
+                        () => cam!.CaptureAsync(ExposureSeconds, capOpts, ct), ct);
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                last = ex;
+                ctx.Logger.LogWarning(ex,
+                    "ADV capture failed (attempt {N}/{Max}); waiting for the camera and retrying",
+                    attempt + 1, MaxCaptureRetries + 1);
+                try { await Task.Delay(2000, ct); } catch (OperationCanceledException) { throw; }
+            }
+        }
+        // Exhausted the retries: let it propagate to the entity error policy. If
+        // the camera is genuinely broken (not just restarting), AbortRun is the
+        // right outcome — this only stops a TRANSIENT failure from doing that.
+        throw last ?? new InvalidOperationException("Capture failed");
     }
 }
 

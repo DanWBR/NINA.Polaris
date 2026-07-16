@@ -80,6 +80,7 @@ public class SequenceEngine {
     private readonly FlatWizardService _flatWizard;
     private readonly CaptureProgressService _captureProgress;
     private readonly AuxCaptureService _aux;
+    private readonly CameraReadyGate _cameraReady;
 
     public SequenceEngine(EquipmentManager equip, ImageRelayService relay,
         LiveStackingService liveStack, PHD2Client phd2, ActiveGuiderProvider guiders,
@@ -90,6 +91,7 @@ public class SequenceEngine {
         ProfileService profile,
         CaptureProgressService captureProgress,
         AuxCaptureService aux,
+        CameraReadyGate cameraReady,
         ILogger<SequenceEngine> logger) {
         _equip = equip;
         _relay = relay;
@@ -103,6 +105,7 @@ public class SequenceEngine {
         _profile = profile;
         _captureProgress = captureProgress;
         _aux = aux;
+        _cameraReady = cameraReady;
         _logger = logger;
     }
 
@@ -393,12 +396,24 @@ public class SequenceEngine {
 
                     CurrentFrameInItem = f;
 
-                    if (_equip.Camera == null) {
-                        LastError = "No camera connected";
-                        _logger.LogError("Sequence aborted: no camera");
-                        State = SequenceState.Idle;
-                        return;
-                    }
+                    // WAIT for the camera to be ready, don't fail through it. This
+                    // was a bare `if (_equip.Camera == null) abort`, which let a
+                    // present-but-DISCONNECTED camera (mid driver-restart) sail
+                    // straight into CaptureAsync. The capture failed in ~2 s, the
+                    // catch skipped the frame, and the `for (f...)` loop advanced —
+                    // so a 30 s driver recovery burned ~15 frames of a 60 s item,
+                    // the item "completed" with nothing on disk, and the night
+                    // fast-forwarded while reporting success. Waiting holds f in
+                    // place until the watchdog hands the camera back. `cam` is
+                    // re-resolved here every frame, so a reconnect that swaps the
+                    // instance can't leave us on a dead one. ct cancels on user stop.
+                    var cam = await _cameraReady.WaitAsync("AUTORUN", ct,
+                        onWaiting: _ => LastError = "Waiting for the camera to reconnect…");
+                    // The gate returns null only on cancellation — throw OCE so the
+                    // one cancellation handler below runs (RunOnStop end actions, etc)
+                    // instead of a bespoke exit path here.
+                    if (cam == null) { ct.ThrowIfCancellationRequested(); return; }
+                    if (LastError != null && LastError.StartsWith("Waiting for the camera")) LastError = null;
 
                     _logger.LogDebug("Capturing frame {Frame}/{Total} for {Name}",
                         f + 1, item.Count, item.Name);
@@ -427,7 +442,7 @@ public class SequenceEngine {
                         NINA.Image.Interfaces.IImageData imageData;
                         using (_captureProgress.Begin("autorun", item.Exposure))
                             imageData = await CameraCaptureGate.RunAsync(
-                            () => _equip.Camera.CaptureAsync(item.Exposure, capOpts, ct), ct);
+                            () => cam.CaptureAsync(item.Exposure, capOpts, ct), ct);
 
                         // Populate exposure-level metadata before saving / relaying
                         imageData.MetaData.Exposure.ExposureTime = item.Exposure;
@@ -489,13 +504,19 @@ public class SequenceEngine {
                         _logger.LogWarning(ex, "Frame {Frame} capture failed for {Name}, retrying once",
                             f + 1, item.Name);
 
-                        // Single retry after brief pause
+                        // Single retry after brief pause. Wait for the camera to be
+                        // ready first: if the throw was a mid-capture disconnect, the
+                        // watchdog may still be restarting the driver, and retrying
+                        // against the dead device would just fail again. This also
+                        // re-resolves cam, so the retry never uses a stale instance.
                         try {
                             await Task.Delay(2000, ct);
+                            var retryCam = await _cameraReady.WaitAsync("AUTORUN retry", ct);
+                            if (retryCam == null) { ct.ThrowIfCancellationRequested(); return; }
                             NINA.Image.Interfaces.IImageData imageData;
                             using (_captureProgress.Begin("autorun", item.Exposure))
                                 imageData = await CameraCaptureGate.RunAsync(
-                            () => _equip.Camera.CaptureAsync(item.Exposure, capOpts, ct), ct);
+                            () => retryCam.CaptureAsync(item.Exposure, capOpts, ct), ct);
 
                             // Preview only (see note above): AUTORUN never feeds
                             // the LIVE-tab stacking accumulator, and routes to the

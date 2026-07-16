@@ -47,6 +47,7 @@ public sealed class LiveCaptureService {
     private readonly ActiveGuiderProvider _guiders;
     private readonly AutoFocusService _autoFocus;
     private readonly AuxCaptureService _aux;
+    private readonly CameraReadyGate _cameraReady;
     private readonly ILogger<LiveCaptureService> _logger;
 
     private CancellationTokenSource? _cts;
@@ -63,7 +64,8 @@ public sealed class LiveCaptureService {
     public LiveCaptureService(EquipmentManager equip, LiveStackingService liveStack,
         ImageRelayService relay, CaptureProgressService captureProgress,
         ActiveGuiderProvider guiders, AutoFocusService autoFocus,
-        AuxCaptureService aux, ILogger<LiveCaptureService> logger) {
+        AuxCaptureService aux, CameraReadyGate cameraReady,
+        ILogger<LiveCaptureService> logger) {
         _equip = equip;
         _liveStack = liveStack;
         _relay = relay;
@@ -71,6 +73,7 @@ public sealed class LiveCaptureService {
         _guiders = guiders;
         _autoFocus = autoFocus;
         _aux = aux;
+        _cameraReady = cameraReady;
         _logger = logger;
     }
 
@@ -129,30 +132,21 @@ public sealed class LiveCaptureService {
     /// Also the single place the camera reference is resolved, so a reconnect that
     /// swaps the ICamera instance can't leave the loop holding a dead one.</summary>
     private async Task<ICamera?> WaitForCameraReadyAsync(CancellationToken ct) {
-        var cam = _equip.Camera;
-        if (cam != null && cam.IsConnected) return cam;
+        // Fast path AND the wait now go through the shared gate, so LIVE, AUTORUN
+        // and ADV all pause for a driver recovery identically. LIVE keeps its two
+        // extras on top: surface the wait in the WS status (LastError) and re-assert
+        // binning on return, since a restarted driver dropped it.
+        if (CameraReadyGate.IsReady(_equip.Camera)) return _equip.Camera;
 
-        // Log/report once per outage, not once per poll — this is the state the old
-        // code turned into a per-second log flood.
-        _logger.LogWarning("Server LIVE: camera not ready ({State}); waiting before the next frame",
-            cam == null ? "no camera selected" : "disconnected");
-        LastError = "Waiting for the camera to reconnect…";
+        var cam = await _cameraReady.WaitAsync("Server LIVE", ct,
+            onWaiting: _ => LastError = "Waiting for the camera to reconnect…");
+        if (cam == null) return null;
 
-        while (!ct.IsCancellationRequested) {
-            try { await Task.Delay(1000, ct); } catch { return null; }
-            cam = _equip.Camera;
-            if (cam != null && cam.IsConnected) {
-                _logger.LogInformation("Server LIVE: camera back, resuming capture");
-                LastError = null;
-                // Re-assert geometry: a driver restart drops the device back to its
-                // defaults, so the binning we set at Start() is gone.
-                if (BinX > 0) {
-                    try { await cam.SetBinningAsync(BinX, BinX, ct); } catch { /* best effort */ }
-                }
-                return cam;
-            }
+        LastError = null;
+        if (BinX > 0) {
+            try { await cam.SetBinningAsync(BinX, BinX, ct); } catch { /* best effort */ }
         }
-        return null;
+        return cam;
     }
 
     private async Task RunLoop(CancellationToken ct) {

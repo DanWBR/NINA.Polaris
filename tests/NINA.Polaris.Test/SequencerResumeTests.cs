@@ -34,7 +34,7 @@ public class SequencerResumeTests {
 
     private static SequenceContext BareCtx(bool isResume = false) {
         var ctx = new SequenceContext(
-            null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!,
+            null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!,
             NullLogger.Instance);
         ctx.IsResume = isResume;
         return ctx;
@@ -125,9 +125,13 @@ public class SequencerResumeTests {
         var profile = new ProfileService(emptyConfig, NullLogger<ProfileService>.Instance);
         profile.Active.ImageOutputDir = "";   // SaveImage no-ops, keeps tests off disk
         var imageWriter = new ImageWriterService(equip, profile, NullLogger<ImageWriterService>.Instance);
+        // Real gate backed by the equipment manager: TakeExposure now waits on it
+        // before each frame, so a null gate would NRE the moment it captures.
+        var gate = new CameraReadyGate(() => equip.Camera,
+            NullLogger<CameraReadyGate>.Instance);
         var ctx = new SequenceContext(
             equip, relay, liveStack, null!, null!, null!, null!, null!,
-            imageWriter, profile, new CaptureProgressService(), null!,
+            imageWriter, profile, new CaptureProgressService(), null!, gate,
             NullLogger.Instance);
         return (ctx, equip);
     }

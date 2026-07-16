@@ -50,6 +50,7 @@ public class SequenceEngineDitherTests {
             NullLogger<AuxCaptureService>.Instance);
         return new SequenceEngine(equip, relay, liveStack, phd2, guiders, meridianFlip, imageWriter,
             graXpert, flatWizard, profile, new CaptureProgressService(), aux,
+            new NINA.Polaris.Services.CameraReadyGate(() => equip.Camera, Microsoft.Extensions.Logging.Abstractions.NullLogger<NINA.Polaris.Services.CameraReadyGate>.Instance),
             NullLogger<SequenceEngine>.Instance);
     }
 

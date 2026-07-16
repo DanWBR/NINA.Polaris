@@ -43,6 +43,15 @@ public class AdvancedSequenceEngine {
     /// resets to 0 when a new run begins. Used by PLAN-mode progress.</summary>
     public int FramesCompleted => _ctx?.FramesCompleted ?? 0;
     public string? LastError { get; private set; }
+
+    /// <summary>True when the last run ended in a FAILURE (an instruction threw
+    /// past its retry/error policy), as opposed to completing normally or being
+    /// stopped by the user. Read by <see cref="Plan.PlanRunnerService"/> the moment
+    /// a run goes Idle, to tell a genuine finish from a crash — the engine drops to
+    /// <see cref="AdvancedSequenceState.Idle"/> for ALL THREE outcomes, so State
+    /// alone can't. Reflects <c>Document.Root.Status</c>, so read it before loading
+    /// the next document (e.g. an end-actions doc) or it describes that one.</summary>
+    public bool LastRunFailed => Document.Root.Status == SequenceEntityStatus.Failed;
     public DateTime? StartedAt { get; private set; }
     public DateTime? FinishedAt { get; private set; }
 
@@ -210,6 +219,7 @@ public class AdvancedSequenceEngine {
             profiles: _services.GetRequiredService<ProfileService>(),
             captureProgress: _services.GetRequiredService<CaptureProgressService>(),
             coolingRamp: _services.GetRequiredService<CoolingRampService>(),
+            cameraReady: _services.GetRequiredService<CameraReadyGate>(),
             logger: _logger);
     }
 

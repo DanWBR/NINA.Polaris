@@ -48,6 +48,12 @@ public class PlanRunnerService : IHostedService {
     private DateTime? _endsAtUtc;       // resolved end instant for Dawn / AtTime
     private Phase _phase = Phase.Idle;
     private bool _userAborted;
+    // FIELD7-3: did the MAIN run end in a failure (an instruction threw past its
+    // error policy) rather than completing or being stopped? Captured at the
+    // Main->end transition, because by FinishPlan the engine has run the
+    // end-actions document too and its own status no longer reflects the main run.
+    // Destructive end actions (host shutdown) must never fire on a failed run.
+    private bool _mainRunFailed;
     private int _mainPlannedFrames;   // total light frames the main doc will capture
 
     private CancellationTokenSource? _cts;
@@ -128,6 +134,7 @@ public class PlanRunnerService : IHostedService {
 
             _active = plan;
             _userAborted = false;
+            _mainRunFailed = false;
             _startedAtUtc = DateTime.UtcNow;
             _endsAtUtc = ResolveEnd(plan);
             _phase = Phase.Main;
@@ -178,6 +185,7 @@ public class PlanRunnerService : IHostedService {
             _mainPlannedFrames = CountFrames(_resumeDoc.Root);
             _active = plan;
             _userAborted = false;
+            _mainRunFailed = false;
             _startedAtUtc = DateTime.UtcNow;
             _endsAtUtc = ResolveEnd(plan);
             _phase = Phase.Main;
@@ -311,6 +319,22 @@ public class PlanRunnerService : IHostedService {
             if (_engine.State != AdvancedSequenceState.Idle) return;
 
             if (_phase == Phase.Main) {
+                // Capture the main run's outcome NOW, before the end-actions
+                // document replaces it on the engine. State is Idle for a normal
+                // finish, a user stop AND a failure — LastRunFailed is the only
+                // thing that separates a crash from the other two, and it's about
+                // to become unreadable once end actions load. A transient BLOB
+                // timeout during a driver restart reaches here as a failure; without
+                // this capture it was indistinguishable from a clean completion, and
+                // the plan went on to run end actions and power off the host while
+                // the watchdog was mid-recovery. (See FIELD7-3.)
+                _mainRunFailed = _engine.LastRunFailed;
+                if (_mainRunFailed) {
+                    _logger.LogWarning(
+                        "Plan '{Name}' main run FAILED ({Err}); end actions will run but host " +
+                        "shutdown is suppressed", _active.Name, _engine.LastError ?? "unknown");
+                }
+
                 // Main phase over. If it ended EARLY (user stop / end-time)
                 // with partial progress, stash the main document BEFORE the
                 // end-actions document replaces it on the engine, so the
@@ -350,23 +374,45 @@ public class PlanRunnerService : IHostedService {
     private void FinishPlan() {
         var plan = _active;
         var aborted = _userAborted;
+        var failed = _mainRunFailed;
         _active = null;
         _phase = Phase.Idle;
         _endsAtUtc = null;
         _startedAtUtc = null;
         _userAborted = false;
+        _mainRunFailed = false;
         _mainPlannedFrames = 0;
 
         if (plan == null) return;
-        _logger.LogInformation("Plan '{Name}' finished ({How})",
-            plan.Name, aborted ? "stopped by user" : "completed");
 
-        if (plan.EndShutdownHost && !aborted) {
-            _logger.LogWarning("Plan '{Name}' requested host shutdown; powering off", plan.Name);
-            try { _power.ScheduleShutdown(); }
-            catch (Exception ex) { _logger.LogError(ex, "Host shutdown failed"); }
+        var how = aborted ? "stopped by user" : failed ? "FAILED" : "completed";
+        _logger.LogInformation("Plan '{Name}' finished ({How})", plan.Name, how);
+
+        if (plan.EndShutdownHost) {
+            if (ShouldShutdownHost(true, aborted, failed)) {
+                _logger.LogWarning("Plan '{Name}' requested host shutdown; powering off", plan.Name);
+                try { _power.ScheduleShutdown(); }
+                catch (Exception ex) { _logger.LogError(ex, "Host shutdown failed"); }
+            } else {
+                _logger.LogWarning(
+                    "Plan '{Name}' requested host shutdown, but the run {How} — NOT powering off " +
+                    "so the session can be recovered", plan.Name, how);
+            }
         }
     }
+
+    /// <summary>FIELD7-3: whether a plan's "shut down the host at the end" action
+    /// may fire. Only a run that COMPLETED NORMALLY qualifies — a user stop and a
+    /// run FAILURE are both "did not finish as planned".
+    ///
+    /// The bug this pins: the old code gated only on <paramref name="userAborted"/>,
+    /// so a FAILED run (e.g. one recoverable BLOB timeout during a driver restart)
+    /// read as a completion and powered off the SBC mid-session while the watchdog
+    /// was about to hand back a healthy camera. End-time expiry is deliberately NOT
+    /// a failure (the engine reports Skipped, not Failed), so a genuine "image until
+    /// dawn, then shut down" plan still shuts down.</summary>
+    internal static bool ShouldShutdownHost(bool endShutdownHost, bool userAborted, bool mainRunFailed)
+        => endShutdownHost && !userAborted && !mainRunFailed;
 
     /// <summary>Resolve the absolute UTC end instant for the plan, or null for AllDone.</summary>
     private DateTime? ResolveEnd(ImagingPlan plan) {
