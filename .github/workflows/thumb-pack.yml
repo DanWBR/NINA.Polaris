@@ -1,15 +1,16 @@
-name: Publish DSO thumbnail pack
+name: Publish data packs
 
-# THUMBPACK: the full ~215 MB DSO thumbnail set is excluded from the app package
-# (NINA.Polaris.csproj) and downloaded on demand by DsoThumbPackService from a
-# FIXED, version-independent release tag ("data-pack"). This workflow (re)builds
-# that asset and uploads it there, decoupled from the per-version app releases so
-# a 215 MB asset isn't re-uploaded on every app release.
+# THUMBPACK: large data assets are excluded from the app package
+# (NINA.Polaris.csproj) and downloaded on demand from a FIXED, version-independent
+# release tag ("data-pack"). This workflow (re)builds those assets and uploads them
+# there, decoupled from the per-version app releases so they aren't re-uploaded on
+# every app release:
+#   polaris-dso-thumbs.zip   — full DSO thumbnail set  (~215 MB, DsoThumbPackService)
+#   polaris-ncnn-models.zip  — ncnn GPU-Vulkan models  (~246 MB, NcnnModelPackService)
 #
-# Run it manually (Actions -> "Publish DSO thumbnail pack" -> Run workflow) after
-# regenerating the thumbnails (scripts/build-dso-thumbs.py) or changing the
-# catalogue. It also runs automatically when the generator or catalogue changes on
-# the default branch, so the pack can't silently drift from the app's expectations.
+# Run it manually (Actions -> "Publish data packs" -> Run workflow) after
+# regenerating either. It also runs automatically when the generator, catalogue, or
+# ncnn models change on the default branch, so the packs can't silently drift.
 
 on:
   workflow_dispatch:
@@ -18,6 +19,7 @@ on:
     paths:
       - 'scripts/build-dso-thumbs.py'
       - 'src/NINA.Polaris/wwwroot/catalogs/dso/dso.db'
+      - 'src/NINA.Polaris/wwwroot/graxpert/models/ncnn/**'
 
 permissions:
   contents: write
@@ -45,15 +47,35 @@ jobs:
           ( cd "$THUMBS" && zip -0 -j -q -r "$GITHUB_WORKSPACE/polaris-dso-thumbs.zip" . )
           ls -la polaris-dso-thumbs.zip
 
+      - name: Build the ncnn GPU model zip
+        run: |
+          NCNN="src/NINA.Polaris/wwwroot/graxpert/models/ncnn"
+          bins=$(find "$NCNN" -name '*.bin' | wc -l)
+          echo "Packing $bins ncnn models from $NCNN"
+          if [ "$bins" -lt 1 ]; then
+            echo "::error::No ncnn .bin models found — LFS pull likely failed. Aborting."
+            exit 1
+          fi
+          # Preserve the {family}-ai-models/{version}/ tree (NcnnModelPackService
+          # extracts into the writable models root's ncnn/ subtree, where the
+          # resolver's parallel layout looks). -0 store: the weights are ~random,
+          # deflate wouldn't help.
+          ( cd "$NCNN" && zip -0 -q -r "$GITHUB_WORKSPACE/polaris-ncnn-models.zip" . )
+          ls -la polaris-ncnn-models.zip
+
       - name: Upload to the fixed data-pack release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: data-pack
-          name: Data pack (DSO thumbnails)
+          name: Data packs
           body: |
             Version-independent data assets downloaded on demand by Polaris.
             `polaris-dso-thumbs.zip` — full DSO thumbnail set (~215 MB), served at
             the SKY object cards. The app ships only a curated core subset and
             fetches this the first time the user asks for the full set.
-          files: polaris-dso-thumbs.zip
+            `polaris-ncnn-models.zip` — ncnn GPU-Vulkan models (~246 MB) for
+            BGE/Denoise GPU acceleration. The CPU/ONNX path works without them.
+          files: |
+            polaris-dso-thumbs.zip
+            polaris-ncnn-models.zip
           fail_on_unmatched_files: true

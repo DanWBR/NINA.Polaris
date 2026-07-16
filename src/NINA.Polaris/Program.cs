@@ -353,6 +353,10 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Editor.ImageBlendService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Editor.EditSidecarStore>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.OnnxModelRegistry>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.ModelDownloadService>();
+// THUMBPACK-4: on-demand downloader for the converted ncnn GPU-Vulkan models
+// (excluded from the package). Extracts into the writable models root's ncnn/
+// subtree, where the existing NcnnInferenceService resolver already looks.
+builder.Services.AddSingleton<NINA.Polaris.Services.External.NcnnModelPackService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.OnnxFileService>();
 // RKNN: host-side NPU acceleration for GraXpert AI on Rockchip RK3588.
 // Injected (optionally) into GraXpertService; no-op when no NPU is present.
@@ -1199,6 +1203,7 @@ app.MapSensorAnalysisEndpoints();
 app.MapSirilEndpoints();
 app.MapDssEndpoints();
 app.MapDsoThumbPackEndpoints();
+app.MapNcnnModelPackEndpoints();
 app.MapGraXpertEndpoints();
 app.MapUpdateEndpoints();
 app.MapCropEndpoints();

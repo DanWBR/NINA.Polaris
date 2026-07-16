@@ -646,6 +646,15 @@ function ninaApp() {
         },
         _thumbPackPollTimer: null,
 
+        // THUMBPACK-4: on-demand ncnn GPU-Vulkan model pack (~246 MB), excluded
+        // from the package. Restores GPU acceleration on packaged installs.
+        ncnnPack: {
+            running: false, phase: 'idle', bytesDownloaded: 0, bytesTotal: 0,
+            entriesExtracted: 0, entriesTotal: 0, error: null,
+            installed: false, installedModelCount: 0
+        },
+        _ncnnPackPollTimer: null,
+
         // Remote terminal (xterm.js + /ws/terminal SSH bridge).
         // Credentials are never persisted, every Connect prompts
         // again. Terminal:Enabled=false on the server returns 403
@@ -10546,6 +10555,58 @@ function ninaApp() {
         },
         async cancelThumbPackDownload() {
             try { await this.apiPost('/api/sky/dso-thumbs/cancel'); } catch (e) {}
+            this.toast('Cancelling download…', 'warn');
+        },
+
+        // THUMBPACK-4: ncnn GPU model pack (same flow as the thumbnail pack).
+        async loadNcnnPackStatus() {
+            try {
+                const s = await this.apiGet('/api/ai/ncnn-models/status');
+                this.ncnnPack = Object.assign(this.ncnnPack, s);
+            } catch (e) { /* card may not be visible yet */ }
+            if (this.ncnnPack.running && !this._ncnnPackPollTimer) {
+                this._ncnnPackPollTimer = setInterval(() => this._pollNcnnPack(), 1500);
+            }
+        },
+        async _pollNcnnPack() {
+            try {
+                const s = await this.apiGet('/api/ai/ncnn-models/status');
+                this.ncnnPack = Object.assign(this.ncnnPack, s);
+            } catch (e) { /* keep last */ }
+            if (!this.ncnnPack.running && this._ncnnPackPollTimer) {
+                clearInterval(this._ncnnPackPollTimer); this._ncnnPackPollTimer = null;
+                if (this.ncnnPack.installed && !this.ncnnPack.error) {
+                    this.toast('GPU model pack installed ('
+                        + this.ncnnPack.installedModelCount + ' models). GPU acceleration is now available.', 'ok');
+                } else if (this.ncnnPack.error) {
+                    this.toast('GPU model pack download failed: ' + this.ncnnPack.error, 'error');
+                }
+            }
+        },
+        ncnnPackPercent() {
+            const t = this.ncnnPack;
+            if (t.phase === 'extracting' && t.entriesTotal > 0)
+                return Math.floor(100 * t.entriesExtracted / t.entriesTotal);
+            if (t.bytesTotal > 0)
+                return Math.floor(100 * t.bytesDownloaded / t.bytesTotal);
+            return 0;
+        },
+        async startNcnnPackDownload() {
+            try {
+                const resp = await this.apiPost('/api/ai/ncnn-models/download');
+                const s = await resp.json().catch(() => ({}));
+                this.ncnnPack = Object.assign(this.ncnnPack, s, { running: true });
+                this.toast('Downloading GPU model pack (~246 MB). Runs in the background.', 'info');
+                if (!this._ncnnPackPollTimer)
+                    this._ncnnPackPollTimer = setInterval(() => this._pollNcnnPack(), 1500);
+            } catch (e) {
+                let msg = e.message;
+                try { const b = JSON.parse(e.body || '{}'); if (b.error) msg = b.error; } catch {}
+                this.toast('Could not start download: ' + msg, 'error');
+            }
+        },
+        async cancelNcnnPackDownload() {
+            try { await this.apiPost('/api/ai/ncnn-models/cancel'); } catch (e) {}
             this.toast('Cancelling download…', 'warn');
         },
 
