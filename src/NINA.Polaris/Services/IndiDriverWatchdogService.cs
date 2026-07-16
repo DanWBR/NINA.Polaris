@@ -46,6 +46,7 @@ public class IndiDriverWatchdogService : IHostedService {
     private readonly NotificationService _notify;
     private readonly ILogger<IndiDriverWatchdogService> _logger;
     private readonly IConfiguration _config;
+    private readonly IServiceProvider _services;
 
     // Tunables (overridable via IndiWatchdog:* config).
     public bool Enabled { get; private set; }
@@ -70,6 +71,20 @@ public class IndiDriverWatchdogService : IHostedService {
     }
     private readonly ConcurrentDictionary<string, DeviceState> _byDevice = new();
 
+    /// <summary>Cooler state captured just BEFORE a driver restart, so it can be
+    /// put back after the reconnect. Keyed by INDI device name.
+    ///
+    /// Needed because a restarted driver comes up at ITS defaults, and on the
+    /// SV405CC the Cooler control's default is 0 (off) — so a camera that was
+    /// holding 0°C came back with the TEC dead and quietly warmed up for the rest
+    /// of the night. We reconnected the device and stopped there (dc645402), which
+    /// fixed capture but not cooling. Field report: "faltou reativar o cooling da
+    /// câmera após a reconexão."
+    ///
+    /// Snapshot rather than "always re-enable": if the user had the cooler OFF on
+    /// purpose, a restart must not switch it on.</summary>
+    private readonly ConcurrentDictionary<string, bool> _coolerWasOn = new();
+
     // Rolling record of what the watchdog last did, for the UI/status.
     public record ActionRecord(DateTime At, string Device, string? DriverLabel,
                                string Result);
@@ -80,11 +95,16 @@ public class IndiDriverWatchdogService : IHostedService {
     public IndiDriverWatchdogService(IndiClient indi, IndiWebManagerService indiWeb,
                                      NotificationService notify,
                                      IConfiguration config,
+                                     IServiceProvider services,
                                      ILogger<IndiDriverWatchdogService> logger) {
         _indi = indi;
         _indiWeb = indiWeb;
         _notify = notify;
         _config = config;
+        // Resolved lazily rather than constructor-injected: this stays a plain INDI
+        // watchdog with no hard edge into the equipment graph (EquipmentManager
+        // already depends on IndiClient, so taking it here would invite a cycle).
+        _services = services;
         _logger = logger;
 
         Enabled = config.GetValue("IndiWatchdog:Enabled", true);
@@ -282,6 +302,11 @@ public class IndiDriverWatchdogService : IHostedService {
         _logger.LogWarning(
             "INDI watchdog: restarting wedged driver '{Label}' for device {Device}", label, device);
 
+        // Snapshot cooler state BEFORE the driver dies — once it's gone the device
+        // reports its defaults and we'd have no way to tell "was cooling" from
+        // "user turned it off".
+        CaptureCoolerState(device);
+
         var ok = await _indiWeb.RestartDriverAsync(label);
         lock (st.Gate) {
             var now = DateTime.UtcNow;
@@ -307,6 +332,11 @@ public class IndiDriverWatchdogService : IHostedService {
         // reconnect". Correct that a reconnect alone can't fix a wedged driver;
         // wrong that it's either/or — it's restart THEN reconnect.)
         var reconnected = await TryReconnectAfterRestartAsync(device, label);
+        // FIELD7-2: reconnecting is still only two thirds of it. The fresh driver
+        // is at its defaults, and on the SV405CC the Cooler control defaults to OFF
+        // — so a camera that had been holding 0°C came back with a dead TEC and
+        // warmed up unnoticed for the rest of the session.
+        if (reconnected) RestoreCoolerAfterReconnect(device);
         Record(device, label, reconnected ? "restarted+reconnected" : "restarted-reconnect-failed");
         if (reconnected) {
             _notify.Push("info",
@@ -324,6 +354,70 @@ public class IndiDriverWatchdogService : IHostedService {
     /// poll until its CONNECTION property exists again before writing — a CONNECT
     /// aimed at a device indiserver hasn't re-announced is silently dropped.
     /// </summary>
+    /// <summary>Resolve the main or aux camera when it's the INDI device named
+    /// <paramref name="device"/>. Null when the device isn't a camera we own (the
+    /// watchdog also covers mounts, focusers, wheels — none of which have a cooler).</summary>
+    private (NINA.Image.Interfaces.ICamera Camera, string Slot)? ResolveCamera(string device) {
+        var equip = _services.GetService<EquipmentManager>();
+        if (equip == null) return null;
+        if (equip.Camera != null && equip.Camera.DeviceName == device)
+            return (equip.Camera, CoolingRampService.Main);
+        if (equip.AuxCamera != null && equip.AuxCamera.DeviceName == device)
+            return (equip.AuxCamera, CoolingRampService.Aux);
+        return null;
+    }
+
+    /// <summary>Remember whether the cooler was running, before we tear the driver
+    /// down. Best-effort: a camera that's already wedged may answer badly, and a
+    /// bad answer must not stop the restart that's trying to rescue it.</summary>
+    private void CaptureCoolerState(string device) {
+        try {
+            var found = ResolveCamera(device);
+            if (found == null) return;
+            if (!found.Value.Camera.Capabilities.SupportsCooler) return;
+            _coolerWasOn[device] = found.Value.Camera.CoolerOn;
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Could not read cooler state for {Device} before restart", device);
+        }
+    }
+
+    /// <summary>Put the cooler back after a restart+reconnect, if it was on.
+    ///
+    /// Goes through CoolingRampService rather than writing the setpoint raw, so the
+    /// same °C/min rule applies here as everywhere else — and it matters more here
+    /// than anywhere: the sensor may have drifted up while the driver was down, and
+    /// slamming it back to 0°C is exactly the fast plunge that condenses dew.
+    /// Ramping from wherever it actually is, is free, because the ramp reads the
+    /// live temperature.</summary>
+    private void RestoreCoolerAfterReconnect(string device) {
+        try {
+            if (!_coolerWasOn.TryRemove(device, out var wasOn) || !wasOn) return;
+
+            var found = ResolveCamera(device);
+            if (found == null) return;
+            var (cam, slot) = found.Value;
+
+            var profiles = _services.GetService<ProfileService>();
+            var ramp = _services.GetService<CoolingRampService>();
+            if (ramp == null) return;
+
+            var rig = profiles?.ActiveEquipmentProfile;
+            var target = rig?.CoolerTargetTemperature ?? -10;
+            var rate = rig?.CoolerRampDegPerMinute ?? 2.0;
+
+            _logger.LogInformation(
+                "INDI watchdog: restoring cooler on {Device} → {Target:0.0}°C at {Rate:0.#}°C/min " +
+                "(sensor now {Now:0.0}°C)", device, target, rate, cam.Temperature);
+            ramp.Start(cam, target, rate, coolerOnFirst: true, coolerOffWhenDone: false,
+                       source: "watchdog restore", slot: slot);
+            _notify.Push("info",
+                $"Cooler re-enabled on {device} after the driver restart (target {target:0.#}°C).", 6000);
+        } catch (Exception ex) {
+            // Never let this sink the restart: capture is back, which is the point.
+            _logger.LogWarning(ex, "Could not restore cooler on {Device} after reconnect", device);
+        }
+    }
+
     private async Task<bool> TryReconnectAfterRestartAsync(string device, string label) {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(
             _config.GetValue("IndiWatchdog:ReconnectTimeoutSec", 30));

@@ -114,12 +114,53 @@ public sealed class LiveCaptureService {
         _logger.LogInformation("Server LIVE loop stopped");
     }
 
+    /// <summary>Block until the main camera is present AND connected, returning it;
+    /// null means the loop was cancelled while waiting.
+    ///
+    /// Exists because the LIVE loop must never ask a disconnected camera for a
+    /// frame. It used to check IsConnected only at Start(), so a mid-session drop
+    /// (or an INDI driver restart by the watchdog) left it firing CaptureAsync once
+    /// a second against a device whose CCD_EXPOSURE property no longer existed —
+    /// each write failing, each failure retried, all night. Waiting is the correct
+    /// response: the watchdog restarts the driver, reconnects the device and
+    /// restores the cooler; this loop's only job is to stay out of the way and pick
+    /// back up when the camera returns.
+    ///
+    /// Also the single place the camera reference is resolved, so a reconnect that
+    /// swaps the ICamera instance can't leave the loop holding a dead one.</summary>
+    private async Task<ICamera?> WaitForCameraReadyAsync(CancellationToken ct) {
+        var cam = _equip.Camera;
+        if (cam != null && cam.IsConnected) return cam;
+
+        // Log/report once per outage, not once per poll — this is the state the old
+        // code turned into a per-second log flood.
+        _logger.LogWarning("Server LIVE: camera not ready ({State}); waiting before the next frame",
+            cam == null ? "no camera selected" : "disconnected");
+        LastError = "Waiting for the camera to reconnect…";
+
+        while (!ct.IsCancellationRequested) {
+            try { await Task.Delay(1000, ct); } catch { return null; }
+            cam = _equip.Camera;
+            if (cam != null && cam.IsConnected) {
+                _logger.LogInformation("Server LIVE: camera back, resuming capture");
+                LastError = null;
+                // Re-assert geometry: a driver restart drops the device back to its
+                // defaults, so the binning we set at Start() is gone.
+                if (BinX > 0) {
+                    try { await cam.SetBinningAsync(BinX, BinX, ct); } catch { /* best effort */ }
+                }
+                return cam;
+            }
+        }
+        return null;
+    }
+
     private async Task RunLoop(CancellationToken ct) {
         try {
-            var cam = _equip.Camera;
-            if (cam == null) return;
+            var startCam = _equip.Camera;
+            if (startCam == null) return;
             if (BinX > 0) {
-                try { await cam.SetBinningAsync(BinX, BinX); } catch { /* best effort */ }
+                try { await startCam.SetBinningAsync(BinX, BinX); } catch { /* best effort */ }
             }
 
             while (!ct.IsCancellationRequested) {
@@ -130,6 +171,24 @@ public sealed class LiveCaptureService {
                     try { await Task.Delay(250, ct); } catch { return; }
                 }
                 if (ct.IsCancellationRequested) break;
+
+                // Don't ask a disconnected camera for a frame. IsConnected used to
+                // be checked only in Start(), so if the camera dropped mid-session
+                // (or the INDI watchdog restarted its driver) this loop kept firing
+                // CaptureAsync into the void: the write hit a property that no
+                // longer existed, failed, and the 1s back-off retried it forever.
+                // Field log 2026-07-15 is exactly that, once per second:
+                //   Server LIVE frame capture failed; backing off 1s
+                //   CCD_EXPOSURE [120] -- WARNING: property NOT in device snapshot
+                // Wait for the camera to come BACK instead. The watchdog reconnects
+                // it (and restores the cooler); we just have to not stampede while
+                // it does. Poll at 1s — a reconnect takes seconds, and the whole
+                // point is to stop hammering.
+                // Re-resolved every frame, never captured once outside the loop: a
+                // reconnect can hand back a DIFFERENT ICamera instance, and a stale
+                // reference would keep talking to the dead one.
+                var cam = await WaitForCameraReadyAsync(ct);
+                if (cam == null) break;
 
                 IImageData image;
                 try {
