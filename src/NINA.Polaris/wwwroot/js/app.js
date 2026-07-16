@@ -1015,6 +1015,14 @@ function ninaApp() {
         powerBoxDiscovering: false,
         powerBoxInputs: {},
         equipCoolerTarget: -10,
+        // COOLRAMP: max °C/min the cooler setpoint may move, in both directions.
+        // 0 = no ramp (jump straight to target). Seeded from the active rig on
+        // load; null there means "unset" and resolves to 2°C/min — the rate the
+        // sequencer's warm-up has always used.
+        equipCoolerRamp: 2,
+        // Per-slot ramp state from the WS `cooling` block: {main:{...},aux:{...}}.
+        // Empty object = nothing is ramping.
+        cooling: {},
         // Guards the "Connect all / Disconnect all" buttons while a bulk
         // run is walking the device list sequentially.
         equipBulkBusy: false,
@@ -18375,6 +18383,10 @@ function ninaApp() {
                 try { this.detectVendorSwitches(); } catch (e) {}
             }
             if (rig.coolerTargetTemperature != null) this.equipCoolerTarget = rig.coolerTargetTemperature;
+            // null = never configured on this rig → 2°C/min default. An explicit 0
+            // (ramping deliberately off) must survive, hence != null and not a
+            // truthiness check.
+            this.equipCoolerRamp = rig.coolerRampDegPerMinute != null ? rig.coolerRampDegPerMinute : 2;
             // Hydrate FAST step from the rig profile (legacy field
             // name kept for backwards compat). SLOW step lives in
             // localStorage only -- per-rig persistence would need a
@@ -22199,6 +22211,28 @@ function ninaApp() {
             return Math.min(100, Math.max(0, pct));
         },
 
+        /// COOLRAMP: persist the ramp rate onto the active rig.
+        /// Sends ONLY coolerRampDegPerMinute. That's safe for this field because
+        /// it's nullable server-side (omitted => null => untouched), which is the
+        /// SlewConfirmDeg pattern. Don't copy this shape for the other numeric rig
+        /// fields — gain/offset/binning/cooler-target are non-nullable and a
+        /// partial PUT resets them to the model defaults (see RIGPUT-1).
+        async saveCoolerRamp() {
+            try {
+                const rig = this.rigs.find(r => r.id === this.activeRigId);
+                if (!rig) return;
+                const rate = Math.max(0, Number(this.equipCoolerRamp) || 0);
+                await this.apiPut('/api/equipment/rigs/' + encodeURIComponent(rig.id),
+                                  { coolerRampDegPerMinute: rate });
+                rig.coolerRampDegPerMinute = rate;
+                this.toast(rate > 0
+                    ? `Cooling ramp set to ${rate}°C/min`
+                    : 'Cooling ramp off — setpoint jumps straight to target', 'info');
+            } catch (e) {
+                this.toast('Could not save cooling ramp: ' + e.message, 'warn');
+            }
+        },
+
         async setCooler(enabled, temp) {
             // Optimistically reflect the user's intent so the toggle holds its
             // new position instead of snapping back to the camera's old coolerOn
@@ -22216,9 +22250,21 @@ function ninaApp() {
                 // field still binds via x-model.number).
                 const n = Number(temp);
                 const target = Number.isFinite(n) ? n : null;
-                await this.apiPost('/api/camera/cooler', {
+                // No rampDegPerMinute here on purpose: the server resolves it from
+                // the active rig, and the Ramp field saves on change, so the rig
+                // stays the single source of truth for the rate.
+                const resp = await this.apiPost('/api/camera/cooler', {
                     enabled, targetTemperature: target
                 });
+                // apiFetch hands back a Response, not a parsed body.
+                const r = await resp.json().catch(() => null);
+                // Turning the cooler OFF now RAMPS to ambient first and cuts the TEC
+                // only on arrival — ~10 min at 2°C/min. Say so: the toggle flips to
+                // OFF immediately (it reflects intent) while the cooler is
+                // deliberately still running, and unexplained that reads as a bug.
+                if (r && r.ramping && !enabled) {
+                    this.toast(`Warming to ${r.target}°C at ${r.rate}°C/min before the cooler switches off — protects against dew. Set Ramp to 0 to switch off instantly.`, 'info', 7000);
+                }
             } catch (e) {
                 // Command failed — drop the optimistic hold so the toggle
                 // reflects the camera's real state on the next tick.
@@ -35906,6 +35952,11 @@ function ninaApp() {
             // running state so the LIVE shutter shows active and a reconnecting/
             // backgrounded browser re-adopts a session that's still going on the
             // server.
+            // COOLRAMP: per-slot ramp state. Absorbed unconditionally (not behind a
+            // truthiness check) so an empty object clears the "Ramping →" hint the
+            // tick after a ramp finishes, instead of leaving it stuck on screen.
+            if (msg.cooling !== undefined) this.cooling = msg.cooling || {};
+
             if (msg.liveCapture) {
                 this.serverLiveCapture = msg.liveCapture;
                 if (msg.liveCapture.running) {

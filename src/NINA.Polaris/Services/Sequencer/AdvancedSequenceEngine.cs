@@ -209,6 +209,7 @@ public class AdvancedSequenceEngine {
             imageWriter: _services.GetRequiredService<ImageWriterService>(),
             profiles: _services.GetRequiredService<ProfileService>(),
             captureProgress: _services.GetRequiredService<CaptureProgressService>(),
+            coolingRamp: _services.GetRequiredService<CoolingRampService>(),
             logger: _logger);
     }
 

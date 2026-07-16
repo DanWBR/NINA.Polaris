@@ -38,6 +38,17 @@ public class SequenceContext {
     public ImageWriterService ImageWriter { get; }
     public ProfileService Profiles { get; }
     public CaptureProgressService CaptureProgress { get; }
+
+    /// <summary>Walks the cooler setpoint at a controlled °C/min. Shared with the
+    /// UI's cooler buttons so cooldown and warm-up behave identically wherever
+    /// they're triggered from.</summary>
+    public CoolingRampService CoolingRamp { get; }
+
+    /// <summary>The active rig's ramp rate (°C/min), used when a cooler
+    /// instruction doesn't override it. 0 = ramping off (write the setpoint once).</summary>
+    public double CoolerRampDegPerMinute =>
+        Profiles.ActiveEquipmentProfile?.CoolerRampDegPerMinute ?? 2.0;
+
     public ILogger Logger { get; }
 
     /// <summary>
@@ -101,6 +112,7 @@ public class SequenceContext {
         ImageWriterService imageWriter,
         ProfileService profiles,
         CaptureProgressService captureProgress,
+        CoolingRampService coolingRamp,
         ILogger logger) {
         Equipment = equipment;
         Relay = relay;
@@ -113,6 +125,7 @@ public class SequenceContext {
         ImageWriter = imageWriter;
         Profiles = profiles;
         CaptureProgress = captureProgress;
+        CoolingRamp = coolingRamp;
         Logger = logger;
         RunStartedAt = DateTime.UtcNow;
     }

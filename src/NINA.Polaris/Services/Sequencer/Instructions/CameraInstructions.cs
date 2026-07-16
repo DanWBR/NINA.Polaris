@@ -158,20 +158,36 @@ public class TakeExposureInstruction : SequenceInstruction {
 }
 
 /// <summary>
-/// Set the camera cooler setpoint and wait until the sensor is within
-/// <see cref="ToleranceDegC"/> of <see cref="TargetTempC"/> or
-/// <see cref="TimeoutSeconds"/> elapses.
+/// Ramp the camera cooler down to <see cref="TargetTempC"/> and wait until the
+/// sensor settles within <see cref="ToleranceDegC"/>.
+///
+/// <see cref="RateDegPerMinute"/> mirrors <see cref="WarmCameraInstruction"/> —
+/// this instruction used to slam the setpoint while its warm-up twin ramped, so
+/// the gentle half of the cycle was the only half anyone got. Null = use the
+/// rig's CoolerRampDegPerMinute; 0 = no ramp.
+///
+/// <see cref="TimeoutSeconds"/> budgets the SETTLE after the ramp arrives, not
+/// the ramp itself — a 27→0°C ramp at 2°C/min is ~14 min and would blow the old
+/// 600s deadline every time.
 /// </summary>
 public class CoolCameraInstruction : SequenceInstruction {
     public override string Type => "CoolCamera";
     public double TargetTempC { get; set; } = -10;
     public double ToleranceDegC { get; set; } = 1.0;
     public int TimeoutSeconds { get; set; } = 600;
+    public double? RateDegPerMinute { get; set; }
 
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
         var cam = ctx.Equipment.Camera ?? throw new InvalidOperationException("No camera connected");
-        await cam.SetCoolerAsync(true, ct);
-        await cam.SetTemperatureAsync(TargetTempC, ct);
+        var rate = RateDegPerMinute ?? ctx.CoolerRampDegPerMinute;
+
+        ctx.CoolingRamp.Start(cam, TargetTempC, rate,
+                              coolerOnFirst: true, coolerOffWhenDone: false,
+                              source: "Sequencer cooldown");
+        // Wait for the setpoint to finish walking before we start judging the
+        // sensor against the target — otherwise the tolerance check races a
+        // setpoint that hasn't arrived yet and the timeout fires mid-ramp.
+        await ctx.CoolingRamp.Current();
 
         var deadline = DateTime.UtcNow.AddSeconds(TimeoutSeconds);
         while (DateTime.UtcNow < deadline) {
@@ -187,8 +203,14 @@ public class CoolCameraInstruction : SequenceInstruction {
 }
 
 /// <summary>
-/// Gradually ramp the cooler back to ambient, then power it off. Default
-/// ramp is 2°C/min to protect the sensor from thermal shock.
+/// Gradually ramp the cooler back to ambient, then power it off, protecting the
+/// sensor from thermal shock and the window from condensation.
+///
+/// This instruction's hand-rolled ramp loop is the ancestor of
+/// <see cref="CoolingRampService"/> — it was the only ramp in the codebase, so it
+/// got generalised rather than duplicated. Behaviour is unchanged (same 2°C/min,
+/// same 10s steps, cooler off on arrival); it now shares one implementation with
+/// the cooldown and with the UI buttons, so a fix here can't miss them.
 /// </summary>
 public class WarmCameraInstruction : SequenceInstruction {
     public override string Type => "WarmCamera";
@@ -198,34 +220,37 @@ public class WarmCameraInstruction : SequenceInstruction {
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
         var cam = ctx.Equipment.Camera ?? throw new InvalidOperationException("No camera connected");
         var start = cam.Temperature;
-        var stepC = Math.Max(0.5, RateDegPerMinute / 6); // 10-second steps
-        var stepDelay = TimeSpan.FromSeconds(10);
-
-        while (cam.Temperature < TargetTempC - 0.5) {
-            ct.ThrowIfCancellationRequested();
-            var next = Math.Min(TargetTempC, cam.Temperature + stepC);
-            await cam.SetTemperatureAsync(next, ct);
-            await Task.Delay(stepDelay, ct);
-        }
-        await cam.SetCoolerAsync(false, ct);
+        ctx.CoolingRamp.Start(cam, TargetTempC, RateDegPerMinute,
+                              coolerOnFirst: false, coolerOffWhenDone: true,
+                              source: "Sequencer warm-up");
+        await ctx.CoolingRamp.Current();
+        ct.ThrowIfCancellationRequested();
         ctx.Logger.LogInformation("Cooler ramped from {Start:0.0}°C to {Target}°C and powered off", start, TargetTempC);
     }
 }
 
 /// <summary>
-/// Cool the AUX camera to a setpoint — same wait/tolerance loop as
+/// Cool the AUX camera to a setpoint — same ramp + wait/tolerance behaviour as
 /// <see cref="CoolCameraInstruction"/> but on <c>ctx.Equipment.AuxCamera</c>.
+///
+/// Ramps on the <c>Aux</c> slot, so a main-camera cooldown running at the same
+/// time is untouched (the two cameras own independent setpoints).
 /// </summary>
 public class CoolAuxCameraInstruction : SequenceInstruction {
     public override string Type => "CoolAuxCamera";
     public double TargetTempC { get; set; } = -10;
     public double ToleranceDegC { get; set; } = 1.0;
     public int TimeoutSeconds { get; set; } = 600;
+    public double? RateDegPerMinute { get; set; }
 
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
         var cam = ctx.Equipment.AuxCamera ?? throw new InvalidOperationException("No aux camera connected");
-        await cam.SetCoolerAsync(true, ct);
-        await cam.SetTemperatureAsync(TargetTempC, ct);
+        var rate = RateDegPerMinute ?? ctx.CoolerRampDegPerMinute;
+
+        ctx.CoolingRamp.Start(cam, TargetTempC, rate,
+                              coolerOnFirst: true, coolerOffWhenDone: false,
+                              source: "Sequencer aux cooldown", slot: CoolingRampService.Aux);
+        await ctx.CoolingRamp.Current(CoolingRampService.Aux);
 
         var deadline = DateTime.UtcNow.AddSeconds(TimeoutSeconds);
         while (DateTime.UtcNow < deadline) {

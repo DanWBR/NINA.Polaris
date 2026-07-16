@@ -87,6 +87,7 @@ public static class StatusStreamHandler {
             .GetRequiredService<NINA.Polaris.Services.PlateSolving.PlateSolveProgressService>();
         var captureProgress = context.RequestServices.GetRequiredService<CaptureProgressService>();
         var deconProgress = context.RequestServices.GetRequiredService<DeconProgressService>();
+        var coolingRamp = context.RequestServices.GetRequiredService<CoolingRampService>();
         var liveCapture = context.RequestServices.GetRequiredService<LiveCaptureService>();
         var auxCapture = context.RequestServices.GetRequiredService<AuxCaptureService>();
         var logService = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Logging.LogService>();
@@ -714,7 +715,13 @@ public static class StatusStreamHandler {
                             binX = liveCapture.BinX,
                             frames = liveCapture.FrameCount,
                             lastError = liveCapture.LastError
-                        }
+                        },
+                        // COOLRAMP: in-flight cooler ramps, keyed by slot
+                        // ("main"/"aux"). A ramp takes ~14 min at the default
+                        // 2°C/min, so the UI needs to show that the setpoint is
+                        // still walking — otherwise the sensor sitting at 12°C
+                        // with a -10°C target looks like a broken cooler.
+                        cooling = BuildCoolingPayload(coolingRamp)
                     };
 
                     payload = JsonSerializer.SerializeToUtf8Bytes(status, JsonOpts);
@@ -797,6 +804,31 @@ public static class StatusStreamHandler {
     /// <summary>Current-exposure progress sub-object. <c>active=false</c> with
     /// a null start when nothing is exposing. The client derives elapsed =
     /// serverNow - startedUtc and remaining = exposureSeconds - elapsed.</summary>
+    /// <summary>COOLRAMP: per-slot cooler ramp state, e.g.
+    /// <c>{ main: { running, target, setpoint, rate, source } }</c>. Slots with no
+    /// ramp history are absent, so an empty object means "nothing ramping" and the
+    /// UI can just hide the hint. Wrapped in try/catch to match the other builders:
+    /// a status tick must never die over a cosmetic block.</summary>
+    private static object BuildCoolingPayload(CoolingRampService svc) {
+        try {
+            var all = svc.SnapshotAll();
+            var result = new Dictionary<string, object>();
+            foreach (var (slot, s) in all) {
+                result[slot] = new {
+                    running = s.Running,
+                    source = s.Source,
+                    startC = Math.Round(s.StartC, 2),
+                    targetC = Math.Round(s.TargetC, 2),
+                    setpointC = Math.Round(s.SetpointC, 2),
+                    rate = s.RatePerMinute
+                };
+            }
+            return result;
+        } catch {
+            return new Dictionary<string, object>();
+        }
+    }
+
     private static object BuildCapturePayload(CaptureProgressService svc) {
         try {
             var s = svc.Snapshot();

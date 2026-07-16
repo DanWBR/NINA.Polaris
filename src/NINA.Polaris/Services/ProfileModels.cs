@@ -396,6 +396,25 @@ public class EquipmentProfile {
 
     // Per-rig defaults
     public double CoolerTargetTemperature { get; set; } = -10;
+
+    /// <summary>Max rate the cooler setpoint may move, in °C/min, for BOTH
+    /// cooldown and warm-up. <c>null</c> ⇒ 2.0°C/min (the default every read site
+    /// resolves); 0 disables ramping and writes the setpoint in one go, which is
+    /// the pre-COOLRAMP behaviour.
+    ///
+    /// 2.0 isn't invented: it's the rate <c>WarmCameraInstruction</c> has always
+    /// used. The ramp existed on the warm-up side only, so this makes the two
+    /// halves symmetric. Ramping guards against dew condensing on the sensor
+    /// window during a fast plunge (field log 2026-07-15: ~3.7°C/min from 27°C
+    /// ambient to 0°C) and against thermal shock.
+    ///
+    /// Nullable for the same partial-PUT reason as <see cref="SlewConfirmDeg"/>:
+    /// the rig PUT binds a whole <see cref="EquipmentProfile"/>, so a body that
+    /// omits this field would otherwise arrive holding the model's default and
+    /// silently overwrite a rig where the user had turned ramping off. Null means
+    /// "not specified", which is distinguishable from an explicit 0.</summary>
+    public double? CoolerRampDegPerMinute { get; set; }
+
     public int DefaultGain { get; set; } = 100;
     public int DefaultOffset { get; set; } = 50;
     public int DefaultBinning { get; set; } = 1;

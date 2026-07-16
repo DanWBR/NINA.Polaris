@@ -434,25 +434,46 @@ public static class CameraEndpoints {
             });
         });
 
-        group.MapPost("/cooler", async (EquipmentManager equip, CoolerRequest request) => {
+        group.MapPost("/cooler", (EquipmentManager equip, ProfileService profiles,
+                                  CoolingRampService ramp, CoolerRequest request) => {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected" });
 
-            // Only push the target temperature when turning the cooler ON.
-            // Writing the target while disabling re-asserts cooling on some
-            // native drivers (SVBony: setting SVB_TARGET_TEMPERATURE flips
-            // SVB_COOLER_ENABLE back on), so the cooler would switch straight
-            // back on right after the user turned it off. Set the target
-            // first, then enable; on disable, just disable.
-            if (request.Enabled) {
-                if (request.TargetTemperature.HasValue)
-                    await equip.Camera.SetTemperatureAsync(request.TargetTemperature.Value);
-                await equip.Camera.SetCoolerAsync(true);
-            } else {
-                await equip.Camera.SetCoolerAsync(false);
-            }
+            // Rate is per-rig; a request may override it. 0 = no ramp (write once).
+            var rate = request.RampDegPerMinute
+                       ?? profiles.ActiveEquipmentProfile?.CoolerRampDegPerMinute ?? 2.0;
 
-            return Results.Ok(new { coolerOn = request.Enabled, target = request.TargetTemperature });
+            // COOLRAMP: both directions ramp, and both go through the one service.
+            // ON used to write the setpoint raw (TEC straight to 100%, ~3.7°C/min
+            // measured in the field), and OFF just cut the cooler dead — leaving a
+            // 0°C sensor to race back to ambient, which is the textbook way to
+            // condense water on the window. OFF now walks the setpoint up first and
+            // powers the TEC down only on arrival.
+            //
+            // The old "don't write the target while disabling" hazard still holds:
+            // on SVBony, writing SVB_TARGET_TEMPERATURE flips SVB_COOLER_ENABLE back
+            // on, so a naive disable would bounce the cooler straight back. The ramp
+            // respects that by construction — during a warm-up the cooler is MEANT to
+            // stay on (it's what paces the rise), and SetCoolerAsync(false) runs once
+            // at the end, after the final setpoint write. Never before.
+            //
+            // Returns as soon as the ramp STARTS: a 27→0°C ramp at 2°C/min is ~14
+            // minutes, which no HTTP request should hold open. Progress rides the WS
+            // `cooling` block.
+            if (request.Enabled) {
+                var target = request.TargetTemperature
+                             ?? profiles.ActiveEquipmentProfile?.CoolerTargetTemperature ?? -10;
+                ramp.Start(equip.Camera, target, rate,
+                           coolerOnFirst: true, coolerOffWhenDone: false, source: "UI cooldown");
+                return Results.Ok(new { coolerOn = true, target, ramping = rate > 0, rate });
+            } else {
+                // Warm-up destination. Ambient would be ideal but we can't count on a
+                // sensor for it; 20°C matches the WarmCameraInstruction default.
+                var warmTo = request.WarmTargetC ?? 20;
+                ramp.Start(equip.Camera, warmTo, rate,
+                           coolerOnFirst: false, coolerOffWhenDone: true, source: "UI warm-up");
+                return Results.Ok(new { coolerOn = false, target = warmTo, ramping = rate > 0, rate });
+            }
         });
 
         group.MapPost("/select/{deviceName}", (EquipmentManager equip, string deviceName, string? driver) => {
@@ -684,7 +705,14 @@ public static class CameraEndpoints {
         "slew-preview" => FrameKind.SlewPreview,
         _              => FrameKind.Live
     };
-    public record CoolerRequest(bool Enabled, double? TargetTemperature = null);
+    /// <summary>Body for POST /api/camera/cooler. <c>TargetTemperature</c> and
+    /// <c>RampDegPerMinute</c> both fall back to the active rig when omitted, so
+    /// existing clients that only send <c>Enabled</c> keep working and simply get
+    /// the rig's ramp. <c>RampDegPerMinute</c>=0 forces the old write-once
+    /// behaviour. <c>WarmTargetC</c> is where a cooler-OFF ramps up to before the
+    /// TEC is powered down.</summary>
+    public record CoolerRequest(bool Enabled, double? TargetTemperature = null,
+                                double? RampDegPerMinute = null, double? WarmTargetC = null);
 
     /// <summary>White-balance body. Range is driver-specific, ZWO/QHY
     /// typically 0..100 with 50 = neutral; UI bounds the slider to that

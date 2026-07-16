@@ -369,6 +369,7 @@ public class ProfileService {
             Rotator = src.Rotator,
             FlatDevice = src.FlatDevice, Dome = src.Dome, Weather = src.Weather,
             CoolerTargetTemperature = src.CoolerTargetTemperature,
+            CoolerRampDegPerMinute = src.CoolerRampDegPerMinute,
             DefaultGain = src.DefaultGain, DefaultOffset = src.DefaultOffset,
             DefaultBinning = src.DefaultBinning,
             BayerPatternOverride = src.BayerPatternOverride,

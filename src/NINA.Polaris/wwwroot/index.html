@@ -5724,6 +5724,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <span>&deg;C</span>
                                     </label>
                                     <button class="btn btn-sm" @click="setCooler(true, equipCoolerTarget)">Set</button>
+                                    <!-- COOLRAMP: max °C/min the setpoint may move,
+                                         both directions. 0 = straight to target (the
+                                         old behaviour). Ramping down slowly keeps dew
+                                         off the sensor window; ramping UP slowly is
+                                         what stops a cold sensor hitting ambient the
+                                         moment the cooler is switched off. -->
+                                    <label class="equip-temp-label"
+                                           title="Max cooling/warming rate. 0 = no ramp (jump straight to target). A slow ramp prevents dew forming on the sensor window and avoids thermal shock.">
+                                        Ramp
+                                        <input type="number" x-model.number="equipCoolerRamp"
+                                               step="0.5" min="0" max="10" class="input-sm"
+                                               @change="saveCoolerRamp()">
+                                        <span>&deg;C/min</span>
+                                    </label>
+                                    <!-- Live ramp hint: a 27→0°C ramp at 2°C/min takes
+                                         ~14 min, so without this the sensor sitting at
+                                         12°C with a -10°C target reads as a dead cooler. -->
+                                    <span class="text-muted" style="font-size:11px"
+                                          x-show="cooling?.main?.running" x-cloak
+                                          x-text="'Ramping → ' + (cooling?.main?.setpointC ?? 0).toFixed(1) + '°C'"></span>
                                 </div>
 
                                 <!-- ISO dropdown, DSLR only. Standard ISO
@@ -18016,7 +18036,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260715-framescount"></script>
+    <script src="/js/app.js?v=20260715-coolramp"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

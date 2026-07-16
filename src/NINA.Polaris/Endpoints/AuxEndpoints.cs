@@ -90,15 +90,39 @@ public static class AuxEndpoints {
 
         // Cooler control for a cooled astro cam on the aux port (e.g. SV605CC).
         // 501 when the aux camera has no cooler, so the UI can hide the control.
-        group.MapPost("/camera/cooler", async (EquipmentManager equip, AuxCoolerRequest req) => {
+        group.MapPost("/camera/cooler", (EquipmentManager equip, ProfileService profiles,
+                                         CoolingRampService ramp, AuxCoolerRequest req) => {
             if (equip.AuxCamera == null || !equip.AuxCamera.IsConnected)
                 return Results.BadRequest(new { error = "No aux camera connected" });
             if (!equip.AuxCamera.Capabilities.SupportsCooler)
                 return Results.Json(new { error = "Aux camera has no cooler" }, statusCode: 501);
-            await equip.AuxCamera.SetCoolerAsync(req.Enabled);
-            if (req.TargetTemperature.HasValue)
-                await equip.AuxCamera.SetTemperatureAsync(req.TargetTemperature.Value);
-            return Results.Ok(new { coolerOn = req.Enabled, target = req.TargetTemperature });
+
+            // COOLRAMP: same ramp as the main camera, on the Aux slot so the two
+            // cameras' setpoints are driven independently — an aux cooldown must
+            // never cancel a main cooldown that's still descending.
+            //
+            // This also closes an ordering bug the main endpoint guarded against
+            // and this one didn't: it set the cooler FIRST and wrote the target
+            // after, so on SVBony — where writing the target re-asserts
+            // SVB_COOLER_ENABLE — a cooler-OFF would flip straight back on. Going
+            // through the ramp makes the ordering structural instead of a comment
+            // someone has to remember.
+            var rate = req.RampDegPerMinute
+                       ?? profiles.ActiveEquipmentProfile?.CoolerRampDegPerMinute ?? 2.0;
+            if (req.Enabled) {
+                var target = req.TargetTemperature
+                             ?? profiles.ActiveEquipmentProfile?.CoolerTargetTemperature ?? -10;
+                ramp.Start(equip.AuxCamera, target, rate, coolerOnFirst: true,
+                           coolerOffWhenDone: false, source: "UI aux cooldown",
+                           slot: CoolingRampService.Aux);
+                return Results.Ok(new { coolerOn = true, target, ramping = rate > 0, rate });
+            } else {
+                var warmTo = req.WarmTargetC ?? 20;
+                ramp.Start(equip.AuxCamera, warmTo, rate, coolerOnFirst: false,
+                           coolerOffWhenDone: true, source: "UI aux warm-up",
+                           slot: CoolingRampService.Aux);
+                return Results.Ok(new { coolerOn = false, target = warmTo, ramping = rate > 0, rate });
+            }
         });
 
         // ----- Aux focuser selection + connection + manual jog -----
@@ -171,5 +195,10 @@ public static class AuxEndpoints {
 
     public record AuxEnabledRequest(bool Enabled);
     public record AuxIsoRequest(int Iso);
-    public record AuxCoolerRequest(bool Enabled, double? TargetTemperature = null);
+    /// <summary>Body for POST /api/aux/camera/cooler. Mirrors CoolerRequest on the
+    /// main camera: target + ramp rate fall back to the active rig, rate 0 forces
+    /// the old write-once behaviour, WarmTargetC is where a cooler-OFF ramps up to
+    /// before the TEC is powered down.</summary>
+    public record AuxCoolerRequest(bool Enabled, double? TargetTemperature = null,
+                                   double? RampDegPerMinute = null, double? WarmTargetC = null);
 }

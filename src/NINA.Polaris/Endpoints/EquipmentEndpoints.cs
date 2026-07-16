@@ -127,6 +127,12 @@ public static class EquipmentEndpoints {
                 if (!string.IsNullOrWhiteSpace(update.SwitchDriver))
                     r.SwitchDriver = update.SwitchDriver;
                 r.CoolerTargetTemperature = update.CoolerTargetTemperature;
+                // Nullable + HasValue, like SlewConfirmDeg: a partial PUT (e.g. the
+                // liveStackComputeMode patch) omits this field, and writing it
+                // unconditionally would reset a rig where ramping was turned off.
+                // An explicit 0 still gets through — that's the point of nullable.
+                if (update.CoolerRampDegPerMinute.HasValue)
+                    r.CoolerRampDegPerMinute = Math.Max(0, update.CoolerRampDegPerMinute.Value);
                 r.DefaultGain = update.DefaultGain;
                 r.DefaultOffset = update.DefaultOffset;
                 r.DefaultBinning = update.DefaultBinning;

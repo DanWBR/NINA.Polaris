@@ -34,7 +34,7 @@ public class SequencerResumeTests {
 
     private static SequenceContext BareCtx(bool isResume = false) {
         var ctx = new SequenceContext(
-            null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!,
+            null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!,
             NullLogger.Instance);
         ctx.IsResume = isResume;
         return ctx;
@@ -127,7 +127,7 @@ public class SequencerResumeTests {
         var imageWriter = new ImageWriterService(equip, profile, NullLogger<ImageWriterService>.Instance);
         var ctx = new SequenceContext(
             equip, relay, liveStack, null!, null!, null!, null!, null!,
-            imageWriter, profile, new CaptureProgressService(),
+            imageWriter, profile, new CaptureProgressService(), null!,
             NullLogger.Instance);
         return (ctx, equip);
     }

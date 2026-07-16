@@ -209,6 +209,11 @@ builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.PlateSolveProgr
 // Server-authoritative current-exposure tracker so the per-frame countdown
 // ("Xs of Ys") survives a client reconnect across every capture context.
 builder.Services.AddSingleton<CaptureProgressService>();
+// Walks the cooler setpoint at a controlled °C/min, in both directions, so a
+// fast plunge can't condense dew on the sensor window. Singleton: only one ramp
+// may own the setpoint, and a new request has to cancel the one in flight
+// rather than race it.
+builder.Services.AddSingleton<CoolingRampService>();
 // Server-side progress + ETA for the tiled classical RL deconvolution.
 builder.Services.AddSingleton<DeconProgressService>();
 builder.Services.AddSingleton<SlewCenterService>();
