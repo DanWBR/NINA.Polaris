@@ -45,6 +45,20 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     private const double Deg2Rad = Math.PI / 180.0;
     // Star search half-window (px) around the lock position each frame.
     private const int SearchRegion = 15;
+    // GUIDEREC: how far the per-frame search may widen while the star is lost.
+    // Capped because GuideStar.Find takes the BRIGHTEST peak in the window — search
+    // too wide and it locks a neighbour, and the jump lands as a correction that
+    // walks the target out of frame. Past this, re-acquisition takes over (it picks
+    // by proximity, so it can look further safely).
+    private const int MaxRecoverySearchRegion = 60;
+    // Lost frames before the one-shot full-frame re-acquisition fires. ~10 frames
+    // is a few seconds of thin cloud at typical guide exposures — long enough not to
+    // fire on a satellite streak or a gust, short enough that a real cloud-out
+    // recovers on its own instead of waiting for the operator.
+    private const int ReacquireAfterLostFrames = 10;
+    // Max distance (px) from the old lock that re-acquisition will accept a star.
+    // Bounds how far the pointing can shift in one recovery.
+    private const double ReacquireRadiusPx = 150;
     // Default guide-scope focal length when the rig hasn't set one.
     private const double DefaultGuiderFocalLengthMm = 200.0;
 

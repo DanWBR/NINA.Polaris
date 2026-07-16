@@ -131,6 +131,21 @@ public sealed partial class NativeGuider {
             if (_starLostCount % 5 == 1) RaiseAlert("Guide star lost; skipping correction.");
             PushStep(new PortableGuideStep(NowMs(), 0, 0, 0, 0, 0, 0, snr, hfd, false));
             BuildView(curX, curY, snr, false);
+
+            // RE-ACQUISITION. Widening the search (see RecoverySearchRegionFor)
+            // handles a star that merely drifted; it can't help once the star has
+            // left even the widened window. Then the ONLY thing that recovered
+            // guiding was the user doing stop → loop → start by hand, which
+            // re-detects on the full frame. Field report: "a guiagem nativa não
+            // sobrevive a alguns instantes de nuvens — não consegue pegar a estrela
+            // de volta e realinhar. Tenho que dar stop, loop e depois start guiding
+            // manualmente. Isso é crítico para processos de captura longa."
+            // Do that automatically instead, once, after the widened search has had
+            // its chance.
+            if (_starLostCount == ReacquireAfterLostFrames) {
+                await TryReacquireAsync(cam, ct);
+            }
+
             // Back off while the star is gone so a long cloud-out doesn't spin
             // the loop at full tilt hammering captures (and, on short exposures,
             // the shared INDI link). The dwell scales with the exposure period.
@@ -439,7 +454,10 @@ public sealed partial class NativeGuider {
             MeasureGuideStarAsync(ICamera cam, CancellationToken ct) {
         bool useMulti = Rig.NativeMultiStar && _multiStar.Count > 1;
         if (!useMulti) {
-            return await FindStarDetailedAsync(cam, ct);
+            // Widen the window while the star is missing so a star that merely
+            // drifted during a cloud is found again instead of being lost forever.
+            return await FindStarDetailedAsync(cam, ct,
+                RecoverySearchRegionFor(_starLostCount, SearchRegion, MaxRecoverySearchRegion));
         }
         // Multi-star needs the whole field, so clear any ROI.
         try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
@@ -524,6 +542,107 @@ public sealed partial class NativeGuider {
             }
         }
         return (_lockX, _lockY, false);
+    }
+
+    /// <summary>How wide to search for the guide star, given how many consecutive
+    /// frames have already lost it.
+    ///
+    /// While the star is missing the mount keeps tracking with NO corrections, so
+    /// the star drifts — periodic error plus polar-alignment drift. On a typical
+    /// guide scale (2-5"/px) a few minutes of cloud is easily 20-40 px. The fixed
+    /// 15 px window meant that once the star drifted out of it, it was never found
+    /// again even after the sky cleared and it sat there blazing 30 px away: the
+    /// loop stayed in LostLock all night and only a manual stop/loop/start (which
+    /// re-detects on the full frame) brought guiding back.
+    ///
+    /// Widen one base-width every 2 lost frames, capped. The cap is deliberate and
+    /// NOT generous: GuideStar.Find returns the BRIGHTEST peak in the window, so an
+    /// over-wide search will happily lock a neighbouring star, and the resulting
+    /// jump in dx/dy would be applied as a correction — walking the target out of
+    /// frame. Beyond the cap, re-acquisition (TryReacquireAsync) takes over, which
+    /// picks by PROXIMITY instead and can afford to look further.</summary>
+    internal static int RecoverySearchRegionFor(int starLostCount, int baseRegion, int maxRegion) {
+        if (starLostCount <= 1) return baseRegion;
+        var widened = baseRegion * (1 + starLostCount / 2);
+        return Math.Min(widened, maxRegion);
+    }
+
+    /// <summary>Pick the star to re-lock onto after the star was lost: the one
+    /// NEAREST the old lock, within <paramref name="maxRadius"/>, ignoring
+    /// saturated stars and those too close to the frame edge.
+    ///
+    /// Nearest, deliberately — not brightest, which is what AutoSelectStarAsync
+    /// uses when starting fresh. After a cloud-out the original star is the one
+    /// that drifted a little; the brightest star in a 150 px radius may be a
+    /// different star entirely, and re-locking onto it would silently re-frame the
+    /// target mid-session. Nearest keeps the lock as close to the original as the
+    /// sky allows, so the pointing the user set up survives.</summary>
+    internal static (double X, double Y)? PickReacquireStar(
+            IReadOnlyList<NINA.Image.ImageAnalysis.DetectedStar> stars,
+            double lockX, double lockY, double maxRadius,
+            int width, int height, int margin, double satGuard) {
+        (double X, double Y)? best = null;
+        double bestDist = double.MaxValue;
+        foreach (var s in stars) {
+            if (s.X < margin || s.Y < margin || s.X > width - margin || s.Y > height - margin) continue;
+            if (satGuard > 1 && s.Peak >= satGuard * 0.95) continue;
+            var dx = s.X - lockX;
+            var dy = s.Y - lockY;
+            var dist = Math.Sqrt(dx * dx + dy * dy);
+            if (dist > maxRadius) continue;
+            if (dist < bestDist) { bestDist = dist; best = (s.X, s.Y); }
+        }
+        return best;
+    }
+
+    /// <summary>Last-resort recovery: detect on the full frame and re-lock onto the
+    /// star nearest the old lock. This is the automatic version of the stop → loop
+    /// → start dance the user had to do by hand after every cloud.
+    ///
+    /// Re-locking MOVES the lock point, so the correction that follows won't drag
+    /// the star back to where it was — the small residual drift is kept instead of
+    /// fought. That's the right trade: a few px of pointing shift costs one frame's
+    /// worth of alignment (the stacker handles it), whereas the alternative on the
+    /// table was guiding staying dead for the rest of the night.</summary>
+    private async Task TryReacquireAsync(ICamera cam, CancellationToken ct) {
+        try {
+            _logger.LogInformation(
+                "Native guide: star lost for {N} frames; re-acquiring on the full frame", _starLostCount);
+            RaiseAlert("Guide star lost — re-acquiring…");
+            try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
+            var img = await CaptureFullAsync(cam, ct);
+            if (img == null) return;
+            int w = img.Properties.Width, h = img.Properties.Height;
+            var stars = new NINA.Image.ImageAnalysis.StarDetector().Detect(img.Data, w, h);
+            double satGuard = (1 << Math.Max(1, img.Properties.BitDepth)) - 1;
+            var pick = PickReacquireStar(stars, _lockX, _lockY, ReacquireRadiusPx,
+                                         w, h, SearchRegion + 5, satGuard);
+            if (pick == null) {
+                _logger.LogInformation(
+                    "Native guide: re-acquire found no star within {R}px of the lock; still clouded?",
+                    ReacquireRadiusPx);
+                return;
+            }
+            var moved = Math.Sqrt(Math.Pow(pick.Value.X - _lockX, 2) + Math.Pow(pick.Value.Y - _lockY, 2));
+            _lockX = pick.Value.X;
+            _lockY = pick.Value.Y;
+            _haveLock = true;
+            _starLostCount = 0;
+            if (AppState == "LostLock") SetAppState("Guiding");
+            // The multi-star tracker's secondaries are relative to the old lock;
+            // reseed them or it would keep voting for a field that moved.
+            await BuildMultiStarAsync(ct);
+            _logger.LogInformation(
+                "Native guide: re-acquired at ({X:F1},{Y:F1}), {D:F1}px from the old lock",
+                _lockX, _lockY, moved);
+            RaiseAlert($"Guide star re-acquired ({moved:F0}px away); guiding resumed.");
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            // Recovery is best-effort: a failure here must leave the loop running
+            // so the widened search keeps trying on later frames.
+            _logger.LogWarning(ex, "Native guide: re-acquire attempt failed");
+        }
     }
 
     private async Task<(double x, double y, bool found, double snr, double hfd)>
