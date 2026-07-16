@@ -212,6 +212,21 @@
     <Content Remove="wwwroot\sky\data\skydata\dso-thumbs\**" />
   </ItemGroup>
 
+  <!-- THUMPACK-3: keep the converted ncnn GPU models OUT of the package too.
+       Their siblings (.onnx / .rknn / qnn .bin) are gitignored and fetched at
+       runtime, but the ncnn model.ncnn.bin files are committed via Git LFS and so
+       leaked into `dotnet publish` — 246 MB (bge 104 + denoise 142) straight into
+       every distro. Exclude the whole ncnn/ tree from the publish output (they
+       stay in the repo for a future download pack). Absence degrades cleanly:
+       NcnnInferenceService.ResolveModel returns null when the .param is gone, so
+       GraXpertService skips the ncnn-Vulkan path and falls back to the GraXpert
+       CLI / ONNX — no crash, just no GPU-Vulkan accel until the models are
+       obtained separately. As with the thumbs, a source-tree `dotnet run` still
+       serves them from wwwroot, so dev keeps GPU accel. -->
+  <ItemGroup>
+    <Content Remove="wwwroot\graxpert\models\ncnn\**" />
+  </ItemGroup>
+
   <!-- RKNN: Rockchip RKNPU2 runtime for GraXpert AI acceleration on
        RK3588 (Orange Pi 5 Pro, etc.). Drop the aarch64 librknnrt.so into
        external/rknpu/aarch64/ via scripts/fetch-librknnrt.sh so the
