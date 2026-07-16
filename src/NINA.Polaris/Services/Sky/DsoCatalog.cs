@@ -151,7 +151,14 @@ public class DsoCatalog {
                        constellation, aliases
                 FROM objects
                 WHERE name LIKE $like COLLATE NOCASE
-                   OR common_name LIKE $like COLLATE NOCASE
+                   -- common_name is a COMMA-SEPARATED LIST, exactly like aliases
+                   -- ('Great Orion Nebula,Orion Nebula'), so it needs the same
+                   -- contains-match. It used to take the prefix pattern, which made
+                   -- only the FIRST name in the list searchable: 'Orion Nebula'
+                   -- found nothing because that row starts with 'Great'. Two CSV
+                   -- columns side by side, one matched right — the other silently
+                   -- hid every secondary common name in the catalogue.
+                   OR common_name LIKE $aliasLike COLLATE NOCASE
                    OR aliases LIKE $aliasLike COLLATE NOCASE
                 ORDER BY (name = $exact COLLATE NOCASE) DESC,
                          CASE WHEN magnitude IS NULL THEN 1 ELSE 0 END,

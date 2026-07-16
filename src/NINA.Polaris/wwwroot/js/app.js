@@ -10314,6 +10314,85 @@ function ninaApp() {
         // handler that hides the element. Files come from
         // scripts/build-dso-thumbs.py (DSS2 cutouts) under
         // /sky/data/skydata/dso-thumbs/.
+        /// Does this URL actually decode as an image? The SKY card paints its thumb
+        /// with a CSS background-image on a <div>, which — unlike an <img> — fires
+        /// no error event, so a 404 just silently shows nothing and we'd have no
+        /// way to fall through to the next candidate. Preloading answers that, and
+        /// warms the browser cache for the paint that follows.
+        _imageLoads(url) {
+            return new Promise(resolve => {
+                if (!url) { resolve(false); return; }
+                const img = new Image();
+                img.onload = () => resolve(true);
+                img.onerror = () => resolve(false);
+                img.src = url;
+            });
+        },
+
+        /// Resolve a bundled DSO cutout for an object the SKY engine handed us,
+        /// falling back to the catalogue when the name isn't a catalogue code.
+        ///
+        /// dsoThumbUrl() slugs by parsing letters+digits out of the name, so it
+        /// only ever matches catalogue names ("M 8", "NGC 6523"). The SKY engine
+        /// reports COMMON names for the bright showpieces — "Lagoon Nebula",
+        /// "Trifid Nebula" — which have no digits, so the regex fails, the slug
+        /// comes back empty, and the object with a perfectly good bundled JPEG
+        /// gets no thumb. Those are exactly the objects a user clicks.
+        /// /api/sky/catalog/search maps common name -> catalogue name (its `name`
+        /// field is the catalogue code, `commonName` the pretty one), which is the
+        /// same lookup the card already does for angular size.
+        async _resolveDsoThumb(obj) {
+            const direct = this.dsoThumbUrl({ name: obj.name });
+            if (direct && await this._imageLoads(direct)) return direct;
+
+            if (!obj.name) return '';
+            try {
+                const s = await this.apiGet(
+                    '/api/sky/catalog/search?query=' + encodeURIComponent(obj.name));
+                for (const hit of (s?.results || []).slice(0, 4)) {
+                    // hit.name is the catalogue code; aliases carry the other
+                    // catalogues (an object in the bundle under NGC may be missing
+                    // under M, and vice versa).
+                    for (const candidate of [hit.name, ...(hit.aliases || [])]) {
+                        const url = this.dsoThumbUrl({ name: candidate });
+                        if (url && await this._imageLoads(url)) return url;
+                    }
+                }
+            } catch (e) { /* no catalogue match — fall through to the online lookup */ }
+            return '';
+        },
+
+        /// Thumbnail for the SKY info card, offline-first. Order matters:
+        ///   1. bundled DSO cutout   — 17k JPEGs shipped in the .deb, no network,
+        ///                             instant. Resolves common names via catalogue.
+        ///   2. localUrl             — server already cached the image on disk;
+        ///                             same-origin, needs ?token= (path is /api/*).
+        ///   3. thumbnailUrl         — Wikipedia/NASA CDN. Needs internet.
+        ///   4. fullUrl              — last resort, can be several MB.
+        /// Mirrors _loadCelestialThumb's priority; (1) is added because the card
+        /// sits in front of the bundle and had no reason to ignore it.
+        async _loadSkyCardThumb(obj) {
+            if (!obj || !obj.name) return;
+            const stillShowing = () => this.skyInfo.title === obj.name;
+            try {
+                const dso = await this._resolveDsoThumb(obj);
+                if (dso) {
+                    if (stillShowing()) this.skyInfo.imageUrl = dso;
+                    return;
+                }
+                const r = await this.apiGet(
+                    '/api/sky/image?name=' + encodeURIComponent(obj.name));
+                if (!r || !r.available) return;
+                const url = r.localUrl ? this.authUrl(r.localUrl)
+                          : (r.thumbnailUrl || r.fullUrl || '');
+                // Guard against a card that was closed / switched while we waited:
+                // painting here would put the wrong object's photo on screen.
+                if (url && stillShowing()) this.skyInfo.imageUrl = url;
+            } catch (e) {
+                console.debug('[Polaris] sky card thumb lookup failed for', obj.name, e);
+            }
+        },
+
         dsoThumbUrl(obj) {
             if (!obj) return '';
             let slug = '';
@@ -31866,16 +31945,18 @@ function ninaApp() {
                 }
             }
 
-            // Async fetch the thumbnail from the Tonight's Best image
-            // endpoint. Card opens immediately with the icon fallback;
-            // the photo slides in if our catalog knows the name.
-            try {
-                const r = await this.apiGet(`/api/sky/image?name=${encodeURIComponent(obj.name)}`);
-                if (r && r.available && r.thumbnailUrl
-                    && this.skyInfo.title === obj.name) {
-                    this.skyInfo.imageUrl = r.thumbnailUrl;
-                }
-            } catch (e) { /* no photo, keep icon */ }
+            // Card thumbnail. Opens with the icon fallback; the photo slides in.
+            //
+            // This used to take ONLY r.thumbnailUrl from /api/sky/image — a remote
+            // Wikipedia/NASA CDN URL — which made it the one thumbnail path in the
+            // app that required internet. The rig is an SBC at a dark site with no
+            // internet, so the SKY card never showed a photo while Tonight's Best
+            // (bundled DSO cutouts) and the AUTORUN cards (localUrl-first) both
+            // worked. Field report: "os thumbs aparecem no tonight's best, mas não
+            // no card do dso selecionado no sky."
+            // It also skipped r.localUrl entirely, so even a server-side cached
+            // copy on disk went unused. Now it walks the same cascade as its twins.
+            await this._loadSkyCardThumb(obj);
 
             // Angular size. The Stellarium engine doesn't hand us a
             // reliable extent for DSOs, so if the click didn't carry one
