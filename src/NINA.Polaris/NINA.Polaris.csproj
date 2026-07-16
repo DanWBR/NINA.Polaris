@@ -197,6 +197,21 @@
        Include> needed (adding one duplicates every file and fails
        the build with "Duplicate 'Content' items were included"). -->
 
+  <!-- THUMPACK-1: keep the ~215 MB DSO thumbnail set OUT of the
+       distribution package. dso-thumbs/ is 17k DSS2 cutouts (Git LFS);
+       shipping it took the .deb from ~80 MB to ~450 MB. Polaris downloads
+       it on demand into the writable data dir instead (DsoThumbPackService).
+       Remove it from the publish output only — a source-tree `dotnet run`
+       still serves it straight from wwwroot, so dev/testing is unaffected;
+       only `dotnet publish` (the packaged build) drops it.
+
+       The curated dso-thumbs-core/ subset (a few hundred showpieces, real
+       bytes, NOT LFS) is a SIBLING folder, so this glob doesn't match it —
+       it stays bundled so M8/M42/M31 etc. render offline out of the box. -->
+  <ItemGroup>
+    <Content Remove="wwwroot\sky\data\skydata\dso-thumbs\**" />
+  </ItemGroup>
+
   <!-- RKNN: Rockchip RKNPU2 runtime for GraXpert AI acceleration on
        RK3588 (Orange Pi 5 Pro, etc.). Drop the aarch64 librknnrt.so into
        external/rknpu/aarch64/ via scripts/fetch-librknnrt.sh so the

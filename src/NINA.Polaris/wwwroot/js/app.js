@@ -637,6 +637,15 @@ function ninaApp() {
         },
         _dssPollTimer: null,
 
+        // THUMBPACK: on-demand full DSO thumbnail set (~215 MB). Bundled build
+        // ships only the curated core subset; this downloads the rest.
+        thumbPack: {
+            running: false, phase: 'idle', bytesDownloaded: 0, bytesTotal: 0,
+            entriesExtracted: 0, entriesTotal: 0, error: null,
+            installed: false, installedCount: 0, coreCount: 0
+        },
+        _thumbPackPollTimer: null,
+
         // Remote terminal (xterm.js + /ws/terminal SSH bridge).
         // Credentials are never persisted, every Connect prompts
         // again. Terminal:Enabled=false on the server returns 403
@@ -10485,6 +10494,58 @@ function ninaApp() {
         },
         async cancelDssDownload() {
             try { await this.apiPost('/api/sky/dss/cancel'); } catch (e) {}
+            this.toast('Cancelling download…', 'warn');
+        },
+
+        // THUMBPACK: full DSO thumbnail-pack download (mirrors the DSS flow).
+        async loadThumbPackStatus() {
+            try {
+                const s = await this.apiGet('/api/sky/dso-thumbs/status');
+                this.thumbPack = Object.assign(this.thumbPack, s);
+            } catch (e) { /* card may not be visible yet */ }
+            if (this.thumbPack.running && !this._thumbPackPollTimer) {
+                this._thumbPackPollTimer = setInterval(() => this._pollThumbPack(), 1500);
+            }
+        },
+        async _pollThumbPack() {
+            try {
+                const s = await this.apiGet('/api/sky/dso-thumbs/status');
+                this.thumbPack = Object.assign(this.thumbPack, s);
+            } catch (e) { /* keep last */ }
+            if (!this.thumbPack.running && this._thumbPackPollTimer) {
+                clearInterval(this._thumbPackPollTimer); this._thumbPackPollTimer = null;
+                if (this.thumbPack.installed && !this.thumbPack.error) {
+                    this.toast('DSO thumbnail pack installed ('
+                        + this.thumbPack.installedCount + ' images).', 'ok');
+                } else if (this.thumbPack.error) {
+                    this.toast('Thumbnail pack download failed: ' + this.thumbPack.error, 'error');
+                }
+            }
+        },
+        thumbPackPercent() {
+            const t = this.thumbPack;
+            if (t.phase === 'extracting' && t.entriesTotal > 0)
+                return Math.floor(100 * t.entriesExtracted / t.entriesTotal);
+            if (t.bytesTotal > 0)
+                return Math.floor(100 * t.bytesDownloaded / t.bytesTotal);
+            return 0;
+        },
+        async startThumbPackDownload() {
+            try {
+                const resp = await this.apiPost('/api/sky/dso-thumbs/download');
+                const s = await resp.json().catch(() => ({}));
+                this.thumbPack = Object.assign(this.thumbPack, s, { running: true });
+                this.toast('Downloading DSO thumbnail pack (~215 MB). Runs in the background.', 'info');
+                if (!this._thumbPackPollTimer)
+                    this._thumbPackPollTimer = setInterval(() => this._pollThumbPack(), 1500);
+            } catch (e) {
+                let msg = e.message;
+                try { const b = JSON.parse(e.body || '{}'); if (b.error) msg = b.error; } catch {}
+                this.toast('Could not start download: ' + msg, 'error');
+            }
+        },
+        async cancelThumbPackDownload() {
+            try { await this.apiPost('/api/sky/dso-thumbs/cancel'); } catch (e) {}
             this.toast('Cancelling download…', 'warn');
         },
 

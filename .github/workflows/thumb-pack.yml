@@ -1,0 +1,59 @@
+name: Publish DSO thumbnail pack
+
+# THUMBPACK: the full ~215 MB DSO thumbnail set is excluded from the app package
+# (NINA.Polaris.csproj) and downloaded on demand by DsoThumbPackService from a
+# FIXED, version-independent release tag ("data-pack"). This workflow (re)builds
+# that asset and uploads it there, decoupled from the per-version app releases so
+# a 215 MB asset isn't re-uploaded on every app release.
+#
+# Run it manually (Actions -> "Publish DSO thumbnail pack" -> Run workflow) after
+# regenerating the thumbnails (scripts/build-dso-thumbs.py) or changing the
+# catalogue. It also runs automatically when the generator or catalogue changes on
+# the default branch, so the pack can't silently drift from the app's expectations.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - 'scripts/build-dso-thumbs.py'
+      - 'src/NINA.Polaris/wwwroot/catalogs/dso/dso.db'
+
+permissions:
+  contents: write
+
+jobs:
+  publish-pack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with LFS — the thumbs live in Git LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Build the zip (stored, JPEGs don't compress)
+        run: |
+          THUMBS="src/NINA.Polaris/wwwroot/sky/data/skydata/dso-thumbs"
+          count=$(find "$THUMBS" -name '*.jpg' | wc -l)
+          echo "Packing $count thumbnails from $THUMBS"
+          if [ "$count" -lt 1000 ]; then
+            echo "::error::Only $count thumbs found — LFS pull likely failed. Aborting."
+            exit 1
+          fi
+          # -0 = store (no compression): the JPEGs are already compressed, so
+          # deflate would burn CPU for ~0 gain. -j flattens to a bare name/slug.
+          ( cd "$THUMBS" && zip -0 -j -q -r "$GITHUB_WORKSPACE/polaris-dso-thumbs.zip" . )
+          ls -la polaris-dso-thumbs.zip
+
+      - name: Upload to the fixed data-pack release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: data-pack
+          name: Data pack (DSO thumbnails)
+          body: |
+            Version-independent data assets downloaded on demand by Polaris.
+            `polaris-dso-thumbs.zip` — full DSO thumbnail set (~215 MB), served at
+            the SKY object cards. The app ships only a curated core subset and
+            fetches this the first time the user asks for the full set.
+          files: polaris-dso-thumbs.zip
+          fail_on_unmatched_files: true

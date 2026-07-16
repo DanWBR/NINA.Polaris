@@ -421,6 +421,9 @@ builder.Services.AddSingleton<BenchmarkService>();
 // higher HEALPix orders (4 ~110 MB, 5 ~400 MB) into the bundled skydata dir
 // so the SKY map reaches ASIAIR-grade detail without shipping them in git.
 builder.Services.AddSingleton<NINA.Polaris.Services.External.DssDownloadService>();
+// THUMBPACK: on-demand downloader for the full DSO thumbnail set, excluded from
+// the package to keep it slim. Serves from the download dir + bundled core subset.
+builder.Services.AddSingleton<NINA.Polaris.Services.External.DsoThumbPackService>();
 // Camera sensor analysis (e/ADU, read noise, full well, dynamic range
 // vs gain via the photon-transfer-curve method). On-demand, like the
 // benchmark; launched from the Equipment camera card.
@@ -738,6 +741,56 @@ contentTypes.Mappings[".eph"] = "application/octet-stream";
             /* client went away mid-tile — normal during fast panning */
         } catch (Exception ex) {
             app.Logger.LogWarning(ex, "Failed to serve downloaded DSS tile {Path}", full);
+            if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 500;
+        }
+    });
+}
+
+// THUMBPACK: serve /sky/data/skydata/dso-thumbs/{slug}.jpg from the DOWNLOADED
+// pack (data dir) first, then the bundled CORE subset (wwwroot/dso-thumbs-core).
+// The full dso-thumbs/ dir is excluded from publish, so on a packaged install
+// this middleware is the only thing that answers these URLs — a hit on a
+// downloaded or curated thumb, a fall-through (404) otherwise. In a source-tree
+// dev run the full dir still exists in wwwroot, so a miss here falls through to
+// UseStaticFiles and serves it — dev sees every thumb without downloading.
+{
+    var pack = app.Services.GetRequiredService<NINA.Polaris.Services.External.DsoThumbPackService>();
+    var packRoot = Path.GetFullPath(pack.PackDir);
+    var coreRoot = Path.GetFullPath(pack.CoreDir);
+    const string thumbPrefix = "/sky/data/skydata/dso-thumbs/";
+    app.Use(async (ctx, next) => {
+        var path = ctx.Request.Path.Value;
+        if (path == null
+            || !path.StartsWith(thumbPrefix, StringComparison.Ordinal)
+            || !HttpMethods.IsGet(ctx.Request.Method)) {
+            await next();
+            return;
+        }
+        // Slug only (no subdirs); sanitise against traversal, then resolve
+        // pack -> core.
+        var slug = Path.GetFileNameWithoutExtension(
+            Uri.UnescapeDataString(path.Substring(thumbPrefix.Length)));
+        var full = pack.Resolve(slug ?? "");
+        if (full == null) { await next(); return; }   // dev: static serves the full dir; prod: 404
+        // Defensive: Resolve builds paths under packRoot/coreRoot, but confirm.
+        var resolved = Path.GetFullPath(full);
+        if (!resolved.StartsWith(packRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            && !resolved.StartsWith(coreRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)) {
+            await next();
+            return;
+        }
+        try {
+            ctx.Response.ContentType = "image/jpeg";
+            ctx.Response.Headers["Cache-Control"] = "public, max-age=604800";   // 7 days
+            var fi = new FileInfo(resolved);
+            ctx.Response.ContentLength = fi.Length;
+            await using var fs = new FileStream(resolved, FileMode.Open, FileAccess.Read,
+                FileShare.Read, 65536, useAsync: true);
+            await fs.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
+        } catch (OperationCanceledException) {
+            /* client navigated away — normal */
+        } catch (Exception ex) {
+            app.Logger.LogWarning(ex, "Failed to serve DSO thumb {Path}", resolved);
             if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 500;
         }
     });
@@ -1145,6 +1198,7 @@ app.MapBenchmarkEndpoints();
 app.MapSensorAnalysisEndpoints();
 app.MapSirilEndpoints();
 app.MapDssEndpoints();
+app.MapDsoThumbPackEndpoints();
 app.MapGraXpertEndpoints();
 app.MapUpdateEndpoints();
 app.MapCropEndpoints();
