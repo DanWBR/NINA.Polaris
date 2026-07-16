@@ -113,4 +113,40 @@ public class IndiCameraIdempotencyTests {
             ["Gain"] = 120
         }), Is.True);
     }
+
+    // ── FIELD7-1: never write CCD_FRAME (ROI) mid-exposure ──────────────────
+    //
+    // Field log 2026-07-16: an AF/solve teardown restored the SV405CC to full
+    // frame while a sub was still exposing. Writing CCD_FRAME re-allocates the
+    // driver's capture buffer, so SVBGetVideoData timed out — a wasted frame plus
+    // a driver-restart cycle. SetSubframeAsync must abort an in-flight exposure
+    // before changing geometry. This pins the decision that gates that abort.
+
+    /// <summary>The bug's exact condition: geometry is changing AND the driver is
+    /// mid-exposure → must abort first. This is the ROI-reset-during-a-sub case.</summary>
+    [Test]
+    public void ShouldAbort_WhenChangingGeometryMidExposure() {
+        Assert.That(IndiCamera.ShouldAbortInFlightBeforeSubframe(
+            exposureInFlight: true, geometryChanges: true), Is.True);
+    }
+
+    /// <summary>Nothing exposing (the common path: AF/guide teardown after its own
+    /// capture already finished) → no abort, just write.</summary>
+    [Test]
+    public void ShouldNotAbort_WhenNothingIsExposing() {
+        Assert.That(IndiCamera.ShouldAbortInFlightBeforeSubframe(
+            exposureInFlight: false, geometryChanges: true), Is.False);
+    }
+
+    /// <summary>Same geometry → the idempotency guard returns before this is even
+    /// consulted, but be explicit: an unchanged frame never needs an abort even if
+    /// a capture is running (the guider's every-frame full-frame reset must not
+    /// interrupt exposures).</summary>
+    [Test]
+    public void ShouldNotAbort_WhenGeometryUnchanged() {
+        Assert.That(IndiCamera.ShouldAbortInFlightBeforeSubframe(
+            exposureInFlight: true, geometryChanges: false), Is.False);
+        Assert.That(IndiCamera.ShouldAbortInFlightBeforeSubframe(
+            exposureInFlight: false, geometryChanges: false), Is.False);
+    }
 }

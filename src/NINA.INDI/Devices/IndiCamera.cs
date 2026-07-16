@@ -25,6 +25,16 @@ namespace NINA.INDI.Devices;
 public class IndiCamera : ICamera {
     private readonly IndiClient _client;
     private TaskCompletionSource<IImageData>? _exposureTcs;
+    // FIELD7-1: true from the moment CCD_EXPOSURE is sent until the driver is done
+    // exposing (BLOB delivered, timed out, or aborted). Guards SetSubframeAsync so
+    // CCD_FRAME is never rewritten mid-exposure — that re-allocates the driver's
+    // capture buffer and makes the readout time out (field log 2026-07-16: an
+    // AF/solve teardown reset the SV405CC to full frame while a sub was still
+    // exposing → SVB_ERROR_TIMEOUT). Deliberately NOT cleared when CaptureAsync is
+    // merely CANCELLED: cancelling the awaiting task does not stop the driver's
+    // soft-triggered exposure, so it stays "in flight" until a BLOB, timeout, or
+    // an explicit abort actually ends it.
+    private volatile bool _exposureInFlight;
     // Native CCD_VIDEO_STREAM subscribers, added by CameraStreamService
     // when a native stream is active. Frames arrive via OnBlobReceived
     // and fan out to every subscriber. Concurrent for safety against
@@ -697,6 +707,10 @@ public class IndiCamera : ICamera {
         // caller didn't specify (e.g. PREVIEW snaps).
         await TrySetFrameTypeAsync(opts?.ImageType ?? "LIGHT", ct);
 
+        // Mark the driver as exposing BEFORE the write, so a concurrent
+        // SetSubframeAsync (an AF/solve teardown restoring full frame) sees it and
+        // aborts first instead of corrupting this exposure.
+        _exposureInFlight = true;
         await _client.SetNumberAsync(DeviceName, "CCD_EXPOSURE",
             new Dictionary<string, double> { ["CCD_EXPOSURE_VALUE"] = exposureSeconds }, ct);
 
@@ -715,6 +729,7 @@ public class IndiCamera : ICamera {
             // Signal the wedged-driver watchdog before failing the capture.
             // A missing BLOB after the deadline is the canonical symptom of a
             // driver that stopped delivering frames (a reconnect won't fix it).
+            _exposureInFlight = false;   // gave up on this frame
             _client.RaiseBlobTimeout(DeviceName);
             localTcs.TrySetException(new TimeoutException(
                 $"INDI camera {DeviceName} did not deliver a BLOB within " +
@@ -737,6 +752,7 @@ public class IndiCamera : ICamera {
     public async Task AbortExposureAsync(CancellationToken ct = default) {
         await _client.SetSwitchAsync(DeviceName, "CCD_ABORT_EXPOSURE",
             new Dictionary<string, bool> { ["ABORT"] = true }, ct);
+        _exposureInFlight = false;   // told the driver to stop; no longer exposing
         _exposureTcs?.TrySetCanceled();
     }
 
@@ -791,19 +807,50 @@ public class IndiCamera : ICamera {
         // skipping the write when CCD_FRAME already holds the requested
         // geometry. Only applied once we know real dimensions (width/height>0)
         // so the first, genuine configuration still goes through.
-        if (width > 0 && height > 0
-            && (int)_client.GetNumber(DeviceName, "CCD_FRAME", "X") == x
+        var geometryChanges = !(
+            (int)_client.GetNumber(DeviceName, "CCD_FRAME", "X") == x
             && (int)_client.GetNumber(DeviceName, "CCD_FRAME", "Y") == y
             && (int)_client.GetNumber(DeviceName, "CCD_FRAME", "WIDTH") == width
-            && (int)_client.GetNumber(DeviceName, "CCD_FRAME", "HEIGHT") == height) {
-            return;
+            && (int)_client.GetNumber(DeviceName, "CCD_FRAME", "HEIGHT") == height);
+        if (!geometryChanges) return;
+
+        // FIELD7-1: the geometry IS changing. Never write CCD_FRAME while the
+        // driver is mid-exposure — that re-allocates its capture buffer and the
+        // readout times out (field 2026-07-16: an AF/solve teardown reset the
+        // SV405CC to full frame during a live sub → SVB_ERROR_TIMEOUT → a wasted
+        // frame + a driver-restart cycle). The in-flight frame is being torn down
+        // anyway (nobody changes ROI meaning to keep the current frame), so abort
+        // it cleanly first, then reconfigure — the same stop-before-start the
+        // native SDK path already does. This also covers the nasty case: a
+        // cancelled AF/solve leaves the driver soft-trigger exposing (cancelling
+        // CaptureAsync only cancels the awaiting task, not the driver), so its
+        // teardown reaches here with _exposureInFlight still true.
+        if (ShouldAbortInFlightBeforeSubframe(_exposureInFlight, geometryChanges)) {
+            try { await AbortExposureAsync(ct); } catch { /* best effort; still reconfigure */ }
+            // Let the driver finish tearing the aborted frame down before we
+            // re-allocate its buffer, or the write races the abort.
+            try { await Task.Delay(SubframeAbortSettleMs, ct); } catch (OperationCanceledException) { }
         }
+
         await _client.SetNumberAsync(DeviceName, "CCD_FRAME",
             new Dictionary<string, double> {
                 ["X"] = x, ["Y"] = y,
                 ["WIDTH"] = width, ["HEIGHT"] = height
             }, ct);
     }
+
+    /// <summary>Settle delay (ms) between aborting an in-flight exposure and
+    /// rewriting CCD_FRAME, so the driver finishes releasing the old capture
+    /// buffer before we ask it to re-allocate.</summary>
+    private const int SubframeAbortSettleMs = 300;
+
+    /// <summary>FIELD7-1 guard: writing CCD_FRAME mid-exposure wedges the readout,
+    /// so a geometry change while an exposure is in flight must abort that exposure
+    /// first. No abort when nothing is exposing (the common path — AF/guide teardown
+    /// after its own capture already completed) or when the geometry is unchanged
+    /// (the idempotency guard handles that before we get here).</summary>
+    internal static bool ShouldAbortInFlightBeforeSubframe(bool exposureInFlight, bool geometryChanges)
+        => exposureInFlight && geometryChanges;
 
     private void OnBlobReceived(IndiBlobProperty blob) {
         if (blob.Device != DeviceName) return;
@@ -925,6 +972,7 @@ public class IndiCamera : ICamera {
                         try { sub(imageData); } catch { /* one subscriber's bug shouldn't kill the loop */ }
                     }
                 } else {
+                    _exposureInFlight = false;   // the driver delivered; it's done exposing
                     _exposureTcs?.TrySetResult(imageData);
                 }
             } catch (Exception ex) {
