@@ -428,10 +428,32 @@ public class ImageRelayService : IDisposable {
             // what's on the LIVE canvas, so annotate should target it.
             _latestImage = buffer;
             _latestImageData = rgb;
-            // Invalidate the cached one-shot JPEG (as RelayImageAsync does) so
-            // /api/livestack/preview re-encodes from THIS colour stack instead of
-            // serving a stale JPEG left over from an earlier raw/mono frame.
-            _latestJpeg = null;
+            // THE "colour frame flips to B&W" BUG (field, 2026-07-16).
+            //
+            // This used to set _latestJpeg = null, reasoning that invalidating the
+            // cache would make /api/livestack/preview "re-encode from THIS colour
+            // stack". It does re-encode — as GREYSCALE. GetLatestJpeg falls back to
+            // ImageBuffer.ToJpeg(), whose only encoder is JpegHelper.EncodeGrayscale;
+            // there is no colour path through it, because ImageBuffer carries a
+            // single plane. So the sequence the user kept seeing was:
+            //   1. this method renders the RGB JPEG and broadcasts it  → colour
+            //   2. ...and then throws that exact JPEG away
+            //   3. the client pulls /api/livestack/preview             → greyscale
+            //   4. the greyscale preview paints over the colour frame  → B&W
+            // Confirmed by LIVE-TRACE: every frame logged
+            // `out{branch=COLOUR(debayer-per-plane -> RGB JPEG)} ch=3`, i.e. the
+            // server ALWAYS sent colour — the flip was never on the stacking side,
+            // which is why chasing _colorActive / CCD_CFA dropouts never found it.
+            // The histograms of the colour and B&W screenshots were identical
+            // (MAX 59206, MIN 223) precisely because the DATA never changed: same
+            // _latestImage, different encoder.
+            //
+            // So: cache the colour JPEG we just rendered. The preview then serves
+            // the exact image that's on the canvas, and skips a redundant re-encode
+            // (that fallback took 2.7 s on the SBC for a 4144x2822 frame).
+            // ToJpeg()'s greyscale stays correct for the mono/raw path in
+            // RelayImageAsync, which still nulls the cache on purpose.
+            _latestJpeg = jpeg;
             var header = buffer.GetStreamHeader((int)kind);
             var frame = new byte[4 + header.Length + jpeg.Length];
             BitConverter.GetBytes(header.Length).CopyTo(frame, 0);

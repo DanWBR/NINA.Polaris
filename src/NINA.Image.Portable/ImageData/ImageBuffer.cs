@@ -140,6 +140,21 @@ public class ImageBuffer : IImageBuffer {
         return ms.ToArray();
     }
 
+    /// <summary>Encode this buffer as a JPEG. ALWAYS GREYSCALE — an ImageBuffer
+    /// holds a single plane, so there is nothing here to make colour from.
+    ///
+    /// Read that literally before using this as a "give me a preview of the
+    /// current frame" helper. If the source was a colour (3-plane) stack, this
+    /// silently returns a B&W rendering of plane 0: no error, no warning, just the
+    /// wrong picture. That cost a long-lived field bug — the LIVE colour stack was
+    /// relayed correctly over the WS and then painted over by a greyscale
+    /// /api/livestack/preview that landed here (see ImageRelayService
+    /// .RelayRgbJpegAsync, which now caches its own RGB JPEG instead of forcing a
+    /// re-encode through this method).
+    ///
+    /// For colour data use FitsThumbnailer.RenderJpegFromRgbPlanes (stretches per
+    /// plane, encodes via JpegHelper.EncodeRgb). This method is right for genuinely
+    /// mono frames and for raw CFA frames the client will debayer itself.</summary>
     public byte[] ToJpeg(int quality = 85) {
         var stretched = AutoStretch.Apply(_pixels, Width, Height, BitDepth);
         return JpegHelper.EncodeGrayscale(stretched, Width, Height, quality);
