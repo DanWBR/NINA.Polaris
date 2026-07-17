@@ -9,7 +9,7 @@ deploy-website.yml:
   handbook.jsonl  a chunked RAG corpus: one JSON record per section,
                   with metadata and a deep link back to the web edition
 
-The RAG corpus is the ingestion source for the Polaris Assistant (an
+The RAG corpus is the ingestion source for the Canopus Assistant (an
 external module): each record is a retrievable unit carrying its part,
 chapter, and section titles plus a stable URL into the HTML handbook so
 the assistant can cite and link to the exact section. Quarto-only markup

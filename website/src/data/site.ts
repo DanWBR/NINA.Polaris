@@ -47,7 +47,7 @@ export const footerCols = [
     links: [
       { label: 'All features', href: '/features', external: false },
       { label: 'AI Tools', href: '/ai-tools', external: false },
-      { label: 'Polaris Assistant', href: '/assistant', external: false },
+      { label: 'Canopus Assistant', href: '/assistant', external: false },
       { label: 'Getting started', href: '/getting-started', external: false },
       { label: 'About', href: '/about', external: false },
       { label: 'Download & Install', href: '/install', external: false },

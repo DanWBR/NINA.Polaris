@@ -1,6 +1,6 @@
-# Polaris Assistant {#sec-assistant}
+# Canopus Assistant {#sec-assistant}
 
-Everything else in this handbook is free and open source. **Polaris
+Everything else in this handbook is free and open source. **Canopus
 Assistant** is the one exception: an optional, paid AI companion that
 rides inside the Polaris web interface, and whose subscription revenue
 funds the ongoing development of Polaris itself. It is entirely
@@ -132,7 +132,7 @@ and hosted alongside the service.
 ## Why it is a separate product {#sec-assistant-boundary}
 
 Polaris is licensed under the AGPLv3, which is what keeps it free and
-open. Polaris Assistant is closed source and commercial, and the two are
+open. Canopus Assistant is closed source and commercial, and the two are
 kept cleanly separable on purpose: the assistant runs as an entirely
 separate service and only ever talks to Polaris through the same public
 web API that any other client uses. Nothing in open-source Polaris
