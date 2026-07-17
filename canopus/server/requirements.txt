@@ -1,7 +1,8 @@
-# Cloud backend. Mock provider + mock billing need only fastapi + uvicorn; the
-# openai package is only used when ASSISTANT_PROVIDER=azure, and stripe only when
-# STRIPE_API_KEY is set (real billing).
+# Open Canopus server. The agent loop + MockProvider need nothing; local_server
+# (the SBC / on-device tier) needs fastapi + uvicorn to serve the client + WS,
+# and httpx for LlamaServerProvider to reach the local llama.cpp llama-server.
+# The hosted CLOUD backend (Azure provider, Stripe billing) lives in a separate
+# private repo and brings its own deps — none of it is required here.
 fastapi>=0.110
 uvicorn[standard]>=0.29
-openai>=1.30
-stripe>=9.0
+httpx>=0.27

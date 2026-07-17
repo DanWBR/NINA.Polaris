@@ -47,6 +47,7 @@ namespace NINA.Polaris.Middleware;
 ///   /phd2-vnc/*       (noVNC static client — Windows/TightVNC)
 ///   /phd2-vnc-ws      (WebSocket bridge to local TightVNC TCP)
 ///   /indi-web/*       (reverse-proxied INDI Web Manager)
+///   /canopus/*        (reverse-proxied local Canopus assistant)
 ///   /sky/*            (Stellarium sub-app, includes API calls back
 ///                      to /sky/data/*)
 ///
@@ -101,6 +102,7 @@ public class AuthMiddleware {
             || path.StartsWithSegments("/phd2-vnc")        // noVNC static + /phd2-vnc-ws bridge
             || path.StartsWithSegments("/phd2-vnc-ws")
             || path.StartsWithSegments("/indi-web")
+            || path.StartsWithSegments("/canopus")         // reverse-proxied local assistant
             || path.StartsWithSegments("/sky");
     }
 

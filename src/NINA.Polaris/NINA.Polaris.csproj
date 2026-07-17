@@ -272,4 +272,36 @@
     </Content>
   </ItemGroup>
 
+  <!-- CANOPUS: the OPEN local assistant server (agent loop + llama-server
+       provider + knowledge base), the chat client, and the shared contracts.
+       Copied beside the app so the "On this server (SBC)" backend
+       (CanopusServerService) can launch `uvicorn local_server:app` and serve the
+       client, and so agent.py's ../shared/tools/catalog.json resolves. The large
+       model + llama.cpp runtime are NOT bundled — they download on demand
+       (CanopusModelService). Tests + __pycache__ are excluded. -->
+  <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)..\..\canopus\server\**\*.py"
+             Exclude="$(MSBuildThisFileDirectory)..\..\canopus\server\**\test_*.py;$(MSBuildThisFileDirectory)..\..\canopus\server\**\__pycache__\**">
+      <Link>canopus\server\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(MSBuildThisFileDirectory)..\..\canopus\server\requirements.txt">
+      <Link>canopus\server\requirements.txt</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(MSBuildThisFileDirectory)..\..\canopus\server\knowledge\**\*">
+      <Link>canopus\server\knowledge\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(MSBuildThisFileDirectory)..\..\canopus\client\**\*"
+             Exclude="$(MSBuildThisFileDirectory)..\..\canopus\client\**\.gitignore">
+      <Link>canopus\client\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(MSBuildThisFileDirectory)..\..\canopus\shared\**\*">
+      <Link>canopus\shared\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

@@ -299,6 +299,14 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<IndiDriverWatchdog
 // gracefully short-circuits on Windows / macOS via IsSupportedOs.
 builder.Services.AddSingleton<NetworkManagerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<NetworkManagerService>());
+// CANOPUS: local "On this server (SBC)" assistant backend. The model/runtime
+// downloader is a plain singleton; the server (llama-server + agent child
+// processes) uses the same dual registration as IndiWeb so the endpoints resolve
+// the singleton AND the hosted auto-start / health loop runs.
+builder.Services.AddSingleton<NINA.Polaris.Services.External.CanopusModelService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.External.CanopusServerService>();
+builder.Services.AddHostedService(sp =>
+    sp.GetRequiredService<NINA.Polaris.Services.External.CanopusServerService>());
 // YARP direct forwarder, used by the /phd2-gui/* AND /indi-web/*
 // reverse-proxies below to bridge browser ↔ embedded webapp.
 // Includes WebSocket upgrade support, which xpra-html5 needs for
@@ -1134,6 +1142,56 @@ app.Map("/indi-web/{**rest}", async (HttpContext ctx, IndiWebManagerService svc)
     }
 });
 
+// ----- CANOPUS: /canopus/* reverse-proxy → local assistant agent -----
+// Serves the open chat client, the local-tier manifest, and the agent
+// WebSocket from the Canopus Python server on loopback. Same shape as the
+// /indi-web proxy: strip the /canopus prefix so the agent sees its own root
+// paths, and the forwarder carries the WebSocket upgrade for /canopus/api/agent.
+var canopusForwarder = app.Services.GetRequiredService<IHttpForwarder>();
+var canopusHttpClient = new HttpMessageInvoker(new SocketsHttpHandler {
+    UseProxy = false,
+    AllowAutoRedirect = false,
+    AutomaticDecompression = System.Net.DecompressionMethods.None,
+    UseCookies = false,
+    EnableMultipleHttp2Connections = true,
+    ActivityHeadersPropagator = new Yarp.ReverseProxy.Forwarder.ReverseProxyPropagator(
+        System.Diagnostics.DistributedContextPropagator.Current),
+    ConnectTimeout = TimeSpan.FromSeconds(5),
+});
+var canopusTransform = HttpTransformer.Default;
+app.Map("/canopus/{**rest}", async (HttpContext ctx,
+        NINA.Polaris.Services.External.CanopusServerService svc) => {
+    if (!svc.Running) {
+        ctx.Response.StatusCode = 503;
+        await ctx.Response.WriteAsJsonAsync(new {
+            error = svc.UnavailableReason
+                ?? "Canopus local backend is not running. POST /api/canopus/start to launch it.",
+        });
+        return;
+    }
+    var rest = ctx.Request.Path.Value ?? "/";
+    if (rest.StartsWith("/canopus", StringComparison.OrdinalIgnoreCase)) {
+        rest = rest["/canopus".Length..];
+        if (string.IsNullOrEmpty(rest)) rest = "/";
+    }
+    // Strip the optional /t/<token> auth segment the cross-origin wrapper embeds
+    // (AuthMiddleware already validated it), same as the phd2-gui proxy.
+    if (rest.StartsWith("/t/", StringComparison.Ordinal)) {
+        var after = rest[3..];
+        var slash = after.IndexOf('/');
+        rest = slash >= 0 ? after[slash..] : "/";
+    }
+    if (string.IsNullOrEmpty(rest)) rest = "/";
+    ctx.Request.Path = rest;
+    var target = $"http://127.0.0.1:{svc.AgentPort}";
+    var err = await canopusForwarder.SendAsync(ctx, target, canopusHttpClient,
+        ForwarderRequestConfig.Empty, canopusTransform);
+    if (err != ForwarderError.None) {
+        ctx.Response.StatusCode = 502;
+        await ctx.Response.WriteAsync($"canopus proxy error: {err}");
+    }
+});
+
 // Equipment endpoints
 app.MapEquipmentEndpoints();
 app.MapCameraEndpoints();
@@ -1202,6 +1260,7 @@ app.MapBenchmarkEndpoints();
 app.MapSensorAnalysisEndpoints();
 app.MapSirilEndpoints();
 app.MapDssEndpoints();
+app.MapCanopusEndpoints();
 app.MapDsoThumbPackEndpoints();
 app.MapNcnnModelPackEndpoints();
 app.MapGraXpertEndpoints();

@@ -1,0 +1,27 @@
+{
+  "_comment": "CANOPUS local-LLM asset catalogue for the 'On this server (SBC)' backend. The GGUF model + arch-matched llama.cpp llama-server binary are downloaded on demand (excluded from the .deb, like the DSO thumb / ncnn packs) into the writable data dir. URLs point at a stable 'data-pack' GitHub release so every app version pulls the same files. sha256 is optional: when empty the download is used as-is (verification skipped). Operators who already have the files on the box can bypass all of this with Canopus:ModelPath / Canopus:LlamaServerPath.",
+  "model": {
+    "file": "Qwen3-4B-Q4_0.gguf",
+    "url": "https://github.com/DanWBR/NINA.Polaris/releases/download/data-pack/Qwen3-4B-Q4_0.gguf",
+    "sha256": "",
+    "bytes": 2497281088
+  },
+  "runtimes": {
+    "linux-arm64": {
+      "url": "https://github.com/DanWBR/NINA.Polaris/releases/download/data-pack/canopus-llama-linux-arm64.tar.gz",
+      "sha256": ""
+    },
+    "linux-x64": {
+      "url": "https://github.com/DanWBR/NINA.Polaris/releases/download/data-pack/canopus-llama-linux-x64.tar.gz",
+      "sha256": ""
+    },
+    "win-x64": {
+      "url": "https://github.com/DanWBR/NINA.Polaris/releases/download/data-pack/canopus-llama-win-x64.zip",
+      "sha256": ""
+    },
+    "osx-arm64": {
+      "url": "https://github.com/DanWBR/NINA.Polaris/releases/download/data-pack/canopus-llama-osx-arm64.tar.gz",
+      "sha256": ""
+    }
+  }
+}

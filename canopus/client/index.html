@@ -9,15 +9,15 @@
   /* Bundled Polaris UI fonts (served same-origin from /fonts), so the chat can
      render in the same typeface the user picked in Polaris. All SIL OFL-1.1. */
   @font-face { font-family: 'Atkinson Hyperlegible'; font-weight: 400; font-style: normal; font-display: swap;
-    src: url('/fonts/AtkinsonHyperlegible-Regular.woff2') format('woff2'); }
+    src: url('fonts/AtkinsonHyperlegible-Regular.woff2') format('woff2'); }
   @font-face { font-family: 'Atkinson Hyperlegible'; font-weight: 700; font-style: normal; font-display: swap;
-    src: url('/fonts/AtkinsonHyperlegible-Bold.woff2') format('woff2'); }
+    src: url('fonts/AtkinsonHyperlegible-Bold.woff2') format('woff2'); }
   @font-face { font-family: 'IBM Plex Sans'; font-weight: 400; font-style: normal; font-display: swap;
-    src: url('/fonts/IBMPlexSans-Regular.woff2') format('woff2'); }
+    src: url('fonts/IBMPlexSans-Regular.woff2') format('woff2'); }
   @font-face { font-family: 'IBM Plex Sans'; font-weight: 700; font-style: normal; font-display: swap;
-    src: url('/fonts/IBMPlexSans-Bold.woff2') format('woff2'); }
+    src: url('fonts/IBMPlexSans-Bold.woff2') format('woff2'); }
   @font-face { font-family: 'Inter'; font-weight: 100 900; font-style: normal; font-display: swap;
-    src: url('/fonts/InterVariable.woff2') format('woff2-variations'); }
+    src: url('fonts/InterVariable.woff2') format('woff2-variations'); }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   /* --asst-font / --asst-pad mirror Polaris' Appearance (font + control
@@ -114,6 +114,15 @@
   let booted = false;        // boot() runs once (host:init or standalone/fallback)
   let embedded = false;      // true when running inside the Polaris host iframe
   let ws = null;
+
+  // Where this client was served from. The cloud serves it at /app (BASE=''); the
+  // local SBC/device tier is served behind Polaris's reverse-proxy at /canopus/app
+  // (BASE='/canopus'). The agent WebSocket and the REST surface both live UNDER
+  // that prefix, so derive it once from our own path instead of hardcoding root.
+  const BASE = (() => {
+    const i = location.pathname.lastIndexOf('/app');
+    return i > 0 ? location.pathname.slice(0, i) : '';
+  })();
   let locale = 'en';
   let price = 'US$4.99/mo';
   let trialDays = 0;
@@ -258,7 +267,7 @@
     const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
     const tok = getToken();
     if (tok) headers['Authorization'] = 'Bearer ' + tok;
-    const r = await fetch('/api' + path, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+    const r = await fetch(BASE + '/api' + path, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
     let j = null; try { j = await r.json(); } catch (_) {}
     return { ok: r.ok, status: r.status, json: j || {} };
   }
@@ -268,7 +277,11 @@
     if (booted) return;   // idempotent: host:init, standalone, or fallback
     booted = true;
     try {
-      const m = await fetch('/api/manifest').then(r => r.json());
+      const m = await fetch(BASE + '/api/manifest').then(r => r.json());
+      // Local tier (SBC / on-device): free, no accounts, no billing — the server
+      // has no /account surface, so skip the sign-in/subscribe gate entirely and
+      // go straight to the chat.
+      if (m && m.tier === 'local') return enterChat();
       if (m && m.subscription) { if (m.subscription.priceDisplay) price = m.subscription.priceDisplay; trialDays = m.subscription.trialDays || 0; }
     } catch (_) {}
 
@@ -575,7 +588,7 @@
   function wsSend(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
 
   function connectWs() {
-    const url = location.origin.replace(/^http/, 'ws') + '/api/agent?token=' + encodeURIComponent(getToken());
+    const url = location.origin.replace(/^http/, 'ws') + BASE + '/api/agent?token=' + encodeURIComponent(getToken());
     ws = new WebSocket(url);
     ws.onopen = () => { wsSend({ v: V, type: 'hello', locale }); sys(T('Connected.')); };
     ws.onclose = () => sys(T('Disconnected.'));

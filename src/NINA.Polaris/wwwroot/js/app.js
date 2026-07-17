@@ -66,7 +66,13 @@ function ninaApp() {
         // service via the iframe. Stays fully inert unless a manifest URL is
         // configured (see _initAssistant + wwwroot/assistant-config.json).
         asst: {
-            manifest: null,       // the fetched cloud manifest (branding + allowlist)
+            // Which backend serves the assistant: 'cloud' (hosted Azure, paid),
+            // 'sbc' (local llama-server on this Polaris host, free), or 'device'
+            // (on-device model — deferred). Persisted in localStorage.
+            backend: 'cloud',
+            sbc: null,            // last /api/canopus/status snapshot (SBC controls)
+            sbcBusy: false,       // a start/stop/download action is in flight
+            manifest: null,       // the fetched manifest (branding + allowlist)
             ready: false,         // manifest fetched + valid => host chrome is live
             badgeVisible: false,  // intro badge (before opt-in)
             introOpen: false,     // intro/subscribe modal
@@ -10684,7 +10690,52 @@ function ninaApp() {
         // bridges the external iframe's tool-call requests to the local Polaris
         // API (allowlist + hardcoded denylist enforced here). All chat, billing
         // and agent logic live in the external service loaded in the iframe.
+        _assistantLoadBackend() {
+            let b = 'cloud';
+            try { b = localStorage.getItem('polaris.assistant.backend') || 'cloud'; } catch (_) {}
+            if (b !== 'cloud' && b !== 'sbc' && b !== 'device') b = 'cloud';
+            this.asst.backend = b;
+        },
+
         async _initAssistant() {
+            this._assistantLoadBackend();
+            // One-time host-chrome wiring, independent of which backend is active.
+            this._assistantLoadPos();
+            this._assistantLoadPanel();
+            this._assistantLoadDock();
+            window.addEventListener('resize', () => this._assistantOnResize());
+            this._assistantInstallBridge();
+
+            // While the panel is open, suspend the Polaris on-screen keyboard so it
+            // never pops up over the chat (the iframe handles its own input).
+            this.$watch('asst.open', (open) => {
+                try { if (window.PolarisKeyboard) window.PolarisKeyboard.setSuspended(!!open); } catch (_) {}
+            });
+            // Re-fit the launcher whenever it switches which element is shown (the
+            // wide "Meet…" badge and the round FAB share one saved position).
+            this.$watch('asst.badgeVisible', v => { if (v) this.$nextTick(() => this._assistantFitLauncher()); });
+            this.$watch('asst.subscribed', v => { if (v) this.$nextTick(() => this._assistantFitLauncher()); });
+            // Throttled status forwarder (only while watching + panel open).
+            setInterval(() => this._assistantForwardStatus(), 2000);
+
+            await this._assistantApplyBackend();
+        },
+
+        // Resolve the manifest URL for the active backend. Empty => feature off /
+        // not available yet (e.g. the SBC backend hasn't been started).
+        async _assistantManifestUrl() {
+            const b = this.asst.backend;
+            if (b === 'device') return '';   // on-device tier: deferred
+            if (b === 'sbc') {
+                try {
+                    const s = await fetch('/api/canopus/status', { cache: 'no-store' })
+                        .then(r => r.ok ? r.json() : null);
+                    this.asst.sbc = s || null;
+                    if (s && s.running) return '/canopus/manifest.json';
+                } catch (_) { this.asst.sbc = null; }
+                return '';   // not running -> stay inert until started from Settings
+            }
+            // cloud (default): localStorage override, else the shipped config.
             let url = '';
             try { url = localStorage.getItem('polaris.assistant.manifestUrl') || ''; } catch (_) {}
             if (!url) {
@@ -10693,7 +10744,23 @@ function ninaApp() {
                     if (r.ok) { const j = await r.json(); url = (j && j.manifestUrl) || ''; }
                 } catch (_) { /* no config shipped -> feature absent */ }
             }
-            if (!url) return; // off by default
+            return url;
+        },
+
+        // Fetch + validate the active backend's manifest and light up (or tear
+        // down) the host chrome. Called on init AND whenever the backend switches.
+        async _assistantApplyBackend() {
+            // Reset any chrome left over from a previous backend.
+            this.asst.ready = false;
+            this.asst.badgeVisible = false;
+            this.asst.introOpen = false;
+            this.asst.open = false;
+            this.asst.manifest = null;
+            this.asst.iframeLoaded = false;
+            this.asst.iframeSrc = 'about:blank';
+
+            const url = await this._assistantManifestUrl();
+            if (!url) return; // off by default / SBC not started yet
 
             let m = null;
             try {
@@ -10701,18 +10768,27 @@ function ninaApp() {
                 if (!r.ok) return;
                 m = await r.json();
             } catch (_) { return; }
-            // Minimal validation. Anything malformed -> stay inert.
-            if (!m || m.version !== 1 || !m.product || !m.product.name
-                || !m.intro || !m.subscription || !m.iframe || !m.iframe.url || !m.iframe.origin) return;
+
+            // Local tier (SBC / on-device) is free: no subscription block, served
+            // same-origin behind Polaris's /canopus proxy (iframe.url is a path,
+            // postMessage comes from our own origin).
+            const local = !!(m && m.tier === 'local');
+            if (!m || m.version !== 1 || !m.product || !m.product.name || !m.iframe || !m.iframe.url) return;
+            if (!local && (!m.intro || !m.subscription || !m.iframe.origin)) return;
+            if (local) {
+                m.iframe.origin = location.origin;
+                if (!m.intro) m.intro = { headline: m.product.name, bodyMarkdown: '', bullets: [] };
+            }
 
             this.asst.manifest = m;
-            try { this.asst.subscribed = localStorage.getItem('polaris.assistant.subscribed') === '1'; } catch (_) {}
+            // Local tier reveals the FAB directly (no subscribe wall).
+            try { this.asst.subscribed = local || localStorage.getItem('polaris.assistant.subscribed') === '1'; }
+            catch (_) { this.asst.subscribed = local; }
+
             // Cloud-controlled badge revision. The badge is dismissable (per
-            // browser), but the cloud can re-surface it once by bumping
-            // badge.rev: we only stay dismissed while the rev we dismissed at is
-            // still current. Legacy dismissers (boolean flag, no stored rev)
-            // count as rev 0, so the first revisioned manifest (rev >= 1)
-            // brings the badge back once.
+            // browser), but the cloud can re-surface it once by bumping badge.rev:
+            // we stay dismissed only while the rev we dismissed at is still current.
+            // Legacy dismissers (boolean flag, no stored rev) count as rev 0.
             this._asstBadgeRev = (m.badge && Number(m.badge.rev)) || 0;
             let dismissedRev = 0;
             try {
@@ -10723,35 +10799,58 @@ function ninaApp() {
             } catch (_) { dismissedRev = -1; }
             const dismissed = dismissedRev >= this._asstBadgeRev;
 
-            this._assistantLoadPos();
-            this._assistantLoadPanel();
-            this._assistantLoadDock();
-            window.addEventListener('resize', () => this._assistantOnResize());
-
-            this._assistantInstallBridge();
             this.asst.ready = true;
-
-            // The assistant panel and the on-screen keyboard both dock to the
-            // bottom-right corner. While the panel is open, suspend the Polaris
-            // keyboard so it never pops up over the chat (the assistant iframe
-            // handles its own input via the native keyboard).
-            this.$watch('asst.open', (open) => {
-                try { if (window.PolarisKeyboard) window.PolarisKeyboard.setSuspended(!!open); } catch (_) {}
-            });
-
-            // Re-fit the launcher whenever it switches which element is shown:
-            // the wide "Meet…" badge and the round FAB share one saved position,
-            // and a left anchored for the 56px FAB lets the wide badge overflow
-            // the right edge. Measure after the DOM updates. (Registered before
-            // badgeVisible is set below so the initial show is caught too.)
-            this.$watch('asst.badgeVisible', v => { if (v) this.$nextTick(() => this._assistantFitLauncher()); });
-            this.$watch('asst.subscribed', v => { if (v) this.$nextTick(() => this._assistantFitLauncher()); });
-
-            if (!this.asst.subscribed && (!m.badge || m.badge.show !== false) && !dismissed) {
+            if (!local && !this.asst.subscribed && (!m.badge || m.badge.show !== false) && !dismissed) {
                 this.asst.badgeVisible = true;
             }
-            // Throttled status forwarder (only while watching + panel open).
-            setInterval(() => this._assistantForwardStatus(), 2000);
+        },
+
+        // Switch the assistant backend from Settings. Persists + re-applies live.
+        async _assistantSetBackend(b) {
+            if (b !== 'cloud' && b !== 'sbc' && b !== 'device') return;
+            if (this.asst.backend === b) return;
+            this.asst.backend = b;
+            try { localStorage.setItem('polaris.assistant.backend', b); } catch (_) {}
+            await this._assistantApplyBackend();
+        },
+
+        // ---- SBC (local) backend controls, surfaced in Settings ----
+        async _canopusRefresh() {
+            try { this.asst.sbc = await fetch('/api/canopus/status', { cache: 'no-store' }).then(r => r.ok ? r.json() : null); }
+            catch (_) { this.asst.sbc = null; }
+            return this.asst.sbc;
+        },
+        async _canopusStart() {
+            this.asst.sbcBusy = true;
+            try {
+                const r = await this.apiFetch('/api/canopus/start', { method: 'POST' });
+                if (!r.ok) { const j = await r.json().catch(() => ({})); this.toast?.(j.error || 'Failed to start the local assistant', 'error'); }
+            } finally { this.asst.sbcBusy = false; }
+            await this._canopusRefresh();
+            if (this.asst.backend === 'sbc') await this._assistantApplyBackend();
+        },
+        async _canopusStop() {
+            this.asst.sbcBusy = true;
+            try { await this.apiFetch('/api/canopus/stop', { method: 'POST' }); }
+            finally { this.asst.sbcBusy = false; }
+            await this._canopusRefresh();
+            if (this.asst.backend === 'sbc') await this._assistantApplyBackend();
+        },
+        async _canopusDownload() {
+            try { await this.apiFetch('/api/canopus/model/download', { method: 'POST' }); }
+            catch (_) {}
+            // Poll status until the (large) download + extract finishes.
+            const tick = async () => {
+                await this._canopusRefresh();
+                const d = this.asst.sbc && this.asst.sbc.download;
+                if (d && d.running) setTimeout(tick, 1500);
+            };
+            tick();
+        },
+        _canopusPct() {
+            const d = this.asst.sbc && this.asst.sbc.download;
+            if (!d || !d.bytesTotal) return 0;
+            return Math.floor((d.bytesDownloaded / d.bytesTotal) * 100);
         },
 
         _assistantInstallBridge() {

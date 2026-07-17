@@ -1,0 +1,30 @@
+Qwen3 — Apache License 2.0
+
+Polaris downloads the Qwen3-4B model (GGUF, Q4_0) on demand for the local
+("On this server" / "On this device") Canopus assistant backend. The model runs
+fully offline on the user's own hardware; it is not bundled with Polaris and is
+fetched into the writable data directory when the user enables the local backend.
+
+Model & code: https://github.com/QwenLM/Qwen3  (Alibaba Cloud, Qwen team)
+Licensed under the Apache License, Version 2.0.
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+The full Apache-2.0 license text is available at the URL above. The Qwen3
+weights are released by Alibaba Cloud under Apache-2.0, which permits
+redistribution and commercial use with attribution and preservation of this
+notice.

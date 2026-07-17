@@ -101,15 +101,28 @@ class MockProvider(Provider):
 def get_provider() -> Provider:
     """Return the LLM backend for the agent loop.
 
-    The open Canopus ships only the MockProvider, so this repo is runnable and
-    testable with no keys. A production deployment plugs in a real hosted-model
+    The open Canopus ships the MockProvider plus a keyless LlamaServerProvider
+    (providers_local) for the local SBC/device tiers, so this repo is runnable and
+    testable with no API keys. A production CLOUD deployment plugs in a hosted-model
     backend by pointing CANOPUS_PROVIDER_FACTORY at a "module:callable" that
     returns a Provider — that concrete backend (e.g. an Azure OpenAI client) and
     its credentials live OUTSIDE this open repo. ASSISTANT_PROVIDER=mock forces
-    the mock even when a factory is configured.
+    the mock even when a local URL or factory is configured.
+
+    Resolution order: mock override -> local llama-server (CANOPUS_LOCAL_LLM_URL)
+    -> private factory (CANOPUS_PROVIDER_FACTORY) -> mock.
     """
     if os.environ.get("ASSISTANT_PROVIDER", "").lower() == "mock":
         return MockProvider()
+
+    # The local (SBC / on-device) tier: a llama.cpp llama-server on loopback. No
+    # keys, no network beyond localhost — so it ships open, in-repo.
+    if os.environ.get("CANOPUS_LOCAL_LLM_URL", "").strip():
+        try:
+            from providers_local import get_local_provider
+            return get_local_provider()
+        except Exception:
+            return MockProvider()
 
     spec = os.environ.get("CANOPUS_PROVIDER_FACTORY", "").strip()
     if spec:

@@ -12271,6 +12271,66 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </label>
                     </template>
 
+                    <!-- CANOPUS: assistant backend selector. Choose where the AI
+                         co-pilot runs: the hosted cloud (paid), a local model on
+                         this Polaris host (free/offline), or on the client device
+                         (deferred). The local tier downloads a ~2.4 GB model +
+                         llama-server and runs them as child processes here. -->
+                    <div style="margin-top:18px; max-width:560px" x-init="_canopusRefresh()">
+                        <label style="display:flex; align-items:center; gap:12px">
+                            <span style="min-width:90px">Assistant backend</span>
+                            <select class="input" style="flex:1" :value="asst.backend"
+                                    @change="_assistantSetBackend($event.target.value)">
+                                <option value="cloud">Cloud (Canopus, subscription)</option>
+                                <option value="sbc">On this server (local model)</option>
+                                <option value="device" disabled>On this device (coming soon)</option>
+                            </select>
+                        </label>
+                        <p class="text-muted" style="font-size:12px; margin-top:6px">
+                            Cloud runs on the hosted Canopus service (paid). <em>On this
+                            server</em> runs a local model (Qwen3-4B) entirely on this
+                            Polaris host — free, private and offline, no account needed.
+                        </p>
+
+                        <template x-if="asst.backend === 'sbc'">
+                          <div class="settings-card" style="margin-top:10px; padding:12px">
+                            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                                <span style="width:10px;height:10px;border-radius:50%;display:inline-block"
+                                      :style="(asst.sbc &amp;&amp; asst.sbc.running) ? 'background:#3fb950' : 'background:#7d8590'"></span>
+                                <strong x-text="(asst.sbc &amp;&amp; asst.sbc.running) ? 'Running' : ((asst.sbc &amp;&amp; asst.sbc.modelPresent) ? 'Stopped' : 'Not set up')"></strong>
+                                <span class="text-muted" style="font-size:12px" x-text="asst.sbc ? ('· ' + asst.sbc.rid) : ''"></span>
+                            </div>
+
+                            <!-- First-run: download the model + runtime -->
+                            <template x-if="asst.sbc &amp;&amp; !asst.sbc.modelPresent">
+                              <div style="margin-top:8px">
+                                <p class="text-muted" style="font-size:12px"
+                                   x-text="(asst.sbc.download &amp;&amp; asst.sbc.download.running) ? ('Downloading (' + asst.sbc.download.phase + ') ' + _canopusPct() + '%') : 'The local model (~2.4 GB) and runtime aren\'t installed yet.'"></p>
+                                <button class="btn btn-sm" style="margin-top:6px"
+                                        :disabled="asst.sbc.download &amp;&amp; asst.sbc.download.running"
+                                        @click="_canopusDownload()">
+                                    <span x-text="(asst.sbc.download &amp;&amp; asst.sbc.download.running) ? 'Downloading…' : 'Download model + runtime'"></span>
+                                </button>
+                              </div>
+                            </template>
+
+                            <!-- Ready: start / stop the local backend -->
+                            <template x-if="asst.sbc &amp;&amp; asst.sbc.modelPresent">
+                              <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                                <button class="btn btn-sm" :disabled="asst.sbcBusy || (asst.sbc &amp;&amp; asst.sbc.running)" @click="_canopusStart()">Start</button>
+                                <button class="btn btn-sm" :disabled="asst.sbcBusy || !(asst.sbc &amp;&amp; asst.sbc.running)" @click="_canopusStop()">Stop</button>
+                                <button class="btn btn-sm" @click="_canopusRefresh()">Refresh</button>
+                                <span class="text-muted" style="font-size:12px" x-show="asst.sbcBusy">working…</span>
+                              </div>
+                            </template>
+
+                            <p style="font-size:12px; margin-top:8px; color:#f85149"
+                               x-show="asst.sbc &amp;&amp; (asst.sbc.lastError || (!asst.sbc.running &amp;&amp; asst.sbc.unavailableReason))"
+                               x-text="asst.sbc ? (asst.sbc.lastError || asst.sbc.unavailableReason) : ''"></p>
+                          </div>
+                        </template>
+                    </div>
+
                     <!-- Reduce motion: kill UI animations (panel fade, modal
                          zoom, spinners) for weak client devices or motion
                          sensitivity. Stamps <html data-reduce-motion>; the
@@ -14640,6 +14700,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <p><a href="https://github.com/code2k13/starrem2k13" target="_blank" rel="noopener"><strong>starrem2k13</strong></a> - code2k13. pix2pix-style U-Net star-removal model, an alternative in FILES → Remove stars. Code and weights MIT.</p>
                                     <p><a href="https://github.com/nekitmm/starnet" target="_blank" rel="noopener"><strong>StarNet++</strong></a> - Nikita Misiura (nekitmm). The original star-removal neural network, available in FILES → Remove stars. Code MIT; pre-trained weights © Nikita Misiura, CC BY-NC-SA 4.0 (NonCommercial).</p>
                                     <p><a href="https://siril.org/" target="_blank" rel="noopener"><strong>Siril</strong></a> - the Free-Astro / Siril team. Optional external pre-processing and stacking integration.</p>
+                                </div>
+                            </details>
+
+                            <details class="help-faq">
+                                <summary>Assistant (local AI)</summary>
+                                <div class="help-faq-body">
+                                    <p><a href="https://github.com/QwenLM/Qwen3" target="_blank" rel="noopener"><strong>Qwen3</strong></a> - the Alibaba Qwen team. The local language model (Qwen3-4B) behind the Canopus assistant's "On this server / device" backends, running fully offline on your hardware (Apache-2.0).</p>
+                                    <p><a href="https://github.com/ggml-org/llama.cpp" target="_blank" rel="noopener"><strong>llama.cpp</strong></a> - Georgi Gerganov and the llama.cpp contributors. The efficient CPU inference runtime (<code>llama-server</code>) that serves the local model (MIT).</p>
                                 </div>
                             </details>
 
