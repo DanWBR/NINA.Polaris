@@ -1,0 +1,343 @@
+{
+  "_comment": "REDUCED catalog for the LOCAL (SBC / on-device) Canopus tier. A small text-only model (Qwen3-4B) must pick from a short menu, and the full 29-tool catalog's ~5900-token prompt is too slow to ingest on an SBC (validated on the Radxa Q6A: ~200s cold). This subset drops the vision analyze_* tools (the model is text-only) and the multi-step studio grading/stacking workflow. agent.py loads this when CANOPUS_LOCAL_TIER=1. Keep it small; do not offer near-duplicate tools.",
+  "version": 1,
+  "tools": [
+    {
+      "name": "get_status",
+      "description": "Get a live snapshot of the rig: equipment connection, current capture/sequence/plan progress, guider RMS, live-stack frame count, focus, meridian time-to-flip. Use this to answer 'how is it going' or before proposing a correction.",
+      "category": "status",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/system/status"
+      }
+    },
+    {
+      "name": "get_tonights_best",
+      "description": "List tonight's best deep-sky targets (plus Moon/planets/comets) observable from the user's location and time window, ranked. Use when the user asks what to shoot.",
+      "category": "planning",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "default": 20,
+            "description": "How many targets to return."
+          }
+        },
+        "required": []
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/sky/tonights-best",
+        "query": {
+          "lat": "$ctx.lat",
+          "lon": "$ctx.lon",
+          "limit": "$args.limit"
+        }
+      }
+    },
+    {
+      "name": "search_catalog",
+      "description": "Find a deep-sky object by name or catalog id (e.g. M16, NGC 7000, Eagle Nebula) and get its coordinates and metadata.",
+      "category": "planning",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Name or catalog id."
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/sky/catalog/search",
+        "query": {
+          "query": "$args.query"
+        }
+      }
+    },
+    {
+      "name": "get_altitude",
+      "description": "Get the altitude track of a target across the night for the user's location, to judge when it's high enough and for how long.",
+      "category": "planning",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "ra": {
+            "type": "number",
+            "description": "Right ascension (hours)."
+          },
+          "dec": {
+            "type": "number",
+            "description": "Declination (degrees)."
+          },
+          "stepMinutes": {
+            "type": "integer",
+            "default": 15
+          }
+        },
+        "required": [
+          "ra",
+          "dec"
+        ]
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/sky/altitude",
+        "query": {
+          "ra": "$args.ra",
+          "dec": "$args.dec",
+          "stepMinutes": "$args.stepMinutes"
+        }
+      }
+    },
+    {
+      "name": "get_weather",
+      "description": "Get the 3-day astronomy weather forecast (3h slots) with cloud/seeing/transparency and an observation score for the user's site. Use for planning and for deciding mid-session route changes.",
+      "category": "planning",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/weather/forecast",
+        "query": {
+          "lat": "$ctx.lat",
+          "lon": "$ctx.lon"
+        }
+      }
+    },
+    {
+      "name": "search_knowledge",
+      "description": "Search the assistant's knowledge base, which covers BOTH general astrophotography best-practice (focusing, guiding, exposure/gain/histogram, light pollution & filters, polar alignment, calibration frames, planning & targets, diagnosing bad subs) AND the full N.I.N.A. Polaris user manual — every tab, workflow, setting and button. Use it whenever the user asks 'how do I / where is / what does this do / why', or seems lost or confused, whether the question is general technique or product-specific (which screen to open, how a Polaris feature works, what a setting means, fixing an error message). Base your answer on the returned passages (each has a `source` like 'polaris/live-stacking' or 'focusing'); if the answer is about a screen, also call show_panel to take the user there. If nothing relevant comes back, answer from general knowledge and say so.",
+      "category": "knowledge",
+      "mutates": false,
+      "requiresApproval": false,
+      "local": "knowledge",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "What to look up, e.g. 'why are my stars elongated in the corners' or 'how long should narrowband subs be'."
+          },
+          "k": {
+            "type": "integer",
+            "default": 4,
+            "description": "How many passages to return (1-6)."
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "show_panel",
+      "description": "Switch the Polaris UI to a panel so the user sees what you're doing or reviewing (e.g. FOCUS while adjusting focus, LIVE to show the stack, PLAN to review the night). Non-destructive; use freely to guide the user.",
+      "category": "ui",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string",
+            "description": "Panel to show.",
+            "enum": [
+              "home",
+              "equip",
+              "polar",
+              "sky",
+              "tonight",
+              "weather",
+              "focus",
+              "guide",
+              "preview",
+              "sequence",
+              "plan",
+              "live",
+              "video",
+              "seqadv",
+              "files",
+              "settings",
+              "help"
+            ]
+          }
+        },
+        "required": [
+          "tab"
+        ]
+      },
+      "ui": {
+        "action": "navigate",
+        "params": {
+          "tab": "$args.tab"
+        }
+      }
+    },
+    {
+      "name": "slew_to",
+      "description": "Slew the mount to coordinates and plate-solve-center on them. MUTATES: moves the telescope. Only inside an approved plan.",
+      "category": "mount",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "ra": {
+            "type": "number",
+            "description": "Right ascension (hours)."
+          },
+          "dec": {
+            "type": "number",
+            "description": "Declination (degrees)."
+          },
+          "center": {
+            "type": "boolean",
+            "default": true,
+            "description": "Plate-solve-center after slew."
+          }
+        },
+        "required": [
+          "ra",
+          "dec"
+        ]
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/sky/slew-and-center",
+        "body": {
+          "ra": "$args.ra",
+          "dec": "$args.dec",
+          "center": "$args.center"
+        }
+      }
+    },
+    {
+      "name": "run_autofocus",
+      "description": "Start an automated V-curve autofocus run on the selected optical train. MUTATES: moves the focuser and captures. Only inside an approved plan.",
+      "category": "focus",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "aux",
+              "guide"
+            ],
+            "default": "primary"
+          }
+        },
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/autofocus/start",
+        "body": {
+          "source": "$args.source"
+        }
+      }
+    },
+    {
+      "name": "start_live_stack",
+      "description": "Start live (EAA) stacking with the given exposure and gain. MUTATES: begins capturing. Only inside an approved plan.",
+      "category": "livestack",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "exposure": {
+            "type": "number",
+            "description": "Seconds per sub."
+          },
+          "gain": {
+            "type": "integer"
+          },
+          "binning": {
+            "type": "integer",
+            "default": 1
+          }
+        },
+        "required": [
+          "exposure"
+        ]
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/livecapture/start",
+        "body": {
+          "exposure": "$args.exposure",
+          "gain": "$args.gain",
+          "binning": "$args.binning"
+        }
+      }
+    },
+    {
+      "name": "stop_sequence",
+      "description": "Stop the running capture sequence. MUTATES: aborts the running session. Only inside an approved plan.",
+      "category": "capture",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/sequence/stop"
+      }
+    },
+    {
+      "name": "dither_now",
+      "description": "Ask the guider to dither now (small random nudge so hot pixels/walking noise average out across subs). MUTATES: moves the mount slightly via the guider. Only inside an approved plan.",
+      "category": "guide",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pixels": {
+            "type": "number",
+            "description": "Dither amplitude in guide-camera pixels (optional; uses the guider default when omitted)."
+          }
+        },
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/guider/dither",
+        "body": {
+          "pixels": "$args.pixels"
+        }
+      }
+    }
+  ]
+}

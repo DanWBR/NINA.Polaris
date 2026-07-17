@@ -217,6 +217,9 @@ public sealed class CanopusServerService : BackgroundService {
         psi.ArgumentList.Add(AgentPort.ToString());
         psi.Environment["CANOPUS_LOCAL_LLM_URL"] = $"http://127.0.0.1:{LlamaPort}";
         psi.Environment["CANOPUS_BASE_PATH"] = "/canopus";
+        // Use the reduced catalog + lean system prompt: the small local model can't
+        // ingest the full 29-tool catalog fast enough on an SBC.
+        psi.Environment["CANOPUS_LOCAL_TIER"] = "1";
 
         _logger.LogInformation("Spawning Canopus agent: {Py} -m uvicorn local_server:app (cwd {Dir})",
             PythonPath, ServerDir);

@@ -30,7 +30,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -38,11 +37,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from agent import AgentSession
+from agent import AgentSession, CATALOG
 
 _HERE = os.path.dirname(__file__)
 CLIENT_DIR = os.path.join(_HERE, "..", "client")
-_CATALOG_PATH = os.path.join(_HERE, "..", "shared", "tools", "catalog.json")
 
 # The base path Polaris mounts this app under (its reverse-proxy prefix). The
 # manifest advertises absolute-under-prefix URLs so the FOSS host and the client
@@ -67,8 +65,7 @@ def _build_allowlist() -> list[dict]:
     can reach — its action (`polaris`), any image fetch (`image`), and any job
     poll (`poll`) — becomes an allow entry. The FOSS host enforces this list (plus
     a hardcoded denylist) before executing any call the agent requests."""
-    with open(_CATALOG_PATH, "r", encoding="utf-8") as f:
-        catalog = json.load(f)
+    catalog = CATALOG   # the tier-correct catalog the agent actually offers
     seen: set[tuple[str, str]] = set()
     allow: list[dict] = []
 
