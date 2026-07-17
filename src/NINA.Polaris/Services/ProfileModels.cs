@@ -394,8 +394,20 @@ public class EquipmentProfile {
     /// <c>ascom-com</c>, or <c>alpaca</c>.</summary>
     public string SwitchDriver { get; set; } = "indi";
 
-    // Per-rig defaults
-    public double CoolerTargetTemperature { get; set; } = -10;
+    // Per-rig defaults.
+    //
+    // RIGPUT-1: the value-type per-rig fields below are NULLABLE with NO
+    // initializer, on purpose. The rig PUT binds a whole EquipmentProfile, and
+    // two callers send a PARTIAL body ({liveStackComputeMode} and
+    // {slewConfirmDeg,slewFloorDeg}) — System.Text.Json leaves an omitted nullable
+    // property as null, so the handler can tell "absent" (null → don't touch) from
+    // an explicit value (0/false included) and stop resetting the rig to model
+    // defaults on every partial save. That reset was a live bug (a compute-mode
+    // toggle silently zeroed the offset → SV405CC black-level clipping). Non-null
+    // defaults for a genuinely NEW rig are set in ProfileService.CreateEquipmentProfile,
+    // and every read site resolves null with `?? <default>`. Same pattern as
+    // SlewConfirmDeg / CoolerRampDegPerMinute.
+    public double? CoolerTargetTemperature { get; set; }
 
     /// <summary>Max rate the cooler setpoint may move, in °C/min, for BOTH
     /// cooldown and warm-up. <c>null</c> ⇒ 2.0°C/min (the default every read site
@@ -415,11 +427,14 @@ public class EquipmentProfile {
     /// "not specified", which is distinguishable from an explicit 0.</summary>
     public double? CoolerRampDegPerMinute { get; set; }
 
-    public int DefaultGain { get; set; } = 100;
-    public int DefaultOffset { get; set; } = 50;
-    public int DefaultBinning { get; set; } = 1;
-    public int FocuserStepSize { get; set; } = 50;
-    public int FocuserBacklashSteps { get; set; }
+    // Nullable per RIGPUT-1 (see the note on CoolerTargetTemperature above):
+    // null ⇒ "not sent in this PUT, leave the stored value alone". Defaults for a
+    // new rig live in CreateEquipmentProfile; read sites resolve `?? <default>`.
+    public int? DefaultGain { get; set; }
+    public int? DefaultOffset { get; set; }
+    public int? DefaultBinning { get; set; }
+    public int? FocuserStepSize { get; set; }
+    public int? FocuserBacklashSteps { get; set; }
 
     /// <summary>Per-rig autofocus configuration (AFPORT). The sequencer AF
     /// instruction, all AF triggers and the FOCUS tab resolve their run
@@ -449,8 +464,9 @@ public class EquipmentProfile {
     /// red-green checkerboard after debayer -- the Bayer pattern is
     /// correct enum-wise but offset by 1 row. Setting this true flips
     /// the array Y-direction after decode so RGGB stays RGGB. Default
-    /// false (most cameras need no flip).</summary>
-    public bool VerticalFlipImage { get; set; }
+    /// false (most cameras need no flip). Nullable per RIGPUT-1: a partial rig PUT
+    /// that omits it must NOT reset a user's flip to false; null ⇒ leave alone.</summary>
+    public bool? VerticalFlipImage { get; set; }
 
     // Polar alignment (TPPA) tunables. Per-rig because exposure /
     // gain that work for a fast OSC don't necessarily work for a

@@ -8466,11 +8466,14 @@ function ninaApp() {
             try {
                 const rig = this.rigs.find(r => r.id === this.activeRigId);
                 if (!rig) return;
-                // Server's PUT merges only the fields present in the
-                // body, so we can patch just this one without round-
-                // tripping the whole rig object. (See EquipmentEndpoints
-                //, the null-check on update.LiveStackComputeMode
-                // keeps other fields untouched.)
+                // Partial PUT: send only the field we're patching. The server
+                // guards each field so an ABSENT one is left alone — string fields
+                // via !IsNullOrWhiteSpace, value-types via nullable+HasValue
+                // (RIGPUT-1). This used to silently reset gain/offset/binning/cooler
+                // to model defaults (the offset→0 black-level bug) because those
+                // were written unconditionally; that hole is closed. Still, prefer
+                // full saves for user-facing edits — this thin patch is fine only
+                // because every field it omits is now guarded.
                 await this.apiPost('/api/equipment/rigs/' + encodeURIComponent(rig.id), null, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },

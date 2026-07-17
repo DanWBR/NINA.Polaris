@@ -349,7 +349,21 @@ public class ProfileService {
             .FirstOrDefault(e => e.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         if (existing != null) return existing;
 
-        var rig = new EquipmentProfile { Name = name };
+        // RIGPUT-1: the per-rig value-type fields are nullable (so a partial PUT
+        // can't reset them). A genuinely NEW rig gets the sensible defaults set
+        // HERE — otherwise null would resolve to each read site's fallback, which
+        // for offset is 0 (camera default) rather than the intended 50, and a
+        // fresh rig would run at black-level-clipping offset 0.
+        var rig = new EquipmentProfile {
+            Name = name,
+            DefaultGain = 100,
+            DefaultOffset = 50,
+            DefaultBinning = 1,
+            CoolerTargetTemperature = -10,
+            FocuserStepSize = 50,
+            FocuserBacklashSteps = 0,
+            VerticalFlipImage = false
+        };
         _activeProfile.EquipmentProfiles.Add(rig);
         Save();
         _logger.LogInformation("Created equipment profile: {Name}", name);
@@ -616,8 +630,8 @@ public class ProfileService {
         foreach (var rig in _activeProfile.EquipmentProfiles) {
             if (rig.AutoFocus != null) continue;
             rig.AutoFocus = new AutoFocusSettings {
-                StepSize = rig.FocuserStepSize > 0 ? rig.FocuserStepSize : 50,
-                BacklashIn = Math.Max(0, rig.FocuserBacklashSteps)
+                StepSize = (rig.FocuserStepSize ?? 0) > 0 ? rig.FocuserStepSize!.Value : 50,
+                BacklashIn = Math.Max(0, rig.FocuserBacklashSteps ?? 0)
             };
             seeded++;
         }
@@ -682,7 +696,7 @@ public class ProfileService {
             if (_activeProfile.CameraQuirks.ContainsKey(rig.Camera)) continue;
 
             var hasBayer = !string.IsNullOrWhiteSpace(rig.BayerPatternOverride);
-            var hasFlip = rig.VerticalFlipImage;
+            var hasFlip = rig.VerticalFlipImage ?? false;
             if (!hasBayer && !hasFlip) continue;
 
             _activeProfile.CameraQuirks[rig.Camera] = new CameraQuirks {
@@ -735,8 +749,15 @@ public class ProfileService {
             Focuser = _activeProfile.LastFocuser,
             FilterWheel = _activeProfile.LastFilterWheel,
             FocalLengthMm = _activeProfile.FocalLengthMm,
+            // Carry the legacy top-level defaults; fill the rest with the same
+            // sensible values a new rig gets (nullable fields, RIGPUT-1).
             DefaultGain = _activeProfile.DefaultGain,
-            DefaultBinning = _activeProfile.DefaultBinning
+            DefaultBinning = _activeProfile.DefaultBinning,
+            DefaultOffset = 50,
+            CoolerTargetTemperature = -10,
+            FocuserStepSize = 50,
+            FocuserBacklashSteps = 0,
+            VerticalFlipImage = false
         };
         _activeProfile.EquipmentProfiles.Add(rig);
         _activeProfile.ActiveEquipmentProfileId = rig.Id;

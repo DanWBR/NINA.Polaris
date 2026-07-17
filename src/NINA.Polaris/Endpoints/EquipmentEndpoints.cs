@@ -126,16 +126,20 @@ public static class EquipmentEndpoints {
                 r.Switch = update.Switch;
                 if (!string.IsNullOrWhiteSpace(update.SwitchDriver))
                     r.SwitchDriver = update.SwitchDriver;
-                r.CoolerTargetTemperature = update.CoolerTargetTemperature;
-                // Nullable + HasValue, like SlewConfirmDeg: a partial PUT (e.g. the
-                // liveStackComputeMode patch) omits this field, and writing it
-                // unconditionally would reset a rig where ramping was turned off.
-                // An explicit 0 still gets through — that's the point of nullable.
+                // RIGPUT-1: every value-type per-rig field is nullable + HasValue-
+                // guarded, so a PARTIAL PUT (the {liveStackComputeMode} and
+                // {slewConfirmDeg,slewFloorDeg} patches below omit everything else)
+                // no longer resets these to the model defaults. Before this, a
+                // compute-mode toggle silently zeroed gain/offset/binning/cooler —
+                // the offset→0 case clipped the SV405CC to black. An explicit 0 /
+                // false still writes; only ABSENT (null) is left alone.
+                if (update.CoolerTargetTemperature.HasValue)
+                    r.CoolerTargetTemperature = update.CoolerTargetTemperature.Value;
                 if (update.CoolerRampDegPerMinute.HasValue)
                     r.CoolerRampDegPerMinute = Math.Max(0, update.CoolerRampDegPerMinute.Value);
-                r.DefaultGain = update.DefaultGain;
-                r.DefaultOffset = update.DefaultOffset;
-                r.DefaultBinning = update.DefaultBinning;
+                if (update.DefaultGain.HasValue) r.DefaultGain = update.DefaultGain.Value;
+                if (update.DefaultOffset.HasValue) r.DefaultOffset = update.DefaultOffset.Value;
+                if (update.DefaultBinning.HasValue) r.DefaultBinning = update.DefaultBinning.Value;
                 // FIELD-2: per-rig Bayer mosaic override. Treat empty /
                 // whitespace as null ("Auto") so the UI <select> with
                 // an empty-value default round-trips cleanly. Anything
@@ -150,9 +154,11 @@ public static class EquipmentEndpoints {
                 // both SVBONY family symptoms: completely-wrong mosaic
                 // (Bayer override) vs row-offset mosaic / checkerboard
                 // (vertical flip).
-                r.VerticalFlipImage = update.VerticalFlipImage;
-                r.FocuserStepSize = update.FocuserStepSize;
-                r.FocuserBacklashSteps = update.FocuserBacklashSteps;
+                // RIGPUT-1 (same reason): a partial PUT must not reset the user's
+                // flip / focuser tuning. null ⇒ absent ⇒ leave alone.
+                if (update.VerticalFlipImage.HasValue) r.VerticalFlipImage = update.VerticalFlipImage.Value;
+                if (update.FocuserStepSize.HasValue) r.FocuserStepSize = update.FocuserStepSize.Value;
+                if (update.FocuserBacklashSteps.HasValue) r.FocuserBacklashSteps = update.FocuserBacklashSteps.Value;
                 // AFPORT: per-rig autofocus settings. Null from an old client
                 // must NOT blank the stored block (rig-persistence guard).
                 r.AutoFocus = update.AutoFocus ?? r.AutoFocus;
