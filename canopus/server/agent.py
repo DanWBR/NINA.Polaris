@@ -223,6 +223,23 @@ TURN_WINDOW = 60.0        # seconds ...
 TURN_MAX = 20             # ... max user turns started per window
 MAX_TOOL_ROUNDS = 25      # max tool-call rounds resolved within one turn
 
+# The local tier's small context (8192) can't absorb a large tool result — e.g.
+# get_tonights_best can return ~17k tokens, which blows the window on the very
+# next completion (a 400 from llama-server). Cap what we feed BACK to the model;
+# the useful part (top-ranked items) is at the front. Cloud has 128k+ ctx, so it
+# stays uncapped (0 = no cap).
+LOCAL_TOOL_RESULT_CHARS = 6000
+TOOL_RESULT_CHARS = LOCAL_TOOL_RESULT_CHARS if _LOCAL_TIER else 0
+
+
+def _tool_content(res) -> str:
+    """Serialize a tool result for the model, capping oversized payloads on the
+    local tier so one big result can't overflow the small context."""
+    s = json.dumps(res)
+    if TOOL_RESULT_CHARS and len(s) > TOOL_RESULT_CHARS:
+        s = s[:TOOL_RESULT_CHARS] + " …[result truncated to fit the local model's context]"
+    return s
+
 
 class AgentSession:
     """One agent conversation over a single WebSocket connection."""
@@ -451,7 +468,7 @@ class AgentSession:
                     {"type": "text", "text": prompt},
                     {"type": "image_url", "image_url": {"url": img}}]})
             else:
-                self._messages.append({"role": "tool", "tool_call_id": spec["id"], "content": json.dumps(res)})
+                self._messages.append({"role": "tool", "tool_call_id": spec["id"], "content": _tool_content(res)})
 
     async def _bridge(self, payload: dict, timeout: float = 60) -> dict:
         """Send one message to the browser bridge and await its host:tool-result.

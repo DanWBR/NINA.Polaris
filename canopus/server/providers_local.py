@@ -140,7 +140,17 @@ class LlamaServerProvider(Provider):
         }
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             r = await client.post(f"{self.base_url}/v1/chat/completions", json=body)
-            r.raise_for_status()
+            if r.status_code >= 400:
+                # Surface llama-server's actual reason (e.g. "request (N tokens)
+                # exceeds the available context size") instead of a bare status code.
+                detail = ""
+                try:
+                    j = r.json()
+                    err = j.get("error")
+                    detail = (err.get("message") if isinstance(err, dict) else err) or j.get("message") or ""
+                except Exception:
+                    detail = (r.text or "")[:300]
+                raise RuntimeError(f"local model error (HTTP {r.status_code}): {detail}".strip())
             data = r.json()
 
         usage = None
