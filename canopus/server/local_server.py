@@ -93,7 +93,11 @@ def _build_allowlist() -> list[dict]:
 _ALLOWLIST = _build_allowlist()
 
 
+# Served at BOTH paths: the FOSS host fetches /manifest.json, while the chat
+# client's boot() fetches {api.base}/manifest (i.e. /api/manifest). Both must
+# return the tier:"local" manifest so the client skips the cloud sign-in gate.
 @app.get("/manifest.json")
+@app.get("/api/manifest")
 def manifest() -> JSONResponse:
     """A LOCAL-tier manifest. No `subscription` block — the FOSS host reveals the
     chat directly (local = free). iframe + api are relative to the proxy prefix."""
