@@ -152,14 +152,22 @@ public sealed class CanopusServerService : BackgroundService {
     private async Task<bool> StartLlamaAsync(CancellationToken ct) {
         if (await ProbePortAsync(LlamaPort, ct)) { LlamaRunning = true; return true; }
 
-        var threads = Math.Max(1, Environment.ProcessorCount / 2); // leave half to the rig
+        // Thread count for generation. Fewer threads leave headroom for the rig
+        // (guiding runs continuously); more threads speed up each turn. On the
+        // Radxa Q6A the morning bench measured ~5 t/s generation at 8 threads with
+        // Polaris alive, vs roughly half that at 4 — so `Canopus:Threads` is
+        // exposed to tune the trade-off. Default: leave two cores for the rig.
+        var threads = _config.GetValue("Canopus:Threads", Math.Max(1, Environment.ProcessorCount - 2));
         var ctx = _config.GetValue("Canopus:ContextSize", 8192);
         var exe = _models.LlamaServerPath;
         var model = _models.ModelPath;
-        // --mmap 0: keep weights resident; --jinja: use the model's tool template so
-        // llama-server returns native OpenAI tool_calls.
+        // --no-mmap: keep weights resident (Android/embedded page-cache reclaim
+        // makes the mmap'd path ~340x slower — canopus-eval/MOBILE.md). --jinja:
+        // use the model's tool template so llama-server returns native OpenAI
+        // tool_calls. (Validated against llama-server b10058 on the Q6A: the flag
+        // is --no-mmap, NOT the `--mmap 0` that llama-bench takes.)
         var args = $"-m \"{model}\" --host 127.0.0.1 --port {LlamaPort} " +
-                   $"--mmap 0 -c {ctx} -t {threads} --jinja";
+                   $"--no-mmap -c {ctx} -t {threads} --jinja";
         _logger.LogInformation("Spawning llama-server: {Exe} {Args}", exe, args);
         try {
             _llama = Process.Start(new ProcessStartInfo {
