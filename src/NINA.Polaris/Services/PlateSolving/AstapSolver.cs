@@ -83,9 +83,36 @@ public class AstapSolver : IPlateSolver {
         _logger.LogInformation("ASTAP hinted solve failed; retrying blind (no position/FOV hint)");
         try { onLog?.Invoke("== hinted solve failed; retrying ASTAP blind (auto position) =="); } catch { }
         var blindResult = await SolveOnceAsync(fitsPath, blind, ct, onLog);
-        // Prefer the blind result when it solved; otherwise keep the richer
-        // original (hinted) error which usually has the more useful ASTAP log.
-        return blindResult.Success ? blindResult : result;
+        if (blindResult.Success) return blindResult;
+        if (ct.IsCancellationRequested) return result;
+
+        // FIELD6-14: last resort — retry HINTED with a coarser downsample. Measured
+        // on real M8 L-Ultimate subs: a marginal frame (soft focus / bright
+        // nebulosity / noise) that fails at the default -z 2 solves at -z 4. Coarser
+        // binning averages down the noise, flattens the nebula's high-frequency
+        // structure, and makes stars more compact — recovering exactly the
+        // intermittent "detected ~7 stars, no solution" failures. z=4 solved every
+        // frame in the sample and doesn't hurt easy ones (they solve at any z≥2);
+        // only escalate when we're already at a finer factor, and skip it if a
+        // successful blind pass would have returned above. Keeps the good hint —
+        // the marginal frames need coarser detection, not a wider search.
+        var escalatedZ = EscalatedDownsample(options.Downsample);
+        if (escalatedZ > options.Downsample && options.Downsample >= 0) {
+            var coarse = new PlateSolveOptions {
+                HintRa = options.HintRa, HintDec = options.HintDec,
+                SearchRadiusDeg = options.SearchRadiusDeg, FovDeg = options.FovDeg,
+                ScaleArcsecPerPixel = options.ScaleArcsecPerPixel,
+                Downsample = escalatedZ
+            };
+            _logger.LogInformation("ASTAP blind solve failed too; retrying hinted at -z {Z} (coarser detection)", escalatedZ);
+            try { onLog?.Invoke($"== retrying ASTAP hinted at downsample {escalatedZ} (marginal frame) =="); } catch { }
+            var coarseResult = await SolveOnceAsync(fitsPath, coarse, ct, onLog);
+            if (coarseResult.Success) return coarseResult;
+        }
+
+        // Nothing solved: keep the richer original (hinted) error, which usually has
+        // the more useful ASTAP log.
+        return result;
     }
 
     private async Task<PlateSolveResult> SolveOnceAsync(string fitsPath, PlateSolveOptions options,
@@ -415,31 +442,12 @@ public class AstapSolver : IPlateSolver {
     /// single-channel proxy for ASTAP to swallow. Cheap: only the
     /// FITS header is parsed, not the pixel block.
     /// </summary>
-    /// <summary>FIELD6-14: collapse a plane-sequential multi-channel buffer
-    /// (R,G,B,… concatenated, each <paramref name="planeLen"/> pixels) into a
-    /// single grayscale plane by the per-pixel MEAN of the channels — the proxy
-    /// ASTAP's star detector runs on.
-    ///
-    /// Mean, not max and not a single band: broadband stars sit in every channel,
-    /// so averaging preserves their signal while reducing the background noise by
-    /// ~√channels — the best detection SNR, and colour-agnostic (a red star weak in
-    /// green is still bright in red). Rounded, and clamped to ushort though the mean
-    /// of ushorts can't exceed ushort.MaxValue.</summary>
-    internal static ushort[] BuildSolveLuminance(ushort[] data, int planeLen, int channels) {
-        if (channels <= 1) {
-            var single = new ushort[planeLen];
-            Array.Copy(data, 0, single, 0, planeLen);
-            return single;
-        }
-        var luma = new ushort[planeLen];
-        int half = channels / 2;   // for rounding the integer division
-        for (int i = 0; i < planeLen; i++) {
-            long sum = 0;
-            for (int c = 0; c < channels; c++) sum += data[c * planeLen + i];
-            luma[i] = (ushort)((sum + half) / channels);
-        }
-        return luma;
-    }
+    /// <summary>FIELD6-14: the coarser downsample to retry a failed solve with.
+    /// At least 4 (a marginal M8 sub that failed at -z 2 solved at -z 4 in testing),
+    /// and always a real step up from the current factor. 0 (ASTAP auto) is treated
+    /// as "not coarse enough" and escalated to 4.</summary>
+    internal static int EscalatedDownsample(int current)
+        => Math.Max(4, current <= 0 ? 4 : current + 2);
 
     private static bool NeedsProxyForSolve(string fitsPath, out int channels) {
         channels = 1;
@@ -484,35 +492,37 @@ public class AstapSolver : IPlateSolver {
                 $"pixels for {channels}×{w}×{h}, got {full.Data.Length}.");
         }
 
-        // FIELD6-14: build the proxy from a SYNTHETIC LUMINANCE (the per-pixel
-        // mean of all channels), not the green plane alone.
+        // Project the GREEN plane (index 1). Empirically the best single channel to
+        // solve — and NOT for the SNR reason the old comment gave (green is not
+        // "the highest-SNR band" on a debayered full-res frame; it's just 1 of 3).
         //
-        // The old green-only projection threw away ~2/3 of the photons, and ASTAP's
-        // star detector runs on exactly what we hand it. On a green-weak target —
-        // an Ha/red nebula like M8, or any soft-focus / sparse field — green-only
-        // dropped ASTAP below its detection floor: it reported ~7 stars (vs the ~200
-        // Polaris finds on the full frame) and exited 1, "did not converge". The
-        // comment claimed green was "the highest-SNR band", which is only true for a
-        // Bayer half-plane; on a debayered full-res frame green is just 1 of 3, and
-        // for a red target it's the WEAKEST. Averaging the channels keeps the star
-        // signal (broadband point sources sit in every channel) while cutting the
-        // background noise by ~√channels — strictly more detectable stars, whatever
-        // the target's colour. The astrometry is unaffected: the solved RA/Dec/scale
-        // are intrinsic to the star field, independent of which grayscale we solve.
-        var lumaPlane = BuildSolveLuminance(full.Data, planeLen, channels);
+        // FIELD6-14, measured on real M8 L-Ultimate subs with ASTAP: green solves
+        // where luminance, R+G+B, G+B and red-only all FAIL. The reason is the
+        // TARGET, not the photon count — M8 is a bright Ha emission nebula, so the
+        // RED (Ha) channel is full of bright, structured nebulosity that raises the
+        // local background and buries the stars ASTAP needs. The GREEN (OIII)
+        // channel carries far less of that nebula, so the star field stands out
+        // clean. Averaging channels (the tempting "more photons" fix) INJECTS the
+        // Ha nebula back in and makes detection worse — proven, do not "improve"
+        // this to luminance. The real cure for the intermittent failures is the
+        // downsample escalation in SolveAsync, not the plane choice.
+        int greenIdx = Math.Min(1, channels - 1);
+        var greenPlane = new ushort[planeLen];
+        Array.Copy(full.Data, greenIdx * planeLen, greenPlane, 0, planeLen);
 
-        // Log stats so a failed solve is debuggable without re-running the
-        // pipeline: min / max / mean flag a plane that's too dim, clipped, or empty.
+        // Log per-plane stats so a failed solve is debuggable without re-running
+        // the pipeline: min / max / mean flag a plane that's too dim, clipped, or
+        // truncated.
         long sum = 0;
         ushort lo = ushort.MaxValue, hi = 0;
-        for (int i = 0; i < lumaPlane.Length; i++) {
-            var v = lumaPlane[i];
+        for (int i = 0; i < greenPlane.Length; i++) {
+            var v = greenPlane[i];
             sum += v;
             if (v < lo) lo = v;
             if (v > hi) hi = v;
         }
-        var planeStats = $"luminance={channels}ch min={lo} max={hi} " +
-            $"mean={(double)sum / lumaPlane.Length:F1} " +
+        var planeStats = $"plane={greenIdx}/{channels} min={lo} max={hi} " +
+            $"mean={(double)sum / greenPlane.Length:F1} " +
             $"({w}x{h} {full.Properties.BitDepth}-bit)";
         _logger.LogInformation("ASTAP proxy stats: {Stats}", planeStats);
 
@@ -540,7 +550,7 @@ public class AstapSolver : IPlateSolver {
                 Exposure = full.MetaData.Exposure,
                 CreationTime = full.MetaData.CreationTime,
             };
-            var proxy = new BaseImageData(lumaPlane, proxyProps, proxyMeta);
+            var proxy = new BaseImageData(greenPlane, proxyProps, proxyMeta);
             FITSWriter.Write(proxy, proxyPath);
 
             var args = BuildArgs(proxyPath, options);
