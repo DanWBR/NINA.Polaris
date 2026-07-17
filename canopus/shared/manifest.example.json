@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "product": {
+    "name": "Canopus Assistant",
+    "tagline": "Your AI observing companion",
+    "iconEmoji": "🔭"
+  },
+  "badge": {
+    "show": true,
+    "label": "Meet Canopus Assistant"
+  },
+  "intro": {
+    "headline": "Let an AI plan and run your night",
+    "bodyMarkdown": "Canopus Assistant suggests targets, sets exposures, drives your rig, watches guiding and focus, and even post-processes your frames — asking before it changes anything.",
+    "bullets": [
+      "\"What's good tonight? Suggest a plan.\"",
+      "\"Shoot M16 for 3h, but I can't do a meridian flip.\"",
+      "\"Watch focus and guiding while I capture in Live.\""
+    ],
+    "learnMoreUrl": "https://assistant.example.com/about"
+  },
+  "subscription": {
+    "priceDisplay": "US$4.99/mo",
+    "checkoutUrl": "https://assistant.example.com/subscribe",
+    "manageUrl": "https://assistant.example.com/account"
+  },
+  "iframe": {
+    "url": "https://assistant.example.com/app",
+    "origin": "https://assistant.example.com",
+    "sandbox": "allow-scripts allow-forms allow-popups allow-same-origin",
+    "fabIconEmoji": "🔭",
+    "fabLabel": "Assistant"
+  },
+  "api": {
+    "base": "https://assistant.example.com/api"
+  },
+  "allowlist": [
+    { "method": "GET", "pathPattern": "/api/system/status" },
+    { "method": "GET", "pathPattern": "/api/sky/tonights-best" },
+    { "method": "GET", "pathPattern": "/api/sky/catalog/search" },
+    { "method": "GET", "pathPattern": "/api/sky/altitude" },
+    { "method": "GET", "pathPattern": "/api/weather/forecast" },
+    { "method": "POST", "pathPattern": "/api/sky/slew-and-center" },
+    { "method": "POST", "pathPattern": "/api/autofocus/start" },
+    { "method": "POST", "pathPattern": "/api/livecapture/start" },
+    { "method": "POST", "pathPattern": "/api/plan/{id}/start" }
+  ],
+  "links": {
+    "privacyUrl": "https://assistant.example.com/privacy",
+    "termsUrl": "https://assistant.example.com/terms"
+  }
+}

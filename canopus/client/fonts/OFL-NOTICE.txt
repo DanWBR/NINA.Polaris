@@ -1,0 +1,17 @@
+Bundled UI fonts (SIL Open Font License 1.1)
+============================================
+
+These font files are redistributed so the assistant chat can match the
+typography the user selected in N.I.N.A. Polaris. Each is licensed under the
+SIL Open Font License, Version 1.1 (https://scripts.sil.org/OFL), which permits
+bundling and redistribution with the reserved font names intact.
+
+- Atkinson Hyperlegible (AtkinsonHyperlegible-*.woff2)
+  (c) Braille Institute of America, Inc. OFL-1.1.
+- IBM Plex Sans (IBMPlexSans-*.woff2)
+  (c) IBM Corp. OFL-1.1.
+- Inter (InterVariable.woff2)
+  (c) The Inter Project Authors. OFL-1.1. Full text in Inter-LICENSE.txt.
+
+The full OFL-1.1 text (shared by all three) is available at
+https://scripts.sil.org/OFL and in Inter-LICENSE.txt in this folder.

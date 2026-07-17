@@ -1,0 +1,477 @@
+# LIVE tab (live stacking + EAA)
+
+Real-time integration of incoming frames into a single growing image.
+For Electronically Assisted Astronomy (EAA), comet hunting, or just
+watching your DSO target build up while you have a beer.
+
+> **Capture vs. stacking are separate things.** The LIVE *capture loop*
+> always runs on the **server** (the Pi / mini-PC keeps exposing even if
+> your browser is backgrounded, on another tab, or disconnects entirely —
+> you can run two Polaris tabs and switch freely). The **Compute** dropdown
+> (Auto / Server / Client) only chooses *where the per-frame stacking math
+> runs*, not who drives the camera. On underpowered hosts (Pi 2/3) flip it
+> to client-side WASM offload so the browser owns the accumulator — see
+> [client-side compute](client-side-compute.md).
+
+## How it works
+
+Polaris doesn't drive the capture from the LIVE tab, it **subscribes**
+to frames arriving from anywhere (sequence engine, PREVIEW snap, camera
+stream). When **Stack ON**, each incoming frame:
+
+1. Has its stars detected
+2. Is aligned (affine transform) against the reference (first frame's
+   star pattern)
+3. Accumulates into a running-mean buffer
+4. Re-renders the stacked image to the canvas
+
+Frame count + reference star count update each second.
+
+## Controls (sidebar)
+
+Right sidebar is split top-to-bottom: inputs (Exp / Gain / Bin /
+Filter) at top, Polaris Shutter centered in the middle, secondary
+toggles at bottom. The shutter unifies Capture / Loop / Stop into
+a single gesture button:
+
+- **Tap shutter** when idle, single capture (snap)
+- **Long-press 600ms** when idle, enter loop mode (ring fills
+  amber during the hold to confirm)
+- **Tap shutter** while exposing or looping, abort
+
+Secondary toggles + buttons:
+
+- **Stack ON / Stack**, toggle integration on/off
+- **Reset** (visible when Stack ON), discards the running stack +
+  reference. Next incoming frame becomes the new reference.
+- **⛶ View**, OpenSeadragon viewer on the current stack
+- **Save**, write the current stack to FITS on demand. User-requested
+  saves land in a dedicated `stacked/` subfolder (separate from the
+  per-frame light captures) so the integrated result is easy to find.
+- **Compute** (Auto / Server / Client), per-rig override for
+  where the per-frame **stacking math** runs (the capture loop is always
+  server-owned regardless of this setting):
+  - **Server** — stacking on the host CPU.
+  - **Client** — stacking in the browser via WASM (offload).
+  - **Auto** (default) — the server picks based on the WASM handshake:
+    if a WASM-capable browser is connected it offloads to the client,
+    otherwise it stacks on the host.
+
+For one-shot-colour (OSC) cameras, colour live stacking is automatic —
+there is no mono/colour toggle; the stacker debayers and integrates in
+colour by default.
+
+## Stats bar
+
+- **Stars**, count in latest frame
+- **HFR**, median HFR of latest frame (lower = sharper)
+- **Mean / Median / StDev / Min / Max**, pixel stats of the stack
+- **SNR**, background signal-to-noise ratio of the cumulative stack (or
+  of the latest single frame when no stack is running). Higher = cleaner.
+- **HFR + Star count history chart**, last N frames trend
+
+## SNR and ETA to target
+
+Polaris computes a **background SNR** on every frame and on the
+running-mean stack as it accumulates:
+
+```
+SNR = ( mean(signal) − mean(background) ) / σ(background)
+```
+
+Pixels above `median + 5·MAD` count as "signal" (stars + extended
+target); pixels in `median ± 1·MAD` count as "background" (≈50% central
+of the histogram, robust to outliers). Saturated pixels and zeros are
+excluded so hot pixels and resampled-frame borders don't bias the
+numerator. Same math runs whether the server is doing the stacking or
+the WASM client.
+
+Set a **target SNR** per rig in RIGS → Manage rigs (or override for the
+current session via the small input in the LIVE overlay's "Stack
+quality" widget). When set, the overlay shows three big numbers + an
+input:
+
+- **SNR**, the cumulative stack's SNR right now
+- **Frames**, how many integrated into the stack so far
+- **ETA**, estimated time to reach the target SNR, e.g. *"~12 min to SNR 50"*
+- **Target** input, edit the target SNR live (debounced PUT)
+
+The ETA fits a log-log line through your last samples (the SNR of a
+clean stack grows as √N, slope=0.5 on log-log) and solves for the
+frame-count that hits the target. When the fit is weak (R² < 0.6,
+fewer than 3 samples, slope going the wrong way, or extrapolated frames
+beyond the 1000-frame cap), the ETA shows `—` instead of inventing a
+number. Once you reach the target, `✓ done` replaces the ETA.
+
+### Reading SNR over time
+
+The chart under the overlay shows **SNR cumulative** on the left axis
+(cyan) and **HFR** on the right (amber). A healthy session shows SNR
+climbing along the √N curve and HFR roughly flat. If HFR starts climbing
+without SNR keeping up, focus is drifting and you should refocus (or
+let Auto re-focus do it). If SNR plateaus while HFR is fine, clouds or
+sky glow rolled in.
+
+### Where SNR comes from in each mode
+
+- **Server full mode**, the server's `LiveStackingService` computes SNR
+  on the accumulator buffer after each integration; UI updates via the
+  1 Hz status payload.
+- **Client (WASM) mode**, the WASM stacker computes SNR on the running
+  mean and posts it back via `client-stack-progress`. The server's
+  `InjectClientStackMetrics` feeds the same ETA calculator + WS payload
+  so the UI behaves identically.
+
+## Auto re-focus / re-center
+
+The big feature: long sessions degrade as focus drifts with temperature
+and mount drift accumulates. Polaris fires AF + re-center automatically
+on configurable triggers, without you intervening.
+
+Click the **⚡ Auto re-focus / re-center** `<details>` panel to expand.
+
+### Auto re-focus
+
+Enable + pick any combination of triggers (first to cross fires):
+
+- **Every N integrated frames**, pure frame counter
+- **Every N minutes**, wall-clock elapsed
+- **ΔT ≥ X°C**, sensor temperature drift since last AF
+- **HFR ≥ Y% above last**, when current HFR degrades by Y% vs the
+  HFR right after the last successful AF
+
+Plus AF sweep config (steps, step size, exposure) reused from the
+[FOCUS tab](focus.md#parameters).
+
+When the trigger fires:
+
+1. Captures pause naturally (the frame handler awaits the AF run, and
+   whoever's pushing frames is awaiting that handler)
+2. AF sweeps + finds best position
+3. New HFR + temperature are baselined
+4. Captures resume on their own
+
+**▶ Now** button bypasses gates for manual fires.
+
+### Auto re-center
+
+Same OR-combine pattern. Three trigger types:
+
+- **Every N frames**
+- **Every N minutes**
+- **Drift ≥ X arcsec**, runs a plate-solve **per frame** to compute
+  drift from the reference; **expensive on RPi 4** (1-3s per solve).
+  Default 0 = disabled.
+
+When the trigger fires, Polaris re-slews + plate-solves until the
+mount is centered to within **Tolerance arcsec** (default 30").
+
+**Reference RA/Dec** is established by a one-shot plate solve on the
+**first integrated frame** of the session, true astrometric position,
+not the mount's potentially-biased report. Status line shows the
+reference once it's solved; banner appears if the first-frame solve
+failed (recenter disabled until next stack reset).
+
+**▶ Now** button only enables once reference is solved.
+
+### Mutex
+
+Trigger handlers run sequentially inside the frame integration. AF +
+re-center can't run concurrently (reentry guard skips trigger eval
+for frames arriving during an executing trigger).
+
+### Per-rig persistence
+
+The full policy lives on `EquipmentProfile.LiveStackTriggers`. Switch
+rigs + the new rig's policy auto-loads. Different setups (cold APO vs
+SCT with active dew heater) have different thermal characteristics,
+so per-rig makes sense.
+
+## Auto dither
+
+ASIAIR-style dithering during live stacking: a small random nudge of the mount
+every N integrated frames so the target lands on slightly different pixels each
+time. This decorrelates hot pixels, walking noise and fixed-pattern artifacts
+from the sky, so they can be averaged down and (with **Reject outliers** below)
+removed outright. It also means the frames saved to disk are dithered, which
+benefits your final offline integration.
+
+Panel: LIVE tab → "Auto re-focus / re-center / dither" → **Auto dither**.
+
+- **Every N frames** — dither cadence (counts integrated frames).
+- **Amount (px)** — random offset in guide-camera pixels.
+- **RA only** — restrict the nudge to RA (for mounts with sloppy Dec backlash).
+- **Settle px / for (s) / timeout (s)** — the dithered frame waits for the star
+  to settle back within tolerance before the next frame is integrated, exactly
+  like the AUTORUN sequencer.
+
+Requirements + behaviour:
+
+- The guider must be **actively guiding** (native or external PHD2). Dithering is
+  routed through the active guider, so it works on both backends. If the guider
+  isn't guiding, the dither is skipped (and the gate advances so it doesn't
+  re-check every frame).
+- The dither fires *instead of* a recenter on the same frame — a recenter would
+  cancel the offset just applied.
+- Settings live on `EquipmentProfile.LiveStackTriggers` (per rig), same as the
+  re-focus / re-center policy.
+
+The same dither-every-N-frames option also exists for the AUTORUN sequencer
+(GUIDE/AUTORUN), and likewise routes through whichever guider backend is active.
+
+## Reject outliers (kappa-sigma)
+
+By default the live stack is a plain **running mean** — every frame's pixels are
+averaged in, with no per-pixel outlier rejection. That's fast, but a cosmic ray,
+a satellite/plane trail, or a hot pixel is averaged in too (just at reduced
+amplitude).
+
+The LIVE tab checkbox **🚫 Reject outliers (kappa-sigma)** (next to "Save each
+frame") adds per-pixel rejection: for each pixel Polaris tracks the running mean
+and spread of the frames seen so far, and a new sample more than **k** sigma away
+is dropped instead of folded in. The threshold **k** (default 3, range 1.5–6) is
+editable inline; lower = more aggressive.
+
+- It **pays off most combined with dithering** — dithering moves the defect to a
+  different sky pixel each frame, so it becomes the outlier that rejection then
+  removes cleanly. Without dithering a fixed hot pixel can land on the same sky
+  spot repeatedly and look like signal.
+- The first few frames always seed the statistics (nothing is rejected until a
+  spread estimate exists), so give it 5+ frames.
+- It runs on the CPU and allocates one extra full-frame buffer, so it costs a
+  little more RAM + per-frame time than the plain mean — off by default, opt in
+  per rig. Takes effect on the next **Reset** (the reference frame allocates the
+  buffers).
+- Setting lives on `EquipmentProfile.LiveStackSigmaRejection` / `…Kappa` (per
+  rig). Colour stacks reject on luminance (a bright outlier drops the whole RGB
+  triple so colour balance isn't skewed).
+
+## Refocus suggestion (trend-based, manual focuser friendly)
+
+The auto re-focus path above only fires when you have a motorized
+focuser AND have turned on **RefocusEnabled** in the rig. Plenty of
+setups don't qualify, manual Crayford focusers, the cheap rack &
+pinion on a kid's scope, or motorized rigs where you prefer to
+refocus by hand. Without either condition Polaris would otherwise
+be silent about degrading focus, you'd only notice after several
+blurry frames piled up in the stack.
+
+Polaris fills that gap with a **trend-based suggestion**. It watches
+the same per-frame HFR + star count stream the auto-fire path uses
+and raises an advisory chip + LIVE-tab callout when the numbers are
+trending the wrong way. Nothing moves the focuser, you refocus
+manually, then click "I refocused" to acknowledge.
+
+### How the detection works
+
+The detection is automatic, no thresholds to tune.
+
+1. **Warm-up**: the service buffers the first 15 valid samples
+   (HFR > 0, star count >= 5) without raising anything.
+2. **Baseline**: once warmed up, the 5th-percentile HFR over the
+   last 20 samples becomes the "best stable HFR" reference, plus
+   the median star count.
+3. **Trend test** on every subsequent frame:
+   - Linear regression of the last 10 HFR samples gives a slope.
+   - The rolling mean of the last 5 HFR samples is compared to
+     baseline.
+   - Fires when **slope > 0** AND **mean > baseline x 1.15** AND
+     **5-frame extrapolated change > 30% of baseline**.
+4. **Star-count secondary**: a 30% drop in average star count vs
+   the baseline median fires on its own. Covers very-out-of-focus
+   where HFR looks deceptively stable because dim stars dropped out
+   entirely and HFR is computed on a shrinking set of bright cores.
+5. **Auto-dismiss** once the rolling means recover to within 5% of
+   baseline for 3 consecutive frames.
+
+These constants live in `Services/RefocusSuggestionService.cs` as
+`private const` so a future tuning pass touches one file.
+
+### When you'll see it
+
+- A toast appears the first time the detector fires.
+- A `Refocus: HFR rising 18% over 10 frames` chip joins the activity
+  bar at the bottom of every tab. Click the chip to jump straight to
+  FOCUS, Manual Assist.
+- A yellow callout appears in the LIVE tab above the auto-refocus
+  panel with three buttons:
+  - **I refocused** dismisses and replaces the baseline with the
+    post-refocus HFR (the new "good").
+  - **Open FOCUS** jumps to FOCUS, Manual Assist without dismissing.
+  - **Dismiss** clears the chip without resetting the baseline
+    (useful if you trust the original baseline and just want to
+    acknowledge).
+
+### When it stays silent
+
+- **Auto-refocus is enabled in the rig**: the suggestion does
+  nothing, LSTR-3 already covers you. Toggle one or the other in
+  the LIVE tab's "Auto re-focus / re-center" panel.
+- **First 15 frames of any session**, warm-up gate.
+- **Frames with HFR == 0 or star count < 5**, dropped as
+  unreliable. Bad seeing / clouds won't poison the detector.
+- **No live stacking running**, the detector subscribes to
+  FrameIntegrated events.
+
+### API
+
+- `POST /api/livestack/refocus-suggestion/dismiss` with body
+  `{ "resetBaseline": true }` (default) replaces the baseline with
+  the rolling mean. `false` clears the chip without changing the
+  baseline.
+- `GET /api/livestack/refocus-suggestion/status` for direct polling.
+  The same payload also rides inside `liveStack.refocusSuggestion`
+  on the WS tick.
+
+## Per-frame pre-processing (LSPP)
+
+The "Per-frame pre-processing" panel (below Auto re-focus / re-center)
+applies calibration and/or BGE to every frame **before** it is added to
+the stack. Result: the live stack comes out of the gate already free of
+hot pixels, vignetting and sky-glow gradient instead of waiting until
+you re-process the master in STUDIO.
+
+### Calibration
+
+Toggle `Apply calibration to each frame before stacking` and Polaris
+matches the active rig's master dark/flat/bias against the incoming
+frame's gain + exposure + filter. The matched master file names appear
+in the status block so you can confirm the auto-match picked what you
+expected.
+
+- Match is by (gain, exposure) for the dark, (gain, filter) for the
+  flat, gain only for the bias. Same logic as STUDIO Calibrate.
+- Masters need to exist in your FrameLibrary first -- build them in
+  STUDIO (Stack tab → Master Dark/Flat/Bias) before turning this on.
+- If no master matches, the frame is passed through raw and the
+  "no match" counter ticks. The stack continues.
+- If calibration fails (corrupt master, dimension mismatch), the
+  warning is logged, the frame goes in raw, and the "fallback" counter
+  ticks. The stack never aborts.
+
+Master buffers are cached in memory for the session (`~150MB` peak for
+one full set at 24MP). The cache resets on rig switch and on
+LiveStackingService.Reset (e.g. target switch).
+
+### BGE (background extraction)
+
+Toggle `Apply GraXpert BGE to each frame before stacking`. Runs the
+GraXpert BGE model on every frame before it is added to the stack —
+**wherever the stack actually runs**:
+
+- **Client-mode (MetricsOnly) stacking** — the browser runs the BGE
+  model via WebAssembly + WebGPU. The 208MB model is downloaded lazily
+  the first time BGE is enabled in a session (spares bandwidth on rigs
+  that never use it).
+- **Server-mode (Full) stacking** — the host runs BGE through its
+  GraXpert backend: the GraXpert CLI, or the RK3588 **NPU** fast path
+  where available (see [NPU acceleration](npu-acceleration.md)). Per-frame
+  BGE on a Pi 4/5 CPU is fast enough at normal exposure cadence. If no
+  server-side GraXpert backend is installed, the banner explains it's
+  unavailable and the frame is stacked without BGE.
+- Counters mirror the calibration ones (processed / fallback / last
+  error). The browser posts them back to the server so every other
+  connected browser sees the same numbers.
+
+### Failure mode
+
+Both calibration and BGE are **fail-safe**: if anything goes wrong on
+a frame, the original raw pixels are used instead and the session
+continues. There is no "abort on calibration error" mode -- the live
+stack is designed to keep growing through hardware glitches, missing
+masters, model load races, etc. The error message lands in the LOG
+panel + the "Last error" row of the relevant fieldset.
+
+### Endpoints
+
+- `GET /api/livestack/preprocessing/settings` -- current
+  per-rig settings.
+- `PUT /api/livestack/preprocessing/settings` -- update settings.
+  Resets the master cache so the next frame re-resolves with the
+  new overrides or flags.
+
+## WebSocket payload
+
+For automation / external dashboards, the live stack state is in the
+1Hz `/ws/status`:
+
+```jsonc
+{
+  "liveStack": {
+    "isRunning": true,
+    "frameCount": 42,
+    "width": 4144, "height": 2822,
+    "referenceStarCount": 87,
+    "lastFrameHfr": 1.94,
+    "lastFrameStarCount": 92,
+    "triggers": {
+      "isExecuting": false, "executingKind": null,
+      "lastRefocusAt": "2026-05-22T22:48:13Z", "lastRefocusFrame": 30,
+      "lastRefocusHfr": 1.87, "lastRefocusTempC": -10.2,
+      "lastRecenterAt": null, "lastRecenterFrame": 0,
+      "lastRecenterDriftArcsec": 0,
+      "referenceRaHours": 23.234, "referenceDecDeg": 12.583,
+      "referenceSolved": true,
+      "lastError": null
+    },
+    "refocusSuggestion": {
+      "suggesting": true,
+      "reason": "HFR rising 18% over 10 frames",
+      "baselineHfr": 1.92, "currentHfr": 2.27,
+      "slopePerFrame": 0.04,
+      "framesSinceBaseline": 28, "sampleCount": 28,
+      "baselineStarCount": 87,
+      "suggestedAt": "2026-05-22T23:05:11Z"
+    },
+    "preProc": {
+      "calibration": {
+        "enabled": true,
+        "masterDarkName": "master_dark_120s_g100_x20.fits",
+        "masterFlatName": "master_flat_L_g100_x20.fits",
+        "masterBiasName": null,
+        "framesCalibrated": 42,
+        "framesFallback": 0,
+        "framesNoMatch": 0,
+        "lastError": null
+      },
+      "bge": {
+        "enabled": true,
+        "supportedThisSession": true,
+        "framesProcessed": 42,
+        "framesFallback": 0,
+        "lastError": null,
+        "smoothing": 1.0,
+        "correction": "Subtraction"
+      }
+    }
+  }
+}
+```
+
+## Common pitfalls
+
+**Frames stop integrating mid-session**, alignment failed for a long
+stretch (clouds, dew on the corrector). Polaris keeps trying each
+frame; clear the dew + integration resumes automatically.
+
+**Auto-recenter never triggers**, reference solve failed on the
+first frame (no stars, blurry, plate-solver path wrong). Reset the
+stack so the next first frame solves cleanly. Verify ASTAP is
+installed + reachable.
+
+**HFR trigger fires spuriously after passing meridian**, pier-side
+flip changes the frame orientation; star detection sees "new" stars
+and the median HFR jumps temporarily. Bump the HFR threshold or
+combine it with "every N frames" so the spurious fire is bounded.
+
+**Stack quality looks worse than individual frames**, alignment
+keeps failing silently, only the first frame is actually in the
+stack. Check the WebSocket payload: `frameCount` should match how many
+frames you've captured. Persistent reference-star-count of 0 means
+the first frame had no detectable stars, Reset + try again.
+
+## See also
+
+- [FOCUS tab](focus.md), the AF engine these triggers invoke
+- [SKY tab → Slew & Center](sky-explorer.md), the recenter engine
+- [Glossary → EAA / HFR / Dither / Plate solve](GLOSSARY.md#e)

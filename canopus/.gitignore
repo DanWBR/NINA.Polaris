@@ -1,0 +1,37 @@
+# Canopus (open) — defensive secret/artifact excludes.
+# The hosted backend's secrets live OUTSIDE this repo; these lines make sure a
+# stray .env / account file / vector index dropped in here never gets committed.
+
+# --- secrets / config (NEVER commit) ---
+.env
+.env.*
+!.env.example
+!**/.env.example
+secrets.json
+mcp_servers.json
+*.key
+*.pem
+*.pfx
+
+# --- private subscriber / account data ---
+data/
+accounts.json
+
+# --- built RAG index / models / logs ---
+knowledge/index/
+*.onnx
+*.pt
+*.gguf
+logs/
+
+# --- Python / Node build cruft ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+node_modules/
+dist/
+build/

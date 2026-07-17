@@ -1,0 +1,877 @@
+{
+  "version": 1,
+  "note": "P0 starter catalog. Read tools run freely; mutating tools require an approved plan. Expanded to full coverage in P4.",
+  "tools": [
+    {
+      "name": "get_status",
+      "description": "Get a live snapshot of the rig: equipment connection, current capture/sequence/plan progress, guider RMS, live-stack frame count, focus, meridian time-to-flip. Use this to answer 'how is it going' or before proposing a correction.",
+      "category": "status",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/system/status"
+      }
+    },
+    {
+      "name": "get_tonights_best",
+      "description": "List tonight's best deep-sky targets (plus Moon/planets/comets) observable from the user's location and time window, ranked. Use when the user asks what to shoot.",
+      "category": "planning",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "default": 20,
+            "description": "How many targets to return."
+          }
+        },
+        "required": []
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/sky/tonights-best",
+        "query": {
+          "lat": "$ctx.lat",
+          "lon": "$ctx.lon",
+          "limit": "$args.limit"
+        }
+      }
+    },
+    {
+      "name": "search_catalog",
+      "description": "Find a deep-sky object by name or catalog id (e.g. M16, NGC 7000, Eagle Nebula) and get its coordinates and metadata.",
+      "category": "planning",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Name or catalog id."
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/sky/catalog/search",
+        "query": {
+          "query": "$args.query"
+        }
+      }
+    },
+    {
+      "name": "get_altitude",
+      "description": "Get the altitude track of a target across the night for the user's location, to judge when it's high enough and for how long.",
+      "category": "planning",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "ra": {
+            "type": "number",
+            "description": "Right ascension (hours)."
+          },
+          "dec": {
+            "type": "number",
+            "description": "Declination (degrees)."
+          },
+          "stepMinutes": {
+            "type": "integer",
+            "default": 15
+          }
+        },
+        "required": [
+          "ra",
+          "dec"
+        ]
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/sky/altitude",
+        "query": {
+          "ra": "$args.ra",
+          "dec": "$args.dec",
+          "stepMinutes": "$args.stepMinutes"
+        }
+      }
+    },
+    {
+      "name": "get_weather",
+      "description": "Get the 3-day astronomy weather forecast (3h slots) with cloud/seeing/transparency and an observation score for the user's site. Use for planning and for deciding mid-session route changes.",
+      "category": "planning",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/weather/forecast",
+        "query": {
+          "lat": "$ctx.lat",
+          "lon": "$ctx.lon"
+        }
+      }
+    },
+    {
+      "name": "slew_to",
+      "description": "Slew the mount to coordinates and plate-solve-center on them. MUTATES: moves the telescope. Only inside an approved plan.",
+      "category": "mount",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "ra": {
+            "type": "number",
+            "description": "Right ascension (hours)."
+          },
+          "dec": {
+            "type": "number",
+            "description": "Declination (degrees)."
+          },
+          "center": {
+            "type": "boolean",
+            "default": true,
+            "description": "Plate-solve-center after slew."
+          }
+        },
+        "required": [
+          "ra",
+          "dec"
+        ]
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/sky/slew-and-center",
+        "body": {
+          "ra": "$args.ra",
+          "dec": "$args.dec",
+          "center": "$args.center"
+        }
+      }
+    },
+    {
+      "name": "run_autofocus",
+      "description": "Start an automated V-curve autofocus run on the selected optical train. MUTATES: moves the focuser and captures. Only inside an approved plan.",
+      "category": "focus",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "aux",
+              "guide"
+            ],
+            "default": "primary"
+          }
+        },
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/autofocus/start",
+        "body": {
+          "source": "$args.source"
+        }
+      }
+    },
+    {
+      "name": "start_live_stack",
+      "description": "Start live (EAA) stacking with the given exposure and gain. MUTATES: begins capturing. Only inside an approved plan.",
+      "category": "livestack",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "exposure": {
+            "type": "number",
+            "description": "Seconds per sub."
+          },
+          "gain": {
+            "type": "integer"
+          },
+          "binning": {
+            "type": "integer",
+            "default": 1
+          }
+        },
+        "required": [
+          "exposure"
+        ]
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/livecapture/start",
+        "body": {
+          "exposure": "$args.exposure",
+          "gain": "$args.gain",
+          "binning": "$args.binning"
+        }
+      }
+    },
+    {
+      "name": "start_plan",
+      "description": "Start a saved multi-target night plan by id. MUTATES: runs a whole automated session. Only inside an approved plan.",
+      "category": "capture",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Saved plan id."
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/plan/{id}/start"
+      }
+    },
+    {
+      "name": "list_plans",
+      "description": "List the user's saved multi-target night plans (PLAN mode library) with their ids, target names, and frame lists. Use to see what's already saved before building or starting one.",
+      "category": "planning",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/plan/plans"
+      }
+    },
+    {
+      "name": "create_plan",
+      "description": "Build a multi-target night plan in PLAN mode from your target suggestions and save it to the user's plan library. This only saves a reviewable DRAFT — nothing moves and no capture starts; the user reviews/edits it in the PLAN tab and presses Start themselves (that is the separate start_plan tool, which needs approval). Get each target's J2000 coordinates first via search_catalog or get_tonights_best. After creating, call show_panel with tab 'plan' so the user can see it. Returns the saved plan including its new id.",
+      "category": "planning",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Plan name, e.g. 'Jul 5 - Veil + North America'."
+          },
+          "targets": {
+            "type": "array",
+            "description": "Targets imaged in order. Each needs J2000 coordinates and a frame list.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Target name, e.g. 'NGC 7000'."
+                },
+                "raHours": {
+                  "type": "number",
+                  "description": "J2000 right ascension in decimal HOURS."
+                },
+                "decDeg": {
+                  "type": "number",
+                  "description": "J2000 declination in decimal DEGREES."
+                },
+                "thumbKey": {
+                  "type": "string",
+                  "description": "Catalog slug like 'M42' or 'NGC7000' for the UI preview thumbnail; optional."
+                },
+                "frames": {
+                  "type": "array",
+                  "description": "Exposure blocks captured for this target.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "exposureSeconds": {
+                        "type": "number",
+                        "description": "Seconds per sub."
+                      },
+                      "count": {
+                        "type": "integer",
+                        "description": "Number of subs."
+                      },
+                      "filter": {
+                        "type": "string",
+                        "description": "Filter name, if a filter wheel is used (e.g. 'Ha', 'L', 'R'); omit for OSC."
+                      },
+                      "gain": {
+                        "type": "integer",
+                        "description": "Camera gain; omit to use the current setting."
+                      },
+                      "binning": {
+                        "type": "integer",
+                        "default": 1
+                      }
+                    },
+                    "required": [
+                      "exposureSeconds",
+                      "count"
+                    ]
+                  }
+                },
+                "ditherEveryNFrames": {
+                  "type": "integer",
+                  "default": 0,
+                  "description": "Dither via the guider every N frames (0 = off)."
+                },
+                "refocusEveryNFrames": {
+                  "type": "integer",
+                  "default": 0,
+                  "description": "Auto-focus every N frames (0 = off; needs a focuser)."
+                }
+              },
+              "required": [
+                "name",
+                "raHours",
+                "decDeg",
+                "frames"
+              ]
+            }
+          },
+          "autoGuiding": {
+            "type": "boolean",
+            "default": true
+          },
+          "autoMeridianFlip": {
+            "type": "boolean",
+            "default": true
+          },
+          "autoFocusOnStart": {
+            "type": "boolean",
+            "default": false,
+            "description": "Run one auto-focus pass at the start of the plan (needs a focuser)."
+          }
+        },
+        "required": [
+          "name",
+          "targets"
+        ]
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/plan/plans",
+        "body": {
+          "name": "$args.name",
+          "targets": "$args.targets",
+          "autoGuiding": "$args.autoGuiding",
+          "autoMeridianFlip": "$args.autoMeridianFlip",
+          "autoFocusOnStart": "$args.autoFocusOnStart"
+        }
+      }
+    },
+    {
+      "name": "search_knowledge",
+      "description": "Search the assistant's knowledge base, which covers BOTH general astrophotography best-practice (focusing, guiding, exposure/gain/histogram, light pollution & filters, polar alignment, calibration frames, planning & targets, diagnosing bad subs) AND the full N.I.N.A. Polaris user manual — every tab, workflow, setting and button. Use it whenever the user asks 'how do I / where is / what does this do / why', or seems lost or confused, whether the question is general technique or product-specific (which screen to open, how a Polaris feature works, what a setting means, fixing an error message). Base your answer on the returned passages (each has a `source` like 'polaris/live-stacking' or 'focusing'); if the answer is about a screen, also call show_panel to take the user there. If nothing relevant comes back, answer from general knowledge and say so.",
+      "category": "knowledge",
+      "mutates": false,
+      "requiresApproval": false,
+      "local": "knowledge",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "What to look up, e.g. 'why are my stars elongated in the corners' or 'how long should narrowband subs be'."
+          },
+          "k": {
+            "type": "integer",
+            "default": 4,
+            "description": "How many passages to return (1-6)."
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "show_panel",
+      "description": "Switch the Polaris UI to a panel so the user sees what you're doing or reviewing (e.g. FOCUS while adjusting focus, LIVE to show the stack, PLAN to review the night). Non-destructive; use freely to guide the user.",
+      "category": "ui",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string",
+            "description": "Panel to show.",
+            "enum": [
+              "home",
+              "equip",
+              "polar",
+              "sky",
+              "tonight",
+              "weather",
+              "focus",
+              "guide",
+              "preview",
+              "sequence",
+              "plan",
+              "live",
+              "video",
+              "seqadv",
+              "files",
+              "settings",
+              "help"
+            ]
+          }
+        },
+        "required": [
+          "tab"
+        ]
+      },
+      "ui": {
+        "action": "navigate",
+        "params": {
+          "tab": "$args.tab"
+        }
+      }
+    },
+    {
+      "name": "analyze_frame",
+      "description": "Capture the current camera frame (what the user is viewing in LIVE/PREVIEW/AUTORUN) and visually inspect it. Use when the user asks whether an image looks good, to diagnose a problem, or to check focus, star shape, tracking/trailing, gradients/light pollution, satellites/planes, or framing. The frame is attached as an image right after this call so you can look at it directly, then give a short verdict and any fix.",
+      "category": "image",
+      "mutates": false,
+      "requiresApproval": false,
+      "returnsImage": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "image": {
+        "method": "GET",
+        "path": "/api/image/latest/preview",
+        "query": {
+          "quality": "85"
+        }
+      }
+    },
+    {
+      "name": "analyze_selected_frame",
+      "description": "Visually inspect the frame the user has selected in the STUDIO Files browser (a saved FITS/image on disk) and give a short verdict (depth, gradients, star shape, framing, focus, trailing) plus any fix. Use this whenever the user asks about 'this frame', 'the selected file/image', or 'the one I picked in Files' — you do NOT need to ask them to open it; the selected frame is attached as an image right after this call. Works when exactly one file is selected in the Files tab.",
+      "returnsImage": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "image": {
+        "method": "GET",
+        "path": "/api/files/preview",
+        "query": {
+          "path": "$ctx.selectedFramePath",
+          "maxDim": "1600"
+        }
+      }
+    },
+    {
+      "name": "analyze_current_view",
+      "description": "Look at the image the user is CURRENTLY viewing in Polaris — whatever panel happens to be selected (LIVE, PREVIEW, FOCUS, VIDEO, AUTORUN, or a file open in the STUDIO/Files viewer). Captures the on-screen image exactly as shown, with the applied stretch / white-balance / stacking. Use this whenever the user points at what's on screen without naming a source — 'this', 'what I'm looking at', 'the current view/panel', 'the image on screen' — or when you don't know which panel they're on. The image is attached right after this call; give a short verdict tailored to that panel (focus/HFR & star shape for FOCUS; framing, depth & gradients for LIVE/PREVIEW; trailing for tracking) plus any next step. If it reports no image is displayed, tell the user to switch to an imaging panel.",
+      "category": "image",
+      "mutates": false,
+      "requiresApproval": false,
+      "returnsImage": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "captureView": {
+        "maxDim": 1536,
+        "quality": 0.85
+      }
+    },
+    {
+      "name": "get_studio_stats",
+      "description": "Summarise the captured-frame library: how many light frames are indexed, total integration time (hours), and how many distinct targets/filters. Use to answer 'how much did I capture' or before grading/stacking. Only counts frames the library has indexed; call refresh_library first if the user just captured and nothing shows up.",
+      "category": "library",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/studio/stats"
+      }
+    },
+    {
+      "name": "refresh_library",
+      "description": "Re-scan the image output folder so newly captured frames appear in the library before you list/grade/stack them. Returns immediately; the scan runs in the background. Use it once when a just-finished session isn't showing up in list_frames or get_studio_stats.",
+      "category": "library",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/studio/rescan"
+      }
+    },
+    {
+      "name": "list_frames",
+      "description": "Browse the captured-frame library. Filter by type (LIGHT/DARK/FLAT/BIAS/MASTERLIGHT), filter name, target, and an ISO date window (dateFrom/dateTo compare against each frame's DATE-OBS, e.g. '2026-07-04'). Returns rows with id, path, fileName, target, filter, exposureSec, gain, and dateObs, newest first. Use it to see what was shot last night (type 'LIGHT' with a date window) or to find a specific master (type 'MASTERLIGHT'). To stack the BEST subs, don't hand this list to integrate directly — grade it first with grade_frames.",
+      "category": "library",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Frame type, e.g. LIGHT, MASTERLIGHT, DARK, FLAT, BIAS. Omit for all."
+          },
+          "filter": {
+            "type": "string",
+            "description": "Filter name, e.g. Ha, L, R. Omit for all."
+          },
+          "target": {
+            "type": "string",
+            "description": "Object name as stored in the FITS OBJECT header. Omit for all."
+          },
+          "dateFrom": {
+            "type": "string",
+            "description": "ISO date/time lower bound on DATE-OBS, e.g. '2026-07-04' or '2026-07-04T18:00:00'."
+          },
+          "dateTo": {
+            "type": "string",
+            "description": "ISO date/time upper bound on DATE-OBS."
+          },
+          "limit": {
+            "type": "integer",
+            "default": 100,
+            "description": "Max rows (1-500)."
+          }
+        },
+        "required": []
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/studio/frames",
+        "query": {
+          "type": "$args.type",
+          "filter": "$args.filter",
+          "target": "$args.target",
+          "dateFrom": "$args.dateFrom",
+          "dateTo": "$args.dateTo",
+          "limit": "$args.limit"
+        }
+      }
+    },
+    {
+      "name": "grade_frames",
+      "description": "Measure and rank a set of light frames by quality (star count + median HFR) and pick the best for stacking. Pass either explicit framePaths, or a library query (type defaults to LIGHT; filter/target/date window like list_frames) and it grades everything that matches. This is how you honour 'the best frames': grade first, then feed the returned `selected` paths to integrate_frames. Runs as a background job (star-detecting a whole night takes a while); the result comes back after it finishes with `results` (every frame's stars/hfr/score/keep, best first), `selected` (the keeper paths, ranked) and `selectedCount`. Choose the keep rule: keepBest N for a fixed count, hfrTolerancePct to keep everything within N% of the sharpest sub, or neither for a sensible default (within 20% of the best HFR and at least half the median star count).",
+      "category": "library",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "framePaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicit frame paths to grade. Omit to grade the library query below instead."
+          },
+          "type": {
+            "type": "string",
+            "description": "Frame type when querying the library (defaults to LIGHT)."
+          },
+          "filter": {
+            "type": "string",
+            "description": "Filter name to restrict to (library query)."
+          },
+          "target": {
+            "type": "string",
+            "description": "Target/object name to restrict to (library query)."
+          },
+          "dateFrom": {
+            "type": "string",
+            "description": "ISO lower bound on DATE-OBS (library query), e.g. last night's date."
+          },
+          "dateTo": {
+            "type": "string",
+            "description": "ISO upper bound on DATE-OBS (library query)."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max frames to grade from the library query (default 500)."
+          },
+          "keepBest": {
+            "type": "integer",
+            "description": "Keep exactly the N highest-scoring frames."
+          },
+          "hfrTolerancePct": {
+            "type": "number",
+            "description": "Keep every frame within this percent of the best HFR (ignored when keepBest is set)."
+          }
+        },
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/studio/grade",
+        "body": {
+          "framePaths": "$args.framePaths",
+          "type": "$args.type",
+          "filter": "$args.filter",
+          "target": "$args.target",
+          "dateFrom": "$args.dateFrom",
+          "dateTo": "$args.dateTo",
+          "limit": "$args.limit",
+          "keepBest": "$args.keepBest",
+          "hfrTolerancePct": "$args.hfrTolerancePct"
+        }
+      },
+      "poll": {
+        "statusPath": "/api/studio/grade/{jobId}/status",
+        "jobIdFrom": "jobId",
+        "doneField": "inProgress",
+        "intervalMs": 2500,
+        "maxSeconds": 900
+      }
+    },
+    {
+      "name": "integrate_frames",
+      "description": "Align and stack (integrate) a set of already-captured light frames into one master light FITS. Pass the frame paths in framePaths (need at least 2) — typically the `selected` paths from grade_frames. Pick an integration method: SigmaClippedMean (default, rejects outliers like planes/satellites), Mean, or Median. Non-destructive: it writes a new master_light file and does not touch the subs or move any hardware. Runs as a background job; the result comes back when done with `stage` ('done' or 'error'), `outputPath` of the new master, `combined` (frames stacked), `dropped` (failed alignment) and `totalExposureSec`. After it finishes, call refresh_library then list_frames (type 'MASTERLIGHT') to locate the master, and preview_frame to show it. drizzleScale 2/3 upsamples for undersampled, well-dithered data (leave at 1 unless the user asks).",
+      "category": "library",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "framePaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Paths of the light frames to stack (>= 2). Usually grade_frames' selected list."
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "SigmaClippedMean",
+              "Mean",
+              "Median"
+            ],
+            "default": "SigmaClippedMean",
+            "description": "Per-pixel integration method."
+          },
+          "drizzleScale": {
+            "type": "integer",
+            "enum": [
+              1,
+              2,
+              3
+            ],
+            "default": 1,
+            "description": "1 = native resolution; 2/3 = drizzle onto a finer grid (undersampled + dithered data only)."
+          }
+        },
+        "required": [
+          "framePaths"
+        ]
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/studio/integrate",
+        "body": {
+          "framePaths": "$args.framePaths",
+          "method": "$args.method",
+          "drizzleScale": "$args.drizzleScale"
+        }
+      },
+      "poll": {
+        "statusPath": "/api/studio/integrate/{jobId}/status",
+        "jobIdFrom": "jobId",
+        "doneField": "inProgress",
+        "intervalMs": 3000,
+        "maxSeconds": 1800
+      }
+    },
+    {
+      "name": "preview_frame",
+      "description": "Fetch a library frame (by its numeric id from list_frames) as an auto-stretched image and inspect it — the frame is attached right after this call so you can look at it directly. Use it to show and assess a stacked master after integrate_frames (find its id via list_frames type 'MASTERLIGHT'), or to eyeball any indexed sub. Give a short verdict (depth, gradients, star shape, framing) and any next step.",
+      "category": "image",
+      "mutates": false,
+      "requiresApproval": false,
+      "returnsImage": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Library frame id (from list_frames)."
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "image": {
+        "method": "GET",
+        "path": "/api/studio/frames/{id}/preview",
+        "query": {
+          "quality": "85",
+          "max": "1600"
+        }
+      }
+    },
+    {
+      "name": "stop_live_stack",
+      "description": "Stop the running live (EAA) capture loop. MUTATES: ends the running session. Only inside an approved plan.",
+      "category": "livestack",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/livecapture/stop"
+      }
+    },
+    {
+      "name": "dither_now",
+      "description": "Ask the guider to dither now (small random nudge so hot pixels/walking noise average out across subs). MUTATES: moves the mount slightly via the guider. Only inside an approved plan.",
+      "category": "guide",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pixels": {
+            "type": "number",
+            "description": "Dither amplitude in guide-camera pixels (optional; uses the guider default when omitted)."
+          }
+        },
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/guider/dither",
+        "body": {
+          "pixels": "$args.pixels"
+        }
+      }
+    },
+    {
+      "name": "stop_guiding",
+      "description": "Stop autoguiding. MUTATES: ends guiding on the running session. Only inside an approved plan.",
+      "category": "guide",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/guider/stop"
+      }
+    },
+    {
+      "name": "park_mount",
+      "description": "Park the telescope mount (moves it to its park position and stops tracking — the safe end-of-night state). MUTATES: moves the mount. Only inside an approved plan.",
+      "category": "mount",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/telescope/park"
+      }
+    },
+    {
+      "name": "unpark_mount",
+      "description": "Unpark the telescope mount so it can slew and track again. MUTATES: enables mount motion. Only inside an approved plan.",
+      "category": "mount",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/telescope/unpark"
+      }
+    },
+    {
+      "name": "stop_plan",
+      "description": "Stop the running multi-target night plan (PLAN mode). MUTATES: aborts the automated session. Only inside an approved plan.",
+      "category": "capture",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/plan/stop"
+      }
+    },
+    {
+      "name": "stop_sequence",
+      "description": "Stop the running capture sequence. MUTATES: aborts the running session. Only inside an approved plan.",
+      "category": "capture",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/sequence/stop"
+      }
+    }
+  ]
+}

@@ -1,0 +1,178 @@
+# N.I.N.A. Polaris, User Guide
+
+Welcome. N.I.N.A. Polaris is a browser-controlled astrophotography
+controller running on a Raspberry Pi, mini-PC, or any small Linux/Windows
+host on your network. You point any device (laptop, tablet, phone) at
+the host and get the full equipment + capture + processing workflow
+without a desktop.
+
+This guide is split into **flows** (do this to accomplish X) and
+**references** (this is what every control does).
+
+> **Lost in the UI? → [Where do I go to do X?](ui-navigation.md)** — a quick
+> map of every panel and a task index (connect gear, pick a target, focus,
+> guide, capture, live-stack, process, settings).
+
+## New to Polaris? Start here
+
+1. **[Installation](installation.md)**, get the server running on your
+   Pi / mini-PC / Windows box. ~10 minutes. For the Pi-specific
+   end-to-end recipe (blank SD card to auto-start systemd unit), see
+   **[Raspberry Pi 4 / 5 setup](raspberry-pi-setup.md)**. On Pi the
+   fastest path is the `.deb` package from
+   [Releases](https://github.com/DanWBR/NINA.Polaris/releases/latest):
+   `wget .../polaris_arm64.deb && sudo apt install ./polaris_arm64.deb`
+   handles every dependency, systemd, indi-web, and user setup in one
+   command. After install: `https://<hostname>.local:5000` (accept the
+   self-signed cert once). Section 5 Option A in the Pi guide covers it.
+2. **[First-night setup](first-night.md)**, connect your gear, run
+   your first sequence. ~30 minutes. Walks through INDI/Alpaca,
+   creating a rig, hooking PHD2, slew-and-center, and triggering a
+   ten-frame test sequence on Vega or similar bright reference target.
+3. **[End-to-end workflow](end-to-end-workflow.md)**, the full path
+   from "scope on the tripod" to "JPEG exported": setup, acquire,
+   calibrate, integrate, GraXpert AI cleanup (BGE / Denoise / Decon),
+   editor pass, export. Stitches every Polaris feature into one
+   continuous night with a worked-example time budget.
+4. **[Mono workflow (RGB / LRGB / narrowband)](lrgb-mono-workflow.md)**,
+   the mono-camera branch of the end-to-end pipeline: combine
+   per-filter masters into one RGB FITS via the STUDIO Combine tool.
+   Covers plain RGB (no luminance needed), LRGB when you do have a
+   luminance master, and PixelMath for narrowband palettes like HOO
+   and SHO. Then continues through GraXpert and the editor exactly
+   like the OSC path.
+5. **[Color calibration (Siril-style)](color-calibration.md)**,
+   three calibrators that sit between combine and AI cleanup: BG
+   neutralize (zero-config), Manual (BG + white reference), and
+   PCC (Photometric Color Calibration via bundled APASS DR10 star
+   catalog). Plate-solve-driven, science-grade colour without
+   leaving Polaris.
+
+## By feature
+
+Each tab in the sidebar has its own page. Read the ones you need:
+
+- **[RIGS](rigs.md)**, multi-rig equipment management. INDI/Alpaca/vendor
+  drivers, per-role cards (Main Telescope, Camera, Mount, Focuser, Filter
+  Wheel, Guidescope, Guide Camera, Rotator, Flat Panel, Dome, Weather).
+- **[ASCOM (direct COM)](ascom-com.md)**, Windows-only path to talk to
+  ASCOM Platform drivers directly without going through ASCOM Remote
+  or the Alpaca Omni Simulator.
+- **[GUIDE (native)](guide-native.md)**, built-in autoguider (PHD2 math
+  ported to C#) driving the rig's guide camera + mount directly, no
+  external PHD2 needed. Calibration restore per equipment, dithering,
+  multi-star, meridian-flip handling.
+- **[GUIDE (PHD2)](guide-phd2.md)**, full PHD2 integration. Connection
+  + management + smart calibration + algorithm presets + embedded xpra
+  GUI (Linux only).
+- **[FOCUS](focus.md)**, manual stepper + V-curve auto-focus with live
+  preview canvas.
+- **[PREVIEW](preview.md)**, snap test shots with optional save +
+  continuous stream mode.
+- **[AUTORUN](autorun.md)**, simple sequence editor with end-actions.
+  Also hosts the **[Flat Wizard](flat-wizard.md)** sub-tab for
+  automated flat-field acquisition (binary-search exposure per
+  filter, trained-exposure cache, per-rig defaults).
+- **[ADV](adv-sequencer.md)**, advanced tree-based sequencer (NINA-style).
+- **[PLAN](plan.md)**, ASIAIR-style multi-target night planner. Queue
+  several targets, each with its own frame list, run in order with
+  automatic slew + plate-solve-center, guiding, cooling, auto-focus,
+  meridian-flip handling, and end-of-session actions.
+- **[LIVE](live-stacking.md)**, real-time EAA stacking with auto
+  re-focus / re-center triggers. See also
+  [client-side compute](client-side-compute.md) for the WASM offload
+  that lets a slow server (Pi 2/3) do the math in your browser instead.
+- **[VIDEO](video-planetary.md)**, planetary capture + lucky-imaging
+  stack pipeline (SER format).
+- **[SKY](sky-explorer.md)**, offline sky map, target search, mosaic
+  planner, tonight's best altitudes.
+- **[STUDIO](studio.md)**, post-processing: frame browser, master
+  generation, calibration, batch stacking, debayer + BGE + NR + sharpen.
+- **[EDITOR](editor.md)**, Lightroom-style non-destructive editor with
+  sliders for Light / Color / Effects / Detail + JPEG/PNG/TIFF export
+  with quality + resize. Sidecar JSON (`.edit.json`) preserves your
+  edits next to the source file.
+- **[AI inference (ONNX)](onnx-inference.md)**, GraXpert AI models
+  (BGE / Denoise / Decon) running directly in the browser via
+  onnxruntime-web. Server hosts the `.onnx` files; any device with
+  WebGPU or WASM SIMD does the heavy lifting locally.
+- **[Star removal (StarNet++)](star-removal.md)**, in-browser ONNX star
+  removal that writes `_starless` + `_stars` siblings, then opens Image
+  Blend to recombine them with an independent stretch per layer.
+- **[Image Blend](image-blend.md)**, recombine two same-size images with
+  an independent MTF stretch on each + Screen/Add/Lighten + opacity, with
+  a live preview. The finishing step of the starless workflow.
+- **[FILES](files.md)**, server-side file explorer.
+- **[HTTPS setup](https-setup.md)**, self-signed cert on port 5001,
+  required for WebGPU + multi-thread WASM on LAN client devices
+  (any device other than the host itself). One-time per-device cert
+  trust click in the browser; after that, in-browser GraXpert AI
+  pipelines use the client's GPU instead of falling back to slow
+  CPU-only inference.
+- **[Network mode (Hotspot ↔ Station)](network-mode.md)**,
+  ASIAIR-style WiFi panel. Pi ships as a hotspot
+  (`Polaris-Hotspot` / `polaris1234`) on first boot so you can
+  reach it without a monitor; flip the Pi onto your home WiFi
+  from Settings → Network with a 30 s try-and-revert safety net.
+- **[Relay (remote access)](relay.md)**, TLS-tunneled access from
+  outside your LAN.
+- **[Remote terminal](remote-terminal.md)**, embedded SSH terminal
+  (xterm.js + SSH.NET) in SETTINGS. Restart services on a headless Pi
+  from the browser, without plugging in a screen.
+- **[Software self-update](self-update.md)**, on Pi/SBC `.deb` installs
+  a status-bar badge offers a one-click update to the latest GitHub
+  release — download + install the matching `.deb` and reload, no SSH or
+  sudo password.
+
+## Reference
+
+- **[Glossary](GLOSSARY.md)**, every astrophotography term used in this
+  guide explained in two lines. Read in any order.
+- **[Requirements](../../REQUIREMENTS.md)**, full Windows + Linux (RPi)
+  tooling matrix, what's required vs optional per feature, firewall
+  rules, hardware sizing.
+- **[Troubleshooting](troubleshooting.md)**, common problems + fixes.
+- **[FAQ](faq.md)**, questions that come up a lot.
+- **[Debug logging](debug-logging.md)**, the LOG badge + panel:
+  collect every server log, HTTP request, toast and browser
+  exception in one place, export as JSONL to attach to bug reports.
+
+## For developers
+
+- **[Debug on Raspberry Pi from Visual Studio](rpi-debug-from-vs.md)**,
+  SSH remote debug setup (full breakpoints + step-debug from VS on
+  Windows over the network), plus simpler publish + run + hot-reload
+  workflows.
+- **[Equipment simulator mode](simulator-mode.md)**, built-in fake
+  telescope + camera + focuser + filter wheel for testing the whole
+  pipeline without real hardware. Renders real stars at the simulated
+  mount position so plate solve, auto-focus, and live stacking all
+  actually work.
+- **[INDI Drivers manager (embedded indi-web)](indi-web.md)**,
+  embed the indi-web (indiwebmanager) UI inside the RIGS tab via
+  iframe so you can add / remove INDI drivers and start / stop
+  the indiserver from the Polaris browser instead of ssh'ing into
+  the host. Lighter than the PHD2 xpra integration (no display
+  server, just HTTP).
+
+## A note on screenshots
+
+Screenshots in this guide use placeholder paths like
+`![](screenshots/rigs-tab-overview.png)`. They land as broken images
+in the rendered Markdown, that's expected. They'll be filled in over
+time as we capture good ones from real sessions. If you want to help,
+the placeholder filenames are descriptive enough that you can match
+them to your own captures and open a PR.
+
+## A note on audience
+
+This guide is written for people who have shot astrophotography
+before but are new to Polaris. Concepts like HFR, dither, plate solve,
+bias / dark / flat get a quick line in context and a deeper entry in
+the [glossary](GLOSSARY.md), newcomers should keep that tab open
+while reading.
+
+For complete beginners to astrophotography, supplement with the
+[Photographing the Universe playlist](https://www.youtube.com/@AstroBackyard)
+or any of the standard intro books. We focus on Polaris-specific
+workflow here, not the underlying technique.

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://polaris-assistant/shared/manifest.schema.json",
+  "title": "Canopus Assistant cloud manifest",
+  "description": "Fetched by the FOSS assistant-module host when the feature is enabled. Carries ALL product/branding/commercial specifics so none of it is hardcoded in the AGPL repo. The host is generic and renders whatever a manifest describes.",
+  "type": "object",
+  "required": ["version", "product", "intro", "subscription", "iframe", "api", "allowlist"],
+  "properties": {
+    "version": { "type": "integer", "description": "Manifest schema version.", "const": 1 },
+    "product": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "example": "Canopus Assistant" },
+        "tagline": { "type": "string" },
+        "iconEmoji": { "type": "string", "description": "Emoji shown on the badge/FAB when no iconUrl." },
+        "iconUrl": { "type": "string", "format": "uri" }
+      }
+    },
+    "badge": {
+      "type": "object",
+      "description": "The initial neutral entry point shown before subscription.",
+      "properties": {
+        "show": { "type": "boolean", "default": true },
+        "label": { "type": "string", "example": "Meet Canopus Assistant" }
+      }
+    },
+    "intro": {
+      "type": "object",
+      "description": "Content for the intro/subscribe modal opened from the badge.",
+      "required": ["headline"],
+      "properties": {
+        "headline": { "type": "string" },
+        "bodyMarkdown": { "type": "string" },
+        "bullets": { "type": "array", "items": { "type": "string" } },
+        "learnMoreUrl": { "type": "string", "format": "uri" }
+      }
+    },
+    "subscription": {
+      "type": "object",
+      "required": ["priceDisplay", "checkoutUrl"],
+      "properties": {
+        "priceDisplay": { "type": "string", "example": "US$4.99/mo" },
+        "checkoutUrl": { "type": "string", "format": "uri", "description": "Where the modal sends the user to subscribe (Stripe Checkout entry, opened in a new tab)." },
+        "manageUrl": { "type": "string", "format": "uri", "description": "Stripe customer portal for existing subscribers." }
+      }
+    },
+    "iframe": {
+      "type": "object",
+      "required": ["url", "origin"],
+      "properties": {
+        "url": { "type": "string", "format": "uri", "description": "The chat UI to embed once subscribed + enabled." },
+        "origin": { "type": "string", "format": "uri", "description": "Exact origin for postMessage validation, e.g. https://assistant.example.com" },
+        "sandbox": { "type": "string", "default": "allow-scripts allow-forms allow-popups allow-same-origin" },
+        "fabIconEmoji": { "type": "string" },
+        "fabLabel": { "type": "string" }
+      }
+    },
+    "api": {
+      "type": "object",
+      "required": ["base"],
+      "properties": {
+        "base": { "type": "string", "format": "uri", "description": "Cloud API base the client uses for account/session/billing + the agent WS. The FOSS host does NOT call this; only the iframe does." }
+      }
+    },
+    "allowlist": {
+      "type": "array",
+      "description": "The Polaris API calls the host may execute on the iframe's behalf. Derived from tools/catalog.json 'polaris' blocks. The host also enforces a hardcoded denylist regardless of this list.",
+      "items": {
+        "type": "object",
+        "required": ["method", "pathPattern"],
+        "properties": {
+          "method": { "type": "string", "enum": ["GET", "POST", "PUT", "DELETE"] },
+          "pathPattern": { "type": "string", "description": "Path or template, e.g. /api/sky/tonights-best or /api/plan/{id}/start" }
+        }
+      }
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "privacyUrl": { "type": "string", "format": "uri" },
+        "termsUrl": { "type": "string", "format": "uri" }
+      }
+    }
+  }
+}

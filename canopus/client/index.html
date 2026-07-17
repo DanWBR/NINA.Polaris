@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canopus Assistant</title>
+<style>
+  :root { color-scheme: dark; }
+  /* Bundled Polaris UI fonts (served same-origin from /fonts), so the chat can
+     render in the same typeface the user picked in Polaris. All SIL OFL-1.1. */
+  @font-face { font-family: 'Atkinson Hyperlegible'; font-weight: 400; font-style: normal; font-display: swap;
+    src: url('/fonts/AtkinsonHyperlegible-Regular.woff2') format('woff2'); }
+  @font-face { font-family: 'Atkinson Hyperlegible'; font-weight: 700; font-style: normal; font-display: swap;
+    src: url('/fonts/AtkinsonHyperlegible-Bold.woff2') format('woff2'); }
+  @font-face { font-family: 'IBM Plex Sans'; font-weight: 400; font-style: normal; font-display: swap;
+    src: url('/fonts/IBMPlexSans-Regular.woff2') format('woff2'); }
+  @font-face { font-family: 'IBM Plex Sans'; font-weight: 700; font-style: normal; font-display: swap;
+    src: url('/fonts/IBMPlexSans-Bold.woff2') format('woff2'); }
+  @font-face { font-family: 'Inter'; font-weight: 100 900; font-style: normal; font-display: swap;
+    src: url('/fonts/InterVariable.woff2') format('woff2-variations'); }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  /* --asst-font / --asst-pad mirror Polaris' Appearance (font + control
+     density); --asst-pad defaults to 1 so the chat looks right before init. */
+  body {
+    font-size: 14px; line-height: 1.5;
+    font-family: var(--asst-font, system-ui, -apple-system, Segoe UI, Roboto, sans-serif);
+    background: #0f141b; color: #e6edf3; display: flex; flex-direction: column;
+  }
+  #log { flex: 1; overflow-y: auto; padding: calc(12px * var(--asst-pad, 1)); display: flex; flex-direction: column; gap: calc(10px * var(--asst-pad, 1)); }
+  .msg { max-width: 85%; padding: calc(8px * var(--asst-pad, 1)) calc(11px * var(--asst-pad, 1)); border-radius: 12px; white-space: pre-wrap; word-wrap: break-word; }
+  .user { align-self: flex-end; background: #1f6feb; color: #fff; }
+  .asst { align-self: flex-start; background: #1b2430; border: 1px solid #2b3644; }
+  .sys  { align-self: center; color: #8b98a5; font-size: 12px; }
+  /* Proactive session-watcher nudges (guiding lost, meridian soon, …). Left
+     amber accent so they read as heads-up alerts, distinct from a reply. */
+  .notice { align-self: flex-start; max-width: 92%; background: #241d10; border: 1px solid #4a3a12; border-left: 3px solid #f0b429; }
+  .notice.notice-info { background: #101d24; border-color: #123a4a; border-left-color: #29a3f0; }
+  .plan { align-self: flex-start; max-width: 92%; background: #17202b; border: 1px solid #2b3644; border-radius: 12px; padding: 10px 12px; }
+  .plan h4 { margin: 0 0 6px; font-size: 13px; }
+  .plan ol { margin: 6px 0 10px 18px; padding: 0; }
+  .plan li { margin: 3px 0; }
+  .plan .mut { color: #f0b429; font-size: 11px; margin-left: 4px; }
+  .plan-actions { display: flex; gap: 8px; }
+  .tool { align-self: flex-start; color: #8b98a5; font-size: 12px; font-style: italic; }
+  .thinking { align-self: flex-start; color: #8b98a5; font-size: 12px; font-style: italic; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+  /* Form controls don't inherit font-family by default → they'd fall back to
+     the browser's system font and look off vs the chat. Force inheritance. */
+  input, select, textarea, button { font: inherit; }
+  button { border: 1px solid #2b3644; background: #1b2430; color: #e6edf3; border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  #bar { display: flex; gap: 8px; padding: calc(10px * var(--asst-pad, 1)); border-top: 1px solid #2b3644; position: relative; }
+  #inp { flex: 1; padding: calc(8px * var(--asst-pad, 1)) 11px; border-radius: 10px; border: 1px solid #2b3644; background: #0b1017; color: #e6edf3; }
+  .choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+  /* subscription gate */
+  #gate { flex: 1; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 22px; text-align: center; }
+  #gate h2 { margin: 0; font-size: 18px; }
+  #gate p { margin: 0; color: #8b98a5; max-width: 300px; }
+  #gate .field { width: 100%; max-width: 300px; padding: 9px 11px; border-radius: 10px; border: 1px solid #2b3644; background: #0b1017; color: #e6edf3; }
+  #gate .wide { width: 100%; max-width: 300px; }
+  #gate .mut { color: #8b98a5; font-size: 12px; }
+  #gate .ok { color: #3fb950; font-weight: 600; font-size: 15px; }
+  #gate .err { color: #f2707a; font-size: 12px; min-height: 14px; }
+  #gate .icon { font-size: 34px; }
+  #gate a.link { color: #58a6ff; cursor: pointer; font-size: 12px; text-decoration: none; }
+  #gate .foot { margin-top: 8px; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  #gate .foot a { color: #8b98a5; font-size: 12px; text-decoration: none; }
+  #gate .foot a:hover { color: #e6edf3; }
+  #gate .rights { margin-top: 4px; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+
+  /* gear settings menu in the chat input bar */
+  #gearBtn { flex: none; width: 40px; padding: 8px 0; font-size: 17px; line-height: 1; }
+  #gearBtn.on { border-color: #1f6feb; }
+  .menu { position: absolute; bottom: calc(100% + 6px); left: 8px; min-width: 220px;
+          background: #16202c; border: 1px solid #2b3644; border-radius: 10px;
+          box-shadow: 0 10px 28px rgba(0,0,0,.55); padding: 6px; display: none; z-index: 30; }
+  .menu.open { display: block; }
+  .menu a { display: block; padding: 8px 10px; border-radius: 7px; color: #e6edf3;
+            font-size: 13px; text-decoration: none; cursor: pointer; }
+  .menu a:hover { background: #1f2b39; }
+  .menu a.danger { color: #f2707a; }
+  .menu .hdr { padding: 8px 10px 3px; color: #8b98a5; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .menu .usage { padding: 2px 10px 4px; color: #c6d0da; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .menu .sep { height: 1px; background: #2b3644; margin: 5px 4px; }
+</style>
+</head>
+<body>
+  <div id="gate"></div>
+  <div id="log" style="display:none"></div>
+  <div id="bar" style="display:none">
+    <button id="gearBtn" title="Settings">⚙</button>
+    <div id="gearMenu" class="menu"></div>
+    <input id="inp" placeholder="Ask the assistant…" autocomplete="off">
+    <button id="send" class="primary">Send</button>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+  const V = 1;
+  const log = document.getElementById('log');
+  const bar = document.getElementById('bar');
+  const gate = document.getElementById('gate');
+  const inp = document.getElementById('inp');
+  const sendBtn = document.getElementById('send');
+  const gearBtn = document.getElementById('gearBtn');
+  const gearMenu = document.getElementById('gearMenu');
+  const SESSION_KEY = 'polaris.assistant.session';
+
+  let parentOrigin = null;   // learned from host:init; then enforced
+  let booted = false;        // boot() runs once (host:init or standalone/fallback)
+  let embedded = false;      // true when running inside the Polaris host iframe
+  let ws = null;
+  let locale = 'en';
+  let price = 'US$4.99/mo';
+  let trialDays = 0;
+  let pollTimer = null;
+
+  // ---- i18n (English source string = key) ----
+  const STRINGS = {
+    'pt-BR': {
+      'Loading…': 'Carregando…', 'Polaris {v} connected.': 'Polaris {v} conectado.',
+      'Connected.': 'Conectado.', 'Disconnected.': 'Desconectado.', 'Connection error.': 'Erro de conexão.',
+      'Ask the assistant…': 'Pergunte ao assistente…', 'Send': 'Enviar',
+      'Approve': 'Aprovar', 'Reject': 'Rejeitar', 'Approved.': 'Aprovado.', 'Rejected.': 'Rejeitado.',
+      'Proposed actions': 'Ações propostas', '· changes the rig': '· altera o equipamento',
+      'Choose:': 'Escolha:', 'Error: {m}': 'Erro: {m}',
+      'Canopus Assistant': 'Canopus Assistant',
+      'Plan and run your night with an AI companion.': 'Planeje e execute sua noite com um assistente de IA.',
+      '{price} · cancel anytime.': '{price} · cancele quando quiser.',
+      'Email address': 'Endereço de e-mail', 'Continue': 'Continuar',
+      'Check your email for a sign-in link, or enter the 6-digit code below.': 'Verifique seu e-mail para o link de acesso, ou digite o código de 6 dígitos abaixo.',
+      '6-digit code': 'Código de 6 dígitos', 'Verify': 'Verificar',
+      'Resend email': 'Reenviar e-mail', 'Use a different email': 'Usar outro e-mail', 'Sign-in email sent again.': 'E-mail de acesso reenviado.',
+      'Subscribe · {price}': 'Assinar · {price}', 'Waiting for payment…': 'Aguardando pagamento…',
+      'Manage subscription': 'Gerenciar assinatura', 'Something went wrong. Try again.': 'Algo deu errado. Tente novamente.',
+      'Signed in as {email}': 'Conectado como {email}', 'Sign out': 'Sair',
+      'Signed in successfully': 'Login efetuado com sucesso', 'You can close this tab and return to Polaris, then open the assistant.': 'Você pode fechar esta aba e voltar ao Polaris, depois abrir o assistente.',
+      'Click below to finish signing in.': 'Clique abaixo para concluir o login.', 'Complete sign-in': 'Concluir login', 'This sign-in link has expired or was already used. Request a new one.': 'Este link de acesso expirou ou já foi usado. Solicite um novo.',
+      'Privacy': 'Privacidade', 'Terms': 'Termos',
+      'We never store your conversations.': 'Nunca armazenamos suas conversas.',
+      'Export my data': 'Exportar meus dados', 'Delete my account': 'Apagar minha conta',
+      'This permanently deletes your account and cancels your subscription. Continue?': 'Isto apaga permanentemente sua conta e cancela sua assinatura. Continuar?',
+      'Your account was deleted.': 'Sua conta foi apagada.',
+      'Settings': 'Configurações', 'Account': 'Conta', 'Legal': 'Legal',
+      'Usage this month': 'Uso neste mês', '{used} / {cap} tokens': '{used} / {cap} tokens', 'Usage unavailable': 'Uso indisponível',
+      '{n}-day free trial, then {price}.': '{n} dias grátis, depois {price}.', 'Start free trial': 'Começar teste grátis', 'Analyzing the current frame…': 'Analisando o frame atual…',
+    },
+    'es': {
+      'Loading…': 'Cargando…', 'Polaris {v} connected.': 'Polaris {v} conectado.',
+      'Connected.': 'Conectado.', 'Disconnected.': 'Desconectado.', 'Connection error.': 'Error de conexión.',
+      'Ask the assistant…': 'Pregúntale al asistente…', 'Send': 'Enviar',
+      'Approve': 'Aprobar', 'Reject': 'Rechazar', 'Approved.': 'Aprobado.', 'Rejected.': 'Rechazado.',
+      'Proposed actions': 'Acciones propuestas', '· changes the rig': '· cambia el equipo',
+      'Choose:': 'Elige:', 'Error: {m}': 'Error: {m}',
+      'Canopus Assistant': 'Canopus Assistant',
+      'Plan and run your night with an AI companion.': 'Planifica y ejecuta tu noche con un asistente de IA.',
+      '{price} · cancel anytime.': '{price} · cancela cuando quieras.',
+      'Email address': 'Correo electrónico', 'Continue': 'Continuar',
+      'Check your email for a sign-in link, or enter the 6-digit code below.': 'Revisa tu correo para el enlace de acceso, o ingresa el código de 6 dígitos abajo.',
+      '6-digit code': 'Código de 6 dígitos', 'Verify': 'Verificar',
+      'Resend email': 'Reenviar correo', 'Use a different email': 'Usar otro correo', 'Sign-in email sent again.': 'Correo de acceso reenviado.',
+      'Subscribe · {price}': 'Suscribirse · {price}', 'Waiting for payment…': 'Esperando el pago…',
+      'Manage subscription': 'Gestionar suscripción', 'Something went wrong. Try again.': 'Algo salió mal. Inténtalo de nuevo.',
+      'Signed in as {email}': 'Sesión iniciada como {email}', 'Sign out': 'Cerrar sesión',
+      'Signed in successfully': 'Sesión iniciada correctamente', 'You can close this tab and return to Polaris, then open the assistant.': 'Puedes cerrar esta pestaña y volver a Polaris, luego abrir el asistente.',
+      'Click below to finish signing in.': 'Haz clic abajo para completar el inicio de sesión.', 'Complete sign-in': 'Completar inicio de sesión', 'This sign-in link has expired or was already used. Request a new one.': 'Este enlace de acceso caducó o ya se usó. Solicita uno nuevo.',
+      'Privacy': 'Privacidad', 'Terms': 'Términos',
+      'We never store your conversations.': 'Nunca almacenamos tus conversaciones.',
+      'Export my data': 'Exportar mis datos', 'Delete my account': 'Eliminar mi cuenta',
+      'This permanently deletes your account and cancels your subscription. Continue?': 'Esto elimina permanentemente tu cuenta y cancela tu suscripción. ¿Continuar?',
+      'Your account was deleted.': 'Tu cuenta ha sido eliminada.',
+      'Settings': 'Ajustes', 'Account': 'Cuenta', 'Legal': 'Legal',
+      'Usage this month': 'Uso este mes', '{used} / {cap} tokens': '{used} / {cap} tokens', 'Usage unavailable': 'Uso no disponible',
+      '{n}-day free trial, then {price}.': '{n} días gratis, luego {price}.', 'Start free trial': 'Empezar prueba gratis', 'Analyzing the current frame…': 'Analizando el fotograma actual…',
+    },
+    'fr': {
+      'Loading…': 'Chargement…', 'Polaris {v} connected.': 'Polaris {v} connecté.',
+      'Connected.': 'Connecté.', 'Disconnected.': 'Déconnecté.', 'Connection error.': 'Erreur de connexion.',
+      'Ask the assistant…': 'Demandez à l’assistant…', 'Send': 'Envoyer',
+      'Approve': 'Approuver', 'Reject': 'Rejeter', 'Approved.': 'Approuvé.', 'Rejected.': 'Rejeté.',
+      'Proposed actions': 'Actions proposées', '· changes the rig': '· modifie l’équipement',
+      'Choose:': 'Choisissez :', 'Error: {m}': 'Erreur : {m}',
+      'Canopus Assistant': 'Canopus Assistant',
+      'Plan and run your night with an AI companion.': 'Planifiez et menez votre nuit avec un assistant IA.',
+      '{price} · cancel anytime.': '{price} · annulable à tout moment.',
+      'Email address': 'Adresse e-mail', 'Continue': 'Continuer',
+      'Check your email for a sign-in link, or enter the 6-digit code below.': 'Consultez votre e-mail pour le lien de connexion, ou saisissez le code à 6 chiffres ci-dessous.',
+      '6-digit code': 'Code à 6 chiffres', 'Verify': 'Vérifier',
+      'Resend email': 'Renvoyer l’e-mail', 'Use a different email': 'Utiliser une autre adresse', 'Sign-in email sent again.': 'E-mail de connexion renvoyé.',
+      'Subscribe · {price}': 'S’abonner · {price}', 'Waiting for payment…': 'En attente du paiement…',
+      'Manage subscription': 'Gérer l’abonnement', 'Something went wrong. Try again.': 'Une erreur est survenue. Réessayez.',
+      'Signed in as {email}': 'Connecté en tant que {email}', 'Sign out': 'Se déconnecter',
+      'Signed in successfully': 'Connexion réussie', 'You can close this tab and return to Polaris, then open the assistant.': 'Vous pouvez fermer cet onglet et revenir à Polaris, puis ouvrir l’assistant.',
+      'Click below to finish signing in.': 'Cliquez ci-dessous pour terminer la connexion.', 'Complete sign-in': 'Terminer la connexion', 'This sign-in link has expired or was already used. Request a new one.': 'Ce lien de connexion a expiré ou a déjà été utilisé. Demandez-en un nouveau.',
+      'Privacy': 'Confidentialité', 'Terms': 'Conditions',
+      'We never store your conversations.': 'Nous ne stockons jamais vos conversations.',
+      'Export my data': 'Exporter mes données', 'Delete my account': 'Supprimer mon compte',
+      'This permanently deletes your account and cancels your subscription. Continue?': 'Ceci supprime définitivement votre compte et annule votre abonnement. Continuer ?',
+      'Your account was deleted.': 'Votre compte a été supprimé.',
+      'Settings': 'Paramètres', 'Account': 'Compte', 'Legal': 'Mentions légales',
+      'Usage this month': 'Utilisation ce mois-ci', '{used} / {cap} tokens': '{used} / {cap} tokens', 'Usage unavailable': 'Utilisation indisponible',
+      '{n}-day free trial, then {price}.': '{n} jours gratuits, puis {price}.', 'Start free trial': 'Démarrer l’essai gratuit', 'Analyzing the current frame…': 'Analyse de l’image actuelle…',
+    },
+    'de': {
+      'Loading…': 'Wird geladen…', 'Polaris {v} connected.': 'Polaris {v} verbunden.',
+      'Connected.': 'Verbunden.', 'Disconnected.': 'Getrennt.', 'Connection error.': 'Verbindungsfehler.',
+      'Ask the assistant…': 'Assistenten fragen…', 'Send': 'Senden',
+      'Approve': 'Genehmigen', 'Reject': 'Ablehnen', 'Approved.': 'Genehmigt.', 'Rejected.': 'Abgelehnt.',
+      'Proposed actions': 'Vorgeschlagene Aktionen', '· changes the rig': '· ändert die Ausrüstung',
+      'Choose:': 'Auswählen:', 'Error: {m}': 'Fehler: {m}',
+      'Canopus Assistant': 'Canopus Assistant',
+      'Plan and run your night with an AI companion.': 'Plane und steuere deine Nacht mit einem KI-Begleiter.',
+      '{price} · cancel anytime.': '{price} · jederzeit kündbar.',
+      'Email address': 'E-Mail-Adresse', 'Continue': 'Weiter',
+      'Check your email for a sign-in link, or enter the 6-digit code below.': 'Prüfe deine E-Mail auf den Anmeldelink oder gib den 6-stelligen Code unten ein.',
+      '6-digit code': '6-stelliger Code', 'Verify': 'Bestätigen',
+      'Resend email': 'E-Mail erneut senden', 'Use a different email': 'Andere E-Mail verwenden', 'Sign-in email sent again.': 'Anmelde-E-Mail erneut gesendet.',
+      'Subscribe · {price}': 'Abonnieren · {price}', 'Waiting for payment…': 'Warte auf Zahlung…',
+      'Manage subscription': 'Abo verwalten', 'Something went wrong. Try again.': 'Etwas ist schiefgelaufen. Versuche es erneut.',
+      'Signed in as {email}': 'Angemeldet als {email}', 'Sign out': 'Abmelden',
+      'Signed in successfully': 'Erfolgreich angemeldet', 'You can close this tab and return to Polaris, then open the assistant.': 'Du kannst diesen Tab schließen und zu Polaris zurückkehren, dann den Assistenten öffnen.',
+      'Click below to finish signing in.': 'Klicke unten, um die Anmeldung abzuschließen.', 'Complete sign-in': 'Anmeldung abschließen', 'This sign-in link has expired or was already used. Request a new one.': 'Dieser Anmeldelink ist abgelaufen oder wurde bereits verwendet. Fordere einen neuen an.',
+      'Privacy': 'Datenschutz', 'Terms': 'Nutzungsbedingungen',
+      'We never store your conversations.': 'Wir speichern Ihre Unterhaltungen niemals.',
+      'Export my data': 'Meine Daten exportieren', 'Delete my account': 'Mein Konto löschen',
+      'This permanently deletes your account and cancels your subscription. Continue?': 'Dies löscht Ihr Konto endgültig und kündigt Ihr Abo. Fortfahren?',
+      'Your account was deleted.': 'Ihr Konto wurde gelöscht.',
+      'Settings': 'Einstellungen', 'Account': 'Konto', 'Legal': 'Rechtliches',
+      'Usage this month': 'Nutzung diesen Monat', '{used} / {cap} tokens': '{used} / {cap} tokens', 'Usage unavailable': 'Nutzung nicht verfügbar',
+      '{n}-day free trial, then {price}.': '{n} Tage gratis, dann {price}.', 'Start free trial': 'Kostenlos testen', 'Analyzing the current frame…': 'Analysiere das aktuelle Bild…',
+    },
+  };
+  function T(key, vars) {
+    const tbl = STRINGS[locale];
+    let out = (tbl && tbl[key] != null) ? tbl[key] : key;
+    if (vars) out = out.replace(/\{(\w+)\}/g, (m, k) => Object.prototype.hasOwnProperty.call(vars, k) ? vars[k] : m);
+    return out;
+  }
+  // Locale-aware integer grouping for the usage line (e.g. 12,450 / 1,000,000).
+  function fmtInt(n) {
+    try { return Number(n).toLocaleString(locale); } catch (_) { return String(n); }
+  }
+  function priceLine() {
+    return trialDays > 0
+      ? T('{n}-day free trial, then {price}.', { n: trialDays, price })
+      : T('{price} · cancel anytime.', { price });
+  }
+
+  // ---- account / entitlement REST ----
+  function getToken() { try { return localStorage.getItem(SESSION_KEY) || ''; } catch (_) { return ''; } }
+  function setToken(t) { try { t ? localStorage.setItem(SESSION_KEY, t) : localStorage.removeItem(SESSION_KEY); } catch (_) {} }
+  async function api(path, opts) {
+    opts = opts || {};
+    const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+    const tok = getToken();
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
+    const r = await fetch('/api' + path, { method: opts.method || 'GET', headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+    let j = null; try { j = await r.json(); } catch (_) {}
+    return { ok: r.ok, status: r.status, json: j || {} };
+  }
+
+  // ---- entitlement boot ----
+  async function boot() {
+    if (booted) return;   // idempotent: host:init, standalone, or fallback
+    booted = true;
+    try {
+      const m = await fetch('/api/manifest').then(r => r.json());
+      if (m && m.subscription) { if (m.subscription.priceDisplay) price = m.subscription.priceDisplay; trialDays = m.subscription.trialDays || 0; }
+    } catch (_) {}
+
+    // Magic-link return: #verify=<token>. Do NOT auto-verify on load — the
+    // token is single-use and email link-scanners (Gmail, corporate proxies)
+    // pre-fetch the URL and run the page, which would burn the token before the
+    // user ever clicks. Show a Complete-sign-in button; only a real click
+    // exchanges the token. Scanners don't click.
+    const hash = location.hash || '';
+    const mv = hash.match(/verify=([^&]+)/);
+    if (mv) {
+      history.replaceState(null, '', location.pathname);
+      return showConfirmSignIn(decodeURIComponent(mv[1]));
+    }
+
+    const tok = getToken();
+    if (tok) {
+      const r = await api('/account/session');
+      if (r.ok) {
+        // Standalone tab (the magic-link opened from the email in a fresh
+        // window): its only job was to complete sign-in. The real assistant
+        // runs embedded inside Polaris, so don't render a half-working chat or
+        // checkout here — confirm success and send the user back to Polaris.
+        if (!embedded) return showSignedIn(r.json.email);
+        if (r.json.subscribed) return enterChat();
+        return showSubscribe(r.json.email);
+      }
+      setToken(''); // stale/expired
+    }
+    showEmail();
+  }
+
+  // Magic-link landing: a click (not page load) exchanges the single-use token,
+  // so email link-scanners that pre-fetch the URL can't consume it first.
+  function showConfirmSignIn(token) {
+    gateHeader();
+    gate.appendChild(el('p', null, T('Click below to finish signing in.')));
+    const err = el('div', 'err', '');
+    const btn = el('button', 'primary wide', T('Complete sign-in'));
+    btn.onclick = async () => {
+      err.textContent = '';
+      btn.disabled = true;
+      const r = await api('/account/verify', { method: 'POST', body: { token } });
+      if (!r.ok || !r.json.session) {
+        btn.disabled = false;
+        err.textContent = T('This sign-in link has expired or was already used. Request a new one.');
+        return;
+      }
+      setToken(r.json.session);
+      if (!embedded) return showSignedIn(r.json.email);
+      if (r.json.subscribed) return enterChat();
+      return showSubscribe(r.json.email);
+    };
+    gate.appendChild(btn);
+    gate.appendChild(err);
+    gateFooter();
+  }
+
+  // Confirmation shown in the standalone magic-link tab once sign-in succeeds.
+  function showSignedIn(email) {
+    gateHeader();
+    gate.appendChild(el('p', 'ok', '✓ ' + T('Signed in successfully')));
+    if (email) gate.appendChild(el('p', 'mut', T('Signed in as {email}', { email })));
+    gate.appendChild(el('p', null, T('You can close this tab and return to Polaris, then open the assistant.')));
+    gateFooter();
+  }
+
+  // ---- gate views ----
+  function reportSubscribed(v) { postParent({ v: V, type: 'assistant:subscribed', subscribed: !!v }); }
+  function clearGate() { gate.innerHTML = ''; }
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function extLink(label, href) { const a = el('a', null, label); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; }
+  function gateFooter() {
+    const f = el('div', 'foot');
+    f.appendChild(extLink(T('Privacy'), '/privacy'));
+    f.appendChild(extLink(T('Terms'), '/terms'));
+    gate.appendChild(f);
+  }
+  async function exportData() {
+    const r = await api('/account/export');
+    if (!r.ok) return;
+    const w = window.open('', '_blank');
+    if (w) {
+      w.document.title = 'My data';
+      w.document.body.style.cssText = 'font:13px monospace;white-space:pre-wrap;padding:16px;background:#0f141b;color:#e6edf3';
+      w.document.body.textContent = JSON.stringify(r.json, null, 2);
+    }
+  }
+  async function deleteAccount() {
+    if (!window.confirm(T('This permanently deletes your account and cancels your subscription. Continue?'))) return;
+    await api('/account', { method: 'DELETE' });
+    setToken('');
+    reportSubscribed(false);
+    sys(T('Your account was deleted.'));
+    showEmail();
+  }
+
+  async function managePortal() {
+    const r = await api('/billing/portal', { method: 'POST' });
+    if (r.ok && r.json.url) window.open(r.json.url, '_blank', 'noopener');
+  }
+
+  function gateHeader() {
+    clearGate();
+    closeGear();
+    gate.style.display = 'flex'; log.style.display = 'none'; bar.style.display = 'none';
+    gate.appendChild(el('div', 'icon', '🔭'));
+    gate.appendChild(el('h2', null, T('Canopus Assistant')));
+  }
+
+  function showEmail() {
+    reportSubscribed(false);
+    gateHeader();
+    gate.appendChild(el('p', null, T('Plan and run your night with an AI companion.') + ' ' + priceLine()));
+    const email = el('input', 'field'); email.type = 'email'; email.placeholder = T('Email address'); email.autocomplete = 'email';
+    const err = el('div', 'err', '');
+    const btn = el('button', 'primary wide', T('Continue'));
+    btn.onclick = async () => {
+      err.textContent = '';
+      const addr = email.value.trim();
+      if (!addr || addr.indexOf('@') < 0) { err.textContent = T('Email address'); return; }
+      btn.disabled = true;
+      const r = await api('/account/start', { method: 'POST', body: { email: addr } });
+      btn.disabled = false;
+      if (!r.ok) { err.textContent = T('Something went wrong. Try again.'); return; }
+      if (r.json.devMagicToken) {  // dev: skip the inbox
+        const v = await api('/account/verify', { method: 'POST', body: { token: r.json.devMagicToken } });
+        if (v.ok && v.json.session) { setToken(v.json.session); return showSubscribe(v.json.email); }
+      }
+      showVerify(addr);
+    };
+    email.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+    gate.appendChild(email); gate.appendChild(btn); gate.appendChild(err);
+    gate.appendChild(el('p', 'mut', T('We never store your conversations.')));
+    gateFooter();
+  }
+
+  function showVerify(email) {
+    gateHeader();
+    gate.appendChild(el('p', null, T('Check your email for a sign-in link, or enter the 6-digit code below.')));
+    const code = el('input', 'field'); code.placeholder = T('6-digit code');
+    code.inputMode = 'numeric'; code.autocomplete = 'one-time-code'; code.maxLength = 6;
+    code.style.cssText = 'text-align:center;letter-spacing:4px;font-size:18px';
+    code.addEventListener('input', () => { code.value = code.value.replace(/\D/g, '').slice(0, 6); });
+    const err = el('div', 'err', '');
+    const btn = el('button', 'primary wide', T('Verify'));
+    btn.onclick = async () => {
+      err.textContent = '';
+      btn.disabled = true;
+      const r = await api('/account/verify', { method: 'POST', body: { token: code.value.trim() } });
+      btn.disabled = false;
+      if (!r.ok || !r.json.session) { err.textContent = T('Something went wrong. Try again.'); return; }
+      setToken(r.json.session);
+      r.json.subscribed ? enterChat() : showSubscribe(r.json.email);
+    };
+    code.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+    gate.appendChild(code); gate.appendChild(btn); gate.appendChild(err);
+
+    // Didn't get it? Resend the same link (rate-limited with a short cooldown
+    // so a rapid double-click can't spam the inbox) or go back to change the
+    // address. Resend needs the email we started with; hide it if unknown.
+    const actions = el('div', 'rights');
+    if (email) {
+      const resend = el('a', 'link', T('Resend email'));
+      let cd = 0, timer = null;
+      const tick = () => {
+        resend.textContent = cd > 0 ? T('Resend email') + ' (' + cd + ')' : T('Resend email');
+        resend.style.opacity = cd > 0 ? '0.5' : '1';
+        resend.style.pointerEvents = cd > 0 ? 'none' : 'auto';
+        if (cd > 0) { cd--; timer = setTimeout(tick, 1000); }
+      };
+      resend.onclick = async () => {
+        if (cd > 0) return;
+        err.textContent = '';
+        const r = await api('/account/start', { method: 'POST', body: { email } });
+        if (!r.ok) { err.textContent = T('Something went wrong. Try again.'); return; }
+        err.style.color = ''; // keep default; the confirmation is neutral
+        gate.querySelector('.resend-note')?.remove();
+        const note = el('p', 'mut resend-note', T('Sign-in email sent again.'));
+        gate.insertBefore(note, actions);
+        cd = 30; tick();
+      };
+      actions.appendChild(resend);
+    }
+    const change = el('a', 'link', T('Use a different email'));
+    change.onclick = () => showEmail();
+    actions.appendChild(change);
+    gate.appendChild(actions);
+  }
+
+  function showSubscribe(email) {
+    reportSubscribed(false);
+    gateHeader();
+    if (email) gate.appendChild(el('p', 'mut', T('Signed in as {email}', { email })));
+    gate.appendChild(el('p', null, T('Plan and run your night with an AI companion.') + ' ' + priceLine()));
+    const err = el('div', 'err', '');
+    const btn = el('button', 'primary wide', trialDays > 0 ? T('Start free trial') : T('Subscribe · {price}', { price }));
+    btn.onclick = async () => {
+      err.textContent = '';
+      btn.disabled = true;
+      const r = await api('/billing/checkout', { method: 'POST' });
+      if (!r.ok || !r.json.url) { btn.disabled = false; err.textContent = T('Something went wrong. Try again.'); return; }
+      window.open(r.json.url, '_blank', 'noopener');
+      btn.textContent = T('Waiting for payment…');
+      startPolling();
+    };
+    gate.appendChild(btn); gate.appendChild(err);
+    gate.appendChild(el('p', 'mut', T('We never store your conversations.')));
+    // Data-subject rights (GDPR / LGPD): available once signed in.
+    const rights = el('div', 'rights');
+    const out = el('a', 'link', T('Sign out')); out.onclick = () => { api('/account/signout', { method: 'POST' }); setToken(''); showEmail(); };
+    const exp = el('a', 'link', T('Export my data')); exp.onclick = exportData;
+    const del = el('a', 'link', T('Delete my account')); del.onclick = deleteAccount;
+    rights.appendChild(out); rights.appendChild(exp); rights.appendChild(del);
+    gate.appendChild(rights);
+    gateFooter();
+  }
+
+  function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(async () => {
+      const r = await api('/account/session');
+      if (r.ok && r.json.subscribed) { clearInterval(pollTimer); pollTimer = null; enterChat(); }
+    }, 2500);
+  }
+
+  function enterChat() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    reportSubscribed(true);
+    postParent({ v: V, type: 'assistant:watch', on: true });
+    gate.style.display = 'none'; log.style.display = 'flex'; bar.style.display = 'flex';
+    inp.placeholder = T('Ask the assistant…'); sendBtn.textContent = T('Send');
+    document.getElementById('gearBtn').title = T('Settings');
+    if (!ws) connectWs();
+    setBusy(false);
+  }
+
+  // ---- chat rendering ----
+  function bubble(cls, text) {
+    const d = document.createElement('div');
+    d.className = 'msg ' + cls; d.textContent = text;
+    log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
+  }
+  function sys(t) { bubble('sys', t); }
+
+  // Playful "working" status shown while the agent runs tools, in place of the
+  // raw API calls. One evolving line per turn; cleared when the reply lands.
+  const PLAYFUL = {
+    'en': ['Thinking…', 'Aligning the planets…', 'Chasing photons…', 'Consulting the stars…',
+           'Tracking a comet…', 'Charting the sky…', 'Focusing the cosmos…', 'Reading the night…'],
+    'pt-BR': ['Pensando…', 'Alinhando os planetas…', 'Perseguindo fótons…', 'Consultando as estrelas…',
+              'Acompanhando o cometa…', 'Traçando o céu…', 'Focando o cosmos…', 'Lendo a noite…'],
+    'es': ['Pensando…', 'Alineando los planetas…', 'Persiguiendo fotones…', 'Consultando las estrellas…',
+           'Siguiendo un cometa…', 'Trazando el cielo…', 'Enfocando el cosmos…'],
+    'fr': ['Réflexion…', 'Alignement des planètes…', 'À la poursuite des photons…', 'Consultation des étoiles…',
+           'Suivi d’une comète…', 'Cartographie du ciel…', 'Mise au point du cosmos…'],
+    'de': ['Überlege…', 'Richte die Planeten aus…', 'Jage Photonen…', 'Frage die Sterne…',
+           'Verfolge einen Kometen…', 'Kartiere den Himmel…', 'Fokussiere den Kosmos…'],
+  };
+  let _statusEl = null;
+  function playful() {
+    const pool = PLAYFUL[locale] || PLAYFUL[(locale || '').slice(0, 2)] || PLAYFUL.en;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+  function setStatus(text) {
+    if (_statusEl) { _statusEl.textContent = text; log.scrollTop = log.scrollHeight; }
+    else { _statusEl = bubble('thinking', text); }
+  }
+  function clearStatus() { if (_statusEl) { _statusEl.remove(); _statusEl = null; } }
+
+  function renderPlan(msg) {
+    const box = document.createElement('div'); box.className = 'plan';
+    const h = document.createElement('h4'); h.textContent = msg.title || T('Proposed actions'); box.appendChild(h);
+    const ol = document.createElement('ol');
+    (msg.steps || []).forEach(s => {
+      const li = document.createElement('li'); li.textContent = s.summary || s.tool;
+      if (s.mutates) { const m = document.createElement('span'); m.className = 'mut'; m.textContent = ' ' + T('· changes the rig'); li.appendChild(m); }
+      ol.appendChild(li);
+    });
+    box.appendChild(ol);
+    const act = document.createElement('div'); act.className = 'plan-actions';
+    const yes = document.createElement('button'); yes.className = 'primary'; yes.textContent = T('Approve');
+    const no = document.createElement('button'); no.textContent = T('Reject');
+    const done = () => { yes.disabled = no.disabled = true; };
+    yes.onclick = () => { done(); wsSend({ v: V, type: 'approve', planId: msg.planId }); sys(T('Approved.')); };
+    no.onclick = () => { done(); wsSend({ v: V, type: 'reject', planId: msg.planId }); sys(T('Rejected.')); };
+    act.appendChild(yes); act.appendChild(no); box.appendChild(act);
+    log.appendChild(box); log.scrollTop = log.scrollHeight;
+  }
+
+  function renderQuestion(msg) {
+    const box = bubble('asst', msg.prompt || T('Choose:'));
+    const wrap = document.createElement('div'); wrap.className = 'choices';
+    (msg.options || []).forEach(o => {
+      const b = document.createElement('button'); b.textContent = o.label;
+      b.onclick = () => { wrap.querySelectorAll('button').forEach(x => x.disabled = true);
+        wsSend({ v: V, type: 'answer', questionId: msg.questionId, choices: [o.id] }); };
+      wrap.appendChild(b);
+    });
+    box.appendChild(wrap);
+  }
+
+  // ---- cloud WebSocket ----
+  function wsSend(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
+
+  function connectWs() {
+    const url = location.origin.replace(/^http/, 'ws') + '/api/agent?token=' + encodeURIComponent(getToken());
+    ws = new WebSocket(url);
+    ws.onopen = () => { wsSend({ v: V, type: 'hello', locale }); sys(T('Connected.')); };
+    ws.onclose = () => sys(T('Disconnected.'));
+    ws.onerror = () => sys(T('Connection error.'));
+    ws.onmessage = (ev) => {
+      let m; try { m = JSON.parse(ev.data); } catch (_) { return; }
+      switch (m.type) {
+        case 'assistant': clearStatus(); if (m.text) bubble('asst', m.text); break;
+        case 'notice': if (m.text) bubble('notice ' + (m.severity === 'info' ? 'notice-info' : ''), m.text); break;
+        case 'plan': clearStatus(); renderPlan(m); break;
+        case 'question': clearStatus(); renderQuestion(m); break;
+        case 'tool-call':
+          // Hide the raw API call — show a playful "working" line instead.
+          setStatus(m.responseType === 'image' ? '📷 ' + playful() : playful());
+          postParent({ v: V, type: 'assistant:tool-call', id: m.id, method: m.method, path: m.path, query: m.query, body: m.body, responseType: m.responseType });
+          break;
+        case 'capture-view':
+          // Snapshot the panel the user is currently viewing (host-side canvas
+          // grab). Reply flows back via host:tool-result → tool-result.
+          setStatus('📷 ' + playful());
+          postParent({ v: V, type: 'assistant:capture-view', id: m.id, maxDim: m.maxDim, quality: m.quality });
+          break;
+        case 'ui':
+          setStatus(playful());
+          postParent({ v: V, type: 'assistant:ui', id: m.id, action: m.action, params: m.params });
+          break;
+        case 'done': clearStatus(); setBusy(false); break;
+        case 'error': clearStatus(); sys(T('Error: {m}', { m: m.message || 'unknown' })); setBusy(false); break;
+      }
+    };
+  }
+
+  function setBusy(b) { inp.disabled = b; sendBtn.disabled = b; if (!b) inp.focus(); }
+
+  function submit() {
+    const text = inp.value.trim();
+    if (!text) return;
+    bubble('user', text); inp.value = ''; setBusy(true);
+    wsSend({ v: V, type: 'user', text });
+  }
+  sendBtn.onclick = submit;
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } });
+
+  // ---- gear settings menu ----
+  function closeGear() { gearMenu.classList.remove('open'); gearBtn.classList.remove('on'); }
+  function buildGearMenu() {
+    gearMenu.innerHTML = '';
+    const item = (label, fn, cls) => {
+      const a = document.createElement('a'); a.textContent = label; if (cls) a.className = cls;
+      a.onclick = () => { closeGear(); fn(); }; return a;
+    };
+    const hdr = t => { const d = document.createElement('div'); d.className = 'hdr'; d.textContent = t; return d; };
+    const sep = () => { const d = document.createElement('div'); d.className = 'sep'; return d; };
+
+    // Monthly fair-use quota: a read-only "used / cap tokens" line so the
+    // subscriber can see how much of the allowance they've spent this month.
+    // Filled live from /account/session (usage: {used, cap}).
+    gearMenu.appendChild(hdr(T('Usage this month')));
+    const usage = document.createElement('div'); usage.className = 'usage'; usage.textContent = '…';
+    gearMenu.appendChild(usage);
+    gearMenu.appendChild(sep());
+    (async () => {
+      try {
+        const r = await api('/account/session');
+        const u = r.ok && r.json && r.json.usage;
+        usage.textContent = (u && typeof u.cap === 'number' && u.cap > 0)
+          ? T('{used} / {cap} tokens', { used: fmtInt(u.used || 0), cap: fmtInt(u.cap) })
+          : T('Usage unavailable');
+      } catch (_) { usage.textContent = T('Usage unavailable'); }
+    })();
+
+    gearMenu.appendChild(hdr(T('Account')));
+    gearMenu.appendChild(item(T('Manage subscription'), managePortal));
+    gearMenu.appendChild(item(T('Export my data'), exportData));
+    gearMenu.appendChild(item(T('Sign out'), () => { api('/account/signout', { method: 'POST' }); setToken(''); reportSubscribed(false); showEmail(); }));
+    gearMenu.appendChild(item(T('Delete my account'), deleteAccount, 'danger'));
+    gearMenu.appendChild(sep());
+    gearMenu.appendChild(hdr(T('Legal')));
+    gearMenu.appendChild(item(T('Privacy'), () => window.open('/privacy', '_blank', 'noopener')));
+    gearMenu.appendChild(item(T('Terms'), () => window.open('/terms', '_blank', 'noopener')));
+  }
+  gearBtn.onclick = e => {
+    e.stopPropagation();
+    if (gearMenu.classList.contains('open')) { closeGear(); return; }
+    buildGearMenu(); gearMenu.classList.add('open'); gearBtn.classList.add('on');
+  };
+  document.addEventListener('click', e => {
+    if (gearMenu.classList.contains('open') && !gearMenu.contains(e.target) && e.target !== gearBtn) closeGear();
+  });
+
+  // ---- postMessage bridge to the Polaris host (parent) ----
+  function postParent(m) { if (parentOrigin) window.parent.postMessage(m, parentOrigin); }
+
+  // Mirror Polaris' Appearance settings (font family, page zoom, control
+  // density) so the chat matches the app. The iframe is cross-origin and can't
+  // read the host CSS, so the host forwards these values on init + on change.
+  const HOST_FONTS = {
+    atkinson: '"Atkinson Hyperlegible", system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+    inter: '"Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+    plex: '"IBM Plex Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+    system: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+  };
+  function applyHostUi(ui) {
+    if (!ui || typeof ui !== 'object') return;
+    const de = document.documentElement;
+    const z = Math.max(0.5, Math.min(1.5, Number(ui.zoom) || 1));
+    document.body.style.zoom = String(z);
+    de.style.setProperty('--asst-font', HOST_FONTS[ui.font] || HOST_FONTS.atkinson);
+    const pad = Math.max(0.4, Math.min(1.5, (Number(ui.padScale) || 100) / 100));
+    de.style.setProperty('--asst-pad', String(pad));
+  }
+
+  window.addEventListener('message', (ev) => {
+    if (ev.source !== window.parent) return;
+    const m = ev.data;
+    if (!m || typeof m !== 'object' || m.v !== V || !m.type) return;
+    if (m.type === 'host:init') {
+      parentOrigin = ev.origin;
+      locale = m.locale || 'en';
+      applyHostUi(m.ui);
+      sys(T('Polaris {v} connected.', { v: (m.polaris && m.polaris.version) || '' }));
+      boot();  // decide gate vs chat based on entitlement
+      return;
+    }
+    if (ev.origin !== parentOrigin) return;
+    switch (m.type) {
+      case 'host:ui': applyHostUi(m.ui); break;
+      case 'host:tool-result':
+        wsSend({ v: V, type: 'tool-result', id: m.id, ok: m.ok, result: m.result, error: m.error });
+        break;
+      case 'host:status':
+        wsSend({ v: V, type: 'status', snapshot: m.snapshot });
+        break;
+      case 'host:visibility':
+      case 'host:auth':
+        break;
+    }
+  });
+
+  sys('Loading…');
+  // Embedded in the Polaris host iframe: announce readiness and wait for
+  // host:init (which calls boot with locale + host UI). Opened standalone —
+  // e.g. the magic-link sign-in URL clicked from the email, which lands in a
+  // fresh tab with no parent — there is no host to init us, so boot directly;
+  // otherwise the page just sat blank. A fallback also boots if an embedding
+  // host never sends host:init, so the deep link can't dead-end either.
+  embedded = !!(window.parent && window.parent !== window);
+  if (embedded) {
+    window.parent.postMessage({ v: V, type: 'assistant:ready' }, '*');
+    setTimeout(() => { if (!booted) boot(); }, 2500);
+  } else {
+    boot();
+  }
+})();
+</script>
+</body>
+</html>

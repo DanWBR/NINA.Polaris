@@ -1,0 +1,7 @@
+# Cloud backend. Mock provider + mock billing need only fastapi + uvicorn; the
+# openai package is only used when ASSISTANT_PROVIDER=azure, and stripe only when
+# STRIPE_API_KEY is set (real billing).
+fastapi>=0.110
+uvicorn[standard]>=0.29
+openai>=1.30
+stripe>=9.0
