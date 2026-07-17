@@ -415,6 +415,32 @@ public class AstapSolver : IPlateSolver {
     /// single-channel proxy for ASTAP to swallow. Cheap: only the
     /// FITS header is parsed, not the pixel block.
     /// </summary>
+    /// <summary>FIELD6-14: collapse a plane-sequential multi-channel buffer
+    /// (R,G,B,… concatenated, each <paramref name="planeLen"/> pixels) into a
+    /// single grayscale plane by the per-pixel MEAN of the channels — the proxy
+    /// ASTAP's star detector runs on.
+    ///
+    /// Mean, not max and not a single band: broadband stars sit in every channel,
+    /// so averaging preserves their signal while reducing the background noise by
+    /// ~√channels — the best detection SNR, and colour-agnostic (a red star weak in
+    /// green is still bright in red). Rounded, and clamped to ushort though the mean
+    /// of ushorts can't exceed ushort.MaxValue.</summary>
+    internal static ushort[] BuildSolveLuminance(ushort[] data, int planeLen, int channels) {
+        if (channels <= 1) {
+            var single = new ushort[planeLen];
+            Array.Copy(data, 0, single, 0, planeLen);
+            return single;
+        }
+        var luma = new ushort[planeLen];
+        int half = channels / 2;   // for rounding the integer division
+        for (int i = 0; i < planeLen; i++) {
+            long sum = 0;
+            for (int c = 0; c < channels; c++) sum += data[c * planeLen + i];
+            luma[i] = (ushort)((sum + half) / channels);
+        }
+        return luma;
+    }
+
     private static bool NeedsProxyForSolve(string fitsPath, out int channels) {
         channels = 1;
         try {
@@ -458,27 +484,35 @@ public class AstapSolver : IPlateSolver {
                 $"pixels for {channels}×{w}×{h}, got {full.Data.Length}.");
         }
 
-        // Channel order in the plane-sequential layout FITSWriter
-        // emits is R, G, B (matches FITSReader's expectation). Pull
-        // the second plane for the proxy.
-        int greenIdx = Math.Min(1, channels - 1);
-        var greenPlane = new ushort[planeLen];
-        Array.Copy(full.Data, greenIdx * planeLen, greenPlane, 0, planeLen);
+        // FIELD6-14: build the proxy from a SYNTHETIC LUMINANCE (the per-pixel
+        // mean of all channels), not the green plane alone.
+        //
+        // The old green-only projection threw away ~2/3 of the photons, and ASTAP's
+        // star detector runs on exactly what we hand it. On a green-weak target —
+        // an Ha/red nebula like M8, or any soft-focus / sparse field — green-only
+        // dropped ASTAP below its detection floor: it reported ~7 stars (vs the ~200
+        // Polaris finds on the full frame) and exited 1, "did not converge". The
+        // comment claimed green was "the highest-SNR band", which is only true for a
+        // Bayer half-plane; on a debayered full-res frame green is just 1 of 3, and
+        // for a red target it's the WEAKEST. Averaging the channels keeps the star
+        // signal (broadband point sources sit in every channel) while cutting the
+        // background noise by ~√channels — strictly more detectable stars, whatever
+        // the target's colour. The astrometry is unaffected: the solved RA/Dec/scale
+        // are intrinsic to the star field, independent of which grayscale we solve.
+        var lumaPlane = BuildSolveLuminance(full.Data, planeLen, channels);
 
-        // Log per-plane stats so a failed solve is debuggable
-        // without re-running the pipeline. Min / max / mean tell us
-        // immediately if the plane is too dim, too bright, or
-        // truncated.
+        // Log stats so a failed solve is debuggable without re-running the
+        // pipeline: min / max / mean flag a plane that's too dim, clipped, or empty.
         long sum = 0;
         ushort lo = ushort.MaxValue, hi = 0;
-        for (int i = 0; i < greenPlane.Length; i++) {
-            var v = greenPlane[i];
+        for (int i = 0; i < lumaPlane.Length; i++) {
+            var v = lumaPlane[i];
             sum += v;
             if (v < lo) lo = v;
             if (v > hi) hi = v;
         }
-        var planeStats = $"plane={greenIdx}/{channels} min={lo} max={hi} " +
-            $"mean={(double)sum / greenPlane.Length:F1} " +
+        var planeStats = $"luminance={channels}ch min={lo} max={hi} " +
+            $"mean={(double)sum / lumaPlane.Length:F1} " +
             $"({w}x{h} {full.Properties.BitDepth}-bit)";
         _logger.LogInformation("ASTAP proxy stats: {Stats}", planeStats);
 
@@ -506,7 +540,7 @@ public class AstapSolver : IPlateSolver {
                 Exposure = full.MetaData.Exposure,
                 CreationTime = full.MetaData.CreationTime,
             };
-            var proxy = new BaseImageData(greenPlane, proxyProps, proxyMeta);
+            var proxy = new BaseImageData(lumaPlane, proxyProps, proxyMeta);
             FITSWriter.Write(proxy, proxyPath);
 
             var args = BuildArgs(proxyPath, options);
