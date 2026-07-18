@@ -517,7 +517,7 @@
     gate.style.display = 'none'; log.style.display = 'flex'; bar.style.display = 'flex';
     inp.placeholder = T('Ask the assistant…'); sendBtn.textContent = T('Send');
     document.getElementById('gearBtn').title = T('Settings');
-    if (!ws) connectWs();
+    if (!ws && !agent) connectWs();
     setBusy(false);
   }
 
@@ -568,8 +568,8 @@
     const yes = document.createElement('button'); yes.className = 'primary'; yes.textContent = T('Approve');
     const no = document.createElement('button'); no.textContent = T('Reject');
     const done = () => { yes.disabled = no.disabled = true; };
-    yes.onclick = () => { done(); wsSend({ v: V, type: 'approve', planId: msg.planId }); sys(T('Approved.')); };
-    no.onclick = () => { done(); wsSend({ v: V, type: 'reject', planId: msg.planId }); sys(T('Rejected.')); };
+    yes.onclick = () => { done(); sendToAgent({ v: V, type: 'approve', planId: msg.planId }); sys(T('Approved.')); };
+    no.onclick = () => { done(); sendToAgent({ v: V, type: 'reject', planId: msg.planId }); sys(T('Rejected.')); };
     act.appendChild(yes); act.appendChild(no); box.appendChild(act);
     log.appendChild(box); log.scrollTop = log.scrollHeight;
   }
@@ -580,14 +580,45 @@
     (msg.options || []).forEach(o => {
       const b = document.createElement('button'); b.textContent = o.label;
       b.onclick = () => { wrap.querySelectorAll('button').forEach(x => x.disabled = true);
-        wsSend({ v: V, type: 'answer', questionId: msg.questionId, choices: [o.id] }); };
+        sendToAgent({ v: V, type: 'answer', questionId: msg.questionId, choices: [o.id] }); };
       wrap.appendChild(b);
     });
     box.appendChild(wrap);
   }
 
-  // ---- cloud WebSocket ----
+  // ---- transport: WebSocket (cloud/SBC server agent) OR in-browser agent (device) ----
+  let agent = null;   // the in-browser CanopusAgent for the "On this device" tier
   function wsSend(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); }
+  // Route an outbound message to the in-browser agent or the WS server agent.
+  function sendToAgent(m) { if (agent) agent.onMessage(m); else wsSend(m); }
+
+  // Render one message FROM the agent — same handling whether it arrived over the
+  // WebSocket (cloud/SBC) or from the in-browser agent (device).
+  function handleAgentMessage(m) {
+    switch (m.type) {
+      case 'assistant': clearStatus(); if (m.text) bubble('asst', m.text); break;
+      case 'notice': if (m.text) bubble('notice ' + (m.severity === 'info' ? 'notice-info' : ''), m.text); break;
+      case 'plan': clearStatus(); renderPlan(m); break;
+      case 'question': clearStatus(); renderQuestion(m); break;
+      case 'tool-call':
+        // Hide the raw API call — show a playful "working" line instead.
+        setStatus(m.responseType === 'image' ? '📷 ' + playful() : playful());
+        postParent({ v: V, type: 'assistant:tool-call', id: m.id, method: m.method, path: m.path, query: m.query, body: m.body, responseType: m.responseType });
+        break;
+      case 'capture-view':
+        // Snapshot the panel the user is currently viewing (host-side canvas
+        // grab). Reply flows back via host:tool-result → tool-result.
+        setStatus('📷 ' + playful());
+        postParent({ v: V, type: 'assistant:capture-view', id: m.id, maxDim: m.maxDim, quality: m.quality });
+        break;
+      case 'ui':
+        setStatus(playful());
+        postParent({ v: V, type: 'assistant:ui', id: m.id, action: m.action, params: m.params });
+        break;
+      case 'done': clearStatus(); setBusy(false); break;
+      case 'error': clearStatus(); sys(T('Error: {m}', { m: m.message || 'unknown' })); setBusy(false); break;
+    }
+  }
 
   function connectWs() {
     const url = location.origin.replace(/^http/, 'ws') + BASE + '/api/agent?token=' + encodeURIComponent(getToken());
@@ -595,32 +626,33 @@
     ws.onopen = () => { wsSend({ v: V, type: 'hello', locale }); sys(T('Connected.')); };
     ws.onclose = () => sys(T('Disconnected.'));
     ws.onerror = () => sys(T('Connection error.'));
-    ws.onmessage = (ev) => {
-      let m; try { m = JSON.parse(ev.data); } catch (_) { return; }
-      switch (m.type) {
-        case 'assistant': clearStatus(); if (m.text) bubble('asst', m.text); break;
-        case 'notice': if (m.text) bubble('notice ' + (m.severity === 'info' ? 'notice-info' : ''), m.text); break;
-        case 'plan': clearStatus(); renderPlan(m); break;
-        case 'question': clearStatus(); renderQuestion(m); break;
-        case 'tool-call':
-          // Hide the raw API call — show a playful "working" line instead.
-          setStatus(m.responseType === 'image' ? '📷 ' + playful() : playful());
-          postParent({ v: V, type: 'assistant:tool-call', id: m.id, method: m.method, path: m.path, query: m.query, body: m.body, responseType: m.responseType });
-          break;
-        case 'capture-view':
-          // Snapshot the panel the user is currently viewing (host-side canvas
-          // grab). Reply flows back via host:tool-result → tool-result.
-          setStatus('📷 ' + playful());
-          postParent({ v: V, type: 'assistant:capture-view', id: m.id, maxDim: m.maxDim, quality: m.quality });
-          break;
-        case 'ui':
-          setStatus(playful());
-          postParent({ v: V, type: 'assistant:ui', id: m.id, action: m.action, params: m.params });
-          break;
-        case 'done': clearStatus(); setBusy(false); break;
-        case 'error': clearStatus(); sys(T('Error: {m}', { m: m.message || 'unknown' })); setBusy(false); break;
-      }
-    };
+    ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch (_) { return; } handleAgentMessage(m); };
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script'); s.src = src;
+      s.onload = () => resolve(); s.onerror = () => reject(new Error('failed to load ' + src));
+      document.head.appendChild(s);
+    });
+  }
+  // "On this device": run the agent IN THE BROWSER against the user's local LLM
+  // server (Ollama / LM Studio / llama.cpp). Loads agent.js + provider-local.js,
+  // fetches the tool catalog, and drives the same UI + tool bridge as the WS path.
+  async function setupDeviceAgent(cfg) {
+    booted = true;
+    try {
+      await loadScript('provider-local.js');
+      await loadScript('agent.js');
+      const catalog = await fetch(cfg.catalogUrl || '/api/canopus/catalog', { credentials: 'same-origin' }).then(r => r.json());
+      const provider = new LocalOpenAIProvider(cfg.url, cfg.model);
+      agent = new CanopusAgent(provider, catalog, { send: handleAgentMessage, locale: locale });
+      enterChat();
+      agent.onMessage({ v: V, type: 'hello', locale: locale });
+    } catch (e) {
+      enterChat();
+      sys('⚠ ' + ((e && e.message) || e));
+    }
   }
 
   function setBusy(b) { inp.disabled = b; sendBtn.disabled = b; if (!b) inp.focus(); }
@@ -629,7 +661,7 @@
     const text = inp.value.trim();
     if (!text) return;
     bubble('user', text); inp.value = ''; setBusy(true);
-    wsSend({ v: V, type: 'user', text });
+    sendToAgent({ v: V, type: 'user', text });
   }
   sendBtn.onclick = submit;
   inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } });
@@ -712,17 +744,20 @@
       locale = m.locale || 'en';
       applyHostUi(m.ui);
       sys(T('Polaris {v} connected.', { v: (m.polaris && m.polaris.version) || '' }));
-      boot();  // decide gate vs chat based on entitlement
+      // "On this device": the host passes a provider block; run the in-browser
+      // agent against the user's local LLM instead of the usual gate/WS flow.
+      if (m.provider) setupDeviceAgent(m.provider);
+      else boot();  // decide gate vs chat based on entitlement
       return;
     }
     if (ev.origin !== parentOrigin) return;
     switch (m.type) {
       case 'host:ui': applyHostUi(m.ui); break;
       case 'host:tool-result':
-        wsSend({ v: V, type: 'tool-result', id: m.id, ok: m.ok, result: m.result, error: m.error });
+        sendToAgent({ v: V, type: 'tool-result', id: m.id, ok: m.ok, result: m.result, error: m.error });
         break;
       case 'host:status':
-        wsSend({ v: V, type: 'status', snapshot: m.snapshot });
+        sendToAgent({ v: V, type: 'status', snapshot: m.snapshot });
         break;
       case 'host:visibility':
       case 'host:auth':

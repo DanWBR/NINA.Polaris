@@ -72,6 +72,10 @@ function ninaApp() {
             backend: 'cloud',
             sbc: null,            // last /api/canopus/status snapshot (SBC controls)
             sbcBusy: false,       // a start/stop/download action is in flight
+            deviceUrl: 'http://localhost:11434/v1',  // "on this device": local LLM /v1 base
+            deviceModel: 'qwen2.5:7b',
+            deviceTest: null,     // null | 'testing' | 'ok' | 'error'
+            deviceModels: [],     // models reported by the local server (Test connection)
             manifest: null,       // the fetched manifest (branding + allowlist)
             ready: false,         // manifest fetched + valid => host chrome is live
             badgeVisible: false,  // intro badge (before opt-in)
@@ -10695,6 +10699,10 @@ function ninaApp() {
             try { b = localStorage.getItem('polaris.assistant.backend') || 'cloud'; } catch (_) {}
             if (b !== 'cloud' && b !== 'sbc' && b !== 'device') b = 'cloud';
             this.asst.backend = b;
+            try {
+                const u = localStorage.getItem('polaris.assistant.deviceUrl'); if (u) this.asst.deviceUrl = u;
+                const md = localStorage.getItem('polaris.assistant.deviceModel'); if (md) this.asst.deviceModel = md;
+            } catch (_) {}
         },
 
         async _initAssistant() {
@@ -10759,20 +10767,28 @@ function ninaApp() {
             this.asst.iframeLoaded = false;
             this.asst.iframeSrc = 'about:blank';
 
-            const url = await this._assistantManifestUrl();
-            if (!url) return; // off by default / SBC not started yet
-
             let m = null;
-            try {
-                const r = await fetch(url, { cache: 'no-store' });
-                if (!r.ok) return;
-                m = await r.json();
-            } catch (_) { return; }
+            if (this.asst.backend === 'device') {
+                // On this device: fetch the device manifest (tier + tool allowlist),
+                // then inject the user's local LLM config from Settings. The client
+                // runs the agent IN THE BROWSER against that local server.
+                try { m = await fetch('/api/canopus/device-manifest', { cache: 'no-store' }).then(r => r.ok ? r.json() : null); }
+                catch (_) { m = null; }
+                if (!m) return;
+                m.provider = { url: this._canopusDeviceUrl(), model: this._canopusDeviceModel(), catalogUrl: '/api/canopus/catalog' };
+            } else {
+                const url = await this._assistantManifestUrl();
+                if (!url) return; // off by default / SBC not started yet
+                try {
+                    const r = await fetch(url, { cache: 'no-store' });
+                    if (!r.ok) return;
+                    m = await r.json();
+                } catch (_) { return; }
+            }
 
-            // Local tier (SBC / on-device) is free: no subscription block, served
-            // same-origin behind Polaris's /canopus proxy (iframe.url is a path,
-            // postMessage comes from our own origin).
-            const local = !!(m && m.tier === 'local');
+            // Local tiers (SBC / on-device) are free: no subscription block, served
+            // same-origin (iframe.url is a path, postMessage comes from our origin).
+            const local = !!(m && (m.tier === 'local' || m.tier === 'device'));
             if (!m || m.version !== 1 || !m.product || !m.product.name || !m.iframe || !m.iframe.url) return;
             if (!local && (!m.intro || !m.subscription || !m.iframe.origin)) return;
             if (local) {
@@ -10859,6 +10875,30 @@ function ninaApp() {
             if (!m) return '';
             return (m.iframe && m.iframe.fabIconUrl) || (m.product && m.product.iconUrl) || '';
         },
+        // ---- "On this device" tier: local LLM config + test connection ----
+        _canopusDeviceUrl() { return (this.asst.deviceUrl || 'http://localhost:11434/v1').trim(); },
+        _canopusDeviceModel() { return (this.asst.deviceModel || 'qwen2.5:7b').trim(); },
+        _canopusSaveDevice() {
+            try {
+                localStorage.setItem('polaris.assistant.deviceUrl', this._canopusDeviceUrl());
+                localStorage.setItem('polaris.assistant.deviceModel', this._canopusDeviceModel());
+            } catch (_) {}
+            if (this.asst.backend === 'device') this._assistantApplyBackend();
+        },
+        async _canopusTestDevice() {
+            this.asst.deviceTest = 'testing'; this.asst.deviceModels = [];
+            try {
+                const base = this._canopusDeviceUrl().replace(/\/+$/, '');
+                const r = await fetch(base + '/models');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const j = await r.json().catch(() => ({}));
+                this.asst.deviceModels = (j.data || j.models || []).map(x => x.id || x.name).filter(Boolean);
+                this.asst.deviceTest = 'ok';
+            } catch (e) {
+                this.asst.deviceTest = 'error';
+                this.toast?.('Cannot reach the local LLM (' + ((e && e.message) || e) + '). Is it running, with CORS allowed for this page?', 'error');
+            }
+        },
 
         _assistantInstallBridge() {
             if (this._asstBridgeInstalled) return;
@@ -10910,7 +10950,10 @@ function ninaApp() {
                         v: 1, type: 'host:init', parentOrigin: location.origin, protocolVersion: 1,
                         polaris: { version: this.currentVersion || '', baseUrl: location.origin },
                         locale: (window.I18N && window.I18N.lang) || 'en', theme: this.nightMode ? 'night' : 'dark',
-                        ui: this._assistantUiSettings()
+                        ui: this._assistantUiSettings(),
+                        // On this device: hand the client the local-LLM config so it
+                        // runs the agent in-browser instead of the WS/gate flow.
+                        provider: (this.asst.manifest && this.asst.manifest.provider) || undefined
                     });
                     this._assistantPost({
                         v: 1, type: 'host:auth',

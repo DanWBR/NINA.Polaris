@@ -862,6 +862,21 @@ app.UseStaticFiles(new StaticFileOptions {
     DefaultContentType = "application/octet-stream"
 });
 
+// CANOPUS: serve the open chat client for the "On this device" tier same-origin
+// from the app's copy of canopus/client. agent.js + provider-local.js run IN THE
+// BROWSER against the user's own local LLM server (Ollama / LM Studio / llama.cpp).
+// Public open-source assets, no secrets; tool execution is still gated at the
+// Polaris host bridge. Exists-guarded so a build without the copy doesn't crash.
+var canopusClientDir = Path.Combine(AppContext.BaseDirectory, "canopus", "client");
+if (Directory.Exists(canopusClientDir)) {
+    app.UseStaticFiles(new StaticFileOptions {
+        RequestPath = "/canopus-client",
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(canopusClientDir),
+        ServeUnknownFileTypes = true,
+        DefaultContentType = "application/octet-stream"
+    });
+}
+
 // AUTH-2: gate /api/*, /ws/*, /phd2-gui/*, /indi-web/*, /sky/*
 // behind the bearer token issued by AuthService. /api/auth/* and
 // /api/system/version are exempt. Loopback (127.0.0.1/::1) and the

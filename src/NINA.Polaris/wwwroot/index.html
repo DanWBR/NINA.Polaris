@@ -13621,13 +13621,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     @change="_assistantSetBackend($event.target.value)">
                                 <option value="cloud">Cloud (Canopus, subscription)</option>
                                 <option value="sbc">On this server (local model)</option>
-                                <option value="device" disabled>On this device (coming soon)</option>
+                                <option value="device">On this device (your local LLM)</option>
                             </select>
                         </label>
                         <p class="text-muted" style="font-size:12px; margin-top:6px">
                             Cloud runs on the hosted Canopus service (paid). <em>On this
-                            server</em> runs a local model (Qwen3-4B) entirely on this
-                            Polaris host — free, private and offline, no account needed.
+                            server</em> runs a local model on this Polaris host. <em>On this
+                            device</em> runs the agent in your browser against a local LLM
+                            (Ollama / LM Studio / llama.cpp) on the computer you're using —
+                            fast on a powerful PC/Mac, free and offline, no account needed.
                         </p>
 
                         <template x-if="asst.backend === 'sbc'">
@@ -13665,6 +13667,41 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <p style="font-size:12px; margin-top:8px; color:#f85149"
                                x-show="asst.sbc &amp;&amp; (asst.sbc.lastError || (!asst.sbc.running &amp;&amp; asst.sbc.unavailableReason))"
                                x-text="asst.sbc ? (asst.sbc.lastError || asst.sbc.unavailableReason) : ''"></p>
+                          </div>
+                        </template>
+
+                        <template x-if="asst.backend === 'device'">
+                          <div class="settings-card" style="margin-top:10px; padding:12px">
+                            <p class="text-muted" style="font-size:12px; margin-top:0">
+                                Run a local LLM on this computer with <strong>Ollama</strong>,
+                                <strong>LM Studio</strong> or <strong>llama.cpp</strong>, then point
+                                Canopus at its OpenAI-compatible endpoint. The agent runs in your
+                                browser; inference runs on this machine's GPU — nothing leaves it.
+                            </p>
+                            <label style="display:flex; align-items:center; gap:10px; margin-top:4px">
+                                <span style="min-width:64px">Server URL</span>
+                                <input type="text" class="input" style="flex:1" x-model="asst.deviceUrl"
+                                       @change="_canopusSaveDevice()" placeholder="http://localhost:11434/v1">
+                            </label>
+                            <label style="display:flex; align-items:center; gap:10px; margin-top:8px">
+                                <span style="min-width:64px">Model</span>
+                                <input type="text" class="input" style="flex:1" x-model="asst.deviceModel"
+                                       @change="_canopusSaveDevice()" placeholder="qwen2.5:7b">
+                            </label>
+                            <div style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                                <button class="btn btn-sm" :disabled="asst.deviceTest === 'testing'" @click="_canopusTestDevice()">
+                                    <span x-text="asst.deviceTest === 'testing' ? 'Testing…' : 'Test connection'"></span>
+                                </button>
+                                <span x-show="asst.deviceTest === 'ok'" style="font-size:12px; color:#3fb950"
+                                      x-text="'✓ connected · ' + asst.deviceModels.length + ' models'"></span>
+                                <span x-show="asst.deviceTest === 'error'" style="font-size:12px; color:#f85149">✗ couldn't reach it</span>
+                            </div>
+                            <p class="text-muted" style="font-size:12px; margin-top:10px">
+                                The LLM server must allow this page's origin (CORS). For Ollama, run it with
+                                <code>OLLAMA_ORIGINS=<span x-text="location.origin"></span></code> (or <code>*</code>);
+                                LM Studio / llama.cpp have a CORS toggle. Use a tool-capable model (e.g.
+                                <code>qwen2.5</code>, <code>llama3.1</code>).
+                            </p>
                           </div>
                         </template>
                     </div>
