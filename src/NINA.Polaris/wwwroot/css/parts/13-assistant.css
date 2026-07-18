@@ -173,6 +173,22 @@
 /* When the manifest supplies an image icon, let it fill the round FAB (its own
    dark background blends in), clipped to the FAB's shape. */
 .assistant-fab-img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
+/* Image FAB: drop the glossy "accent orb" chrome (light border + white inner
+   highlights + accent gradient) — it clashes with the dark icon. Keep only a
+   soft drop shadow for depth, and clip the image to the round shape. */
+.assistant-fab.has-img {
+    border: none;
+    background: #0a0f1a;
+    overflow: hidden;
+    padding: 0;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    text-shadow: none;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.assistant-fab.has-img:hover {
+    box-shadow: 0 13px 30px rgba(0, 0, 0, 0.55), 0 4px 9px rgba(0, 0, 0, 0.5);
+}
 .assistant-panel-header button {
     background: none;
     border: none;
