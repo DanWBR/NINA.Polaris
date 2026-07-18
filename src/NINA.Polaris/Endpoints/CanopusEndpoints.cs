@@ -74,6 +74,17 @@ public static class CanopusEndpoints {
                 : Results.NotFound(new { error = "catalog not found" });
         });
 
+        // Curated Ollama model catalog for the "On this device" tier — the host's
+        // model manager offers these for one-click download and recommends the
+        // largest that fits the user's VRAM. Static JSON (see ollama-models.json).
+        g.MapGet("/device-models", () => {
+            var path = System.IO.Path.Combine(AppContext.BaseDirectory,
+                "canopus", "shared", "models", "ollama-models.json");
+            return System.IO.File.Exists(path)
+                ? Results.Content(System.IO.File.ReadAllText(path), "application/json")
+                : Results.NotFound(new { error = "model catalog not found" });
+        });
+
         // Manifest for the "On this device" tier: the FOSS host loads this, injects
         // the local LLM url/model from Settings, and embeds the client from
         // /canopus-client. The tool allowlist is derived from catalog.local.json so

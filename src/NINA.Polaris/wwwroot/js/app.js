@@ -76,6 +76,13 @@ function ninaApp() {
             deviceModel: 'qwen2.5:7b',
             deviceTest: null,     // null | 'testing' | 'ok' | 'error'
             deviceModels: [],     // models reported by the local server (Test connection)
+            // --- Ollama model manager (device tier) ---
+            deviceCatalog: [],    // curated models [{tag,min_vram_gb,size_gb,note,installed,fits,recommended}]
+            deviceGpuName: '',     // best-effort GPU name (WebGPU adapter), '' if unknown
+            deviceVramChoice: 'auto', // manual VRAM bucket: 'auto'|'0'|'4'|'6'|'8'|'12'|'16'|'24'
+            devicePull: '',       // tag currently downloading ('' = none)
+            devicePullPct: 0,
+            devicePullStatus: '',
             manifest: null,       // the fetched manifest (branding + allowlist)
             ready: false,         // manifest fetched + valid => host chrome is live
             badgeVisible: false,  // intro badge (before opt-in)
@@ -10702,6 +10709,7 @@ function ninaApp() {
             try {
                 const u = localStorage.getItem('polaris.assistant.deviceUrl'); if (u) this.asst.deviceUrl = u;
                 const md = localStorage.getItem('polaris.assistant.deviceModel'); if (md) this.asst.deviceModel = md;
+                const vr = localStorage.getItem('polaris.assistant.deviceVram'); if (vr) this.asst.deviceVramChoice = vr;
             } catch (_) {}
         },
 
@@ -10894,10 +10902,142 @@ function ninaApp() {
                 const j = await r.json().catch(() => ({}));
                 this.asst.deviceModels = (j.data || j.models || []).map(x => x.id || x.name).filter(Boolean);
                 this.asst.deviceTest = 'ok';
+                // Also refresh the model manager (installed list + recommendation).
+                this._canopusDeviceRefresh();
             } catch (e) {
                 this.asst.deviceTest = 'error';
+                this.asst.deviceCatalog = [];
                 this.toast?.('Cannot reach the local LLM (' + ((e && e.message) || e) + '). Is it running, with CORS allowed for this page?', 'error');
             }
+        },
+
+        // ---- Ollama model manager (device tier) ----------------------------
+        // The manager talks to Ollama's HTTP API DIRECTLY from the browser (the
+        // browser is always co-located with the user's Ollama at localhost). The
+        // same OLLAMA_ORIGINS CORS grant that permits /v1 covers /api/* too.
+
+        // Ollama's API base (strip the OpenAI "/v1" suffix off the configured URL).
+        _canopusOllamaBase() {
+            return this._canopusDeviceUrl().replace(/\/+$/, '').replace(/\/v1$/, '');
+        },
+        // Resolve the VRAM figure the recommendation uses. Manual pick wins; 'auto'
+        // means "unknown" (0) — the browser cannot read VRAM, so we fall back to a
+        // safe mid-tier recommendation. See _canopusDetectGpu for the label only.
+        _canopusVramGb() {
+            const c = this.asst.deviceVramChoice;
+            if (c && c !== 'auto') { const n = Number(c); return isNaN(n) ? 0 : n; }
+            return 0;
+        },
+        // Best-effort GPU *name* via WebGPU (VRAM total isn't exposed by the API).
+        async _canopusDetectGpu() {
+            try {
+                if (!navigator.gpu) { this.asst.deviceGpuName = ''; return; }
+                const ad = await navigator.gpu.requestAdapter();
+                const info = ad && (ad.info || (ad.requestAdapterInfo && await ad.requestAdapterInfo()));
+                this.asst.deviceGpuName = (info && (info.description || info.device ||
+                    [info.vendor, info.architecture].filter(Boolean).join(' '))) || 'GPU detected';
+            } catch (_) { this.asst.deviceGpuName = ''; }
+        },
+        _canopusSaveVram() {
+            try { localStorage.setItem('polaris.assistant.deviceVram', this.asst.deviceVramChoice); } catch (_) {}
+            this._canopusRecompute();
+        },
+        // Fetch the curated catalog + Ollama's installed models, then annotate.
+        async _canopusDeviceRefresh() {
+            this._canopusDetectGpu();
+            let catalog = [];
+            try {
+                const cr = await fetch('/api/canopus/device-models');
+                if (cr.ok) catalog = ((await cr.json()) || {}).models || [];
+            } catch (_) {}
+            let installed = new Set();
+            try {
+                const tr = await fetch(this._canopusOllamaBase() + '/api/tags');
+                if (tr.ok) {
+                    const td = await tr.json().catch(() => ({}));
+                    (td.models || []).forEach(m => { if (m && m.name) installed.add(m.name); });
+                }
+            } catch (_) {}
+            // Match ignoring an implicit ':latest'.
+            const isInstalled = (tag) => installed.has(tag) || installed.has(tag + ':latest') ||
+                (!tag.includes(':') && installed.has(tag + ':latest'));
+            this.asst.deviceCatalog = catalog.map(m => ({ ...m, installed: isInstalled(m.tag) }));
+            this.asst._installedTags = installed;
+            this._canopusRecompute();
+        },
+        // Flag which entries fit the VRAM and pick the single recommendation
+        // (largest whose min_vram_gb fits; when VRAM is unknown, a safe <=8 GB pick).
+        _canopusRecompute() {
+            const vram = this._canopusVramGb();
+            const cat = this.asst.deviceCatalog || [];
+            let best = null;
+            cat.forEach(m => {
+                m.fits = (m.min_vram_gb === 0) || (vram > 0 && vram >= m.min_vram_gb);
+                const ceiling = vram > 0 ? vram : 8; // unknown -> conservative default
+                if (m.min_vram_gb <= ceiling) {
+                    if (!best || m.min_vram_gb >= best.min_vram_gb) best = m;
+                }
+            });
+            cat.forEach(m => { m.recommended = !!best && m.tag === best.tag; });
+        },
+        // Stream a model download from Ollama (/api/pull emits NDJSON progress).
+        async _canopusDevicePull(tag) {
+            if (this.asst.devicePull) return; // one at a time
+            const allowed = (this.asst.deviceCatalog || []).some(m => m.tag === tag);
+            if (!allowed) return;
+            this.asst.devicePull = tag; this.asst.devicePullPct = 0; this.asst.devicePullStatus = 'starting…';
+            try {
+                const resp = await fetch(this._canopusOllamaBase() + '/api/pull', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: tag, stream: true }),
+                });
+                if (!resp.ok || !resp.body) throw new Error('HTTP ' + resp.status);
+                const reader = resp.body.getReader();
+                const dec = new TextDecoder(); let buf = '';
+                for (;;) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    buf += dec.decode(value, { stream: true });
+                    let nl;
+                    while ((nl = buf.indexOf('\n')) >= 0) {
+                        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+                        if (!line) continue;
+                        let ch; try { ch = JSON.parse(line); } catch (_) { continue; }
+                        if (ch.error) throw new Error(ch.error);
+                        this.asst.devicePullStatus = ch.status || '';
+                        if (ch.total && ch.completed) this.asst.devicePullPct = Math.round(ch.completed / ch.total * 100);
+                        if (ch.status === 'success') this.asst.devicePullPct = 100;
+                    }
+                }
+                this.toast?.('Downloaded ' + tag, 'success');
+                await this._canopusDeviceRefresh();
+                // If nothing is selected yet, adopt the freshly pulled model.
+                if (!this._canopusDeviceModel() || this.asst.deviceModel === 'qwen2.5:7b') this._canopusDevicePick(tag);
+            } catch (e) {
+                this.toast?.('Download failed: ' + ((e && e.message) || e), 'error');
+            } finally {
+                this.asst.devicePull = ''; this.asst.devicePullStatus = '';
+            }
+        },
+        async _canopusDeviceDelete(tag) {
+            if (!confirm('Delete ' + tag + ' from Ollama? You can download it again later.')) return;
+            try {
+                const r = await fetch(this._canopusOllamaBase() + '/api/delete', {
+                    method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: tag }),
+                });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                this.toast?.('Deleted ' + tag, 'success');
+                await this._canopusDeviceRefresh();
+            } catch (e) {
+                this.toast?.('Delete failed: ' + ((e && e.message) || e), 'error');
+            }
+        },
+        // Set a model as the active one for the device tier.
+        _canopusDevicePick(tag) {
+            this.asst.deviceModel = tag;
+            this._canopusSaveDevice();
+            this.toast?.('Using ' + tag, 'success');
         },
 
         _assistantInstallBridge() {

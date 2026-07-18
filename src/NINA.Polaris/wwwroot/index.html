@@ -13696,11 +13696,73 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                       x-text="'✓ connected · ' + asst.deviceModels.length + ' models'"></span>
                                 <span x-show="asst.deviceTest === 'error'" style="font-size:12px; color:#f85149">✗ couldn't reach it</span>
                             </div>
+                            <!-- Ollama model manager: recommend + one-click download (browser -> Ollama) -->
+                            <div x-show="asst.deviceTest === 'ok' && asst.deviceCatalog.length"
+                                 style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px">
+                                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px">
+                                    <span style="font-size:13px; font-weight:600">Recommended models</span>
+                                    <span class="text-muted" style="font-size:12px" x-show="asst.deviceGpuName"
+                                          x-text="'· ' + asst.deviceGpuName"></span>
+                                    <span style="flex:1"></span>
+                                    <label style="font-size:12px; display:flex; align-items:center; gap:6px">
+                                        GPU memory
+                                        <select class="input" style="width:auto; padding:2px 6px"
+                                                x-model="asst.deviceVramChoice" @change="_canopusSaveVram()">
+                                            <option value="auto">Auto / unsure</option>
+                                            <option value="4">≤ 4 GB</option>
+                                            <option value="6">6 GB</option>
+                                            <option value="8">8 GB</option>
+                                            <option value="12">12 GB</option>
+                                            <option value="16">16 GB</option>
+                                            <option value="24">24 GB+</option>
+                                        </select>
+                                    </label>
+                                    <button class="btn btn-sm" @click="_canopusDeviceRefresh()" title="Refresh">↻</button>
+                                </div>
+                                <template x-for="m in asst.deviceCatalog" :key="m.tag">
+                                    <div style="display:flex; align-items:center; gap:10px; padding:6px 0; border-top:1px solid rgba(255,255,255,.06)">
+                                        <div style="flex:1; min-width:0">
+                                            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                                                <code style="font-size:13px" x-text="m.tag"></code>
+                                                <span x-show="m.recommended" style="font-size:11px; color:#d29922"
+                                                      title="Best fit for your GPU">★ recommended</span>
+                                                <span x-show="m.installed" style="font-size:11px; color:#3fb950">✓ installed</span>
+                                                <span x-show="!m.fits && !m.installed" style="font-size:11px; color:#8b949e"
+                                                      x-text="'needs ~' + m.min_vram_gb + ' GB'"></span>
+                                            </div>
+                                            <div class="text-muted" style="font-size:11px"
+                                                 x-text="(m.size_gb ? m.size_gb + ' GB · ' : '') + (m.note || '')"></div>
+                                            <div x-show="asst.devicePull === m.tag" style="margin-top:4px">
+                                                <div style="height:5px; background:var(--border); border-radius:3px; overflow:hidden">
+                                                    <div :style="'height:100%; width:' + asst.devicePullPct + '%; background:#3fb950; transition:width .2s'"></div>
+                                                </div>
+                                                <span class="text-muted" style="font-size:11px"
+                                                      x-text="asst.devicePullStatus + ' · ' + asst.devicePullPct + '%'"></span>
+                                            </div>
+                                        </div>
+                                        <div style="display:flex; gap:6px; align-items:center; flex-shrink:0">
+                                            <template x-if="m.installed">
+                                                <button class="btn btn-sm" :class="asst.deviceModel === m.tag ? 'btn-primary' : ''"
+                                                        @click="_canopusDevicePick(m.tag)"
+                                                        x-text="asst.deviceModel === m.tag ? '✓ in use' : 'Use'"></button>
+                                            </template>
+                                            <template x-if="m.installed">
+                                                <button class="btn btn-sm" @click="_canopusDeviceDelete(m.tag)" title="Delete">🗑</button>
+                                            </template>
+                                            <template x-if="!m.installed">
+                                                <button class="btn btn-sm" :disabled="!!asst.devicePull"
+                                                        @click="_canopusDevicePull(m.tag)"
+                                                        x-text="asst.devicePull === m.tag ? 'Downloading…' : 'Download'"></button>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
                             <p class="text-muted" style="font-size:12px; margin-top:10px">
                                 The LLM server must allow this page's origin (CORS). For Ollama, run it with
                                 <code>OLLAMA_ORIGINS=<span x-text="location.origin"></span></code> (or <code>*</code>);
-                                LM Studio / llama.cpp have a CORS toggle. Use a tool-capable model (e.g.
-                                <code>qwen2.5</code>, <code>llama3.1</code>).
+                                LM Studio / llama.cpp have a CORS toggle. After connecting, pick a model above —
+                                Canopus downloads it into Ollama for you. Only tool-capable models are listed.
                             </p>
                           </div>
                         </template>
