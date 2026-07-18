@@ -139,7 +139,18 @@ class LlamaServerProvider(Provider):
             "chat_template_kwargs": {"enable_thinking": False},
         }
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            r = await client.post(f"{self.base_url}/v1/chat/completions", json=body)
+            try:
+                r = await client.post(f"{self.base_url}/v1/chat/completions", json=body)
+            except httpx.RequestError as e:
+                # Connection refused / server disconnected / read timeout: the local
+                # model isn't answering (still loading a big prompt, or restarted).
+                # Surface something actionable instead of a bare/empty error.
+                raise RuntimeError(
+                    "the local model isn't responding right now "
+                    f"({type(e).__name__}). It may still be loading or was "
+                    "restarted — wait a moment, or Stop then Start the local "
+                    "backend in Settings."
+                ) from e
             if r.status_code >= 400:
                 # Surface llama-server's actual reason (e.g. "request (N tokens)
                 # exceeds the available context size") instead of a bare status code.

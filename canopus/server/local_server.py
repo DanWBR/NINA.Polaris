@@ -37,7 +37,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from agent import AgentSession, CATALOG
+from agent import AgentSession, CATALOG, OPENAI_TOOLS, SYSTEM_PROMPT
+from providers import get_provider
 
 _HERE = os.path.dirname(__file__)
 CLIENT_DIR = os.path.join(_HERE, "..", "client")
@@ -92,6 +93,29 @@ def _build_allowlist() -> list[dict]:
 
 _ALLOWLIST = _build_allowlist()
 
+# Warmth flag the UI/health can read: true once the system-prompt + tool-catalog
+# prefix has been ingested into llama-server's cache.
+_warm = {"ready": False}
+
+
+@app.on_event("startup")
+async def _warmup_prompt_cache() -> None:
+    """Pre-ingest the (identical every turn) system prompt + tool catalog so the
+    user's FIRST question reuses the cached prefix instead of paying the full
+    ~1900-token ingest (~60-70s on an SBC). Best-effort, in the background: it
+    doesn't block startup, and llama-server serializes it ahead of the first real
+    query so that query then only ingests the short user message."""
+    async def go() -> None:
+        try:
+            await get_provider().complete(
+                [{"role": "system", "content": SYSTEM_PROMPT},
+                 {"role": "user", "content": "hello"}],
+                OPENAI_TOOLS)
+            _warm["ready"] = True
+        except Exception:
+            pass  # warmup is a nicety, never fatal
+    asyncio.create_task(go())
+
 
 # Served at BOTH paths: the FOSS host fetches /manifest.json, while the chat
 # client's boot() fetches {api.base}/manifest (i.e. /api/manifest). Both must
@@ -140,7 +164,7 @@ app.mount("/fonts", StaticFiles(directory=os.path.join(CLIENT_DIR, "fonts")), na
 
 @app.get("/healthz")
 def healthz() -> dict:
-    return {"ok": True, "tier": "local"}
+    return {"ok": True, "tier": "local", "warm": _warm["ready"]}
 
 
 @app.websocket("/api/agent")
