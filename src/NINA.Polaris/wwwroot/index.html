@@ -12253,83 +12253,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         typeface. Persists per browser; no restart needed.
                     </p>
 
-                    <!-- Assistant badge reset. The optional external assistant's
-                         intro badge is dismissable (its × sets a per-browser
-                         flag); once dismissed there's no way back short of
-                         clearing site data. This brings it back. Only shown when
-                         an assistant module is actually configured (asst.ready),
-                         and hidden once subscribed (the FAB is always visible
-                         then, so there's nothing to restore). -->
-                    <template x-if="asst.ready &amp;&amp; !asst.subscribed">
-                        <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:16px">
-                            <span style="min-width:90px">Assistant</span>
-                            <button class="btn btn-sm" @click="assistantResetBadge()"
-                                    :disabled="asst.badgeVisible"
-                                    title="Bring back the dismissed assistant intro badge">
-                                <span x-text="asst.badgeVisible ? 'Badge is showing' : 'Show assistant badge'"></span>
-                            </button>
-                        </label>
-                    </template>
-
-                    <!-- CANOPUS: assistant backend selector. Choose where the AI
-                         co-pilot runs: the hosted cloud (paid), a local model on
-                         this Polaris host (free/offline), or on the client device
-                         (deferred). The local tier downloads a ~2.4 GB model +
-                         llama-server and runs them as child processes here. -->
-                    <div style="margin-top:18px; max-width:560px" x-init="_canopusRefresh()">
-                        <label style="display:flex; align-items:center; gap:12px">
-                            <span style="min-width:90px">Assistant backend</span>
-                            <select class="input" style="flex:1" :value="asst.backend"
-                                    @change="_assistantSetBackend($event.target.value)">
-                                <option value="cloud">Cloud (Canopus, subscription)</option>
-                                <option value="sbc">On this server (local model)</option>
-                                <option value="device" disabled>On this device (coming soon)</option>
-                            </select>
-                        </label>
-                        <p class="text-muted" style="font-size:12px; margin-top:6px">
-                            Cloud runs on the hosted Canopus service (paid). <em>On this
-                            server</em> runs a local model (Qwen3-4B) entirely on this
-                            Polaris host — free, private and offline, no account needed.
-                        </p>
-
-                        <template x-if="asst.backend === 'sbc'">
-                          <div class="settings-card" style="margin-top:10px; padding:12px">
-                            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
-                                <span style="width:10px;height:10px;border-radius:50%;display:inline-block"
-                                      :style="(asst.sbc &amp;&amp; asst.sbc.running) ? 'background:#3fb950' : 'background:#7d8590'"></span>
-                                <strong x-text="(asst.sbc &amp;&amp; asst.sbc.running) ? 'Running' : ((asst.sbc &amp;&amp; asst.sbc.modelPresent) ? 'Stopped' : 'Not set up')"></strong>
-                                <span class="text-muted" style="font-size:12px" x-text="asst.sbc ? ('· ' + asst.sbc.rid) : ''"></span>
-                            </div>
-
-                            <!-- First-run: download the model + runtime -->
-                            <template x-if="asst.sbc &amp;&amp; !asst.sbc.modelPresent">
-                              <div style="margin-top:8px">
-                                <p class="text-muted" style="font-size:12px"
-                                   x-text="(asst.sbc.download &amp;&amp; asst.sbc.download.running) ? ('Downloading (' + asst.sbc.download.phase + ') ' + _canopusPct() + '%') : 'The local model (~2.4 GB) and runtime aren\'t installed yet.'"></p>
-                                <button class="btn btn-sm" style="margin-top:6px"
-                                        :disabled="asst.sbc.download &amp;&amp; asst.sbc.download.running"
-                                        @click="_canopusDownload()">
-                                    <span x-text="(asst.sbc.download &amp;&amp; asst.sbc.download.running) ? 'Downloading…' : 'Download model + runtime'"></span>
-                                </button>
-                              </div>
-                            </template>
-
-                            <!-- Ready: start / stop the local backend -->
-                            <template x-if="asst.sbc &amp;&amp; asst.sbc.modelPresent">
-                              <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-                                <button class="btn btn-sm" :disabled="asst.sbcBusy || (asst.sbc &amp;&amp; asst.sbc.running)" @click="_canopusStart()">Start</button>
-                                <button class="btn btn-sm" :disabled="asst.sbcBusy || !(asst.sbc &amp;&amp; asst.sbc.running)" @click="_canopusStop()">Stop</button>
-                                <button class="btn btn-sm" @click="_canopusRefresh()">Refresh</button>
-                                <span class="text-muted" style="font-size:12px" x-show="asst.sbcBusy">working…</span>
-                              </div>
-                            </template>
-
-                            <p style="font-size:12px; margin-top:8px; color:#f85149"
-                               x-show="asst.sbc &amp;&amp; (asst.sbc.lastError || (!asst.sbc.running &amp;&amp; asst.sbc.unavailableReason))"
-                               x-text="asst.sbc ? (asst.sbc.lastError || asst.sbc.unavailableReason) : ''"></p>
-                          </div>
-                        </template>
-                    </div>
 
                     <!-- Reduce motion: kill UI animations (panel fade, modal
                          zoom, spinners) for weak client devices or motion
@@ -13378,247 +13301,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
                 </div>
 
-                <div class="settings-section" x-init="loadGpuInfo()">
-                    <h3 data-tour="set-gpu"><span class="settings-card-icon">🎛️</span>GPU acceleration (OpenCL)</h3>
-                    <p class="hint" style="margin-top:0">
-                        Offloads classic image math (debayer, alignment warp,
-                        stretch, editor blur, live-stack integration) to the SBC
-                        GPU when the board exposes OpenCL (e.g. Mali on RK3588,
-                        Adreno on QCS6490). Falls back to the CPU automatically
-                        per operation. This is for classic math only — GraXpert
-                        AI inference uses a separate accelerator path (an NPU, or
-                        the GPU via Vulkan/ncnn), shown in the GraXpert section below.
-                    </p>
-                    <template x-if="gpuInfo && gpuInfo.loaderPresent && gpuInfo.hardware">
-                        <div>
-                            <label class="checkbox-label">
-                                <input type="checkbox" :checked="gpuInfo.userEnabled"
-                                       @change="toggleGpu($event.target.checked)">
-                                Use GPU when available
-                            </label>
-                            <p class="hint" style="margin-top:6px">
-                                Device: <strong x-text="gpuInfo.device || gpuInfo.backend"></strong>
-                                <span x-show="gpuInfo.userEnabled && gpuInfo.initialized" style="color:var(--accent-ok,#16a34a)"> · active</span>
-                                <span x-show="!gpuInfo.userEnabled" style="color:var(--text-secondary)"> · disabled (CPU)</span>
-                            </p>
-                            <button class="btn btn-sm" @click="runGpuSelftest()" :disabled="gpuSelftest==='running'">
-                                <span x-show="gpuSelftest!=='running'">Run GPU self-test</span>
-                                <span x-show="gpuSelftest==='running'">Testing…</span>
-                            </button>
-                            <template x-if="gpuSelftestResult">
-                                <div class="hint" style="margin-top:8px">
-                                    <span :style="gpuSelftestResult.allOk ? 'color:var(--accent-ok,#16a34a)' : 'color:var(--accent-warn,#f59e0b)'"
-                                          x-text="gpuSelftestResult.allOk ? '✓ all kernels match the CPU reference' : '⚠ a kernel diverged'"></span>
-                                    <template x-for="k in gpuSelftestResult.kernels" :key="k.kernel">
-                                        <div x-show="!k.ok || k.maxDiff > 0">
-                                            <code x-text="k.kernel + ': maxDiff ' + k.maxDiff + ' (tol ' + k.tolerance + ') ' + (k.ok ? 'OK' : 'FAIL')"></code>
-                                        </div>
-                                    </template>
-                                </div>
-                            </template>
-                        </div>
-                    </template>
-                    <p class="hint" x-show="gpuInfo && !gpuInfo.loaderPresent" style="color:var(--text-secondary)">
-                        No OpenCL device on this machine — running on CPU.
-                        <span x-text="gpuInfo?.diagnostics"></span>
-                    </p>
-                </div>
-
-                <div class="settings-section" x-init="loadBenchmark()">
-                    <h3 data-tour="set-benchmark"><span class="settings-card-icon">📊</span>Hardware benchmark</h3>
-                    <p class="hint" style="margin-top:0">
-                        Measures how fast this machine runs the Polaris image
-                        pipeline (stacking, capture/video encode) plus a raw
-                        CPU/memory test, so you can compare different boards
-                        (Raspberry Pi, Orange Pi, mini-PC, etc.). The synthetic
-                        test runs the same fixed workload everywhere, so the
-                        scores are directly comparable. No camera needed.
-                    </p>
-
-                    <label class="checkbox-label" style="margin-top:4px"
-                           title="Also time real exposures from the connected camera. Camera/USB dependent, so not comparable across machines.">
-                        <input type="checkbox" x-model="benchIncludeCamera">
-                        Also measure the connected camera (not comparable across machines)
-                    </label>
-                    <div x-show="benchIncludeCamera" style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 2px 22px">
-                        <label class="hint">Exposure (s)
-                            <input type="number" min="0" step="0.1" x-model.number="benchExposure"
-                                   style="width:70px;margin-left:4px">
-                        </label>
-                        <label class="hint">Gain
-                            <input type="number" min="0" x-model.number="benchGain" placeholder="auto"
-                                   style="width:70px;margin-left:4px">
-                        </label>
-                        <label class="hint" title="Centered square ROI for the high-fps video probe. 0 = full frame. Planetary high-fps needs a small ROI (e.g. 640).">Video ROI (px)
-                            <input type="number" min="0" step="64" x-model.number="benchVideoRoi" placeholder="0 = full"
-                                   style="width:80px;margin-left:4px">
-                        </label>
-                        <label class="checkbox-label hint" style="align-self:center"
-                               title="Also write a real SER recording to the image-output volume during the video probe, to measure sustainable record fps + dropped frames.">
-                            <input type="checkbox" x-model="benchMeasureRecording">
-                            Measure recording
-                        </label>
-                    </div>
-
-                    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-                        <button class="btn btn-primary btn-sm"
-                                :disabled="bench.state === 'running'"
-                                @click="runBenchmark()"
-                                x-text="bench.state === 'running' ? 'Running…' : '▶ Run benchmark'"></button>
-                        <button class="btn btn-sm" x-show="bench.state === 'running'"
-                                @click="cancelBenchmark()">Cancel</button>
-                        <button class="btn btn-sm" @click="loadBenchmark()">↻ Refresh</button>
-                    </div>
-
-                    <div x-show="bench.state === 'running'" style="margin-top:10px">
-                        <div class="hint" x-text="(bench.phase || 'Working') + '… ' + (bench.progress || 0) + '%'"></div>
-                        <div style="width:100%;height:6px;background:var(--border,#333);border-radius:3px;overflow:hidden;margin-top:4px">
-                            <div style="height:100%;background:var(--accent,#3a9);border-radius:3px;transition:width .3s"
-                                 :style="{ width: (bench.progress || 0) + '%' }"></div>
-                        </div>
-                    </div>
-
-                    <template x-if="bench.lastResult">
-                        <div style="margin-top:14px">
-                            <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-                                <span style="font-size:26px;font-weight:700"
-                                      x-text="Math.round(bench.lastResult.compositeScore)"></span>
-                                <span class="hint">Polaris score
-                                    (<strong x-text="bench.lastResult.device?.shortLabel || bench.lastResult.device?.model || 'host'"></strong>,
-                                    <span x-text="bench.lastResult.device?.cores + ' cores'"></span>)
-                                </span>
-                            </div>
-                            <table style="width:100%;font-size:12px;margin-top:8px;border-collapse:collapse">
-                                <tr><td colspan="2" style="padding-top:6px"><strong>Stacking</strong>
-                                    (<span x-text="bench.lastResult.megapixels"></span> MP frames)</td></tr>
-                                <tr><td class="hint" style="padding-left:10px">Throughput</td>
-                                    <td><span x-text="bench.lastResult.stacking.fps"></span> fps ·
-                                        <span x-text="bench.lastResult.stacking.mpxPerSec"></span> Mpx/s</td></tr>
-                                <tr><td class="hint" style="padding-left:10px">Detect / align / resample / stats (ms)</td>
-                                    <td><span x-text="bench.lastResult.stacking.detectMs"></span> /
-                                        <span x-text="bench.lastResult.stacking.matchMs"></span> /
-                                        <span x-text="bench.lastResult.stacking.resampleMs"></span> /
-                                        <span x-text="bench.lastResult.stacking.statsMs"></span></td></tr>
-
-                                <tr><td colspan="2" style="padding-top:6px"><strong>Capture / video encode</strong></td></tr>
-                                <tr><td class="hint" style="padding-left:10px">Throughput</td>
-                                    <td><span x-text="bench.lastResult.encode.fps"></span> fps ·
-                                        <span x-text="bench.lastResult.encode.mpxPerSec"></span> Mpx/s</td></tr>
-                                <tr><td class="hint" style="padding-left:10px">Debayer / JPEG / LZ4 (ms)</td>
-                                    <td><span x-text="bench.lastResult.encode.debayerMs"></span> /
-                                        <span x-text="bench.lastResult.encode.jpegMs"></span> /
-                                        <span x-text="bench.lastResult.encode.lz4Ms"></span>
-                                        (<span x-text="bench.lastResult.encode.lz4MBps"></span> MB/s)</td></tr>
-
-                                <tr><td colspan="2" style="padding-top:6px"><strong>CPU / memory</strong></td></tr>
-                                <tr><td class="hint" style="padding-left:10px">Single / multi-thread (MFLOPS)</td>
-                                    <td><span x-text="bench.lastResult.cpu.singleThreadMflops"></span> /
-                                        <span x-text="bench.lastResult.cpu.multiThreadMflops"></span>
-                                        (<span x-text="bench.lastResult.cpu.coreScaling"></span>× scaling)</td></tr>
-                                <tr><td class="hint" style="padding-left:10px">Memory bandwidth</td>
-                                    <td><span x-text="bench.lastResult.cpu.memBandwidthGBps"></span> GB/s</td></tr>
-
-                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
-                                    <tr><td colspan="2" style="padding-top:6px"><strong>GPU vs CPU (OpenCL)</strong>
-                                        <span class="hint" x-text="'(' + bench.lastResult.gpu.device + ')'"></span></td></tr>
-                                </template>
-                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
-                                    <tr><td class="hint" style="padding-left:10px">Warp (CPU / GPU / speedup)</td>
-                                        <td><span x-text="bench.lastResult.gpu.warpCpuMpxPerSec"></span> /
-                                            <span x-text="bench.lastResult.gpu.warpGpuMpxPerSec"></span> Mpx/s ·
-                                            <strong x-text="bench.lastResult.gpu.warpSpeedup + '×'"></strong></td></tr>
-                                </template>
-                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
-                                    <tr><td class="hint" style="padding-left:10px">Debayer (CPU / GPU / speedup)</td>
-                                        <td><span x-text="bench.lastResult.gpu.debayerCpuMpxPerSec"></span> /
-                                            <span x-text="bench.lastResult.gpu.debayerGpuMpxPerSec"></span> Mpx/s ·
-                                            <strong x-text="bench.lastResult.gpu.debayerSpeedup + '×'"></strong></td></tr>
-                                </template>
-                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
-                                    <tr><td class="hint" style="padding-left:10px">Blur (CPU / GPU / speedup)</td>
-                                        <td><span x-text="bench.lastResult.gpu.blurCpuMpxPerSec"></span> /
-                                            <span x-text="bench.lastResult.gpu.blurGpuMpxPerSec"></span> Mpx/s ·
-                                            <strong x-text="bench.lastResult.gpu.blurSpeedup + '×'"></strong></td></tr>
-                                </template>
-                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
-                                    <tr><td class="hint" style="padding-left:10px">Overall GPU speedup <span class="hint">(geo-mean)</span></td>
-                                        <td><strong x-text="bench.lastResult.gpu.overallSpeedup + '×'"></strong></td></tr>
-                                </template>
-
-                                <template x-if="bench.lastResult.npu && bench.lastResult.npu.ran">
-                                    <tr><td colspan="2" style="padding-top:6px"><strong>NPU (AI denoise)</strong>
-                                        <span class="hint" x-text="'(' + bench.lastResult.npu.backend + ')'"></span></td></tr>
-                                </template>
-                                <template x-if="bench.lastResult.npu && bench.lastResult.npu.ran">
-                                    <tr><td class="hint" style="padding-left:10px">GraXpert denoise
-                                        (<span x-text="bench.lastResult.npu.model"></span> ·
-                                         <span x-text="bench.lastResult.npu.precision"></span>)</td>
-                                        <td><strong x-text="bench.lastResult.npu.msPerTile"></strong> ms/tile ·
-                                            <span x-text="bench.lastResult.npu.tilesPerSec"></span> tiles/s
-                                            <span class="hint" x-text="'(' + bench.lastResult.npu.width + '×' + bench.lastResult.npu.height + ', ' + bench.lastResult.npu.tiles + ' tiles)'"></span></td></tr>
-                                </template>
-
-                                <template x-if="bench.lastResult.camera">
-                                    <tr><td colspan="2" style="padding-top:6px"><strong>Camera</strong>
-                                        <span class="hint">(camera-dependent)</span></td></tr>
-                                </template>
-                                <template x-if="bench.lastResult.camera && !bench.lastResult.camera.error">
-                                    <tr><td class="hint" style="padding-left:10px">Capture</td>
-                                        <td><span x-text="bench.lastResult.camera.meanCaptureMs"></span> ms ·
-                                            <span x-text="bench.lastResult.camera.fps"></span> fps ·
-                                            <span x-text="bench.lastResult.camera.width + '×' + bench.lastResult.camera.height"></span></td></tr>
-                                </template>
-                                <template x-if="bench.lastResult.camera && bench.lastResult.camera.error">
-                                    <tr><td class="hint" style="padding-left:10px">Camera</td>
-                                        <td class="text-warn" x-text="bench.lastResult.camera.error"></td></tr>
-                                </template>
-
-                                <template x-if="bench.lastResult.cameraVideo">
-                                    <tr><td colspan="2" style="padding-top:6px"><strong>Camera video stream</strong>
-                                        <span class="hint">(camera-dependent)</span></td></tr>
-                                </template>
-                                <template x-if="bench.lastResult.cameraVideo && !bench.lastResult.cameraVideo.error">
-                                    <tr><td class="hint" style="padding-left:10px">Stream
-                                        (<span x-text="bench.lastResult.cameraVideo.mode"></span>)</td>
-                                        <td><span x-text="bench.lastResult.cameraVideo.captureFps"></span> fps capture ·
-                                            <span x-text="bench.lastResult.cameraVideo.transmitFps"></span> fps sent ·
-                                            <span x-text="bench.lastResult.cameraVideo.width + '×' + bench.lastResult.cameraVideo.height"></span>
-                                            (<span x-text="bench.lastResult.cameraVideo.mbPerSec"></span> MB/s)</td></tr>
-                                </template>
-                                <template x-if="bench.lastResult.cameraVideo && !bench.lastResult.cameraVideo.error && bench.lastResult.cameraVideo.recordFps > 0">
-                                    <tr><td class="hint" style="padding-left:10px">Recording (SER)</td>
-                                        <td><span x-text="bench.lastResult.cameraVideo.recordFps"></span> fps written ·
-                                            <span x-text="bench.lastResult.cameraVideo.droppedFrames"></span> dropped ·
-                                            <span x-text="bench.lastResult.cameraVideo.meanWriteMs"></span> ms/write</td></tr>
-                                </template>
-                                <template x-if="bench.lastResult.cameraVideo && bench.lastResult.cameraVideo.error">
-                                    <tr><td class="hint" style="padding-left:10px">Video stream</td>
-                                        <td class="text-warn" x-text="bench.lastResult.cameraVideo.error"></td></tr>
-                                </template>
-                            </table>
-                        </div>
-                    </template>
-
-                    <template x-if="bench.history && bench.history.length">
-                        <div style="margin-top:14px">
-                            <div class="hint" style="margin-bottom:4px">History (the host's recent runs)</div>
-                            <table style="width:100%;font-size:12px;border-collapse:collapse">
-                                <template x-for="(h, i) in bench.history.slice(0, 10)" :key="i">
-                                    <tr>
-                                        <td x-text="benchTimeLabel(h.timestamp)"></td>
-                                        <td x-text="(h.device?.shortLabel || h.device?.model || '')"></td>
-                                        <td style="text-align:right;font-weight:600" x-text="Math.round(h.compositeScore)"></td>
-                                    </tr>
-                                </template>
-                            </table>
-                            <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-                                <button class="btn btn-sm" @click="exportBenchmark()">⤓ Export JSON</button>
-                                <button class="btn btn-sm btn-danger" @click="clearBenchmarkHistory()">🗑 Clear history</button>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-
                 <div class="settings-section">
                     <h3 data-tour="set-hardware"><span class="settings-card-icon">⚙</span>Hardware</h3>
                     <label class="checkbox-label" title="When Polaris starts up, automatically connect to INDI, run an Alpaca discovery on the local network, and connect every device saved on the active rig. Toasts surface each step.">
@@ -13903,8 +13585,93 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
                 </template>
 
+                <div class="settings-section" id="assistant-card">
+                    <h3 data-tour="set-assistant"><span class="settings-card-icon">⭐</span>Assistant</h3>
+                    <p class="hint" style="margin-top:0">
+                        Choose where the Canopus AI co-pilot runs — the hosted cloud,
+                        or a local model on this Polaris host — and manage the on-server model.
+                    </p>
+                    <!-- Assistant badge reset. The optional external assistant's
+                         intro badge is dismissable (its × sets a per-browser
+                         flag); once dismissed there's no way back short of
+                         clearing site data. This brings it back. Only shown when
+                         an assistant module is actually configured (asst.ready),
+                         and hidden once subscribed (the FAB is always visible
+                         then, so there's nothing to restore). -->
+                    <template x-if="asst.ready &amp;&amp; !asst.subscribed">
+                        <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:16px">
+                            <span style="min-width:90px">Assistant</span>
+                            <button class="btn btn-sm" @click="assistantResetBadge()"
+                                    :disabled="asst.badgeVisible"
+                                    title="Bring back the dismissed assistant intro badge">
+                                <span x-text="asst.badgeVisible ? 'Badge is showing' : 'Show assistant badge'"></span>
+                            </button>
+                        </label>
+                    </template>
+
+                    <!-- CANOPUS: assistant backend selector. Choose where the AI
+                         co-pilot runs: the hosted cloud (paid), a local model on
+                         this Polaris host (free/offline), or on the client device
+                         (deferred). The local tier downloads a ~2.4 GB model +
+                         llama-server and runs them as child processes here. -->
+                    <div style="margin-top:18px; max-width:560px" x-init="_canopusRefresh()">
+                        <label style="display:flex; align-items:center; gap:12px">
+                            <span style="min-width:90px">Assistant backend</span>
+                            <select class="input" style="flex:1" :value="asst.backend"
+                                    @change="_assistantSetBackend($event.target.value)">
+                                <option value="cloud">Cloud (Canopus, subscription)</option>
+                                <option value="sbc">On this server (local model)</option>
+                                <option value="device" disabled>On this device (coming soon)</option>
+                            </select>
+                        </label>
+                        <p class="text-muted" style="font-size:12px; margin-top:6px">
+                            Cloud runs on the hosted Canopus service (paid). <em>On this
+                            server</em> runs a local model (Qwen3-4B) entirely on this
+                            Polaris host — free, private and offline, no account needed.
+                        </p>
+
+                        <template x-if="asst.backend === 'sbc'">
+                          <div class="settings-card" style="margin-top:10px; padding:12px">
+                            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                                <span style="width:10px;height:10px;border-radius:50%;display:inline-block"
+                                      :style="(asst.sbc &amp;&amp; asst.sbc.running) ? 'background:#3fb950' : 'background:#7d8590'"></span>
+                                <strong x-text="(asst.sbc &amp;&amp; asst.sbc.running) ? 'Running' : ((asst.sbc &amp;&amp; asst.sbc.modelPresent) ? 'Stopped' : 'Not set up')"></strong>
+                                <span class="text-muted" style="font-size:12px" x-text="asst.sbc ? ('· ' + asst.sbc.rid) : ''"></span>
+                            </div>
+
+                            <!-- First-run: download the model + runtime -->
+                            <template x-if="asst.sbc &amp;&amp; !asst.sbc.modelPresent">
+                              <div style="margin-top:8px">
+                                <p class="text-muted" style="font-size:12px"
+                                   x-text="(asst.sbc.download &amp;&amp; asst.sbc.download.running) ? ('Downloading (' + asst.sbc.download.phase + ') ' + _canopusPct() + '%') : 'The local model (~2.4 GB) and runtime aren\'t installed yet.'"></p>
+                                <button class="btn btn-sm" style="margin-top:6px"
+                                        :disabled="asst.sbc.download &amp;&amp; asst.sbc.download.running"
+                                        @click="_canopusDownload()">
+                                    <span x-text="(asst.sbc.download &amp;&amp; asst.sbc.download.running) ? 'Downloading…' : 'Download model + runtime'"></span>
+                                </button>
+                              </div>
+                            </template>
+
+                            <!-- Ready: start / stop the local backend -->
+                            <template x-if="asst.sbc &amp;&amp; asst.sbc.modelPresent">
+                              <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                                <button class="btn btn-sm" :disabled="asst.sbcBusy || (asst.sbc &amp;&amp; asst.sbc.running)" @click="_canopusStart()">Start</button>
+                                <button class="btn btn-sm" :disabled="asst.sbcBusy || !(asst.sbc &amp;&amp; asst.sbc.running)" @click="_canopusStop()">Stop</button>
+                                <button class="btn btn-sm" @click="_canopusRefresh()">Refresh</button>
+                                <span class="text-muted" style="font-size:12px" x-show="asst.sbcBusy">working…</span>
+                              </div>
+                            </template>
+
+                            <p style="font-size:12px; margin-top:8px; color:#f85149"
+                               x-show="asst.sbc &amp;&amp; (asst.sbc.lastError || (!asst.sbc.running &amp;&amp; asst.sbc.unavailableReason))"
+                               x-text="asst.sbc ? (asst.sbc.lastError || asst.sbc.unavailableReason) : ''"></p>
+                          </div>
+                        </template>
+                    </div>
+                </div>
+
                 <div class="settings-section settings-section--wide">
-                    <h3 data-tour="set-ai"><span class="settings-card-icon">🧠</span>AI inference (ONNX)</h3>
+                    <h3 data-tour="set-ai"><span class="settings-card-icon">🧠</span>AI models</h3>
                     <p class="hint" style="margin-top:0">
                         In-browser AI ops — star removal (nox / starrem2k13 /
                         StarNet++) and GraXpert (BGE / Denoise / Deconvolution).
@@ -14095,7 +13862,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          BGE/Denoise on the GPU (Adreno/Mali/etc.) instead of CPU. -->
                     <div class="settings-card" style="margin-top:12px" x-init="loadNcnnPackStatus()">
                         <div style="font-weight:600; margin-bottom:4px">
-                            <span class="settings-card-icon">⚡</span>GPU acceleration models (ncnn-Vulkan)
+                            <span class="settings-card-icon">⚡</span>Run AI models on the GPU (ncnn-Vulkan)
                         </div>
                         <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                             Run BGE and Denoise on a Vulkan GPU (Adreno, Mali, …) instead
@@ -14184,6 +13951,247 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <!-- Factory reset: wipe all profiles/rigs/auth so a
                      clean Raspberry Pi image can ship with no personal
                      or test config. Captured images are NOT touched. -->
+                <div class="settings-section" x-init="loadGpuInfo()">
+                    <h3 data-tour="set-gpu"><span class="settings-card-icon">🎛️</span>GPU acceleration (OpenCL)</h3>
+                    <p class="hint" style="margin-top:0">
+                        Offloads classic image math (debayer, alignment warp,
+                        stretch, editor blur, live-stack integration) to the SBC
+                        GPU when the board exposes OpenCL (e.g. Mali on RK3588,
+                        Adreno on QCS6490). Falls back to the CPU automatically
+                        per operation. This is for classic math only — GraXpert
+                        AI inference uses a separate accelerator path (an NPU, or
+                        the GPU via Vulkan/ncnn), shown in the AI models section above.
+                    </p>
+                    <template x-if="gpuInfo && gpuInfo.loaderPresent && gpuInfo.hardware">
+                        <div>
+                            <label class="checkbox-label">
+                                <input type="checkbox" :checked="gpuInfo.userEnabled"
+                                       @change="toggleGpu($event.target.checked)">
+                                Use GPU when available
+                            </label>
+                            <p class="hint" style="margin-top:6px">
+                                Device: <strong x-text="gpuInfo.device || gpuInfo.backend"></strong>
+                                <span x-show="gpuInfo.userEnabled && gpuInfo.initialized" style="color:var(--accent-ok,#16a34a)"> · active</span>
+                                <span x-show="!gpuInfo.userEnabled" style="color:var(--text-secondary)"> · disabled (CPU)</span>
+                            </p>
+                            <button class="btn btn-sm" @click="runGpuSelftest()" :disabled="gpuSelftest==='running'">
+                                <span x-show="gpuSelftest!=='running'">Run GPU self-test</span>
+                                <span x-show="gpuSelftest==='running'">Testing…</span>
+                            </button>
+                            <template x-if="gpuSelftestResult">
+                                <div class="hint" style="margin-top:8px">
+                                    <span :style="gpuSelftestResult.allOk ? 'color:var(--accent-ok,#16a34a)' : 'color:var(--accent-warn,#f59e0b)'"
+                                          x-text="gpuSelftestResult.allOk ? '✓ all kernels match the CPU reference' : '⚠ a kernel diverged'"></span>
+                                    <template x-for="k in gpuSelftestResult.kernels" :key="k.kernel">
+                                        <div x-show="!k.ok || k.maxDiff > 0">
+                                            <code x-text="k.kernel + ': maxDiff ' + k.maxDiff + ' (tol ' + k.tolerance + ') ' + (k.ok ? 'OK' : 'FAIL')"></code>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                    <p class="hint" x-show="gpuInfo && !gpuInfo.loaderPresent" style="color:var(--text-secondary)">
+                        No OpenCL device on this machine — running on CPU.
+                        <span x-text="gpuInfo?.diagnostics"></span>
+                    </p>
+                </div>
+
+                <div class="settings-section" x-init="loadBenchmark()">
+                    <h3 data-tour="set-benchmark"><span class="settings-card-icon">📊</span>Hardware benchmark</h3>
+                    <p class="hint" style="margin-top:0">
+                        Measures how fast this machine runs the Polaris image
+                        pipeline (stacking, capture/video encode) plus a raw
+                        CPU/memory test, so you can compare different boards
+                        (Raspberry Pi, Orange Pi, mini-PC, etc.). The synthetic
+                        test runs the same fixed workload everywhere, so the
+                        scores are directly comparable. No camera needed.
+                    </p>
+
+                    <label class="checkbox-label" style="margin-top:4px"
+                           title="Also time real exposures from the connected camera. Camera/USB dependent, so not comparable across machines.">
+                        <input type="checkbox" x-model="benchIncludeCamera">
+                        Also measure the connected camera (not comparable across machines)
+                    </label>
+                    <div x-show="benchIncludeCamera" style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 2px 22px">
+                        <label class="hint">Exposure (s)
+                            <input type="number" min="0" step="0.1" x-model.number="benchExposure"
+                                   style="width:70px;margin-left:4px">
+                        </label>
+                        <label class="hint">Gain
+                            <input type="number" min="0" x-model.number="benchGain" placeholder="auto"
+                                   style="width:70px;margin-left:4px">
+                        </label>
+                        <label class="hint" title="Centered square ROI for the high-fps video probe. 0 = full frame. Planetary high-fps needs a small ROI (e.g. 640).">Video ROI (px)
+                            <input type="number" min="0" step="64" x-model.number="benchVideoRoi" placeholder="0 = full"
+                                   style="width:80px;margin-left:4px">
+                        </label>
+                        <label class="checkbox-label hint" style="align-self:center"
+                               title="Also write a real SER recording to the image-output volume during the video probe, to measure sustainable record fps + dropped frames.">
+                            <input type="checkbox" x-model="benchMeasureRecording">
+                            Measure recording
+                        </label>
+                    </div>
+
+                    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                        <button class="btn btn-primary btn-sm"
+                                :disabled="bench.state === 'running'"
+                                @click="runBenchmark()"
+                                x-text="bench.state === 'running' ? 'Running…' : '▶ Run benchmark'"></button>
+                        <button class="btn btn-sm" x-show="bench.state === 'running'"
+                                @click="cancelBenchmark()">Cancel</button>
+                        <button class="btn btn-sm" @click="loadBenchmark()">↻ Refresh</button>
+                    </div>
+
+                    <div x-show="bench.state === 'running'" style="margin-top:10px">
+                        <div class="hint" x-text="(bench.phase || 'Working') + '… ' + (bench.progress || 0) + '%'"></div>
+                        <div style="width:100%;height:6px;background:var(--border,#333);border-radius:3px;overflow:hidden;margin-top:4px">
+                            <div style="height:100%;background:var(--accent,#3a9);border-radius:3px;transition:width .3s"
+                                 :style="{ width: (bench.progress || 0) + '%' }"></div>
+                        </div>
+                    </div>
+
+                    <template x-if="bench.lastResult">
+                        <div style="margin-top:14px">
+                            <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+                                <span style="font-size:26px;font-weight:700"
+                                      x-text="Math.round(bench.lastResult.compositeScore)"></span>
+                                <span class="hint">Polaris score
+                                    (<strong x-text="bench.lastResult.device?.shortLabel || bench.lastResult.device?.model || 'host'"></strong>,
+                                    <span x-text="bench.lastResult.device?.cores + ' cores'"></span>)
+                                </span>
+                            </div>
+                            <table style="width:100%;font-size:12px;margin-top:8px;border-collapse:collapse">
+                                <tr><td colspan="2" style="padding-top:6px"><strong>Stacking</strong>
+                                    (<span x-text="bench.lastResult.megapixels"></span> MP frames)</td></tr>
+                                <tr><td class="hint" style="padding-left:10px">Throughput</td>
+                                    <td><span x-text="bench.lastResult.stacking.fps"></span> fps ·
+                                        <span x-text="bench.lastResult.stacking.mpxPerSec"></span> Mpx/s</td></tr>
+                                <tr><td class="hint" style="padding-left:10px">Detect / align / resample / stats (ms)</td>
+                                    <td><span x-text="bench.lastResult.stacking.detectMs"></span> /
+                                        <span x-text="bench.lastResult.stacking.matchMs"></span> /
+                                        <span x-text="bench.lastResult.stacking.resampleMs"></span> /
+                                        <span x-text="bench.lastResult.stacking.statsMs"></span></td></tr>
+
+                                <tr><td colspan="2" style="padding-top:6px"><strong>Capture / video encode</strong></td></tr>
+                                <tr><td class="hint" style="padding-left:10px">Throughput</td>
+                                    <td><span x-text="bench.lastResult.encode.fps"></span> fps ·
+                                        <span x-text="bench.lastResult.encode.mpxPerSec"></span> Mpx/s</td></tr>
+                                <tr><td class="hint" style="padding-left:10px">Debayer / JPEG / LZ4 (ms)</td>
+                                    <td><span x-text="bench.lastResult.encode.debayerMs"></span> /
+                                        <span x-text="bench.lastResult.encode.jpegMs"></span> /
+                                        <span x-text="bench.lastResult.encode.lz4Ms"></span>
+                                        (<span x-text="bench.lastResult.encode.lz4MBps"></span> MB/s)</td></tr>
+
+                                <tr><td colspan="2" style="padding-top:6px"><strong>CPU / memory</strong></td></tr>
+                                <tr><td class="hint" style="padding-left:10px">Single / multi-thread (MFLOPS)</td>
+                                    <td><span x-text="bench.lastResult.cpu.singleThreadMflops"></span> /
+                                        <span x-text="bench.lastResult.cpu.multiThreadMflops"></span>
+                                        (<span x-text="bench.lastResult.cpu.coreScaling"></span>× scaling)</td></tr>
+                                <tr><td class="hint" style="padding-left:10px">Memory bandwidth</td>
+                                    <td><span x-text="bench.lastResult.cpu.memBandwidthGBps"></span> GB/s</td></tr>
+
+                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
+                                    <tr><td colspan="2" style="padding-top:6px"><strong>GPU vs CPU (OpenCL)</strong>
+                                        <span class="hint" x-text="'(' + bench.lastResult.gpu.device + ')'"></span></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
+                                    <tr><td class="hint" style="padding-left:10px">Warp (CPU / GPU / speedup)</td>
+                                        <td><span x-text="bench.lastResult.gpu.warpCpuMpxPerSec"></span> /
+                                            <span x-text="bench.lastResult.gpu.warpGpuMpxPerSec"></span> Mpx/s ·
+                                            <strong x-text="bench.lastResult.gpu.warpSpeedup + '×'"></strong></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
+                                    <tr><td class="hint" style="padding-left:10px">Debayer (CPU / GPU / speedup)</td>
+                                        <td><span x-text="bench.lastResult.gpu.debayerCpuMpxPerSec"></span> /
+                                            <span x-text="bench.lastResult.gpu.debayerGpuMpxPerSec"></span> Mpx/s ·
+                                            <strong x-text="bench.lastResult.gpu.debayerSpeedup + '×'"></strong></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
+                                    <tr><td class="hint" style="padding-left:10px">Blur (CPU / GPU / speedup)</td>
+                                        <td><span x-text="bench.lastResult.gpu.blurCpuMpxPerSec"></span> /
+                                            <span x-text="bench.lastResult.gpu.blurGpuMpxPerSec"></span> Mpx/s ·
+                                            <strong x-text="bench.lastResult.gpu.blurSpeedup + '×'"></strong></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
+                                    <tr><td class="hint" style="padding-left:10px">Overall GPU speedup <span class="hint">(geo-mean)</span></td>
+                                        <td><strong x-text="bench.lastResult.gpu.overallSpeedup + '×'"></strong></td></tr>
+                                </template>
+
+                                <template x-if="bench.lastResult.npu && bench.lastResult.npu.ran">
+                                    <tr><td colspan="2" style="padding-top:6px"><strong>NPU (AI denoise)</strong>
+                                        <span class="hint" x-text="'(' + bench.lastResult.npu.backend + ')'"></span></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.npu && bench.lastResult.npu.ran">
+                                    <tr><td class="hint" style="padding-left:10px">GraXpert denoise
+                                        (<span x-text="bench.lastResult.npu.model"></span> ·
+                                         <span x-text="bench.lastResult.npu.precision"></span>)</td>
+                                        <td><strong x-text="bench.lastResult.npu.msPerTile"></strong> ms/tile ·
+                                            <span x-text="bench.lastResult.npu.tilesPerSec"></span> tiles/s
+                                            <span class="hint" x-text="'(' + bench.lastResult.npu.width + '×' + bench.lastResult.npu.height + ', ' + bench.lastResult.npu.tiles + ' tiles)'"></span></td></tr>
+                                </template>
+
+                                <template x-if="bench.lastResult.camera">
+                                    <tr><td colspan="2" style="padding-top:6px"><strong>Camera</strong>
+                                        <span class="hint">(camera-dependent)</span></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.camera && !bench.lastResult.camera.error">
+                                    <tr><td class="hint" style="padding-left:10px">Capture</td>
+                                        <td><span x-text="bench.lastResult.camera.meanCaptureMs"></span> ms ·
+                                            <span x-text="bench.lastResult.camera.fps"></span> fps ·
+                                            <span x-text="bench.lastResult.camera.width + '×' + bench.lastResult.camera.height"></span></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.camera && bench.lastResult.camera.error">
+                                    <tr><td class="hint" style="padding-left:10px">Camera</td>
+                                        <td class="text-warn" x-text="bench.lastResult.camera.error"></td></tr>
+                                </template>
+
+                                <template x-if="bench.lastResult.cameraVideo">
+                                    <tr><td colspan="2" style="padding-top:6px"><strong>Camera video stream</strong>
+                                        <span class="hint">(camera-dependent)</span></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.cameraVideo && !bench.lastResult.cameraVideo.error">
+                                    <tr><td class="hint" style="padding-left:10px">Stream
+                                        (<span x-text="bench.lastResult.cameraVideo.mode"></span>)</td>
+                                        <td><span x-text="bench.lastResult.cameraVideo.captureFps"></span> fps capture ·
+                                            <span x-text="bench.lastResult.cameraVideo.transmitFps"></span> fps sent ·
+                                            <span x-text="bench.lastResult.cameraVideo.width + '×' + bench.lastResult.cameraVideo.height"></span>
+                                            (<span x-text="bench.lastResult.cameraVideo.mbPerSec"></span> MB/s)</td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.cameraVideo && !bench.lastResult.cameraVideo.error && bench.lastResult.cameraVideo.recordFps > 0">
+                                    <tr><td class="hint" style="padding-left:10px">Recording (SER)</td>
+                                        <td><span x-text="bench.lastResult.cameraVideo.recordFps"></span> fps written ·
+                                            <span x-text="bench.lastResult.cameraVideo.droppedFrames"></span> dropped ·
+                                            <span x-text="bench.lastResult.cameraVideo.meanWriteMs"></span> ms/write</td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.cameraVideo && bench.lastResult.cameraVideo.error">
+                                    <tr><td class="hint" style="padding-left:10px">Video stream</td>
+                                        <td class="text-warn" x-text="bench.lastResult.cameraVideo.error"></td></tr>
+                                </template>
+                            </table>
+                        </div>
+                    </template>
+
+                    <template x-if="bench.history && bench.history.length">
+                        <div style="margin-top:14px">
+                            <div class="hint" style="margin-bottom:4px">History (the host's recent runs)</div>
+                            <table style="width:100%;font-size:12px;border-collapse:collapse">
+                                <template x-for="(h, i) in bench.history.slice(0, 10)" :key="i">
+                                    <tr>
+                                        <td x-text="benchTimeLabel(h.timestamp)"></td>
+                                        <td x-text="(h.device?.shortLabel || h.device?.model || '')"></td>
+                                        <td style="text-align:right;font-weight:600" x-text="Math.round(h.compositeScore)"></td>
+                                    </tr>
+                                </template>
+                            </table>
+                            <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                                <button class="btn btn-sm" @click="exportBenchmark()">⤓ Export JSON</button>
+                                <button class="btn btn-sm btn-danger" @click="clearBenchmarkHistory()">🗑 Clear history</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
                 <div class="settings-section settings-section--wide danger-section">
                     <h3 data-tour="set-reset"><span class="settings-card-icon">⚠️</span>Reset everything to factory defaults</h3>
                     <p class="hint" style="margin-top:0">
