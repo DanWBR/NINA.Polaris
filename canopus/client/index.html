@@ -34,6 +34,19 @@
   .user { align-self: flex-end; background: #1f6feb; color: #fff; }
   .asst { align-self: flex-start; background: #1b2430; border: 1px solid #2b3644; }
   .sys  { align-self: center; color: #8b98a5; font-size: 12px; }
+  /* Markdown-rendered assistant bubbles (block layout, no pre-wrap). */
+  .msg.md { white-space: normal; }
+  .msg.md > :first-child { margin-top: 0; }
+  .msg.md > :last-child { margin-bottom: 0; }
+  .msg.md p { margin: 0 0 8px; }
+  .msg.md ul, .msg.md ol { margin: 4px 0 8px; padding-left: 20px; }
+  .msg.md li { margin: 2px 0; }
+  .msg.md h4, .msg.md h5 { margin: 10px 0 4px; font-size: 14px; font-weight: 600; }
+  .msg.md code { background: rgba(255,255,255,.09); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+  .msg.md pre { background: rgba(0,0,0,.3); padding: 8px; border-radius: 6px; overflow-x: auto; margin: 6px 0; }
+  .msg.md pre code { background: none; padding: 0; }
+  .msg.md a { color: #58a6ff; }
+  .msg.md strong { font-weight: 600; }
   /* Proactive session-watcher nudges (guiding lost, meridian soon, …). Left
      amber accent so they read as heads-up alerts, distinct from a reply. */
   .notice { align-self: flex-start; max-width: 92%; background: #241d10; border: 1px solid #4a3a12; border-left: 3px solid #f0b429; }
@@ -529,6 +542,56 @@
   }
   function sys(t) { bubble('sys', t); }
 
+  // ---- minimal, XSS-safe Markdown for assistant replies ----
+  // Escape first, then apply a small subset (headings, lists, bold/italic,
+  // inline + fenced code, links). Tool results/model text are data, never HTML.
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+  function renderInline(s) {
+    // s is already HTML-escaped. Protect inline code, then bold/italic/links.
+    const codes = [];
+    s = s.replace(/`([^`]+)`/g, (_, c) => { codes.push(c); return '@@C' + (codes.length - 1) + '@@'; });
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, t, u) => '<a href="' + u + '" target="_blank" rel="noopener noreferrer">' + t + '</a>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>').replace(/(^|[^_\w])_([^_\n]+)_/g, '$1<em>$2</em>');
+    s = s.replace(/@@C(\d+)@@/g, (_, i) => '<code>' + codes[+i] + '</code>');
+    return s;
+  }
+  function renderMarkdown(src) {
+    src = String(src || '').replace(/\r\n/g, '\n');
+    const fences = [];
+    src = src.replace(/```[^\n]*\n([\s\S]*?)```/g, (_, code) => { fences.push(code.replace(/\n$/, '')); return '@@F' + (fences.length - 1) + '@@'; });
+    const lines = src.split('\n');
+    let html = '', para = [], i = 0;
+    const flushPara = () => { if (para.length) { html += '<p>' + para.map(l => renderInline(escapeHtml(l))).join('<br>') + '</p>'; para = []; } };
+    while (i < lines.length) {
+      const line = lines[i];
+      const fb = line.match(/^@@F(\d+)@@$/);
+      if (fb) { flushPara(); html += '<pre><code>' + escapeHtml(fences[+fb[1]]) + '</code></pre>'; i++; continue; }
+      const h = line.match(/^(#{1,6})\s+(.*)$/);
+      if (h) { flushPara(); const tag = h[1].length === 1 ? 'h4' : 'h5'; html += '<' + tag + '>' + renderInline(escapeHtml(h[2])) + '</' + tag + '>'; i++; continue; }
+      const ordered = /^\s*\d+[.)]\s+/.test(line);
+      if (ordered || /^\s*[-*•]\s+/.test(line)) {
+        flushPara();
+        const items = [], re = ordered ? /^\s*\d+[.)]\s+/ : /^\s*[-*•]\s+/;
+        while (i < lines.length && (ordered ? /^\s*\d+[.)]\s+/ : /^\s*[-*•]\s+/).test(lines[i])) { items.push(lines[i].replace(re, '')); i++; }
+        const tag = ordered ? 'ol' : 'ul';
+        html += '<' + tag + '>' + items.map(it => '<li>' + renderInline(escapeHtml(it)) + '</li>').join('') + '</' + tag + '>';
+        continue;
+      }
+      if (/^\s*$/.test(line)) { flushPara(); i++; continue; }
+      para.push(line); i++;
+    }
+    flushPara();
+    return html;
+  }
+  function mdBubble(cls, text) {
+    const d = document.createElement('div');
+    d.className = 'msg md ' + cls; d.innerHTML = renderMarkdown(text);
+    log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
+  }
+
   // Playful "working" status shown while the agent runs tools, in place of the
   // raw API calls. One evolving line per turn; cleared when the reply lands.
   const PLAYFUL = {
@@ -596,7 +659,7 @@
   // WebSocket (cloud/SBC) or from the in-browser agent (device).
   function handleAgentMessage(m) {
     switch (m.type) {
-      case 'assistant': clearStatus(); if (m.text) bubble('asst', m.text); break;
+      case 'assistant': clearStatus(); if (m.text) mdBubble('asst', m.text); break;
       case 'notice': if (m.text) bubble('notice ' + (m.severity === 'info' ? 'notice-info' : ''), m.text); break;
       case 'plan': clearStatus(); renderPlan(m); break;
       case 'question': clearStatus(); renderQuestion(m); break;
