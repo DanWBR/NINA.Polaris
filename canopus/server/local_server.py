@@ -128,7 +128,7 @@ def manifest() -> JSONResponse:
     return JSONResponse({
         "version": 1,
         "tier": "local",
-        "product": {"name": "Canopus (local)", "tagline": "On-device AI observing companion",
+        "product": {"name": "Canopus Assistant (local)", "tagline": "On-device AI observing companion",
                     "iconEmoji": "🔭", "iconUrl": f"{BASE_PATH}/img/canopus-icon.png"},
         "intro": {
             "headline": "Your rig's own AI, running locally",

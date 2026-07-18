@@ -92,7 +92,7 @@ public static class CanopusEndpoints {
         g.MapGet("/device-manifest", () => Results.Ok(new {
             version = 1,
             tier = "device",
-            product = new { name = "Canopus (device)", iconEmoji = "🔭",
+            product = new { name = "Canopus Assistant (device)", iconEmoji = "🔭",
                             iconUrl = "/canopus-client/img/canopus-icon.png" },
             iframe = new {
                 url = "/canopus-client/index.html",
