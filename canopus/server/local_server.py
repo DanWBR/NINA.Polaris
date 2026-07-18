@@ -128,7 +128,8 @@ def manifest() -> JSONResponse:
     return JSONResponse({
         "version": 1,
         "tier": "local",
-        "product": {"name": "Canopus (local)", "tagline": "On-device AI observing companion", "iconEmoji": "🔭"},
+        "product": {"name": "Canopus (local)", "tagline": "On-device AI observing companion",
+                    "iconEmoji": "🔭", "iconUrl": f"{BASE_PATH}/img/canopus-icon.png"},
         "intro": {
             "headline": "Your rig's own AI, running locally",
             "bodyMarkdown": "Canopus runs entirely on this server — no cloud, no account, "
@@ -145,6 +146,7 @@ def manifest() -> JSONResponse:
             "origin": None,   # same-origin as the Polaris page; host uses its own origin
             "sandbox": "allow-scripts allow-forms allow-popups allow-same-origin allow-modals",
             "fabIconEmoji": "🔭",
+            "fabIconUrl": f"{BASE_PATH}/img/canopus-icon.png",
             "fabLabel": "Canopus",
         },
         "api": {"base": f"{BASE_PATH}/api"},
@@ -160,6 +162,8 @@ def client_app() -> FileResponse:
 # The bundled UI fonts (same origin as the chat iframe → no CORS), so the chat
 # renders in the exact typeface the user picked in Polaris.
 app.mount("/fonts", StaticFiles(directory=os.path.join(CLIENT_DIR, "fonts")), name="fonts")
+# The Canopus star icon (used by the FOSS host panel/FAB and the client favicon).
+app.mount("/img", StaticFiles(directory=os.path.join(CLIENT_DIR, "img")), name="img")
 
 
 @app.get("/healthz")

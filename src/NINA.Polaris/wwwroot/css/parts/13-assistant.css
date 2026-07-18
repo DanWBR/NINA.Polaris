@@ -169,6 +169,10 @@
 .assistant-panel-actions { display: flex; align-items: center; gap: 2px; flex: none; }
 .assistant-panel-actions button { font-size: 15px; }
 .assistant-panel-icon { font-size: 16px; line-height: 1; flex: none; }
+.assistant-panel-icon-img { width: 20px; height: 20px; flex: none; object-fit: contain; border-radius: 5px; display: block; }
+/* When the manifest supplies an image icon, let it fill the round FAB (its own
+   dark background blends in), clipped to the FAB's shape. */
+.assistant-fab-img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
 .assistant-panel-header button {
     background: none;
     border: none;

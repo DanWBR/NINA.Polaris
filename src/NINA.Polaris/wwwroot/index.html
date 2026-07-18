@@ -18283,7 +18283,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     :class="{ 'active': asst.open }" @click="assistantToggle()"
                     @pointerdown="assistantDragStart($event)" :style="_assistantLauncherStyle()"
                     :title="asst.manifest.iframe.fabLabel || asst.manifest.product.name">
-                <span x-text="asst.manifest.iframe.fabIconEmoji || asst.manifest.product.iconEmoji || '✨'"></span>
+                <img class="assistant-fab-img" x-show="_asstIconUrl()" :src="_asstIconUrl()" alt="">
+                <span x-show="!_asstIconUrl()" x-text="asst.manifest.iframe.fabIconEmoji || asst.manifest.product.iconEmoji || '✨'"></span>
             </button>
 
             <!-- Dock drop-zone preview (shown while dragging near an edge) -->
@@ -18296,7 +18297,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                  :class="('dock-' + asst.dock) + (asst.panelDragging ? ' asst-dragging' : '')">
                 <div class="assistant-panel-header" @pointerdown="assistantPanelDragStart($event)">
                     <span class="assistant-panel-title">
-                        <span class="assistant-panel-icon"
+                        <img class="assistant-panel-icon-img" x-show="_asstIconUrl()" :src="_asstIconUrl()" alt="">
+                        <span class="assistant-panel-icon" x-show="!_asstIconUrl()"
                               x-text="asst.manifest.iframe.fabIconEmoji || asst.manifest.product.iconEmoji || '🔭'"></span>
                         <span x-text="asst.manifest.product.name"></span>
                     </span>

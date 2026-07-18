@@ -10852,6 +10852,13 @@ function ninaApp() {
             if (!d || !d.bytesTotal) return 0;
             return Math.floor((d.bytesDownloaded / d.bytesTotal) * 100);
         },
+        // Image icon for the assistant FAB/panel (e.g. the local Canopus star),
+        // when the manifest supplies one; else the caller falls back to the emoji.
+        _asstIconUrl() {
+            const m = this.asst.manifest;
+            if (!m) return '';
+            return (m.iframe && m.iframe.fabIconUrl) || (m.product && m.product.iconUrl) || '';
+        },
 
         _assistantInstallBridge() {
             if (this._asstBridgeInstalled) return;
