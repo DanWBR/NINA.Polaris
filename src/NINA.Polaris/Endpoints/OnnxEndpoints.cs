@@ -92,9 +92,14 @@ public static class OnnxEndpoints {
         });
 
         // Start a background download of {dir}/{version}. 409 if one is busy.
-        g.MapPost("/download", (ModelDownloadService dl, ModelDownloadRequest req) => {
+        g.MapPost("/download", async (ModelDownloadService dl, HttpContext ctx) => {
             if (!dl.IsConfigured) return Results.BadRequest(new { error = "No model bucket URL configured." });
-            if (string.IsNullOrWhiteSpace(req.Dir) || string.IsNullOrWhiteSpace(req.Version))
+            // Read the body defensively: a POST with no/invalid JSON body must not
+            // throw a BadHttpRequestException from implicit [FromBody] binding —
+            // return a clean 400 instead.
+            ModelDownloadRequest? req = null;
+            try { req = await ctx.Request.ReadFromJsonAsync<ModelDownloadRequest>(); } catch { /* no/invalid body */ }
+            if (req is null || string.IsNullOrWhiteSpace(req.Dir) || string.IsNullOrWhiteSpace(req.Version))
                 return Results.BadRequest(new { error = "dir and version are required." });
             try {
                 return dl.TryStart(req.Dir, req.Version)
