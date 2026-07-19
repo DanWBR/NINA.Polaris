@@ -14,6 +14,11 @@ Pod::Spec.new do |s|
   s.ios.deployment_target = '14.0'
   s.dependency 'Capacitor'
   s.swift_version = '5.1'
-  # iOS in-process llama.cpp embed (xcframework) is deferred; the stub only
-  # reports unavailable for now, so no extra pod dependency yet.
+
+  # In-process llama.cpp server (provides polaris_llama_start/stop/is_running in
+  # PolarisLlamaBridge.h). Build it into an xcframework from server.cpp + libllama
+  # (arm64 device + simulator slices) and drop it here, then uncomment. Until
+  # then the pod's start/stop won't link (the download/status surface is pure
+  # Foundation). See README for the build recipe.
+  # s.vendored_frameworks = 'ios/Frameworks/llama.xcframework'
 end

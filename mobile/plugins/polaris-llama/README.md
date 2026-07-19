@@ -89,7 +89,33 @@ first assistant turn ~60s (catalog ingest), warm turns ~3.3s.
 
 ## iOS
 
-Deferred. iOS forbids spawning a subprocess, so `llama-server` cannot run; iOS
-needs llama.cpp **embedded in-process** (an xcframework) with a small bridge that
-exposes the same `start/stop/status/downloadModel` surface. The web/stub in
-`web.ts` throws `unavailable` until then.
+iOS forbids spawning a subprocess, so `llama-server` cannot run as a child
+process. Instead the model host runs **in-process**: a small C bridge
+(`ios/Plugin/PolarisLlamaBridge.h` -> `polaris_llama_start/stop/is_running`)
+starts llama.cpp's OpenAI-compatible server on `127.0.0.1` on a background
+thread. Because that is a real loopback HTTP server, the Canopus client's
+provider (`provider-local.js`, HTTP to localhost) drives it **unchanged, exactly
+like Android** -- no JS branch, the host UI's mobile flow (download/start) works
+as-is.
+
+State:
+
+- **Done (pure Foundation, compiles):** `downloadModel` (URLSession + progress),
+  `deleteModel`, `status`, and the Swift `start/stop` wiring.
+- **Pending (native artifact):** the llama.cpp **xcframework** that implements the
+  three bridge symbols. Until it is vendored, `start/stop` do not link.
+
+Build + vendor the framework:
+
+1. Build llama.cpp for iOS (arm64 device + arm64 simulator) with `server.cpp`
+   and libllama, exposing the `polaris_llama_*` C entry points from the bridge
+   header (a thin wrapper that runs the server loop on a thread, with the same
+   flags as Android: weights resident, jinja template, half the cores, ctx 8192,
+   KV prefix reuse).
+2. Package the slices into `llama.xcframework`, drop it in
+   `ios/Frameworks/`, and uncomment `vendored_frameworks` in `PolarisLlama.podspec`.
+3. **ATS**: the WebView page (remote host, https) fetches `http://127.0.0.1`, so
+   add an App Transport Security exception for local networking in the app's
+   `Info.plist` (`NSAllowsLocalNetworking`), alongside the existing LAN-cert
+   exceptions.
+4. `npx cap sync ios`, build, test on a real device.
