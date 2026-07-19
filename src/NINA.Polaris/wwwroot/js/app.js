@@ -11447,6 +11447,21 @@ function ninaApp() {
             left = Math.max(gap, Math.min(left, vw - gap - Wp));
             return { left: left + 'px', top: top + 'px', right: 'auto', bottom: 'auto', width: Wp + 'px' };
         },
+        // Inset the whole Polaris shell when the assistant is docked to an edge, so
+        // the docked panel DISPLACES the UI instead of floating over it. <body> is a
+        // flex column owning status-bar + app-layout + activity-bar as flow elements,
+        // so padding it insets all three; the panel is position:fixed and ignores the
+        // padding, filling the freed edge. Floating stays an overlay (no push).
+        _assistantDockPush() {
+            const a = this.asst;
+            if (!a || !a.open || a.dock === 'float') return {};
+            const vw = window.innerWidth, vh = window.innerHeight;
+            if (vw <= 480) return {};   // phone = bottom sheet, never push
+            if (a.dock === 'left')   return { paddingLeft:  Math.min(a.dockW, vw - 60) + 'px' };
+            if (a.dock === 'right')  return { paddingRight: Math.min(a.dockW, vw - 60) + 'px' };
+            if (a.dock === 'bottom') return { paddingBottom: Math.min(a.dockH, vh - 60) + 'px' };
+            return {};
+        },
         assistantDragStart(ev) {
             if (ev.button != null && ev.button !== 0) return; // primary / touch only
             const el = ev.currentTarget;

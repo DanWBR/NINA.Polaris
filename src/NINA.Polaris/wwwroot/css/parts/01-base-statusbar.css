@@ -208,6 +208,12 @@ html, body {
 body {
     display: flex;
     flex-direction: column;
+    /* Smoothly reflow when the assistant docks/undocks and pushes the UI. */
+    transition: padding 0.16s ease;
+}
+/* No lag while the user is live-dragging the dock edge to resize it. */
+body.asst-dock-dragging {
+    transition: none;
 }
 
 /* Mobile/small-screen global UI scale-down. The codebase uses

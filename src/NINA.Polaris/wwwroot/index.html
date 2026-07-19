@@ -110,7 +110,8 @@
     <!-- FOUC gate for non-English UIs (see head IIFE + js/i18n.js). -->
     <style>html.i18n-loading body { visibility: hidden; }</style>
 </head>
-<body x-data="ninaApp()" x-init="init()">
+<body x-data="ninaApp()" x-init="init()" :style="_assistantDockPush()"
+      :class="{ 'asst-dock-dragging': asst.panelDragging }">
 
     <!-- AUTH-3: full-screen overlay that intercepts EVERY interaction
          until auth resolves. Three states:
