@@ -296,9 +296,10 @@ public static class LiveStackEndpoints {
         // COLOUR live-stack JPEG is rendered at that resolution (the colour
         // preview has no client-side raw render path). Not persisted server-side
         // — it's a client localStorage setting the client re-sends on load.
-        group.MapPost("/preview-dim", (PreviewDimRequest req, LiveStackingService stack) => {
-            stack.PreviewMaxDim = req.Dim;   // 0 = native; clamped when applied
-            return Results.Ok(new { ok = true, dim = req.Dim });
+        group.MapPost("/preview-dim", (PreviewDimRequest? req, LiveStackingService stack) => {
+            var dim = req?.Dim ?? 0;          // tolerate an empty body (best-effort call)
+            stack.PreviewMaxDim = dim;        // 0 = native; clamped when applied
+            return Results.Ok(new { ok = true, dim });
         });
 
         // ----- CLST-6: persist a client-stacked result as FITS -----

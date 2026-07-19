@@ -9533,7 +9533,7 @@ function ninaApp() {
             this.pushPreviewDim();
         },
         pushPreviewDim() {
-            try { this.apiPost('/api/livestack/preview-dim', null, { dim: this.previewMaxDim | 0 }); }
+            try { this.apiPost('/api/livestack/preview-dim', { dim: this.previewMaxDim | 0 }); }
             catch (e) { /* best effort; server default 4096 */ }
         },
         setPreviewFullDebayer(on) {
