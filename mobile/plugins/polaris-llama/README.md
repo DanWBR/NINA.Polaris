@@ -107,12 +107,16 @@ heavy, long-lived process the OS is tempted to reap. What's in place:
 - **Keep-awake**: the shell holds a wake lock while a session is open (`connect.js`),
   keeping the screen/CPU alive.
 
-**iOS background execution (recommended, not added here):** with the screen on and
-keep-awake holding, the app stays foreground/active, which covers the phone-at-the-
-scope case. If you need the model to survive the user switching apps, add a
-`UIBackgroundModes` entry (the app already uses `location`, so `location` is the
-justifiable one) in `ios-postadd.sh`. It has App-Store-review and battery
-implications, so it's a deliberate choice, not a default.
+**iOS background execution:** `ios-postadd.sh` now declares the `location`
+`UIBackgroundModes` (plus the Always usage string), so iOS is *allowed* to keep the
+app running when it leaves the foreground. **This key only declares the
+capability** — to actually get background runtime iOS also needs an active
+background location session at runtime (Always permission +
+`allowsBackgroundLocationUpdates` on a `CLLocationManager`), which is a further
+native step not wired yet. With just the key, keep-awake (screen on) is what holds
+the app foreground at the scope. Expect App Store review to ask why `location`
+background is used; the answer is keeping the imaging session / on-device assistant
+alive while backgrounded.
 
 ## Device test
 

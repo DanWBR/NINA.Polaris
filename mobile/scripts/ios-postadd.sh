@@ -51,6 +51,25 @@ set_string "NSLocalNetworkUsageDescription" \
 "$PB" -c "Add :NSBonjourServices:0 string _nina._tcp" "$PLIST"
 "$PB" -c "Add :NSBonjourServices:1 string _http._tcp" "$PLIST"
 
+# ---- Background execution: keep a session / the on-device model alive ----
+# The `location` background mode lets iOS keep the app running when it leaves the
+# foreground (otherwise it is suspended within seconds), so a long imaging session
+# or the on-device Canopus model isn't torn down when the user switches apps. The
+# app already uses location, so this is the justifiable mode for App Store review.
+#
+# NOTE: this key only DECLARES the capability. To actually get background runtime,
+# iOS also needs an ACTIVE background location session at runtime (Always
+# permission + `allowsBackgroundLocationUpdates` on a CLLocationManager) — a
+# further native step. With only the key, keep-awake (screen on) is what holds the
+# app foreground at the scope.
+"$PB" -c "Delete :UIBackgroundModes" "$PLIST" 2>/dev/null || true
+"$PB" -c "Add :UIBackgroundModes array" "$PLIST"
+"$PB" -c "Add :UIBackgroundModes:0 string location" "$PLIST"
+
+# Background/Always location needs its own usage string (When-In-Use is set above).
+set_string "NSLocationAlwaysAndWhenInUseUsageDescription" \
+  "Polaris keeps your imaging session and on-device assistant running while the app is in the background."
+
 # ---- Inject LANCertTrust.swift so WKWebView accepts the LAN self-signed cert ----
 # The Polaris UI iframe loads over the SBC's self-signed HTTPS; WKWebView
 # rejects it by default (no "proceed anyway"), leaving the tab blank. This
