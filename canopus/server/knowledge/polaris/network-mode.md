@@ -88,8 +88,8 @@ rejoins your WiFi on the next boot without any action from you.
 This watchdog is on by default. It can be tuned or disabled via
 configuration:
 
-- `Network:AutoHotspotFallback` (default `true`) — master switch.
-- `Network:HotspotFallbackSeconds` (default `45`, floor `20`) — how
+- `Network:AutoHotspotFallback` (default `true`): master switch.
+- `Network:HotspotFallbackSeconds` (default `45`, floor `20`), how
   long the Pi waits with no WiFi before starting the hotspot.
 
 ## Switching back to hotspot mode
@@ -115,13 +115,13 @@ with the new one.
 
 The panel shows a banner with the reason:
 
-- **"WiFi management requires Linux + NetworkManager"** — you are
+- **"WiFi management requires Linux + NetworkManager"**: you are
   running Polaris on Windows or macOS. Manage WiFi via the OS
   settings on those hosts; the panel is read-only there.
-- **"nmcli not installed"** — `sudo apt install network-manager`
+- **"nmcli not installed"**: `sudo apt install network-manager`
   on the Pi, then reboot. The `.deb` declares this dependency,
   so a normal `apt install` of Polaris pulls it in.
-- **"No WiFi interface detected"** — the host has no WiFi (a
+- **"No WiFi interface detected"**: the host has no WiFi (a
   mini-PC with only Ethernet, for instance). The Polaris UI does
   not try to manage Ethernet; that lives in `/etc/network/` and
   `/etc/NetworkManager/system-connections/` per the host's normal
@@ -138,7 +138,7 @@ password prompts. Without the rule the daemon would get
 
 The two NetworkManager connection names Polaris uses:
 
-- **`polaris-hotspot`** — created on first boot by
+- **`polaris-hotspot`**: created on first boot by
   `polaris-wifi-bootstrap.service`, persists across reboots. AP
   mode, 2.4 GHz, `ipv4.method=shared` so connected devices get
   DHCP automatically. `autoconnect-priority -10`, so NetworkManager
@@ -146,7 +146,7 @@ The two NetworkManager connection names Polaris uses:
   the hotspot as the fallback. If the connection is ever missing
   (the first-boot bootstrap never ran), Polaris recreates it
   automatically the first time it needs to fall back to it.
-- **`polaris-station`** — created on demand when you pick a
+- **`polaris-station`**: created on demand when you pick a
   network from the scan list. Replaced (delete + add) every time
   you click "Switch to Station Mode" so the credentials are
   always fresh. `autoconnect-priority 10`, above the hotspot, so
@@ -182,7 +182,7 @@ profile.
 
 ## See also
 
-- [Raspberry Pi 4 / 5 setup](raspberry-pi-setup.md) — full
+- [Raspberry Pi 4 / 5 setup](raspberry-pi-setup.md): full
   end-to-end install, including the first-boot WiFi behaviour.
-- [Installation](installation.md) — generic install across
+- [Installation](installation.md): generic install across
   Linux + Windows.

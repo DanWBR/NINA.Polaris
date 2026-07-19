@@ -291,7 +291,7 @@ for most setups. Reasons to want a newer build:
 #### 4.2.1. Easy path: the official apt repos (Ubuntu only)
 
 INDI and PHD2 each publish an up-to-date apt repository (a Launchpad
-**PPA**). This is far less work than compiling — **but PPAs target
+**PPA**). This is far less work than compiling, **but PPAs target
 Ubuntu, not Debian.** Raspberry Pi OS is Debian-based, so
 `add-apt-repository ppa:...` will **not** work there (it adds an
 Ubuntu suite that has no matching packages, and `apt update` errors).
@@ -300,7 +300,7 @@ Use the PPA route **only if you flashed Ubuntu Server (24.04+ arm64)**
 on the Pi instead of Raspberry Pi OS. On plain Raspberry Pi OS, jump to
 [4.2.2 (compile from source)](#422-full-control-compile-from-source).
 
-**INDI** — newer `indi-full` + all 3rd-party drivers (the
+**INDI**: newer `indi-full` + all 3rd-party drivers (the
 `mutlaqja/ppa`, maintained by the INDI/KStars author):
 
 ```bash
@@ -311,7 +311,7 @@ sudo apt update
 sudo apt install -y indi-full gsc
 ```
 
-**PHD2** — newer build from the OpenPHDGuiding PPA:
+**PHD2**: newer build from the OpenPHDGuiding PPA:
 
 ```bash
 # Ubuntu Server on the Pi ONLY -- not Raspberry Pi OS
@@ -328,8 +328,7 @@ compile instead.
 > Why no PPA on Raspberry Pi OS? A PPA is built for specific *Ubuntu*
 > release codenames (jammy, noble, ...). Pi OS reports a *Debian*
 > codename (bookworm), so apt finds no matching binaries. Forcing it
-> risks pulling mismatched Ubuntu libc/deps and breaking the system —
-> don't. Compile (below) is the supported way on Pi OS.
+> risks pulling mismatched Ubuntu libc/deps and breaking the system, > don't. Compile (below) is the supported way on Pi OS.
 
 #### 4.2.2. Full control: compile from source
 
@@ -430,11 +429,11 @@ python3 -m venv graxpert
 
 > **Install `onnxruntime` too** (as shown above). GraXpert runs its AI models
 > (BGE / Denoise / Decon) through ONNX Runtime, but the PyPI `graxpert`
-> package does **not** pull it in automatically on aarch64 — without it the
+> package does **not** pull it in automatically on aarch64, without it the
 > CLI fails with `No module named 'onnxruntime'` / "(AI library) package is
 > misconfigured". PyPI has aarch64 wheels, so `pip install onnxruntime` in the
 > venv just works. (On a board with an NPU/GPU you can also pick that
-> accelerator in the run modal and skip the CLI entirely — but Decon still
+> accelerator in the run modal and skip the CLI entirely, but Decon still
 > needs the CLI, so install onnxruntime regardless.)
 >
 > Already installed GraXpert without it? Just add it to the same venv:

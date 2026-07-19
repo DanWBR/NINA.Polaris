@@ -6,11 +6,10 @@ watching your DSO target build up while you have a beer.
 
 > **Capture vs. stacking are separate things.** The LIVE *capture loop*
 > always runs on the **server** (the Pi / mini-PC keeps exposing even if
-> your browser is backgrounded, on another tab, or disconnects entirely —
-> you can run two Polaris tabs and switch freely). The **Compute** dropdown
+> your browser is backgrounded, on another tab, or disconnects entirely, > you can run two Polaris tabs and switch freely). The **Compute** dropdown
 > (Auto / Server / Client) only chooses *where the per-frame stacking math
 > runs*, not who drives the camera. On underpowered hosts (Pi 2/3) flip it
-> to client-side WASM offload so the browser owns the accumulator — see
+> to client-side WASM offload so the browser owns the accumulator, see
 > [client-side compute](client-side-compute.md).
 
 ## How it works
@@ -51,14 +50,13 @@ Secondary toggles + buttons:
 - **Compute** (Auto / Server / Client), per-rig override for
   where the per-frame **stacking math** runs (the capture loop is always
   server-owned regardless of this setting):
-  - **Server** — stacking on the host CPU.
-  - **Client** — stacking in the browser via WASM (offload).
-  - **Auto** (default) — the server picks based on the WASM handshake:
+  - **Server**: stacking on the host CPU.
+  - **Client**: stacking in the browser via WASM (offload).
+  - **Auto** (default): the server picks based on the WASM handshake:
     if a WASM-capable browser is connected it offloads to the client,
     otherwise it stacks on the host.
 
-For one-shot-colour (OSC) cameras, colour live stacking is automatic —
-there is no mono/colour toggle; the stacker debayers and integrates in
+For one-shot-colour (OSC) cameras, colour live stacking is automatic, there is no mono/colour toggle; the stacker debayers and integrates in
 colour by default.
 
 ## Stats bar
@@ -100,7 +98,7 @@ The ETA fits a log-log line through your last samples (the SNR of a
 clean stack grows as √N, slope=0.5 on log-log) and solves for the
 frame-count that hits the target. When the fit is weak (R² < 0.6,
 fewer than 3 samples, slope going the wrong way, or extrapolated frames
-beyond the 1000-frame cap), the ETA shows `—` instead of inventing a
+beyond the 1000-frame cap), the ETA shows `-` instead of inventing a
 number. Once you reach the target, `✓ done` replaces the ETA.
 
 ### Reading SNR over time
@@ -198,10 +196,10 @@ benefits your final offline integration.
 
 Panel: LIVE tab → "Auto re-focus / re-center / dither" → **Auto dither**.
 
-- **Every N frames** — dither cadence (counts integrated frames).
-- **Amount (px)** — random offset in guide-camera pixels.
-- **RA only** — restrict the nudge to RA (for mounts with sloppy Dec backlash).
-- **Settle px / for (s) / timeout (s)** — the dithered frame waits for the star
+- **Every N frames**: dither cadence (counts integrated frames).
+- **Amount (px)**: random offset in guide-camera pixels.
+- **RA only**: restrict the nudge to RA (for mounts with sloppy Dec backlash).
+- **Settle px / for (s) / timeout (s)**, the dithered frame waits for the star
   to settle back within tolerance before the next frame is integrated, exactly
   like the AUTORUN sequencer.
 
@@ -211,7 +209,7 @@ Requirements + behaviour:
   routed through the active guider, so it works on both backends. If the guider
   isn't guiding, the dither is skipped (and the gate advances so it doesn't
   re-check every frame).
-- The dither fires *instead of* a recenter on the same frame — a recenter would
+- The dither fires *instead of* a recenter on the same frame, a recenter would
   cancel the offset just applied.
 - Settings live on `EquipmentProfile.LiveStackTriggers` (per rig), same as the
   re-focus / re-center policy.
@@ -221,7 +219,7 @@ The same dither-every-N-frames option also exists for the AUTORUN sequencer
 
 ## Reject outliers (kappa-sigma)
 
-By default the live stack is a plain **running mean** — every frame's pixels are
+By default the live stack is a plain **running mean**, every frame's pixels are
 averaged in, with no per-pixel outlier rejection. That's fast, but a cosmic ray,
 a satellite/plane trail, or a hot pixel is averaged in too (just at reduced
 amplitude).
@@ -229,17 +227,17 @@ amplitude).
 The LIVE tab checkbox **🚫 Reject outliers (kappa-sigma)** (next to "Save each
 frame") adds per-pixel rejection: for each pixel Polaris tracks the running mean
 and spread of the frames seen so far, and a new sample more than **k** sigma away
-is dropped instead of folded in. The threshold **k** (default 3, range 1.5–6) is
+is dropped instead of folded in. The threshold **k** (default 3, range 1.5-6) is
 editable inline; lower = more aggressive.
 
-- It **pays off most combined with dithering** — dithering moves the defect to a
+- It **pays off most combined with dithering**, dithering moves the defect to a
   different sky pixel each frame, so it becomes the outlier that rejection then
   removes cleanly. Without dithering a fixed hot pixel can land on the same sky
   spot repeatedly and look like signal.
 - The first few frames always seed the statistics (nothing is rejected until a
   spread estimate exists), so give it 5+ frames.
 - It runs on the CPU and allocates one extra full-frame buffer, so it costs a
-  little more RAM + per-frame time than the plain mean — off by default, opt in
+  little more RAM + per-frame time than the plain mean, off by default, opt in
   per rig. Takes effect on the next **Reset** (the reference frame allocates the
   buffers).
 - Setting lives on `EquipmentProfile.LiveStackSigmaRejection` / `…Kappa` (per
@@ -356,14 +354,13 @@ LiveStackingService.Reset (e.g. target switch).
 ### BGE (background extraction)
 
 Toggle `Apply GraXpert BGE to each frame before stacking`. Runs the
-GraXpert BGE model on every frame before it is added to the stack —
-**wherever the stack actually runs**:
+GraXpert BGE model on every frame before it is added to the stack, **wherever the stack actually runs**:
 
-- **Client-mode (MetricsOnly) stacking** — the browser runs the BGE
+- **Client-mode (MetricsOnly) stacking**: the browser runs the BGE
   model via WebAssembly + WebGPU. The 208MB model is downloaded lazily
   the first time BGE is enabled in a session (spares bandwidth on rigs
   that never use it).
-- **Server-mode (Full) stacking** — the host runs BGE through its
+- **Server-mode (Full) stacking**: the host runs BGE through its
   GraXpert backend: the GraXpert CLI, or the RK3588 **NPU** fast path
   where available (see [NPU acceleration](npu-acceleration.md)). Per-frame
   BGE on a Pi 4/5 CPU is fast enough at normal exposure cadence. If no

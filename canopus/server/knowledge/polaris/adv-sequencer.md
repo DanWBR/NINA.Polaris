@@ -62,7 +62,7 @@ into the palette + drag-drop into any new sequence.
 **Mount**: Slew, Slew & Center, Park, Unpark, Set Tracking, Solve & Sync
 
 **Camera**: Take Exposure, Take Many Exposures, Cool Camera, Warm Camera,
-Take Aux Exposure, Cool Aux Camera, Warm Aux Camera — the *Aux* variants drive
+Take Aux Exposure, Cool Aux Camera, Warm Aux Camera, the *Aux* variants drive
 the secondary (aux) camera and save frames to the `aux/` subtree; exposure /
 gain / binning default to the rig's aux settings when left blank.
 

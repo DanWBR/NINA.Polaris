@@ -39,7 +39,7 @@ sits next to Auto and zeros every slider in one click. **→ Workflow**
 [Auto Workflow](studio.md#auto-workflow) so you can name them and
 batch-apply the same look to other frames.
 
-**Stretch mode:** the histogram panel has a **Mode** selector — `MTF`
+**Stretch mode:** the histogram panel has a **Mode** selector, `MTF`
 (the classic black/mid/white handles) or `GHS` / `asinh` (a
 generalized-hyperbolic / arc-sinh curve driven by the D + B sliders).
 GHS/asinh apply as a linked, colour-preserving curve over the neutral
@@ -103,7 +103,7 @@ Behaviour:
 
 | Slider | What it does |
 |---|---|
-| **Sharpen** (amount/radius) | Unsharp-mask on luminance. Amount 0–1, radius 0.5–5 px. |
+| **Sharpen** (amount/radius) | Unsharp-mask on luminance. Amount 0-1, radius 0.5-5 px. |
 | **Noise reduce** | Conservative 3×3 median on luminance, blended back at the slider's strength. For heavy NR run GraXpert Denoise on the FITS first, this is just polish. |
 
 ## Pipeline order

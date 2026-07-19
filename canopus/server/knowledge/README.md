@@ -4,12 +4,12 @@ Markdown docs the assistant retrieves from (the `search_knowledge` tool →
 `knowledge.py` BM25 index). This is the RAG corpus; it is not Polaris API state.
 Two layers, both indexed together:
 
-- **This folder (top level)** — hand-written, vendor-neutral general
+- **This folder (top level)**: hand-written, vendor-neutral general
   astrophotography notes (focusing, guiding, exposure, filters, polar
   alignment, calibration frames, planning, common problems).
-- **`polaris/`** — a mirror of the full N.I.N.A. Polaris user guide (every tab,
+- **`polaris/`**: a mirror of the full N.I.N.A. Polaris user guide (every tab,
   workflow and setting), so the assistant can answer product/navigation
-  questions and orient confused users. **Do not hand-edit these** — they are
+  questions and orient confused users. **Do not hand-edit these**: they are
   generated. Re-sync from the docs with:
   `python scripts/sync-polaris-docs.py` (copies `nina-polaris/docs/user-guide`
   here; the guide's `README.md` lands as `polaris/index.md`). The synced files

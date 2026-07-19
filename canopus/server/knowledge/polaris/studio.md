@@ -236,9 +236,9 @@ At the top of the builder, the **Combine source** dropdown lets a workflow
 *produce* its source by composing several per-filter masters instead of taking
 a file from the Sources list:
 
-- **Mono LRGB** — assign R / G / B / L masters; composed via Lab luminance.
-- **Mono SHO** — assign Ha / OIII / SII masters; composed as the SHO palette.
-- **OSC dual-band SHO** — assign the two debayered RGB masters (Ha+OIII and
+- **Mono LRGB**: assign R / G / B / L masters; composed via Lab luminance.
+- **Mono SHO**: assign Ha / OIII / SII masters; composed as the SHO palette.
+- **OSC dual-band SHO**: assign the two debayered RGB masters (Ha+OIII and
   SII+OIII filters). Ha/SII are extracted from red, OIII from green+blue (both
   masters' OIII are averaged for SNR), the two are star-registered, and packed
   as SHO.
@@ -253,30 +253,30 @@ workflow reloads ready to go (roles cleared for you to reassign).
 
 **Tools (single-image, server-side FITS→FITS):**
 
-- **Auto Crop (stacking borders)** — detects the largest fully-covered inner
+- **Auto Crop (stacking borders)**, detects the largest fully-covered inner
   rectangle and removes the black/ragged registration borders that stacking
   leaves on slightly-misaligned subs. No ROI to draw.
-- **Crop** — manual rectangular crop (fractions).
-- **SCNR** — remove the residual green cast (average/maximum-neutral,
+- **Crop**: manual rectangular crop (fractions).
+- **SCNR**: remove the residual green cast (average/maximum-neutral,
   masked variants). Ported from Siril.
-- **Stretch (GHS / asinh)** — Generalized Hyperbolic / arc-sinh non-linear
+- **Stretch (GHS / asinh)**: Generalized Hyperbolic / arc-sinh non-linear
   stretch; "auto" picks the amount from the image median. Ported from Siril.
-- **Cosmetic (hot/cold pixels)** — sigma-based hot/cold pixel removal (CFA
+- **Cosmetic (hot/cold pixels)**: sigma-based hot/cold pixel removal (CFA
   option for undebayered OSC). Ported from Siril.
-- **Star Reduction** — morphological shrink/dim of stars (detected-star mask +
+- **Star Reduction**: morphological shrink/dim of stars (detected-star mask +
   grayscale erosion), with core protection.
-- **Wavelet Sharpen** — multiscale (à-trous) detail boost + optional
+- **Wavelet Sharpen**: multiscale (à-trous) detail boost + optional
   denoise, on luminance so colour is preserved. Subsumes frequency
   separation. SASpro/PixInsight-inspired.
-- **Multiscale HDR (recover cores)** — compress the large-scale luminance so
+- **Multiscale HDR (recover cores)**: compress the large-scale luminance so
   blown galaxy/nebula/star cores come down toward the background while fine
   detail is kept.
-- **CLAHE (local contrast)** — contrast-limited adaptive histogram
+- **CLAHE (local contrast)**: contrast-limited adaptive histogram
   equalization. Best placed **after** the stretch.
-- **Highlight Recovery** — soft-knee compression of blown highlights above a
+- **Highlight Recovery**: soft-knee compression of blown highlights above a
   knee point.
 
-**AI Tools (browser ONNX, need the models installed — see
+**AI Tools (browser ONNX, need the models installed, see
 [ONNX inference](onnx-inference.md)):** Background Extraction, Denoise,
 Detail/Sharpen, Halo Removal, Upscale, Star Removal.
 

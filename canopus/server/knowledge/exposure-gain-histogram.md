@@ -9,8 +9,7 @@ ratio; individual sub length mostly affects how you handle noise and saturation.
 
 The histogram shows how many pixels fall at each brightness. For a light frame, the
 main peak is the sky background. A common guideline is to expose so the background
-peak sits roughly one quarter to one third of the way from the left (black) edge —
-far enough off the left wall that read noise is swamped, but not so bright that you
+peak sits roughly one quarter to one third of the way from the left (black) edge, far enough off the left wall that read noise is swamped, but not so bright that you
 lose highlight headroom. If the peak is jammed against the left edge, the sub is too
 short; if it is pushed well past the middle, you are wasting dynamic range on sky
 glow and will clip star cores sooner.

@@ -8,8 +8,7 @@ their shape and color usually name the culprit.
 - All stars streaked the same direction, everywhere: tracking or guiding failed
   (lost star, wind gust, bad polar alignment, cable snag, or a mount stall). Check the
   guide graph for that frame.
-- Stars elongated more toward the corners than the center: optical, not tracking —
-  coma or field curvature. A coma corrector or field flattener matched to your scope
+- Stars elongated more toward the corners than the center: optical, not tracking: coma or field curvature. A coma corrector or field flattener matched to your scope
   fixes it.
 - One axis consistently worse: guiding problem in that axis (RA oscillation or DEC
   backlash/drift), or differential flexure between guide scope and main scope.

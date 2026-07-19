@@ -245,7 +245,7 @@ position. Polaris:
   **Main** (imaging camera + main focuser), **Auxiliary** (aux camera
   + aux focuser), or **Guide** (guide camera + guide focuser). Only
   shown when an aux or guide focuser is configured on the rig. The
-  camera is always paired to the focuser — a V-curve needs the camera
+  camera is always paired to the focuser, a V-curve needs the camera
   that looks through the motor being moved. Guide-scope AF refuses to
   start while the guider is looping/guiding (it would steal the guide
   camera); stop guiding first. See
@@ -283,10 +283,10 @@ target them instead of the main imaging train.
 Two small selectors appear in the Manual Assist controls (only when the
 matching device is configured):
 
-- **Camera: Primary | Auxiliary | Guide** — which camera the Manual
+- **Camera: Primary | Auxiliary | Guide**: which camera the Manual
   Assist loop and the ↻ Snap capture from. The frame still renders on
   the focus canvas with the same HFR / Bahtinov tools.
-- **Focuser: Primary | Auxiliary | Guide** — which motor the manual
+- **Focuser: Primary | Auxiliary | Guide**: which motor the manual
   stepper, the GoTo box and the focus wheel drive.
 
 Everything in the manual jog follows the selected **Focuser** source:
@@ -305,7 +305,7 @@ you, so picking *Guide* sweeps the guide focuser using the guide camera.
 > loop, stop guiding first to avoid two consumers hitting the camera.
 
 Automatic autofocus **during a session** (AUTORUN / LIVE triggers) always
-targets the **main** focuser — the aux/guide trains are manual-focus only
+targets the **main** focuser, the aux/guide trains are manual-focus only
 for now.
 
 ## Auto-focus triggers (advanced)
