@@ -132,7 +132,7 @@ def manifest() -> JSONResponse:
                     "iconEmoji": "🔭", "iconUrl": f"{BASE_PATH}/img/canopus-icon.png"},
         "intro": {
             "headline": "Your rig's own AI, running locally",
-            "bodyMarkdown": "Canopus runs entirely on this server — no cloud, no account, "
+            "bodyMarkdown": "Canopus runs entirely on this server: no cloud, no account, "
                             "no subscription. It plans the night, drives the rig with your "
                             "approval, and answers questions, all offline.",
             "bullets": [

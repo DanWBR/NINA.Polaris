@@ -1,15 +1,15 @@
 {
-  "_comment": "Curated model catalog for the Canopus 'On this device' tier (Ollama). Every entry MUST support native OpenAI tool calling — the agent loop cannot drive the rig without it (this is why DeepSeek-R1 and Gemma 3 are excluded; Gemma 4 added tool calling). min_vram_gb is the rough floor to run mostly on the GPU (0 = fine on CPU / low VRAM). size_gb is the download size (Q4-class). Ranked small -> large; the host recommends the largest whose min_vram_gb fits the detected/declared VRAM. Keep tags valid Ollama tags.",
+  "_comment": "Curated model catalog for the Canopus 'On this device' tier (Ollama). Every entry MUST support native OpenAI tool calling; the agent loop cannot drive the rig without it (this is why DeepSeek-R1 and Gemma 3 are excluded; Gemma 4 added tool calling). min_vram_gb is the rough floor to run mostly on the GPU (0 = fine on CPU / low VRAM). size_gb is the download size (Q4-class). Ranked small -> large; the host recommends the largest whose min_vram_gb fits the detected/declared VRAM. Keep tags valid Ollama tags.",
   "version": 1,
   "provider": "ollama",
   "models": [
-    { "tag": "gemma4:e2b-it-qat",     "min_vram_gb": 2,  "size_gb": 4.3,  "note": "Smallest — QAT, runs on CPU or a small GPU. Last-resort quality." },
-    { "tag": "gemma4:e4b-it-qat",     "min_vram_gb": 4,  "size_gb": 6.1,  "note": "QAT effective-4B — a good low-VRAM pick." },
-    { "tag": "qwen3.6:8b",            "min_vram_gb": 6,  "size_gb": 5.2,  "note": "Small, strong tool-caller — solid default on 6-8 GB." },
-    { "tag": "gemma4:12b-it-qat",     "min_vram_gb": 8,  "size_gb": 7.2,  "note": "Best quality/size ratio — validated end-to-end with Canopus." },
+    { "tag": "gemma4:e2b-it-qat",     "min_vram_gb": 2,  "size_gb": 4.3,  "note": "Smallest QAT model, runs on CPU or a small GPU. Last-resort quality." },
+    { "tag": "gemma4:e4b-it-qat",     "min_vram_gb": 4,  "size_gb": 6.1,  "note": "QAT effective-4B; a good low-VRAM pick." },
+    { "tag": "qwen3.6:8b",            "min_vram_gb": 6,  "size_gb": 5.2,  "note": "Small, strong tool-caller; a solid default on 6-8 GB." },
+    { "tag": "gemma4:12b-it-qat",     "min_vram_gb": 8,  "size_gb": 7.2,  "note": "Best quality/size ratio; validated end-to-end with Canopus." },
     { "tag": "gpt-oss:20b",           "min_vram_gb": 14, "size_gb": 13.0, "note": "Larger reasoning model; needs ~14 GB with context." },
     { "tag": "mistral-small3.1:24b",  "min_vram_gb": 15, "size_gb": 14.0, "note": "Capable 24B; fits a 16 GB card." },
     { "tag": "qwen3.6:27b",           "min_vram_gb": 18, "size_gb": 17.0, "note": "High quality; wants ~18 GB or it starts spilling." },
-    { "tag": "qwen3.6:35b",           "min_vram_gb": 22, "size_gb": 20.0, "note": "Top quality; needs ~22 GB — spills to CPU (slow) on a 16 GB card." }
+    { "tag": "qwen3.6:35b",           "min_vram_gb": 22, "size_gb": 20.0, "note": "Top quality; needs ~22 GB and spills to CPU (slow) on a 16 GB card." }
   ]
 }
