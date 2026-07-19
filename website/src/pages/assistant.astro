@@ -9,8 +9,8 @@ const shots = p.screenshots ?? [];
 ---
 
 <Layout
-  title="Canopus Assistant — AI co-pilot for Polaris Astro Controller"
-  description="Canopus Assistant is an optional AI companion for Polaris Astro Controller: it plans your night, drives the rig with your approval, inspects your frames, and answers astrophotography questions — inside the Polaris web UI. US$4.99/mo with a 7-day free trial."
+  title="Canopus Assistant: AI co-pilot for Polaris Astro Controller"
+  description="Canopus Assistant is an optional AI companion for Polaris Astro Controller: it plans your night, drives the rig with your approval, inspects your frames, and answers astrophotography questions inside the Polaris web UI. A paid cloud plan (US$4.99/mo, 7-day trial) plus free, fully offline on-server and on-device backends."
 >
   <main>
 
@@ -117,6 +117,39 @@ const shots = p.screenshots ?? [];
         </div>
       </div>
     </section>
+
+    <!-- ── Backends & requirements ───────────────────────────────── -->
+    {p.backends && p.backends.length > 0 && (
+      <section class="section section-alt">
+        <div class="container">
+          <h2 class="block-title">{p.backendsTitle}</h2>
+          {p.backendsLede && <p class="section-lede">{p.backendsLede}</p>}
+          <div class="panels">
+            {p.backends.map((b) => (
+              <article class="panel">
+                <header class="panel-head">
+                  <span class="sq-icon" style={b.color ? `--ic: ${b.color}` : undefined}>{b.icon}</span>
+                  <div class="panel-id">
+                    <h3>{b.title}</h3>
+                    {b.tag && <p class="panel-tag">{b.tag}</p>}
+                  </div>
+                </header>
+                {b.intro && <p class="panel-intro">{b.intro}</p>}
+                <ul class="panel-list">
+                  {b.items.map((it) => (
+                    <li>
+                      {it.label && <strong>{it.label}</strong>}
+                      {it.label && it.text ? ' ' : ''}
+                      {it.text}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+    )}
 
     <!-- ── Screenshot 3 (full width) ─────────────────────────────── -->
     {shots[2] && (
@@ -246,6 +279,7 @@ const shots = p.screenshots ?? [];
   }
   .panel-id { min-width: 0; }
   .panel-id h3 { font-size: 17px; font-weight: 800; letter-spacing: 0.2px; line-height: 1.1; }
+  .panel-tag { font-size: 12.5px; color: var(--text-muted); line-height: 1.35; margin-top: 3px; }
   .panel-intro { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 14px; }
   .panel-list { list-style: none; display: flex; flex-direction: column; gap: 9px; }
   .panel-list li { position: relative; padding-left: 18px; font-size: 13.5px; color: var(--text-muted); line-height: 1.55; }

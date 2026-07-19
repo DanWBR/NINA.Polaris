@@ -78,6 +78,10 @@ Each tab in the sidebar has its own page. Read the ones you need:
   several targets, each with its own frame list, run in order with
   automatic slew + plate-solve-center, guiding, cooling, auto-focus,
   meridian-flip handling, and end-of-session actions.
+- **[Canopus Assistant](canopus-assistant.md)**, the optional AI co-pilot:
+  plans the night, drives the rig with your approval, and answers questions.
+  Covers the three backends (cloud, on this server, on this device) and their
+  minimum and recommended requirements.
 - **[LIVE](live-stacking.md)**, real-time EAA stacking with auto
   re-focus / re-center triggers. See also
   [client-side compute](client-side-compute.md) for the WASM offload

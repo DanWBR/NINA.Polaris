@@ -1,6 +1,6 @@
 {
   "title": "Canopus Assistant",
-  "lede": "An optional AI companion for your imaging sessions. It plans the night, drives your rig through Polaris with your approval, watches focus and guiding, inspects your frames, and answers astrophotography questions — right inside the Polaris web UI. A friendly co-pilot for beginners and a time-saver for everyone.",
+  "lede": "An optional AI companion for your imaging sessions. It plans the night, drives your rig through Polaris with your approval, watches focus and guiding, inspects your frames, and answers astrophotography questions, right inside the Polaris web UI. A friendly co-pilot for beginners and a time-saver for everyone.",
   "tagline": "Your personal astrophotography co-pilot, built into Polaris.",
   "glanceTitle": "At a glance",
   "glance": [
@@ -10,15 +10,19 @@
     },
     {
       "label": "Drives the rig, with approval.",
-      "text": "Anything that moves hardware or changes a running session is proposed as a plan you approve, review, or reject first — you stay in control."
+      "text": "Anything that moves hardware or changes a running session is proposed as a plan you approve, review, or reject first, so you stay in control."
     },
     {
       "label": "Looks at your images.",
-      "text": "Ask 'is this frame good?' and it inspects the current frame — focus, star shape, trailing, gradients, framing — and tells you what to fix."
+      "text": "Ask 'is this frame good?' and it inspects the current frame (focus, star shape, trailing, gradients, framing) and tells you what to fix."
     },
     {
       "label": "Knows astrophotography.",
       "text": "Grounded answers on focusing, guiding, exposure, filters, polar alignment, calibration, and diagnosing bad subs."
+    },
+    {
+      "label": "Cloud or fully offline.",
+      "text": "Run it in the cloud, on your Polaris host, or on your own device. Two of the three are free and never leave your hardware."
     }
   ],
   "featuresTitle": "What it does",
@@ -39,7 +43,7 @@
         },
         {
           "label": "Builds the plan.",
-          "text": "Assembles a multi-target imaging plan in PLAN mode with sensible exposures, dithering, and refocus — you review, tweak, and start it."
+          "text": "Assembles a multi-target imaging plan in PLAN mode with sensible exposures, dithering, and refocus, for you to review, tweak, and start."
         }
       ]
     },
@@ -51,7 +55,7 @@
       "items": [
         {
           "label": "Approve-first actions.",
-          "text": "Slewing, autofocus, starting a sequence or live stack, meridian flip — each is proposed as a plan you approve or reject."
+          "text": "Slewing, autofocus, starting a sequence or live stack, meridian flip: each is proposed as a plan you approve or reject."
         },
         {
           "label": "Shows you what it's doing.",
@@ -59,7 +63,7 @@
         },
         {
           "label": "Reads the session.",
-          "text": "Answers 'how's it going?' from live rig status — connection, capture progress, guiding RMS, focus, time to meridian."
+          "text": "Answers 'how's it going?' from live rig status: connection, capture progress, guiding RMS, focus, time to meridian."
         }
       ]
     },
@@ -67,7 +71,7 @@
       "icon": "📷",
       "title": "Frame analysis",
       "color": "#7c3aed",
-      "intro": "A second pair of (very patient) eyes on every sub.",
+      "intro": "A second pair of (very patient) eyes on every sub. Cloud backend only.",
       "items": [
         {
           "label": "Is this good?",
@@ -75,7 +79,7 @@
         },
         {
           "label": "Spots problems.",
-          "text": "Elongated or trailed stars, soft focus, gradients and light pollution, satellites, and framing issues — with a concrete fix."
+          "text": "Elongated or trailed stars, soft focus, gradients and light pollution, satellites, and framing issues, with a concrete fix."
         }
       ]
     },
@@ -83,7 +87,7 @@
       "icon": "💬",
       "title": "Astro knowledge",
       "color": "#16a34a",
-      "intro": "Ask anything, get a grounded answer — not a guess.",
+      "intro": "Ask anything, get a grounded answer, not a guess.",
       "items": [
         {
           "label": "How-to and why.",
@@ -119,23 +123,71 @@
       "items": [
         {
           "label": "Chats are not stored.",
-          "text": "Your messages are processed to generate a reply and then discarded — we don't keep a copy."
+          "text": "On the cloud backend your messages are processed to generate a reply and then discarded; we don't keep a copy. The local backends never send anything at all."
         },
         {
           "label": "Minimal account data.",
-          "text": "Only your email, a login token, and your subscription status are stored. Payment is handled by Stripe; we never see your card."
+          "text": "For the cloud backend, only your email, a login token, and your subscription status are stored. Payment is handled by Stripe; we never see your card. The local backends need no account."
         }
+      ]
+    }
+  ],
+  "backendsTitle": "Three ways to run it",
+  "backendsLede": "One assistant, your choice of brain. All three drive the rig the same way and share the same approve-first safety. Pick one in Settings, Assistant.",
+  "backends": [
+    {
+      "icon": "☁️",
+      "color": "#2563eb",
+      "title": "Cloud",
+      "tag": "The most capable brain, always on, nothing to install.",
+      "intro": "The assistant's AI runs on our servers and returns a reply; your browser relays approved actions to your local Polaris.",
+      "items": [
+        { "label": "Cost.", "text": "Paid subscription: US$4.99 per month, with a 7-day free trial." },
+        { "label": "Runs on.", "text": "Our servers (Microsoft Azure). No local model, no GPU needed." },
+        { "label": "Minimum.", "text": "An internet connection and a subscription. Any device that runs the Polaris web UI." },
+        { "label": "Recommended.", "text": "The same. This is the strongest option and the only one that does frame analysis (looking at your images)." },
+        { "label": "Privacy.", "text": "Messages are processed to reply, then discarded, and are not used to train models. Only your email, a login token and subscription status are stored." }
+      ]
+    },
+    {
+      "icon": "🖥️",
+      "color": "#0891b2",
+      "title": "On this server",
+      "tag": "Free and fully offline, running on your Polaris host.",
+      "intro": "A small language model runs on the Polaris machine itself, so any phone or tablet on your network becomes a thin client. No account, no subscription.",
+      "items": [
+        { "label": "Cost.", "text": "Free." },
+        { "label": "Runs on.", "text": "The Polaris host, on the CPU. An NPU or GPU is a bonus, not a requirement." },
+        { "label": "Minimum.", "text": "A 64-bit host with about 6 GB of RAM free alongside Polaris." },
+        { "label": "Recommended.", "text": "8 GB or more and a faster processor. Warm replies land in a few seconds; the first reply of a session takes longer while the model warms up." },
+        { "label": "Text-only.", "text": "Plans the night, drives the rig, and answers questions. Frame analysis (vision) is cloud-only." },
+        { "label": "Privacy.", "text": "Everything stays on your hardware. Nothing is sent to us or to any AI provider." }
+      ]
+    },
+    {
+      "icon": "📱",
+      "color": "#7c3aed",
+      "title": "On this device",
+      "tag": "Free and offline, running on the computer or phone you are using.",
+      "intro": "The model runs on your own machine. On a desktop it uses a local LLM server you run on the native GPU; in the mobile app it runs the model on the phone.",
+      "items": [
+        { "label": "Cost.", "text": "Free." },
+        { "label": "Runs on.", "text": "Your computer's GPU (through Ollama, LM Studio, or llama.cpp), or your phone in the Polaris mobile app." },
+        { "label": "Minimum.", "text": "Desktop: a local LLM server and a tool-capable model that fits your GPU memory. Mobile: an 8 GB device, since the model loads fully into RAM." },
+        { "label": "Recommended.", "text": "Desktop: a 12 to 24 billion parameter tool-capable model on a 16 GB or larger GPU. Mobile: an 8 GB phone or tablet, for smooth replies in a few seconds." },
+        { "label": "Text-only.", "text": "Same as the on-server backend: planning, rig control, and Q&A; frame analysis is cloud-only." },
+        { "label": "Privacy.", "text": "Runs locally; nothing leaves your machine. If you point the desktop option at a remote endpoint, that service sees your messages under its own terms." }
       ]
     }
   ],
   "screenshotsTitle": "See it in action",
   "screenshots": [
     {
-      "caption": "“What’s good tonight?” — the assistant reads your sky and weather and suggests targets, right beside Polaris.",
+      "caption": "“What's good tonight?” The assistant reads your sky and weather and suggests targets, right beside Polaris.",
       "src": "/assets/screenshots/assistant-chat.jpg"
     },
     {
-      "caption": "It builds a full night plan in PLAN mode — targets, exposures, autofocus and dither — for you to review before it starts.",
+      "caption": "It builds a full night plan in PLAN mode (targets, exposures, autofocus and dither) for you to review before it starts.",
       "src": "/assets/screenshots/assistant-plan.jpg"
     },
     {
@@ -143,20 +195,20 @@
       "src": "/assets/screenshots/assistant-frame.jpg"
     },
     {
-      "caption": "The exact frame it looked at — opened straight from your Studio Files, no manual export needed.",
+      "caption": "The exact frame it looked at, opened straight from your Studio Files, no manual export needed.",
       "src": "/assets/screenshots/assistant-frame-view.jpg"
     }
   ],
   "howTitle": "How it works",
-  "howLede": "The assistant runs in the cloud, but it never talks to your telescope directly. Your browser is the bridge: it relays the assistant's requests to your local Polaris over your LAN, so your rig stays offline-friendly and under your control.",
+  "howLede": "Canopus proposes; you approve; your browser executes the approved action on your local Polaris over the LAN. The brain can live in three places (the cloud, your Polaris host, or the device you are using), but it never talks to your telescope directly.",
   "how": [
     {
-      "label": "Cloud brain.",
-      "text": "The AI and billing run in the cloud; the assistant only ever proposes actions."
+      "label": "Choose the brain.",
+      "text": "Run the assistant in the cloud, on your Polaris host, or on your own device. Pick the backend in Settings, Assistant; everything else is identical."
     },
     {
       "label": "Browser bridge.",
-      "text": "Your browser executes approved actions on your local Polaris API and streams status back — no inbound connection to your rig."
+      "text": "Your browser executes approved actions on your local Polaris API and streams status back. There is no inbound connection to your rig."
     },
     {
       "label": "Opt-in and off by default.",
@@ -167,9 +219,9 @@
     "price": "US$4.99",
     "period": "per month",
     "trial": "7-day free trial",
-    "note": "Single flat plan. Cancel anytime; access continues to the end of the paid period."
+    "note": "Pricing is for the cloud backend. The on-server and on-device backends are free. Single flat plan; cancel anytime and access continues to the end of the paid period."
   },
-  "ctaText": "The assistant is optional and opt-in — Polaris itself stays free and open-source.",
+  "ctaText": "The assistant is optional and opt-in, with free offline backends; Polaris itself stays free and open-source.",
   "ctaButton": "Get Polaris",
   "ctaHref": "/install"
 }
