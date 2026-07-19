@@ -1,10 +1,10 @@
 {
-  "_comment": "CANOPUS local-LLM asset catalogue for the 'On this server (SBC)' backend. The GGUF model + arch-matched llama.cpp llama-server binary are downloaded on demand (excluded from the .deb, like the DSO thumb / ncnn packs) into the writable data dir. URLs point at a stable 'data-pack' GitHub release so every app version pulls the same files. sha256 is optional: when empty the download is used as-is (verification skipped). Operators who already have the files on the box can bypass all of this with Canopus:ModelPath / Canopus:LlamaServerPath.",
+  "_comment": "CANOPUS local-LLM asset catalogue for the 'On this host (SBC)' backend. The GGUF model + arch-matched llama.cpp llama-server binary are downloaded on demand (excluded from the .deb, like the DSO thumb / ncnn packs) into the writable data dir. The model pulls from a public Hugging Face mirror; the llama.cpp runtimes point at a 'data-pack' GitHub release that must be published per arch (linux-arm64 has no upstream llama.cpp binary and needs a self-build). sha256 is optional: when empty the download is used as-is (verification skipped). Operators who already have the files on the box can bypass all of this with Canopus:ModelPath / Canopus:LlamaServerPath.",
   "model": {
     "file": "Qwen3-4B-Q4_0.gguf",
-    "url": "https://github.com/DanWBR/NINA.Polaris/releases/download/data-pack/Qwen3-4B-Q4_0.gguf",
+    "url": "https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_0.gguf",
     "sha256": "",
-    "bytes": 2497281088
+    "bytes": 2375773472
   },
   "runtimes": {
     "linux-arm64": {
