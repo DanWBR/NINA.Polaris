@@ -91,8 +91,11 @@ public class SelfSignedCertService {
                 var existingHash = File.ReadAllText(_sanHashPath).Trim();
                 if (existingHash == sanHash) {
                     var existing = LoadFromDisk();
+                    var tooLong = existing != null
+                        && (existing.NotAfter - existing.NotBefore).TotalDays > 398;
                     if (existing != null
                         && existing.NotAfter > DateTime.UtcNow.AddDays(30)
+                        && !tooLong
                         && IsValidRootCa(existing)) {
                         _logger.LogInformation(
                             "HTTPS cert reused (valid until {Expiry:yyyy-MM-dd}, "
@@ -101,7 +104,15 @@ public class SelfSignedCertService {
                         _cached = existing;
                         return _cached;
                     }
-                    if (existing != null && !IsValidRootCa(existing)) {
+                    if (tooLong) {
+                        // Apple (iOS / Safari, Chrome on iOS) rejects certs whose
+                        // validity exceeds 398 days. Old builds issued a 5-year cert;
+                        // regenerate so the rig is reachable from an iPhone/iPad.
+                        _logger.LogInformation(
+                            "HTTPS cert validity exceeds Apple's 398-day limit, "
+                            + "regenerating with a shorter life for iOS compatibility.");
+                    }
+                    if (existing != null && !tooLong && !IsValidRootCa(existing)) {
                         // GX-12q3: old cert is a leaf (CA:FALSE) or
                         // missing KeyCertSign, install-as-trusted-root
                         // workflow won't work with it on Chrome. Force
@@ -262,8 +273,14 @@ public class SelfSignedCertService {
         }
         req.CertificateExtensions.Add(sanBuilder.Build());
 
+        // Apple (iOS / Safari, and Chrome on iOS) REJECTS TLS certs whose total
+        // validity exceeds 398 days (ERR_CERT_VALIDITY_TOO_LONG), so a multi-year
+        // self-signed cert makes Polaris unreachable from an iPhone/iPad. Keep the
+        // span under 398 days: NotBefore is backdated 1 day for clock skew, so 396
+        // days ahead gives a 397-day total. GetOrCreate auto-renews when under 30
+        // days remain, so the shorter life is covered on the next start.
         var notBefore = DateTimeOffset.UtcNow.AddDays(-1);
-        var notAfter  = DateTimeOffset.UtcNow.AddYears(5);
+        var notAfter  = DateTimeOffset.UtcNow.AddDays(396);
         var rawCert   = req.CreateSelfSigned(notBefore, notAfter);
 
         // CreateSelfSigned returns a cert with an in-memory ephemeral
