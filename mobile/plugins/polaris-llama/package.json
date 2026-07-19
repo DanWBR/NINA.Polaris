@@ -1,0 +1,31 @@
+{
+  "name": "polaris-llama",
+  "version": "0.1.0",
+  "description": "On-device local LLM backend for Canopus: bundles llama.cpp's llama-server, runs the GGUF model on 127.0.0.1 so the in-browser Canopus agent runs fully offline on the phone.",
+  "license": "MIT",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "files": [
+    "dist/",
+    "ios/",
+    "android/",
+    "PolarisLlama.podspec"
+  ],
+  "scripts": {
+    "build": "tsc && rollup -c rollup.config.js",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "@capacitor/core": "^6.1.2",
+    "rollup": "^4.20.0",
+    "typescript": "^5.5.4"
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^6.0.0"
+  },
+  "capacitor": {
+    "ios": { "src": "ios" },
+    "android": { "src": "android" }
+  }
+}

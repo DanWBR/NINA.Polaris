@@ -1,0 +1,40 @@
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.2.1' }
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace "dev.danwbr.polaris.llama"
+    compileSdk project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 34
+    defaultConfig {
+        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 24
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 34
+        // Ship only arm64 (the only Android target these llama.cpp binaries and
+        // real astro phones/tablets use).
+        ndk { abiFilters 'arm64-v8a' }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    sourceSets {
+        // The llama.cpp release (llama-server renamed libllamaserver.so + its
+        // sibling .so libs) is dropped here as jniLibs so it lands in
+        // nativeLibraryDir and is executable. See README for how to populate it.
+        main.jniLibs.srcDirs += ['src/main/jniLibs']
+    }
+    packagingOptions {
+        // These are executables/libs we ship verbatim; do not let Gradle strip
+        // or dedupe them.
+        jniLibs { useLegacyPackaging = true }
+    }
+}
+
+repositories { google(); mavenCentral() }
+
+dependencies {
+    implementation project(':capacitor-android')
+    implementation 'androidx.annotation:annotation:1.7.1'
+}

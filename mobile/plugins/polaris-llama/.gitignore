@@ -1,0 +1,7 @@
+node_modules/
+dist/
+android/build/
+android/.gradle/
+# The llama.cpp release binaries are staged at build time, never committed.
+android/src/main/jniLibs/
+ios/Pods/
