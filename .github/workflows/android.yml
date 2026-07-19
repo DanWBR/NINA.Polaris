@@ -43,8 +43,13 @@ jobs:
       - name: Install JS deps
         run: npm install
 
-      - name: Build native ONNX plugin
+      - name: Build native plugins (ONNX + llama)
         run: npm run plugin:build
+
+      - name: Stage llama.cpp server binary (Canopus on-device backend)
+        env:
+          LLAMA_TAG: b10058   # the eval-validated build; bump deliberately
+        run: bash ./plugins/polaris-llama/scripts/fetch-llama.sh "$LLAMA_TAG"
 
       - name: Add Android platform
         run: npx cap add android
@@ -103,8 +108,13 @@ jobs:
       - name: Install JS deps
         run: npm install
 
-      - name: Build native ONNX plugin
+      - name: Build native plugins (ONNX + llama)
         run: npm run plugin:build
+
+      - name: Stage llama.cpp server binary (Canopus on-device backend)
+        env:
+          LLAMA_TAG: b10058   # the eval-validated build; bump deliberately
+        run: bash ./plugins/polaris-llama/scripts/fetch-llama.sh "$LLAMA_TAG"
 
       - name: Add Android platform
         run: npx cap add android
