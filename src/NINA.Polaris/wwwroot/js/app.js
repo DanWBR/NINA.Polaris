@@ -5579,7 +5579,7 @@ function ninaApp() {
         },
 
         tlsFormatExpiry(iso) {
-            if (!iso) return '—';
+            if (!iso) return '-';
             try { return new Date(iso).toISOString().substring(0, 10); }
             catch { return iso; }
         },
@@ -5589,7 +5589,7 @@ function ninaApp() {
             if (!fp) return;
             try {
                 await navigator.clipboard.writeText(fp);
-                this.toast('Fingerprint copied — verify it in your OS cert dialog before trusting', 'success');
+                this.toast('Fingerprint copied: verify it in your OS cert dialog before trusting', 'success');
             } catch (e) {
                 // Some browsers gate clipboard.writeText behind https + secure
                 // context. We're served over https (self-signed) so this
@@ -5870,13 +5870,13 @@ function ninaApp() {
         // people know from regular cameras. Shown as the Gain "?" tooltip on
         // astro cameras. Appends the driver-reported gain range when known.
         gainIsoHint() {
-            let s = 'Gain is analogue amplification — the astro-camera analogue of '
+            let s = 'Gain is analogue amplification: the astro-camera analogue of '
                   + 'a DSLR’s ISO. Higher gain brightens the image and lowers '
                   + 'read noise, but reduces dynamic range and full-well capacity. '
                   + 'Like ISO, it does not collect more light; exposure time and '
                   + 'aperture do that.';
             const lo = this.cameraIso.gainMin, hi = this.cameraIso.gainMax;
-            if (hi > lo) s += ` This camera’s gain range is ${lo}–${hi}.`;
+            if (hi > lo) s += ` This camera’s gain range is ${lo}-${hi}.`;
             return s;
         },
 
@@ -6022,7 +6022,7 @@ function ninaApp() {
             } else {
                 // Need the SBC login + sudo password; reveal the form focused.
                 this.term.lastError =
-                    'Enter your SBC login and password — ' + tool
+                    'Enter your SBC login and password:' + tool
                     + ' will start automatically (sudo will prompt once).';
                 this.$nextTick(() => {
                     try { this.$refs.termUser?.focus(); } catch { }
@@ -6562,7 +6562,7 @@ function ninaApp() {
             if (await this._copyText(text)) {
                 this.toast('Copied ' + rows.length + ' log line(s)', 'ok');
             } else {
-                this.toast('Copy failed — use Export TXT instead', 'error');
+                this.toast('Copy failed: use Export TXT instead', 'error');
             }
         },
 
@@ -7980,7 +7980,7 @@ function ninaApp() {
         autoWbNow() {
             const f = this._lastRawFrame;
             if (!f) {
-                this.toast('No frame yet — take a snap first.', 'warn');
+                this.toast('No frame yet: take a snap first.', 'warn');
                 return;
             }
             const ok = this._computeAutoWB(f.pixels, f.width, f.height, f.bayerPattern);
@@ -8579,8 +8579,8 @@ function ninaApp() {
                     rig.liveStackSigmaKappa = k;
                 }
                 this.toast(this.liveStackSigmaRejection
-                    ? ('Outlier rejection on (k=' + k + ') — Reset the stack to apply')
-                    : 'Outlier rejection off — Reset the stack to apply', 'ok');
+                    ? ('Outlier rejection on (k=' + k + '): Reset the stack to apply')
+                    : 'Outlier rejection off: Reset the stack to apply', 'ok');
             } catch (e) {
                 this.liveStackSigmaRejection = !this.liveStackSigmaRejection;
                 this.toast('Save failed: ' + (e.message || e), 'error');
@@ -8602,8 +8602,8 @@ function ninaApp() {
                 const rig = this.rigs.find(r => r.id === this.activeRigId);
                 if (rig) rig.liveStackColor = this.liveStackColor;
                 this.toast(this.liveStackColor
-                    ? 'Colour stacking on — Reset the stack to apply'
-                    : 'Colour stacking off — Reset the stack to apply', 'ok');
+                    ? 'Colour stacking on: Reset the stack to apply'
+                    : 'Colour stacking off: Reset the stack to apply', 'ok');
             } catch (e) {
                 this.liveStackColor = !this.liveStackColor;
                 this.toast('Save failed: ' + (e.message || e), 'error');
@@ -13591,7 +13591,7 @@ function ninaApp() {
             this.workflow.selected = 0;
             if (!this.workflow.name) this.workflow.name = 'Editor edits';
             this.setStudioTab('autoworkflow');
-            this.toast('Sent editor edits to Auto Workflow — name it and Save', 'success');
+            this.toast('Sent editor edits to Auto Workflow, name it and Save', 'success');
         },
 
         // Middle-truncated path for the editor toolbar so deep
@@ -16267,7 +16267,7 @@ function ninaApp() {
                     ? `${aux.widthDeg.toFixed(2)}°×${aux.heightDeg.toFixed(2)}°`
                         + (Number.isFinite(aux.raDeg) ? ' (celestial)' : ' (concentric with target)')
                     : (!(afl > 0) ? 'null (no aux focal length)'
-                        : 'null (no aux sensor size — connect the aux camera once or set the DSLR pixel/size fields)'));
+                        : 'null (no aux sensor size: connect the aux camera once or set the DSLR pixel/size fields)'));
 
             // mosaicTiles is an Alpine reactive array (a Proxy); postMessage
             // can't structured-clone a Proxy and throws DataCloneError, which
@@ -16417,7 +16417,7 @@ function ninaApp() {
                     const implied = (this.fov?.width > 0 && j.width)
                         ? (this.fov.width * 3600 / j.width) : 0;
                     if (implied > 0) {
-                        diag = ` — ${(j.scaleArcsecPerPixel||0).toFixed(2)}"/px vs rig ${implied.toFixed(2)}"/px (×${(j.scaleArcsecPerPixel/implied).toFixed(3)})`;
+                        diag = `${(j.scaleArcsecPerPixel||0).toFixed(2)}"/px vs rig ${implied.toFixed(2)}"/px (×${(j.scaleArcsecPerPixel/implied).toFixed(3)})`;
                     }
                 } catch (_) {}
                 this.toast((this.annotate.items.length
@@ -16577,7 +16577,7 @@ function ninaApp() {
                     if (fl > 0 && pix > 0) implied = 206.2648 * pix / fl;      // header-derived
                     else if (this.fov?.width > 0 && j.width) implied = this.fov.width * 3600 / j.width;
                     if (implied > 0) {
-                        diag = ` — ${(j.scaleArcsecPerPixel||0).toFixed(2)}"/px vs ${implied.toFixed(2)}"/px (×${(j.scaleArcsecPerPixel/implied).toFixed(3)})`;
+                        diag = `${(j.scaleArcsecPerPixel||0).toFixed(2)}"/px vs ${implied.toFixed(2)}"/px (×${(j.scaleArcsecPerPixel/implied).toFixed(3)})`;
                     }
                 } catch (_) {}
                 this.toast((this.studioAnnotate.items.length
@@ -16958,7 +16958,7 @@ function ninaApp() {
                 // exit button lives). A floating exit button (bound to
                 // imageViewerFullPage) handles touch users; Esc still works
                 // on desktop. Toast as an extra hint.
-                if (!cur) this.toast('Full page — tap ⤢ or press Esc to exit', 'info');
+                if (!cur) this.toast('Full page: tap ⤢ or press Esc to exit', 'info');
             } catch (e) {}
         },
 
@@ -17170,7 +17170,7 @@ function ninaApp() {
             const ok = await this._confirmAsync(
                 'Clear image cache?',
                 'Removes the cached previews + thumbnails from disk. They are ' +
-                'regenerated automatically the next time you view a file — no ' +
+                'regenerated automatically the next time you view a file, no ' +
                 'captures or settings are affected.',
                 'Clear cache');
             if (!ok) return;
@@ -18604,13 +18604,13 @@ function ninaApp() {
         // "~45 s" / "—". Pass the liveStackStatus payload so we can
         // decorate "✓ done" when the target's already reached.
         formatSnrEta(ls) {
-            if (!ls) return '—';
+            if (!ls) return '-';
             if (ls.cumulativeSnr > 0 && ls.targetSnr > 0
                 && ls.cumulativeSnr >= ls.targetSnr) {
                 return '✓ done';
             }
             const sec = ls.etaSeconds;
-            if (sec == null || !isFinite(sec) || sec <= 0) return '—';
+            if (sec == null || !isFinite(sec) || sec <= 0) return '-';
             if (sec < 60) return `~${Math.round(sec)} s`;
             if (sec < 3600) return `~${Math.round(sec / 60)} min`;
             const h = Math.floor(sec / 3600);
@@ -18654,7 +18654,7 @@ function ninaApp() {
                 return this._fmtHm(s);
             }
             const m = this.mfTimeToMeridianMinutes;
-            if (m == null || !isFinite(m)) return '—';
+            if (m == null || !isFinite(m)) return '-';
             return this._fmtHm(m);
         },
 
@@ -19870,7 +19870,7 @@ function ninaApp() {
 
         planAddTargetFromMount() {
             if (!Number.isFinite(this.mount.ra) || !Number.isFinite(this.mount.dec)) {
-                this.toast('Mount position unknown — connect the mount first', 'warn');
+                this.toast('Mount position unknown: connect the mount first', 'warn');
                 return;
             }
             const t = this._blankTarget();
@@ -20064,7 +20064,7 @@ function ninaApp() {
             const s = this.planStatus;
             if (s && s.active && s.currentItemTotal > 0)
                 return `${s.currentItemCompleted}/${s.currentItemTotal}`;
-            return '—';
+            return '-';
         },
         planTotalProgressLabel() {
             const s = this.planStatus;
@@ -20083,9 +20083,9 @@ function ninaApp() {
             return sec + 's';
         },
         planFormatLocalTime(iso) {
-            if (!iso) return '—';
+            if (!iso) return '-';
             try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-            catch (e) { return '—'; }
+            catch (e) { return '-'; }
         },
 
         // ----- PLAN: per-target schedule mode + elevation chart -----
@@ -20836,7 +20836,7 @@ function ninaApp() {
             // silently restart the stack from zero instead of offering
             // Continue/Restart.
             if (this._liveSessionBusy) {
-                this.toast('Finishing the previous exposure — try again in a moment', 'warn');
+                this.toast('Finishing the previous exposure: try again in a moment', 'warn');
                 return;
             }
             // Cooler-off pre-flight before starting the LIVE loop (saves frames
@@ -22217,7 +22217,7 @@ function ninaApp() {
                     this.toast(
                         'Nearest body (' + r.name + ') is '
                         + r.angularSepDeg.toFixed(1)
-                        + '° away — too far to assume that\'s the target',
+                        + '° away: too far to assume that\'s the target',
                         'warn');
                     return;
                 }
@@ -22735,7 +22735,7 @@ function ninaApp() {
                 rig.coolerRampDegPerMinute = rate;
                 this.toast(rate > 0
                     ? `Cooling ramp set to ${rate}°C/min`
-                    : 'Cooling ramp off — setpoint jumps straight to target', 'info');
+                    : 'Cooling ramp off: setpoint jumps straight to target', 'info');
             } catch (e) {
                 this.toast('Could not save cooling ramp: ' + e.message, 'warn');
             }
@@ -22771,7 +22771,7 @@ function ninaApp() {
                 // OFF immediately (it reflects intent) while the cooler is
                 // deliberately still running, and unexplained that reads as a bug.
                 if (r && r.ramping && !enabled) {
-                    this.toast(`Warming to ${r.target}°C at ${r.rate}°C/min before the cooler switches off — protects against dew. Set Ramp to 0 to switch off instantly.`, 'info', 7000);
+                    this.toast(`Warming to ${r.target}°C at ${r.rate}°C/min before the cooler switches off, protects against dew. Set Ramp to 0 to switch off instantly.`, 'info', 7000);
                 }
             } catch (e) {
                 // Command failed — drop the optimistic hold so the toggle
@@ -22993,7 +22993,7 @@ function ninaApp() {
                     try {
                         await this.apiPost('/api/livestack/stop');
                         const n = this.liveStackFrames || 0;
-                        this.toast('LIVE stopped — stack kept (' + n + ' frame' + (n === 1 ? '' : 's') + ')', 'warn');
+                        this.toast('LIVE stopped: stack kept (' + n + ' frame' + (n === 1 ? '' : 's') + ')', 'warn');
                     } catch (e) {
                         this.toast('Live stack stop failed: ' + (e?.message || ''), 'error');
                     }
@@ -24584,9 +24584,9 @@ function ninaApp() {
         },
         manualFocusFormat(field) {
             const s = this.manualFocusLastSample();
-            if (!s) return '—';
+            if (!s) return '-';
             const v = s[field];
-            if (!Number.isFinite(v)) return '—';
+            if (!Number.isFinite(v)) return '-';
             if (field === 'laplacian') {
                 return v >= 1000 ? v.toExponential(1) : v.toFixed(1);
             }
@@ -25162,7 +25162,7 @@ function ninaApp() {
         },
 
         formatArcsec(arcsec) {
-            if (arcsec == null || isNaN(arcsec)) return '—';
+            if (arcsec == null || isNaN(arcsec)) return '-';
             const v = Math.abs(arcsec);
             if (v < 60) return arcsec.toFixed(1) + '"';
             const min = Math.floor(v / 60);
@@ -25471,7 +25471,7 @@ function ninaApp() {
                     this.toast('Filter: ' + (r.filter || filterName), 'ok');
                 } else {
                     this.toast(
-                        'Filter wheel still moving — ' + (r?.message || 'no settle ack'),
+                        'Filter wheel still moving:' + (r?.message || 'no settle ack'),
                         'warn');
                 }
             } catch (e) {
@@ -25490,7 +25490,7 @@ function ninaApp() {
                         'ok');
                 } else {
                     this.toast(
-                        'Filter wheel still moving — ' + (r?.message || 'no settle ack'),
+                        'Filter wheel still moving:' + (r?.message || 'no settle ack'),
                         'warn');
                 }
             } catch (e) {
@@ -25718,7 +25718,7 @@ function ninaApp() {
                 { has: () => !!this.equipSwitchChoice && !this.powerBox?.connected, fn: () => this.equipConnectSwitch() },
             ];
             const todo = steps.filter(s => s.has());
-            if (todo.length === 0) { this.toast('Nothing to connect — pick devices first', 'warn'); return; }
+            if (todo.length === 0) { this.toast('Nothing to connect: pick devices first', 'warn'); return; }
             this.equipBulkBusy = true;
             this.toast(`Connecting ${todo.length} device(s)…`, 'ok');
             try { for (const s of todo) { await s.fn(); } }
@@ -28289,7 +28289,7 @@ function ninaApp() {
         analyzeZoneLabel(z) {
             const aberr = this.analyze.tab === 'aberration';
             const val = aberr ? z.meanEcc : z.medianHfr;
-            if (val == null || Number.isNaN(val)) return '—';
+            if (val == null || Number.isNaN(val)) return '-';
             return aberr ? val.toFixed(2) : val.toFixed(1);
         },
 
@@ -28536,7 +28536,7 @@ function ninaApp() {
                 const d = await r.json();
                 if (d.error) { this.crop.error = d.error; return; }
                 if (d.full) {
-                    this.toast('No stacking borders found — the frame is already fully covered.', 'info');
+                    this.toast('No stacking borders found: the frame is already fully covered.', 'info');
                     return;
                 }
                 const offL = this.crop._imgOffLeft || 0;
@@ -28549,7 +28549,7 @@ function ninaApp() {
                     endY: sy + (d.fracH || 0) * dispH
                 };
                 this.crop.dragging = false;
-                this.toast('Auto crop suggested — adjust the rectangle or Crop and save.', 'success');
+                this.toast('Auto crop suggested: adjust the rectangle or Crop and save.', 'success');
             } catch (e) {
                 this.crop.error = (e && e.message) ? e.message : String(e);
             } finally {
@@ -28590,7 +28590,7 @@ function ninaApp() {
                 const ok = (data.results && data.results[0]);
                 const out = ok ? (ok.outputPath.split(/[\\/]/).pop() || ok.outputPath)
                                : this.crop.outputName;
-                this.toast(`Cropped — saved as ${out}`, 'success');
+                this.toast(`Cropped: saved as ${out}`, 'success');
                 this.cropClose();
                 // Refresh the FILES browser listing so the new sibling file
                 // shows up immediately (studioRescan only reindexes the DB; the
@@ -28706,7 +28706,7 @@ function ninaApp() {
             out.push({
                 family: 'rl', version: 'measured', target: 'rl',
                 key: 'rl::measured',
-                label: 'Classical RL — measured PSF (server)',
+                label: 'Classical RL: measured PSF (server)',
                 sizeBytes: 0, isQuantized: false,
             });
             // Field-varying PSF: a PSF per region (corner ≠ centre). The
@@ -28714,7 +28714,7 @@ function ninaApp() {
             out.push({
                 family: 'rl', version: 'field', target: 'rl',
                 key: 'rl::field',
-                label: 'Classical RL — field PSF, per-region (server)',
+                label: 'Classical RL: field PSF, per-region (server)',
                 sizeBytes: 0, isQuantized: false,
             });
             return out;
@@ -28852,7 +28852,7 @@ function ninaApp() {
                 else if (m.version.endsWith('-int8'))  tag = ' (INT8)';
                 return {
                     version: m.version,
-                    label: `${this._modelDisplayName(family, m.version)} — ${mb} MB${tag}`,
+                    label: `${this._modelDisplayName(family, m.version)}: ${mb} MB${tag}`,
                     sizeBytes: m.sizeBytes || 0,
                     isQuantized: tag !== '',
                 };
@@ -28911,7 +28911,7 @@ function ninaApp() {
                 };
                 return (fb[family] || []).map(c => ({
                     version: c.version,
-                    label: `${this._modelDisplayName(family, c.version)} — ~${(c.sizeBytes / 1e6).toFixed(0)} MB`,
+                    label: `${this._modelDisplayName(family, c.version)}: ~${(c.sizeBytes / 1e6).toFixed(0)} MB`,
                     sizeBytes: c.sizeBytes,
                     isQuantized: false,
                 }));
@@ -29029,7 +29029,7 @@ function ninaApp() {
         // Only global-PSF mode (field mode needs multiple kernels per tile).
         async _runBrowserRl() {
             if (!window.RlBrowserDecon) {
-                this.toast('rl-decon.js not loaded — falling back to server RL', 'warn');
+                this.toast('rl-decon.js not loaded: falling back to server RL', 'warn');
                 return this._runClassicalRl();
             }
             const paths = [...this.graxpert.modalPaths];
@@ -30523,12 +30523,12 @@ function ninaApp() {
                     const typeLbl = (s.type || '').toUpperCase();
                     this.spcc.autoNote = 'Auto-selected ' + (s.sensorName || s.sensorId) +
                         (typeLbl ? ' (' + typeLbl + ')' : '') +
-                        (s.camera ? ' from "' + s.camera + '"' : '') + ' — you can change it.';
+                        (s.camera ? ' from "' + s.camera + '"' : '') + 'you can change it.';
                 } else if (s.camera) {
                     // Header had a camera but we couldn't match it to a curve.
                     this.spcc.autoNote = 'Camera "' + s.camera + '" (' +
                         ((s.type || '').toUpperCase() || '?') +
-                        ') not in the curve database — using the generic ' +
+                        ') not in the curve database, using the generic ' +
                         ((s.type === 'osc') ? 'OSC' : 'mono') + ' sensor; pick a closer one if you like.';
                 }
             } catch { /* suggestion is optional */ }
@@ -30621,7 +30621,7 @@ function ninaApp() {
 
         // ── White-balance summary (PCC/SPCC) ───────────────────────────
         wbFmt(v, d = 6) {
-            return (v == null || isNaN(v)) ? '—' : Number(v).toFixed(d);
+            return (v == null || isNaN(v)) ? '-' : Number(v).toFixed(d);
         },
         // Show the summary. `comparePair` (optional) enables a "before/after"
         // button that opens the existing comparator.
@@ -31757,7 +31757,7 @@ function ninaApp() {
                     }
                     await new Promise(r => setTimeout(r, 1500));
                 }
-                this.toast('PHD2 GUI demorou a iniciar — tente Restart', 'warn');
+                this.toast('PHD2 GUI demorou a iniciar: tente Restart', 'warn');
             } finally {
                 this.phd2GuiStarting = false;
                 this._phd2GuiEnsuring = false;
@@ -32000,7 +32000,7 @@ function ninaApp() {
         async buildGuideCal() {
             try {
                 await this.apiPost('/api/guider/calibration/build');
-                this.toast('Building guide dark library — cover the scope', 'ok');
+                this.toast('Building guide dark library: cover the scope', 'ok');
             } catch (e) { this.toast('Build failed: ' + (e.message || e), 'error'); }
         },
         async cancelGuideCal() {
@@ -32665,7 +32665,7 @@ function ninaApp() {
                     'Pointing an unfiltered telescope at the Sun will instantly destroy ' +
                     'your camera and can cause permanent eye damage. Only continue if a ' +
                     'certified full-aperture solar filter is fitted.',
-                    { title: 'Center on the Sun', okLabel: 'Solar filter fitted — continue', danger: true })) return;
+                    { title: 'Center on the Sun', okLabel: 'Solar filter fitted: continue', danger: true })) return;
             }
             try {
                 const resp = await this.apiPost('/api/sky/center-body', { body });
@@ -32697,7 +32697,7 @@ function ninaApp() {
                     this.centerBodyJobId = null;
                     if (data.state === 'done') {
                         let msg = 'Centered on ' + data.body;
-                        if (data.trackingMode) msg += ' — ' + data.trackingMode + ' tracking on';
+                        if (data.trackingMode) msg += ' - ' + data.trackingMode + ' tracking on';
                         this.toast(msg, 'ok');
                     } else if (data.state === 'failed') {
                         this.toast('Center on ' + data.body + ' failed: ' + (data.error || ''), 'error');
@@ -32748,7 +32748,7 @@ function ninaApp() {
             const alt = this._targetAltitudeDeg(raHours, decDeg);
             if (alt !== null && alt < 0) {
                 this.toast('Target is ' + Math.abs(alt).toFixed(0) +
-                    '° below the horizon right now — the mount would refuse the GoTo.', 'error');
+                    '° below the horizon right now, the mount would refuse the GoTo.', 'error');
                 return true;
             }
             return false;
@@ -32775,7 +32775,7 @@ function ninaApp() {
             if (!await this._confirmAsync(
                 'Tell the mount it is pointing at:\n\n  ' + name +
                 'RA ' + this.formatRA(target.ra) + '   Dec ' + this.formatDec(target.dec) +
-                '\n\nThis does NOT move the mount — it overwrites where the mount thinks it ' +
+                '\n\nThis does NOT move the mount, it overwrites where the mount thinks it ' +
                 'is. Use it to recover pointing (e.g. after an INDI driver reload reset the ' +
                 'coordinates) when the scope is aimed at this region and you can\'t plate-solve. ' +
                 'A wrong sync sends every later GoTo off-target.',
@@ -32828,12 +32828,12 @@ function ninaApp() {
                 const r = await resp.json();
                 if (!r || !r.success) {
                     this.toast('Solve failed: ' + ((r && r.error) || 'unknown') +
-                        ' — try "Sync here" (manual) if clouded out.', 'warn');
+                        'try "Sync here" (manual) if clouded out.', 'warn');
                     return;
                 }
                 await this.apiPost('/api/telescope/sync', { ra: r.raHours, dec: r.decDeg });
                 this._applySolvedFrame(r);
-                this.toast('Solved & synced — mount position recovered (no movement)', 'ok');
+                this.toast('Solved & synced: mount position recovered (no movement)', 'ok');
             } catch (e) {
                 if (signal.aborted || e?.name === 'AbortError') {
                     this.toast('Solve & Sync aborted', 'info');
@@ -32885,7 +32885,7 @@ function ninaApp() {
                         rotationDeg: Number.isFinite(r.rotationDeg) ? r.rotationDeg : 0,
                         scaleArcsecPerPixel: r.scaleArcsecPerPixel
                     };
-                    this.toast(`Aux FOV solved — rotation ${(r.rotationDeg || 0).toFixed(1)}°`, 'ok');
+                    this.toast(`Aux FOV solved: rotation ${(r.rotationDeg || 0).toFixed(1)}°`, 'ok');
                     try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
                     catch (e) { /* SKY engine idle */ }
                 } else if (r) {
@@ -33444,14 +33444,14 @@ function ninaApp() {
             if (this.host.underVoltageNow && !this.dismissedChips.has('uv-now')) {
                 out.push({
                     id: 'uv-now', icon: '⚡', kind: 'error',
-                    label: 'Under-voltage NOW — expect USB crashes',
+                    label: 'Under-voltage NOW: expect USB crashes',
                     href: 'docs/user-guide/troubleshooting.md#usb-device-crashes-mid-operation-under-voltage',
                     dismissable: true
                 });
             } else if (this.host.underVoltageOccurred && !this.dismissedChips.has('uv-past')) {
                 out.push({
                     id: 'uv-past', icon: '⚡', kind: 'warn',
-                    label: 'Pi was under-voltage since boot — use a powered USB hub',
+                    label: 'Pi was under-voltage since boot: use a powered USB hub',
                     href: 'docs/user-guide/troubleshooting.md#usb-device-crashes-mid-operation-under-voltage',
                     dismissable: true
                 });
@@ -33544,7 +33544,7 @@ function ninaApp() {
                          + (this.workflow.currentStep >= 0 && nSteps
                              ? ` · step ${this.workflow.currentStep + 1}/${nSteps}` : ''),
                     progress: Math.round(100 * done / total),
-                    tooltip: 'Auto Workflow runs in THIS browser tab — keep it open until it finishes.',
+                    tooltip: 'Auto Workflow runs in THIS browser tab, keep it open until it finishes.',
                     onClick: () => { this.tab = 'files'; this.setStudioTab && this.setStudioTab('autoworkflow'); }
                 });
             }
@@ -33843,8 +33843,8 @@ function ninaApp() {
                 case 'hotspot':       return '🟢 Hotspot';
                 case 'station':       return '🟢 Station';
                 case 'disconnected':  return '⚠ Disconnected';
-                case 'unsupported':   return '— Unsupported';
-                default:              return '— Unknown';
+                case 'unsupported':   return 'Unsupported';
+                default:              return 'Unknown';
             }
         },
 
@@ -34735,7 +34735,7 @@ function ninaApp() {
             L.push('## Diagnostics',
                 '<details><summary>Client &amp; server info (auto-filled)</summary>', '',
                 '```');
-            L.push('— Polaris —');
+            L.push('Polaris:');
             L.push('Server version : ' + (this.appVersion || 'unknown'));
             L.push('UI build       : ' + uiBuild);
             L.push('Active tab     : ' + (this.tab || ''));
@@ -34744,13 +34744,13 @@ function ninaApp() {
             L.push('Guider         : ' + (g.backend || '(none)')
                 + (g.connected ? ' · ' + (g.appState || 'connected') : ' · offline'));
             L.push('');
-            L.push('— Server host —');
+            L.push('Server host:');
             L.push('Model          : ' + (d.model || 'unknown'));
             L.push('OS             : ' + (d.os || 'unknown'));
             L.push('Arch / cores   : ' + ((d.architecture || '?') + ' / ' + (d.cores || '?')));
             if (d.cpu) L.push('CPU            : ' + d.cpu);
             L.push('');
-            L.push('— Client (browser) —');
+            L.push('Client (browser):');
             L.push('User agent     : ' + navigator.userAgent);
             L.push('Language       : ' + (navigator.language || ''));
             L.push('Viewport       : ' + window.innerWidth + 'x' + window.innerHeight
@@ -34762,7 +34762,7 @@ function ninaApp() {
                 .filter(e => /error|warn/i.test(e.level || ''))
                 .slice(-15);
             if (errs.length) {
-                L.push('', '— Recent warnings/errors —');
+                L.push('', 'Recent warnings/errors:');
                 for (const e of errs) {
                     const lvl = (e.level || '?')[0];
                     L.push('[' + lvl + '] ' + (e.source ? e.source + ': ' : '')
@@ -34811,7 +34811,7 @@ function ninaApp() {
             this.update.checking = true;
             try {
                 const u = await this.checkUpdate(true);
-                if (!u) { this.toast('Update check failed — offline or server error', 'error'); return; }
+                if (!u) { this.toast('Update check failed: offline or server error', 'error'); return; }
                 if (!u.supported) {
                     this.toast('Self-update needs a Linux .deb install. Running v' + (u.currentVersion || '?'), 'info');
                     return;
@@ -34822,7 +34822,7 @@ function ninaApp() {
                 if (u.error) {
                     this.update.offline = true;
                     this.update.relayOpen = true;
-                    this.toast('Polaris couldn\'t reach GitHub from the host — you can update through this client device instead.', 'info', 8000);
+                    this.toast('Polaris couldn\'t reach GitHub from the host, you can update through this client device instead.', 'info', 8000);
                     this.openUpdateModal();
                     this.update.modalOpen = true;
                     this.relayCheckGithub();
@@ -34989,7 +34989,7 @@ function ninaApp() {
                 this.update.installing = false;
                 this._updProgStop();
                 this.update.error = 'Update is taking longer than expected. '
-                    + 'It may still be installing — reload the page in a moment.';
+                    + 'It may still be installing: reload the page in a moment.';
                 return;
             }
             try {
@@ -35610,7 +35610,7 @@ function ninaApp() {
                 lines.push('Click to open Settings');
                 return lines.join('\n');
             }
-            const lines = [state === 'busy' ? `${kind} push — uploading` : `${kind} push — connected`];
+            const lines = [state === 'busy' ? `${kind} push: uploading` : `${kind} push: connected`];
             if (s.currentFile) lines.push(`Uploading: ${s.currentFile.split(/[\\/]/).pop()}`);
             if (s.queued > 0) lines.push(`Queued: ${s.queued}`);
             if (s.queued === 0 && !s.currentFile) lines.push('Idle (queue empty)');
@@ -35732,7 +35732,7 @@ function ninaApp() {
                     // no-move Sync (Solve & Sync, or "Sync here" on SKY)
                     // instead of a blind Home. Only when a mount is present.
                     if (this.mount && this.mount.connected) {
-                        this.toast('INDI reconnected — if the mount position looks reset to ' +
+                        this.toast('INDI reconnected: if the mount position looks reset to ' +
                             'home, fix it without moving via Solve & Sync (PREVIEW) or ' +
                             '"Sync here" on the SKY map; only Home if you must.', 'warn', 12000);
                     }
@@ -37113,7 +37113,7 @@ function ninaApp() {
             }
             const port = parseInt(this.alpaca.manualPort, 10);
             if (!Number.isInteger(port) || port < 1 || port > 65535) {
-                this.toast('Invalid port: must be 1–65535.', 'error');
+                this.toast('Invalid port: must be 1-65535.', 'error');
                 return;
             }
             // Add or update the manual server in the list, then enumerate

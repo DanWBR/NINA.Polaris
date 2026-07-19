@@ -87,7 +87,7 @@
             // i18n: stamp <html lang> and, for a non-English UI, hide the body
             // until i18n.js has loaded the catalog and run the first pass, so
             // the user never sees an English flash (FOUC). English is the
-            // identity language — no class, no hiding, no cost. js/i18n.js
+            // identity language, no class, no hiding, no cost. js/i18n.js
             // lifts the i18n-loading class once translation is applied.
             try {
                 var L = localStorage.getItem('nina-ui-lang');
@@ -866,7 +866,7 @@
                         <button @click="_pzZoomButton('liveCanvas', 1/1.3)" title="Zoom out">－</button>
                         <button @click="toggleAutoStretch()" :class="stretchAuto ? 'pz-active' : ''" title="Auto-stretch brightness">◐</button>
                         <button @click="toggleAnnotate()" :class="annotate.active ? 'pz-active' : ''" :disabled="annotate.busy"
-                                title="Annotate — plate-solve and label DSOs in the frame">
+                                title="Annotate: plate-solve and label DSOs in the frame">
                             <svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:middle"><circle cx="8" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 13 L20 4 M15 4 h5 v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </button>
                     </div>
@@ -944,7 +944,7 @@
                                 <span class="lsq-value"
                                       x-text="liveStackStatus?.cumulativeSnr > 0
                                               ? liveStackStatus?.cumulativeSnr.toFixed(1)
-                                              : '—'"></span>
+                                              : '-'"></span>
                             </div>
                             <div class="lsq-cell">
                                 <span class="lsq-label">Frames</span>
@@ -964,7 +964,7 @@
                             <div class="lsq-target">
                                 <label>Target
                                     <input type="number" class="input-sm" min="0" max="500" step="1"
-                                           :placeholder="liveStackStatus?.targetSnr ?? '—'"
+                                           :placeholder="liveStackStatus?.targetSnr ?? '-'"
                                            x-model.number="liveStack.targetSnrInput"
                                            @change="saveTargetSnr()">
                                 </label>
@@ -1044,7 +1044,7 @@
                                  background but inflates colour; this dials it
                                  back. Saved frames are untouched. -->
                             <span class="histo-sat" x-show="dispSaturation !== undefined"
-                                  :title="'Display saturation: ' + Math.round(dispSaturation * 100) + '% (double-click resets to 100%). Display only — saved frames are untouched.'">
+                                  :title="'Display saturation: ' + Math.round(dispSaturation * 100) + '% (double-click resets to 100%). Display only: saved frames are untouched.'">
                                 <span class="histo-sat-label">Sat</span>
                                 <input type="range" class="histo-sat-slider"
                                        min="0" max="1.5" step="0.05"
@@ -1111,7 +1111,7 @@
                         <tr x-show="!cameraUsesIso()">
                             <td><label>Offset</label></td>
                             <td><input type="number" x-model.number="offset" step="1" min="0" class="input-sm"></td>
-                            <td><span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens — SV405CC ~30-64.">?</span></td>
+                            <td><span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens: SV405CC ~30-64.">?</span></td>
                         </tr>
                         </tbody>
                         </table>
@@ -1221,8 +1221,8 @@
                         <span class="livestack-stats" data-tour="live-actions"
                               :class="liveStackEnabled ? 'ls-on' : ''"
                               :title="liveStackEnabled
-                                  ? 'Stacking — press the shutter to stop (the stack is kept)'
-                                  : 'Stopped — press the shutter to start or continue stacking'">
+                                  ? 'Stacking: press the shutter to stop (the stack is kept)'
+                                  : 'Stopped: press the shutter to start or continue stacking'">
                             <span class="ls-state" x-text="liveStackEnabled ? '⚫ Stacking' : '⏸ Stopped'"></span>
                             <span class="ls-stat" title="Total integration time"
                                   x-show="liveStackStatus?.elapsedSeconds > 0">
@@ -1312,7 +1312,7 @@
                              preview, not an archive. The counter shows
                              how many frames landed in this session. -->
                         <label class="livestack-save-frames-label"
-                               title="Save every incoming frame to disk during live stacking (in addition to the integrated preview). Keeps a science-grade archive of the session for re-stacking or calibration later. On by default — uncheck if you only want the live preview and not an archive (needs an image output folder set in FILES).">
+                               title="Save every incoming frame to disk during live stacking (in addition to the integrated preview). Keeps a science-grade archive of the session for re-stacking or calibration later. On by default: uncheck if you only want the live preview and not an archive (needs an image output folder set in FILES).">
                             <input type="checkbox"
                                    x-model="liveStackSaveFrames"
                                    @change="saveLiveStackSaveFrames()">
@@ -1346,7 +1346,7 @@
                              after the session. -->
                         <div class="text-warn" style="font-size:11px; margin-top:2px"
                              x-show="liveStackStatus?.saveFramesNoDir">
-                            ⚠ No output folder set — frames are NOT being saved.
+                            ⚠ No output folder set: frames are NOT being saved.
                             Set an image output folder in the FILES tab.
                         </div>
                     </div>
@@ -2150,7 +2150,7 @@
                             (or enable Auto) to re-measure. If an error grows
                             after a nudge, reverse that knob. Once the dot
                             reads near zero, <strong>re-run the 3-point
-                            sweep</strong> to confirm — the sweep is the
+                            sweep</strong> to confirm: the sweep is the
                             ground-truth measurement.
                         </p>
                         <p class="text-warn" style="margin: 0"
@@ -2181,7 +2181,7 @@
                     <p>
                         After TPPA, a bullseye shows the pole at the centre and your mount's
                         RA axis as a dot. Adjust the tripod knobs, then click <strong>Refresh</strong>
-                        to re-measure — or enable <strong>Auto</strong> for a continuous
+                        to re-measure: or enable <strong>Auto</strong> for a continuous
                         capture/solve loop.
                     </p>
                 </div>
@@ -2667,7 +2667,7 @@
                             <div class="manual-focus-metric">
                                 <span class="manual-focus-metric-label">Stars</span>
                                 <span class="manual-focus-metric-value"
-                                      x-text="manualFocusLastSample()?.starCount ?? '—'"></span>
+                                      x-text="manualFocusLastSample()?.starCount ?? '-'"></span>
                             </div>
                             <div class="manual-focus-metric">
                                 <span class="manual-focus-metric-label">Laplacian</span>
@@ -2678,7 +2678,7 @@
                                  x-show="manualFocus.bestHfr != null">
                                 <span class="manual-focus-metric-label">Best HFR</span>
                                 <span class="manual-focus-metric-value"
-                                      x-text="manualFocus.bestHfr?.toFixed(2) ?? '—'"></span>
+                                      x-text="manualFocus.bestHfr?.toFixed(2) ?? '-'"></span>
                             </div>
                         </div>
                         <div class="text-warn" x-show="manualFocus.lastError" style="font-size:11px"
@@ -2760,7 +2760,7 @@
                               x-text="(autoFocus.method || 'V-CURVE').toUpperCase() + (autoFocus.attempt > 1 ? (' · TRY ' + autoFocus.attempt) : '')"></span>
                     </div>
                     <div class="af-params">
-                        <label title="Points required on EACH arm of the V-curve. The sweep starts OffsetSteps×StepSize out, samples inward, then keeps adding points to whichever arm is short — so the curve always gets built on BOTH sides of focus.">Points/side
+                        <label title="Points required on EACH arm of the V-curve. The sweep starts OffsetSteps×StepSize out, samples inward, then keeps adding points to whichever arm is short, so the curve always gets built on BOTH sides of focus.">Points/side
                             <input type="number" x-model.number="afParams.offsetSteps" min="1" max="10" step="1" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
@@ -2773,7 +2773,7 @@
                                    list="exposure-presets" min="0" step="any" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
-                        <label title="Curve model that determines the focus position. TrendHyperbolic (default): weighted hyperbola cross-validated against the trendline intersection — the NINA desktop recommendation.">Fit
+                        <label title="Curve model that determines the focus position. TrendHyperbolic (default): weighted hyperbola cross-validated against the trendline intersection, the NINA desktop recommendation.">Fit
                             <select class="input-sm" x-model="afParams.method"
                                     :disabled="autoFocus.state === 'running'">
                                 <option value="TRENDHYPERBOLIC">Trend + Hyperbolic</option>
@@ -2833,7 +2833,7 @@
                                 :disabled="!focusConnected || !focusMoving">Stop Focuser</button>
                         <button class="btn" @click="saveAfParamsToRig()"
                                 :disabled="autoFocus.state === 'running'"
-                                title="Persist these values as the rig's auto-focus defaults — the sequencer AF instruction and every AF trigger will use them too.">Save as rig default</button>
+                                title="Persist these values as the rig's auto-focus defaults, the sequencer AF instruction and every AF trigger will use them too.">Save as rig default</button>
                     </div>
 
                     <!-- Live progress -->
@@ -2928,7 +2928,7 @@
                         <button @click="_pzZoomButton('previewCanvas', 1/1.3)" title="Zoom out">－</button>
                         <button @click="toggleAutoStretch()" :class="stretchAuto ? 'pz-active' : ''" title="Auto-stretch brightness">◐</button>
                         <button @click="toggleAnnotate()" :class="annotate.active ? 'pz-active' : ''" :disabled="annotate.busy"
-                                title="Annotate — plate-solve and label DSOs in the frame">
+                                title="Annotate: plate-solve and label DSOs in the frame">
                             <svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:middle"><circle cx="8" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 13 L20 4 M15 4 h5 v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                         </button>
                     </div>
@@ -2972,7 +2972,7 @@
                                  background but inflates colour; this dials it
                                  back. Saved frames are untouched. -->
                             <span class="histo-sat" x-show="dispSaturation !== undefined"
-                                  :title="'Display saturation: ' + Math.round(dispSaturation * 100) + '% (double-click resets to 100%). Display only — saved frames are untouched.'">
+                                  :title="'Display saturation: ' + Math.round(dispSaturation * 100) + '% (double-click resets to 100%). Display only: saved frames are untouched.'">
                                 <span class="histo-sat-label">Sat</span>
                                 <input type="range" class="histo-sat-slider"
                                        min="0" max="1.5" step="0.05"
@@ -3077,7 +3077,7 @@
                             <td><input type="number" x-model.number="offset"
                                    step="1" min="0" class="input-sm"
                                    :disabled="preview.busy"></td>
-                            <td><span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens — SV405CC ~30-64.">?</span></td>
+                            <td><span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens: SV405CC ~30-64.">?</span></td>
                         </tr>
                         </tbody>
                         </table>
@@ -3671,7 +3671,7 @@
                                 <div class="mount-slew-rate-label">
                                     <span>Slew rate</span>
                                     <strong x-text="(mount.slewRates || [])
-                                            .find(r=> r.active)?.label || '—'"></strong>
+                                            .find(r=> r.active)?.label || '-'"></strong>
                                 </div>
                                 <input type="range" min="0"
                                        :max="(mount.slewRates || []).length - 1"
@@ -4199,13 +4199,13 @@
                             </div>
                             <div class="phd2-cam-empty text-muted" x-show="!guider.view">Loop or guide to see the guide frame</div>
                             <div class="phd2-cal-banner" x-show="guider.calibrating && guider.calProgress"
-                                 x-text="'Calibrating — ' + guider.calProgress"></div>
+                                 x-text="'Calibrating: ' + guider.calProgress"></div>
                             <!-- Dither / settle banner (ASIAIR-style). Dither
                                  takes precedence; while it's up the RMS/error
                                  history is frozen server-side so the excursion
                                  isn't counted as guiding error. -->
                             <div class="phd2-dither-banner" x-show="guider.dithering" x-cloak>
-                                ⤡ Dithering — settling to &lt; <span x-text="(guiderSettlePixels ?? 1.5)"></span> px…
+                                ⤡ Dithering: settling to &lt; <span x-text="(guiderSettlePixels ?? 1.5)"></span> px…
                             </div>
                             <div class="phd2-dither-banner phd2-settle-banner"
                                  x-show="guider.settling && !guider.dithering" x-cloak>
@@ -4393,7 +4393,7 @@
                         <div class="settle-readout" x-show="guider.settling"
                              :class="{ 'is-dither': guider.dithering }">
                             <div class="settle-head">
-                                <span x-text="guider.dithering ? '⤡ Dithering — settling' : 'Settling'"></span>
+                                <span x-text="guider.dithering ? '⤡ Dithering: settling' : 'Settling'"></span>
                                 <strong x-show="guider.settleProgress"
                                         :class="guider.settleProgress && guider.settleProgress.errorPx <= guider.settleProgress.thresholdPx ? 'text-ok' : 'text-warn'"
                                         x-text="guider.settleProgress ? (guider.settleProgress.errorPx.toFixed(2) + ' / ' + guider.settleProgress.thresholdPx.toFixed(2) + ' px') : ''"></strong>
@@ -4614,7 +4614,7 @@
                                     <button class="btn btn-sm" x-show="guider.backend === 'native'"
                                             @click="guiderFlipCalibration()"
                                             :disabled="!guider.calDetails || guider.calibrating"
-                                            title="Mirror this calibration for a meridian flip (RA +180°) without recalibrating — use after a flip on mounts that don't report pier side">Flip</button>
+                                            title="Mirror this calibration for a meridian flip (RA +180°) without recalibrating, use after a flip on mounts that don't report pier side">Flip</button>
                                     <button class="btn btn-sm" @click="guiderClearCalibration()"
                                             :disabled="!guider.calDetails || guider.calibrating"
                                             title="Forget the saved calibration for this rig">Clear</button>
@@ -4638,10 +4638,10 @@
                                             <td></td><td x-text="(guider.calDetails?.decRatePxPerSec)?.toFixed(3) + ' px/s'"></td></tr>
                                         <tr><td>Dec backlash</td>
                                             <td x-text="Math.round(guider.calDetails?.backlashMs) + ' ms'"></td>
-                                            <td>Side of pier</td><td x-text="guider.calDetails?.pierSide || '—'"></td></tr>
+                                            <td>Side of pier</td><td x-text="guider.calDetails?.pierSide || '-'"></td></tr>
                                         <tr><td>Binning</td><td x-text="guider.calDetails?.binning"></td>
                                             <td>Created</td>
-                                            <td x-text="guider.calDetails?.createdAtUtc ? new Date(guider.calDetails.createdAtUtc).toLocaleString() : '—'"></td></tr>
+                                            <td x-text="guider.calDetails?.createdAtUtc ? new Date(guider.calDetails.createdAtUtc).toLocaleString() : '-'"></td></tr>
                                     </table>
                                     <div class="cal-review-section" style="margin-top:10px">Configuration</div>
                                     <table class="cal-review-table">
@@ -4650,7 +4650,7 @@
                                             <td>Focal length</td>
                                             <td x-text="Math.round(guider.calDetails?.focalLengthMm) + ' mm'"></td></tr>
                                         <tr><td>Declination</td>
-                                            <td x-text="isFinite(guider.calDetails?.declinationDeg) ? (guider.calDetails.declinationDeg).toFixed(1) + '°' : '—'"></td>
+                                            <td x-text="isFinite(guider.calDetails?.declinationDeg) ? (guider.calDetails.declinationDeg).toFixed(1) + '°' : '-'"></td>
                                             <td>Expected RA</td>
                                             <td x-text="(guider.calDetails?.expectedRateArcsecPerSec)?.toFixed(2) + ' a-s/s'"></td></tr>
                                     </table>
@@ -4788,7 +4788,7 @@
                                :min="guideCameraGainMin || 0"
                                :max="(guideCameraGainMax || 0) > 0 ? guideCameraGainMax : null"
                                step="1" class="input-sm" style="width:5em"
-                               title="Guide-camera gain — type the value (camera range used as limits when reported)"></label>
+                               title="Guide-camera gain: type the value (camera range used as limits when reported)"></label>
                     <label class="gb-check" x-show="guiderDriver === 'native'"><input type="checkbox"
                                :checked="guideBin === 2" @change="setGuideBin($event.target.checked ? 2 : 1)"> Bin 2x2</label>
                     <button class="btn btn-sm" @click="guiderLoop()" :disabled="guider.looping">Loop</button>
@@ -4799,7 +4799,7 @@
                     <button class="btn btn-sm btn-danger" @click="guiderStop()">Stop</button>
                     <button class="btn btn-sm" :class="guideOverlay.on ? 'btn-active' : ''"
                             @click="toggleGuideOverlay()"
-                            title="Floating always-on guiding graph — draggable &amp; resizable, visible from any tab">Overlay</button>
+                            title="Floating always-on guiding graph: draggable &amp; resizable, visible from any tab">Overlay</button>
                     <!-- Dither/settle knobs moved to the side panel's Status
                          pane ("Dithering" section); Clear History moved onto
                          the chart itself; the old Disconnect button dropped —
@@ -4860,7 +4860,7 @@
                     <div x-show="phd2GuiSession && phd2GuiSession?.supportedOs && phd2GuiSession?.supportedArch && phd2GuiSession?.xpraInstalled && !phd2GuiSession?.running && !phd2GuiStarting"
                          class="phd2-gui-empty">
                         <h3>PHD2 GUI session not running</h3>
-                        <p>Starting takes ~5–10 seconds (spins up an Xorg-dummy
+                        <p>Starting takes ~5-10 seconds (spins up an Xorg-dummy
                            display + launches PHD2 inside).</p>
                         <button class="btn btn-primary" @click="phd2GuiStart()"
                                 :disabled="phd2GuiBusy">
@@ -5424,12 +5424,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             <option value="Optolong-UHC">UHC</option>
                                             <option value="Optolong-CLS">CLS / CLS-CCD</option>
                                         </optgroup>
-                                        <optgroup label="SVBony — SV220 dual-band">
+                                        <optgroup label="SVBony: SV220 dual-band">
                                             <option value="SV220-HO-3nm">SV220 Ha+OIII 3nm</option>
                                             <option value="SV220-HO-7nm">SV220 Ha+OIII 7nm</option>
                                             <option value="SV220-SO-7nm">SV220 SII+OIII 7nm</option>
                                         </optgroup>
-                                        <optgroup label="SVBony — other">
+                                        <optgroup label="SVBony: other">
                                             <option value="SVBony-UHC">UHC</option>
                                             <option value="SVBony-CLS">CLS</option>
                                         </optgroup>
@@ -5946,7 +5946,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                      : 'host:port'"
                                        title="Mount IP and port. Empty falls back to the driver's default endpoint (e.g. 192.168.4.1:11880 for SynScan factory AP).">
                                 <span class="text-muted" x-show="mountDriver === 'sim'"
-                                      style="align-self:center; font-size:12px">No device needed — just flip the switch to connect.</span>
+                                      style="align-self:center; font-size:12px">No device needed: just flip the switch to connect.</span>
 
                                 <button class="btn btn-sm"
                                         x-show="mountDriver === 'ascom-com' && equipMountChoice"
@@ -6061,7 +6061,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                  panel so an active safety stop is always visible,
                                  even when the panel below is collapsed. -->
                             <div class="safety-banner" x-show="mfSafetyTripped" x-cloak style="margin-top:8px">
-                                <span>🛑 <strong>Mount safety stop</strong> — <span x-text="mfSafetyReason"></span></span>
+                                <span>🛑 <strong>Mount safety stop</strong>: <span x-text="mfSafetyReason"></span></span>
                                 <button class="btn btn-sm" @click="resetMountSafety()">Dismiss</button>
                             </div>
                             <!-- Mount safety + protection, collapsed by default to
@@ -6113,7 +6113,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     meridian without a flip, or the guider loses the star repeatedly.
                                     The <b>altitude floor</b> aborts a slew whose OTA drops below it (an
                                     anti-crash backstop for a wrong-way slew toward the tripod; 0 disables).
-                                    0 disables a guard. Global — applies to every rig.
+                                    0 disables a guard. Global: applies to every rig.
                                 </p>
                             </div>
                             <!-- Slew-confirm thresholds (PER-RIG): how big a GoTo
@@ -6136,8 +6136,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     </label>
                                 </div>
                                 <p class="hint" style="margin:4px 0 0;font-size:11px">
-                                    A SKY "Go To" whose swing is at least this many degrees — or whose
-                                    target sits below the floor — asks you to confirm before the mount
+                                    A SKY "Go To" whose swing is at least this many degrees, or whose
+                                    target sits below the floor, asks you to confirm before the mount
                                     moves (a big swing can make the mount un-flip and take the long way
                                     toward the tripod). Blank ⇒ defaults (60° / 5°); 0 disables that check.
                                     The altitude floor also arms the live anti-crash abort (needs the
@@ -6483,11 +6483,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </label>
                             <p class="hint" style="margin:4px 0 0;font-size:11px"
                                x-show="aux.enabled && auxCapture.running">
-                                Aux capturing — <strong x-text="auxCapture.frameCount"></strong> saved this session.
+                                Aux capturing: <strong x-text="auxCapture.frameCount"></strong> saved this session.
                             </p>
                             <p class="text-warn" style="margin:4px 0 0;font-size:11px"
                                x-show="aux.enabled && auxCapture.noOutputDir">
-                                ⚠ No output folder set — aux frames are NOT being saved. Set one in FILES.
+                                ⚠ No output folder set: aux frames are NOT being saved. Set one in FILES.
                             </p>
                             </div><!-- /Camera + Lens/Scope group -->
 
@@ -7342,7 +7342,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <label style="font-size:12px;color:var(--text-muted);">Device:</label>
                         <select class="input-sm" x-model="indiProps.selectedDevice"
                                 @change="indiProps.collapsedGroups = {}">
-                            <option value="">— All —</option>
+                            <option value="">- All -</option>
                             <template x-for="d in indiProps.devices" :key="d.name">
                                 <option :value="d.name" x-text="d.name"></option>
                             </template>
@@ -7518,7 +7518,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                         <!-- BLOB placeholder -->
                                                         <template x-if="p.type === 'blob'">
                                                             <div style="font-size:11px;color:var(--text-muted);">
-                                                                Binary payload (FITS / JPEG) — delivered via the image
+                                                                Binary payload (FITS / JPEG): delivered via the image
                                                                 stream, not edited here.
                                                             </div>
                                                         </template>
@@ -7627,7 +7627,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                     <div class="indi-prop-rows">
                                                         <div class="indi-prop-row">
                                                             <span class="indi-elem-label"
-                                                                  x-text="c.min + ' – ' + c.max"></span>
+                                                                  x-text="c.min + ': ' + c.max"></span>
                                                             <input type="range" style="flex:1;min-width:80px;"
                                                                    :min="c.min" :max="c.max"
                                                                    :step="c.valueType === 'float' ? 'any' : 1"
@@ -7661,7 +7661,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                         <div class="indi-prop-row">
                                                             <span class="indi-elem-label">Value</span>
                                                             <span class="indi-input" style="width:auto;flex:0 0 auto;"
-                                                                  x-text="Number.isFinite(c.value) ? c.value.toFixed(2) : '—'"></span>
+                                                                  x-text="Number.isFinite(c.value) ? c.value.toFixed(2) : '-'"></span>
                                                         </div>
                                                     </div>
                                                 </template>
@@ -7807,7 +7807,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <!-- Ecliptic line: the plane of the solar system. -->
                     <button class="btn btn-sm" @click="toggleSkyEcliptic()"
                             :class="skyEclipticVisible ? 'btn-active' : ''"
-                            title="Toggle the ecliptic — the plane of the solar system, where the Sun, Moon and planets travel">☀️ Ecliptic</button>
+                            title="Toggle the ecliptic: the plane of the solar system, where the Sun, Moon and planets travel">☀️ Ecliptic</button>
                     <!-- Constellation stick-figure lines + labels. -->
                     <button class="btn btn-sm" @click="toggleSkyConstLines()"
                             :class="skyConstLines ? 'btn-active' : ''"
@@ -8080,7 +8080,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <button class="btn btn-sm"
                                 @click="solveAndSyncHere()"
                                 :disabled="!mount.connected || solveSyncBusy"
-                                :title="!mount.connected ? 'Connect a mount first' : 'Capture + plate-solve + sync to the real sky position, without moving — recovers a lost pointing model'">
+                                :title="!mount.connected ? 'Connect a mount first' : 'Capture + plate-solve + sync to the real sky position, without moving, recovers a lost pointing model'">
                             <span x-show="!solveSyncBusy">⚓ Solve &amp; Sync</span>
                             <span x-show="solveSyncBusy">Solving…</span>
                         </button>
@@ -8111,7 +8111,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                            :min="equipCameraInfo?.gainMin || 0"
                                            :max="(equipCameraInfo?.gainMax || 0) > 0 ? equipCameraInfo.gainMax : null"
                                            step="1"
-                                           title="Solve-frame gain — type the value (camera range used as limits when reported)">
+                                           title="Solve-frame gain: type the value (camera range used as limits when reported)">
                                 </label>
                                 <span class="zwo-gain-presets"
                                       x-show="zwoPresetsForActiveCamera()"
@@ -8307,7 +8307,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="sky-slew-progress" x-show="slewCenterFailedLog" x-cloak>
                     <div class="slew-progress-row">
                         <span class="slew-phase-icon">❌</span>
-                        <span class="slew-state">Slew &amp; center failed — solver output</span>
+                        <span class="slew-state">Slew &amp; center failed: solver output</span>
                         <button class="btn btn-sm" style="margin-left:auto"
                                 @click="slewCenterFailedLog = ''">Close</button>
                     </div>
@@ -8321,7 +8321,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="sky-slew-progress" x-show="solveSyncBusy" x-cloak>
                     <div class="slew-progress-row">
                         <span class="slew-phase-icon">🎯</span>
-                        <span class="slew-state">Solve &amp; Sync — capturing + solving…</span>
+                        <span class="slew-state">Solve &amp; Sync: capturing + solving…</span>
                         <button class="btn btn-sm btn-danger" @click="cancelSolveSync()"
                                 style="margin-left:auto">Abort</button>
                     </div>
@@ -8469,7 +8469,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <div class="mount-slew-rate-label">
                                     <span>Slew rate</span>
                                     <strong x-text="(mount.slewRates || [])
-                                                .find(r => r.active)?.label || '—'"></strong>
+                                                .find(r => r.active)?.label || '-'"></strong>
                                 </div>
                                 <input type="range" min="0"
                                        :max="(mount.slewRates || []).length - 1"
@@ -8643,7 +8643,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <label class="editor-export-row">
                         <span>Network</span>
                         <select x-model="networkStation.ssid" :disabled="networkSwitching">
-                            <option value="">— pick a WiFi network —</option>
+                            <option value="">- pick a WiFi network -</option>
                             <template x-for="n in (networkStation.scanResults || [])" :key="n.ssid">
                                 <option :value="n.ssid"
                                         x-text="n.ssid + '  (' + n.signal + '% · ' + (n.security || 'open') + ')'"></option>
@@ -8772,12 +8772,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <template x-for="(row, i) in sensorAnalysis.lastResult.rows" :key="i">
                                             <tr :style="row.valid ? '' : 'color:var(--text-muted)'">
                                                 <td x-text="row.gain"></td>
-                                                <td x-text="row.valid ? row.electronsPerAdu : '—'"
+                                                <td x-text="row.valid ? row.electronsPerAdu : '-'"
                                                     :title="row.note || ''"></td>
-                                                <td x-text="row.valid ? row.readNoiseE : '—'"></td>
-                                                <td x-text="row.valid ? row.fullWellE : '—'"></td>
-                                                <td x-text="row.valid ? row.relativeGainDb : '—'"></td>
-                                                <td x-text="row.valid ? row.dynamicRangeStops : '—'"></td>
+                                                <td x-text="row.valid ? row.readNoiseE : '-'"></td>
+                                                <td x-text="row.valid ? row.fullWellE : '-'"></td>
+                                                <td x-text="row.valid ? row.relativeGainDb : '-'"></td>
+                                                <td x-text="row.valid ? row.dynamicRangeStops : '-'"></td>
                                             </tr>
                                         </template>
                                     </tbody>
@@ -9029,7 +9029,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <ul>
                         <template x-for="w in weatherBestWindows()" :key="w.startMs">
                             <li>
-                                <span x-text="w.startLocal"></span> – <span x-text="w.endLocal"></span>
+                                <span x-text="w.startLocal"></span>: <span x-text="w.endLocal"></span>
                                 · <span x-text="w.durationLabel"></span>
                                 · score <span x-text="w.avgScore"></span>
                                 <span class="muted" x-text="' · ' + w.summary"></span>
@@ -9059,12 +9059,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <div class="weather-day-celestial">
                                     <div x-show="day.sunset && day.sunrise">
                                         <span class="weather-icon">🌇</span>
-                                        <span x-text="day.sunsetLabel"></span> –
-                                        <span x-text="day.sunriseLabel"></span>
+                                        <span x-text="day.sunsetLabel"></span>: <span x-text="day.sunriseLabel"></span>
                                     </div>
                                     <div x-show="day.duskAstro && day.dawnAstro" class="muted">
-                                        Astro <span x-text="day.duskAstroLabel"></span> –
-                                        <span x-text="day.dawnAstroLabel"></span>
+                                        Astro <span x-text="day.duskAstroLabel"></span>: <span x-text="day.dawnAstroLabel"></span>
                                     </div>
                                     <div class="weather-moon">
                                         <span class="weather-icon" x-text="day.moonIcon"></span>
@@ -9117,7 +9115,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <!-- Plan picker toolbar -->
                 <div class="plan-toolbar">
                     <select class="plan-select" x-model="planSelectedId" @change="selectPlan(planSelectedId)">
-                        <option value="" disabled>— Select a plan —</option>
+                        <option value="" disabled>- Select a plan -</option>
                         <template x-for="p in plans" :key="p.id">
                             <option :value="p.id" x-text="p.name"></option>
                         </template>
@@ -9258,9 +9256,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <template x-if="t.scheduleMode === 'TimeWindow'">
                                             <div class="plan-altchart-wrap">
                                                 <div class="plan-altchart-head">
-                                                    <span class="muted">Elevation tonight — drag the green handles to set start &amp; end</span>
+                                                    <span class="muted">Elevation tonight: drag the green handles to set start &amp; end</span>
                                                     <span class="plan-window-times">
-                                                        <span x-text="(t.startAtUtc ? _todUtcToLocal(t.startAtUtc) : '—') + ' → ' + (t.endAtUtc ? _todUtcToLocal(t.endAtUtc) : '—') + ' local'"></span>
+                                                        <span x-text="(t.startAtUtc ? _todUtcToLocal(t.startAtUtc) : '-') + ' → ' + (t.endAtUtc ? _todUtcToLocal(t.endAtUtc) : '-') + ' local'"></span>
                                                         <button class="btn btn-sm" @click="planLoadAlt(t, true)" title="Refresh chart">↻</button>
                                                     </span>
                                                 </div>
@@ -9346,7 +9344,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             <div class="plan-frame-row">
                                                 <label>Exp(s) <input type="number" step="0.1" min="0" x-model.number="f.exposureSeconds" @change="savePlan()"></label>
                                                 <label>× <input type="number" min="1" x-model.number="f.count" @change="savePlan()"></label>
-                                                <label>Filter <input type="text" style="width:5em" x-model="f.filter" @change="savePlan()" placeholder="—"></label>
+                                                <label>Filter <input type="text" style="width:5em" x-model="f.filter" @change="savePlan()" placeholder="-"></label>
                                                 <label>Gain <input type="number" style="width:5em" x-model.number="f.gain" @change="savePlan()" placeholder="auto"></label>
                                                 <label>Bin <input type="number" min="1" style="width:3.5em" x-model.number="f.binning" @change="savePlan()"></label>
                                                 <button class="btn btn-sm btn-icon btn-danger" @click="planRemoveFrame(t, fi)" title="Remove frame">✕</button>
@@ -9433,7 +9431,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             <div class="plan-viz-backdrop" x-show="planVizOpen" x-cloak @click.self="closePlanViz()">
                 <div class="plan-viz">
                     <div class="plan-viz-head">
-                        <span x-text="(plan && plan.name) ? ('Plan — ' + plan.name) : 'Plan'"></span>
+                        <span x-text="(plan && plan.name) ? ('Plan: ' + plan.name) : 'Plan'"></span>
                         <button class="btn btn-sm" @click="closePlanViz()">✕</button>
                     </div>
                     <div class="plan-viz-body">
@@ -9499,10 +9497,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                      @error="$el.style.display='none'" alt=""></td>
                                             <td x-text="s.name"></td>
                                             <td x-text="s.mode"></td>
-                                            <td x-text="s.startLocal + ' – ' + s.endLocal"></td>
+                                            <td x-text="s.startLocal + ': ' + s.endLocal"></td>
                                             <td x-text="s.frames"></td>
                                             <td x-text="planFormatDuration(s.durationSec)"></td>
-                                            <td x-text="s.maxAlt != null ? (s.maxAlt + '°') : '—'"></td>
+                                            <td x-text="s.maxAlt != null ? (s.maxAlt + '°') : '-'"></td>
                                         </tr>
                                     </template>
                                 </tbody>
@@ -9901,7 +9899,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      bottom beside the controls. -->
                 <div class="autorun-cards-col">
                     <div class="sequence-empty" x-show="sequence.length === 0">
-                        <p>No sequence loaded — click <strong>+ Add</strong> in the controls panel or pick a target in Sky Explorer.</p>
+                        <p>No sequence loaded: click <strong>+ Add</strong> in the controls panel or pick a target in Sky Explorer.</p>
                     </div>
                     <div class="sequence-list" x-show="sequence.length > 0">
                         <template x-for="(item, i) in sequence" :key="i">
@@ -10069,7 +10067,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                  background but inflates colour; this dials it
                                  back. Saved frames are untouched. -->
                             <span class="histo-sat" x-show="dispSaturation !== undefined"
-                                  :title="'Display saturation: ' + Math.round(dispSaturation * 100) + '% (double-click resets to 100%). Display only — saved frames are untouched.'">
+                                  :title="'Display saturation: ' + Math.round(dispSaturation * 100) + '% (double-click resets to 100%). Display only: saved frames are untouched.'">
                                 <span class="histo-sat-label">Sat</span>
                                 <input type="range" class="histo-sat-slider"
                                        min="0" max="1.5" step="0.05"
@@ -11015,20 +11013,20 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <td class="files-col-type" x-text="filesTypeLabel(entry)"></td>
                                     <template x-if="files.showFitsMeta">
                                         <td class="files-col-fitsmeta"
-                                            x-text="entry.fitsMeta?.imageType || '—'"></td>
+                                            x-text="entry.fitsMeta?.imageType || '-'"></td>
                                     </template>
                                     <template x-if="files.showFitsMeta">
                                         <td class="files-col-fitsmeta"
-                                            x-text="entry.fitsMeta?.filter || '—'"></td>
+                                            x-text="entry.fitsMeta?.filter || '-'"></td>
                                     </template>
                                     <template x-if="files.showFitsMeta">
                                         <td class="files-col-fitsmeta"
-                                            x-text="entry.fitsMeta?.target || '—'"></td>
+                                            x-text="entry.fitsMeta?.target || '-'"></td>
                                     </template>
                                     <template x-if="files.showFitsMeta">
                                         <td class="files-col-fitsmeta"
                                             x-text="entry.fitsMeta?.exposureSec
-                                                    ? entry.fitsMeta.exposureSec.toFixed(0) : '—'"></td>
+                                                    ? entry.fitsMeta.exposureSec.toFixed(0) : '-'"></td>
                                     </template>
                                 </tr>
                             </template>
@@ -12239,15 +12237,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:16px">
                         <span style="min-width:90px">Font</span>
                         <select x-model="uiFont" @change="applyUiFont()" style="flex:1">
-                            <option value="atkinson">Atkinson Hyperlegible (default) — best readability</option>
-                            <option value="inter">Inter — clean modern UI</option>
-                            <option value="plex">IBM Plex Sans — tech / corporate</option>
+                            <option value="atkinson">Atkinson Hyperlegible (default): best readability</option>
+                            <option value="inter">Inter: clean modern UI</option>
+                            <option value="plex">IBM Plex Sans: tech / corporate</option>
                             <option value="system">System default</option>
                         </select>
                     </label>
                     <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
                         <strong>Atkinson Hyperlegible</strong> was designed by the Braille
-                        Institute for maximum legibility — letters with unique shapes so
+                        Institute for maximum legibility, letters with unique shapes so
                         <code>B</code>, <code>8</code>, <code>l</code>, <code>1</code>,
                         <code>I</code>, <code>0</code>, <code>O</code> never blur together.
                         Try it if you (or your stargazing companions) prefer a more readable
@@ -12290,7 +12288,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </label>
                     <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
                         Tightens the spacing of buttons, inputs and toolbars so more
-                        fits on screen — lower it on a phone to free room for the
+                        fits on screen, lower it on a phone to free room for the
                         image / sky views. Doesn't change text size. Persists per browser.
                     </p>
 
@@ -12302,9 +12300,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:18px">
                         <span style="min-width:90px">On-screen keyboard</span>
                         <select x-model="vkbdMode" @change="setVkbdMode($event.target.value)" style="flex:1">
-                            <option value="auto">Auto — only on touch devices (default)</option>
+                            <option value="auto">Auto: only on touch devices (default)</option>
                             <option value="on">Always on</option>
-                            <option value="off">Off — use the device keyboard</option>
+                            <option value="off">Off: use the device keyboard</option>
                         </select>
                     </label>
                     <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
@@ -12322,9 +12320,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:18px">
                         <span style="min-width:90px">Preview quality</span>
                         <select :value="previewMaxDim" @change="setPreviewMaxDim($event.target.value)" style="flex:1">
-                            <option value="2048">Standard — up to 2048 px (lightest)</option>
-                            <option value="4096">High — up to 4096 px (default)</option>
-                            <option value="0">Native — full sensor (sharpest, heaviest)</option>
+                            <option value="2048">Standard: up to 2048 px (lightest)</option>
+                            <option value="4096">High: up to 4096 px (default)</option>
+                            <option value="0">Native: full sensor (sharpest, heaviest)</option>
                         </select>
                     </label>
                     <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
@@ -12346,7 +12344,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
                         For one-shot-colour cameras, reconstruct colour at the full
                         sensor resolution instead of the lighter half-resolution
-                        preview. Sharper, but heavier — it only takes effect when
+                        preview. Sharper, but heavier: it only takes effect when
                         the frame fits within the Preview quality limit above
                         (so pair it with <strong>Native</strong> for the full effect).
                         Mono cameras are unaffected.
@@ -12364,7 +12362,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                             The SKY map ships with real deep-sky imagery (DSS Color)
                             at a low resolution that works fully offline. Download a
-                            higher detail level here for ASIAIR-grade zoom — it's
+                            higher detail level here for ASIAIR-grade zoom, it's
                             stored on this host and used automatically, no internet
                             needed afterwards. Each level includes the lower ones
                             and resumes where it left off.
@@ -12432,15 +12430,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             The bundled build includes the showpieces (all Messier plus
                             named nebulae/galaxies) so common targets work offline out of
                             the box. Download the full set here for a photo of every
-                            catalogued object — stored on this host, used automatically,
+                            catalogued object, stored on this host, used automatically,
                             no internet needed afterwards.
                         </p>
                         <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px; font-size:12px">
                             <div>
                                 Installed:
                                 <strong x-text="thumbPack.installed
-                                    ? ('full set — ' + thumbPack.installedCount + ' images')
-                                    : ('core subset only — ' + thumbPack.coreCount + ' showpieces')"></strong>
+                                    ? ('full set: ' + thumbPack.installedCount + ' images')
+                                    : ('core subset only: ' + thumbPack.coreCount + ' showpieces')"></strong>
                             </div>
                             <div x-show="thumbPack.running">
                                 <span x-text="thumbPack.phase === 'extracting' ? 'Extracting…' : 'Downloading…'"></span>
@@ -12754,7 +12752,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <!-- Online solver isn't "installed" — it just needs an API key. -->
                         <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id === 'astrometry-net-online'" class="text-warn">⚠ needs an API key (set below)</span>
                         <!-- Local solve-field on Windows usually means WSL: tell the user to enable it + Save. -->
-                        <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id === 'astrometry-net-local'" class="text-warn">⚠ not detected — enable "Run via WSL" (in advanced below) or set the solve-field path, then click <strong>Save</strong></span>
+                        <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id === 'astrometry-net-local'" class="text-warn">⚠ not detected: enable "Run via WSL" (in advanced below) or set the solve-field path, then click <strong>Save</strong></span>
                         <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id !== 'astrometry-net-online' && psSelectedSolver?.id !== 'astrometry-net-local'" class="text-warn">⚠ not detected on this system</span>
                         <span x-show="psSelectedSolver?.path" class="text-muted"> · <code x-text="psSelectedSolver?.path"></code></span>
                     </p>
@@ -12764,10 +12762,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <select class="input-sm" style="flex:1"
                                 @change="psConfig.downsample = Number($event.target.value)">
                             <option :value="0" :selected="psConfig.downsample === 0">Auto (ASTAP picks)</option>
-                            <option :value="1" :selected="psConfig.downsample === 1">1 — none (slowest, most precise)</option>
+                            <option :value="1" :selected="psConfig.downsample === 1">1: none (slowest, most precise)</option>
                             <option :value="2" :selected="psConfig.downsample === 2">2</option>
                             <option :value="3" :selected="psConfig.downsample === 3">3</option>
-                            <option :value="4" :selected="psConfig.downsample === 4">4 — fastest (recommended on Pi)</option>
+                            <option :value="4" :selected="psConfig.downsample === 4">4: fastest (recommended on Pi)</option>
                         </select>
                     </label>
 
@@ -12797,7 +12795,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <p class="text-muted" style="font-size:11px; margin:6px 0 0 132px">
                             Free key from
                             <a href="https://nova.astrometry.net/api_help" target="_blank" rel="noopener">nova.astrometry.net</a>
-                            (Profile → API Key). The online solver is a web service — nothing to install;
+                            (Profile → API Key). The online solver is a web service, nothing to install;
                             it just needs this key. Without it it stays disabled. Blind solve over the
                             internet: slower, but a solid fallback when ASTAP can't solve.
                         </p>
@@ -12823,7 +12821,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                         <hr style="border:none; border-top:1px solid var(--border); margin:14px 0">
                         <p class="text-muted" style="font-size:11px; margin:0 0 8px">
-                            <strong>Astrometry.net (local solve-field)</strong> — pick
+                            <strong>Astrometry.net (local solve-field)</strong>: pick
                             "Astrometry.net (local solve-field)" above as the primary/blind solver to use it.
                         </p>
                         <label style="display:flex; align-items:center; gap:12px; margin-top:6px">
@@ -12865,7 +12863,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <h3><span class="settings-card-icon">🎨</span>Colour calibration data</h3>
                     <p class="text-muted" style="font-size:12px; max-width:600px; margin-top:4px">
                         What PCC and SPCC use to match your stars to a reference. It
-                        all ships with Polaris — nothing to download on the device.
+                        all ships with Polaris: nothing to download on the device.
                     </p>
 
                     <div style="display:flex; flex-direction:column; gap:10px; margin-top:12px; max-width:600px; font-size:12.5px">
@@ -12894,10 +12892,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <span class="text-ok">✓ Blackbody</span>
                                 <span class="text-muted"> (always) · </span>
                                 <span :class="ccData.sources?.pickles ? 'text-ok' : 'text-muted'"
-                                      x-text="(ccData.sources?.pickles ? '✓' : '—') + ' Pickles library'"></span>
+                                      x-text="(ccData.sources?.pickles ? '✓' : '-') + ' Pickles library'"></span>
                                 <span class="text-muted"> (empirical, bundled) · </span>
                                 <span :class="ccData.sources?.gaia ? 'text-ok' : 'text-muted'"
-                                      x-text="(ccData.sources?.gaia ? '✓' : '—') + ' Gaia per-star'"></span>
+                                      x-text="(ccData.sources?.gaia ? '✓' : '-') + ' Gaia per-star'"></span>
                                 <span x-show="!ccData.sources?.gaia" class="text-muted"> (planned)</span>
                             </span>
                             <span x-show="!ccData.sources" class="text-muted">…</span>
@@ -12944,7 +12942,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px; font-size:12px">
                         <div>
                             Host UTC:
-                            <strong x-text="clockSync.serverUtc || '—'"></strong>
+                            <strong x-text="clockSync.serverUtc || '-'"></strong>
                         </div>
                         <div>
                             Difference vs this client device:
@@ -13032,8 +13030,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             Running v<span x-text="update.currentVersion"></span>.
                         </span>
                         <span x-show="update.available" style="color:var(--accent)">
-                            ⬆ Update available: v<span x-text="update.latestVersion"></span> —
-                            <a href="#" @click.prevent="openUpdateModal()">view &amp; install</a>
+                            ⬆ Update available: v<span x-text="update.latestVersion"></span>: <a href="#" @click.prevent="openUpdateModal()">view &amp; install</a>
                         </span>
                     </p>
 
@@ -13112,7 +13109,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                       :class="'network-mode-' + (network?.mode || 'unknown')">
                                     <span x-text="networkModeLabel()"></span>
                                 </span>
-                                <span class="network-ssid" x-text="network?.ssid || '—'"></span>
+                                <span class="network-ssid" x-text="network?.ssid || '-'"></span>
                                 <span class="network-ip text-muted" x-text="network?.ip || ''"></span>
                                 <template x-if="network?.mode === 'station' && network?.signal > 0">
                                     <span class="network-signal text-muted"
@@ -13275,7 +13272,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <p class="hint" style="margin-top:0">
                         Polaris keeps rendered previews + thumbnails on disk so
                         re-opening a file is instant and doesn't re-render on
-                        the Pi. Safe to clear any time — entries are
+                        the Pi. Safe to clear any time: entries are
                         regenerated on demand the next time you view a file.
                     </p>
                     <div class="cache-stats-row">
@@ -13589,8 +13586,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="settings-section" id="assistant-card">
                     <h3 data-tour="set-assistant"><span class="settings-card-icon">⭐</span>Assistant</h3>
                     <p class="hint" style="margin-top:0">
-                        Choose where the Canopus AI co-pilot runs — the hosted cloud,
-                        or a local model on this Polaris host — and manage the on-server model.
+                        Choose where the Canopus AI co-pilot runs, the hosted cloud,
+                        or a local model on this Polaris host, and manage the on-server model.
                     </p>
                     <!-- Assistant badge reset. The optional external assistant's
                          intro badge is dismissable (its × sets a per-browser
@@ -13629,8 +13626,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             Cloud runs on the hosted Canopus service (paid). <em>On this
                             server</em> runs a local model on this Polaris host. <em>On this
                             device</em> runs the agent in your browser against a local LLM
-                            (Ollama / LM Studio / llama.cpp) on the computer you're using —
-                            fast on a powerful PC/Mac, free and offline, no account needed.
+                            (Ollama / LM Studio / llama.cpp) on the computer you're using, fast on a powerful PC/Mac, free and offline, no account needed.
                         </p>
 
                         <template x-if="asst.backend === 'sbc'">
@@ -13677,7 +13673,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 Run a local LLM on this computer with <strong>Ollama</strong>,
                                 <strong>LM Studio</strong> or <strong>llama.cpp</strong>, then point
                                 Canopus at its OpenAI-compatible endpoint. The agent runs in your
-                                browser; inference runs on this machine's GPU — nothing leaves it.
+                                browser; inference runs on this machine's GPU, nothing leaves it.
                             </p>
                             <label style="display:flex; align-items:center; gap:10px; margin-top:4px">
                                 <span style="min-width:64px">Server URL</span>
@@ -13762,8 +13758,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <p class="text-muted" style="font-size:12px; margin-top:10px">
                                 The LLM server must allow this page's origin (CORS). For Ollama, run it with
                                 <code>OLLAMA_ORIGINS=<span x-text="location.origin"></span></code> (or <code>*</code>);
-                                LM Studio / llama.cpp have a CORS toggle. After connecting, pick a model above —
-                                Canopus downloads it into Ollama for you. Only tool-capable models are listed.
+                                LM Studio / llama.cpp have a CORS toggle. After connecting, pick a model above, Canopus downloads it into Ollama for you. Only tool-capable models are listed.
                             </p>
                           </div>
                         </template>
@@ -13773,7 +13768,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="settings-section settings-section--wide">
                     <h3 data-tour="set-ai"><span class="settings-card-icon">🧠</span>AI models</h3>
                     <p class="hint" style="margin-top:0">
-                        In-browser AI ops — star removal (nox / starrem2k13 /
+                        In-browser AI ops: star removal (nox / starrem2k13 /
                         StarNet++) and GraXpert (BGE / Denoise / Deconvolution).
                         Server hosts the model files, your browser fetches them
                         once and runs inference locally, works on any device
@@ -13868,7 +13863,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             Useful for OS images and phones/tablets that don't
                             ship the large model files. Downloads land in your
                             writable models directory and the registry rescans
-                            automatically — no browser cache needed.
+                            automatically, no browser cache needed.
                         </p>
 
                         <div class="control-row actions" style="margin-top:6px">
@@ -13881,7 +13876,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                         <details style="margin-top:10px">
                             <summary style="cursor:pointer; font-size:11px; color:var(--text-muted)">
-                                Advanced — use a custom model bucket instead
+                                Advanced: use a custom model bucket instead
                             </summary>
                             <label style="margin-top:6px; display:block">Bucket URL
                                 <input type="text" class="input-md"
@@ -13919,7 +13914,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             <td x-text="c.label"></td>
                                             <td x-text="c.version"></td>
                                             <td style="text-align:right; font-variant-numeric:tabular-nums"
-                                                x-text="c.bytes ? formatBytes(c.bytes) : '—'"></td>
+                                                x-text="c.bytes ? formatBytes(c.bytes) : '-'"></td>
                                             <td style="text-align:right">
                                                 <span x-show="c.installed" class="muted"
                                                       style="font-size:11px">✓ Installed</span>
@@ -13967,7 +13962,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                             Run BGE and Denoise on a Vulkan GPU (Adreno, Mali, …) instead
                             of the CPU. These converted models are not shipped in the
-                            package to keep it slim — download them here, once, and they're
+                            package to keep it slim, download them here, once, and they're
                             used automatically. The CPU / ONNX path works without them; this
                             only adds GPU speed. Needs the corresponding ONNX model
                             downloaded above.
@@ -13976,7 +13971,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <div>
                                 Status:
                                 <strong x-text="ncnnPack.installed
-                                    ? ('installed — ' + ncnnPack.installedModelCount + ' GPU models')
+                                    ? ('installed: ' + ncnnPack.installedModelCount + ' GPU models')
                                     : 'not installed (CPU / ONNX only)'"></strong>
                             </div>
                             <div x-show="ncnnPack.running">
@@ -14016,11 +14011,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         model files.
                         <ul style="margin:6px 0 0 0; padding-left:18px">
                             <li><strong>nox</strong> &amp; <strong>starrem2k13</strong>
-                                (star removal) — MIT, code and weights.</li>
-                            <li><strong>StarNet++</strong> (star removal) —
-                                CC BY-NC-SA 4.0 (non-commercial), © Nikita Misiura.</li>
+                                (star removal): MIT, code and weights.</li>
+                            <li><strong>StarNet++</strong> (star removal): CC BY-NC-SA 4.0 (non-commercial), © Nikita Misiura.</li>
                             <li><strong>GraXpert</strong> (BGE / Denoise /
-                                Deconvolution) — CC BY-NC-SA 4.0 (non-commercial),
+                                Deconvolution): CC BY-NC-SA 4.0 (non-commercial),
                                 © GraXpert Development Team.</li>
                         </ul>
                     </div>
@@ -14058,7 +14052,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         stretch, editor blur, live-stack integration) to the SBC
                         GPU when the board exposes OpenCL (e.g. Mali on RK3588,
                         Adreno on QCS6490). Falls back to the CPU automatically
-                        per operation. This is for classic math only — GraXpert
+                        per operation. This is for classic math only, GraXpert
                         AI inference uses a separate accelerator path (an NPU, or
                         the GPU via Vulkan/ncnn), shown in the AI models section above.
                     </p>
@@ -14092,7 +14086,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
                     </template>
                     <p class="hint" x-show="gpuInfo && !gpuInfo.loaderPresent" style="color:var(--text-secondary)">
-                        No OpenCL device on this machine — running on CPU.
+                        No OpenCL device on this machine, running on CPU.
                         <span x-text="gpuInfo?.diagnostics"></span>
                     </p>
                 </div>
@@ -14365,7 +14359,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <span class="help-card-icon">📊</span>
                                 <h3>Status bars tour</h3>
                                 <p>What every item in the top header and the
-                                bottom activity bar means — connections,
+                                bottom activity bar means, connections,
                                 chips, traffic, host stats.</p>
                                 <span class="help-card-meta">optional</span>
                             </button>
@@ -14951,7 +14945,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <p>Open a pre-filled GitHub report with your client + server
                                        details (versions, host, browser, recent warnings) already
                                        attached, so it's easier to diagnose. Nothing is sent
-                                       automatically — it opens GitHub in a new tab for you to
+                                       automatically: it opens GitHub in a new tab for you to
                                        review and post.</p>
                                     <div class="report-actions">
                                         <button class="btn btn-sm btn-primary" @click="reportToGithub('issue')">🐞 Report a bug (issue)</button>
@@ -15070,7 +15064,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                           'activity-transfer-' + t.direction,
                           t.done ? (t.ok === false ? 'activity-transfer-failed' : 'activity-transfer-done') : ''
                       ]"
-                      :title="t.label + ' — ' + formatTransferLine(t)">
+                      :title="t.label + ': ' + formatTransferLine(t)">
                     <span class="activity-transfer-arrow"
                           x-text="t.direction === 'up' ? '↑' : '↓'"></span>
                     <span class="activity-transfer-label" x-text="t.label"></span>
@@ -15965,13 +15959,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 </label>
                 <label class="seq-dither-checkbox" style="flex:0 0 auto"
                        x-show="_deconSelection().family === 'rl'"
-                       title="Keep every detected star as the original pixel data — only the diffuse signal (nebula/galaxy) is deconvolved. Prevents dark halos on stars. Disable if you have corrected colour fringing upstream and want the stars sharpened too.">
+                       title="Keep every detected star as the original pixel data, only the diffuse signal (nebula/galaxy) is deconvolved. Prevents dark halos on stars. Disable if you have corrected colour fringing upstream and want the stars sharpened too.">
                     <input type="checkbox" x-model="graxpert.modalDeconProtectStars">
                     Protect stars
                 </label>
                 <label class="seq-dither-checkbox" style="flex:0 0 auto"
                        x-show="_deconSelection().family === 'rl' && _deconSelection().version !== 'field'"
-                       title="Run the RL iteration loop in this browser tab (server only measures the PSF and noise model, ~5–15 s). Frees the SBC CPU for capture during the deconvolution. Field mode always runs on the server.">
+                       title="Run the RL iteration loop in this browser tab (server only measures the PSF and noise model, ~5-15 s). Frees the SBC CPU for capture during the deconvolution. Field mode always runs on the server.">
                     <input type="checkbox" x-model="graxpert.modalRlRunInBrowser">
                     Run in browser
                 </label>
@@ -16164,8 +16158,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <p class="hint">
                 Drag a rectangle on the picture below to choose the area
                 you want to keep. Everything outside the rectangle gets
-                trimmed off. The original file stays untouched —
-                Polaris saves a new file named
+                trimmed off. The original file stays untouched: Polaris saves a new file named
                 <code><span x-text="crop.outputName || '&lt;source&gt;_crop.fits'"></span></code>
                 next to it.
             </p>
@@ -16270,7 +16263,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </label>
             <p class="hint" x-show="starRemovalPrecisions().length > 1 && starRemoval.options.precision === 'fp32'"
                style="margin-top:-4px">
-                FP32 is ~2× the size and memory of FP16 — best on a desktop; on
+                FP32 is ~2× the size and memory of FP16, best on a desktop; on
                 SBCs/phones the FP16 default is recommended.
             </p>
 
@@ -16296,8 +16289,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <span style="flex:0 0 150px">Passes</span>
                 <select class="input-sm" x-model.number="starRemoval.options.passes"
                         style="flex:1 1 auto; min-width:0">
-                    <option :value="1">1 — fast</option>
-                    <option :value="2">2 — cleans bright-star halos (~2× slower)</option>
+                    <option :value="1">1: fast</option>
+                    <option :value="2">2: cleans bright-star halos (~2× slower)</option>
                 </select>
             </label>
 
@@ -16434,7 +16427,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             Independently stretch the <strong>Base</strong> (starless) and
                             <strong>Blend</strong> (stars), then recombine. Screen adds the
                             stars back on top of the processed nebulosity. Originals stay
-                            untouched — a new <code>_blend.fits</code> is written.
+                            untouched: a new <code>_blend.fits</code> is written.
                         </p>
 
                         <!-- Which file is the starless (base) vs stars (blend).
@@ -16552,8 +16545,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </h2>
             <p class="hint">
                 Build a new file name from each file's FITS header. Type any
-                header keyword in braces — e.g.
-                <code>{OBJECT}_{FILTER}_{EXPTIME}s_{n:03}</code> — plus
+                header keyword in braces, e.g.
+                <code>{OBJECT}_{FILTER}_{EXPTIME}s_{n:03}</code>: plus
                 <code>{n}</code> for a counter (<code>{n:03}</code> pads to
                 001). The original extension is kept and the originals stay in
                 place; names that clash get a <code>_1</code>, <code>_2</code>…
@@ -16595,7 +16588,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             <tr>
                                 <td class="br-old" x-text="it.originalName"></td>
                                 <td class="br-arrow">→</td>
-                                <td class="br-new" x-text="it.status === 'skipped' ? '—' : it.newName"></td>
+                                <td class="br-new" x-text="it.status === 'skipped' ? '-' : it.newName"></td>
                                 <td>
                                     <span class="br-badge"
                                           :class="'br-badge-' + it.status"
@@ -16690,7 +16683,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <template x-if="analyze.tab === 'inspector'">
                         <div>
                             <p class="analyze-verdict sev-unknown">
-                                9 crops — corners + edges around the
+                                9 crops: corners + edges around the
                                 centre (C). Compare the corner stars to the
                                 centre: bloated or stretched corners mean
                                 tilt, coma, or field curvature; round + even
@@ -16811,7 +16804,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         <div x-text="'y = ' + wbFmt(wbSummary.data?.bg?.fit?.intercept, 4)
                              + ' + ' + wbFmt(wbSummary.data?.bg?.fit?.slope, 4)
                              + '·x   ·   σ = ' + wbFmt(wbSummary.data?.bg?.fit?.sigma, 4)"></div>
-                        <div x-text="'White reference: ' + (wbSummary.refName || '—')"></div>
+                        <div x-text="'White reference: ' + (wbSummary.refName || '-')"></div>
                         <div x-text="wbSummary.data?.bg?.fit?.nStars + ' stars ('
                              + wbSummary.data?.bg?.fit?.nOutliers + ' outliers removed)'"></div>
                     </div>
@@ -16824,7 +16817,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         <div x-text="'y = ' + wbFmt(wbSummary.data?.rg?.fit?.intercept, 4)
                              + ' + ' + wbFmt(wbSummary.data?.rg?.fit?.slope, 4)
                              + '·x   ·   σ = ' + wbFmt(wbSummary.data?.rg?.fit?.sigma, 4)"></div>
-                        <div x-text="'White reference: ' + (wbSummary.refName || '—')"></div>
+                        <div x-text="'White reference: ' + (wbSummary.refName || '-')"></div>
                         <div x-text="wbSummary.data?.rg?.fit?.nStars + ' stars ('
                              + wbSummary.data?.rg?.fit?.nOutliers + ' outliers removed)'"></div>
                     </div>
@@ -16836,7 +16829,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <strong x-text="'R ' + wbFmt(wbSummary.data?.gainR, 3)"></strong> ·
                 <strong x-text="'G ' + wbFmt(wbSummary.data?.gainG, 3)"></strong> ·
                 <strong x-text="'B ' + wbFmt(wbSummary.data?.gainB, 3)"></strong>
-                &nbsp;— applied to the new master. A tight scatter on the green fit
+                &nbsp;- applied to the new master. A tight scatter on the green fit
                 line means a confident calibration.
             </div>
         </div>
@@ -16904,8 +16897,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="btn btn-sm"
                         @click="graxpertCompareToggleStretch()"
                         :title="graxpertCompare.linkStretch
-                            ? 'Stretch: linked — AFTER uses the BEFORE histogram. Click for an independent stretch per image (better for colour calibration).'
-                            : 'Stretch: independent — each image auto-stretches on its own. Click to link AFTER to the BEFORE histogram (better for denoise/decon).'"
+                            ? 'Stretch: linked: AFTER uses the BEFORE histogram. Click for an independent stretch per image (better for colour calibration).'
+                            : 'Stretch: independent: each image auto-stretches on its own. Click to link AFTER to the BEFORE histogram (better for denoise/decon).'"
                         x-text="graxpertCompare.linkStretch ? '🔗 Linked stretch' : '🔀 Independent stretch'"></button>
                 <button class="btn btn-sm" @click="graxpertCloseCompare()">Close</button>
             </div>
@@ -17577,7 +17570,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <path d="M8 11V7a4 4 0 0 1 8 0v4"
                       fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
             </svg>
-            UI locked — tap to unlock
+            UI locked: tap to unlock
         </button>
     </div>
 
@@ -17587,7 +17580,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
     <!-- PLAN: SkyAtlas framing banner (shown while picking a target's framing) -->
     <div class="plan-frame-banner" x-show="planFramingActive" x-cloak>
-        <span>Framing a target for the plan — pan/zoom, then add it.</span>
+        <span>Framing a target for the plan, pan/zoom, then add it.</span>
         <button class="btn btn-sm" @click="planAddTargetFromSky()">Add to plan</button>
         <button class="btn btn-sm" @click="planCancelFraming()">Cancel</button>
     </div>
@@ -17604,7 +17597,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </div>
             <p style="font-size:13px">
                 Fixes the one-sided blue/magenta + dark fringe OSC cameras (e.g. SVBony)
-                leave on bright stars — channel alignment + radial colour/luminance
+                leave on bright stars: channel alignment + radial colour/luminance
                 symmetry. Run this <b>first</b>, before background extraction. Writes a new
                 FITS; the original is kept.
             </p>
@@ -17894,7 +17887,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <div>
                     <p style="font-size:.82em;opacity:.85;margin-bottom:4px">
                         The new package will be downloaded and installed, then Polaris
-                        restarts on the new version — no password needed.
+                        restarts on the new version, no password needed.
                     </p>
                     <p class="update-error" x-show="update.error" x-text="update.error"
                        style="color:var(--danger,#f87171);font-size:.82em;margin-top:8px"></p>
@@ -17912,8 +17905,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <div>
                     <p style="font-size:.82em;opacity:.85;margin-bottom:8px">
                         The host has no internet, but this client device does. Download
-                        the package here, then pick it to send it over to the host —
-                        it verifies the checksum before installing.
+                        the package here, then pick it to send it over to the host, it verifies the checksum before installing.
                     </p>
 
                     <div x-show="update.relayBusy" style="display:flex;align-items:center;gap:8px;margin:10px 0">
@@ -17979,7 +17971,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </div>
                     <p style="opacity:.7;font-size:.8em;margin-top:8px">
                         The service will restart automatically. This page will reload when the
-                        new version is live — don't close it.
+                        new version is live, don't close it.
                     </p>
                 </div>
             </template>
@@ -18101,7 +18093,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </div>
                     <p style="opacity:.7;font-size:.8em;margin-top:8px">
                         The service will restart automatically. This page will reload when the
-                        target version is live — don't close it.
+                        target version is live, don't close it.
                     </p>
                 </div>
             </template>
@@ -18136,7 +18128,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                               : (term.lastError ? 'Disconnected' : 'Terminal'))"></span>
                 <span class="term-window-ctrls">
                     <button class="term-window-btn" title="Minimise (keep session)"
-                            @click="term.modalOpen = false">–</button>
+                            @click="term.modalOpen = false">-</button>
                     <button class="term-window-btn term-window-close"
                             title="Close session" @click="termCloseModal()">✕</button>
                 </span>
