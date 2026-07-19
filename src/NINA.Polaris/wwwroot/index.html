@@ -13618,7 +13618,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <select class="input" style="flex:1" :value="asst.backend"
                                     @change="_assistantSetBackend($event.target.value)">
                                 <option value="cloud">Cloud (Canopus, subscription)</option>
-                                <option value="sbc">On this server (local model)</option>
+                                <option value="sbc">On this host (local model)</option>
                                 <option value="device">On this device (your local LLM)</option>
                             </select>
                         </label>
@@ -14854,7 +14854,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <details class="help-faq">
                                 <summary>Assistant (local AI)</summary>
                                 <div class="help-faq-body">
-                                    <p><a href="https://github.com/QwenLM/Qwen3" target="_blank" rel="noopener"><strong>Qwen3</strong></a> - the Alibaba Qwen team. The local language model (Qwen3-4B) behind the Canopus assistant's "On this server / device" backends, running fully offline on your hardware (Apache-2.0).</p>
+                                    <p><a href="https://github.com/QwenLM/Qwen3" target="_blank" rel="noopener"><strong>Qwen3</strong></a> - the Alibaba Qwen team. The local language model (Qwen3-4B) behind the Canopus assistant's "On this host / device" backends, running fully offline on your hardware (Apache-2.0).</p>
                                     <p><a href="https://github.com/ggml-org/llama.cpp" target="_blank" rel="noopener"><strong>llama.cpp</strong></a> - Georgi Gerganov and the llama.cpp contributors. The efficient CPU inference runtime (<code>llama-server</code>) that serves the local model (MIT).</p>
                                 </div>
                             </details>

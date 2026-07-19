@@ -156,7 +156,7 @@
       'Backend': 'Backend', 'Using: {backend}': 'Em uso: {backend}',
       'To change the backend, open Polaris Settings → Assistant (under AI Tools).': 'Para mudar o backend, abra as Configurações do Polaris → Assistant (em AI Tools).',
       'On this device (your local LLM)': 'Neste dispositivo (seu LLM local)',
-      'On this server (SBC)': 'Neste servidor (SBC)', 'Cloud': 'Nuvem',
+      'On this host (SBC)': 'Neste host (SBC)', 'Cloud': 'Nuvem',
       'Canopus Assistant': 'Canopus Assistant',
       'Plan and run your night with an AI companion.': 'Planeje e execute sua noite com um assistente de IA.',
       '{price} · cancel anytime.': '{price} · cancele quando quiser.',
@@ -739,7 +739,7 @@
   function closeGear() { gearMenu.classList.remove('open'); gearBtn.classList.remove('on'); }
   function backendLabel() {
     if (assistantTier === 'device') return T('On this device (your local LLM)');
-    if (assistantTier === 'sbc') return T('On this server (SBC)');
+    if (assistantTier === 'sbc') return T('On this host (SBC)');
     return T('Cloud');
   }
   function buildGearMenu() {

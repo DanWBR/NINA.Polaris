@@ -17,7 +17,7 @@
 #   uvicorn local_server:app --host 127.0.0.1 --port 8790
 #
 # The keyless, subscription-free analogue of the private cloud app.py, for the
-# "On this server (SBC)" and (later) "On this device" backends. It serves:
+# "On this host (SBC)" and (later) "On this device" backends. It serves:
 #   - a LOCAL-tier manifest (tier:"local", NO subscription block),
 #   - the open chat client + its bundled fonts,
 #   - the agent WebSocket (no accounts, no billing, no entitlement gate).
@@ -132,7 +132,7 @@ def manifest() -> JSONResponse:
                     "iconEmoji": "🔭", "iconUrl": f"{BASE_PATH}/img/canopus-icon.png"},
         "intro": {
             "headline": "Your rig's own AI, running locally",
-            "bodyMarkdown": "Canopus runs entirely on this server: no cloud, no account, "
+            "bodyMarkdown": "Canopus runs entirely on this host: no cloud, no account, "
                             "no subscription. It plans the night, drives the rig with your "
                             "approval, and answers questions, all offline.",
             "bullets": [
