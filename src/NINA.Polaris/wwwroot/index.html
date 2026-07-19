@@ -18415,6 +18415,25 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 x-text="'Get started · ' + (asst.manifest.subscription.priceDisplay || '')"></button>
                         <button class="btn" @click="asst.introOpen=false">Not now</button>
                     </div>
+                    <!-- Free local alternatives. The cloud intro must never be a
+                         dead end that hides the two free, local backends: the
+                         user has to be able to discover them from the first
+                         screen. -->
+                    <div class="assistant-intro-alt">
+                        <div class="assistant-intro-alt-title">Or run it free, on your own hardware</div>
+                        <ul class="assistant-intro-alt-list">
+                            <li><strong>On this host:</strong> the machine running Polaris</li>
+                            <li><strong>On this device:</strong> the one you are browsing from</li>
+                        </ul>
+                        <div class="assistant-intro-alt-note">
+                            No subscription and your data never leaves your network.
+                            Text only (live image analysis needs the cloud).
+                        </div>
+                        <button class="btn btn-sm"
+                                @click="asst.introOpen=false; openSettingsCard('assistant-card')">
+                            Choose a backend in Settings →
+                        </button>
+                    </div>
                     <div class="assistant-intro-links">
                         <a x-show="asst.manifest.links && asst.manifest.links.privacyUrl" href="#"
                            @click.prevent="_assistantOpenExternal(asst.manifest.links.privacyUrl)">Privacy</a>

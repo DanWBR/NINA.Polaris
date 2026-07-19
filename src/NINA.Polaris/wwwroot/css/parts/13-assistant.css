@@ -251,6 +251,18 @@
 .assistant-intro-links a { color: var(--text-secondary); text-decoration: none; }
 .assistant-intro-links a:hover { color: var(--accent); text-decoration: underline; }
 
+.assistant-intro-alt {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 10px);
+    background: rgba(255, 255, 255, 0.03);
+}
+.assistant-intro-alt-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+.assistant-intro-alt-list { margin: 0 0 8px; padding-left: 18px; font-size: 12px; color: var(--text-primary); }
+.assistant-intro-alt-list li { margin: 3px 0; }
+.assistant-intro-alt-note { font-size: 11px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.4; }
+
 @media (max-width: 480px) {
     .assistant-panel {
         right: 0;
