@@ -1,0 +1,21 @@
+# Local Python venv for gen-5 model eval (transformers 5.x + onnxruntime-genai).
+# Several GB; recreate with requirements.txt. Never commit.
+.venv-gen5/
+
+# Exported int4 ONNX models (~8.7GB) and HF cache. Rebuilt with the genai model
+# builder from the HF weights; not artifacts to version.
+models/
+
+# Eval result JSONs are cheap and reproducible; keep them out of the repo too.
+eval/*.json
+
+__pycache__/
+
+# Android test module build output + the 40MB AAR pulled from the genai GitHub
+# release (re-download with: gh release download v0.14.0 --repo microsoft/onnxruntime-genai
+# --pattern 'onnxruntime-genai-android-*.aar'). Gradle wrapper jar is copied from mobile/.
+android-test/app/build/
+android-test/app/libs/*.aar
+android-test/.gradle/
+android-test/local.properties
+android-test/build/

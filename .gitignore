@@ -455,3 +455,19 @@ scripts/.apass-cache/
 # from the repo and broke per-RID packaging (ToupTek showed "not installed").
 # The shipped libs are committed via `git add -f` and stay tracked; if you add
 # a new vendor/arch the build packages, force-add its lib the same way.
+
+# --- Relay server runtime state (secrets) ---
+# tenants.json is the relay's live tenant store: it holds the per-tenant bearer
+# TOKEN that authenticates a rig's tunnel, so committing it to a public repo
+# hands out tunnel access. Copy tenants.sample.json (which IS tracked, with
+# placeholder tokens) and edit locally. Hot-reloaded on change, so no restart.
+# tenant-state.json is the monthly byte counter the server writes by itself.
+# Paths are anchored: only the relay's own working directory, not any
+# same-named file elsewhere.
+/src/NINA.Relay.Server/tenants.json
+/src/NINA.Relay.Server/tenant-state.json
+
+# llama.cpp prebuilt binaries + GGUF model (~2.4GB). Re-fetch with:
+#   gh release download b10058 --repo ggml-org/llama.cpp --pattern 'llama-*-bin-android-arm64.tar.gz'
+#   huggingface: unsloth/Qwen3-4B-GGUF -> Qwen3-4B-Q4_0.gguf
+llamacpp/

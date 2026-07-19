@@ -1,0 +1,11 @@
+jsonschema>=4.0
+httpx>=0.27
+
+# Desktop model iteration (pick which model is worth exporting).
+# Install a CUDA-matched torch separately, same note as polaris-ai/requirements.txt:
+#   RTX 50-series (Blackwell): pip install torch --index-url https://download.pytorch.org/whl/cu128
+transformers>=4.44
+
+# The device target. Not installed on the desktop; the ortgenai backend imports
+# it lazily so mock/transformers runs need nothing extra.
+# onnxruntime-genai>=0.4
