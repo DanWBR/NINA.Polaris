@@ -8,4 +8,5 @@ CAP_PLUGIN(PolarisLlamaPlugin, "PolarisLlama",
     CAP_PLUGIN_METHOD(start, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(stop, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(status, CAPPluginReturnPromise);
+    CAP_PLUGIN_METHOD(requestBatteryExemption, CAPPluginReturnPromise);
 )

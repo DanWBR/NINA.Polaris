@@ -1,8 +1,12 @@
 package dev.danwbr.polaris.llama;
 
+import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
+import android.provider.Settings;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -202,14 +206,51 @@ public class PolarisLlamaPlugin extends Plugin {
             int port = call.getInt("port", DEFAULT_PORT);
             String base = "http://127.0.0.1:" + port;
             boolean running = probe(base + "/health");
+            ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+            ActivityManager am = (ActivityManager) getContext().getSystemService(Context.ACTIVITY_SERVICE);
+            if (am != null) am.getMemoryInfo(mi);
+            PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+            boolean exempt = pm != null && pm.isIgnoringBatteryOptimizations(getContext().getPackageName());
+
             JSObject r = new JSObject();
             r.put("modelReady", ready);
             r.put("running", running);
             r.put("url", running ? base + "/v1" : "");
             r.put("modelPath", ready ? model.getAbsolutePath() : "");
             r.put("modelBytes", ready ? model.length() : 0);
+            // Resource-kill signals: the phone must hold the whole model resident
+            // (--no-mmap), so the host gates start on total RAM; batteryExempt tells
+            // it whether OEM power management can still reap the foreground service.
+            r.put("totalMemBytes", mi.totalMem);
+            r.put("availMemBytes", mi.availMem);
+            r.put("lowMemory", mi.lowMemory);
+            r.put("batteryExempt", exempt);
             call.resolve(r);
         });
+    }
+
+    /** Ask the user to exempt the app from battery optimization so Doze / OEM
+     *  power managers (MIUI SmartPower killed the eval harness in ~2 min) don't
+     *  reap the model's foreground service mid-session. No-op if already exempt. */
+    @PluginMethod
+    public void requestBatteryExemption(PluginCall call) {
+        Context c = getContext();
+        PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
+        boolean already = pm != null && pm.isIgnoringBatteryOptimizations(c.getPackageName());
+        if (!already) {
+            try {
+                Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        Uri.parse("package:" + c.getPackageName()));
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                c.startActivity(i);
+            } catch (Exception e) {
+                // Some OEMs block the direct request; the user can still do it
+                // manually in Settings. Not fatal.
+            }
+        }
+        JSObject r = new JSObject();
+        r.put("exempt", already);
+        call.resolve(r);
     }
 
     // ---- helpers ------------------------------------------------------------

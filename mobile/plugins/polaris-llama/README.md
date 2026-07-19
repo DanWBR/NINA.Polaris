@@ -89,6 +89,31 @@ The Canopus client fetches `http://127.0.0.1:8823` from the (remote) Polaris pag
 mixed content is already allowed (`capacitor.config.ts`), and `llama-server` sends
 permissive CORS, so the loopback fetch works.
 
+## Staying alive (resource-kill resilience)
+
+The 4B model loads **fully resident** (`--no-mmap`), so an on-device session is a
+heavy, long-lived process the OS is tempted to reap. What's in place:
+
+- **RAM gate.** `status()` reports `totalMemBytes` / `lowMemory`; the host UI blocks
+  (or warns-and-confirms) starting the model unless the device has the model size
+  plus ~2.5 GB of headroom. Prevents the Android LMK / iOS Jetsam kill that a 3.9 GB
+  model on a 4 GB phone guarantees. **Practically: the 4B wants an 8 GB device**
+  (iOS Jetsam only hands one app ~half of RAM).
+- **Foreground service** (Android): `LlamaServerService` runs the server with a
+  persistent notification so Doze doesn't suspend it.
+- **Battery-optimization exemption** (Android): `requestBatteryExemption()` (called
+  on start) prompts the user to exempt the app, so OEM power managers (MIUI's
+  SmartPower killed the eval harness in ~2 min) don't reap the service.
+- **Keep-awake**: the shell holds a wake lock while a session is open (`connect.js`),
+  keeping the screen/CPU alive.
+
+**iOS background execution (recommended, not added here):** with the screen on and
+keep-awake holding, the app stays foreground/active, which covers the phone-at-the-
+scope case. If you need the model to survive the user switching apps, add a
+`UIBackgroundModes` entry (the app already uses `location`, so `location` is the
+justifiable one) in `ios-postadd.sh`. It has App-Store-review and battery
+implications, so it's a deliberate choice, not a default.
+
 ## Device test
 
 ```powershell

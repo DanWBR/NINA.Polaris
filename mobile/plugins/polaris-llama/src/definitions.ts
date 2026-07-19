@@ -41,6 +41,16 @@ export interface StatusResult {
   modelPath: string;
   /** Bytes on disk for the model (0 if absent). */
   modelBytes: number;
+  /** Total physical RAM (bytes). The host gates start on this + headroom, because
+   *  the model loads fully resident (--no-mmap) and the OS (Jetsam/LMK) kills the
+   *  app if it doesn't fit. */
+  totalMemBytes: number;
+  /** Available RAM (bytes); on iOS equals total (per-app budget is Jetsam-managed). */
+  availMemBytes: number;
+  /** OS reports low memory right now. */
+  lowMemory: boolean;
+  /** App is exempt from battery optimization (Android); always true on iOS. */
+  batteryExempt: boolean;
 }
 
 export interface DownloadModelOptions {
@@ -73,8 +83,11 @@ export interface PolarisLlamaPlugin {
   start(options?: StartOptions): Promise<StartResult>;
   /** Stop llama-server and the foreground service. */
   stop(): Promise<void>;
-  /** Current model + server state. */
+  /** Current model + server state, including RAM + battery-exemption signals. */
   status(): Promise<StatusResult>;
+  /** Prompt the user to exempt the app from battery optimization (Android) so the
+   *  foreground service survives Doze / OEM power managers. No-op on iOS. */
+  requestBatteryExemption(): Promise<{ exempt: boolean }>;
 
   addListener(
     eventName: 'downloadProgress',

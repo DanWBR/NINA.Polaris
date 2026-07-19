@@ -31,6 +31,12 @@ export class PolarisLlamaWeb extends WebPlugin implements PolarisLlamaPlugin {
     return this.unsupported();
   }
   async status(): Promise<StatusResult> {
-    return { modelReady: false, running: false, url: '', modelPath: '', modelBytes: 0 };
+    return {
+      modelReady: false, running: false, url: '', modelPath: '', modelBytes: 0,
+      totalMemBytes: 0, availMemBytes: 0, lowMemory: false, batteryExempt: true,
+    };
+  }
+  async requestBatteryExemption(): Promise<{ exempt: boolean }> {
+    return { exempt: true };
   }
 }

@@ -99,13 +99,26 @@ public class PolarisLlamaPlugin: CAPPlugin {
 
     @objc func status(_ call: CAPPluginCall) {
         let ready = FileManager.default.fileExists(atPath: modelFile().path) && modelBytes() > 0
+        // iOS is stricter than Android on memory (Jetsam), so the host gates the
+        // on-device model on physical RAM. Battery is OS-managed here (no user
+        // exemption), so batteryExempt is always true.
+        let total = Int64(ProcessInfo.processInfo.physicalMemory)
         call.resolve([
             "modelReady": ready,
             "running": false,
             "url": "",
             "modelPath": ready ? modelFile().path : "",
-            "modelBytes": ready ? modelBytes() : 0
+            "modelBytes": ready ? modelBytes() : 0,
+            "totalMemBytes": total,
+            "availMemBytes": total,
+            "lowMemory": false,
+            "batteryExempt": true
         ])
+    }
+
+    @objc func requestBatteryExemption(_ call: CAPPluginCall) {
+        // iOS has no user-facing battery-optimization exemption; the OS manages it.
+        call.resolve(["exempt": true])
     }
 
     // ---- helpers ------------------------------------------------------------

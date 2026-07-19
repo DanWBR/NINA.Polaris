@@ -89,6 +89,9 @@ function ninaApp() {
             mobileModel: null,    // { url, bytes, name } for the GGUF (from the device manifest)
             mobileBusy: '',       // '' | 'downloading' | 'starting' | 'stopping'
             mobilePct: -1,        // download progress (-1 = unknown/none)
+            mobileRamOk: true,    // device has enough RAM to hold the model resident
+            mobileTotalMem: 0,    // device total RAM (bytes), 0 = unknown
+            mobileNeedMem: 0,     // estimated RAM the model needs (bytes)
             manifest: null,       // the fetched manifest (branding + allowlist)
             ready: false,         // manifest fetched + valid => host chrome is live
             badgeVisible: false,  // intro badge (before opt-in)
@@ -11075,6 +11078,14 @@ function ninaApp() {
                 this.asst.mobileStatus = s;
                 // Once the server is up, that loopback base is the device provider url.
                 if (s && s.running && s.url) { this.asst.deviceUrl = s.url; this._canopusSaveDevice(); }
+                // RAM gate: the model loads fully resident (--no-mmap), so the OS
+                // (Android LMK / iOS Jetsam) kills the app if it doesn't fit. Need
+                // the model plus ~2.5 GB for the app, WebView, KV cache and OS.
+                const modelB = (this.asst.mobileModel && this.asst.mobileModel.bytes) || (s && s.modelBytes) || 0;
+                const need = modelB + 2.5e9;
+                this.asst.mobileNeedMem = need;
+                this.asst.mobileTotalMem = (s && s.totalMemBytes) || 0;
+                this.asst.mobileRamOk = !this.asst.mobileTotalMem || this.asst.mobileTotalMem >= need;
             } catch (e) {
                 this.asst.mobileStatus = null;
             }
@@ -11109,6 +11120,17 @@ function ninaApp() {
         async _canopusMobileStart() {
             const p = this._canopusMobilePlugin();
             if (!p) return;
+            // RAM gate: warn before the OS can kill the app for overcommitting.
+            if (!this.asst.mobileRamOk) {
+                const gb = (b) => (b / 1e9).toFixed(1);
+                const ok = confirm('This device has ' + gb(this.asst.mobileTotalMem) +
+                    ' GB RAM, but the model needs about ' + gb(this.asst.mobileNeedMem) +
+                    ' GB resident. The system may kill the app under memory pressure. Start anyway?');
+                if (!ok) return;
+            }
+            // Keep Doze / OEM power managers from reaping the model's foreground
+            // service during a long, screen-off session.
+            try { await p.requestBatteryExemption(); } catch (_) {}
             this.asst.mobileBusy = 'starting';
             try {
                 const r = await p.start();       // { url: 'http://127.0.0.1:PORT/v1', port }
