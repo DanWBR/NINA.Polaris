@@ -13634,25 +13634,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
                                 <span style="width:10px;height:10px;border-radius:50%;display:inline-block"
                                       :style="(asst.sbc &amp;&amp; asst.sbc.running) ? 'background:#3fb950' : 'background:#7d8590'"></span>
-                                <strong x-text="(asst.sbc &amp;&amp; asst.sbc.running) ? 'Running' : ((asst.sbc &amp;&amp; asst.sbc.modelPresent) ? 'Stopped' : 'Not set up')"></strong>
+                                <strong x-text="(asst.sbc &amp;&amp; asst.sbc.running) ? 'Running' : ((asst.sbc &amp;&amp; asst.sbc.modelPresent &amp;&amp; asst.sbc.runtimePresent) ? 'Stopped' : 'Not set up')"></strong>
                                 <span class="text-muted" style="font-size:12px" x-text="asst.sbc ? ('· ' + asst.sbc.rid) : ''"></span>
                             </div>
 
-                            <!-- First-run: download the model + runtime -->
-                            <template x-if="asst.sbc &amp;&amp; !asst.sbc.modelPresent">
+                            <!-- First-run (or a partial install): download whatever is missing. -->
+                            <template x-if="asst.sbc &amp;&amp; (!asst.sbc.modelPresent || !asst.sbc.runtimePresent)">
                               <div style="margin-top:8px">
                                 <p class="text-muted" style="font-size:12px"
-                                   x-text="(asst.sbc.download &amp;&amp; asst.sbc.download.running) ? ('Downloading (' + asst.sbc.download.phase + ') ' + _canopusPct() + '%') : 'The local model (~2.4 GB) and runtime aren\'t installed yet.'"></p>
+                                   x-text="(asst.sbc.download &amp;&amp; asst.sbc.download.running) ? ('Downloading (' + asst.sbc.download.phase + ') ' + _canopusPct() + '%') : (!asst.sbc.modelPresent ? 'The local model (~2.4 GB) and runtime aren\'t installed yet.' : 'The runtime (llama-server) isn\'t installed yet.')"></p>
                                 <button class="btn btn-sm" style="margin-top:6px"
                                         :disabled="asst.sbc.download &amp;&amp; asst.sbc.download.running"
                                         @click="_canopusDownload()">
-                                    <span x-text="(asst.sbc.download &amp;&amp; asst.sbc.download.running) ? 'Downloading…' : 'Download model + runtime'"></span>
+                                    <span x-text="(asst.sbc.download &amp;&amp; asst.sbc.download.running) ? 'Downloading…' : (!asst.sbc.modelPresent ? 'Download model + runtime' : 'Download runtime')"></span>
                                 </button>
                               </div>
                             </template>
 
-                            <!-- Ready: start / stop the local backend -->
-                            <template x-if="asst.sbc &amp;&amp; asst.sbc.modelPresent">
+                            <!-- Ready: start / stop the local backend (needs model AND runtime). -->
+                            <template x-if="asst.sbc &amp;&amp; asst.sbc.modelPresent &amp;&amp; asst.sbc.runtimePresent">
                               <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
                                 <button class="btn btn-sm" :disabled="asst.sbcBusy || (asst.sbc &amp;&amp; asst.sbc.running)" @click="_canopusStart()">Start</button>
                                 <button class="btn btn-sm" :disabled="asst.sbcBusy || !(asst.sbc &amp;&amp; asst.sbc.running)" @click="_canopusStop()">Stop</button>
