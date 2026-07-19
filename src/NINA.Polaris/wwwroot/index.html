@@ -13618,7 +13618,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <select class="input" style="flex:1" :value="asst.backend"
                                     @change="_assistantSetBackend($event.target.value)">
                                 <option value="cloud">Cloud (gpt-5.3-chat, subscription)</option>
-                                <option value="sbc">On this host (local model)</option>
+                                <option value="sbc">On this host (local model, where Polaris is running)</option>
                                 <option value="device">On this device (your local LLM)</option>
                             </select>
                         </label>
