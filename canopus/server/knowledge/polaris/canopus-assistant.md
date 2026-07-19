@@ -34,7 +34,7 @@ servers and returns a reply.
   are not used to train models. Only your email, a login token, and your
   subscription status are stored. Payment is handled by Stripe.
 
-### On this server
+### On this host
 
 Free and fully offline. A small language model runs on the Polaris host itself, so
 any phone or tablet on your network becomes a thin client. No account, no
@@ -65,7 +65,7 @@ Free and offline, running the model on the machine you are using.
 - Recommended: on a desktop, a 12 to 24 billion parameter tool-capable model on a
   16 GB or larger GPU. On mobile, an 8 GB phone or tablet, for smooth replies in a
   few seconds.
-- Text-only: same as the on-server backend. Frame analysis is cloud-only.
+- Text-only: same as the on-host backend. Frame analysis is cloud-only.
 - Privacy: the model runs locally and nothing leaves your machine. If you point the
   desktop option at a remote, non-local endpoint, that service sees your messages
   under its own terms.
@@ -74,9 +74,9 @@ Free and offline, running the model on the machine you are using.
 
 - Want the best answers and image analysis, and do not mind a subscription: cloud.
 - Want a free, private assistant and your Polaris host has 8 GB or more: on this
-  server.
+  host.
 - Have a powerful PC, Mac, or a recent phone and want it free and private: on this
   device.
 
-The on-server and on-device backends are text-only and skip frame analysis; the
+The on-host and on-device backends are text-only and skip frame analysis; the
 cloud backend is the only one that inspects your images.

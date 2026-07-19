@@ -152,9 +152,9 @@
     {
       "icon": "🖥️",
       "color": "#0891b2",
-      "title": "On this server",
+      "title": "On this host",
       "tag": "Free and fully offline, running on your Polaris host.",
-      "intro": "A small language model runs on the Polaris machine itself, so any phone or tablet on your network becomes a thin client. No account, no subscription.",
+      "intro": "A small language model runs on the Polaris host itself, so any phone or tablet on your network becomes a thin client. No account, no subscription.",
       "items": [
         { "label": "Cost.", "text": "Free." },
         { "label": "Runs on.", "text": "The Polaris host, on the CPU. An NPU or GPU is a bonus, not a requirement." },
@@ -175,7 +175,7 @@
         { "label": "Runs on.", "text": "Your computer's GPU (through Ollama, LM Studio, or llama.cpp), or your phone in the Polaris mobile app." },
         { "label": "Minimum.", "text": "Desktop: a local LLM server and a tool-capable model that fits your GPU memory. Mobile: an 8 GB device, since the model loads fully into RAM." },
         { "label": "Recommended.", "text": "Desktop: a 12 to 24 billion parameter tool-capable model on a 16 GB or larger GPU. Mobile: an 8 GB phone or tablet, for smooth replies in a few seconds." },
-        { "label": "Text-only.", "text": "Same as the on-server backend: planning, rig control, and Q&A; frame analysis is cloud-only." },
+        { "label": "Text-only.", "text": "Same as the on-host backend: planning, rig control, and Q&A; frame analysis is cloud-only." },
         { "label": "Privacy.", "text": "Runs locally; nothing leaves your machine. If you point the desktop option at a remote endpoint, that service sees your messages under its own terms." }
       ]
     }
@@ -219,7 +219,7 @@
     "price": "US$4.99",
     "period": "per month",
     "trial": "7-day free trial",
-    "note": "Pricing is for the cloud backend. The on-server and on-device backends are free. Single flat plan; cancel anytime and access continues to the end of the paid period."
+    "note": "Pricing is for the cloud backend. The on-host and on-device backends are free. Single flat plan; cancel anytime and access continues to the end of the paid period."
   },
   "ctaText": "The assistant is optional and opt-in, with free offline backends; Polaris itself stays free and open-source.",
   "ctaButton": "Get Polaris",

@@ -80,7 +80,7 @@ Each tab in the sidebar has its own page. Read the ones you need:
   meridian-flip handling, and end-of-session actions.
 - **[Canopus Assistant](canopus-assistant.md)**, the optional AI co-pilot:
   plans the night, drives the rig with your approval, and answers questions.
-  Covers the three backends (cloud, on this server, on this device) and their
+  Covers the three backends (cloud, on this host, on this device) and their
   minimum and recommended requirements.
 - **[LIVE](live-stacking.md)**, real-time EAA stacking with auto
   re-focus / re-center triggers. See also
