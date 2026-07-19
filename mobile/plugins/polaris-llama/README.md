@@ -22,24 +22,39 @@ The model is the **4B Q4_0** (`qwen3-4b`-class). The 1.7B int4 does not tool-cal
 
 ## Populate the native binary (build step, not committed)
 
-The `llama-server` binary and its `.so` deps are large release artifacts, so they
-are **not** checked in. Stage them into `android/src/main/jniLibs/arm64-v8a/`
-before `npx cap sync android` with the helper script:
+The `llama-server` binary and its `.so` deps are large, so they are **not** checked
+in; they get staged into `android/src/main/jniLibs/arm64-v8a/` before
+`npx cap sync android`.
 
-```bash
-mobile/plugins/polaris-llama/scripts/fetch-llama.sh              # or fetch-llama.ps1
-mobile/plugins/polaris-llama/scripts/fetch-llama.sh b<NNNN>      # pin a llama.cpp tag
+> **Heads-up:** llama.cpp's GitHub releases do **not** publish a prebuilt
+> `bin-android-arm64` asset, so `scripts/fetch-llama.{sh,ps1}` (which targets that
+> URL) 404s against upstream today. The Android CI runs it **best-effort**: if it
+> can't stage the binary, the APK still builds, just without the on-device backend
+> (a `::warning::` is logged). To actually ship it you must **build llama-server
+> with the Android NDK** and place the outputs here, or point the script at a
+> mirror that hosts the binary.
+
+Expected layout once staged (executable renamed so Android keeps + can exec it from
+`nativeLibraryDir`, since W^X blocks exec from `filesDir`; `pb.directory(...)`
+points the process at that dir so the loader resolves the sibling libs):
+
+```
+android/src/main/jniLibs/arm64-v8a/
+  libllamaserver.so   <- the llama-server executable, renamed
+  libllama.so  libggml*.so  ...
 ```
 
-It downloads the `llama-b<NNNN>-bin-android-arm64.zip` release (the eval validated
-**b10058**), copies every `.so` into `jniLibs/arm64-v8a/`, and copies the
-`llama-server` executable there renamed `libllamaserver.so`. Naming everything
-`lib*.so` is what lets Android place them in `nativeLibraryDir` and execute the
-server there (W^X blocks exec from `filesDir`); `pb.directory(...)` points the
-process at that dir so the loader resolves the sibling libs.
+NDK build sketch (unverified; iterate locally before trusting CI):
 
-> Wire the script as a prebuild step in the Android CI job (mirroring the
-> ncnn/data-pack packaging) so releases stage the binary automatically.
+```bash
+git clone --depth 1 -b b<NNNN> https://github.com/ggml-org/llama.cpp
+cmake -S llama.cpp -B build-android \
+  -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+  -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 \
+  -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON
+cmake --build build-android --target llama-server -j
+# then copy build-android/bin/llama-server (-> libllamaserver.so) + *.so into jniLibs
+```
 
 ## Register the plugin
 

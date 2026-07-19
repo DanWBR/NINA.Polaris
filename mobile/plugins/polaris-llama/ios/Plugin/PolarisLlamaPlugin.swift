@@ -83,47 +83,26 @@ public class PolarisLlamaPlugin: CAPPlugin {
 
     // ---- server lifecycle (in-process, via the xcframework) -----------------
 
+    // The in-process server needs the llama.cpp xcframework to provide the
+    // PolarisLlamaBridge symbols (polaris_llama_start/stop/is_running). Until it is
+    // vendored, do NOT reference those symbols (they would be undefined at link
+    // time and break the whole app build). Report unavailable; download/status/
+    // delete stay fully functional so the model can still be fetched on iOS.
     @objc func start(_ call: CAPPluginCall) {
-        let model = modelFile()
-        guard FileManager.default.fileExists(atPath: model.path) else {
-            call.reject("model not downloaded"); return
-        }
-        let port = Int32(call.getInt("port") ?? defaultPort)
-        let cores = ProcessInfo.processInfo.activeProcessorCount
-        let threads = Int32(call.getInt("threads") ?? max(2, (cores + 1) / 2))
-        let ctx = Int32(call.getInt("contextSize") ?? 8192)
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            let rc = polaris_llama_start(model.path, port, threads, ctx)
-            if rc != 0 { call.reject("llama server failed to start (code \(rc))"); return }
-            // Wait until it is actually listening (weights load can take a while).
-            let deadline = Date().addingTimeInterval(120)
-            while Date() < deadline {
-                if polaris_llama_is_running() != 0 {
-                    let base = "http://127.0.0.1:\(port)"
-                    call.resolve(["url": "\(base)/v1", "port": Int(port)])
-                    return
-                }
-                Thread.sleep(forTimeInterval: 0.5)
-            }
-            polaris_llama_stop()
-            call.reject("llama server did not become ready in time")
-        }
+        _ = defaultPort
+        call.unavailable("The on-device model backend is not yet available on iOS (in-process llama.cpp embed pending).")
     }
 
     @objc func stop(_ call: CAPPluginCall) {
-        polaris_llama_stop()
         call.resolve()
     }
 
     @objc func status(_ call: CAPPluginCall) {
         let ready = FileManager.default.fileExists(atPath: modelFile().path) && modelBytes() > 0
-        let running = polaris_llama_is_running() != 0
-        let port = call.getInt("port") ?? defaultPort
         call.resolve([
             "modelReady": ready,
-            "running": running,
-            "url": running ? "http://127.0.0.1:\(port)/v1" : "",
+            "running": false,
+            "url": "",
             "modelPath": ready ? modelFile().path : "",
             "modelBytes": ready ? modelBytes() : 0
         ])

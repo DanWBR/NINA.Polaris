@@ -46,10 +46,12 @@ jobs:
       - name: Build native plugins (ONNX + llama)
         run: npm run plugin:build
 
-      - name: Stage llama.cpp server binary (Canopus on-device backend)
+      - name: Stage llama.cpp server binary (Canopus on-device backend, best-effort)
         env:
-          LLAMA_TAG: b10058   # the eval-validated build; bump deliberately
-        run: bash ./plugins/polaris-llama/scripts/fetch-llama.sh "$LLAMA_TAG"
+          LLAMA_TAG: b10058   # bump deliberately
+        run: |
+          bash ./plugins/polaris-llama/scripts/fetch-llama.sh "$LLAMA_TAG" \
+            || echo "::warning::llama-server not staged (llama.cpp has no prebuilt android-arm64 release). The APK builds WITHOUT the on-device Canopus backend; it needs an NDK build of llama-server (see plugins/polaris-llama/README.md)."
 
       - name: Add Android platform
         run: npx cap add android
@@ -111,10 +113,12 @@ jobs:
       - name: Build native plugins (ONNX + llama)
         run: npm run plugin:build
 
-      - name: Stage llama.cpp server binary (Canopus on-device backend)
+      - name: Stage llama.cpp server binary (Canopus on-device backend, best-effort)
         env:
-          LLAMA_TAG: b10058   # the eval-validated build; bump deliberately
-        run: bash ./plugins/polaris-llama/scripts/fetch-llama.sh "$LLAMA_TAG"
+          LLAMA_TAG: b10058   # bump deliberately
+        run: |
+          bash ./plugins/polaris-llama/scripts/fetch-llama.sh "$LLAMA_TAG" \
+            || echo "::warning::llama-server not staged (llama.cpp has no prebuilt android-arm64 release). The APK builds WITHOUT the on-device Canopus backend; it needs an NDK build of llama-server (see plugins/polaris-llama/README.md)."
 
       - name: Add Android platform
         run: npx cap add android
