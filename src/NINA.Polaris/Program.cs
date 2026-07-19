@@ -961,7 +961,10 @@ app.Map("/phd2-gui/{**rest}", async (HttpContext ctx, Phd2GuiSessionService gui)
     var target = $"http://127.0.0.1:{gui.BindPort}";
     var err = await phd2GuiForwarder.SendAsync(ctx, target, phd2GuiHttpClient,
         ForwarderRequestConfig.Empty, phd2GuiTransform);
-    if (err != ForwarderError.None) {
+    // Only write a 502 if nothing was sent yet: a mid-stream forwarder error
+    // (client aborted, upstream dropped) means the response already started, and
+    // setting StatusCode then throws "response has already started".
+    if (err != ForwarderError.None && !ctx.Response.HasStarted) {
         ctx.Response.StatusCode = 502;
         await ctx.Response.WriteAsync($"xpra proxy error: {err}");
     }
@@ -1151,7 +1154,7 @@ app.Map("/indi-web/{**rest}", async (HttpContext ctx, IndiWebManagerService svc)
     var target = $"http://{svc.BindAddress}:{svc.BindPort}";
     var err = await indiWebForwarder.SendAsync(ctx, target, indiWebHttpClient,
         ForwarderRequestConfig.Empty, indiWebTransform);
-    if (err != ForwarderError.None) {
+    if (err != ForwarderError.None && !ctx.Response.HasStarted) {
         ctx.Response.StatusCode = 502;
         await ctx.Response.WriteAsync($"indi-web proxy error: {err}");
     }
@@ -1201,7 +1204,7 @@ app.Map("/canopus/{**rest}", async (HttpContext ctx,
     var target = $"http://127.0.0.1:{svc.AgentPort}";
     var err = await canopusForwarder.SendAsync(ctx, target, canopusHttpClient,
         ForwarderRequestConfig.Empty, canopusTransform);
-    if (err != ForwarderError.None) {
+    if (err != ForwarderError.None && !ctx.Response.HasStarted) {
         ctx.Response.StatusCode = 502;
         await ctx.Response.WriteAsync($"canopus proxy error: {err}");
     }
