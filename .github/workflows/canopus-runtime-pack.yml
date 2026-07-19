@@ -1,0 +1,148 @@
+name: Canopus runtime pack
+
+# Builds llama.cpp's llama-server for each architecture the "On this host" (SBC)
+# Canopus backend supports, and publishes the archives to the fixed "data-pack"
+# release. The URLs and archive names match
+# src/NINA.Polaris/wwwroot/canopus/models-index.json; CanopusModelService pulls
+# the arch-matched archive on demand and extracts it into runtime/<rid>/, expecting
+# llama-server (+ its shared libs) at the archive ROOT.
+#
+# linux-arm64 (the Pi / SBC target) has NO upstream llama.cpp binary, so it must be
+# built here (on a native arm64 runner). The others are built too, for one
+# consistent llama.cpp version and layout across platforms.
+#
+# Manual: heavy and rarely changes. Bump the tag deliberately.
+
+on:
+  workflow_dispatch:
+    inputs:
+      llama_tag:
+        description: "llama.cpp release tag to build (e.g. b10058)"
+        type: string
+        default: "b10058"
+
+permissions:
+  contents: write
+
+env:
+  LLAMA_TAG: ${{ inputs.llama_tag }}
+  LLAMA_CMAKE: >-
+    -DCMAKE_BUILD_TYPE=Release
+    -DLLAMA_CURL=OFF
+    -DBUILD_SHARED_LIBS=ON
+    -DGGML_NATIVE=OFF
+
+jobs:
+  # ---- Linux (x64 + native arm64) ----
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runs-on: ubuntu-latest,     rid: linux-x64 }
+          - { runs-on: ubuntu-24.04-arm,  rid: linux-arm64 }
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - name: Install build deps
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential git
+
+      - name: Clone llama.cpp @ ${{ env.LLAMA_TAG }}
+        run: git clone --depth 1 -b "$LLAMA_TAG" https://github.com/ggml-org/llama.cpp
+
+      - name: Build llama-server
+        run: |
+          cmake -S llama.cpp -B build $LLAMA_CMAKE
+          cmake --build build --target llama-server -j"$(nproc)"
+
+      - name: Package (llama-server + libs at archive root)
+        run: |
+          mkdir pkg
+          find build -maxdepth 4 -type f -name 'llama-server' -exec cp -av {} pkg/ \;
+          # -a keeps the versioned *.so.N symlinks the loader resolves.
+          find build \( -name '*.so' -o -name '*.so.*' \) -exec cp -av {} pkg/ \;
+          ( cd pkg && tar czf "$GITHUB_WORKSPACE/canopus-llama-${{ matrix.rid }}.tar.gz" . )
+          ls -la "canopus-llama-${{ matrix.rid }}.tar.gz"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: canopus-llama-${{ matrix.rid }}
+          path: canopus-llama-${{ matrix.rid }}.tar.gz
+          if-no-files-found: error
+
+  # ---- Windows x64 ----
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Clone llama.cpp @ ${{ env.LLAMA_TAG }}
+        run: git clone --depth 1 -b $env:LLAMA_TAG https://github.com/ggml-org/llama.cpp
+
+      - name: Build llama-server
+        run: |
+          cmake -S llama.cpp -B build -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=ON -DGGML_NATIVE=OFF
+          cmake --build build --config Release --target llama-server
+
+      - name: Package (llama-server.exe + dlls at archive root)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory pkg | Out-Null
+          Copy-Item (Get-ChildItem -Recurse build -Filter llama-server.exe | Select-Object -First 1).FullName pkg/
+          Get-ChildItem -Recurse build -Filter *.dll | ForEach-Object { Copy-Item $_.FullName pkg/ -Force }
+          Compress-Archive -Path pkg/* -DestinationPath canopus-llama-win-x64.zip -Force
+          Get-Item canopus-llama-win-x64.zip | Format-List Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: canopus-llama-win-x64
+          path: canopus-llama-win-x64.zip
+          if-no-files-found: error
+
+  # ---- macOS arm64 ----
+  macos:
+    runs-on: macos-latest
+    steps:
+      - name: Clone llama.cpp @ ${{ env.LLAMA_TAG }}
+        run: git clone --depth 1 -b "$LLAMA_TAG" https://github.com/ggml-org/llama.cpp
+
+      - name: Build llama-server
+        run: |
+          cmake -S llama.cpp -B build $LLAMA_CMAKE
+          cmake --build build --target llama-server -j"$(sysctl -n hw.ncpu)"
+
+      - name: Package (llama-server + dylibs at archive root)
+        run: |
+          mkdir pkg
+          find build -maxdepth 4 -type f -name 'llama-server' -exec cp -av {} pkg/ \;
+          find build -name '*.dylib' -exec cp -av {} pkg/ \;
+          ( cd pkg && tar czf "$GITHUB_WORKSPACE/canopus-llama-osx-arm64.tar.gz" . )
+          ls -la canopus-llama-osx-arm64.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: canopus-llama-osx-arm64
+          path: canopus-llama-osx-arm64.tar.gz
+          if-no-files-found: error
+
+  # ---- Publish all four to the data-pack release in one shot (no race) ----
+  publish:
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - run: ls -la dist
+
+      - name: Upload to the fixed data-pack release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: data-pack
+          # No name/body: keep whatever the data-pack release already shows
+          # (the thumb/ncnn packs), only add/replace the llama runtime archives.
+          files: |
+            dist/canopus-llama-linux-x64.tar.gz
+            dist/canopus-llama-linux-arm64.tar.gz
+            dist/canopus-llama-win-x64.zip
+            dist/canopus-llama-osx-arm64.tar.gz
+          fail_on_unmatched_files: true
