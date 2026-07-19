@@ -180,6 +180,10 @@
       ]
     }
   ],
+  "backendsShot": {
+    "caption": "Choosing the backend in Settings, Assistant: cloud, on this host, or on this device, each with its own controls.",
+    "src": "/assets/screenshots/assistant-backends.jpg"
+  },
   "screenshotsTitle": "See it in action",
   "screenshots": [
     {

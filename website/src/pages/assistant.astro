@@ -147,6 +147,14 @@ const shots = p.screenshots ?? [];
               </article>
             ))}
           </div>
+          {p.backendsShot && (
+            <figure class="shot" style="margin-top:32px">
+              {p.backendsShot.src && <img src={p.backendsShot.src} alt={p.backendsShot.caption} loading="lazy"
+                onerror="var f=this.closest('.shot');this.remove();var ph=f.querySelector('.shot-ph');if(ph)ph.style.display='grid';" />}
+              <div class="shot-ph" style={p.backendsShot.src ? 'display:none' : undefined}><span class="shot-ph-icon">⚙️</span><span class="shot-ph-tag">Screenshot</span></div>
+              <figcaption>{p.backendsShot.caption}</figcaption>
+            </figure>
+          )}
         </div>
       </section>
     )}
