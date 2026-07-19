@@ -89,7 +89,7 @@ public static class CanopusEndpoints {
         // the local LLM url/model from Settings, and embeds the client from
         // /canopus-client. The tool allowlist is derived from catalog.local.json so
         // the host's tool executor only permits what the local agent can call.
-        g.MapGet("/device-manifest", () => Results.Ok(new {
+        g.MapGet("/device-manifest", (IConfiguration cfg) => Results.Ok(new {
             version = 1,
             tier = "device",
             product = new { name = "Canopus Assistant (device)", iconEmoji = "🔭",
@@ -103,7 +103,26 @@ public static class CanopusEndpoints {
                 fabLabel = "Canopus",
             },
             allowlist = DeviceAllowlist(),
+            // GGUF source for the mobile app's on-device backend (polaris-llama):
+            // the phone downloads this once. Config-driven; null until a source is
+            // set (a release asset, or the host's own model-serving endpoint). See
+            // MOBILE-LLM-C for serving the file the host already downloads.
+            mobileModel = MobileModel(cfg),
         }));
+    }
+
+    // GGUF source the mobile app downloads for its on-device backend. Null unless
+    // configured (Canopus:MobileModelUrl); the mobile UI then shows "not configured".
+    private static object? MobileModel(IConfiguration cfg) {
+        var url = cfg["Canopus:MobileModelUrl"];
+        if (string.IsNullOrWhiteSpace(url)) return null;
+        long.TryParse(cfg["Canopus:MobileModelBytes"], out var bytes);
+        return new {
+            url,
+            bytes,
+            name = cfg["Canopus:MobileModelName"] ?? "Qwen3 4B (Q4_0)",
+            sha256 = cfg["Canopus:MobileModelSha256"],
+        };
     }
 
     // Derive the tool-call allowlist from catalog.local.json (mirror of the Python

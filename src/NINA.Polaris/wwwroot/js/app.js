@@ -83,6 +83,12 @@ function ninaApp() {
             devicePull: '',       // tag currently downloading ('' = none)
             devicePullPct: 0,
             devicePullStatus: '',
+            // --- mobile on-device backend (polaris-llama native plugin) ---
+            deviceMobile: false,  // running inside the Polaris app with the native LLM plugin
+            mobileStatus: null,   // last PolarisLlama.status() { modelReady, running, url, modelBytes }
+            mobileModel: null,    // { url, bytes, name } for the GGUF (from the device manifest)
+            mobileBusy: '',       // '' | 'downloading' | 'starting' | 'stopping'
+            mobilePct: -1,        // download progress (-1 = unknown/none)
             manifest: null,       // the fetched manifest (branding + allowlist)
             ready: false,         // manifest fetched + valid => host chrome is live
             badgeVisible: false,  // intro badge (before opt-in)
@@ -10711,6 +10717,10 @@ function ninaApp() {
                 const md = localStorage.getItem('polaris.assistant.deviceModel'); if (md) this.asst.deviceModel = md;
                 const vr = localStorage.getItem('polaris.assistant.deviceVram'); if (vr) this.asst.deviceVramChoice = vr;
             } catch (_) {}
+            // Running inside the Polaris mobile app? Then "on this device" means the
+            // phone runs the model natively via the polaris-llama plugin.
+            this.asst.deviceMobile = !!this._canopusMobilePlugin();
+            if (this.asst.deviceMobile) this._canopusMobileRefresh();
         },
 
         async _initAssistant() {
@@ -10783,7 +10793,14 @@ function ninaApp() {
                 try { m = await fetch('/api/canopus/device-manifest', { cache: 'no-store' }).then(r => r.ok ? r.json() : null); }
                 catch (_) { m = null; }
                 if (!m) return;
-                m.provider = { url: this._canopusDeviceUrl(), model: this._canopusDeviceModel(), catalogUrl: '/api/canopus/catalog' };
+                // Mobile app: the phone runs the model natively; the GGUF source comes
+                // from the manifest and the provider url is the started llama-server.
+                this.asst.mobileModel = m.mobileModel || null;
+                let devUrl = this._canopusDeviceUrl();
+                if (this.asst.deviceMobile && this.asst.mobileStatus && this.asst.mobileStatus.running && this.asst.mobileStatus.url) {
+                    devUrl = this.asst.mobileStatus.url;
+                }
+                m.provider = { url: devUrl, model: this._canopusDeviceModel(), catalogUrl: '/api/canopus/catalog' };
             } else {
                 const url = await this._assistantManifestUrl();
                 if (!url) return; // off by default / SBC not started yet
@@ -11038,6 +11055,83 @@ function ninaApp() {
             this.asst.deviceModel = tag;
             this._canopusSaveDevice();
             this.toast?.('Using ' + tag, 'success');
+        },
+
+        // ---- mobile on-device backend (polaris-llama) ----------------------
+        // In the Polaris app the phone runs the model itself: the native plugin
+        // downloads the GGUF and runs llama-server on 127.0.0.1, and the existing
+        // device-tier agent (provider-local.js) drives it over HTTP unchanged.
+
+        _canopusMobilePlugin() {
+            const cap = (typeof window !== 'undefined') && window.Capacitor;
+            return (cap && cap.Plugins && cap.Plugins.PolarisLlama) || null;
+        },
+        _canopusMobileFmtGb(bytes) { return bytes ? (bytes / 1e9).toFixed(1) + ' GB' : ''; },
+        async _canopusMobileRefresh() {
+            const p = this._canopusMobilePlugin();
+            if (!p) { this.asst.deviceMobile = false; return; }
+            try {
+                const s = await p.status();
+                this.asst.mobileStatus = s;
+                // Once the server is up, that loopback base is the device provider url.
+                if (s && s.running && s.url) { this.asst.deviceUrl = s.url; this._canopusSaveDevice(); }
+            } catch (e) {
+                this.asst.mobileStatus = null;
+            }
+        },
+        // Fetch the GGUF onto the phone (source comes from the device manifest).
+        async _canopusMobileDownload() {
+            const p = this._canopusMobilePlugin();
+            if (!p) return;
+            const model = this.asst.mobileModel;
+            if (!model || !model.url) { this.toast?.('No model source configured on the host.', 'error'); return; }
+            this.asst.mobileBusy = 'downloading'; this.asst.mobilePct = 0;
+            let sub = null;
+            try {
+                sub = await p.addListener('downloadProgress', (ev) => {
+                    this.asst.mobilePct = (ev && typeof ev.percent === 'number') ? ev.percent : -1;
+                });
+                await p.downloadModel({ url: model.url, expectedBytes: model.bytes || 0, sha256: model.sha256 });
+                this.toast?.('Model downloaded.', 'success');
+                await this._canopusMobileRefresh();
+            } catch (e) {
+                this.toast?.('Model download failed: ' + ((e && e.message) || e), 'error');
+            } finally {
+                if (sub && sub.remove) { try { await sub.remove(); } catch (_) {} }
+                this.asst.mobileBusy = ''; this.asst.mobilePct = -1;
+            }
+        },
+        // Start llama-server, then (re)apply the device backend so the chat uses it.
+        async _canopusMobileStart() {
+            const p = this._canopusMobilePlugin();
+            if (!p) return;
+            this.asst.mobileBusy = 'starting';
+            try {
+                const r = await p.start();       // { url: 'http://127.0.0.1:PORT/v1', port }
+                if (r && r.url) { this.asst.deviceUrl = r.url; this._canopusSaveDevice(); }
+                await this._canopusMobileRefresh();
+                this.toast?.('On-device model ready.', 'success');
+                if (this.asst.backend === 'device') this._assistantApplyBackend();
+            } catch (e) {
+                this.toast?.('Could not start the on-device model: ' + ((e && e.message) || e), 'error');
+            } finally {
+                this.asst.mobileBusy = '';
+            }
+        },
+        async _canopusMobileStop() {
+            const p = this._canopusMobilePlugin();
+            if (!p) return;
+            this.asst.mobileBusy = 'stopping';
+            try { await p.stop(); await this._canopusMobileRefresh(); }
+            catch (_) {}
+            finally { this.asst.mobileBusy = ''; }
+        },
+        async _canopusMobileDelete() {
+            const p = this._canopusMobilePlugin();
+            if (!p) return;
+            if (!confirm('Delete the downloaded model from this device?')) return;
+            try { await p.stop(); await p.deleteModel(); await this._canopusMobileRefresh(); this.toast?.('Model deleted.', 'success'); }
+            catch (e) { this.toast?.('Delete failed: ' + ((e && e.message) || e), 'error'); }
         },
 
         _assistantInstallBridge() {

@@ -13669,6 +13669,48 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                         <template x-if="asst.backend === 'device'">
                           <div class="settings-card" style="margin-top:10px; padding:12px">
+                            <!-- Mobile app: the phone runs the model natively (polaris-llama plugin) -->
+                            <template x-if="asst.deviceMobile">
+                              <div>
+                                <p class="text-muted" style="font-size:12px; margin-top:0">
+                                    Canopus runs the model <strong>right here on this device</strong>, fully
+                                    offline. Download it once, then start it, no server or account needed.
+                                </p>
+                                <template x-if="!asst.mobileModel">
+                                    <p class="text-muted" style="font-size:12px">
+                                        The model source isn't configured on the connected Polaris host yet.
+                                    </p>
+                                </template>
+                                <div x-show="asst.mobileModel" style="margin-top:8px">
+                                    <template x-if="!(asst.mobileStatus && asst.mobileStatus.modelReady)">
+                                        <button class="btn btn-sm btn-primary" :disabled="!!asst.mobileBusy"
+                                                @click="_canopusMobileDownload()"
+                                                x-text="asst.mobileBusy === 'downloading' ? 'Downloading…' : ('Download model' + (asst.mobileModel && asst.mobileModel.bytes ? ' (' + _canopusMobileFmtGb(asst.mobileModel.bytes) + ')' : ''))"></button>
+                                    </template>
+                                    <div x-show="asst.mobileBusy === 'downloading' && asst.mobilePct >= 0" style="margin-top:8px">
+                                        <div style="height:5px; background:var(--border); border-radius:3px; overflow:hidden">
+                                            <div :style="'height:100%; width:' + asst.mobilePct + '%; background:#3fb950; transition:width .2s'"></div>
+                                        </div>
+                                        <span class="text-muted" style="font-size:11px" x-text="asst.mobilePct + '%'"></span>
+                                    </div>
+                                    <template x-if="asst.mobileStatus && asst.mobileStatus.modelReady">
+                                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:4px">
+                                            <span x-show="asst.mobileStatus.running" style="font-size:12px; color:#3fb950">✓ model running on this device</span>
+                                            <button class="btn btn-sm btn-primary" x-show="!asst.mobileStatus.running"
+                                                    :disabled="!!asst.mobileBusy" @click="_canopusMobileStart()"
+                                                    x-text="asst.mobileBusy === 'starting' ? 'Starting…' : 'Start model'"></button>
+                                            <button class="btn btn-sm" x-show="asst.mobileStatus.running"
+                                                    :disabled="!!asst.mobileBusy" @click="_canopusMobileStop()">Stop</button>
+                                            <button class="btn btn-sm" :disabled="!!asst.mobileBusy"
+                                                    @click="_canopusMobileDelete()" title="Delete the downloaded model">🗑</button>
+                                        </div>
+                                    </template>
+                                </div>
+                              </div>
+                            </template>
+
+                            <template x-if="!asst.deviceMobile">
+                              <div>
                             <p class="text-muted" style="font-size:12px; margin-top:0">
                                 Run a local LLM on this computer with <strong>Ollama</strong>,
                                 <strong>LM Studio</strong> or <strong>llama.cpp</strong>, then point
@@ -13760,6 +13802,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <code>OLLAMA_ORIGINS=<span x-text="location.origin"></span></code> (or <code>*</code>);
                                 LM Studio / llama.cpp have a CORS toggle. After connecting, pick a model above, Canopus downloads it into Ollama for you. Only tool-capable models are listed.
                             </p>
+                              </div>
+                            </template>
                           </div>
                         </template>
                     </div>
