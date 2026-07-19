@@ -6,6 +6,12 @@ import { assistantPage as p } from '../data/site';
 // Screenshots are spaced through the page. Each is full-width; until a real
 // image is dropped in (set `src`), a full-width placeholder box is shown.
 const shots = p.screenshots ?? [];
+
+// Backend capability matrix. A cell is "yes"/"no"/"partial" (rendered as a
+// glyph) or any other string (rendered as plain text, e.g. Cost / Runs on).
+const capColumns: string[] = (p as any).capabilitiesColumns ?? [];
+const capGroups: any[] = (p as any).capabilities ?? [];
+const capGlyph: Record<string, string> = { yes: '✓', no: '✗', partial: '~' };
 ---
 
 <Layout
@@ -155,6 +161,51 @@ const shots = p.screenshots ?? [];
               <figcaption>{p.backendsShot.caption}</figcaption>
             </figure>
           )}
+        </div>
+      </section>
+    )}
+
+    <!-- ── Backend capability matrix ─────────────────────────────── -->
+    {capGroups.length > 0 && capColumns.length > 0 && (
+      <section class="section">
+        <div class="container">
+          <h2 class="block-title">{(p as any).capabilitiesTitle}</h2>
+          {(p as any).capabilitiesLede && <p class="section-lede">{(p as any).capabilitiesLede}</p>}
+          <div class="cap-wrap">
+            <table class="cap">
+              <thead>
+                <tr>
+                  <th class="left">Capability</th>
+                  {capColumns.map((c) => <th>{c}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {capGroups.map((g: any) => (
+                  <>
+                    <tr class="cap-group">
+                      <td class="left" colspan={capColumns.length + 1}>{g.group}</td>
+                    </tr>
+                    {g.rows.map((r: any) => (
+                      <tr>
+                        <td class="left">
+                          <span class="cap-feat">{r.feature}</span>
+                          {r.tools && <code class="cap-tools">{r.tools}</code>}
+                        </td>
+                        {r.cells.map((cell: string) => (
+                          <td>
+                            {capGlyph[cell]
+                              ? <span class={`cap-mark cm-${cell}`}>{capGlyph[cell]}</span>
+                              : <span class="cap-text">{cell}</span>}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {(p as any).capabilitiesNote && <p class="cap-note">{(p as any).capabilitiesNote}</p>}
         </div>
       </section>
     )}
@@ -327,11 +378,80 @@ const shots = p.screenshots ?? [];
   }
   .btn-primary:hover { opacity: 0.88; text-decoration: none; }
 
+  /* ── Backend capability matrix ──────────────────────────── */
+  .cap-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg);
+  }
+  .cap {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 720px;
+    font-size: 15px;
+  }
+  .cap thead th {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    color: var(--text);
+    text-align: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .cap thead th.left { text-align: left; }
+  .cap td {
+    padding: 12px 16px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .cap tbody tr:last-child td { border-bottom: 0; }
+  .cap td.left { text-align: left; }
+  .cap .left { min-width: 320px; }
+
+  .cap-group td {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--accent) 85%, var(--text));
+    padding: 9px 16px;
+  }
+  .cap-feat { display: block; color: var(--text); font-weight: 600; line-height: 1.45; }
+  .cap-tools {
+    display: block;
+    margin-top: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    white-space: normal;
+    word-break: break-word;
+  }
+  .cap-mark { font-size: 19px; font-weight: 800; line-height: 1; }
+  .cm-yes { color: var(--success, #22c55e); }
+  .cm-no { color: var(--text-muted); opacity: 0.5; }
+  .cm-partial { color: var(--warning, #eab308); }
+  .cap-text { font-size: 13.5px; color: var(--text); line-height: 1.4; display: inline-block; }
+  .cap-note {
+    font-size: 14px;
+    color: var(--text-muted);
+    max-width: 820px;
+    margin: 16px auto 0;
+    text-align: center;
+    line-height: 1.6;
+  }
+
   /* ── Responsive ──────────────────────────────────────────── */
   @media (max-width: 600px) {
     .panels, .how-grid { grid-template-columns: 1fr; }
     .glance-grid { grid-template-columns: 1fr; }
     .cta-inner { flex-direction: column; align-items: flex-start; }
     .price-card { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .cap .left { min-width: 220px; }
   }
 </style>
