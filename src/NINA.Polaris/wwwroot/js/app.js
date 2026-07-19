@@ -11085,13 +11085,17 @@ function ninaApp() {
             if (!p) return;
             const model = this.asst.mobileModel;
             if (!model || !model.url) { this.toast?.('No model source configured on the host.', 'error'); return; }
+            // The native downloader has no page origin, so a host-relative url
+            // (e.g. /api/canopus/model.gguf) must be made absolute against the host.
+            let absUrl = model.url;
+            try { absUrl = new URL(model.url, location.origin).href; } catch (_) {}
             this.asst.mobileBusy = 'downloading'; this.asst.mobilePct = 0;
             let sub = null;
             try {
                 sub = await p.addListener('downloadProgress', (ev) => {
                     this.asst.mobilePct = (ev && typeof ev.percent === 'number') ? ev.percent : -1;
                 });
-                await p.downloadModel({ url: model.url, expectedBytes: model.bytes || 0, sha256: model.sha256 });
+                await p.downloadModel({ url: absUrl, expectedBytes: model.bytes || 0, sha256: model.sha256 });
                 this.toast?.('Model downloaded.', 'success');
                 await this._canopusMobileRefresh();
             } catch (e) {

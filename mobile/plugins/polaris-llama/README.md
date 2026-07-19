@@ -23,31 +23,23 @@ The model is the **4B Q4_0** (`qwen3-4b`-class). The 1.7B int4 does not tool-cal
 ## Populate the native binary (build step, not committed)
 
 The `llama-server` binary and its `.so` deps are large release artifacts, so they
-are **not** checked in. Drop them into `android/src/main/jniLibs/arm64-v8a/` before
-building the app:
+are **not** checked in. Stage them into `android/src/main/jniLibs/arm64-v8a/`
+before `npx cap sync android` with the helper script:
 
-1. Download the llama.cpp Android arm64 release
-   (`llama-b<NNNN>-bin-android-arm64.zip` from the llama.cpp GitHub releases; the
-   eval validated **b10058**).
-2. Copy the server binary and every `.so` it needs into `jniLibs/arm64-v8a/`,
-   renaming the executable so the packager keeps it:
-   ```
-   android/src/main/jniLibs/arm64-v8a/
-     libllamaserver.so      <- the llama-server executable, renamed
-     libllama.so
-     libggml.so
-     libggml-base.so
-     libggml-cpu.so
-     ... (whatever the release ships alongside)
-   ```
-   Naming everything `lib*.so` is what lets Android place them in
-   `nativeLibraryDir` and execute the server there (W^X blocks exec from
-   `filesDir`). `pb.directory(...)` points the process at that dir so the loader
-   resolves the sibling libs.
-3. Confirm the binary is arm64 PIE (`file libllamaserver.so`).
+```bash
+mobile/plugins/polaris-llama/scripts/fetch-llama.sh              # or fetch-llama.ps1
+mobile/plugins/polaris-llama/scripts/fetch-llama.sh b<NNNN>      # pin a llama.cpp tag
+```
 
-> A CI step (mirroring the ncnn/data-pack packaging) can fetch and stage these on
-> release instead of asking each builder to do it by hand. Not wired yet.
+It downloads the `llama-b<NNNN>-bin-android-arm64.zip` release (the eval validated
+**b10058**), copies every `.so` into `jniLibs/arm64-v8a/`, and copies the
+`llama-server` executable there renamed `libllamaserver.so`. Naming everything
+`lib*.so` is what lets Android place them in `nativeLibraryDir` and execute the
+server there (W^X blocks exec from `filesDir`); `pb.directory(...)` points the
+process at that dir so the loader resolves the sibling libs.
+
+> Wire the script as a prebuild step in the Android CI job (mirroring the
+> ncnn/data-pack packaging) so releases stage the binary automatically.
 
 ## Register the plugin
 

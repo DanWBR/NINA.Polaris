@@ -85,11 +85,23 @@ public static class CanopusEndpoints {
                 : Results.NotFound(new { error = "model catalog not found" });
         });
 
+        // Stream the GGUF the host already has to the phone over the LAN (the
+        // mobile on-device backend downloads it once). Range-enabled so the
+        // plugin's resume works. 404 when the host has no model.
+        g.MapGet("/model.gguf", (CanopusModelService models) => {
+            var path = models.ModelPath;
+            return string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)
+                ? Results.NotFound(new { error = "no model on this host" })
+                : Results.File(path, "application/octet-stream",
+                               fileDownloadName: System.IO.Path.GetFileName(path),
+                               enableRangeProcessing: true);
+        });
+
         // Manifest for the "On this device" tier: the FOSS host loads this, injects
         // the local LLM url/model from Settings, and embeds the client from
         // /canopus-client. The tool allowlist is derived from catalog.local.json so
         // the host's tool executor only permits what the local agent can call.
-        g.MapGet("/device-manifest", (IConfiguration cfg) => Results.Ok(new {
+        g.MapGet("/device-manifest", (IConfiguration cfg, CanopusModelService models) => Results.Ok(new {
             version = 1,
             tier = "device",
             product = new { name = "Canopus Assistant (device)", iconEmoji = "🔭",
@@ -107,13 +119,26 @@ public static class CanopusEndpoints {
             // the phone downloads this once. Config-driven; null until a source is
             // set (a release asset, or the host's own model-serving endpoint). See
             // MOBILE-LLM-C for serving the file the host already downloads.
-            mobileModel = MobileModel(cfg),
+            mobileModel = MobileModel(cfg, models),
         }));
     }
 
-    // GGUF source the mobile app downloads for its on-device backend. Null unless
-    // configured (Canopus:MobileModelUrl); the mobile UI then shows "not configured".
-    private static object? MobileModel(IConfiguration cfg) {
+    // GGUF source the mobile app downloads for its on-device backend. Prefer the
+    // model the host already has (the phone pulls it over the LAN via /model.gguf);
+    // else a configured URL (Canopus:MobileModelUrl); else null -> UI shows
+    // "not configured". The url may be host-relative; the client makes it absolute.
+    private static object? MobileModel(IConfiguration cfg, CanopusModelService models) {
+        if (models.ModelPresent) {
+            try {
+                var fi = new System.IO.FileInfo(models.ModelPath);
+                return new {
+                    url = "/api/canopus/model.gguf",
+                    bytes = fi.Length,
+                    name = System.IO.Path.GetFileNameWithoutExtension(fi.Name),
+                    sha256 = (string?)null,
+                };
+            } catch { /* fall through to config */ }
+        }
         var url = cfg["Canopus:MobileModelUrl"];
         if (string.IsNullOrWhiteSpace(url)) return null;
         long.TryParse(cfg["Canopus:MobileModelBytes"], out var bytes);
