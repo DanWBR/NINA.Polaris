@@ -109,6 +109,13 @@ case "$1" in
         # loses the mode bit if the build host's umask is loose.
         # Idempotent: chmod is a no-op when the bits are already set.
         chmod 0755 /opt/polaris/bin/polaris-wifi-bootstrap.sh 2>/dev/null || true
+        # USB auto-mount helper (invoked by udev on a plugged-in drive, see
+        # /lib/udev/rules.d/99-polaris-usbmount.rules). Mark it executable and
+        # create the mount-point root so headless hosts auto-mount USB sticks
+        # and Polaris can offer one as the capture home.
+        chmod 0755 /opt/polaris/bin/polaris-usb-mount.sh 2>/dev/null || true
+        mkdir -p /media/polaris 2>/dev/null || true
+        chmod 0755 /media/polaris 2>/dev/null || true
 
         # PolicyKit reload picks up /etc/polkit-1/rules.d/50-polaris-nm.rules
         # which grants the polaris user nmcli access without sudo
@@ -119,16 +126,18 @@ case "$1" in
             systemctl restart polkit.service >/dev/null 2>&1 || true
         fi
 
-        # ---- 5b. Camera USB udev rules ----
+        # ---- 5b. USB udev rules ----
         # /lib/udev/rules.d/99-polaris-{svbony,asi,playerone,touptek,altair}.rules
         # grant the polaris user libusb access to SVBony / ZWO / PlayerOne /
-        # ToupTek / Altair cameras (and bump usbfs memory for high-fps USB3 streaming).
-        # Reload so they apply without a reboot; harmless when udev isn't
+        # ToupTek / Altair cameras (and bump usbfs memory for high-fps USB3
+        # streaming). 99-polaris-usbmount.rules auto-mounts plugged-in USB drives
+        # under /media/polaris. Reload so they apply without a reboot; the trigger
+        # also mounts any drive already connected. Harmless when udev isn't
         # present (minimal containers).
         if command -v udevadm >/dev/null 2>&1; then
             udevadm control --reload-rules >/dev/null 2>&1 || true
             udevadm trigger >/dev/null 2>&1 || true
-            echo "polaris: reloaded camera USB udev rules"
+            echo "polaris: reloaded USB udev rules (camera access + drive auto-mount)"
         fi
 
         # ---- 6. systemd ----

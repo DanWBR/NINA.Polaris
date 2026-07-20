@@ -199,6 +199,10 @@ fi
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-self-update.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-self-update.sh"
 fi
+# USB auto-mount helper (udev runs it via systemd-run on a plugged-in drive).
+if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-usb-mount.sh" ]; then
+    chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-usb-mount.sh"
+fi
 find "$BUILD_DIR/opt/polaris/bin" -type d -exec chmod 0755 {} \; 2>/dev/null || true
 if [ -f "$BUILD_DIR/etc/polkit-1/rules.d/50-polaris-nm.rules" ]; then
     chmod 0644 "$BUILD_DIR/etc/polkit-1/rules.d/50-polaris-nm.rules"

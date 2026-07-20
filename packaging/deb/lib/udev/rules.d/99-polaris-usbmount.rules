@@ -1,0 +1,17 @@
+# Polaris: auto-mount USB mass-storage filesystems on headless hosts.
+#
+# A headless SBC has no desktop session, so udisks2 never auto-mounts a
+# plugged-in USB stick. Without a mountpoint the Polaris app cannot offer it
+# as the capture home. These rules mount USB filesystems under /media/polaris
+# via a detached helper (systemd-run, so a slow or hung mount never blocks
+# udev). Removal unmounts and prunes. See /opt/polaris/bin/polaris-usb-mount.sh.
+#
+# SUBSYSTEMS=="usb" restricts to devices behind a USB bus (not the SD card or
+# an internal SATA/NVMe disk); ID_FS_USAGE=="filesystem" skips partition tables,
+# swap and other non-mountable nodes. Drives already mounted (e.g. a USB boot
+# disk) are skipped by the helper.
+
+ACTION=="add", KERNEL=="sd*", SUBSYSTEMS=="usb", ENV{ID_FS_USAGE}=="filesystem", RUN+="/usr/bin/systemd-run --no-block /opt/polaris/bin/polaris-usb-mount.sh add %k"
+# On remove the parent USB chain may already be gone, so do not filter on
+# SUBSYSTEMS; the helper only ever unmounts stale /media/polaris entries.
+ACTION=="remove", KERNEL=="sd*", RUN+="/usr/bin/systemd-run --no-block /opt/polaris/bin/polaris-usb-mount.sh remove %k"
