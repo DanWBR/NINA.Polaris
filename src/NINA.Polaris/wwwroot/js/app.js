@@ -73,6 +73,8 @@ function ninaApp() {
             sbc: null,            // last /api/canopus/status snapshot (SBC controls)
             sbcBusy: false,       // a start/stop/download action is in flight
             deviceUrl: 'http://localhost:11434/v1',  // "on this device": local LLM /v1 base
+            deviceViaProxy: false, // route LLM calls through the host proxy (no CORS needed)
+            deviceProxyPort: 0,    // the local LLM port the host proxy forwards to
             deviceModel: 'qwen2.5:7b',
             deviceTest: null,     // null | 'testing' | 'ok' | 'error'
             deviceModels: [],     // models reported by the local server (Test connection)
@@ -10803,7 +10805,10 @@ function ninaApp() {
                 // Mobile app: the phone runs the model natively; the GGUF source comes
                 // from the manifest and the provider url is the started llama-server.
                 this.asst.mobileModel = m.mobileModel || null;
-                let devUrl = this._canopusDeviceUrl();
+                // Desktop device tier: prefer the host proxy (no CORS) when the
+                // browser is on the host machine; else the raw URL (direct + CORS).
+                if (!this.asst.deviceMobile) await this._canopusResolveDeviceProxy();
+                let devUrl = this.asst.deviceMobile ? this._canopusDeviceUrl() : this._canopusDeviceBaseV1();
                 if (this.asst.deviceMobile && this.asst.mobileStatus && this.asst.mobileStatus.running && this.asst.mobileStatus.url) {
                     devUrl = this.asst.mobileStatus.url;
                 }
@@ -10909,6 +10914,44 @@ function ninaApp() {
         },
         // ---- "On this device" tier: local LLM config + test connection ----
         _canopusDeviceUrl() { return (this.asst.deviceUrl || 'http://localhost:11434/v1').trim(); },
+        // Parse the configured device URL into { host, port, isLoopback }.
+        _canopusParseDevice() {
+            try {
+                const u = new URL(this._canopusDeviceUrl());
+                const port = Number(u.port) || (u.protocol === 'https:' ? 443 : 80);
+                const isLoopback = /^(localhost|127(\.\d+){3}|\[?::1\]?)$/i.test(u.hostname);
+                return { host: u.hostname, port, isLoopback };
+            } catch (_) { return null; }
+        },
+        // Decide whether the browser can reach the local LLM through the host's
+        // same-origin proxy (no CORS grant needed). That is valid only when the
+        // browser runs on the host machine: the proxy is loopback-gated and
+        // returns 421 otherwise, in which case we fall back to a direct fetch
+        // (which does need CORS). Sets asst.deviceViaProxy + asst.deviceProxyPort.
+        async _canopusResolveDeviceProxy() {
+            this.asst.deviceViaProxy = false;
+            const d = this._canopusParseDevice();
+            if (!d || !d.isLoopback) return;  // a LAN endpoint: the host can't stand in
+            try {
+                const r = await fetch('/api/canopus/device-llm/' + d.port + '/v1/models', { credentials: 'same-origin' });
+                if (r.status === 421) return; // host is not this machine -> direct + CORS
+                // Any other outcome means the host reached (or tried) 127.0.0.1:port,
+                // so proxying is valid even if the LLM itself is down right now.
+                this.asst.deviceViaProxy = true; this.asst.deviceProxyPort = d.port;
+            } catch (_) { /* proxy endpoint unreachable -> direct */ }
+        },
+        // Effective OpenAI /v1 base and Ollama root base: the same-origin host
+        // proxy when available, else the raw configured URL (direct + CORS).
+        _canopusDeviceBaseV1() {
+            return this.asst.deviceViaProxy
+                ? '/api/canopus/device-llm/' + this.asst.deviceProxyPort + '/v1'
+                : this._canopusDeviceUrl().replace(/\/+$/, '');
+        },
+        _canopusDeviceBaseOllama() {
+            return this.asst.deviceViaProxy
+                ? '/api/canopus/device-llm/' + this.asst.deviceProxyPort
+                : this._canopusOllamaBase();
+        },
         _canopusDeviceModel() { return (this.asst.deviceModel || 'qwen2.5:7b').trim(); },
         _canopusSaveDevice() {
             try {
@@ -10920,8 +10963,9 @@ function ninaApp() {
         async _canopusTestDevice() {
             this.asst.deviceTest = 'testing'; this.asst.deviceModels = [];
             try {
-                const base = this._canopusDeviceUrl().replace(/\/+$/, '');
-                const r = await fetch(base + '/models');
+                await this._canopusResolveDeviceProxy();
+                const base = this._canopusDeviceBaseV1();
+                const r = await fetch(base + '/models', { credentials: 'same-origin' });
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 const j = await r.json().catch(() => ({}));
                 this.asst.deviceModels = (j.data || j.models || []).map(x => x.id || x.name).filter(Boolean);
@@ -10931,14 +10975,20 @@ function ninaApp() {
             } catch (e) {
                 this.asst.deviceTest = 'error';
                 this.asst.deviceCatalog = [];
-                this.toast?.('Cannot reach the local LLM (' + ((e && e.message) || e) + '). Is it running, with CORS allowed for this page?', 'error');
+                // Via the host proxy no CORS is involved, so a failure means the LLM
+                // is down; on a direct fetch it may also be a missing CORS grant.
+                const hint = this.asst.deviceViaProxy
+                    ? 'Is your LLM server (Ollama / LM Studio / llama.cpp) running?'
+                    : 'Is it running, with CORS allowed for this page?';
+                this.toast?.('Cannot reach the local LLM (' + ((e && e.message) || e) + '). ' + hint, 'error');
             }
         },
 
         // ---- Ollama model manager (device tier) ----------------------------
-        // The manager talks to Ollama's HTTP API DIRECTLY from the browser (the
-        // browser is always co-located with the user's Ollama at localhost). The
-        // same OLLAMA_ORIGINS CORS grant that permits /v1 covers /api/* too.
+        // The manager reaches Ollama's HTTP API through the same host proxy as
+        // the agent (_canopusDeviceBaseOllama): same-origin when the browser is
+        // on the host machine, so no OLLAMA_ORIGINS CORS grant is needed. Only a
+        // remote browser (proxy returns 421) falls back to a direct fetch.
 
         // Ollama's API base (strip the OpenAI "/v1" suffix off the configured URL).
         _canopusOllamaBase() {
@@ -10969,6 +11019,7 @@ function ninaApp() {
         // Fetch the curated catalog + Ollama's installed models, then annotate.
         async _canopusDeviceRefresh() {
             this._canopusDetectGpu();
+            await this._canopusResolveDeviceProxy();
             let catalog = [];
             try {
                 const cr = await fetch('/api/canopus/device-models');
@@ -10976,7 +11027,7 @@ function ninaApp() {
             } catch (_) {}
             let installed = new Set();
             try {
-                const tr = await fetch(this._canopusOllamaBase() + '/api/tags');
+                const tr = await fetch(this._canopusDeviceBaseOllama() + '/api/tags');
                 if (tr.ok) {
                     const td = await tr.json().catch(() => ({}));
                     (td.models || []).forEach(m => { if (m && m.name) installed.add(m.name); });
@@ -11011,7 +11062,7 @@ function ninaApp() {
             if (!allowed) return;
             this.asst.devicePull = tag; this.asst.devicePullPct = 0; this.asst.devicePullStatus = 'starting…';
             try {
-                const resp = await fetch(this._canopusOllamaBase() + '/api/pull', {
+                const resp = await fetch(this._canopusDeviceBaseOllama() + '/api/pull', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ model: tag, stream: true }),
                 });
@@ -11046,7 +11097,7 @@ function ninaApp() {
         async _canopusDeviceDelete(tag) {
             if (!confirm('Delete ' + tag + ' from Ollama? You can download it again later.')) return;
             try {
-                const r = await fetch(this._canopusOllamaBase() + '/api/delete', {
+                const r = await fetch(this._canopusDeviceBaseOllama() + '/api/delete', {
                     method: 'DELETE', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ model: tag }),
                 });

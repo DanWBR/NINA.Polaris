@@ -13822,9 +13822,18 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 </template>
                             </div>
                             <p class="text-muted" style="font-size:12px; margin-top:10px">
-                                The LLM server must allow this page's origin (CORS). For Ollama, run it with
-                                <code>OLLAMA_ORIGINS=<span x-text="location.origin"></span></code> (or <code>*</code>);
-                                LM Studio / llama.cpp have a CORS toggle. After connecting, pick a model above, Canopus downloads it into Ollama for you. Only tool-capable models are listed.
+                                <template x-if="!asst.deviceViaProxy">
+                                    <span>
+                                        Polaris and your LLM are on different machines, so the LLM server must allow
+                                        this page's origin (CORS). For Ollama, run it with
+                                        <code>OLLAMA_ORIGINS=<span x-text="location.origin"></span></code> (or <code>*</code>);
+                                        LM Studio / llama.cpp have a CORS toggle.
+                                    </span>
+                                </template>
+                                <template x-if="asst.deviceViaProxy">
+                                    <span>Polaris reaches your LLM through the host, so no CORS setup is needed.</span>
+                                </template>
+                                After connecting, pick a model above, Canopus downloads it into Ollama for you. Only tool-capable models are listed.
                             </p>
                               </div>
                             </template>

@@ -12,6 +12,9 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Net;
+using System.Net.Http.Headers;
+using Microsoft.AspNetCore.Http.Features;
 using NINA.Polaris.Services.External;
 
 namespace NINA.Polaris.Endpoints;
@@ -21,6 +24,12 @@ namespace NINA.Polaris.Endpoints;
 /// starts/stops the local server. The chat itself is served through the
 /// /canopus/* reverse-proxy, not here.</summary>
 public static class CanopusEndpoints {
+    // Reverse-proxy to the "On this device" LLM (Ollama / LM Studio / llama.cpp)
+    // so the browser talks same-origin and never needs a CORS grant on that
+    // server. Only used when the browser is on the host machine (see the
+    // loopback gate below), so forwarding to 127.0.0.1 targets the same Ollama.
+    private static readonly HttpClient _deviceLlmHttp = new() { Timeout = TimeSpan.FromMinutes(10) };
+
     public static void MapCanopusEndpoints(this WebApplication app) {
         var g = app.MapGroup("/api/canopus");
 
@@ -96,6 +105,53 @@ public static class CanopusEndpoints {
                                fileDownloadName: System.IO.Path.GetFileName(path),
                                enableRangeProcessing: true);
         });
+
+        // Same-origin reverse proxy to the user's local LLM for the "On this
+        // device" tier, so the browser never needs a CORS grant on Ollama/LM
+        // Studio/llama.cpp. Forwards /device-llm/{port}/{path} to
+        // http://127.0.0.1:{port}/{path}. Gated to a loopback client: only when
+        // the browser runs on the host machine is the host's 127.0.0.1 the same
+        // Ollama the browser means by "this device"; otherwise the client falls
+        // back to a direct (CORS) fetch. 421 signals "not the same machine".
+        g.MapMethods("/device-llm/{port:int}/{**rest}", new[] { "GET", "POST", "DELETE" },
+            async (HttpContext ctx, int port, string? rest) => {
+                var ip = ctx.Connection.RemoteIpAddress;
+                var loopback = ip != null && (IPAddress.IsLoopback(ip)
+                    || (ip.IsIPv4MappedToIPv6 && IPAddress.IsLoopback(ip.MapToIPv4())));
+                if (!loopback) {
+                    ctx.Response.StatusCode = StatusCodes.Status421MisdirectedRequest;
+                    await ctx.Response.WriteAsJsonAsync(new { error = "not-same-host" });
+                    return;
+                }
+                if (port < 1 || port > 65535) { ctx.Response.StatusCode = StatusCodes.Status400BadRequest; return; }
+
+                var target = $"http://127.0.0.1:{port}/{rest}{ctx.Request.QueryString.Value}";
+                using var req = new HttpRequestMessage(new HttpMethod(ctx.Request.Method), target);
+                if (HttpMethods.IsPost(ctx.Request.Method) || HttpMethods.IsDelete(ctx.Request.Method)) {
+                    var ms = new MemoryStream();
+                    await ctx.Request.Body.CopyToAsync(ms);
+                    ms.Position = 0;
+                    if (ms.Length > 0) {
+                        req.Content = new StreamContent(ms);
+                        if (MediaTypeHeaderValue.TryParse(ctx.Request.ContentType, out var mt))
+                            req.Content.Headers.ContentType = mt;
+                    }
+                }
+                HttpResponseMessage resp;
+                try {
+                    resp = await _deviceLlmHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ctx.RequestAborted);
+                } catch (Exception e) {
+                    ctx.Response.StatusCode = StatusCodes.Status502BadGateway;
+                    await ctx.Response.WriteAsJsonAsync(new { error = "unreachable", detail = e.Message });
+                    return;
+                }
+                ctx.Response.StatusCode = (int)resp.StatusCode;
+                var ct = resp.Content.Headers.ContentType?.ToString();
+                if (!string.IsNullOrEmpty(ct)) ctx.Response.ContentType = ct;
+                // Stream the body through (Ollama's /api/pull emits NDJSON progress).
+                ctx.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+                await resp.Content.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
+            });
 
         // Manifest for the "On this device" tier: the FOSS host loads this, injects
         // the local LLM url/model from Settings, and embeds the client from
