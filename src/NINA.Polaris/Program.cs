@@ -244,6 +244,8 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Storage.IStorageTargetFactor
     NINA.Polaris.Services.Storage.StorageTargetFactory>();
 builder.Services.AddSingleton<StoragePushService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<StoragePushService>());
+builder.Services.AddSingleton<UsbDriveWatcherService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<UsbDriveWatcherService>());
 builder.Services.AddSingleton<PHD2Client>();
 // Native in-process autoguider (drop-in alternative to PHD2, per-rig).
 builder.Services.AddSingleton<NativeGuider>();
@@ -1233,6 +1235,7 @@ app.MapIndiWebEndpoints();
 // WIFI-3: hotspot ↔ station mode switch (Linux + NetworkManager only)
 app.MapNetworkEndpoints();
 app.MapStorageEndpoints();
+app.MapUsbEndpoints();
 app.MapAutoFocusEndpoints();
 // Sticky UI field persistence (panel exposure/gain/binning, target name,
 // AF params, ...): client PUTs a JSON blob, restores it on load.

@@ -23729,6 +23729,41 @@ function ninaApp() {
                 + 'Turn the cooler on in RIGS → Camera first, or proceed anyway?',
                 { title: 'Cooler is off', okLabel: 'Start anyway', cancelLabel: 'Cancel', danger: true });
         },
+        // A removable USB drive appeared at runtime: ask once whether to move the
+        // capture home onto it. Guards keep it to a single prompt per drive and
+        // never stomp another open confirm. Accept POSTs /api/usb/use (sets home),
+        // decline POSTs /api/usb/dismiss; both clear the pending state server-side.
+        async _maybePromptUsbDrive(drive) {
+            if (!drive || !drive.path) { this._usbHandledPath = null; return; }
+            if (this._usbHandledPath === drive.path) return;        // already offered this one
+            if (this._usbPromptBusy || this.confirmModal.open) return; // don't interrupt another prompt
+            this._usbPromptBusy = true;
+            this._usbHandledPath = drive.path;
+            try {
+                const free = drive.freeBytes ? ' (' + (drive.freeBytes / 1e9).toFixed(1) + ' GB free)' : '';
+                const label = drive.label || drive.path;
+                const yes = await this._confirmAsync(
+                    'A USB drive "' + label + '"' + free + ' was just plugged in.\n\n'
+                    + 'Use it as your capture home, where Polaris saves images?',
+                    { title: 'USB drive detected', okLabel: 'Yes, use it', cancelLabel: 'Not now' });
+                if (yes) {
+                    const resp = await this.apiPost('/api/usb/use', { path: drive.path });
+                    const r = await resp.json().catch(() => ({}));
+                    if (resp.ok && r.imageOutputDir) {
+                        this.settings.imageOutputDir = r.imageOutputDir;
+                        this.toast('Capture home set to ' + r.imageOutputDir, 'ok');
+                    } else {
+                        this.toast('Could not use the USB drive' + (r.error ? ': ' + r.error : ''), 'error');
+                    }
+                } else {
+                    await this.apiPost('/api/usb/dismiss', { path: drive.path });
+                }
+            } catch (e) {
+                this.toast('USB drive: ' + ((e && e.message) || e), 'error');
+            } finally {
+                this._usbPromptBusy = false;
+            }
+        },
         _confirmAccept() {
             const r = this._confirmResolver;
             this._confirmResolver = null;
@@ -36705,6 +36740,9 @@ function ninaApp() {
             // Auto-push to network storage: live counters for the Settings card.
             // Kept separate from the storagePush config-form object.
             if (msg.storagePush) this.storagePushStatus = msg.storagePush;
+            // A USB drive plugged in at runtime: offer to move the capture home
+            // onto it (null when nothing is pending). See UsbDriveWatcherService.
+            this._maybePromptUsbDrive(msg.usbDrive);
             // FW-1: Flat Wizard tick. state + lastError always present;
             // progress is null when the wizard never ran (preserved as
             // null so the UI hides the progress block). When a run

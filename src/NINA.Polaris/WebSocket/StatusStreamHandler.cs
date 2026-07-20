@@ -71,6 +71,7 @@ public static class StatusStreamHandler {
         var profile = context.RequestServices.GetRequiredService<ProfileService>();
         var hostMetrics = context.RequestServices.GetRequiredService<HostMetricsService>();
         var clockSync = context.RequestServices.GetRequiredService<ClockSyncService>();
+        var usbWatcher = context.RequestServices.GetRequiredService<UsbDriveWatcherService>();
         var siril = context.RequestServices
             .GetRequiredService<NINA.Polaris.Services.External.SirilService>();
         var graxpert = context.RequestServices
@@ -641,6 +642,15 @@ public static class StatusStreamHandler {
                             lastError     = storagePush.LastError,
                             lastUploadUtc = storagePush.LastUploadUtc?.ToString("o")
                         },
+                        // A removable USB drive plugged in at runtime, awaiting the
+                        // user's yes/no to move the capture home onto it. null when
+                        // nothing is pending. See UsbDriveWatcherService.
+                        usbDrive = usbWatcher.Pending is { } usb ? new {
+                            path       = usb.Path,
+                            label      = usb.Label,
+                            freeBytes  = usb.FreeBytes,
+                            totalBytes = usb.TotalBytes
+                        } : null,
                         // BENCH: compact progress for the Settings card.
                         // Full results are fetched over REST.
                         benchmark = new {
