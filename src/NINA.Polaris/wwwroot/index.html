@@ -13628,6 +13628,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             device</em> runs the agent in your browser against a local LLM
                             (Ollama / LM Studio / llama.cpp) on the computer you're using, fast on a powerful PC/Mac, free and offline, no account needed.
                         </p>
+                        <p x-show="_isMobileClient()" class="text-muted" style="font-size:12px; margin-top:4px; color:#d29922">
+                            On a phone or tablet browser, <em>On this device</em> has no local model to run;
+                            use <em>On this host</em>, or install the Polaris app to run it on this device.
+                        </p>
 
                         <template x-if="asst.backend === 'sbc'">
                           <div class="settings-card" style="margin-top:10px; padding:12px">
@@ -13711,7 +13715,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                               </div>
                             </template>
 
-                            <template x-if="!asst.deviceMobile">
+                            <!-- Mobile browser (not the native app): there is no local LLM on a
+                                 phone/tablet browser, so this tier cannot run here. Steer the user
+                                 to the on-host model or the native app. -->
+                            <template x-if="!asst.deviceMobile &amp;&amp; _isMobileClient()">
+                              <div>
+                                <p style="font-size:12px; color:#d29922; margin-top:0">
+                                    ⚠ On a phone or tablet browser there is no local LLM here to run the model.
+                                </p>
+                                <p class="text-muted" style="font-size:12px">
+                                    Choose <strong>On this host</strong> to run the model on the Polaris host
+                                    (works from any browser), or install the Polaris app to run it natively on
+                                    this device.
+                                </p>
+                                <button class="btn btn-sm btn-primary" style="margin-top:6px"
+                                        @click="_assistantSetBackend('sbc')">Switch to On this host</button>
+                              </div>
+                            </template>
+
+                            <template x-if="!asst.deviceMobile &amp;&amp; !_isMobileClient()">
                               <div>
                             <p class="text-muted" style="font-size:12px; margin-top:0">
                                 Run a local LLM on this computer with <strong>Ollama</strong>,

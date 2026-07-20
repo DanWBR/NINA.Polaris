@@ -10790,6 +10790,10 @@ function ninaApp() {
 
             let m = null;
             if (this.asst.backend === 'device') {
+                // Mobile browser (not the native app): a phone/tablet browser has no
+                // local LLM to run the model, so this tier can't work here. Don't reveal
+                // the FAB; the Settings card shows guidance to use "On this host" instead.
+                if (this._isMobileClient() && !this.asst.deviceMobile) { this.asst.subscribed = false; return; }
                 // On this device: fetch the device manifest (tier + tool allowlist),
                 // then inject the user's local LLM config from Settings. The client
                 // runs the agent IN THE BROWSER against that local server.
