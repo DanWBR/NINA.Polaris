@@ -106,11 +106,12 @@
           body: JSON.stringify(body),
         });
       } catch (e) {
-        // Connection refused / CORS / DNS: the local server isn't reachable.
+        // Connection refused / DNS: the local server isn't reachable. (CORS setup,
+        // when relevant, is surfaced by the Settings Test connection button.)
         throw new Error(
           "can't reach the local model at " + this.base + '. Is your LLM server '
-          + '(Ollama / LM Studio / llama.cpp) running, and is CORS allowed for this '
-          + 'page? (' + (e && e.message ? e.message : e) + ')');
+          + '(Ollama / LM Studio / llama.cpp) running? ('
+          + (e && e.message ? e.message : e) + ')');
       }
       if (!r.ok) {
         let detail = '';
