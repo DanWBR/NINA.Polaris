@@ -12978,7 +12978,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <div class="settings-section" id="power-card">
-                    <h3 data-tour="set-power"><span class="settings-card-icon">⏻</span>Power / Software Update</h3>
+                    <h3 data-tour="set-power"><span class="settings-card-icon">⏻</span>Power</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Restart the Polaris server or reboot the whole device
                         without an SSH session. Handy on a headless SBC at the
@@ -13004,34 +13004,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span x-show="!power.shuttingDown">⏻ Shut down device</span>
                             <span x-show="power.shuttingDown">Shutting down…</span>
                         </button>
-                        <button class="btn btn-sm"
-                                @click="checkUpdateManual()"
-                                :disabled="update.checking"
-                                title="Query GitHub for a newer Polaris release">
-                            <span x-show="!update.checking">⬇ Check for updates</span>
-                            <span x-show="update.checking">Checking…</span>
-                        </button>
-                        <!-- Roll back to a previous version. Its own button +
-                             modal because the update modal only appears when a
-                             newer version exists. Self-update is .deb-only. -->
-                        <button class="btn btn-sm" x-show="update.supported" x-cloak
-                                @click="openRollback()"
-                                title="Reinstall a previous Polaris release (downgrade)">
-                            ↩ Roll back version
-                        </button>
                     </div>
                     <p class="text-muted" x-show="!power.canReboot && power.loaded"
                        style="font-size:11px; margin-top:8px">
                         ⚠ Device reboot is not available on this platform.
-                    </p>
-                    <p class="text-muted" x-show="update.currentVersion"
-                       style="font-size:11px; margin-top:8px">
-                        <span x-show="!update.available">
-                            Running v<span x-text="update.currentVersion"></span>.
-                        </span>
-                        <span x-show="update.available" style="color:var(--accent)">
-                            ⬆ Update available: v<span x-text="update.latestVersion"></span>: <a href="#" @click.prevent="openUpdateModal()">view &amp; install</a>
-                        </span>
                     </p>
 
                     <!-- Windows boot auto-start. On Linux/SBC this is handled
@@ -13071,6 +13047,41 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </span>
                         </p>
                     </template>
+                </div>
+
+                <div class="settings-section" id="software-update-card">
+                    <h3 data-tour="set-update"><span class="settings-card-icon">⬇</span>Software update</h3>
+                    <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
+                        Check for a newer Polaris release and install it, or roll back to a
+                        previous version, all without an SSH session.
+                    </p>
+
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px">
+                        <button class="btn btn-sm"
+                                @click="checkUpdateManual()"
+                                :disabled="update.checking"
+                                title="Query GitHub for a newer Polaris release">
+                            <span x-show="!update.checking">⬇ Check for updates</span>
+                            <span x-show="update.checking">Checking…</span>
+                        </button>
+                        <!-- Roll back to a previous version. Its own button +
+                             modal because the update modal only appears when a
+                             newer version exists. Self-update is .deb-only. -->
+                        <button class="btn btn-sm" x-show="update.supported" x-cloak
+                                @click="openRollback()"
+                                title="Reinstall a previous Polaris release (downgrade)">
+                            ↩ Roll back version
+                        </button>
+                    </div>
+                    <p class="text-muted" x-show="update.currentVersion"
+                       style="font-size:11px; margin-top:8px">
+                        <span x-show="!update.available">
+                            Running v<span x-text="update.currentVersion"></span>.
+                        </span>
+                        <span x-show="update.available" style="color:var(--accent)">
+                            ⬆ Update available: v<span x-text="update.latestVersion"></span>: <a href="#" @click.prevent="openUpdateModal()">view &amp; install</a>
+                        </span>
+                    </p>
                 </div>
 
                 <div class="settings-section network-section">

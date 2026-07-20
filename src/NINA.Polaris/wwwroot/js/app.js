@@ -26239,7 +26239,7 @@ function ninaApp() {
             // category name -> exact normalized titles it contains (emoji
             // stripped, lowercased). Category order is the display order.
             const CATS = [
-                ['Appearance & interface', ['appearance', 'device name']],
+                ['Appearance & interface', ['appearance', 'host name']],
                 ['Location & time',     ['clock', 'observatory']],
                 ['Equipment & capture', ['hardware', 'indi server', 'indi status', 'plate solving', 'sequencer']],
                 ['AI Tools', ['assistant', 'ai models']],
@@ -26247,7 +26247,7 @@ function ninaApp() {
                 ['Network & security',  ['authentication', 'https certificate',
                     'https endpoints (for webgpu + multi-thread wasm)', 'network (wifi)', 'remote terminal',
                     'auto-push to network storage']],
-                ['System & maintenance', ['debug logging', 'hardware benchmark', 'reset everything to factory defaults', 'power']],
+                ['System & maintenance', ['debug logging', 'hardware benchmark', 'reset everything to factory defaults', 'software update', 'power']],
             ];
             const norm = s => (s || '').replace(/^[^A-Za-z0-9]+/, '').trim().toLowerCase();
             const cards = Array.from(gridEl.querySelectorAll(':scope > .settings-section'))
