@@ -1,59 +1,123 @@
 # Canopus Assistant {#sec-assistant}
 
 Everything else in this handbook is free and open source. **Canopus
-Assistant** is the one exception: an optional, paid AI companion that
-rides inside the Polaris web interface, and whose subscription revenue
-funds the ongoing development of Polaris itself. It is entirely
-opt-in — Polaris ships with it switched off, never depends on it, and
-works exactly the same whether or not you ever turn it on. This chapter
-explains what it does, how to enable it, and — just as importantly —
-what it does *not* do with your data or your telescope.
+Assistant** is an optional AI companion that rides inside the Polaris web
+interface. It comes in three flavours: one paid cloud tier, whose
+subscription revenue funds the ongoing development of Polaris itself, and
+two free tiers that run entirely on your own hardware. All three are
+strictly opt-in. Polaris ships with the assistant switched off, never
+depends on it, and works exactly the same whether or not you ever turn it
+on. This chapter explains what it does, how to choose and enable a
+backend, and, just as importantly, what it does *not* do with your data or
+your telescope.
 
 Think of it as a co-pilot rather than an autopilot. It plans the night,
-proposes the actions to get there, inspects your frames, and answers
-astrophotography questions in plain language; but anything that moves
-hardware or changes a running session waits for your approval first.
+proposes the actions to get there, answers astrophotography questions in
+plain language, and (on the cloud tier) inspects your frames. Anything
+that moves hardware or changes a running session waits for your approval
+first.
 
 ## What it can do {#sec-assistant-capabilities}
 
-The assistant is built around four jobs.
+Every backend shares the same core jobs. The cloud tier adds a few that
+need either a vision-capable model or more horsepower than a small local
+model has; those are called out below.
 
-**It plans the night.** Tell it what you feel like shooting — "a nebula
+**It plans the night.** Tell it what you feel like shooting, "a nebula
 that's up now", "something for a two-hour window", "narrowband from a
-Bortle 7 backyard" — and it ranks well-placed deep-sky targets (plus the
-Moon and planets), checks their altitude across the night, the weather
-and the Moon's interference, and then assembles a ready-to-run,
-multi-target plan in the night planner (@sec-night-planner) with sensible
-exposures, dithering, and refocus points. You review and tweak it before
-anything runs.
+Bortle 7 backyard", and it ranks well-placed deep-sky targets (plus the
+Moon and planets), checks their altitude across the night, the weather and
+the Moon's interference, and then assembles a ready-to-run plan in the
+night planner (@sec-night-planner) with sensible exposures, dithering, and
+refocus points. You review and tweak it before anything runs. (Building
+the full multi-target plan is a cloud-tier feature; the local tiers still
+suggest targets, exposures and framing.)
 
 **It drives the rig, with your approval.** Slewing to a target,
-autofocusing (@sec-focusing), starting a sequence or a live stack,
-dithering, a meridian flip — each is proposed as a plan you **approve**,
-**review**, or **reject**. When it acts, it navigates the Polaris UI to
-the relevant panel so you can watch focus, guiding (@sec-guiding), or the
-stack as it works.
-
-**It looks at your images.** Ask "is this frame any good?" and it
-inspects the current frame — focus and star shape, trailing, gradients,
-framing — and tells you what to fix. It can also grade a folder of subs
-and drive the STUDIO stacking and post-processing tools (@sec-studio) on
-your behalf, again as reviewable steps.
+autofocusing (@sec-focusing), starting a sequence or a live stack, and
+dithering are each proposed as an action you **approve**, **review**, or
+**reject**. When it acts, it navigates the Polaris UI to the relevant
+panel so you can watch focus, guiding (@sec-guiding), or the stack as it
+works. (Parking the mount and stopping guiding or a live stack are
+cloud-tier extras.)
 
 **It knows astrophotography.** Grounded, practical answers on focusing,
 guiding, exposure and histograms, filters, polar alignment
-(@sec-polar-alignment), calibration frames, and diagnosing bad subs —
-drawing on a knowledge base that includes this very handbook.
+(@sec-polar-alignment), calibration frames, and diagnosing bad subs,
+drawing on a knowledge base that includes this very handbook. Available on
+every backend.
+
+**It looks at your images (cloud tier).** Ask "is this frame any good?"
+and it inspects the current frame, focus and star shape, trailing,
+gradients, framing, and tells you what to fix. It can also grade a folder
+of subs and drive the STUDIO stacking and post-processing tools
+(@sec-studio) on your behalf, again as reviewable steps. Frame analysis
+needs a vision-capable model, so it runs on the cloud tier only; the two
+local tiers are text only.
+
+## Choosing a backend {#sec-assistant-backends}
+
+You pick where the assistant runs in **Settings, Assistant**. There are
+three choices, and the picker labels each by what runs it:
+
+- **Cloud (subscription).** The most capable option, and the only one that
+  can look at your frames. The AI runs on our servers (gpt-5.3-chat on
+  Microsoft Azure); your browser relays approved actions to your local
+  Polaris. It needs an internet connection and a subscription (US$4.99 per
+  month at the time of writing, with a short free trial). Any device that
+  can open the Polaris web interface can use it, no local model or GPU
+  required.
+
+- **On this host (free).** A small language model runs on the Polaris host
+  itself, the machine Polaris is running on, so any phone or tablet on
+  your network becomes a thin client. No account, no subscription, fully
+  offline, text only. It needs a 64-bit host with roughly 6 GB of RAM free
+  alongside Polaris; 8 GB or more and a faster processor let warm replies
+  land in a few seconds (the first reply of a session takes longer while
+  the model loads). Polaris downloads the model and runtime for you on
+  first use.
+
+- **On this device (free).** The assistant runs the model on the machine
+  you are browsing from, using a local LLM server you already run (Ollama,
+  LM Studio, or llama.cpp), or, inside the Polaris mobile app, a model
+  bundled into the app. This is the fastest option on a powerful PC or Mac
+  with a capable GPU, where replies are near-instant. No account, fully
+  offline, text only. When Polaris and your local LLM are on the same
+  machine, Polaris routes the calls for you, so there is nothing to
+  configure; only a split setup, where you browse a Polaris host on a
+  different machine, needs the LLM server to allow the Polaris page's
+  origin.
+
+The two local tiers are free and keep every message on your own hardware.
+The cloud tier is the only paid one, and the only one whose revenue funds
+Polaris.
+
+::: {.callout-note}
+On a phone or tablet **browser**, "On this device" has no local model to
+run, because the browser is not the machine hosting the model. Use "On
+this host" instead (the model runs on the Polaris host and your phone is
+just a screen), or install the Polaris mobile app, which can run a small
+model natively on the phone.
+:::
 
 ## Turning it on {#sec-assistant-enable}
 
-The assistant appears as a small, dismissible badge in the bottom-right
-corner of the Polaris interface. The flow from there is deliberately
-short:
+Open **Settings, Assistant** and choose a backend.
+
+For a **free local backend**, pick "On this host" or "On this device" and
+follow the short setup shown in the card: download the on-host model, or
+point Polaris at your local LLM and pick a model. The assistant's floating
+button appears straight away; there is no account to create and nothing to
+pay.
+
+For the **cloud tier**, the assistant also surfaces as a small, dismissible
+badge in the bottom-right corner of the interface. The flow from there is
+deliberately short:
 
 1. Click the badge to open a short intro that explains what the assistant
-   is and what it costs.
-2. Choose to subscribe. You create an account with just an email address —
+   is and what it costs (and points you to the free local options, in case
+   you would rather run it yourself).
+2. Choose to subscribe. You create an account with just an email address,
    there is no password to invent. Polaris sends you a **magic link** (and
    a short numeric code you can type instead), and clicking it signs you
    in. The subscription itself is handled by Stripe's secure checkout.
@@ -61,55 +125,67 @@ short:
    Click it to open the chat panel and start talking to the assistant.
 
 If you dismiss the badge, it stays gone until there is something new to
-show. Nothing about this flow is baked into open-source Polaris: the app
-only knows how to fetch a small manifest from the assistant's cloud and
-render whatever it describes. With no manifest configured, the badge
+show. Nothing about the cloud flow is baked into open-source Polaris: the
+app only knows how to fetch a small manifest from the assistant's cloud
+and render whatever it describes. With no manifest configured, the badge
 never appears at all.
 
 ## How it works {#sec-assistant-architecture}
 
-The assistant has three parts, and understanding how they fit together
-explains both its safety model and its privacy model.
+There are two architectures, depending on the backend, and both share the
+same safety and privacy model.
+
+**Cloud tier.** Three parts fit together:
 
 - **The cloud service** holds the language model, the account and billing
   records, and the "agent loop" that turns your requests into a plan of
   tool calls. It is the only part that talks to the AI.
 - **The chat panel** is a small web app served from that cloud and shown
   inside Polaris as an embedded frame.
-- **Your browser is the bridge.** This is the important part. The cloud
-  never contacts your telescope. When the agent decides to, say, read the
-  system status or slew the mount, it does not reach into your network —
-  it hands that *intent* to your browser, which executes it against your
-  local Polaris over your LAN, using the session you are already logged
-  into, and hands the result back.
+- **Your browser is the bridge.** The cloud never contacts your telescope.
+  When the agent decides to read the system status or slew the mount, it
+  does not reach into your network; it hands that *intent* to your browser,
+  which executes it against your local Polaris over your LAN, using the
+  session you are already logged into, and hands the result back.
 
-This design has a happy consequence: because the browser is the bridge,
-your Polaris host (@sec-networking) never needs its own internet
-connection. The single-board computer at the telescope can sit on an
-offline field network; as long as the browser you are holding has both
-internet (to reach the cloud) and LAN access (to reach Polaris), the
-assistant works. The telescope stays on your local network, and the AI
-never touches it directly.
+This has a happy consequence: because the browser is the bridge, your
+Polaris host (@sec-networking) never needs its own internet connection.
+The single-board computer at the telescope can sit on an offline field
+network; as long as the browser you are holding has both internet (to
+reach the cloud) and LAN access (to reach Polaris), the assistant works.
+
+**Local tiers.** There is no cloud and no server-side AI. The agent loop
+runs in your browser (for "On this device") or on the Polaris host itself
+(for "On this host"), talking to a local model over a plain HTTP endpoint.
+Prompts and replies never leave your hardware. The same "browser is the
+bridge" model still applies for actions: proposed tool calls run against
+your local Polaris through the session you are logged into.
 
 ## Staying in control {#sec-assistant-safety}
 
-Read-only questions — "what's up tonight?", "how's guiding?", "is this
-sub sharp?" — run freely; they only look. Anything that **moves hardware
-or changes a running session** is different: slewing, autofocus, starting
-or stopping a sequence or live stack, parking, a meridian flip. Those are
-never performed silently. The assistant proposes a plan, and it does
-nothing until you approve it. You can review the exact actions, approve
-them, or reject them outright. The assistant is a co-pilot with its hands
-visible on the yoke, not an autopilot you have to trust blindly.
+This applies to every backend. Read-only questions, "what's up tonight?",
+"how's guiding?", "is this sub sharp?", run freely; they only look.
+Anything that **moves hardware or changes a running session** is
+different: slewing, autofocus, starting or stopping a sequence or live
+stack, parking, a meridian flip. Those are never performed silently. The
+assistant proposes an action, and it does nothing until you approve it.
+You can review the exact steps, approve them, or reject them outright. The
+approval gate is structural, not a matter of the model's good behaviour,
+so it holds on the local tiers exactly as it does on the cloud. The
+assistant is a co-pilot with its hands visible on the yoke, not an
+autopilot you have to trust blindly.
 
 ## Your account and subscription {#sec-assistant-account}
 
-The assistant is a flat monthly subscription (US$4.99/mo at the time of
-writing; the current price is always shown on the subscribe screen), with
-a short free trial for new subscribers. Sign-in is by magic link, so
-there is no password to manage; you can change your email or resend the
-link from the sign-in screen. Billing and cancellation go through Stripe's
-standard customer flow.
+This section applies to the cloud tier only; the two free local backends
+have no account and nothing to pay.
+
+The cloud tier is a flat monthly subscription (US$4.99 per month at the
+time of writing; the current price is always shown on the subscribe
+screen), with a short free trial for new subscribers. Sign-in is by magic
+link, so there is no password to manage; you can change your email or
+resend the link from the sign-in screen. Billing and cancellation go
+through Stripe's standard customer flow.
 
 To keep the shared AI service fair and its costs predictable, each
 subscriber has a generous monthly usage allowance. In normal use you will
@@ -119,24 +195,29 @@ in the assistant's settings menu.
 
 ## Privacy {#sec-assistant-privacy}
 
-The assistant is designed to need very little about you. It does not
-upload or store your images. When it "looks at a frame", the analysis
-happens against your local Polaris, and only the *result* — sharpness,
-star shape, a gradient note — travels back as text. Likewise, when it
-needs to know how the session is going, your browser forwards a compact,
-on-demand snapshot of status (not your data) so the agent can reason about
-it. The account itself is just your email address plus the subscription
-state. The full, current privacy policy is linked from the intro screen
-and hosted alongside the service.
+On the **local tiers**, privacy is simple: nothing leaves your hardware.
+There is no account, no cloud, and no third-party AI provider. Your
+messages, the model, and every reply stay on the Polaris host or on the
+device you are browsing from.
 
-## Why it is a separate product {#sec-assistant-boundary}
+On the **cloud tier**, the assistant is designed to need very little about
+you. It does not upload or store your images. When it "looks at a frame",
+the analysis happens against your local Polaris, and only the *result*,
+sharpness, star shape, a gradient note, travels back as text. Likewise,
+when it needs to know how the session is going, your browser forwards a
+compact, on-demand snapshot of status (not your data) so the agent can
+reason about it. The account itself is just your email address plus the
+subscription state. The full, current privacy policy is linked from the
+intro screen and hosted alongside the service.
 
-Polaris is licensed under the AGPLv3, which is what keeps it free and
-open. Canopus Assistant is closed source and commercial, and the two are
-kept cleanly separable on purpose: the assistant runs as an entirely
-separate service and only ever talks to Polaris through the same public
-web API that any other client uses. Nothing in open-source Polaris
-contains the assistant's product logic — the open app is just a generic,
-off-by-default host that renders what the cloud manifest tells it to. That
-boundary is what lets a paid add-on fund a free application without
-compromising either one.
+## Why the cloud tier is a separate product {#sec-assistant-boundary}
+
+Polaris is licensed under the AGPLv3, which is what keeps it free and open,
+and the two local backends are part of that open codebase. The cloud tier
+is the one closed, commercial piece, and it is kept cleanly separable on
+purpose: it runs as an entirely separate service and only ever talks to
+Polaris through the same public web API that any other client uses.
+Nothing in open-source Polaris contains the cloud tier's product logic; the
+open app is just a generic, off-by-default host that renders what the cloud
+manifest tells it to. That boundary is what lets a paid add-on fund a free
+application without compromising either one.

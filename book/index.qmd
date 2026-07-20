@@ -53,9 +53,10 @@ Two audiences share these pages:
 - **Part V, Remote Access and Administration**: networking, HTTPS, the
   relay, authentication, and keeping a headless box (one that runs
   with no monitor or keyboard attached) healthy.
-- **Part VI, The Optional Assistant**: Canopus Assistant, the paid,
-  opt-in AI companion whose subscription funds Polaris — what it does,
-  how to enable it, and how it handles your telescope and your data.
+- **Part VI, The Optional Assistant**: Canopus Assistant, the opt-in AI
+  companion, its paid cloud tier (whose subscription funds Polaris) and
+  its two free, fully local backends, what it does, how to choose and
+  enable a backend, and how it handles your telescope and your data.
 - **Part VII, Under the Hood**: architecture, API, configuration, and how to
   build and contribute.
 - **Appendices**: the requirements matrix, glossary, troubleshooting, and
