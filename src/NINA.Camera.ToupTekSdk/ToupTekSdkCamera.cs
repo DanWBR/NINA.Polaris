@@ -40,6 +40,7 @@ public sealed class ToupTekSdkCamera : ICamera {
     private int _gainMin, _gainMax = 100;
 
     private int _gain;
+    private int _offset;   // sensor black level (OPTION_BLACKLEVEL); stamped into FITS
     private double _exposureSec = 0.03;
     private int _roiX, _roiY, _roiW, _roiH, _bin = 1;
 
@@ -148,6 +149,7 @@ public sealed class ToupTekSdkCamera : ICamera {
 
         _roiX = 0; _roiY = 0; _roiW = _maxX; _roiH = _maxY; _bin = 1;
         _gain = _gainMin;
+        if (cam.get_Option(Toupcam.eOPTION.OPTION_BLACKLEVEL, out int bl0)) _offset = bl0;
         _connected = true;
         State = CameraStates.Idle;
     }, ct);
@@ -259,7 +261,8 @@ public sealed class ToupTekSdkCamera : ICamera {
                     return _cam.put_ExpoAGain((ushort)Math.Clamp(_gain, _gainMin,
                         _gainMax == 0 ? ushort.MaxValue : _gainMax));
                 case "Offset":
-                    return _cam.put_Option(Toupcam.eOPTION.OPTION_BLACKLEVEL, (int)Math.Round(value));
+                    _offset = Math.Clamp((int)Math.Round(value), 0, BlackMax());
+                    return _cam.put_Option(Toupcam.eOPTION.OPTION_BLACKLEVEL, _offset);
                 case "Gamma":
                     return _cam.put_Gamma((int)Math.Round(value));
                 case "Speed":
@@ -320,7 +323,7 @@ public sealed class ToupTekSdkCamera : ICamera {
     public Task<IImageData> CaptureAsync(double exposureSeconds, CaptureOptions? opts = null,
                                          CancellationToken ct = default) => Task.Run<IImageData>(() => {
         if (_cam == null) throw new InvalidOperationException("Camera not connected.");
-        ApplyExposureGain(exposureSeconds, opts?.Gain);
+        ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
         var tcs = new TaskCompletionSource<IImageData>(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_captureGate) _captureTcs = tcs;
         bool startedForCapture = !_pullActive;
@@ -404,12 +407,19 @@ public sealed class ToupTekSdkCamera : ICamera {
             foreach (var s in _streamSubs.Values) { try { s(frame); } catch { } }
     }
 
-    private void ApplyExposureGain(double exposureSeconds, int? gainOverride) {
+    // Max black level scales with the current bit depth (see GetControls).
+    private int BlackMax() => 31 << Math.Max(0, (_bitDepth > 8 ? 16 : 8) - 8);
+
+    private void ApplyExposureGain(double exposureSeconds, int? gainOverride, int? offsetOverride = null) {
         if (_cam == null) return;
         _exposureSec = exposureSeconds > 0 ? exposureSeconds : _exposureSec;
         _cam.put_ExpoTime((uint)Math.Round(_exposureSec * 1_000_000));
         if (gainOverride is int g) _gain = g;
         _cam.put_ExpoAGain((ushort)Math.Clamp(_gain, _gainMin, _gainMax == 0 ? ushort.MaxValue : _gainMax));
+        if (offsetOverride is int o) {
+            _offset = Math.Clamp(o, 0, BlackMax());
+            _cam.put_Option(Toupcam.eOPTION.OPTION_BLACKLEVEL, _offset);
+        }
     }
 
     private IImageData WrapFrame16(ushort[] src, int w, int h) {
@@ -432,6 +442,7 @@ public sealed class ToupTekSdkCamera : ICamera {
         var meta = new ImageMetaData();
         meta.Camera.Name = DeviceName;
         meta.Camera.Gain = _gain;
+        meta.Camera.Offset = _offset;
         // Stamp the integration time so the FITS/XISF writers emit EXPTIME /
         // EXPOSURE (otherwise native-SDK frames saved with no exposure value).
         meta.Exposure.ExposureTime = _exposureSec;

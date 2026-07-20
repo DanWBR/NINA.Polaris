@@ -53,9 +53,10 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
     private double _pixelSizeX, _pixelSizeY;
     private int _bitDepth = 16;
     private int _sensorType; // 0=Mono 1=Color 2=RGGB 3=CMYG 4=CMYG2 5=LRGB
-    private bool _canCool, _canBin, _canAbort, _hasGain;
+    private bool _canCool, _canBin, _canAbort, _hasGain, _hasOffset;
     private int _maxBinX = 1;
     private int _gainMin, _gainMax;
+    private int _offsetMin, _offsetMax;
 
     public string Host { get; }
     public int Port { get; }
@@ -146,6 +147,10 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
     public int GainMin => _hasGain ? _gainMin : 0;
     public int GainMax => _hasGain ? _gainMax : 0;
 
+    // Value-based offset (offsetmin/offsetmax probed at connect). 0 when the
+    // driver has no offset range (or uses an index-based Offsets list).
+    public int Offset => _hasOffset ? SafeGet(() => _client.GetAsync<int>("offset"), 0) : 0;
+
     /// <summary>Alpaca cameras report gain, not ISO -- empty list signals
     /// the UI to hide the ISO dropdown.</summary>
     public IReadOnlyList<int> IsoOptions => Array.Empty<int>();
@@ -230,6 +235,13 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
             _gainMax = await _client.GetAsync<int>("gainmax", ct);
             _hasGain = _gainMax > _gainMin;
         } catch { _hasGain = false; }
+        // Same probe for the value-based offset range.
+        _hasOffset = false;
+        try {
+            _offsetMin = await _client.GetAsync<int>("offsetmin", ct);
+            _offsetMax = await _client.GetAsync<int>("offsetmax", ct);
+            _hasOffset = _offsetMax > _offsetMin;
+        } catch { _hasOffset = false; }
     }
 
     public async Task DisconnectAsync(CancellationToken ct = default) {
@@ -250,6 +262,11 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
             var clamped = Math.Clamp(g, _gainMin, _gainMax);
             await _client.PutAsync("gain",
                 new Dictionary<string, string> { ["Gain"] = clamped.ToString(CultureInfo.InvariantCulture) }, ct);
+        }
+        if (opts?.Offset is int off && _hasOffset) {
+            var clampedOff = Math.Clamp(off, _offsetMin, _offsetMax);
+            await _client.PutAsync("offset",
+                new Dictionary<string, string> { ["Offset"] = clampedOff.ToString(CultureInfo.InvariantCulture) }, ct);
         }
         if (_canBin) {
             if (opts?.BinX is int bx && bx >= 1) {
@@ -320,6 +337,7 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
                 PixelSizeX = _pixelSizeX,
                 PixelSizeY = _pixelSizeY,
                 Gain = _hasGain ? Gain : 0,
+                Offset = _hasOffset ? Offset : 0,
                 SensorType = MapSensorType(_sensorType),
                 BayerPattern = bayer
             },

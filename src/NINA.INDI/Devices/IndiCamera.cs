@@ -48,6 +48,9 @@ public class IndiCamera : ICamera {
     // to decide whether native streaming is producing usable frames or
     // whether it should bail out to loop mode.
     private int _emptyStreamFrameCount;
+    // Last offset applied via CCD_CONTROLS, stamped into FITS metadata when the
+    // driver's own BLOB header didn't carry an OFFSET card.
+    private int _offset;
     // Last non-None CFA pattern observed on CCD_CFA. An OSC sensor's
     // Bayer layout never changes during a session, so once we've seen it
     // we keep it: the INDI property store can transiently lose CCD_CFA
@@ -305,6 +308,7 @@ public class IndiCamera : ICamera {
             if (ctrl.Values.ContainsKey(candidate)) { key = candidate; break; }
         }
         if (key == null) return;   // driver has no offset element
+        _offset = offset;          // record for the FITS metadata stamp
         var wanted = new Dictionary<string, double> { [key] = offset };
         if (AlreadyAt(ctrl, wanted)) return;   // already at this offset (see CaptureAsync churn note)
         try {
@@ -915,6 +919,11 @@ public class IndiCamera : ICamera {
                 imageData.MetaData.Camera.BinY = (short)BinY;
                 imageData.MetaData.Camera.PixelSizeX = PixelSizeX;
                 imageData.MetaData.Camera.PixelSizeY = PixelSizeY;
+                // Stamp the applied offset when the driver's FITS header had no
+                // OFFSET card (FITSReader defaults it to 0); a driver-authored
+                // value is preserved.
+                if (imageData.MetaData.Camera.Offset == 0 && _offset != 0)
+                    imageData.MetaData.Camera.Offset = _offset;
 
                 // FIELD5-CFA: INDI drivers typically do NOT put BAYERPAT
                 // in the FITS BLOB header (the SV405CC indi_svbony_ccd

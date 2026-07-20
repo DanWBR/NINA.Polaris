@@ -56,8 +56,9 @@ public sealed class AscomComCamera : ICamera, IDisposable {
     private int _maxX, _maxY;
     private double _pixelSizeX, _pixelSizeY;
     private int _bitDepth = 16;
-    private bool _canCool, _canBin, _canAbort, _canRoi, _hasGain;
+    private bool _canCool, _canBin, _canAbort, _canRoi, _hasGain, _hasOffset;
     private int _gainMin, _gainMax;
+    private int _offsetMin, _offsetMax;
     // OSC / Bayer mosaic metadata cached at Connect time. ASCOM's
     // SensorType property reports the matrix layout (RGGB/BGGR/etc);
     // we project that onto Polaris's BayerPatternEnum + SensorType so
@@ -131,6 +132,12 @@ public sealed class AscomComCamera : ICamera, IDisposable {
     public int GainMin => _hasGain ? _gainMin : 0;
     public int GainMax => _hasGain ? _gainMax : 0;
 
+    // ICameraV3 Offset (int, unlike the short Gain). 0 when the driver has no
+    // value-based offset range (probed via OffsetMin/OffsetMax at connect).
+    public int Offset => _driver == null || !_hasOffset ? 0
+        : _disp.Invoke<int>(() => SafeGet<int>(() => (int)_driver!.Offset))
+            .GetAwaiter().GetResult();
+
     public IReadOnlyList<int> IsoOptions => Array.Empty<int>();
     public int SelectedIso => 0;
 
@@ -185,6 +192,14 @@ public sealed class AscomComCamera : ICamera, IDisposable {
             _gainMax = (int)(short)_driver.GainMax;
             _hasGain = _gainMax > _gainMin;
         } catch { _hasGain = false; }
+        // Same probe for the (value-based) offset range. Index-based offset
+        // drivers (an Offsets list) throw here and stay _hasOffset = false.
+        _hasOffset = false;
+        try {
+            _offsetMin = (int)_driver.OffsetMin;
+            _offsetMax = (int)_driver.OffsetMax;
+            _hasOffset = _offsetMax > _offsetMin;
+        } catch { _hasOffset = false; }
         // ICameraV3.SensorType — int enum, values mirror our
         // SensorTypeEnum (0=Monochrome, 1=Color, 2=RGGB, 3=CMYG,
         // 4=CMYG2, 5=LRGB, 6=BGGR, 7=GBRG, 8=GRBG). Mono cameras +
@@ -243,6 +258,9 @@ public sealed class AscomComCamera : ICamera, IDisposable {
                 }
                 if (opts.Gain is int g && _hasGain) {
                     SafeSet(() => _driver!.Gain = (short)Math.Clamp(g, _gainMin, _gainMax));
+                }
+                if (opts.Offset is int off && _hasOffset) {
+                    SafeSet(() => _driver!.Offset = Math.Clamp(off, _offsetMin, _offsetMax));
                 }
             }
 
@@ -329,6 +347,7 @@ public sealed class AscomComCamera : ICamera, IDisposable {
                 PixelSizeX = _pixelSizeX,
                 PixelSizeY = _pixelSizeY,
                 Gain = _hasGain ? Gain : 0,
+                Offset = _hasOffset ? Offset : 0,
                 SensorType = _sensorType,
                 BayerPattern = _bayerPattern
             },
