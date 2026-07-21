@@ -246,6 +246,7 @@ builder.Services.AddSingleton<StoragePushService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<StoragePushService>());
 builder.Services.AddSingleton<UsbDriveWatcherService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<UsbDriveWatcherService>());
+builder.Services.AddSingleton<ScriptRunnerService>();
 builder.Services.AddSingleton<PHD2Client>();
 // Native in-process autoguider (drop-in alternative to PHD2, per-rig).
 builder.Services.AddSingleton<NativeGuider>();
@@ -1236,6 +1237,7 @@ app.MapIndiWebEndpoints();
 app.MapNetworkEndpoints();
 app.MapStorageEndpoints();
 app.MapUsbEndpoints();
+app.MapScriptEndpoints();
 app.MapAutoFocusEndpoints();
 // Sticky UI field persistence (panel exposure/gain/binning, target name,
 // AF params, ...): client PUTs a JSON blob, restores it on load.

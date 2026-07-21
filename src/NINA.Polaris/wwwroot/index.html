@@ -13084,6 +13084,46 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </p>
                 </div>
 
+                <!-- polarispy script runner (Phase 1: headless scripts). -->
+                <div class="settings-section" id="scripts-card" x-init="loadScripts()">
+                    <h3><span class="settings-card-icon">🐍</span>Scripts <span style="font-size:11px; color:var(--text-muted); font-weight:400">(beta)</span></h3>
+                    <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
+                        Run Python scripts against Polaris's processing engine (polarispy). Bundled
+                        examples plus your own in <code>~/.config/NINA.Polaris/scripts</code>. Headless
+                        for now; interactive dialogs are coming.
+                    </p>
+                    <div style="margin-top:12px; max-width:620px">
+                        <template x-if="!scripts.list.length">
+                            <p class="text-muted" style="font-size:12px" x-text="scripts.loaded ? 'No scripts found.' : 'Loading…'"></p>
+                        </template>
+                        <template x-for="s in scripts.list" :key="s.path">
+                            <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border)">
+                                <div style="flex:1; min-width:0">
+                                    <div style="font-weight:600" x-text="s.name"></div>
+                                    <div class="text-muted" style="font-size:11px" x-text="s.description"></div>
+                                </div>
+                                <span class="text-muted" style="font-size:10px" x-show="s.builtIn">example</span>
+                                <button class="btn btn-sm" :disabled="scripts.busy" @click="runScript(s.path)">Run</button>
+                            </div>
+                        </template>
+                        <button class="btn btn-sm" style="margin-top:8px" @click="loadScripts()">Refresh list</button>
+                    </div>
+
+                    <template x-if="scripts.job">
+                        <div class="settings-card" style="margin-top:12px; padding:12px; max-width:620px">
+                            <div style="display:flex; align-items:center; gap:8px">
+                                <strong x-text="scripts.job.state"></strong>
+                                <span class="text-muted" style="font-size:12px; flex:1" x-text="scripts.job.progressMessage"></span>
+                                <button class="btn btn-sm" x-show="scripts.job.state==='running'" @click="cancelScript()">Cancel</button>
+                            </div>
+                            <div style="height:5px; background:var(--border); border-radius:3px; overflow:hidden; margin-top:8px">
+                                <div :style="'height:100%; width:' + Math.round((scripts.job.progress||0)*100) + '%; background:#3fb950; transition:width .3s'"></div>
+                            </div>
+                            <pre style="margin-top:10px; max-height:220px; overflow:auto; font-size:11px; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; white-space:pre-wrap" x-text="(scripts.job.log||[]).join('\n')"></pre>
+                        </div>
+                    </template>
+                </div>
+
                 <div class="settings-section network-section">
                     <h3 data-tour="set-network"><span class="settings-card-icon">📡</span>Network (WiFi)</h3>
                     <!-- Body wrapper: forces consistent padding on the

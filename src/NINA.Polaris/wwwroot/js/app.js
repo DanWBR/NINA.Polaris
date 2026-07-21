@@ -1841,6 +1841,8 @@ function ninaApp() {
         _weatherLastKey: '',
 
         // Studio (post-processing), ST-1 frame browser + ST-2 viewer
+        // polarispy script runner (Phase 1: headless scripts).
+        scripts: { list: [], loaded: false, jobId: null, job: null, busy: false },
         studio: {
             frames: [],
             stats: null,
@@ -12433,6 +12435,55 @@ function ninaApp() {
         async _studioRefreshAfterFileOp() {
             try { await this.apiPost('/api/studio/rescan', {}); } catch { /* best effort */ }
             try { await this.loadStudio(); } catch { /* best effort */ }
+        },
+
+        // ----- polarispy script runner (Phase 1) -----
+        async loadScripts() {
+            try {
+                this.scripts.list = await this.apiGet('/api/script/list');
+            } catch (_) { this.scripts.list = []; }
+            this.scripts.loaded = true;
+        },
+        async runScript(path) {
+            if (this.scripts.busy) return;
+            this.scripts.busy = true;
+            this.scripts.job = { state: 'running', progress: 0, progressMessage: 'Starting…', log: [] };
+            try {
+                const resp = await this.apiPost('/api/script/run', { path });
+                const r = await resp.json().catch(() => ({}));
+                if (!resp.ok || !r.jobId) {
+                    this.scripts.busy = false; this.scripts.job = null; this.scripts.jobId = null;
+                    this.toast('Could not start script' + (r.error ? ': ' + r.error : ''), 'error');
+                    return;
+                }
+                this.scripts.jobId = r.jobId;
+                this._pollScript(r.jobId);
+            } catch (e) {
+                this.scripts.busy = false;
+                this.toast('Script error: ' + ((e && e.message) || e), 'error');
+            }
+        },
+        _pollScript(jobId) {
+            const tick = async () => {
+                if (this.scripts.jobId !== jobId) return;   // superseded by another run
+                let job;
+                try { job = await this.apiGet('/api/script/' + jobId + '/status'); }
+                catch (_) { setTimeout(tick, 1500); return; }
+                this.scripts.job = job;
+                if (job.state === 'running') { setTimeout(tick, 1000); return; }
+                this.scripts.busy = false;
+                if (job.state === 'succeeded') {
+                    this.toast('Script finished.', 'ok');
+                    try { await this._studioRefreshAfterFileOp(); } catch (_) {}
+                } else if (job.state === 'failed') {
+                    this.toast('Script failed' + (job.error ? ': ' + job.error : ''), 'error');
+                }
+            };
+            tick();
+        },
+        async cancelScript() {
+            if (!this.scripts.jobId) return;
+            try { await this.apiPost('/api/script/' + this.scripts.jobId + '/cancel', {}); } catch (_) {}
         },
 
         studioToggleSelect(id) {

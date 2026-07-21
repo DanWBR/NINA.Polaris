@@ -129,6 +129,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Link>Services\OpenCl\kernels\%(Filename)%(Extension)</Link>
     </Content>
+    <!-- polarispy scripting module + bundled example scripts, copied to
+         {output}/Scripts so ScriptRunnerService can run them (PYTHONPATH). -->
+    <Content Include="Scripts\**\*.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Scripts\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
