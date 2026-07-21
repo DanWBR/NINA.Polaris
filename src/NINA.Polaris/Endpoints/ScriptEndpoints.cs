@@ -28,6 +28,14 @@ public static class ScriptEndpoints {
                 name = s.Name, path = s.Path, description = s.Description, builtIn = s.BuiltIn
             })));
 
+        // Pixel-processing runtime (numpy + astropy), installed offline from a
+        // per-arch/per-Python wheel pack. Status + one-shot install.
+        g.MapGet("/runtime", (ScriptRuntimeService rt) => Results.Ok(rt.Status()));
+        g.MapPost("/runtime/install", (ScriptRuntimeService rt) => {
+            rt.StartInstall();
+            return Results.Accepted(value: rt.Status());
+        });
+
         g.MapPost("/run", (RunRequest req, ScriptRunnerService svc) => {
             if (string.IsNullOrWhiteSpace(req.Path))
                 return Results.BadRequest(new { error = "path is required" });

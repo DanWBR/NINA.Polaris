@@ -1845,6 +1845,8 @@ function ninaApp() {
         scripts: {
             list: [], loaded: false, jobId: null, job: null, busy: false,
             dialog: { open: false, seq: -1, title: '', fields: [], values: {}, okLabel: 'OK', cancelLabel: 'Cancel' },
+            // Pixel runtime (numpy + astropy), installed offline from a wheel pack.
+            runtime: { ready: false, viaVenv: false, install: { running: false, phase: '', percent: 0, error: null, done: false } },
         },
         studio: {
             frames: [],
@@ -12446,6 +12448,22 @@ function ninaApp() {
                 this.scripts.list = await this.apiGet('/api/script/list');
             } catch (_) { this.scripts.list = []; }
             this.scripts.loaded = true;
+            this.loadScriptRuntime();
+        },
+        async loadScriptRuntime() {
+            try { this.scripts.runtime = await this.apiGet('/api/script/runtime'); } catch (_) {}
+        },
+        async installScriptRuntime() {
+            if (this.scripts.runtime.install && this.scripts.runtime.install.running) return;
+            try { await this.apiPost('/api/script/runtime/install', {}); } catch (_) {}
+            const tick = async () => {
+                await this.loadScriptRuntime();
+                const st = this.scripts.runtime.install || {};
+                if (st.running) { setTimeout(tick, 1500); return; }
+                if (this.scripts.runtime.ready) this.toast('Scripting runtime installed (numpy + astropy).', 'ok');
+                else if (st.error) this.toast('Runtime install failed: ' + st.error, 'error');
+            };
+            setTimeout(tick, 1000);
         },
         // Run a script from the STUDIO Files toolbar, passing the open frame (a
         // single selected file) and the current folder as context.

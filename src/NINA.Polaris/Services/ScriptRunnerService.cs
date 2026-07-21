@@ -44,6 +44,7 @@ public sealed class ScriptRunnerService {
     }
 
     private readonly ILogger<ScriptRunnerService> _log;
+    private readonly ScriptRuntimeService _runtime;
     private readonly string _loopbackUrl;
     private readonly string _scriptsRoot;      // {BaseDir}/Scripts (holds polarispy + examples)
     private readonly string _examplesDir;
@@ -52,8 +53,9 @@ public sealed class ScriptRunnerService {
 
     private const int MaxLogLines = 2000;
 
-    public ScriptRunnerService(IConfiguration cfg, ILogger<ScriptRunnerService> log) {
+    public ScriptRunnerService(IConfiguration cfg, ILogger<ScriptRunnerService> log, ScriptRuntimeService runtime) {
         _log = log;
+        _runtime = runtime;
         var port = cfg.GetValue("Server:Http:Port", 5080);
         _loopbackUrl = $"http://127.0.0.1:{port}";
         _scriptsRoot = Path.Combine(AppContext.BaseDirectory, "Scripts");
@@ -65,7 +67,6 @@ public sealed class ScriptRunnerService {
         try { Directory.CreateDirectory(_userDir); } catch { /* best effort */ }
     }
 
-    private static string PythonExe => OperatingSystem.IsWindows() ? "python" : "python3";
 
     /// <summary>Bundled + user scripts (*.py), excluding the polarispy package.</summary>
     public IReadOnlyList<ScriptInfo> ListScripts() {
@@ -105,7 +106,7 @@ public sealed class ScriptRunnerService {
         var job = new ScriptJob { Name = Path.GetFileNameWithoutExtension(full) };
 
         var psi = new ProcessStartInfo {
-            FileName = PythonExe,
+            FileName = _runtime.PythonForScripts(),   // runtime venv (numpy/astropy) or system Python
             WorkingDirectory = Path.GetDirectoryName(full)!,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

@@ -1,0 +1,58 @@
+name: Script runtime pack
+
+# Builds the offline wheel packs (numpy + astropy and their dependencies) that
+# the Polaris host installs for polarispy pixel scripts. numpy/astropy are C
+# extensions tied to the CPU arch AND the Python minor version, so one pack is
+# published per (rid, pyXY). The host (ScriptRuntimeService) downloads the pack
+# matching its architecture + system Python, then pip-installs it offline with
+# --no-index into a venv.
+#
+# Run manually (workflow_dispatch). Assets: script-runtime-<rid>-py<XY>.zip.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to publish the packs to"
+        default: "script-runtime"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runs-on: ubuntu-latest,    rid: linux-x64,   py: "3.11" }
+          - { runs-on: ubuntu-latest,    rid: linux-x64,   py: "3.12" }
+          - { runs-on: ubuntu-24.04-arm, rid: linux-arm64, py: "3.11" }
+          - { runs-on: ubuntu-24.04-arm, rid: linux-arm64, py: "3.12" }
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "${{ matrix.py }}"
+
+      - name: Download the wheel closure (numpy + astropy)
+        run: |
+          set -eux
+          PYV="${{ matrix.py }}"; PYV="${PYV/./}"     # 3.11 -> 311
+          mkdir wheels
+          python -m pip install --upgrade pip
+          # Full binary dependency closure for THIS interpreter + platform.
+          python -m pip download --only-binary=:all: numpy astropy -d wheels
+          ( cd wheels && zip -r "../script-runtime-${{ matrix.rid }}-py${PYV}.zip" . )
+          ls -lh script-runtime-*.zip
+
+      - name: Publish to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eux
+          TAG="${{ inputs.release_tag }}"
+          gh release create "$TAG" -t "Script runtime packs" \
+            -n "numpy + astropy wheel packs for polarispy pixel scripts (per arch + Python version)." \
+            || true
+          gh release upload "$TAG" script-runtime-*.zip --clobber
