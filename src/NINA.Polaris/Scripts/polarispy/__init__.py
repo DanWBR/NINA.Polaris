@@ -51,6 +51,25 @@ def _as_list(paths):
     return [paths]
 
 
+def _require_numpy_astropy():
+    """Import numpy + astropy lazily. Pixel-level access needs them, but the
+    core (Phase 1/2) stays dependency-free, so import only when actually used."""
+    try:
+        import numpy as np
+        from astropy.io import fits
+        return np, fits
+    except ImportError as exc:
+        raise PolarisError(
+            "pixel access needs numpy and astropy. Install them into the host "
+            "Python: pip install numpy astropy  (%s)" % exc) from None
+
+
+def _default_out(src):
+    import os
+    root, ext = os.path.splitext(src)
+    return root + "_polarispy" + (ext or ".fits")
+
+
 class PolarisInterface:
     """Connection to the running Polaris host over its loopback HTTP API."""
 
@@ -58,6 +77,7 @@ class PolarisInterface:
         self.base = (base_url or os.environ.get("POLARIS_API_URL")
                      or "http://127.0.0.1:5080").rstrip("/")
         self.job = job_id or os.environ.get("POLARIS_SCRIPT_JOB") or ""
+        self.current = None   # the working image path (Siril-style "loaded image")
 
     def connect(self):
         """Verify the host is reachable. Returns self so calls can chain."""
@@ -91,35 +111,103 @@ class PolarisInterface:
             query["filter"] = filter
         return self._get("/api/studio/frames", query)
 
+    # ---- working image (Siril-style: load once, then operate) -------------
+    def load(self, path):
+        """Set the working image. Processing ops and pixel access default to it
+        when their ``paths``/``path`` argument is omitted."""
+        self.current = path
+        return path
+
+    def _targets(self, paths):
+        if paths is None:
+            if not self.current:
+                raise PolarisError("no image loaded; call load(path) or pass a path")
+            return [self.current]
+        return _as_list(paths)
+
     # ---- processing (ported Siril operations, /api/post/*) ----------------
-    def scnr(self, paths, mode="average-neutral", amount=1.0, preserve_lightness=False):
+    # ``paths`` may be omitted to operate on the loaded image (see load()).
+    def scnr(self, paths=None, mode="average-neutral", amount=1.0, preserve_lightness=False):
         """Green-cast removal (SCNR) on one or more RGB FITS files."""
         return self._post("/api/post/scnr", {
-            "paths": _as_list(paths), "mode": mode, "amount": amount,
+            "paths": self._targets(paths), "mode": mode, "amount": amount,
             "preserveLightness": preserve_lightness})
 
-    def stretch(self, paths, mode="ghs", d=1.0, b=0.0, lp=0.0, sp=0.0, hp=1.0,
+    def stretch(self, paths=None, mode="ghs", d=1.0, b=0.0, lp=0.0, sp=0.0, hp=1.0,
                 bp=0.0, auto=False, target_background=0.25):
         """GHS / asinh stretch (linear to stretched)."""
         return self._post("/api/post/stretch", {
-            "paths": _as_list(paths), "mode": mode, "d": d, "b": b, "lp": lp,
+            "paths": self._targets(paths), "mode": mode, "d": d, "b": b, "lp": lp,
             "sp": sp, "hp": hp, "bp": bp, "auto": auto,
             "targetBackground": target_background})
 
-    def star_reduce(self, paths, amount=0.5, iterations=1):
+    def star_reduce(self, paths=None, amount=0.5, iterations=1):
         """Reduce star sizes."""
         return self._post("/api/post/star-reduce", {
-            "paths": _as_list(paths), "amount": amount, "iterations": iterations})
+            "paths": self._targets(paths), "amount": amount, "iterations": iterations})
 
-    def cosmetic(self, paths, **params):
+    def cosmetic(self, paths=None, **params):
         """Cosmetic (hot / cold pixel) correction."""
-        return self._post("/api/post/cosmetic", dict(paths=_as_list(paths), **params))
+        return self._post("/api/post/cosmetic", dict(paths=self._targets(paths), **params))
 
-    def post(self, op, paths, **params):
+    def post(self, op, paths=None, **params):
         """Low-level: call any /api/post/<op> with ``paths`` + params. Lets a
         script reach a Siril-ported operation not yet wrapped by a typed method."""
         return self._post("/api/post/%s" % op.strip("/"),
-                          dict(paths=_as_list(paths), **params))
+                          dict(paths=self._targets(paths), **params))
+
+    def rescan(self):
+        """Re-index the STUDIO frame library (call after writing a new file)."""
+        return self._post("/api/studio/rescan", {})
+
+    # ---- pixel data as numpy (needs numpy + astropy) ----------------------
+    # The script runs on the Polaris host, so it reads/writes the FITS file
+    # directly rather than transferring pixels over HTTP.
+    def get_pixeldata(self, path=None):
+        """Return the image pixels as a numpy array (2D mono, or 3D for colour),
+        or None when the file has no data. Needs numpy + astropy."""
+        src = path or self.current
+        if not src:
+            raise PolarisError("no image; call load(path) or pass path")
+        np, fits = _require_numpy_astropy()
+        with fits.open(src) as hdul:
+            hdu = next((h for h in hdul if getattr(h, "data", None) is not None), None)
+            return None if hdu is None else np.array(hdu.data)
+
+    def set_pixeldata(self, data, path=None, out_path=None, rescan=True):
+        """Write a numpy array back to a FITS (preserving the source header) and
+        re-index STUDIO. Returns the written path. Needs numpy + astropy."""
+        src = path or self.current
+        if not src:
+            raise PolarisError("no image; call load(path) or pass path")
+        _np, fits = _require_numpy_astropy()
+        out = out_path or _default_out(src)
+        with fits.open(src) as hdul:
+            hdu = next((h for h in hdul if getattr(h, "data", None) is not None), hdul[0])
+            hdu.data = data
+            hdul.writeto(out, overwrite=True)
+        if rescan:
+            try: self.rescan()
+            except Exception: pass
+        return out
+
+    # sirilpy-flavoured aliases (used by the compat shim / ported scripts).
+    def get_image_pixeldata(self, *a, **k): return self.get_pixeldata(*a, **k)
+    def set_image_pixeldata(self, data, *a, **k): return self.set_pixeldata(data, *a, **k)
+
+    def cmd(self, name, paths=None, **params):
+        """Run a processing op by name on the loaded image (or ``paths``),
+        Siril-cmd flavoured. Maps a curated set of names to the /api/post ops;
+        raises for anything not supported by Polaris."""
+        alias = {"ght": "stretch", "ghs": "stretch", "autostretch": "stretch",
+                 "asinh": "stretch", "rmgreen": "scnr", "scnr": "scnr",
+                 "starnet": "star-reduce", "unclipstars": "star-reduce"}
+        op = alias.get(name.lower(), name.lower())
+        known = {"scnr", "stretch", "star-reduce", "cosmetic", "wavelet-sharpen",
+                 "wavescale-hdr", "clahe", "highlight-recovery"}
+        if op not in known:
+            raise PolarisError("cmd('%s') is not supported by Polaris" % name)
+        return self.post(op, paths, **params)
 
     # ---- UI: a declarative dialog rendered in the Polaris browser ---------
     def dialog(self, title="Polaris script"):

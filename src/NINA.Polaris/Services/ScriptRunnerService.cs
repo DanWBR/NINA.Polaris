@@ -113,10 +113,13 @@ public sealed class ScriptRunnerService {
             CreateNoWindow = true,
         };
         psi.ArgumentList.Add(full);
-        // polarispy (stdlib only) is importable via PYTHONPATH = the Scripts root.
+        // polarispy is importable via PYTHONPATH = the Scripts root; the compat
+        // subfolder makes `import sirilpy` resolve to the polarispy-backed shim.
+        var compatDir = Path.Combine(_scriptsRoot, "compat");
         var existingPyPath = Environment.GetEnvironmentVariable("PYTHONPATH");
+        var pyPath = _scriptsRoot + Path.PathSeparator + compatDir;
         psi.EnvironmentVariables["PYTHONPATH"] = string.IsNullOrEmpty(existingPyPath)
-            ? _scriptsRoot : _scriptsRoot + Path.PathSeparator + existingPyPath;
+            ? pyPath : pyPath + Path.PathSeparator + existingPyPath;
         psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
         psi.EnvironmentVariables["POLARIS_API_URL"] = _loopbackUrl;   // loopback = auth-exempt
         psi.EnvironmentVariables["POLARIS_SCRIPT_JOB"] = job.Id;
