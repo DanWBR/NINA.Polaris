@@ -123,6 +123,32 @@ def main():
     dlg.checkbox("curves", "Curves boost", False)
     dlg.slider("boost", "Curves amount", 0.0, 1.0, 0.0, step=0.05)
     dlg.checkbox("normalize", "Normalize to full range", False)
+
+    _cache = {}
+
+    def _stretch_vals(img, color, vals):
+        kw = dict(target_median=vals["target"], clip_black=vals["clip_black"], sigma=vals["sigma"],
+                  apply_curves=vals["curves"], curves_boost=vals["boost"], normalize=vals["normalize"])
+        if color and vals["linked"]:
+            return _stretch(img, **kw)
+        if color:
+            return np.stack([_stretch(img[..., c], **kw) for c in range(3)], axis=-1)
+        return _stretch(img, **kw)
+
+    def _preview(vals):
+        if np is None:
+            raise polarispy.PolarisError("Install the scripting runtime (Settings > Scripts) to preview.")
+        if "img" not in _cache:
+            d = poe.get_pixeldata()
+            if d is None:
+                raise polarispy.PolarisError("no pixel data")
+            img, color = _to_float01(d)
+            step = max(1, int(max(img.shape[0], img.shape[1]) / 500.0))
+            _cache["img"] = img[::step, ::step] if img.ndim == 2 else img[::step, ::step, :]
+            _cache["color"] = color
+        return _stretch_vals(_cache["img"], _cache["color"], vals)
+
+    dlg.preview(_preview)
     v = dlg.run()
     if v is None:
         poe.log("Cancelled.")
@@ -141,14 +167,7 @@ def main():
     img, color = _to_float01(data)
 
     poe.update_progress("Stretching", 0.55)
-    kw = dict(target_median=v["target"], clip_black=v["clip_black"], sigma=v["sigma"],
-              apply_curves=v["curves"], curves_boost=v["boost"], normalize=v["normalize"])
-    if color and v["linked"]:
-        out = _stretch(img, **kw)
-    elif color:
-        out = np.stack([_stretch(img[..., c], **kw) for c in range(3)], axis=-1)
-    else:
-        out = _stretch(img, **kw)
+    out = _stretch_vals(img, color, v)
 
     poe.update_progress("Writing result", 0.8)
     written = poe.set_pixeldata(_to_fits(out, color))

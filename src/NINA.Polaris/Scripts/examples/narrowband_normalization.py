@@ -233,6 +233,17 @@ def _to_hwc(arr):
         "Narrowband Normalization needs a 3-channel (SHO/HOO) colour image.")
 
 
+def _shrink_hwc(a, maxside=500):
+    """Fast spatial subsample of an (H, W, 3) array for a preview."""
+    h, w = a.shape[:2]
+    step = max(1, int(max(h, w) / float(maxside)))
+    return a[::step, ::step, :] if step > 1 else a
+
+
+_PARAM_KEYS = ("palette", "lightness", "blend_mode", "blend_amount", "scnr",
+               "oiii_boost", "sii_boost", "shadow_point", "highlight_reduction", "brightness")
+
+
 def main():
     poe = polarispy.connect()
     path = poe.current
@@ -257,6 +268,23 @@ def main():
     dlg.slider("shadow_point", "Shadow point", 0.0, 1.0, 1.0, step=0.01)
     dlg.slider("highlight_reduction", "Highlight reduction", 0.2, 3.0, 1.0, step=0.05)
     dlg.slider("brightness", "Brightness", 0.2, 3.0, 1.0, step=0.05)
+
+    _cache = {}
+
+    def _preview(vals):
+        if np is None:
+            raise polarispy.PolarisError("Install the scripting runtime (Settings > Scripts) to preview.")
+        if "hwc" not in _cache:
+            d = poe.get_pixeldata()
+            if d is None:
+                raise polarispy.PolarisError("no pixel data")
+            a = d.astype(np.float32)
+            mx = float(np.nanmax(a)) if a.size else 1.0
+            wp = float(np.iinfo(d.dtype).max) if np.issubdtype(d.dtype, np.integer) else (mx if mx > 1.5 else 1.0)
+            _cache["hwc"] = _shrink_hwc(_to_hwc(a / wp))
+        return process_image(_cache["hwc"], {k: vals[k] for k in _PARAM_KEYS})
+
+    dlg.preview(_preview)
     v = dlg.run()
     if v is None:
         poe.log("Cancelled.")
@@ -279,9 +307,7 @@ def main():
     hwc = _to_hwc(arr / white)
 
     poe.update_progress("Normalizing", 0.6)
-    out_hwc = process_image(hwc, {k: v[k] for k in (
-        "palette", "lightness", "blend_mode", "blend_amount", "scnr",
-        "oiii_boost", "sii_boost", "shadow_point", "highlight_reduction", "brightness")})
+    out_hwc = process_image(hwc, {k: v[k] for k in _PARAM_KEYS})
 
     # Back to the source layout for writing.
     out = np.moveaxis(out_hwc, -1, 0) if data.ndim == 3 and data.shape[0] == 3 else out_hwc
