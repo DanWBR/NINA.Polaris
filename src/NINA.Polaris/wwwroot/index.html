@@ -18356,46 +18356,59 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- polarispy declarative script dialog (Phase 2). Rendered from a spec the
          running script posts; the values are sent back when the user submits. -->
     <div class="confirm-modal-overlay" x-show="scripts.dialog.open" x-cloak>
-        <div class="confirm-modal-card" style="max-width:460px; width:92%">
+        <div class="confirm-modal-card" :style="scripts.dialog.preview ? 'max-width:760px; width:94%' : 'max-width:460px; width:92%'">
             <h3 class="confirm-modal-title" x-text="scripts.dialog.title"></h3>
-            <div style="display:flex; flex-direction:column; gap:12px; margin:14px 0; max-height:60vh; overflow:auto">
-                <template x-for="(f, i) in scripts.dialog.fields" :key="i">
-                    <div>
-                        <p x-show="f.type==='info'" class="text-muted" style="font-size:12px; margin:0" x-text="f.text"></p>
-                        <div x-show="f.type==='slider'">
-                            <label style="display:flex; justify-content:space-between; font-size:12px">
-                                <span x-text="f.label"></span>
-                                <span class="text-muted" x-text="scripts.dialog.values[f.key]"></span>
+            <div :style="scripts.dialog.preview ? 'display:flex; gap:16px; align-items:stretch; flex-wrap:wrap' : ''">
+              <div :style="scripts.dialog.preview ? 'flex:1 1 240px; min-width:240px' : ''">
+                <div style="display:flex; flex-direction:column; gap:12px; margin:14px 0; max-height:60vh; overflow:auto">
+                    <template x-for="(f, i) in scripts.dialog.fields" :key="i">
+                        <div>
+                            <p x-show="f.type==='info'" class="text-muted" style="font-size:12px; margin:0" x-text="f.text"></p>
+                            <div x-show="f.type==='slider'">
+                                <label style="display:flex; justify-content:space-between; font-size:12px">
+                                    <span x-text="f.label"></span>
+                                    <span class="text-muted" x-text="scripts.dialog.values[f.key]"></span>
+                                </label>
+                                <input type="range" style="width:100%" :min="f.min" :max="f.max" :step="f.step"
+                                       :value="scripts.dialog.values[f.key]"
+                                       @input="scripts.dialog.values[f.key] = parseFloat($event.target.value); scriptPreviewDebounced()">
+                            </div>
+                            <label x-show="f.type==='number'" style="display:flex; align-items:center; gap:10px; font-size:12px">
+                                <span style="flex:1" x-text="f.label"></span>
+                                <input type="number" class="input" style="width:120px" :min="f.min" :max="f.max" :step="f.step"
+                                       :value="scripts.dialog.values[f.key]"
+                                       @input="scripts.dialog.values[f.key] = ($event.target.value===''?null:parseFloat($event.target.value)); scriptPreviewDebounced()">
                             </label>
-                            <input type="range" style="width:100%" :min="f.min" :max="f.max" :step="f.step"
-                                   :value="scripts.dialog.values[f.key]"
-                                   @input="scripts.dialog.values[f.key] = parseFloat($event.target.value)">
+                            <label x-show="f.type==='checkbox'" style="display:flex; align-items:center; gap:10px; font-size:12px">
+                                <input type="checkbox" :checked="scripts.dialog.values[f.key]"
+                                       @change="scripts.dialog.values[f.key] = $event.target.checked; scriptPreviewDebounced()">
+                                <span x-text="f.label"></span>
+                            </label>
+                            <label x-show="f.type==='select'" style="display:flex; align-items:center; gap:10px; font-size:12px">
+                                <span style="flex:1" x-text="f.label"></span>
+                                <select class="input" style="width:170px" :value="scripts.dialog.values[f.key]"
+                                        @change="scripts.dialog.values[f.key] = $event.target.value; scriptPreviewDebounced()">
+                                    <template x-for="o in (f.options||[])" :key="o"><option :value="o" x-text="o"></option></template>
+                                </select>
+                            </label>
+                            <label x-show="f.type==='text'" style="display:flex; align-items:center; gap:10px; font-size:12px">
+                                <span style="flex:1" x-text="f.label"></span>
+                                <input type="text" class="input" style="width:200px" :value="scripts.dialog.values[f.key]"
+                                       @input="scripts.dialog.values[f.key] = $event.target.value; scriptPreviewDebounced()">
+                            </label>
                         </div>
-                        <label x-show="f.type==='number'" style="display:flex; align-items:center; gap:10px; font-size:12px">
-                            <span style="flex:1" x-text="f.label"></span>
-                            <input type="number" class="input" style="width:120px" :min="f.min" :max="f.max" :step="f.step"
-                                   :value="scripts.dialog.values[f.key]"
-                                   @input="scripts.dialog.values[f.key] = ($event.target.value===''?null:parseFloat($event.target.value))">
-                        </label>
-                        <label x-show="f.type==='checkbox'" style="display:flex; align-items:center; gap:10px; font-size:12px">
-                            <input type="checkbox" :checked="scripts.dialog.values[f.key]"
-                                   @change="scripts.dialog.values[f.key] = $event.target.checked">
-                            <span x-text="f.label"></span>
-                        </label>
-                        <label x-show="f.type==='select'" style="display:flex; align-items:center; gap:10px; font-size:12px">
-                            <span style="flex:1" x-text="f.label"></span>
-                            <select class="input" style="width:170px" :value="scripts.dialog.values[f.key]"
-                                    @change="scripts.dialog.values[f.key] = $event.target.value">
-                                <template x-for="o in (f.options||[])" :key="o"><option :value="o" x-text="o"></option></template>
-                            </select>
-                        </label>
-                        <label x-show="f.type==='text'" style="display:flex; align-items:center; gap:10px; font-size:12px">
-                            <span style="flex:1" x-text="f.label"></span>
-                            <input type="text" class="input" style="width:200px" :value="scripts.dialog.values[f.key]"
-                                   @input="scripts.dialog.values[f.key] = $event.target.value">
-                        </label>
-                    </div>
-                </template>
+                    </template>
+                </div>
+              </div>
+              <div x-show="scripts.dialog.preview" style="flex:1 1 320px; min-width:280px; display:flex; flex-direction:column; gap:6px; margin:14px 0">
+                <div style="position:relative; flex:1; min-height:220px; background:var(--bg); border:1px solid var(--border); border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden">
+                    <img x-show="scripts.dialog.previewUrl" :src="scripts.dialog.previewUrl" style="max-width:100%; max-height:52vh; object-fit:contain">
+                    <span x-show="!scripts.dialog.previewUrl && !scripts.dialog.previewErr" class="text-muted" style="font-size:12px">Preview will appear here…</span>
+                    <span x-show="scripts.dialog.previewErr" class="text-muted" style="font-size:11px; color:#f0883e; padding:10px; text-align:center" x-text="scripts.dialog.previewErr"></span>
+                    <div x-show="scripts.dialog.previewBusy" style="position:absolute; top:6px; right:8px; font-size:11px; background:rgba(0,0,0,.5); border-radius:4px; padding:2px 6px" class="text-muted">Rendering…</div>
+                </div>
+                <span class="text-muted" style="font-size:10px">Auto-stretched preview. The saved file keeps its linear data.</span>
+              </div>
             </div>
             <div class="confirm-modal-actions">
                 <button class="btn btn-sm" @click="_cancelScriptDialog()" x-text="scripts.dialog.cancelLabel"></button>

@@ -103,5 +103,29 @@ public static class ScriptEndpoints {
             svc.CancelDialog(jobId);
             return Results.Ok(new { ok = true });
         });
+
+        // ----- Live preview bridge -----
+        // Browser posts the current field values to request a preview; the script
+        // polls the request, renders a PNG, and posts it back for the browser.
+        g.MapPost("/{jobId}/dialog/preview-request", (string jobId, JsonElement body, ScriptRunnerService svc) => {
+            var values = body.ValueKind == JsonValueKind.Object && body.TryGetProperty("values", out var v)
+                ? v : body;
+            var seq = svc.SetPreviewRequest(jobId, values);
+            return Results.Ok(new { seq });
+        });
+
+        g.MapGet("/{jobId}/dialog/preview-request", (string jobId, ScriptRunnerService svc) =>
+            Results.Ok(svc.PreviewRequest(jobId)));
+
+        g.MapPost("/{jobId}/dialog/preview-result", (string jobId, JsonElement body, ScriptRunnerService svc) => {
+            var seq = body.TryGetProperty("seq", out var s) && s.TryGetInt32(out var si) ? si : 0;
+            var png = body.TryGetProperty("png", out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
+            var error = body.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() : null;
+            svc.SetPreviewResult(jobId, seq, png, error);
+            return Results.Ok(new { ok = true });
+        });
+
+        g.MapGet("/{jobId}/dialog/preview-result", (string jobId, ScriptRunnerService svc) =>
+            Results.Ok(svc.PreviewResult(jobId)));
     }
 }

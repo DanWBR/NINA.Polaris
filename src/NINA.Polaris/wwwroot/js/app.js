@@ -1844,7 +1844,7 @@ function ninaApp() {
         // polarispy script runner. dialog = the declarative form a script blocks on.
         scripts: {
             list: [], loaded: false, jobId: null, job: null, busy: false,
-            dialog: { open: false, seq: -1, title: '', fields: [], values: {}, okLabel: 'OK', cancelLabel: 'Cancel' },
+            dialog: { open: false, seq: -1, title: '', fields: [], values: {}, okLabel: 'OK', cancelLabel: 'Cancel', preview: false, previewUrl: '', previewBusy: false, previewErr: '' },
             // Pixel runtime (numpy + astropy), installed offline from a wheel pack.
             runtime: { ready: false, viaVenv: false, install: { running: false, phase: '', percent: 0, error: null, done: false } },
         },
@@ -12552,7 +12552,45 @@ function ninaApp() {
                 open: true, seq: d.seq,
                 title: spec.title || 'Script', fields: spec.fields || [], values,
                 okLabel: spec.okLabel || 'OK', cancelLabel: spec.cancelLabel || 'Cancel',
+                preview: !!spec.preview, previewUrl: '', previewBusy: false, previewErr: '',
             };
+            if (this.scripts.dialog.preview) this.$nextTick(() => this._requestScriptPreview());
+        },
+        // Debounced live preview: post the current values, then poll for the
+        // rendered PNG the script sends back (matched by seq).
+        scriptPreviewDebounced() {
+            if (!this.scripts.dialog.preview) return;
+            clearTimeout(this._scriptPreviewTimer);
+            this._scriptPreviewTimer = setTimeout(() => this._requestScriptPreview(), 500);
+        },
+        async _requestScriptPreview() {
+            const id = this.scripts.jobId;
+            if (!id || !this.scripts.dialog.open) return;
+            const dseq = this.scripts.dialog.seq;   // the dialog this preview is for
+            this.scripts.dialog.previewBusy = true;
+            this.scripts.dialog.previewErr = '';
+            let seq = 0;
+            try {
+                const r = await (await this.apiPost('/api/script/' + id + '/dialog/preview-request',
+                    { values: this.scripts.dialog.values })).json();
+                seq = r.seq || 0;
+            } catch (_) { this.scripts.dialog.previewBusy = false; return; }
+            const deadline = Date.now() + 60000;
+            const poll = async () => {
+                if (!this.scripts.dialog.open || this.scripts.dialog.seq !== dseq) return;
+                let res;
+                try { res = await this.apiGet('/api/script/' + id + '/dialog/preview-result'); }
+                catch (_) { res = null; }
+                if (res && res.seq === seq) {
+                    this.scripts.dialog.previewBusy = false;
+                    if (res.error) this.scripts.dialog.previewErr = res.error;
+                    else if (res.png) this.scripts.dialog.previewUrl = res.png;
+                    return;
+                }
+                if (Date.now() > deadline) { this.scripts.dialog.previewBusy = false; return; }
+                setTimeout(poll, 400);
+            };
+            poll();
         },
         async _submitScriptDialog() {
             const id = this.scripts.jobId;

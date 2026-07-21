@@ -171,6 +171,40 @@ def correct_channel(ch, degree, downsample, mode, protect=True, log=print):
     return ch - bg + level
 
 
+def _shrink(a, maxside=500):
+    """Fast spatial subsample of a normalized array for a preview."""
+    if a.ndim == 2:
+        h, w = a.shape
+    elif a.ndim == 3 and a.shape[0] == 3:
+        _, h, w = a.shape
+    else:
+        h, w = a.shape[:2]
+    step = max(1, int(max(h, w) / float(maxside)))
+    if step == 1:
+        return a
+    if a.ndim == 2:
+        return a[::step, ::step]
+    if a.shape[0] == 3:
+        return a[:, ::step, ::step]
+    return a[::step, ::step, :]
+
+
+def _run_all(arr, vals, downsample):
+    """Correct every channel of a normalized array with the given settings."""
+    chans, layout = _channels(arr)
+    out = np.empty_like(arr)
+    for c, ch in chans:
+        corr = correct_channel(ch, int(vals["degree"]), downsample, vals["mode"],
+                               protect=bool(vals["protect"]), log=lambda *_: None)
+        if layout == "mono":
+            out = corr
+        elif layout == "planar":
+            out[c] = corr
+        else:
+            out[..., c] = corr
+    return out
+
+
 def _channels(arr):
     """Return [(index, 2D channel)] and a layout tag for mono / (3,H,W) / (H,W,3)."""
     if arr.ndim == 2:
@@ -200,6 +234,27 @@ def main():
     dlg.select("mode", "Mode", ["subtract", "divide"], default="subtract")
     dlg.number("downsample", "Downsample (speed)", default=2, min=1, max=4, step=1)
     dlg.checkbox("protect", "Protect bright structures (nebulae)", True)
+
+    _cache = {}
+
+    def _preview(vals):
+        if np is None:
+            raise polarispy.PolarisError("Install the scripting runtime (Settings > Scripts) to preview.")
+        if "arr" not in _cache:
+            d = poe.get_pixeldata()
+            if d is None:
+                raise polarispy.PolarisError("no pixel data")
+            a = d.astype(np.float64)
+            if np.issubdtype(d.dtype, np.integer):
+                wp = float(np.iinfo(d.dtype).max)
+            else:
+                mx = float(a.max())
+                wp = mx if mx > 1.0 else 1.0
+            _cache["arr"] = _shrink(a / wp)
+            _cache["white"] = wp
+        return _run_all(_cache["arr"], vals, 1) * _cache["white"]
+
+    dlg.preview(_preview)
     v = dlg.run()
     if v is None:
         poe.log("Cancelled.")
@@ -225,23 +280,8 @@ def main():
     else:
         mx = float(arr.max())
         white = mx if mx > 1.0 else 1.0
-    arr = arr / white
-    chans, layout = _channels(arr)
-
-    out = np.empty_like(arr)
-    for i, (c, ch) in enumerate(chans):
-        poe.update_progress("Correcting channel %d/%d" % (i + 1, len(chans)),
-                            0.25 + 0.6 * i / max(1, len(chans)))
-        corr = correct_channel(ch, int(v["degree"]), int(v["downsample"]),
-                               v["mode"], protect=bool(v["protect"]), log=poe.log)
-        if layout == "mono":
-            out = corr
-        elif layout == "planar":
-            out[c] = corr
-        else:
-            out[..., c] = corr
-
-    out = out * white
+    poe.update_progress("Correcting", 0.5)
+    out = _run_all(arr / white, v, int(v["downsample"])) * white
     poe.update_progress("Writing result", 0.9)
     written = poe.set_pixeldata(out.astype("float32"),
                                 out_path=os.path.splitext(path)[0] + "_gradremoved.fits")

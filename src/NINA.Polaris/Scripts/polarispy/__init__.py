@@ -31,6 +31,7 @@ scripts use.
     poe.stretch(frames[0]["path"], mode="ghs", auto=True)
 """
 
+import base64
 import json
 import os
 import ssl
@@ -77,6 +78,72 @@ def _default_out(src):
     import os
     root, ext = os.path.splitext(src)
     return root + "_polarispy" + (ext or ".fits")
+
+
+# ---- preview rendering (numpy image -> auto-stretched PNG data URL) ---------
+
+def _autostretch_uint8(img, max_side=720):
+    """Auto-stretch any float / int image to an 8-bit RGB preview (H, W, 3).
+
+    Uses an MTF autostretch (median + MAD, target background 0.25) so it looks
+    right for both linear and already-stretched data. Downsampled to max_side.
+    """
+    np, _ = _require_numpy_astropy()
+    a = np.asarray(img).astype(np.float64)
+    if a.ndim == 2:
+        a = np.repeat(a[:, :, None], 3, axis=2)
+    elif a.ndim == 3 and a.shape[0] == 3 and a.shape[-1] != 3:
+        a = np.moveaxis(a, 0, -1)
+    elif not (a.ndim == 3 and a.shape[-1] == 3):
+        a = np.repeat(a.reshape(a.shape[0], a.shape[1], 1), 3, axis=2)
+
+    h, w = a.shape[:2]
+    step = max(1, int(round(max(h, w) / float(max_side))))
+    if step > 1:
+        a = a[::step, ::step]
+
+    mx = float(np.nanmax(a)) if a.size else 1.0
+    if mx > 1.5:
+        a = a / (65535.0 if mx > 255.0 else 255.0)
+    a = np.clip(np.nan_to_num(a), 0.0, 1.0)
+
+    lum = a.mean(axis=2)
+    med = float(np.median(lum))
+    mad = float(np.median(np.abs(lum - med))) * 1.4826 + 1e-8
+    shadow = min(max(med - 2.8 * mad, 0.0), 0.99)
+    span = max(1e-6, 1.0 - shadow)
+    x = (med - shadow) / span
+    m = min(max(x * 0.75 / (x * 0.5 + 0.25 + 1e-9), 1e-4), 0.5)  # maps x -> 0.25
+    a = np.clip((a - shadow) / span, 0.0, 1.0)
+    denom = (2.0 * m - 1.0) * a - m
+    denom = np.where(np.abs(denom) < 1e-6, np.copysign(1e-6, denom), denom)
+    a = np.clip(((m - 1.0) * a) / denom, 0.0, 1.0)
+    return (a * 255.0 + 0.5).astype(np.uint8)
+
+
+def _png_data_url(rgb):
+    """Encode an (H, W, 3) uint8 array to a base64 PNG data URL (stdlib only)."""
+    import struct
+    import zlib
+    np, _ = _require_numpy_astropy()
+    h, w = rgb.shape[:2]
+    rows = np.ascontiguousarray(rgb).reshape(h, w * 3)
+    raw = np.hstack([np.zeros((h, 1), np.uint8), rows]).tobytes()  # filter byte 0/row
+
+    def chunk(typ, data):
+        return (struct.pack(">I", len(data)) + typ + data
+                + struct.pack(">I", zlib.crc32(typ + data) & 0xffffffff))
+
+    png = (b"\x89PNG\r\n\x1a\n"
+           + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+           + chunk(b"IDAT", zlib.compress(raw, 6))
+           + chunk(b"IEND", b""))
+    return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+
+
+def _encode_preview(img):
+    """numpy image -> auto-stretched PNG data URL for the browser preview."""
+    return _png_data_url(_autostretch_uint8(img))
 
 
 class PolarisInterface:
@@ -257,13 +324,14 @@ class PolarisInterface:
         it in the Polaris web UI and block until the user submits or cancels."""
         return Dialog(self, title)
 
-    def _run_dialog(self, spec, poll_interval=0.5, timeout=None):
+    def _run_dialog(self, spec, poll_interval=0.5, timeout=None, preview_fn=None):
         # No job context (script run standalone / for testing): fall back to the
         # field defaults so the pipeline still runs unattended.
         if not self.job:
             return {f["key"]: f.get("default")
                     for f in spec.get("fields", []) if f.get("key")}
         self._post("/api/script/%s/dialog" % self.job, spec)
+        last_preview = 0
         waited = 0.0
         while True:
             r = self._get("/api/script/%s/dialog/result" % self.job)
@@ -271,10 +339,29 @@ class PolarisInterface:
                 return r.get("values") or {}
             if r.get("cancelled"):
                 return None
+            if preview_fn is not None:
+                last_preview = self._service_preview(preview_fn, last_preview)
             time.sleep(poll_interval)
             waited += poll_interval
             if timeout and waited >= timeout:
                 return None
+
+    def _service_preview(self, preview_fn, last_seq):
+        """If the browser requested a preview for new values, render it."""
+        try:
+            req = self._get("/api/script/%s/dialog/preview-request" % self.job)
+        except PolarisError:
+            return last_seq
+        seq = req.get("seq") or 0
+        if not seq or seq == last_seq:
+            return last_seq
+        try:
+            img = preview_fn(req.get("values") or {})
+            body = {"seq": seq, "png": _encode_preview(img)}
+        except Exception as exc:
+            body = {"seq": seq, "error": str(exc)}
+        self._quiet("POST", "/api/script/%s/dialog/preview-result" % self.job, body)
+        return seq
 
     # ---- HTTP plumbing ----------------------------------------------------
     def _get(self, path, query=None):
@@ -341,6 +428,7 @@ class Dialog:
     def __init__(self, iface, title):
         self._iface = iface
         self.spec = {"title": title, "fields": [], "okLabel": "OK", "cancelLabel": "Cancel"}
+        self._preview_fn = None
 
     def _add(self, field):
         self.spec["fields"].append(field)
@@ -378,10 +466,19 @@ class Dialog:
         self.spec["cancelLabel"] = cancel
         return self
 
-    def run(self, poll_interval=0.5, timeout=None):
+    def preview(self, fn):
+        """Enable a live preview panel. ``fn(values)`` takes the current field
+        values and returns an image (2D mono or 3D colour numpy array); it is
+        auto-stretched and shown in the browser while the user tunes settings.
+        Keep it fast: work on a downsampled copy of the frame."""
+        self._preview_fn = fn
+        self.spec["preview"] = True
+        return self
+
+    def run(self, poll_interval=0.4, timeout=None):
         """Show the dialog and block. Returns a dict of the field values keyed by
         ``key``, or ``None`` if the user cancelled (or ``timeout`` seconds pass)."""
-        return self._iface._run_dialog(self.spec, poll_interval, timeout)
+        return self._iface._run_dialog(self.spec, poll_interval, timeout, self._preview_fn)
 
 
 def connect(base_url=None, job_id=None):

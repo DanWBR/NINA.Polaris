@@ -42,6 +42,14 @@ public sealed class ScriptRunnerService {
         public string DialogState = "none";   // none | pending | submitted | cancelled
         public JsonElement? DialogSpec;
         public JsonElement? DialogValues;
+
+        // Live preview: the browser bumps PreviewReqSeq with the current field
+        // values; the script renders and posts back a PNG for PreviewResSeq.
+        public int PreviewReqSeq;
+        public JsonElement? PreviewValues;
+        public int PreviewResSeq;
+        public string? PreviewPng;
+        public string? PreviewError;
     }
 
     private readonly ILogger<ScriptRunnerService> _log;
@@ -246,6 +254,28 @@ public sealed class ScriptRunnerService {
 
     public void CancelDialog(string id) {
         if (_jobs.TryGetValue(id, out var job)) lock (job) { job.DialogState = "cancelled"; }
+    }
+
+    // Live preview bridge. Browser -> SetPreviewRequest (values, bumps seq);
+    // script polls PreviewRequest, renders, and posts SetPreviewResult (png).
+    public int SetPreviewRequest(string id, JsonElement values) {
+        if (!_jobs.TryGetValue(id, out var job)) return 0;
+        lock (job) { job.PreviewReqSeq++; job.PreviewValues = values.Clone(); return job.PreviewReqSeq; }
+    }
+
+    public object PreviewRequest(string id) {
+        if (!_jobs.TryGetValue(id, out var job)) return new { seq = 0 };
+        lock (job) return new { seq = job.PreviewReqSeq, values = (object?)job.PreviewValues };
+    }
+
+    public void SetPreviewResult(string id, int seq, string? png, string? error) {
+        if (!_jobs.TryGetValue(id, out var job)) return;
+        lock (job) { job.PreviewResSeq = seq; job.PreviewPng = png; job.PreviewError = error; }
+    }
+
+    public object PreviewResult(string id) {
+        if (!_jobs.TryGetValue(id, out var job)) return new { seq = 0 };
+        lock (job) return new { seq = job.PreviewResSeq, png = job.PreviewPng, error = job.PreviewError };
     }
 
     // For /status: the spec the browser should render, or null when none is pending.
