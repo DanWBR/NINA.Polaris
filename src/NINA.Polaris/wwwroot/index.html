@@ -18373,12 +18373,14 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                      :style="!scripts.dialog.preview ? 'max-height:60vh; overflow:auto' : ''">
                     <template x-for="(f, i) in scripts.dialog.fields" :key="i">
                         <div x-show="f.type !== 'info'">
-                            <div x-show="f.type==='slider'" style="display:flex; align-items:center; gap:8px; font-size:12px">
-                                <span style="flex:0 0 132px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" :title="f.label" x-text="f.label"></span>
-                                <input type="range" style="flex:1 1 auto; min-width:60px" :min="f.min" :max="f.max" :step="f.step"
-                                       :value="scripts.dialog.values[f.key]"
-                                       @input="scripts.dialog.values[f.key] = parseFloat($event.target.value); scriptPreviewDebounced()">
-                                <span class="text-muted" style="flex:0 0 auto; min-width:26px; text-align:right" x-text="scripts.dialog.values[f.key]"></span>
+                            <div x-show="f.type==='slider'">
+                                <div style="font-size:12px; margin-bottom:3px" x-text="f.label"></div>
+                                <div style="display:flex; align-items:center; gap:8px">
+                                    <input type="range" style="flex:1 1 auto; min-width:60px" :min="f.min" :max="f.max" :step="f.step"
+                                           :value="scripts.dialog.values[f.key]"
+                                           @input="scripts.dialog.values[f.key] = parseFloat($event.target.value); scriptPreviewDebounced()">
+                                    <span class="text-muted" style="flex:0 0 auto; min-width:30px; text-align:right; font-size:12px" x-text="scripts.dialog.values[f.key]"></span>
+                                </div>
                             </div>
                             <label x-show="f.type==='number'" style="display:flex; align-items:center; gap:10px; font-size:12px">
                                 <span style="flex:1" x-text="f.label"></span>
