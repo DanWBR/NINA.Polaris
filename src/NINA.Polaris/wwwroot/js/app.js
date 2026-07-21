@@ -12440,6 +12440,8 @@ function ninaApp() {
         async _studioRefreshAfterFileOp() {
             try { await this.apiPost('/api/studio/rescan', {}); } catch { /* best effort */ }
             try { await this.loadStudio(); } catch { /* best effort */ }
+            // Also refresh the Files browser so a script's output file shows up.
+            try { if (this.files && this.files.cwd) await this.filesReload(); } catch { /* best effort */ }
         },
 
         // ----- polarispy script runner (Phase 1) -----
