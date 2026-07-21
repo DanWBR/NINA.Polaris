@@ -12488,6 +12488,10 @@ function ninaApp() {
         async runScript(path, ctx = {}) {
             if (this.scripts.busy) return;
             this.scripts.busy = true;
+            // DialogSeq is per-job (starts at 1), so reset our tracker or the next
+            // run's first dialog (seq 1) would match the previous run and never open.
+            this.scripts.dialog.seq = -1;
+            this.scripts.dialog.open = false;
             this.scripts.job = { state: 'running', progress: 0, progressMessage: 'Starting…', log: [], name: '' };
             try {
                 const resp = await this.apiPost('/api/script/run', {
