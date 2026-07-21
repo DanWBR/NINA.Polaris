@@ -92,7 +92,7 @@ class PolarisInterface:
 
     def connect(self):
         """Verify the host is reachable. Returns self so calls can chain."""
-        self._request("GET", self.base + "/api/system/version", None)
+        self._request("GET", self.base + "/api/system/status", None)
         return self
 
     # ---- back-channel to the Polaris UI -----------------------------------
