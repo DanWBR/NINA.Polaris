@@ -12465,6 +12465,14 @@ function ninaApp() {
             };
             setTimeout(tick, 1000);
         },
+        // Scripts that operate on a single frame (for the image-viewer toolbar).
+        frameScripts() {
+            return (this.scripts.list || []).filter(s => s.scope === 'frame' || s.scope === 'any');
+        },
+        // Run a frame-scope script on the file currently open in the image viewer.
+        runFrameScript(path) {
+            this.runScript(path, { activeFrame: this.imageViewerPath || null, cwd: null });
+        },
         // Run a script from the STUDIO Files toolbar, passing the open frame (a
         // single selected file) and the current folder as context.
         runStudioScript(path) {

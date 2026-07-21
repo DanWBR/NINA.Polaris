@@ -1,3 +1,4 @@
+# polaris: name=GHS Stretch; icon=🌗; scope=frame
 """GHS-stretch the newest light frame (polarispy demo).
 
 Lists the STUDIO light frames, applies an auto GHS stretch to the first one,

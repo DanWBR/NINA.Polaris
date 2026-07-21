@@ -25,7 +25,8 @@ public static class ScriptEndpoints {
 
         g.MapGet("/list", (ScriptRunnerService svc) =>
             Results.Ok(svc.ListScripts().Select(s => new {
-                name = s.Name, path = s.Path, description = s.Description, builtIn = s.BuiltIn
+                name = s.Name, path = s.Path, description = s.Description, builtIn = s.BuiltIn,
+                displayName = s.DisplayName, icon = s.Icon, scope = s.Scope
             })));
 
         // Pixel-processing runtime (numpy + astropy), installed offline from a

@@ -8,6 +8,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Original code: Seti Astro Statistical Stretch / Cyril Richard.
+# polaris: name=Statistical Stretch; icon=📈; scope=frame
 
 """Statistical Stretch (Seti Astro) for the open STUDIO frame.
 

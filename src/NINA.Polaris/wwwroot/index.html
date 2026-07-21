@@ -10527,7 +10527,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Run a ported Siril / polarispy script on the selected frame or this folder">
                         <option value="" disabled selected>Ported Siril Scripts…</option>
                         <template x-for="s in scripts.list" :key="s.path">
-                            <option :value="s.path" x-text="s.name"></option>
+                            <option :value="s.path" x-text="(s.icon ? s.icon + ' ' : '') + s.displayName"></option>
                         </template>
                     </select>
                     <nav class="files-crumbs" aria-label="Path">
@@ -13136,8 +13136,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </template>
                         <template x-for="s in scripts.list" :key="s.path">
                             <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border)">
+                                <span x-text="s.icon" style="font-size:16px"></span>
                                 <div style="flex:1; min-width:0">
-                                    <div style="font-weight:600" x-text="s.name"></div>
+                                    <div style="font-weight:600" x-text="s.displayName"></div>
                                     <div class="text-muted" style="font-size:11px" x-text="s.description"></div>
                                 </div>
                                 <span class="text-muted" style="font-size:10px" x-show="s.builtIn">example</span>
@@ -17172,6 +17173,21 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         @click="filesDiscardCurrent()" :disabled="filesViewerBusy"
                         title="Discard (move to discarded/)">🗑</button>
                 <button class="btn btn-sm btn-danger" @click="closeImageViewer()">✕</button>
+            </div>
+            <!-- Ported Siril / polarispy scripts that operate on this frame,
+                 styled like the STUDIO PROCESSING TOOLS row. -->
+            <div class="files-actions files-actions-icons files-ai-toolbar"
+                 x-init="loadScripts()"
+                 x-show="imageViewerPath && frameScripts().length" x-cloak>
+                <span class="files-ai-label" aria-hidden="true">SCRIPTS</span>
+                <template x-for="s in frameScripts()" :key="s.path">
+                    <button class="btn btn-sm btn-icon" :disabled="scripts.busy"
+                            @click="runFrameScript(s.path)"
+                            :title="s.description || s.displayName" :aria-label="s.displayName">
+                        <span class="files-icon" x-text="s.icon"></span>
+                        <span class="files-icon-label" x-text="s.displayName"></span>
+                    </button>
+                </template>
             </div>
             <!-- Annotate plate-solve in-progress banner: elapsed time, live
                  solver console (shared filesSolveLog, streamed via /ws/status),

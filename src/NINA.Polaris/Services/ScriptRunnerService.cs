@@ -21,7 +21,8 @@ namespace NINA.Polaris.Services;
 /// <c>Scripts/examples</c> folder and a per-user scripts folder; only files
 /// under those roots may be run.</summary>
 public sealed class ScriptRunnerService {
-    public record ScriptInfo(string Name, string Path, string Description, bool BuiltIn);
+    public record ScriptInfo(string Name, string Path, string Description, bool BuiltIn,
+                             string DisplayName, string Icon, string Scope);
 
     public sealed class ScriptJob {
         public string Id { get; init; } = Guid.NewGuid().ToString("n");
@@ -75,13 +76,44 @@ public sealed class ScriptRunnerService {
             if (!Directory.Exists(dir)) return;
             foreach (var f in Directory.EnumerateFiles(dir, "*.py")) {
                 if (Path.GetFileName(f).StartsWith("_")) continue;
-                list.Add(new ScriptInfo(Path.GetFileNameWithoutExtension(f), f, FirstDocline(f), builtIn));
+                var name = Path.GetFileNameWithoutExtension(f);
+                var (display, icon, scope) = ParseMeta(f, name);
+                list.Add(new ScriptInfo(name, f, FirstDocline(f), builtIn, display, icon, scope));
             }
         }
         Scan(_examplesDir, builtIn: true);
         Scan(_userDir, builtIn: false);
         return list.OrderBy(s => !s.BuiltIn).ThenBy(s => s.Name).ToList();
     }
+
+    // Parse the "# polaris: name=...; icon=...; scope=frame|folder|any" metadata
+    // line (scanned in the first lines). Defaults: prettified filename, 🐍, any.
+    private static (string display, string icon, string scope) ParseMeta(string path, string fileName) {
+        string display = Prettify(fileName), icon = "🐍", scope = "any";
+        try {
+            foreach (var raw in File.ReadLines(path).Take(30)) {
+                var idx = raw.IndexOf("polaris:", StringComparison.OrdinalIgnoreCase);
+                if (idx < 0 || !raw.TrimStart().StartsWith("#")) continue;
+                foreach (var part in raw[(idx + "polaris:".Length)..].Split(';')) {
+                    var eq = part.IndexOf('=');
+                    if (eq < 0) continue;
+                    var k = part[..eq].Trim().ToLowerInvariant();
+                    var v = part[(eq + 1)..].Trim();
+                    if (v.Length == 0) continue;
+                    if (k == "name") display = v;
+                    else if (k == "icon") icon = v;
+                    else if (k == "scope") scope = v.ToLowerInvariant();
+                }
+                break;
+            }
+        } catch { /* ignore */ }
+        return (display, icon, scope);
+    }
+
+    private static string Prettify(string fileName) =>
+        string.Join(' ', fileName.Split('_', '-')
+            .Where(w => w.Length > 0)
+            .Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
 
     // First non-empty line of the module docstring, for the UI subtitle.
     private static string FirstDocline(string path) {

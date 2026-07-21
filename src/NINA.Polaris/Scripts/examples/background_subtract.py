@@ -1,3 +1,4 @@
+# polaris: name=Background Subtraction; icon=🌌; scope=frame
 """Percentile background subtraction (polarispy pixel demo).
 
 Needs numpy + astropy on the host Python. Loads the newest light frame, reads

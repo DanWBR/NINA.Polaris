@@ -1,3 +1,4 @@
+# polaris: name=Star Reduction; icon=✨; scope=frame
 """Interactive star reduction (polarispy dialog demo).
 
 Lists the STUDIO light frames, asks the user for the reduction settings through
