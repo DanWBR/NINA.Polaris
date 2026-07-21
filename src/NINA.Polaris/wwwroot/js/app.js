@@ -12469,6 +12469,10 @@ function ninaApp() {
         frameScripts() {
             return (this.scripts.list || []).filter(s => s.scope === 'frame' || s.scope === 'any');
         },
+        // Scripts that operate on the folder / a multi-file selection (FILE TOOLS).
+        folderScripts() {
+            return (this.scripts.list || []).filter(s => s.scope === 'folder' || s.scope === 'any');
+        },
         // Run a frame-scope script on the file currently open in the image viewer.
         runFrameScript(path) {
             this.runScript(path, { activeFrame: this.imageViewerPath || null, cwd: null });

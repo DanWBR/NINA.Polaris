@@ -10520,16 +10520,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <option :value="r.name" x-text="r.displayName"></option>
                         </template>
                     </select>
-                    <!-- Ported Siril / polarispy scripts: run one on the selected
-                         frame (a single selection) or this folder (the home). -->
-                    <select class="input-sm" x-init="loadScripts()" :disabled="scripts.busy"
-                            @change="runStudioScript($event.target.value); $event.target.value=''"
-                            title="Run a ported Siril / polarispy script on the selected frame or this folder">
-                        <option value="" disabled selected>Ported Siril Scripts…</option>
-                        <template x-for="s in scripts.list" :key="s.path">
-                            <option :value="s.path" x-text="(s.icon ? s.icon + ' ' : '') + s.displayName"></option>
-                        </template>
-                    </select>
                     <nav class="files-crumbs" aria-label="Path">
                         <template x-for="(crumb, i) in filesCrumbs()" :key="i">
                             <span>
@@ -10708,6 +10698,24 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon">↔</span>
                         <span class="files-icon-label">Compare</span>
                     </button>
+                    <!-- Ported Siril / polarispy scripts that process the whole
+                         folder or a multi-file selection (frame-only scripts live
+                         in the image viewer's SCRIPTS row instead). Shown only when
+                         at least one folder-scope script exists. -->
+                    <template x-if="folderScripts().length">
+                        <span class="files-actions-sep" aria-hidden="true"></span>
+                    </template>
+                    <select class="input-sm" x-init="loadScripts()"
+                            x-show="folderScripts().length" x-cloak
+                            :disabled="scripts.busy"
+                            style="min-width:210px; max-width:340px"
+                            @change="runStudioScript($event.target.value); $event.target.value=''"
+                            title="Run a ported script on this folder or the selected files">
+                        <option value="" disabled selected>Ported Siril Scripts…</option>
+                        <template x-for="s in folderScripts()" :key="s.path">
+                            <option :value="s.path" x-text="(s.icon ? s.icon + ' ' : '') + s.displayName"></option>
+                        </template>
+                    </select>
                 </div>
 
                 <!-- AI Tools — dedicated second toolbar grouping every
