@@ -257,6 +257,8 @@ def main():
         poe.load(path)
 
     dlg = poe.dialog("Narrowband Normalization")
+    dlg.expects("stretched")
+    dlg.credits("NarrowbandNormalization (c) 2026 Yannick Dutertre (Cuiv),\nfrom Bill Blanshan & Mike Cranfield's math - GPL-3.0-or-later.\nPorted to polarispy.")
     dlg.info("Stretched SHO / HOO image: %s" % os.path.basename(path))
     dlg.select("palette", "Palette", ["HOO", "SHO", "HSO", "HOS"], default="HOO")
     dlg.select("lightness", "Lightness source", ["Off", "Original", "Ha", "SII", "OIII"], default="Off")

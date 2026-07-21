@@ -24,6 +24,8 @@ def main():
         poe.load(path)
 
     dlg = poe.dialog("Background subtraction")
+    dlg.expects("linear")
+    dlg.credits("Background Subtraction - polarispy pixel demo.")
     dlg.info("Frame: %s" % path)
     dlg.slider("pct", "Background percentile", 0, 50, 10, step=1)
     values = dlg.run()

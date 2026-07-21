@@ -115,6 +115,8 @@ def main():
         poe.load(path)
 
     dlg = poe.dialog("Statistical Stretch")
+    dlg.expects("linear")
+    dlg.credits("Statistical Stretch\nSeti Astro / Cyril Richard (c) 2026 - GPL-3.0-or-later.\nPorted to polarispy.")
     dlg.info("Frame: %s" % path)
     dlg.slider("target", "Target background", 0.05, 0.90, 0.25, step=0.01)
     dlg.checkbox("linked", "Linked RGB (uncheck for per-channel)", True)

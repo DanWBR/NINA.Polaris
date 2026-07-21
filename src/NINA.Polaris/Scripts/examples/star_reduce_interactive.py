@@ -27,6 +27,8 @@ def main():
         poe.load(path)
 
     dlg = poe.dialog("Star reduction")
+    dlg.expects("stretched")
+    dlg.credits("Star Reduction - polarispy dialog demo.\nRuns Polaris's star-reduction processing.")
     dlg.info("Frame: %s" % path)
     dlg.slider("amount", "Amount", 0.0, 1.0, 0.5, step=0.05)
     dlg.number("iterations", "Iterations", default=1, min=1, max=5, step=1)

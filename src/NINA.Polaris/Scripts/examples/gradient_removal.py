@@ -229,6 +229,8 @@ def main():
         poe.load(path)
 
     dlg = poe.dialog("Gradient Removal")
+    dlg.expects("linear")
+    dlg.credits("AutoGradientRemoval for Siril - GPL-3.0-or-later.\nRobust polynomial background model ported to polarispy.")
     dlg.info("Auto background/gradient removal: %s" % os.path.basename(path))
     dlg.number("degree", "Polynomial degree (1 = plain gradient)", default=2, min=1, max=6, step=1)
     dlg.select("mode", "Mode", ["subtract", "divide"], default="subtract")

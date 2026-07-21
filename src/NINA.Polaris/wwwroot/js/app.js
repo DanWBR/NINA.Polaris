@@ -1844,7 +1844,7 @@ function ninaApp() {
         // polarispy script runner. dialog = the declarative form a script blocks on.
         scripts: {
             list: [], loaded: false, jobId: null, job: null, busy: false,
-            dialog: { open: false, seq: -1, title: '', fields: [], values: {}, okLabel: 'OK', cancelLabel: 'Cancel', preview: false, previewUrl: '', previewBusy: false, previewErr: '' },
+            dialog: { open: false, seq: -1, title: '', fields: [], values: {}, okLabel: 'OK', cancelLabel: 'Cancel', preview: false, previewUrl: '', previewBusy: false, previewErr: '', dataKind: '', credits: '', showCredits: false },
             // Pixel runtime (numpy + astropy), installed offline from a wheel pack.
             runtime: { ready: false, viaVenv: false, install: { running: false, phase: '', percent: 0, error: null, done: false } },
         },
@@ -12553,6 +12553,7 @@ function ninaApp() {
                 title: spec.title || 'Script', fields: spec.fields || [], values,
                 okLabel: spec.okLabel || 'OK', cancelLabel: spec.cancelLabel || 'Cancel',
                 preview: !!spec.preview, previewUrl: '', previewBusy: false, previewErr: '',
+                dataKind: spec.dataKind || '', credits: spec.credits || '', showCredits: false,
             };
             if (this.scripts.dialog.preview) this.$nextTick(() => this._requestScriptPreview());
         },

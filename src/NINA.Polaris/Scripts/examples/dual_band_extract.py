@@ -66,6 +66,8 @@ def main():
         poe.load(path)
 
     dlg = poe.dialog("Dual-Band Extract")
+    dlg.expects("linear")
+    dlg.credits("DBXtract v1.0.1 (c) 2025 Raul Hussein (Astrocitas).\nPyQt6 port by Adrian Knagg-Baugh - GPL-3.0-or-later.\nPorted to polarispy.")
     dlg.info("Ha + OIII from: %s" % os.path.basename(path))
     dlg.select("sensor", "Camera sensor", list(SENSORS.keys()), default="IMX 571")
     v = dlg.run()

@@ -538,6 +538,18 @@ class Dialog:
         self.spec["cancelLabel"] = cancel
         return self
 
+    def expects(self, kind):
+        """Declare the input the script expects: ``"linear"`` or ``"stretched"``
+        (or ``"any"``). Shown as a badge so the user picks the right frame."""
+        self.spec["dataKind"] = str(kind)
+        return self
+
+    def credits(self, text):
+        """Attribution / licence text, shown behind a Credits button in the
+        bottom-left corner of the dialog."""
+        self.spec["credits"] = str(text)
+        return self
+
     def preview(self, fn):
         """Enable a live preview panel. ``fn(values)`` takes the current field
         values and returns an image (2D mono or 3D colour numpy array); it is
