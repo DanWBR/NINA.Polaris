@@ -170,8 +170,14 @@ public sealed class ScriptRunnerService {
                 job.ExitCode = SafeExitCode(proc);
                 if (job.State == "running")
                     job.State = job.ExitCode == 0 ? "succeeded" : "failed";
-                if (job.ExitCode is int ec && ec != 0 && job.Error == null)
-                    job.Error = $"Script exited with code {ec}.";
+                if (job.ExitCode is int ec && ec != 0 && job.Error == null) {
+                    // Surface the real cause: the last non-empty log line is
+                    // usually the Python exception (e.g. ModuleNotFoundError).
+                    string last;
+                    lock (job.Log) last = job.Log.LastOrDefault(l => !string.IsNullOrWhiteSpace(l)) ?? "";
+                    if (last.Length > 300) last = last[^300..];
+                    job.Error = last.Length > 0 ? $"exited with code {ec}: {last}" : $"exited with code {ec}.";
+                }
             };
             proc.Start();
             proc.BeginOutputReadLine();

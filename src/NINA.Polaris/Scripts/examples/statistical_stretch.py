@@ -17,7 +17,10 @@ level, with optional per-channel (unlinked) mode, a sigma-based black point, a
 gentle curves boost, and normalization. Needs numpy + astropy on the host.
 """
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None   # reported cleanly in main() instead of crashing at import
 
 import polarispy
 
@@ -102,6 +105,11 @@ def _to_fits(a, color):
 
 def main():
     poe = polarispy.connect()
+    if np is None:
+        poe.log("This script needs numpy + astropy. Install the scripting runtime "
+                "in Settings > Scripts (the 'Install runtime' button).")
+        poe.update_progress("Missing runtime", 1.0)
+        return
     path = poe.current
     if not path:
         frames = poe.list_frames(type="LIGHT", limit=1)
