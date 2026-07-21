@@ -97,7 +97,7 @@ public sealed class ScriptRunnerService {
 
     /// <summary>Launch a script by path. The path must resolve under an allowed
     /// scripts root. Returns the created job.</summary>
-    public ScriptJob Run(string scriptPath) {
+    public ScriptJob Run(string scriptPath, string? activeFrame = null, string? cwd = null) {
         var full = Path.GetFullPath(scriptPath);
         if (!IsAllowed(full)) throw new UnauthorizedAccessException("Script is outside the allowed folders.");
         if (!File.Exists(full)) throw new FileNotFoundException("Script not found.", full);
@@ -123,6 +123,10 @@ public sealed class ScriptRunnerService {
         psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
         psi.EnvironmentVariables["POLARIS_API_URL"] = _loopbackUrl;   // loopback = auth-exempt
         psi.EnvironmentVariables["POLARIS_SCRIPT_JOB"] = job.Id;
+        // STUDIO context: the frame the user had open and the folder they were
+        // browsing, so a script can act on the open frame or the home folder.
+        if (!string.IsNullOrEmpty(activeFrame)) psi.EnvironmentVariables["POLARIS_ACTIVE_FRAME"] = activeFrame;
+        if (!string.IsNullOrEmpty(cwd)) psi.EnvironmentVariables["POLARIS_CWD"] = cwd;
 
         Process proc;
         try {

@@ -11,18 +11,22 @@ import polarispy
 
 def main():
     poe = polarispy.connect()
-    poe.update_progress("Listing light frames", 0.1)
-    frames = poe.list_frames(type="LIGHT", limit=50)
-    poe.log("Found %d light frame(s)." % len(frames))
-    if not frames:
-        poe.log("No light frames yet. Capture some (or rescan STUDIO) and run again.")
-        poe.update_progress("Nothing to do", 1.0)
-        return
+    poe.update_progress("Choosing a frame", 0.1)
 
-    path = frames[0].get("path") or frames[0].get("Path")
+    # Prefer the frame open in STUDIO; else the newest light.
+    path = poe.current
+    if not path:
+        frames = poe.list_frames(type="LIGHT", limit=50)
+        poe.log("No open frame; found %d light frame(s)." % len(frames))
+        if not frames:
+            poe.log("Nothing to do. Open a frame in STUDIO, or capture some lights.")
+            poe.update_progress("Nothing to do", 1.0)
+            return
+        path = frames[0].get("path") or frames[0].get("Path")
+        poe.load(path)
 
     dlg = poe.dialog("Star reduction")
-    dlg.info("Target: %s" % (frames[0].get("target") or path))
+    dlg.info("Frame: %s" % path)
     dlg.slider("amount", "Amount", 0.0, 1.0, 0.5, step=0.05)
     dlg.number("iterations", "Iterations", default=1, min=1, max=5, step=1)
     dlg.checkbox("open_after", "Refresh STUDIO when done", True)

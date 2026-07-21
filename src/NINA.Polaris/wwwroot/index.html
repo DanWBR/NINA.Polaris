@@ -10520,6 +10520,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <option :value="r.name" x-text="r.displayName"></option>
                         </template>
                     </select>
+                    <!-- Ported Siril / polarispy scripts: run one on the selected
+                         frame (a single selection) or this folder (the home). -->
+                    <select class="input-sm" x-init="loadScripts()" :disabled="scripts.busy"
+                            @change="runStudioScript($event.target.value); $event.target.value=''"
+                            title="Run a ported Siril / polarispy script on the selected frame or this folder">
+                        <option value="" disabled selected>Ported Siril Scripts…</option>
+                        <template x-for="s in scripts.list" :key="s.path">
+                            <option :value="s.path" x-text="s.name"></option>
+                        </template>
+                    </select>
                     <nav class="files-crumbs" aria-label="Path">
                         <template x-for="(crumb, i) in filesCrumbs()" :key="i">
                             <span>
@@ -13108,20 +13118,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </template>
                         <button class="btn btn-sm" style="margin-top:8px" @click="loadScripts()">Refresh list</button>
                     </div>
-
-                    <template x-if="scripts.job">
-                        <div class="settings-card" style="margin-top:12px; padding:12px; max-width:620px">
-                            <div style="display:flex; align-items:center; gap:8px">
-                                <strong x-text="scripts.job.state"></strong>
-                                <span class="text-muted" style="font-size:12px; flex:1" x-text="scripts.job.progressMessage"></span>
-                                <button class="btn btn-sm" x-show="scripts.job.state==='running'" @click="cancelScript()">Cancel</button>
-                            </div>
-                            <div style="height:5px; background:var(--border); border-radius:3px; overflow:hidden; margin-top:8px">
-                                <div :style="'height:100%; width:' + Math.round((scripts.job.progress||0)*100) + '%; background:#3fb950; transition:width .3s'"></div>
-                            </div>
-                            <pre style="margin-top:10px; max-height:220px; overflow:auto; font-size:11px; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; white-space:pre-wrap" x-text="(scripts.job.log||[]).join('\n')"></pre>
-                        </div>
-                    </template>
+                    <p class="text-muted" style="font-size:11px; margin-top:10px">
+                        Progress and log appear in the floating panel while a script runs.
+                        You can also run these from the STUDIO Files toolbar
+                        ("Ported Siril Scripts").
+                    </p>
                 </div>
 
                 <div class="settings-section network-section">
@@ -18349,6 +18350,28 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="btn btn-sm btn-primary" @click="_submitScriptDialog()" x-text="scripts.dialog.okLabel"></button>
             </div>
         </div>
+    </div>
+
+    <!-- Floating script-run status: shows progress + log for a script started
+         anywhere (Settings card or the STUDIO Files toolbar). -->
+    <div class="settings-card" x-show="scripts.job" x-cloak
+         style="position:fixed; right:16px; bottom:16px; z-index:1100; width:340px; max-width:92vw; padding:12px; box-shadow:0 8px 30px rgba(0,0,0,.4)">
+        <div style="display:flex; align-items:center; gap:8px">
+            <span class="settings-card-icon">🐍</span>
+            <strong style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
+                    x-text="(scripts.job && scripts.job.name) || 'Script'"></strong>
+            <span class="text-muted" style="font-size:11px" x-text="scripts.job && scripts.job.state"></span>
+            <button class="btn btn-sm" x-show="scripts.job && scripts.job.state==='running'" @click="cancelScript()">Cancel</button>
+            <button class="btn btn-sm" x-show="scripts.job && scripts.job.state!=='running'" @click="dismissScriptPanel()">Close</button>
+        </div>
+        <span class="text-muted" style="font-size:12px; display:block; margin-top:6px" x-text="scripts.job && scripts.job.progressMessage"></span>
+        <div style="height:5px; background:var(--border); border-radius:3px; overflow:hidden; margin-top:6px">
+            <div :style="'height:100%; width:' + Math.round(((scripts.job&&scripts.job.progress)||0)*100) + '%; background:#3fb950; transition:width .3s'"></div>
+        </div>
+        <details style="margin-top:8px">
+            <summary class="text-muted" style="font-size:11px; cursor:pointer">Log</summary>
+            <pre style="max-height:180px; overflow:auto; font-size:11px; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; white-space:pre-wrap; margin-top:6px" x-text="((scripts.job&&scripts.job.log)||[]).join('\n')"></pre>
+        </details>
     </div>
 
     <!-- Single-select modal (replaces window.prompt for the STUDIO

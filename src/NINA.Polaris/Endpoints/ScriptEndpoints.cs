@@ -16,7 +16,7 @@ namespace NINA.Polaris.Endpoints;
 /// progress back through /log and /progress (over the loopback API, which is
 /// auth-exempt).</summary>
 public static class ScriptEndpoints {
-    public record RunRequest(string Path);
+    public record RunRequest(string Path, string? ActiveFrame, string? Cwd);
     public record LogRequest(string Message);
     public record ProgressRequest(string? Message, double? Fraction);
 
@@ -32,7 +32,7 @@ public static class ScriptEndpoints {
             if (string.IsNullOrWhiteSpace(req.Path))
                 return Results.BadRequest(new { error = "path is required" });
             try {
-                var job = svc.Run(req.Path);
+                var job = svc.Run(req.Path, req.ActiveFrame, req.Cwd);
                 return Results.Ok(new { jobId = job.Id, state = job.State, error = job.Error });
             } catch (UnauthorizedAccessException uae) {
                 return Results.Json(new { error = uae.Message }, statusCode: StatusCodes.Status403Forbidden);

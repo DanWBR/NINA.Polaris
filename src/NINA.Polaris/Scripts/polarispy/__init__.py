@@ -77,7 +77,9 @@ class PolarisInterface:
         self.base = (base_url or os.environ.get("POLARIS_API_URL")
                      or "http://127.0.0.1:5080").rstrip("/")
         self.job = job_id or os.environ.get("POLARIS_SCRIPT_JOB") or ""
-        self.current = None   # the working image path (Siril-style "loaded image")
+        # Working image: defaults to the frame the user had open in STUDIO when
+        # they launched the script (Siril's "currently loaded image"), if any.
+        self.current = os.environ.get("POLARIS_ACTIVE_FRAME") or None
 
     def connect(self):
         """Verify the host is reachable. Returns self so calls can chain."""
@@ -110,6 +112,22 @@ class PolarisInterface:
         if filter:
             query["filter"] = filter
         return self._get("/api/studio/frames", query)
+
+    # ---- STUDIO context (like Siril's open frame / home folder) -----------
+    def active_frame(self):
+        """The frame the user had open in STUDIO when launching the script, or
+        None. It is also the default working image (see load())."""
+        return os.environ.get("POLARIS_ACTIVE_FRAME") or None
+
+    def cwd(self):
+        """The folder the user was browsing in the STUDIO Files tab, or None."""
+        return os.environ.get("POLARIS_CWD") or None
+
+    def home(self):
+        """The STUDIO root (the capture home / ImageOutputDir). Siril scripts
+        that work over the 'home folder' should walk this or use list_frames()."""
+        r = self._get("/api/files/studio-root")
+        return r.get("effective") or r.get("configured") or None
 
     # ---- working image (Siril-style: load once, then operate) -------------
     def load(self, path):

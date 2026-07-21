@@ -11,21 +11,18 @@ import polarispy
 def main():
     poe = polarispy.connect()
     poe.log("Connected to Polaris.")
-    poe.update_progress("Listing light frames", 0.1)
+    poe.update_progress("Choosing a frame", 0.1)
 
-    frames = poe.list_frames(type="LIGHT", limit=50)
-    poe.log("Found %d light frame(s) in the library." % len(frames))
-    if not frames:
-        poe.log("No light frames yet. Capture some (or add + rescan in STUDIO) and run again.")
-        poe.update_progress("Nothing to do", 1.0)
-        return
-
-    first = frames[0]
-    path = first.get("path") or first.get("Path")
+    # Prefer the frame the user had open in STUDIO; else the newest light.
+    path = poe.current
     if not path:
-        poe.log("The first frame has no path field; aborting.")
-        poe.update_progress("Error", 1.0)
-        return
+        frames = poe.list_frames(type="LIGHT", limit=50)
+        poe.log("No open frame; found %d light frame(s)." % len(frames))
+        if not frames:
+            poe.log("Nothing to do. Open a frame in STUDIO, or capture some lights.")
+            poe.update_progress("Nothing to do", 1.0)
+            return
+        path = frames[0].get("path") or frames[0].get("Path")
 
     poe.log("Applying an auto GHS stretch to: %s" % path)
     poe.update_progress("Stretching", 0.5)

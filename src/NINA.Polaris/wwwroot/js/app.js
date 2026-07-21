@@ -12447,12 +12447,21 @@ function ninaApp() {
             } catch (_) { this.scripts.list = []; }
             this.scripts.loaded = true;
         },
-        async runScript(path) {
+        // Run a script from the STUDIO Files toolbar, passing the open frame (a
+        // single selected file) and the current folder as context.
+        runStudioScript(path) {
+            if (!path) return;
+            const one = (this.files && (this.files.selectedPaths || []).length === 1)
+                ? this.files.selectedPaths[0] : null;
+            this.runScript(path, { activeFrame: one, cwd: this.files ? this.files.cwd : null });
+        },
+        async runScript(path, ctx = {}) {
             if (this.scripts.busy) return;
             this.scripts.busy = true;
-            this.scripts.job = { state: 'running', progress: 0, progressMessage: 'Starting…', log: [] };
+            this.scripts.job = { state: 'running', progress: 0, progressMessage: 'Starting…', log: [], name: '' };
             try {
-                const resp = await this.apiPost('/api/script/run', { path });
+                const resp = await this.apiPost('/api/script/run', {
+                    path, activeFrame: ctx.activeFrame || null, cwd: ctx.cwd || null });
                 const r = await resp.json().catch(() => ({}));
                 if (!resp.ok || !r.jobId) {
                     this.scripts.busy = false; this.scripts.job = null; this.scripts.jobId = null;
@@ -12495,6 +12504,7 @@ function ninaApp() {
             if (!this.scripts.jobId) return;
             try { await this.apiPost('/api/script/' + this.scripts.jobId + '/cancel', {}); } catch (_) {}
         },
+        dismissScriptPanel() { this.scripts.job = null; this.scripts.jobId = null; },
         // Render a script's declarative dialog spec, seeding values from defaults.
         _openScriptDialog(d) {
             const spec = d.spec || {};
