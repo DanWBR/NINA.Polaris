@@ -49,6 +49,7 @@ jobs:
       - name: Publish to the release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}   # gh needs the repo without a checkout
         run: |
           set -eux
           TAG="${{ inputs.release_tag }}"
