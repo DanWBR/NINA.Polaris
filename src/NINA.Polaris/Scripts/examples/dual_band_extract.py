@@ -70,6 +70,24 @@ def main():
     dlg.credits("DBXtract v1.0.1 (c) 2025 Raul Hussein (Astrocitas).\nPyQt6 port by Adrian Knagg-Baugh - GPL-3.0-or-later.\nPorted to polarispy.")
     dlg.info("Ha + OIII from: %s" % os.path.basename(path))
     dlg.select("sensor", "Camera sensor", list(SENSORS.keys()), default="IMX 571")
+
+    _cache = {}
+
+    def _preview(vals):
+        if np is None:
+            raise polarispy.PolarisError("Install the scripting runtime (Settings > Scripts) to preview.")
+        if "rgb" not in _cache:
+            rgb = poe.get_rgb()  # (H, W, 3), debayers a raw OSC mosaic
+            if rgb is None:
+                raise polarispy.PolarisError("no pixel data")
+            a = np.moveaxis(rgb.astype("float32"), -1, 0)  # (3, H, W)
+            h, w = a.shape[1:]
+            step = max(1, int(max(h, w) / 500.0))
+            _cache["rgb"] = a[:, ::step, ::step] if step > 1 else a
+        oiii, ha = _extract_ho(_cache["rgb"], SENSORS[vals["sensor"]])
+        return np.stack([ha, oiii, oiii], axis=0)  # HOO false colour (R=Ha, G/B=OIII)
+
+    dlg.preview(_preview)
     v = dlg.run()
     if v is None:
         poe.log("Cancelled.")
