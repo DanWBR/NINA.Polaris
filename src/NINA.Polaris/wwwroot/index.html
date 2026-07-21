@@ -18363,21 +18363,22 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                       :style="'font-size:10px; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:10px; border:1px solid var(--border); ' + (scripts.dialog.dataKind==='stretched' ? 'color:#d29922' : (scripts.dialog.dataKind==='linear' ? 'color:#58a6ff' : 'color:var(--text-muted)'))"
                       x-text="'Expects ' + scripts.dialog.dataKind + ' data'"></span>
             </div>
-            <div :style="scripts.dialog.preview ? 'display:flex; gap:16px; flex:1 1 auto; min-height:0' : ''">
+            <!-- Filename / info text: full width, above the two columns. -->
+            <template x-for="(f, i) in scripts.dialog.fields" :key="'info'+i">
+                <p x-show="f.type==='info'" class="text-muted" style="flex:0 0 auto; font-size:12px; margin:6px 0 0" x-text="f.text"></p>
+            </template>
+            <div :style="scripts.dialog.preview ? 'display:flex; gap:16px; flex:1 1 auto; min-height:0; margin-top:6px' : ''">
               <div :style="scripts.dialog.preview ? 'flex:0 0 300px; width:300px; overflow-y:auto; min-height:0' : ''">
                 <div style="display:flex; flex-direction:column; gap:12px; margin:14px 0"
                      :style="!scripts.dialog.preview ? 'max-height:60vh; overflow:auto' : ''">
                     <template x-for="(f, i) in scripts.dialog.fields" :key="i">
-                        <div>
-                            <p x-show="f.type==='info'" class="text-muted" style="font-size:12px; margin:0" x-text="f.text"></p>
-                            <div x-show="f.type==='slider'">
-                                <label style="display:flex; justify-content:space-between; font-size:12px">
-                                    <span x-text="f.label"></span>
-                                    <span class="text-muted" x-text="scripts.dialog.values[f.key]"></span>
-                                </label>
-                                <input type="range" style="width:100%" :min="f.min" :max="f.max" :step="f.step"
+                        <div x-show="f.type !== 'info'">
+                            <div x-show="f.type==='slider'" style="display:flex; align-items:center; gap:8px; font-size:12px">
+                                <span style="flex:0 0 132px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" :title="f.label" x-text="f.label"></span>
+                                <input type="range" style="flex:1 1 auto; min-width:60px" :min="f.min" :max="f.max" :step="f.step"
                                        :value="scripts.dialog.values[f.key]"
                                        @input="scripts.dialog.values[f.key] = parseFloat($event.target.value); scriptPreviewDebounced()">
+                                <span class="text-muted" style="flex:0 0 auto; min-width:26px; text-align:right" x-text="scripts.dialog.values[f.key]"></span>
                             </div>
                             <label x-show="f.type==='number'" style="display:flex; align-items:center; gap:10px; font-size:12px">
                                 <span style="flex:1" x-text="f.label"></span>
