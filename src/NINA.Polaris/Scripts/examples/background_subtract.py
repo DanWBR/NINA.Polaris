@@ -12,15 +12,19 @@ import polarispy
 
 def main():
     poe = polarispy.connect()
-    frames = poe.list_frames(type="LIGHT", limit=1)
-    if not frames:
-        poe.log("No light frames in the library.")
-        poe.update_progress("Nothing to do", 1.0)
-        return
-    poe.load(frames[0].get("path") or frames[0].get("Path"))
+    # Prefer the frame the user has open in STUDIO; else the newest light.
+    path = poe.current
+    if not path:
+        frames = poe.list_frames(type="LIGHT", limit=1)
+        if not frames:
+            poe.log("No frame. Open one in STUDIO, or capture a light.")
+            poe.update_progress("Nothing to do", 1.0)
+            return
+        path = frames[0].get("path") or frames[0].get("Path")
+        poe.load(path)
 
     dlg = poe.dialog("Background subtraction")
-    dlg.info("Frame: %s" % (frames[0].get("target") or poe.current))
+    dlg.info("Frame: %s" % path)
     dlg.slider("pct", "Background percentile", 0, 50, 10, step=1)
     values = dlg.run()
     if values is None:

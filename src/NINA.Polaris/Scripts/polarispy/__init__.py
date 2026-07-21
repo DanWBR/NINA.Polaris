@@ -197,9 +197,14 @@ class PolarisInterface:
         if not src:
             raise PolarisError("no image; call load(path) or pass path")
         np, fits = _require_numpy_astropy()
-        with fits.open(src) as hdul:
-            hdu = next((h for h in hdul if getattr(h, "data", None) is not None), None)
-            return None if hdu is None else np.array(hdu.data)
+        try:
+            with fits.open(src) as hdul:
+                hdu = next((h for h in hdul if getattr(h, "data", None) is not None), None)
+                return None if hdu is None else np.array(hdu.data)
+        except PolarisError:
+            raise
+        except Exception as exc:
+            raise PolarisError("cannot read pixels from %s: %s" % (src, exc)) from None
 
     def set_pixeldata(self, data, path=None, out_path=None, rescan=True):
         """Write a numpy array back to a FITS (preserving the source header) and
@@ -209,17 +214,20 @@ class PolarisInterface:
             raise PolarisError("no image; call load(path) or pass path")
         _np, fits = _require_numpy_astropy()
         out = out_path or _default_out(src)
-        with fits.open(src) as hdul:
-            hdu = next((h for h in hdul if getattr(h, "data", None) is not None), hdul[0])
-            hdu.data = data
-            # Keep the source header (BAYERPAT etc.) but, for a float result,
-            # drop the integer BZERO/BSCALE so astropy writes the real dtype
-            # (BITPIX -32) instead of quantising it back through the int scaling.
-            if getattr(data, "dtype", None) is not None and data.dtype.kind == "f":
-                for _k in ("BZERO", "BSCALE"):
-                    if _k in hdu.header:
-                        del hdu.header[_k]
-            hdul.writeto(out, overwrite=True)
+        try:
+            with fits.open(src) as hdul:
+                hdu = next((h for h in hdul if getattr(h, "data", None) is not None), hdul[0])
+                hdu.data = data
+                # Keep the source header (BAYERPAT etc.) but, for a float result,
+                # drop the integer BZERO/BSCALE so astropy writes the real dtype
+                # (BITPIX -32) instead of quantising it back through the int scaling.
+                if getattr(data, "dtype", None) is not None and data.dtype.kind == "f":
+                    for _k in ("BZERO", "BSCALE"):
+                        if _k in hdu.header:
+                            del hdu.header[_k]
+                hdul.writeto(out, overwrite=True)
+        except Exception as exc:
+            raise PolarisError("cannot write %s: %s" % (out, exc)) from None
         if rescan:
             try: self.rescan()
             except Exception: pass
