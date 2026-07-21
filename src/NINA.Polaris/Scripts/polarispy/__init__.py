@@ -282,20 +282,32 @@ class PolarisInterface:
     def _request(self, method, url, body):
         data = json.dumps(body).encode("utf-8") if body is not None else None
         headers = {"Content-Type": "application/json"} if data is not None else {}
-        req = urllib.request.Request(url, data=data, method=method, headers=headers)
-        try:
-            with urllib.request.urlopen(req, timeout=600, context=_SSL_NOVERIFY) as resp:
-                raw = resp.read().decode("utf-8")
-                return json.loads(raw) if raw else {}
-        except urllib.error.HTTPError as exc:
-            detail = ""
+        # Polaris's UseHttpsRedirect answers the loopback HTTP port with a 307 to
+        # HTTPS. urllib auto-follows 307 for GET but refuses to for POST, so we
+        # follow it ourselves (method + body preserved) and pin self.base to the
+        # redirected origin so later requests skip the round trip.
+        for _ in range(4):
+            req = urllib.request.Request(url, data=data, method=method, headers=headers)
             try:
-                detail = exc.read().decode("utf-8", "replace")
-            except Exception:
-                pass
-            raise PolarisError("%s %s -> HTTP %s: %s" % (method, url, exc.code, detail)) from None
-        except urllib.error.URLError as exc:
-            raise PolarisError("cannot reach Polaris at %s: %s" % (url, exc)) from None
+                with urllib.request.urlopen(req, timeout=600, context=_SSL_NOVERIFY) as resp:
+                    raw = resp.read().decode("utf-8")
+                    return json.loads(raw) if raw else {}
+            except urllib.error.HTTPError as exc:
+                if exc.code in (301, 302, 307, 308) and exc.headers.get("Location"):
+                    loc = urllib.parse.urljoin(url, exc.headers["Location"])
+                    parts = urllib.parse.urlsplit(loc)
+                    self.base = "%s://%s" % (parts.scheme, parts.netloc)
+                    url = loc
+                    continue
+                detail = ""
+                try:
+                    detail = exc.read().decode("utf-8", "replace")
+                except Exception:
+                    pass
+                raise PolarisError("%s %s -> HTTP %s: %s" % (method, url, exc.code, detail)) from None
+            except urllib.error.URLError as exc:
+                raise PolarisError("cannot reach Polaris at %s: %s" % (url, exc)) from None
+        raise PolarisError("%s %s -> too many redirects" % (method, url))
 
 
 class Dialog:
