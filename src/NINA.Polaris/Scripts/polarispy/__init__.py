@@ -33,12 +33,21 @@ scripts use.
 
 import json
 import os
+import ssl
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
 __all__ = ["PolarisInterface", "PolarisError", "Dialog", "connect"]
+
+# Polaris talks to us over the loopback API (127.0.0.1). Its HTTPS redirect can
+# bounce the plain-HTTP loopback call to the self-signed TLS endpoint, which the
+# default urllib would reject. Loopback is same-machine and the cert is Polaris's
+# own, so verification is safely disabled here (never used for non-loopback).
+_SSL_NOVERIFY = ssl.create_default_context()
+_SSL_NOVERIFY.check_hostname = False
+_SSL_NOVERIFY.verify_mode = ssl.CERT_NONE
 
 
 class PolarisError(Exception):
@@ -275,7 +284,7 @@ class PolarisInterface:
         headers = {"Content-Type": "application/json"} if data is not None else {}
         req = urllib.request.Request(url, data=data, method=method, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=600) as resp:
+            with urllib.request.urlopen(req, timeout=600, context=_SSL_NOVERIFY) as resp:
                 raw = resp.read().decode("utf-8")
                 return json.loads(raw) if raw else {}
         except urllib.error.HTTPError as exc:
