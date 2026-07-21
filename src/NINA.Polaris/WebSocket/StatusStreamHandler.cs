@@ -651,6 +651,12 @@ public static class StatusStreamHandler {
                             freeBytes  = usb.FreeBytes,
                             totalBytes = usb.TotalBytes
                         } : null,
+                        // The drive holding the capture home was unplugged, offering
+                        // a revert to the default folder. null when nothing pending.
+                        usbRemoved = usbWatcher.RevertPending is { } rp ? new {
+                            label       = rp.RemovedLabel,
+                            defaultPath = rp.DefaultPath
+                        } : null,
                         // BENCH: compact progress for the Settings card.
                         // Full results are fetched over REST.
                         benchmark = new {

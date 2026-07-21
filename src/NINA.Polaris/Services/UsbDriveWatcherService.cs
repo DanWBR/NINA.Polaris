@@ -25,6 +25,7 @@ namespace NINA.Polaris.Services;
 /// <c>UsbEndpoints</c>; this service only detects and de-dups.</summary>
 public sealed class UsbDriveWatcherService : BackgroundService {
     public record UsbDrive(string Path, string Label, long? FreeBytes, long? TotalBytes);
+    public record RevertPrompt(string RemovedLabel, string DefaultPath);
 
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(3);
 
@@ -42,6 +43,20 @@ public sealed class UsbDriveWatcherService : BackgroundService {
     /// <summary>The newly-plugged removable drive awaiting the user's decision,
     /// or null. Serialized into the status stream.</summary>
     public UsbDrive? Pending => _pending;
+
+    private volatile RevertPrompt? _revertPending;
+    /// <summary>Set when the drive holding the current capture home is unplugged,
+    /// offering to revert the home to the default folder. null otherwise.</summary>
+    public RevertPrompt? RevertPending => _revertPending;
+
+    public void ClearRevert() => _revertPending = null;
+
+    /// <summary>The default capture home (the user's home/files), used to offer a
+    /// revert when the drive holding the current home is removed.</summary>
+    public static string DefaultImageDir() {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return string.IsNullOrWhiteSpace(home) ? "" : System.IO.Path.Combine(home, "files");
+    }
 
     public UsbDriveWatcherService(ProfileService profiles, NotificationService notify,
                                   ILogger<UsbDriveWatcherService> log) {
@@ -79,15 +94,28 @@ public sealed class UsbDriveWatcherService : BackgroundService {
     private void Poll() {
         var current = Enumerate().ToList();
         var currentKeys = current.Select(d => Norm(d.Path)).ToHashSet();
+        var home = Norm(_profiles.Active?.ImageOutputDir ?? "");
+
+        // A drive we knew is gone now: if the capture home lived on it, offer to
+        // revert the home to the default folder. Fires once per removal (the key
+        // is dropped from _known just below, so it cannot re-trigger).
+        foreach (var k in _known) {
+            if (currentKeys.Contains(k)) continue;
+            if (_revertPending == null && home.Length > 0 &&
+                (home == k || home.StartsWith(k + "/") || home.StartsWith(k + "\\"))) {
+                var def = DefaultImageDir();
+                if (def.Length > 0 && Norm(def) != home)
+                    _revertPending = new RevertPrompt(System.IO.Path.GetFileName(k), def);
+            }
+        }
 
         // Forget drives that were unplugged, so re-inserting one prompts again.
         _known.RemoveWhere(k => !currentKeys.Contains(k));
         _dismissed.RemoveWhere(k => !currentKeys.Contains(k));
         if (_pending is { } p0 && !currentKeys.Contains(Norm(p0.Path))) _pending = null;
 
-        if (_pending != null) return;   // one prompt at a time
+        if (_pending != null) return;   // one add-prompt at a time
 
-        var home = Norm(_profiles.Active?.ImageOutputDir ?? "");
         foreach (var d in current) {
             var key = Norm(d.Path);
             if (_known.Contains(key)) continue;   // present at startup or already offered

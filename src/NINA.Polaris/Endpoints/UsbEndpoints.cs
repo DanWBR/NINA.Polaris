@@ -49,5 +49,27 @@ public static class UsbEndpoints {
             watcher.Dismiss(req.Path);
             return Results.Ok(new { ok = true });
         });
+
+        // Revert: the drive holding the capture home was unplugged; move the home
+        // back to the default folder (home/files), creating it if it is missing.
+        g.MapPost("/revert", (ProfileService profiles, UsbDriveWatcherService watcher) => {
+            try {
+                var def = UsbDriveWatcherService.DefaultImageDir();
+                if (string.IsNullOrEmpty(def)) return Results.BadRequest(new { error = "no default home" });
+                Directory.CreateDirectory(def);
+                profiles.Active.ImageOutputDir = def;
+                profiles.Save();
+                watcher.ClearRevert();
+                return Results.Ok(new { ok = true, imageOutputDir = def });
+            } catch (Exception ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // Keep the (now dead) home on the removed drive; just stop asking.
+        g.MapPost("/revert-dismiss", (UsbDriveWatcherService watcher) => {
+            watcher.ClearRevert();
+            return Results.Ok(new { ok = true });
+        });
     }
 }

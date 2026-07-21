@@ -23752,6 +23752,8 @@ function ninaApp() {
                     if (resp.ok && r.imageOutputDir) {
                         this.settings.imageOutputDir = r.imageOutputDir;
                         this.toast('Capture home set to ' + r.imageOutputDir, 'ok');
+                        // Point STUDIO at the new root (rescan + reload, silent).
+                        try { await this._studioRefreshAfterFileOp(); } catch (_) {}
                     } else {
                         this.toast('Could not use the USB drive' + (r.error ? ': ' + r.error : ''), 'error');
                     }
@@ -23760,6 +23762,38 @@ function ninaApp() {
                 }
             } catch (e) {
                 this.toast('USB drive: ' + ((e && e.message) || e), 'error');
+            } finally {
+                this._usbPromptBusy = false;
+            }
+        },
+        // The drive that held the capture home was unplugged: offer to revert the
+        // home to the default folder (/home/polaris/files). Same one-prompt guards.
+        async _maybePromptUsbRemoved(rp) {
+            if (!rp) { this._usbRemovedHandled = false; return; }
+            if (this._usbRemovedHandled) return;
+            if (this._usbPromptBusy || this.confirmModal.open) return;
+            this._usbPromptBusy = true;
+            this._usbRemovedHandled = true;
+            try {
+                const yes = await this._confirmAsync(
+                    'The USB drive "' + (rp.label || 'drive') + '" that held your capture home was removed.\n\n'
+                    + 'Revert the capture home to the default (' + rp.defaultPath + ')?',
+                    { title: 'USB drive removed', okLabel: 'Yes, revert', cancelLabel: 'Keep it' });
+                if (yes) {
+                    const resp = await this.apiPost('/api/usb/revert', {});
+                    const r = await resp.json().catch(() => ({}));
+                    if (resp.ok && r.imageOutputDir) {
+                        this.settings.imageOutputDir = r.imageOutputDir;
+                        this.toast('Capture home reverted to ' + r.imageOutputDir, 'ok');
+                        try { await this._studioRefreshAfterFileOp(); } catch (_) {}
+                    } else {
+                        this.toast('Could not revert the capture home' + (r.error ? ': ' + r.error : ''), 'error');
+                    }
+                } else {
+                    await this.apiPost('/api/usb/revert-dismiss', {});
+                }
+            } catch (e) {
+                this.toast('USB revert: ' + ((e && e.message) || e), 'error');
             } finally {
                 this._usbPromptBusy = false;
             }
@@ -36743,6 +36777,8 @@ function ninaApp() {
             // A USB drive plugged in at runtime: offer to move the capture home
             // onto it (null when nothing is pending). See UsbDriveWatcherService.
             this._maybePromptUsbDrive(msg.usbDrive);
+            // The drive holding the home was unplugged: offer to revert to default.
+            this._maybePromptUsbRemoved(msg.usbRemoved);
             // FW-1: Flat Wizard tick. state + lastError always present;
             // progress is null when the wizard never ran (preserved as
             // null so the UI hides the progress block). When a run
