@@ -105,11 +105,6 @@ def _to_fits(a, color):
 
 def main():
     poe = polarispy.connect()
-    if np is None:
-        poe.log("This script needs numpy + astropy. Install the scripting runtime "
-                "in Settings > Scripts (the 'Install runtime' button).")
-        poe.update_progress("Missing runtime", 1.0)
-        return
     path = poe.current
     if not path:
         frames = poe.list_frames(type="LIGHT", limit=1)
@@ -132,6 +127,11 @@ def main():
     if v is None:
         poe.log("Cancelled.")
         return
+
+    if np is None:
+        raise polarispy.PolarisError(
+            "This script needs numpy + astropy. Install the scripting runtime in "
+            "Settings > Scripts (the 'Install runtime' button).")
 
     poe.update_progress("Reading pixels", 0.25)
     data = poe.get_pixeldata()
@@ -157,7 +157,4 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except polarispy.PolarisError as exc:
-        polarispy.connect().log("Statistical Stretch failed: %s" % exc)
+    main()
