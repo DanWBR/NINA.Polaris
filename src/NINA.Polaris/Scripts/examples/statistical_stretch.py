@@ -145,7 +145,7 @@ def main():
             if d is None:
                 raise polarispy.PolarisError("no pixel data")
             img, color = _to_float01(d)
-            step = max(1, int(max(img.shape[0], img.shape[1]) / 500.0))
+            step = max(1, int(max(img.shape[0], img.shape[1]) / 720.0))
             _cache["img"] = img[::step, ::step] if img.ndim == 2 else img[::step, ::step, :]
             _cache["color"] = color
         return _stretch_vals(_cache["img"], _cache["color"], vals)

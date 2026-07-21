@@ -86,7 +86,7 @@ def main():
                 raise polarispy.PolarisError("no pixel data")
             a = np.moveaxis(rgb.astype("float32"), -1, 0)  # (3, H, W)
             h, w = a.shape[1:]
-            step = max(1, int(max(h, w) / 500.0))
+            step = max(1, int(max(h, w) / 720.0))
             _cache["rgb"] = a[:, ::step, ::step] if step > 1 else a
         oiii, ha = _extract_ho(_cache["rgb"], SENSORS[vals["sensor"]])
         return np.stack([ha, oiii, oiii], axis=0)  # HOO false colour (R=Ha, G/B=OIII)

@@ -233,7 +233,7 @@ def _to_hwc(arr):
         "Narrowband Normalization needs a 3-channel (SHO/HOO) colour image.")
 
 
-def _shrink_hwc(a, maxside=500):
+def _shrink_hwc(a, maxside=720):
     """Fast spatial subsample of an (H, W, 3) array for a preview."""
     h, w = a.shape[:2]
     step = max(1, int(max(h, w) / float(maxside)))

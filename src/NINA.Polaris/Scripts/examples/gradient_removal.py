@@ -171,7 +171,7 @@ def correct_channel(ch, degree, downsample, mode, protect=True, log=print):
     return ch - bg + level
 
 
-def _shrink(a, maxside=500):
+def _shrink(a, maxside=720):
     """Fast spatial subsample of a normalized array for a preview."""
     if a.ndim == 2:
         h, w = a.shape

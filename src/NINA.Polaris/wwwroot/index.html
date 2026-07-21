@@ -18407,9 +18407,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </template>
                 </div>
               </div>
-              <div x-show="scripts.dialog.preview" style="flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:6px; margin:14px 0">
+              <div x-show="scripts.dialog.preview" style="flex:1 1 auto; min-width:0; min-height:0; display:flex; flex-direction:column; gap:6px; margin:14px 0">
                 <div style="position:relative; flex:1 1 auto; min-height:0; background:var(--bg); border:1px solid var(--border); border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden">
-                    <img x-show="scripts.dialog.previewUrl" :src="scripts.dialog.previewUrl" style="max-width:100%; max-height:100%; object-fit:contain">
+                    <img x-show="scripts.dialog.previewUrl" :src="scripts.dialog.previewUrl" style="width:100%; height:100%; object-fit:contain; display:block">
                     <span x-show="!scripts.dialog.previewUrl && !scripts.dialog.previewErr" class="text-muted" style="font-size:12px">Preview will appear here…</span>
                     <span x-show="scripts.dialog.previewErr" class="text-muted" style="font-size:11px; color:#f0883e; padding:10px; text-align:center" x-text="scripts.dialog.previewErr"></span>
                     <div x-show="scripts.dialog.previewBusy" style="position:absolute; top:6px; right:8px; font-size:11px; background:rgba(0,0,0,.5); border-radius:4px; padding:2px 6px" class="text-muted">Rendering…</div>
