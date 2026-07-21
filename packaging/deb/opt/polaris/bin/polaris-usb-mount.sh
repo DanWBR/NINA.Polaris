@@ -32,12 +32,21 @@ case "$ACTION" in
       swap|crypto_LUKS|linux_raid_member|LVM2_member) exit 0 ;;
     esac
 
+    # Friendly mount-dir name: the filesystem label, else the partition label,
+    # else the drive model from sysfs (e.g. "Cruzer Blade"), else a plain "usb".
+    # Never the UUID (an unlabelled stick would mount as a huge GUID).
     LABEL="$(blkid -o value -s LABEL "$DEV" 2>/dev/null || true)"
-    UUID="$(blkid -o value -s UUID "$DEV" 2>/dev/null || true)"
-    NAME="$(sanitize "${LABEL:-${UUID:-$KDEV}}")"
-    [ -n "$NAME" ] || NAME="$KDEV"
+    PARTLABEL="$(blkid -o value -s PARTLABEL "$DEV" 2>/dev/null || true)"
+    DISK="$(echo "$KDEV" | sed 's/[0-9]*$//')"   # sdb1 -> sdb
+    MODEL=""
+    if [ -r "/sys/block/$DISK/device/model" ]; then
+        MODEL="$(cat "/sys/block/$DISK/device/model" 2>/dev/null | sed 's/[[:space:]]\{1,\}$//;s/^[[:space:]]\{1,\}//')"
+    fi
+    NAME="$(sanitize "${LABEL:-${PARTLABEL:-${MODEL:-usb}}}")"
+    [ -n "$NAME" ] || NAME="usb"
     TARGET="$BASE/$NAME"
-    # Disambiguate if a drive with the same label is already mounted.
+    # Disambiguate if a drive with the same name is already mounted (two
+    # unlabelled sticks both fall back to "usb").
     if mountpoint -q "$TARGET" 2>/dev/null; then TARGET="$BASE/${NAME}-${KDEV}"; fi
     mkdir -p "$TARGET" || exit 0
 
