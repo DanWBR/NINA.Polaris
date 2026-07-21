@@ -82,17 +82,8 @@ def main():
 
     coef = SENSORS[v["sensor"]]
     poe.update_progress("Reading pixels", 0.3)
-    data = poe.get_pixeldata()
-    if data is None or getattr(data, "ndim", 0) != 3:
-        raise polarispy.PolarisError(
-            "Dual-Band Extract needs a debayered colour (RGB) image, not a raw mosaic.")
-    if data.shape[0] == 3:
-        rgb = data
-    elif data.shape[-1] == 3:
-        rgb = np.moveaxis(data, -1, 0)
-    else:
-        raise polarispy.PolarisError("expected a 3-channel image; got shape %r" % (data.shape,))
-    rgb = rgb.astype("float32")
+    # get_rgb debayers a raw OSC mosaic (via BAYERPAT) or returns a colour frame.
+    rgb = np.moveaxis(poe.get_rgb(), -1, 0).astype("float32")  # (3, H, W)
 
     poe.update_progress("Unmixing Ha / OIII", 0.6)
     oiii, ha = _extract_ho(rgb, coef)

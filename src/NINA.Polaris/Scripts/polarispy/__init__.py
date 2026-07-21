@@ -146,6 +146,43 @@ def _encode_preview(img):
     return _png_data_url(_autostretch_uint8(img))
 
 
+# ---- Bayer debayering (bilinear) -------------------------------------------
+
+def _conv3(np, a, k):
+    """Convolve a 2D array with a 3x3 kernel (reflect-padded)."""
+    p = np.pad(a, 1, mode="reflect")
+    out = np.zeros_like(a, dtype=np.float64)
+    for dy in range(3):
+        for dx in range(3):
+            w = k[dy][dx]
+            if w:
+                out += w * p[dy:dy + a.shape[0], dx:dx + a.shape[1]]
+    return out
+
+
+def _debayer(np, mosaic, pattern):
+    """Bilinear demosaic of a 2D Bayer mosaic to (H, W, 3) float."""
+    m = mosaic.astype(np.float64)
+    h, w = m.shape
+    # 2x2 channel arrangement (0=R, 1=G, 2=B) for the top-left of the pattern.
+    pat = {
+        "RGGB": ((0, 1), (1, 2)),
+        "BGGR": ((2, 1), (1, 0)),
+        "GRBG": ((1, 0), (2, 1)),
+        "GBRG": ((1, 2), (0, 1)),
+    }[pattern]
+    ci = np.empty((h, w), dtype=np.int8)
+    ci[0::2, 0::2] = pat[0][0]; ci[0::2, 1::2] = pat[0][1]
+    ci[1::2, 0::2] = pat[1][0]; ci[1::2, 1::2] = pat[1][1]
+
+    krb = ((0.25, 0.5, 0.25), (0.5, 1.0, 0.5), (0.25, 0.5, 0.25))
+    kg = ((0.0, 0.25, 0.0), (0.25, 1.0, 0.25), (0.0, 0.25, 0.0))
+    r = _conv3(np, np.where(ci == 0, m, 0.0), krb)
+    g = _conv3(np, np.where(ci == 1, m, 0.0), kg)
+    b = _conv3(np, np.where(ci == 2, m, 0.0), krb)
+    return np.stack([r, g, b], axis=-1)
+
+
 class PolarisInterface:
     """Connection to the running Polaris host over its loopback HTTP API."""
 
@@ -272,6 +309,41 @@ class PolarisInterface:
             raise
         except Exception as exc:
             raise PolarisError("cannot read pixels from %s: %s" % (src, exc)) from None
+
+    def get_rgb(self, path=None):
+        """Return an (H, W, 3) float RGB image. If the frame is a raw Bayer
+        mosaic (2D with a BAYERPAT header), it is bilinearly debayered; an
+        already-colour frame is returned as-is. Raises for a plain mono image.
+        Needs numpy + astropy."""
+        src = path or self.current
+        if not src:
+            raise PolarisError("no image; call load(path) or pass path")
+        np, fits = _require_numpy_astropy()
+        try:
+            with fits.open(src) as hdul:
+                hdu = next((h for h in hdul if getattr(h, "data", None) is not None), None)
+                if hdu is None:
+                    return None
+                data = np.array(hdu.data)
+                pattern = str(hdu.header.get("BAYERPAT", "")).strip().upper()
+        except PolarisError:
+            raise
+        except Exception as exc:
+            raise PolarisError("cannot read pixels from %s: %s" % (src, exc)) from None
+
+        if data.ndim == 3:
+            if data.shape[0] == 3:
+                return np.moveaxis(data, 0, -1).astype(np.float64)
+            if data.shape[-1] == 3:
+                return data.astype(np.float64)
+            raise PolarisError("unexpected colour image shape %r" % (data.shape,))
+        if data.ndim == 2:
+            if pattern in ("RGGB", "BGGR", "GRBG", "GBRG"):
+                return _debayer(np, data, pattern)
+            raise PolarisError(
+                "this is a mono image with no BAYERPAT header; a debayered "
+                "colour frame is required")
+        raise PolarisError("unexpected image shape %r" % (data.shape,))
 
     def set_pixeldata(self, data, path=None, out_path=None, rescan=True):
         """Write a numpy array back to a FITS (preserving the source header) and
