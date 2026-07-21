@@ -33,11 +33,12 @@ scripts use.
 
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
-__all__ = ["PolarisInterface", "PolarisError", "connect"]
+__all__ = ["PolarisInterface", "PolarisError", "Dialog", "connect"]
 
 
 class PolarisError(Exception):
@@ -120,6 +121,31 @@ class PolarisInterface:
         return self._post("/api/post/%s" % op.strip("/"),
                           dict(paths=_as_list(paths), **params))
 
+    # ---- UI: a declarative dialog rendered in the Polaris browser ---------
+    def dialog(self, title="Polaris script"):
+        """Start building a form dialog. Add fields, then call ``.run()`` to show
+        it in the Polaris web UI and block until the user submits or cancels."""
+        return Dialog(self, title)
+
+    def _run_dialog(self, spec, poll_interval=0.5, timeout=None):
+        # No job context (script run standalone / for testing): fall back to the
+        # field defaults so the pipeline still runs unattended.
+        if not self.job:
+            return {f["key"]: f.get("default")
+                    for f in spec.get("fields", []) if f.get("key")}
+        self._post("/api/script/%s/dialog" % self.job, spec)
+        waited = 0.0
+        while True:
+            r = self._get("/api/script/%s/dialog/result" % self.job)
+            if r.get("submitted"):
+                return r.get("values") or {}
+            if r.get("cancelled"):
+                return None
+            time.sleep(poll_interval)
+            waited += poll_interval
+            if timeout and waited >= timeout:
+                return None
+
     # ---- HTTP plumbing ----------------------------------------------------
     def _get(self, path, query=None):
         url = self.base + path
@@ -155,6 +181,65 @@ class PolarisInterface:
             raise PolarisError("%s %s -> HTTP %s: %s" % (method, url, exc.code, detail)) from None
         except urllib.error.URLError as exc:
             raise PolarisError("cannot reach Polaris at %s: %s" % (url, exc)) from None
+
+
+class Dialog:
+    """A declarative form shown in the Polaris browser UI. Build it with the
+    field helpers (each returns self so calls chain), then call ``run()``.
+
+        dlg = poe.dialog("Star reduction")
+        dlg.slider("amount", "Amount", 0.0, 1.0, 0.5)
+        dlg.checkbox("protect_core", "Protect star cores", True)
+        values = dlg.run()          # blocks until the user submits / cancels
+        if values is None:
+            return                  # cancelled
+        poe.star_reduce(path, amount=values["amount"])
+    """
+
+    def __init__(self, iface, title):
+        self._iface = iface
+        self.spec = {"title": title, "fields": [], "okLabel": "OK", "cancelLabel": "Cancel"}
+
+    def _add(self, field):
+        self.spec["fields"].append(field)
+        return self
+
+    def info(self, text):
+        """A read-only line of explanatory text."""
+        return self._add({"type": "info", "text": str(text)})
+
+    def slider(self, key, label, min=0.0, max=1.0, default=None, step=None):
+        return self._add({"type": "slider", "key": key, "label": label,
+                          "min": min, "max": max,
+                          "step": step if step is not None else (max - min) / 100.0,
+                          "default": default if default is not None else min})
+
+    def number(self, key, label, default=0, min=None, max=None, step=1):
+        return self._add({"type": "number", "key": key, "label": label,
+                          "default": default, "min": min, "max": max, "step": step})
+
+    def checkbox(self, key, label, default=False):
+        return self._add({"type": "checkbox", "key": key, "label": label,
+                          "default": bool(default)})
+
+    def select(self, key, label, options, default=None):
+        opts = list(options)
+        return self._add({"type": "select", "key": key, "label": label,
+                          "options": opts,
+                          "default": default if default is not None else (opts[0] if opts else "")})
+
+    def text(self, key, label, default=""):
+        return self._add({"type": "text", "key": key, "label": label, "default": str(default)})
+
+    def buttons(self, ok="OK", cancel="Cancel"):
+        self.spec["okLabel"] = ok
+        self.spec["cancelLabel"] = cancel
+        return self
+
+    def run(self, poll_interval=0.5, timeout=None):
+        """Show the dialog and block. Returns a dict of the field values keyed by
+        ``key``, or ``None`` if the user cancelled (or ``timeout`` seconds pass)."""
+        return self._iface._run_dialog(self.spec, poll_interval, timeout)
 
 
 def connect(base_url=None, job_id=None):

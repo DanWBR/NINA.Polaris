@@ -6,6 +6,7 @@
 // the Free Software Foundation, either version 3 of the License, or (at your
 // option) any later version. See <https://www.gnu.org/licenses/>.
 
+using System.Text.Json;
 using NINA.Polaris.Services;
 
 namespace NINA.Polaris.Endpoints;
@@ -50,7 +51,8 @@ public static class ScriptEndpoints {
             return Results.Ok(new {
                 id = job.Id, name = job.Name, state = job.State,
                 progress = job.Progress, progressMessage = job.ProgressMessage,
-                exitCode = job.ExitCode, error = job.Error, log = logCopy
+                exitCode = job.ExitCode, error = job.Error, log = logCopy,
+                dialog = svc.PendingDialog(job)
             });
         });
 
@@ -67,6 +69,29 @@ public static class ScriptEndpoints {
 
         g.MapPost("/{jobId}/progress", (string jobId, ProgressRequest req, ScriptRunnerService svc) => {
             svc.SetProgress(jobId, req.Message, req.Fraction);
+            return Results.Ok(new { ok = true });
+        });
+
+        // ----- Phase 2: declarative dialog bridge -----
+        // The script posts a form spec (arbitrary JSON) and long-polls the result.
+        g.MapPost("/{jobId}/dialog", (string jobId, JsonElement spec, ScriptRunnerService svc) => {
+            svc.SetDialog(jobId, spec);
+            return Results.Ok(new { ok = true });
+        });
+
+        g.MapGet("/{jobId}/dialog/result", (string jobId, ScriptRunnerService svc) =>
+            Results.Ok(svc.DialogResult(jobId)));
+
+        // The browser submits the entered values ({ values: {...} }) or cancels.
+        g.MapPost("/{jobId}/dialog/submit", (string jobId, JsonElement body, ScriptRunnerService svc) => {
+            var values = body.ValueKind == JsonValueKind.Object && body.TryGetProperty("values", out var v)
+                ? v : body;
+            svc.SubmitDialog(jobId, values);
+            return Results.Ok(new { ok = true });
+        });
+
+        g.MapPost("/{jobId}/dialog/cancel", (string jobId, ScriptRunnerService svc) => {
+            svc.CancelDialog(jobId);
             return Results.Ok(new { ok = true });
         });
     }

@@ -1841,8 +1841,11 @@ function ninaApp() {
         _weatherLastKey: '',
 
         // Studio (post-processing), ST-1 frame browser + ST-2 viewer
-        // polarispy script runner (Phase 1: headless scripts).
-        scripts: { list: [], loaded: false, jobId: null, job: null, busy: false },
+        // polarispy script runner. dialog = the declarative form a script blocks on.
+        scripts: {
+            list: [], loaded: false, jobId: null, job: null, busy: false,
+            dialog: { open: false, seq: -1, title: '', fields: [], values: {}, okLabel: 'OK', cancelLabel: 'Cancel' },
+        },
         studio: {
             frames: [],
             stats: null,
@@ -12470,8 +12473,15 @@ function ninaApp() {
                 try { job = await this.apiGet('/api/script/' + jobId + '/status'); }
                 catch (_) { setTimeout(tick, 1500); return; }
                 this.scripts.job = job;
-                if (job.state === 'running') { setTimeout(tick, 1000); return; }
+                // A pending declarative dialog: render it once (keyed by seq).
+                if (job.dialog && job.dialog.seq !== this.scripts.dialog.seq) {
+                    this._openScriptDialog(job.dialog);
+                } else if (!job.dialog && this.scripts.dialog.open) {
+                    this.scripts.dialog.open = false;   // resolved elsewhere
+                }
+                if (job.state === 'running') { setTimeout(tick, job.dialog ? 600 : 1000); return; }
                 this.scripts.busy = false;
+                this.scripts.dialog.open = false;
                 if (job.state === 'succeeded') {
                     this.toast('Script finished.', 'ok');
                     try { await this._studioRefreshAfterFileOp(); } catch (_) {}
@@ -12484,6 +12494,32 @@ function ninaApp() {
         async cancelScript() {
             if (!this.scripts.jobId) return;
             try { await this.apiPost('/api/script/' + this.scripts.jobId + '/cancel', {}); } catch (_) {}
+        },
+        // Render a script's declarative dialog spec, seeding values from defaults.
+        _openScriptDialog(d) {
+            const spec = d.spec || {};
+            const values = {};
+            for (const f of (spec.fields || [])) {
+                if (f.key !== undefined) values[f.key] = f.default;
+            }
+            this.scripts.dialog = {
+                open: true, seq: d.seq,
+                title: spec.title || 'Script', fields: spec.fields || [], values,
+                okLabel: spec.okLabel || 'OK', cancelLabel: spec.cancelLabel || 'Cancel',
+            };
+        },
+        async _submitScriptDialog() {
+            const id = this.scripts.jobId;
+            this.scripts.dialog.open = false;
+            if (!id) return;
+            try { await this.apiPost('/api/script/' + id + '/dialog/submit', { values: this.scripts.dialog.values }); }
+            catch (_) {}
+        },
+        async _cancelScriptDialog() {
+            const id = this.scripts.jobId;
+            this.scripts.dialog.open = false;
+            if (!id) return;
+            try { await this.apiPost('/api/script/' + id + '/dialog/cancel', {}); } catch (_) {}
         },
 
         studioToggleSelect(id) {

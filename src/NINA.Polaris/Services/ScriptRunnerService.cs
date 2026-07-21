@@ -8,6 +8,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -33,6 +34,13 @@ public sealed class ScriptRunnerService {
         public DateTime StartedAt { get; } = DateTime.UtcNow;
         public readonly List<string> Log = new();
         internal Process? Proc;
+
+        // A declarative dialog the script is blocking on (Phase 2 UI). Seq bumps
+        // per dialog so the client can tell a new one from the current one.
+        public int DialogSeq;
+        public string DialogState = "none";   // none | pending | submitted | cancelled
+        public JsonElement? DialogSpec;
+        public JsonElement? DialogValues;
     }
 
     private readonly ILogger<ScriptRunnerService> _log;
@@ -158,6 +166,49 @@ public sealed class ScriptRunnerService {
         if (!_jobs.TryGetValue(id, out var job)) return;
         if (fraction is double f) job.Progress = Math.Clamp(f, 0, 1);
         if (message != null) job.ProgressMessage = message;
+    }
+
+    // ---- Phase 2: declarative dialog bridge --------------------------------
+    // The script (polarispy) POSTs a form spec and long-polls the result; the
+    // browser reads the pending spec from /status and POSTs the submitted values.
+    public void SetDialog(string id, JsonElement spec) {
+        if (!_jobs.TryGetValue(id, out var job)) return;
+        lock (job) {
+            job.DialogSeq++;
+            job.DialogSpec = spec.Clone();   // detach from the request's JsonDocument
+            job.DialogValues = null;
+            job.DialogState = "pending";
+        }
+    }
+
+    // For the script's poll: pending, or the terminal outcome.
+    public object DialogResult(string id) {
+        if (!_jobs.TryGetValue(id, out var job)) return new { error = "unknown job" };
+        lock (job) {
+            return job.DialogState switch {
+                "submitted" => new { submitted = true, values = (object?)job.DialogValues },
+                "cancelled" => new { cancelled = true },
+                _ => (object)new { pending = true },
+            };
+        }
+    }
+
+    public void SubmitDialog(string id, JsonElement values) {
+        if (!_jobs.TryGetValue(id, out var job)) return;
+        lock (job) { job.DialogValues = values.Clone(); job.DialogState = "submitted"; }
+    }
+
+    public void CancelDialog(string id) {
+        if (_jobs.TryGetValue(id, out var job)) lock (job) { job.DialogState = "cancelled"; }
+    }
+
+    // For /status: the spec the browser should render, or null when none is pending.
+    public object? PendingDialog(ScriptJob job) {
+        lock (job) {
+            return job.DialogState == "pending" && job.DialogSpec is { } spec
+                ? new { seq = job.DialogSeq, spec = (object?)spec }
+                : null;
+        }
     }
 
     private static void AppendLog(ScriptJob job, string line) {
