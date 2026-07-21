@@ -19,6 +19,11 @@ import os
 
 import polarispy
 
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
 # Per-sensor quantum-efficiency coefficients (verbatim from DBXtract). They
 # weight the R/G/B contributions when unmixing the broadcast bands.
 SENSORS = {
@@ -39,7 +44,6 @@ SENSORS = {
 
 def _extract_ho(rgb, coef):
     """DBXtract HO extraction: return (OIII, Ha) mono planes from an RGB stack."""
-    import numpy as np
     r, g, b = rgb
     bg_r, bg_g, bg_b = np.median(r), np.median(g), np.median(b)
     r, g, b = r - bg_r, g - bg_g, b - bg_b
@@ -93,9 +97,7 @@ def main():
         poe.log("Cancelled.")
         return
 
-    try:
-        import numpy as np
-    except ImportError:
+    if np is None:
         raise polarispy.PolarisError(
             "This script needs numpy + astropy. Install the scripting runtime in "
             "Settings > Scripts (the 'Install runtime' button).")
