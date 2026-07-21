@@ -15297,7 +15297,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <rect class="wifi-bar" :class="wifiBarTone(3)" x="8.27" y="3"   width="2.6" height="8"    rx="0.6"/>
                 <rect class="wifi-bar" :class="wifiBarTone(4)" x="12.4" y="0.5" width="2.6" height="10.5" rx="0.6"/>
             </svg>
-            <span class="activity-wifi-val" x-text="network.signal + '%'"></span>
+            <span class="activity-wifi-val" x-text="network?.signal != null ? network.signal + '%' : ''"></span>
         </div>
         <div class="activity-bar-host" x-show="host.cpuPercent != null || host.device" x-cloak>
             <!-- CLOCK-3: wall-clock skew chip. Only shown when the
