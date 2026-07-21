@@ -132,23 +132,46 @@ public class OnnxFileService {
             int copy = 1;
             while (File.Exists(outPath)) outPath = outBase + "_" + (++copy) + ".fits";
 
-            // Inflate to ushort[] for the writer + carry an empty
-            // MetaData. The browser doesn't see the original FITS
-            // headers; preserving them precisely would require a
-            // header copy step which is a follow-up.
+            // Inflate to ushort[] for the writer.
             // GX-9: for RGB, pixels arrive plane-sequential (R...G...B)
             // matching what FITSReader produces and what FITSWriter now
             // expects, no transpose needed here.
             var data = new ushort[(long)width * height * channels];
             Buffer.BlockCopy(pixelsLE16, 0, data, 0, pixelsLE16.Length);
 
+            // Carry the source's Bayer pattern into a mono result so the STUDIO
+            // browser and the before/after comparer can still debayer it (they
+            // key off BAYERPAT). A 3-channel result is already colour and must
+            // not claim a CFA.
+            var pattern = NINA.Core.Enum.BayerPatternEnum.None;
+            if (channels == 1) {
+                try {
+                    using var hfs = File.OpenRead(sourcePath);
+                    var headers = FITSReader.ReadHeadersOnly(hfs);
+                    if (headers.TryGetValue("BAYERPAT", out var card)) {
+                        pattern = (card.Value ?? "").Trim().ToUpperInvariant() switch {
+                            "RGGB" => NINA.Core.Enum.BayerPatternEnum.RGGB,
+                            "BGGR" => NINA.Core.Enum.BayerPatternEnum.BGGR,
+                            "GBRG" => NINA.Core.Enum.BayerPatternEnum.GBRG,
+                            "GRBG" => NINA.Core.Enum.BayerPatternEnum.GRBG,
+                            _ => NINA.Core.Enum.BayerPatternEnum.None,
+                        };
+                    }
+                } catch (Exception ex) {
+                    _logger.LogDebug(ex, "OnnxFile save: could not read source BAYERPAT");
+                }
+            }
+
             var props = new ImageProperties {
                 Width = width, Height = height,
-                BitDepth = 16, IsBayered = false,
-                BayerPattern = NINA.Core.Enum.BayerPatternEnum.None,
+                BitDepth = 16,
+                IsBayered = pattern != NINA.Core.Enum.BayerPatternEnum.None,
+                BayerPattern = pattern,
                 Channels = channels,
             };
-            var image = new BaseImageData(data, props);
+            var meta = new ImageMetaData();
+            meta.Camera.BayerPattern = pattern;
+            var image = new BaseImageData(data, props, meta);
             FITSWriter.Write(image, outPath);
 
             _logger.LogInformation("OnnxFile save: {Path}", outPath);
