@@ -29,7 +29,13 @@ jobs:
           - { runs-on: ubuntu-latest,    rid: linux-x64,   py: "3.12" }
           - { runs-on: ubuntu-24.04-arm, rid: linux-arm64, py: "3.11" }
           - { runs-on: ubuntu-24.04-arm, rid: linux-arm64, py: "3.12" }
+          - { runs-on: windows-latest,   rid: win-x64,     py: "3.11" }
+          - { runs-on: windows-latest,   rid: win-x64,     py: "3.12" }
     runs-on: ${{ matrix.runs-on }}
+    # Git Bash on the Windows runners too, so one script covers every OS.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/setup-python@v5
         with:
@@ -43,7 +49,16 @@ jobs:
           python -m pip install --upgrade pip
           # Full binary dependency closure for THIS interpreter + platform.
           python -m pip download --only-binary=:all: numpy astropy -d wheels
-          ( cd wheels && zip -r "../script-runtime-${{ matrix.rid }}-py${PYV}.zip" . )
+          # Zip via Python so we do not depend on a `zip` binary (absent on the
+          # Windows runners). Wheels sit at the archive root, as the host expects.
+          RID="${{ matrix.rid }}" PYV="$PYV" python - <<'PY'
+          import glob, os, zipfile
+          name = "script-runtime-%s-py%s.zip" % (os.environ["RID"], os.environ["PYV"])
+          with zipfile.ZipFile(name, "w", zipfile.ZIP_DEFLATED) as z:
+              for f in sorted(glob.glob("wheels/*")):
+                  z.write(f, os.path.basename(f))
+          print("wrote", name)
+          PY
           ls -lh script-runtime-*.zip
 
       - name: Publish to the release
