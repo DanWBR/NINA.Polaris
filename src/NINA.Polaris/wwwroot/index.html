@@ -18454,7 +18454,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </ul>
                     <div class="assistant-intro-actions">
                         <button class="btn btn-primary" @click="assistantStart()"
-                                x-text="'Get started · ' + (asst.manifest.subscription.priceDisplay || '')"></button>
+                                x-text="'Get started · ' + (asst.manifest.subscription?.priceDisplay || '')"></button>
                         <button class="btn" @click="asst.introOpen=false">Not now</button>
                     </div>
                     <!-- Free local alternatives. The cloud intro must never be a
