@@ -74,45 +74,65 @@ public static class FilesEndpoints {
 
         g.MapGet("/list", (FileBrowserService svc,
                            NINA.Polaris.Services.Studio.FrameLibraryService lib,
+                           ProfileService profiles,
                            string path, bool? hidden, bool? withMeta) => {
             try {
                 var entries = svc.List(path, hidden ?? false);
                 if (withMeta == true) {
-                    // UNIF-4: decorate each entry with the FITS
-                    // metadata cached by FrameLibraryService (IMAGETYP,
-                    // FILTER, OBJECT, EXPOSURE, GAIN). The lookup is a
-                    // single SQL "WHERE path IN (...)" so a 200-file
-                    // listing stays under ~30ms even on the Pi. Files
-                    // not indexed yet (fresh captures or non-FITS)
-                    // get a null fitsMeta on their wire shape.
+                    // UNIF-4: decorate each entry with the FITS metadata cached by
+                    // FrameLibraryService (IMAGETYP, FILTER, OBJECT, EXPOSURE, GAIN).
+                    // The lookup is a single SQL "WHERE path IN (...)" so a 200-file
+                    // listing stays under ~30ms even on the Pi. Files not indexed yet
+                    // (fresh captures, non-FITS) get a null fitsMeta on their wire shape.
                     var paths = entries
                         .Where(e => !e.IsDirectory)
                         .Select(e => e.FullPath)
                         .ToList();
                     var meta = lib.BatchLookupByPath(paths);
+
+                    // FITS files not yet in the index. We must NOT parse their headers
+                    // synchronously here (that opened + read every file on the request
+                    // thread and froze the listing on large / USB roots). Instead:
+                    //   - inside the studio root: kick a background rescan (deduped by
+                    //     the scan gate) so they get cached; they show meta next load.
+                    //   - outside the root (a rescan never reaches it): read the headers
+                    //     directly, but in parallel so a big folder cannot freeze the list.
+                    static bool IsFits(string p) =>
+                        p.EndsWith(".fit", StringComparison.OrdinalIgnoreCase) ||
+                        p.EndsWith(".fits", StringComparison.OrdinalIgnoreCase);
+                    var unindexed = paths.Where(p => IsFits(p) && !meta.ContainsKey(p)).ToList();
+
+                    var extra = new System.Collections.Concurrent.ConcurrentDictionary<
+                        string, NINA.Polaris.Services.Studio.FrameMeta>();
+                    if (unindexed.Count > 0) {
+                        var root = svc.ResolveStudioRoot(profiles.Active?.ImageOutputDir ?? "");
+                        var inRoot = !string.IsNullOrEmpty(root) && IsUnder(path, root);
+                        if (inRoot) {
+                            _ = lib.RescanAsync();
+                        } else {
+                            Parallel.ForEach(unindexed,
+                                new ParallelOptions {
+                                    MaxDegreeOfParallelism = Math.Min(8, Environment.ProcessorCount)
+                                },
+                                p => { var d = lib.ReadMetaFromFile(p); if (d != null) extra[p] = d; });
+                        }
+                    }
+
                     var decorated = entries.Select(e => {
                         object? fm = null;
                         if (!e.IsDirectory) {
-                            // Prefer the indexed row; for folders the frame
-                            // library never scanned the cache is empty, so fall
-                            // back to reading the FITS header directly (cheap,
-                            // headers-only) — otherwise every column reads "—".
-                            var m = meta.TryGetValue(e.FullPath, out var row) ? row : null;
-                            if (m != null) {
+                            if (meta.TryGetValue(e.FullPath, out var m)) {
                                 fm = new {
                                     imageType = m.ImageType, filter = m.Filter,
                                     target = m.Target, exposureSec = m.ExposureSec,
                                     gain = m.Gain
                                 };
-                            } else {
-                                var d = lib.ReadMetaFromFile(e.FullPath);
-                                if (d != null) {
-                                    fm = new {
-                                        imageType = d.ImageType, filter = d.Filter,
-                                        target = d.Target, exposureSec = d.ExposureSec,
-                                        gain = d.Gain
-                                    };
-                                }
+                            } else if (extra.TryGetValue(e.FullPath, out var d)) {
+                                fm = new {
+                                    imageType = d.ImageType, filter = d.Filter,
+                                    target = d.Target, exposureSec = d.ExposureSec,
+                                    gain = d.Gain
+                                };
                             }
                         }
                         return new {
@@ -565,6 +585,18 @@ public static class FilesEndpoints {
                 return Results.Ok(new { ok = true, imageOutputDir = full });
             } catch (Exception ex) { return MapError(ex); }
         });
+    }
+
+    // True when `child` is `root` itself or nested under it. Used to decide
+    // whether a background frame-library rescan (which only walks the studio
+    // root) can ever cover the folder being listed.
+    private static bool IsUnder(string child, string root) {
+        try {
+            var rel = Path.GetRelativePath(root, child);
+            return rel == "." || (!rel.StartsWith("..") && !Path.IsPathRooted(rel));
+        } catch {
+            return false;
+        }
     }
 
     private static IResult MapError(Exception ex) => ex switch {
