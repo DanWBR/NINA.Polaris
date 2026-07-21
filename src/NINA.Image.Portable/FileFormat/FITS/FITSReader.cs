@@ -331,6 +331,16 @@ public static class FITSReader {
         meta.Camera.BinY = (short)GetIntHeader(headers, "YBINNING", 1);
         meta.Camera.PixelSizeX = GetDoubleHeader(headers, "XPIXSZ", 0);
         meta.Camera.PixelSizeY = GetDoubleHeader(headers, "YPIXSZ", 0);
+        // Carry the CFA pattern so a read -> process -> FITSWriter.Write round trip
+        // keeps BAYERPAT (the writer keys off meta.Camera.BayerPattern). Without
+        // this the post-process ops emitted a mono FITS with no Bayer info.
+        meta.Camera.BayerPattern = GetStringHeader(headers, "BAYERPAT", "").ToUpperInvariant() switch {
+            "RGGB" => BayerPatternEnum.RGGB,
+            "BGGR" => BayerPatternEnum.BGGR,
+            "GBRG" => BayerPatternEnum.GBRG,
+            "GRBG" => BayerPatternEnum.GRBG,
+            _ => BayerPatternEnum.None
+        };
 
         meta.Telescope.Name = GetStringHeader(headers, "TELESCOP", "");
         meta.Telescope.OpticalTube = GetStringHeader(headers, "OTA", "");

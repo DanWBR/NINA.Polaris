@@ -27,27 +27,24 @@ def main():
         poe.log("Cancelled.")
         return
 
+    poe.update_progress("Reading pixels", 0.3)
     try:
-        poe.update_progress("Reading pixels", 0.3)
         import numpy as np
-        data = poe.get_pixeldata()
-        if data is None:
-            poe.log("The frame has no pixel data.")
-            return
-        bg = float(np.percentile(data, values["pct"]))
-        poe.log("Subtracting background level %.5g (%.0f-th percentile)." % (bg, values["pct"]))
-        poe.update_progress("Writing result", 0.7)
-        out = np.clip(data.astype("float32") - bg, 0.0, None)
-        written = poe.set_pixeldata(out)
-        poe.log("Wrote: %s" % written)
-    except polarispy.PolarisError as exc:
-        poe.log("Pixel step failed: %s" % exc)
-        poe.update_progress("Error", 1.0)
-        return
     except ImportError:
-        poe.log("numpy is not installed on the host. Run: pip install numpy astropy")
-        poe.update_progress("Missing numpy", 1.0)
+        raise polarispy.PolarisError(
+            "This script needs numpy + astropy. Install the scripting runtime in "
+            "Settings > Scripts (the 'Install runtime' button).")
+
+    data = poe.get_pixeldata()
+    if data is None:
+        poe.log("The frame has no pixel data.")
         return
+    bg = float(np.percentile(data, values["pct"]))
+    poe.log("Subtracting background level %.5g (%.0f-th percentile)." % (bg, values["pct"]))
+    poe.update_progress("Writing result", 0.7)
+    out = np.clip(data.astype("float32") - bg, 0.0, None)
+    written = poe.set_pixeldata(out)
+    poe.log("Wrote: %s" % written)
 
     poe.update_progress("Done", 1.0)
     poe.log("Finished. The result will appear in STUDIO after the rescan.")

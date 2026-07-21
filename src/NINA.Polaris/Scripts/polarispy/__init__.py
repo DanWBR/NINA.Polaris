@@ -212,6 +212,13 @@ class PolarisInterface:
         with fits.open(src) as hdul:
             hdu = next((h for h in hdul if getattr(h, "data", None) is not None), hdul[0])
             hdu.data = data
+            # Keep the source header (BAYERPAT etc.) but, for a float result,
+            # drop the integer BZERO/BSCALE so astropy writes the real dtype
+            # (BITPIX -32) instead of quantising it back through the int scaling.
+            if getattr(data, "dtype", None) is not None and data.dtype.kind == "f":
+                for _k in ("BZERO", "BSCALE"):
+                    if _k in hdu.header:
+                        del hdu.header[_k]
             hdul.writeto(out, overwrite=True)
         if rescan:
             try: self.rescan()
