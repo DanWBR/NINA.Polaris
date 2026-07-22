@@ -463,7 +463,9 @@ You want the relay when the rig is at a remote site and you are
 hours away, or when a friend should be able to check on a running
 session from their own home. You do not need it when your tablet
 and the host share a WiFi network; local access is simpler and
-faster.
+faster. For a personal rig you may not need the relay at all: a VPN
+(@sec-vpn) reaches a remote site with less setup, and it is worth
+checking first.
 
 ### Setting up the relay server
 
@@ -562,6 +564,123 @@ pick a provider that does not cut idle WebSockets. A quota-exceeded
 message means the monthly byte cap is spent; the live image stream
 is the bandwidth hog, so switch it to JPEG mode or live with
 status-only access until the month rolls over.
+
+## A simpler alternative: a VPN {#sec-vpn}
+
+For a single rig that only you, and perhaps a few trusted people,
+need to reach, a **VPN** is usually the simplest and most private way
+in, and often less work than running a relay. A VPN puts your phone
+or laptop onto the *same virtual network* as the host, so you reach
+it exactly as you would at home: open `https://<host-ip>:5000` and
+everything works, including the live streams. There is no cloud relay
+to operate and nothing is published to the public internet.
+
+A VPN needs only one thing: the remote site must have working
+internet (any uplink, even a modest fibre or 4G line). The VPN rides
+over that connection, it does not create one.
+
+### First, the question that decides the method: public IP or CGNAT?
+
+There are two families of VPN setup, and which one you can use
+depends on whether the remote site has a **public IPv4 address** or
+sits behind **CGNAT** (carrier-grade NAT, where the provider shares
+one public address among many customers to save IPv4 space). A
+router's built-in VPN *server* accepts inbound connections, so it
+works only with a real public address. CGNAT makes inbound
+impossible no matter how the router is configured, and it is very
+common on smaller and residential fibre plans.
+
+You can tell the two apart from a terminal on a machine at the site.
+First ask the internet what public address it sees:
+
+```bash
+curl -4 https://api.ipify.org
+```
+
+On Windows PowerShell, write `curl.exe` so it is not mistaken for a
+built-in alias. This alone is not conclusive: under CGNAT it returns
+the provider's *shared* public address, which still looks like a
+normal IP. The deciding test is a traceroute, which reveals whether a
+carrier NAT sits between your router and the internet:
+
+```bash
+tracert -d 8.8.8.8      # Windows
+traceroute -n 8.8.8.8   # macOS / Linux
+```
+
+Look at the hops right after your own router (the first hop, usually
+`192.168.x.1`):
+
+- A hop in the range **`100.64.0.0` to `100.127.255.255`** (for
+  example `100.83.0.1`) means **CGNAT**: use Path B.
+- If the trace jumps straight to public addresses with nothing in
+  that `100.64/10` range, you have a **public IPv4** and Path A is
+  available (Path B still works too).
+
+Run this test at the *remote* site specifically, since that is the
+network you need to reach into. Note that a publicly routable IPv6
+address does not settle the question: it is common to have public
+IPv6 and a CGNAT'd IPv4 at the same time, so test the IPv4 path as
+above.
+
+### Path A: your router's built-in VPN server (public IP)
+
+Many home routers, TP-Link Deco among them, can run a **WireGuard or
+OpenVPN server** built in. With a public IPv4 this is the tidiest
+option, because nothing is installed on the host:
+
+1. In the router's app or admin page, enable the VPN server
+   (WireGuard if offered, otherwise OpenVPN). The router must be in
+   *router* mode, not access-point or bridge mode.
+2. Enable the router's dynamic-DNS feature (many vendors include a
+   free name such as `something.tplinkdns.com`) so the changing
+   public address always resolves to a stable name.
+3. Export the client profile and import it into the WireGuard or
+   OpenVPN app on your phone or laptop.
+4. With the VPN connected, reach the host by its LAN address on the
+   remote network, for example `https://192.168.68.x:5000`. Reserve
+   that address in the router's DHCP settings so it does not change.
+
+### Path B: Tailscale on the host (works behind CGNAT)
+
+When the site is behind CGNAT, an inbound router VPN cannot work.
+**Tailscale** (a managed WireGuard mesh) solves this because the host
+dials *outward* to join the mesh, the same way the relay's tunnel
+does, so it needs no public address and no router change. It is the
+most reliable choice for a remote observatory, and if both ends have
+public IPv6 it will use that for a fast, direct connection.
+
+On the host:
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+tailscale ip -4        # note the 100.x.y.z address it prints
+```
+
+Authenticate at the link it shows, then install the Tailscale app on
+your phone or laptop and sign in with the **same account**. From
+anywhere, reach the host at `https://100.x.y.z:5000`. Turning on
+MagicDNS in the Tailscale admin lets you use a name instead of the
+number.
+
+### Two things that trip people up
+
+Whichever path you take:
+
+- **`.local` names do not cross a VPN.** The mDNS discovery from
+  @sec-mdns is link-local and is not routed through the tunnel, so use
+  the host's numeric address (its LAN IP on Path A, or its `100.x`
+  Tailscale address on Path B), not `nina.local`.
+- **Expect a certificate warning the first time.** You are reaching
+  the host by an address that is not in the self-signed certificate's
+  name list (@sec-https), so the browser warns once. Accept it for
+  your own host, or install the certificate as that section describes.
+
+A VPN carries the full local experience, including the raw image
+stream, with no compression. That is fine for checking in and
+adjusting a sequence; continuous live view over a metered mobile link
+uses real data, the same caveat as the relay.
 
 <!-- consolidated from: docs/user-guide/network-mode.md,
 docs/user-guide/https-setup.md, docs/user-guide/authentication.md,
