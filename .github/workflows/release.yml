@@ -153,16 +153,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Quarto + TinyTeX
+      - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
-        with:
-          tinytex: true
+
+      - name: Install TinyTeX (pinned)
+        shell: bash
         env:
-          # The TinyTeX install queries the GitHub API for the latest
-          # rstudio/tinytex-releases tag; unauthenticated requests hit
-          # the shared-runner rate limit (403) and killed the job on
-          # v0.92.2. The default workflow token authenticates it.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pin a specific rstudio/tinytex-releases tag and download the tarball
+          # directly, so we never hit the "determine latest release" GitHub API
+          # call — it returned 403 (rate limit, v0.92.2) and 504 (gateway
+          # timeout, v0.95.0) and killed the job. Bump when TeX Live rolls over.
+          TINYTEX_TAG: v2026.07
+        run: |
+          set -eux
+          asset="TinyTeX-1-linux-x86_64-${TINYTEX_TAG}.tar.xz"
+          url="https://github.com/rstudio/tinytex-releases/releases/download/${TINYTEX_TAG}/${asset}"
+          curl --retry 3 --retry-all-errors -fsSL "$url" -o "$RUNNER_TEMP/tinytex.tar.xz"
+          tar -xJf "$RUNNER_TEMP/tinytex.tar.xz" -C "$HOME"   # -> $HOME/.TinyTeX
+          echo "$HOME/.TinyTeX/bin/x86_64-linux" >> "$GITHUB_PATH"
 
       - name: Install LaTeX packages the book needs (Inter font, tikz)
         shell: bash
