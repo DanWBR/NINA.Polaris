@@ -18369,39 +18369,40 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </template>
             <div :style="scripts.dialog.preview ? 'display:flex; gap:16px; flex:1 1 auto; min-height:0; margin-top:6px' : ''">
               <div :style="scripts.dialog.preview ? 'flex:0 0 300px; width:300px; overflow-y:auto; min-height:0' : ''">
-                <div style="display:flex; flex-direction:column; gap:22px; margin:16px 0 4px"
+                <div style="display:flex; flex-direction:column; gap:24px; margin:16px 0 4px"
                      :style="!scripts.dialog.preview ? 'max-height:60vh; overflow:auto' : ''">
                     <template x-for="(f, i) in scripts.dialog.fields" :key="i">
                         <div x-show="f.type !== 'info'">
                             <div x-show="f.type==='slider'">
-                                <div style="font-size:12px; margin-bottom:3px" x-text="f.label"></div>
+                                <div style="font-size:13px; color:var(--text-secondary); margin-bottom:6px" x-text="f.label"></div>
                                 <div style="display:flex; align-items:center; gap:8px">
                                     <input type="range" style="flex:1 1 auto; min-width:60px" :min="f.min" :max="f.max" :step="f.step"
                                            :value="scripts.dialog.values[f.key]"
                                            @input="scripts.dialog.values[f.key] = parseFloat($event.target.value); scriptPreviewDebounced()">
-                                    <span class="text-muted" style="flex:0 0 auto; min-width:30px; text-align:right; font-size:12px" x-text="scripts.dialog.values[f.key]"></span>
+                                    <span class="text-muted" style="flex:0 0 auto; min-width:30px; text-align:right; font-size:13px" x-text="scripts.dialog.values[f.key]"></span>
                                 </div>
                             </div>
                             <div x-show="f.type==='number'">
-                                <div style="font-size:12px; margin-bottom:3px" x-text="f.label"></div>
+                                <div style="font-size:13px; color:var(--text-secondary); margin-bottom:6px" x-text="f.label"></div>
                                 <input type="number" class="input" style="width:100%" :min="f.min" :max="f.max" :step="f.step"
                                        :value="scripts.dialog.values[f.key]"
                                        @input="scripts.dialog.values[f.key] = ($event.target.value===''?null:parseFloat($event.target.value)); scriptPreviewDebounced()">
                             </div>
-                            <label x-show="f.type==='checkbox'" style="display:flex; align-items:center; gap:10px; font-size:12px">
-                                <input type="checkbox" :checked="scripts.dialog.values[f.key]"
+                            <label x-show="f.type==='checkbox'" style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text-secondary)">
+                                <input type="checkbox" style="width:16px; height:16px; accent-color:var(--accent)"
+                                       :checked="scripts.dialog.values[f.key]"
                                        @change="scripts.dialog.values[f.key] = $event.target.checked; scriptPreviewDebounced()">
                                 <span x-text="f.label"></span>
                             </label>
                             <div x-show="f.type==='select'">
-                                <div style="font-size:12px; margin-bottom:3px" x-text="f.label"></div>
+                                <div style="font-size:13px; color:var(--text-secondary); margin-bottom:6px" x-text="f.label"></div>
                                 <select class="input" style="width:100%" :value="scripts.dialog.values[f.key]"
                                         @change="scripts.dialog.values[f.key] = $event.target.value; scriptPreviewDebounced()">
                                     <template x-for="o in (f.options||[])" :key="o"><option :value="o" x-text="o"></option></template>
                                 </select>
                             </div>
                             <div x-show="f.type==='text'">
-                                <div style="font-size:12px; margin-bottom:3px" x-text="f.label"></div>
+                                <div style="font-size:13px; color:var(--text-secondary); margin-bottom:6px" x-text="f.label"></div>
                                 <input type="text" class="input" style="width:100%" :value="scripts.dialog.values[f.key]"
                                        @input="scripts.dialog.values[f.key] = $event.target.value; scriptPreviewDebounced()">
                             </div>
