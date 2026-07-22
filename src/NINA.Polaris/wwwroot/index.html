@@ -14465,7 +14465,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <td x-text="(h.device?.shortLabel || h.device?.model || '')"></td>
                                         <td style="text-align:right">
                                             <span x-show="h.thermal && h.thermal.throttled" class="text-warn" style="margin-right:6px"
-                                                  :title="'Throttled under load' + (h.thermal.cause === 'thermal' ? ' (thermal, max ' + h.thermal.maxTempC + '°C)' : h.thermal.cause === 'power' ? ' (power / undervoltage, only ' + h.thermal.maxTempC + '°C)' : '')">🔥</span>
+                                                  :title="h.thermal ? ('Throttled under load' + (h.thermal.cause === 'thermal' ? ' (thermal, max ' + h.thermal.maxTempC + '°C)' : h.thermal.cause === 'power' ? ' (power / undervoltage, only ' + h.thermal.maxTempC + '°C)' : '')) : ''">🔥</span>
                                             <span style="font-weight:600" x-text="Math.round(h.compositeScore)"></span></td>
                                     </tr>
                                 </template>
@@ -18458,9 +18458,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <span class="text-muted" style="min-width:44px; text-align:right" x-text="scripts.dialog.blinkFps + ' fps'"></span>
                 </div>
                 <div style="position:relative; flex:1 1 auto; min-height:0; background:#000; border:1px solid var(--border); border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center">
-                    <img x-show="scripts.dialog.blink" :src="_blinkUrl(scripts.dialog.blink[scripts.dialog.blinkIdx])" style="width:100%; height:100%; object-fit:contain; display:block">
+                    <img x-show="scripts.dialog.blink" :src="(scripts.dialog.blink && scripts.dialog.blink.length) ? _blinkUrl(scripts.dialog.blink[scripts.dialog.blinkIdx]) : ''" style="width:100%; height:100%; object-fit:contain; display:block">
                     <div style="position:absolute; top:6px; left:8px; font-size:11px; background:rgba(0,0,0,.55); border-radius:4px; padding:2px 7px; max-width:80%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
-                         x-text="(scripts.dialog.blinkIdx+1) + '/' + scripts.dialog.blink.length + '  ' + (scripts.dialog.blink[scripts.dialog.blinkIdx]||'').split(/[\\/]/).pop()"></div>
+                         x-text="scripts.dialog.blink ? ((scripts.dialog.blinkIdx+1) + '/' + scripts.dialog.blink.length + '  ' + (scripts.dialog.blink[scripts.dialog.blinkIdx]||'').split(/[\\/]/).pop()) : ''"></div>
                 </div>
               </div>
             </div>
