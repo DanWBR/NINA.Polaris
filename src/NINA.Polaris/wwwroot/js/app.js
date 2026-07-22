@@ -7606,9 +7606,41 @@ function ninaApp() {
             finally { this.stretchAuto = savedAuto; }
             const aWhite = ap.shadow + (ap.scaleFactor > 0 ? 1 / ap.scaleFactor : maxVal);
 
-            // Per-channel R/G/B bins for the line histogram, from a colour JPEG
-            // source (raw + server paths are single-channel → white line).
-            if (hasJpeg && j) {
+            // Per-channel R/G/B bins for the line histogram. The RAW path is
+            // tried FIRST because it is what the LIVE stack and preview/autorun
+            // actually deliver — bucketing the Bayer mosaic keeps a colour frame
+            // showing R/G/B lines instead of collapsing to one white line the
+            // moment a freshly stacked raw frame lands (it only came back after
+            // toggling auto, which re-rendered from the cached JPEG).
+            if (hasRaw && f.bayerPattern >= 1 && f.bayerPattern <= 4
+                && f.width > 3 && f.height > 3) {
+                const w = f.width, h = f.height, bp = f.bayerPattern;
+                const nb = 256, bR = new Float64Array(nb), bG = new Float64Array(nb), bB = new Float64Array(nb);
+                const sc = (nb - 1) / (maxVal || 65535);
+                const cells = Math.floor(w / 2) * Math.floor(h / 2);
+                const st = Math.max(1, Math.floor(Math.sqrt(cells / 150000)));
+                const put = (arr, v) => {
+                    let b = (v * sc) | 0;
+                    if (b < 0) b = 0; else if (b >= nb) b = nb - 1;
+                    arr[b]++;
+                };
+                for (let y = 0; y + 1 < h; y += 2 * st) {
+                    for (let x = 0; x + 1 < w; x += 2 * st) {
+                        const p00 = px[y * w + x], p10 = px[y * w + x + 1];
+                        const p01 = px[(y + 1) * w + x], p11 = px[(y + 1) * w + x + 1];
+                        switch (bp) {
+                            case 1: put(bR, p00); put(bG, p10); put(bG, p01); put(bB, p11); break; // RGGB
+                            case 2: put(bB, p00); put(bG, p10); put(bG, p01); put(bR, p11); break; // BGGR
+                            case 3: put(bG, p00); put(bB, p10); put(bR, p01); put(bG, p11); break; // GBRG
+                            case 4: put(bG, p00); put(bR, p10); put(bB, p01); put(bG, p11); break; // GRBG
+                        }
+                    }
+                }
+                let pk = 1;
+                for (let i = 0; i < nb; i++) { if (bR[i] > pk) pk = bR[i]; if (bG[i] > pk) pk = bG[i]; if (bB[i] > pk) pk = bB[i]; }
+                this.histo.binsR = bR; this.histo.binsG = bG; this.histo.binsB = bB;
+                this.histo.peakRGB = Math.log1p(pk); this.histo.color = true;
+            } else if (hasJpeg && j) {
                 const d = j.imageData.data, npix = d.length >> 2;
                 const nb = 256, bR = new Float64Array(nb), bG = new Float64Array(nb), bB = new Float64Array(nb);
                 const st = Math.max(1, Math.floor(npix / 300000));
@@ -9100,16 +9132,23 @@ function ninaApp() {
             // down to the actual dynamic range when it's wildly off.
             // Costs ~5µs per frame.
             let maxVal = (1 << bitDepth) - 1;
-            const probeStride = Math.max(1, (pixels.length / 4096) | 0);
+            // Sample DENSELY (~1M px). A sparse 4096-sample probe over a 12 MP
+            // astro sub misses the sparse bright pixels (stars, nebula core),
+            // so it underestimates the true max and wrongly clamps a genuine
+            // 16-bit frame down to ~16383 — the preview came out black/washed
+            // while the (dense-histogram) LIVE stack rendered fine (field
+            // report, SV405CC + dual-band). Only clamp when the observed max is
+            // genuinely sub-normal (<= ~12-bit packed), which is the byte-in-16
+            // case this guard exists for — never a real 16-bit sub, whose
+            // background alone sits in the thousands.
+            const probeStride = Math.max(1, (pixels.length / 1_000_000) | 0);
             let observedMax = 0;
             for (let i = 0; i < pixels.length; i += probeStride) {
                 if (pixels[i] > observedMax) observedMax = pixels[i];
             }
-            if (observedMax > 0 && observedMax < (maxVal >>> 1)) {
+            if (observedMax > 0 && observedMax < 4096 && maxVal > 8191) {
                 // Round up to the nearest power-of-two boundary so the
-                // stretch math has a sensible normaliser. Stops at 16
-                // because anything dimmer than that is probably a true
-                // black frame, not a bit-depth mismatch.
+                // stretch math has a sensible normaliser.
                 let fitted = 255;
                 while (fitted < observedMax * 2 && fitted < 65535) fitted = (fitted << 1) | 1;
                 maxVal = fitted;
