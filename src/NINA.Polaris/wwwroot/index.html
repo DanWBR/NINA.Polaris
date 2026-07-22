@@ -5059,8 +5059,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             <div x-show="tab === 'equip'" class="tab-panel tab-panel-equip">
                 <div class="panel-header">
                     Equipment
-                    <span class="status-indicator-sm" :class="indiConnected ? 'ok' : 'error'"
-                          x-text="indiConnected ? 'INDI (' + devices.length + ' devices)' : 'INDI Off'"></span>
                 </div>
 
                 <!-- Driver-host connection lives ABOVE the sub-tabstrip so
