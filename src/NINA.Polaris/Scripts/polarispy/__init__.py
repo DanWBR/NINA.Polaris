@@ -242,6 +242,29 @@ class PolarisInterface:
         r = self._get("/api/files/studio-root")
         return r.get("effective") or r.get("configured") or None
 
+    def list_dir(self, path=None, exts=(".fits", ".fit")):
+        """List image files in a STUDIO folder. Defaults to the folder the user
+        has open in the Files tab, else the directory of the loaded frame, else
+        the STUDIO home. Returns dicts ``{"path": .., "name": ..}`` (good as
+        ``file()`` choices). ``exts=None`` returns every file."""
+        d = path or self.cwd()
+        if not d and self.current:
+            d = os.path.dirname(self.current)
+        if not d:
+            d = self.home()
+        if not d:
+            return []
+        r = self._get("/api/files/list", {"path": d})
+        out = []
+        for e in (r.get("entries", []) if isinstance(r, dict) else []):
+            if e.get("isDirectory"):
+                continue
+            full = e.get("fullPath") or e.get("FullPath")
+            name = e.get("name") or e.get("Name") or ""
+            if full and (exts is None or name.lower().endswith(tuple(exts))):
+                out.append({"path": full, "name": name})
+        return out
+
     # ---- working image (Siril-style: load once, then operate) -------------
     def load(self, path):
         """Set the working image. Processing ops and pixel access default to it

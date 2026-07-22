@@ -74,9 +74,9 @@ def subtract(nb, co, c):
 
 def main():
     poe = polarispy.connect()
-    frames = poe.list_frames(limit=500)
+    frames = poe.list_dir()  # image files in the folder open in STUDIO Files
     if not frames:
-        poe.log("No frames in the library. Rescan STUDIO first.")
+        poe.log("No image files in the current STUDIO folder.")
         poe.update_progress("Nothing to do", 1.0)
         return
 
