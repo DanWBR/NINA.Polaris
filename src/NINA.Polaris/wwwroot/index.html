@@ -18388,7 +18388,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                        :value="scripts.dialog.values[f.key]"
                                        @input="scripts.dialog.values[f.key] = ($event.target.value===''?null:parseFloat($event.target.value)); scriptPreviewDebounced()">
                             </div>
-                            <label x-show="f.type==='checkbox'" style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text-secondary)">
+                            <label x-show="f.type==='checkbox'" style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text-secondary); min-height:38px">
                                 <input type="checkbox" style="width:16px; height:16px; accent-color:var(--accent)"
                                        :checked="scripts.dialog.values[f.key]"
                                        @change="scripts.dialog.values[f.key] = $event.target.checked; scriptPreviewDebounced()">
