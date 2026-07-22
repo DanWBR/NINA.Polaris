@@ -147,6 +147,13 @@ public class BenchmarkService {
             // boundaries (and looking stuck during a multi-second stage).
             bool cam = req.IncludeCamera;
             int cpuHi = cam ? 80 : 98;
+            // THERM: trace SoC temperature + clock across the sustained CPU
+            // workload (the comparable pegged-CPU window) so the score can be
+            // read against whether the board throttled. Linux-only; a no-op
+            // elsewhere. Kept to the CPU phases so idle DSP time during the NPU
+            // stage can't drag the clock stats.
+            var thermal = new ThermalSampler();
+            thermal.Start();
             var (stacking, encode, cpu) = await Task.Run(() => {
                 Phase = "Stacking pipeline";
                 var s = RunStackingWorkload(FrameW, FrameH, WorkloadBudget, ct, f => SetProgress(5, 35, f));
@@ -156,6 +163,7 @@ public class BenchmarkService {
                 var c = RunCpuWorkload(ct, f => SetProgress(60, cpuHi, f));
                 return (s, e, c);
             }, ct);
+            var thermalRes = thermal.Stop();
 
             // OCL: GPU-vs-CPU on the image kernels (skipped when no OpenCL GPU
             // or the GPU toggle is off -> Ran=false).
@@ -204,7 +212,8 @@ public class BenchmarkService {
                 Camera: camera,
                 CameraVideo: cameraVideo,
                 Gpu: gpuRes,
-                Npu: npuRes);
+                Npu: npuRes,
+                Thermal: thermalRes);
 
             try { await _store.SaveResultAsync(result, ct); }
             catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist benchmark result"); }

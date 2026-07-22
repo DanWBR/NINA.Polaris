@@ -14349,6 +14349,31 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <tr><td class="hint" style="padding-left:10px">Memory bandwidth</td>
                                     <td><span x-text="bench.lastResult.cpu.memBandwidthGBps"></span> GB/s</td></tr>
 
+                                <template x-if="bench.lastResult.thermal && bench.lastResult.thermal.ran">
+                                    <tr><td colspan="2" style="padding-top:6px"><strong>Thermal &amp; clock</strong>
+                                        <span class="hint" x-text="'(under load · ' + bench.lastResult.thermal.samples + ' samples)'"></span></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.thermal && bench.lastResult.thermal.ran && bench.lastResult.thermal.maxTempC > 0">
+                                    <tr><td class="hint" style="padding-left:10px">SoC temp (start / max)</td>
+                                        <td><span x-text="bench.lastResult.thermal.startTempC"></span> →
+                                            <strong x-text="bench.lastResult.thermal.maxTempC"></strong> °C
+                                            <span class="hint" x-text="'(+' + (bench.lastResult.thermal.maxTempC - bench.lastResult.thermal.startTempC).toFixed(1) + '°)'"></span></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.thermal && bench.lastResult.thermal.ran && bench.lastResult.thermal.clockMaxMhz > 0">
+                                    <tr><td class="hint" style="padding-left:10px">CPU clock (min / avg / max)</td>
+                                        <td><span x-text="(bench.lastResult.thermal.clockMinMhz/1000).toFixed(2)"></span> /
+                                            <strong x-text="(bench.lastResult.thermal.clockAvgMhz/1000).toFixed(2)"></strong> /
+                                            <span x-text="(bench.lastResult.thermal.clockMaxMhz/1000).toFixed(2)"></span> GHz
+                                            <span class="hint" x-show="bench.lastResult.thermal.ratedMaxMhz > 0"
+                                                  x-text="'(rated ' + (bench.lastResult.thermal.ratedMaxMhz/1000).toFixed(2) + ' GHz)'"></span></td></tr>
+                                </template>
+                                <template x-if="bench.lastResult.thermal && bench.lastResult.thermal.ran && bench.lastResult.thermal.ratedMaxMhz > 0">
+                                    <tr><td class="hint" style="padding-left:10px">Throttling</td>
+                                        <td x-show="!bench.lastResult.thermal.throttled" class="text-ok">None — clock held at the rated ceiling.</td>
+                                        <td x-show="bench.lastResult.thermal.throttled" class="text-warn">
+                                            Throttled<span x-show="bench.lastResult.thermal.cause === 'thermal'"> — likely thermal (SoC ran hot; better cooling helps)</span><span x-show="bench.lastResult.thermal.cause === 'power'"> — likely power / undervoltage (clock held down while cool; check the PSU / cable)</span>.</td></tr>
+                                </template>
+
                                 <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
                                     <tr><td colspan="2" style="padding-top:6px"><strong>GPU vs CPU (OpenCL)</strong>
                                         <span class="hint" x-text="'(' + bench.lastResult.gpu.device + ')'"></span></td></tr>
@@ -14438,7 +14463,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <tr>
                                         <td x-text="benchTimeLabel(h.timestamp)"></td>
                                         <td x-text="(h.device?.shortLabel || h.device?.model || '')"></td>
-                                        <td style="text-align:right;font-weight:600" x-text="Math.round(h.compositeScore)"></td>
+                                        <td style="text-align:right">
+                                            <span x-show="h.thermal && h.thermal.throttled" class="text-warn" style="margin-right:6px"
+                                                  :title="'Throttled under load' + (h.thermal.cause === 'thermal' ? ' (thermal, max ' + h.thermal.maxTempC + '°C)' : h.thermal.cause === 'power' ? ' (power / undervoltage, only ' + h.thermal.maxTempC + '°C)' : '')">🔥</span>
+                                            <span style="font-weight:600" x-text="Math.round(h.compositeScore)"></span></td>
                                     </tr>
                                 </template>
                             </table>

@@ -71,6 +71,20 @@ public record NpuResult(
     double MsPerTile, double TilesPerSec, int Tiles,
     int Width, int Height, string? Error);
 
+// THERM: thermal + clock trace sampled during the sustained CPU workload, so a
+// run's score can be read against whether the board throttled. MaxTempC is the
+// hottest thermal zone seen; Clock{Min,Avg,Max}Mhz track the fastest running
+// core over the window; RatedMaxMhz is the SoC's advertised ceiling. Throttled =
+// the sustained clock fell below that ceiling under load. Cause is a hint at why
+// ("thermal" when it was also hot, "power" when it throttled while cool - the
+// undervoltage signature). Ran=false off a Linux sysfs host (Error carries why),
+// same convention as the GPU/NPU rows.
+public record ThermalResult(
+    bool Ran,
+    double StartTempC, double MaxTempC, double EndTempC,
+    int RatedMaxMhz, int ClockMinMhz, int ClockAvgMhz, int ClockMaxMhz,
+    bool Throttled, string? Cause, int Samples, string? Error);
+
 public record CameraResult(
     int Frames, double MeanCaptureMs, double Fps,
     int Width, int Height, double MBPerSec, string? Error);
@@ -95,4 +109,5 @@ public record BenchmarkResult(
     CameraResult? Camera,
     CameraVideoResult? CameraVideo = null,
     GpuResult? Gpu = null,
-    NpuResult? Npu = null);
+    NpuResult? Npu = null,
+    ThermalResult? Thermal = null);
