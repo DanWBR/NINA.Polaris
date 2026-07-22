@@ -291,6 +291,15 @@ class PolarisInterface:
         """Re-index the STUDIO frame library (call after writing a new file)."""
         return self._post("/api/studio/rescan", {})
 
+    def output(self, path):
+        """Declare a file the script produced. The Polaris UI opens the last
+        declared output in the frame viewer when a frame script finishes.
+        ``set_pixeldata`` calls this automatically; the /api/post ops don't, so
+        report their result path yourself if you want it opened."""
+        if path and self.job:
+            self._quiet("POST", "/api/script/%s/output" % self.job, {"path": path})
+        return path
+
     # ---- pixel data as numpy (needs numpy + astropy) ----------------------
     # The script runs on the Polaris host, so it reads/writes the FITS file
     # directly rather than transferring pixels over HTTP.
@@ -370,6 +379,7 @@ class PolarisInterface:
         if rescan:
             try: self.rescan()
             except Exception: pass
+        self.output(out)
         return out
 
     # sirilpy-flavoured aliases (used by the compat shim / ported scripts).

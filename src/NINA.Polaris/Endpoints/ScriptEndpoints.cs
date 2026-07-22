@@ -55,14 +55,23 @@ public static class ScriptEndpoints {
         g.MapGet("/{jobId}/status", (string jobId, ScriptRunnerService svc) => {
             var job = svc.Get(jobId);
             if (job == null) return Results.NotFound(new { error = "Unknown job." });
-            string[] logCopy;
+            string[] logCopy, outputsCopy;
             lock (job.Log) logCopy = job.Log.ToArray();
+            lock (job.Outputs) outputsCopy = job.Outputs.ToArray();
             return Results.Ok(new {
                 id = job.Id, name = job.Name, state = job.State,
                 progress = job.Progress, progressMessage = job.ProgressMessage,
                 exitCode = job.ExitCode, error = job.Error, log = logCopy,
+                outputs = outputsCopy,
                 dialog = svc.PendingDialog(job)
             });
+        });
+
+        // A script reports an output file it wrote (so the browser can open it).
+        g.MapPost("/{jobId}/output", (string jobId, JsonElement body, ScriptRunnerService svc) => {
+            var path = body.TryGetProperty("path", out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
+            if (!string.IsNullOrWhiteSpace(path)) svc.AddOutput(jobId, path!);
+            return Results.Ok(new { ok = true });
         });
 
         g.MapPost("/{jobId}/cancel", (string jobId, ScriptRunnerService svc) => {

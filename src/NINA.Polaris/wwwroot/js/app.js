@@ -12530,6 +12530,10 @@ function ninaApp() {
                 if (job.state === 'succeeded') {
                     this.toast('Script finished.', 'ok');
                     try { await this._studioRefreshAfterFileOp(); } catch (_) {}
+                    // A frame script producing an output: swap the open viewer
+                    // from the source frame to the saved result.
+                    const outs = (job.outputs || []).filter(p => /\.fits?$/i.test(p));
+                    if (this.imageViewerOpen && outs.length) this._openScriptOutput(outs[outs.length - 1]);
                 } else if (job.state === 'failed') {
                     this.toast('Script failed' + (job.error ? ': ' + job.error : ''), 'error');
                 }
@@ -12541,6 +12545,16 @@ function ninaApp() {
             try { await this.apiPost('/api/script/' + this.scripts.jobId + '/cancel', {}); } catch (_) {}
         },
         dismissScriptPanel() { this.scripts.job = null; this.scripts.jobId = null; },
+        // Open a script's output FITS in the frame viewer, replacing the source.
+        _openScriptOutput(path) {
+            if (!path) return;
+            const name = (path.split(/[\\/]/).pop()) || path;
+            this.imageViewerPath = path;
+            this.studioAnnotate.active = false;
+            this.studioAnnotate.items = [];
+            this._openImageViewerWithUrl('/api/files/preview?path=' + encodeURIComponent(path) + '&maxDim=2400', name);
+            try { this.loadFitsHeaders(path); } catch (_) {}
+        },
         // Render a script's declarative dialog spec, seeding values from defaults.
         _openScriptDialog(d) {
             const spec = d.spec || {};

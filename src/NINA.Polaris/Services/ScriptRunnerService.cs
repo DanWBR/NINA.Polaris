@@ -36,6 +36,10 @@ public sealed class ScriptRunnerService {
         public readonly List<string> Log = new();
         internal Process? Proc;
 
+        // Output files the script wrote (reported via set_pixeldata / output()),
+        // so the browser can open the result after a frame script finishes.
+        public readonly List<string> Outputs = new();
+
         // A declarative dialog the script is blocking on (Phase 2 UI). Seq bumps
         // per dialog so the client can tell a new one from the current one.
         public int DialogSeq;
@@ -254,6 +258,15 @@ public sealed class ScriptRunnerService {
 
     public void CancelDialog(string id) {
         if (_jobs.TryGetValue(id, out var job)) lock (job) { job.DialogState = "cancelled"; }
+    }
+
+    // A script reporting an output file it wrote (deduped, keeps order).
+    public void AddOutput(string id, string path) {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        if (!_jobs.TryGetValue(id, out var job)) return;
+        lock (job.Outputs) {
+            if (!job.Outputs.Contains(path)) job.Outputs.Add(path);
+        }
     }
 
     // Live preview bridge. Browser -> SetPreviewRequest (values, bumps seq);

@@ -47,6 +47,7 @@ def main():
 
     for ok in result.get("results", []):
         poe.log("Wrote: %s" % ok.get("outputPath"))
+        poe.output(ok.get("outputPath"))
     for bad in result.get("failures", []):
         poe.log("Failed: %s" % bad.get("error"))
 
