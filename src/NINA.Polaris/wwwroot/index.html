@@ -18369,7 +18369,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </template>
             <div :style="scripts.dialog.preview ? 'display:flex; gap:16px; flex:1 1 auto; min-height:0; margin-top:6px' : ''">
               <div :style="scripts.dialog.preview ? 'flex:0 0 300px; width:300px; overflow-y:auto; min-height:0' : ''">
-                <div style="display:flex; flex-direction:column; gap:24px; margin:16px 0 4px"
+                <div style="display:flex; flex-direction:column; gap:24px; margin:16px 0 4px; line-height:1.5"
                      :style="!scripts.dialog.preview ? 'max-height:60vh; overflow:auto' : ''">
                     <template x-for="(f, i) in scripts.dialog.fields" :key="i">
                         <div x-show="f.type !== 'info'">
