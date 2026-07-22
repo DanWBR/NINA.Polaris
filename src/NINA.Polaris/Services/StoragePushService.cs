@@ -121,8 +121,12 @@ public sealed class StoragePushService : BackgroundService {
         _writer.ImageSaved += Enqueue;
         try {
             await foreach (var item in _queue.Reader.ReadAllAsync(stoppingToken)) {
-                Interlocked.Decrement(ref _queued);
-                await ProcessAsync(item, stoppingToken);
+                // Decrement AFTER the upload finishes, not on dequeue. The
+                // in-flight file is still outstanding work; counting it only
+                // while it sat in the channel made the activity badge read 0
+                // for the whole duration of an active transfer.
+                try { await ProcessAsync(item, stoppingToken); }
+                finally { Interlocked.Decrement(ref _queued); }
             }
         } catch (OperationCanceledException) {
             // shutting down
