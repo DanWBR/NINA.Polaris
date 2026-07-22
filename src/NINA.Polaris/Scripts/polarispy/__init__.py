@@ -535,10 +535,37 @@ class Dialog:
                           "default": bool(default)})
 
     def select(self, key, label, options, default=None):
-        opts = list(options)
+        """A dropdown. ``options`` may be plain strings, or dicts
+        ``{"value": .., "label": ..}`` to show a friendly label but submit a
+        different value (used by ``file()`` to show names but return paths)."""
+        opts = []
+        for o in options:
+            if isinstance(o, dict):
+                val = o.get("value")
+                opts.append({"value": val, "label": o.get("label", val)})
+            else:
+                opts.append(o)
+        if default is None and opts:
+            first = opts[0]
+            default = first["value"] if isinstance(first, dict) else first
         return self._add({"type": "select", "key": key, "label": label,
-                          "options": opts,
-                          "default": default if default is not None else (opts[0] if opts else "")})
+                          "options": opts, "default": default if default is not None else ""})
+
+    def file(self, key, label, choices, default=None):
+        """A file dropdown. ``choices`` is a list of paths, or of frame dicts
+        (as returned by ``list_frames``); the option label is the file name and
+        the submitted value is the full path."""
+        import os as _os
+        opts = []
+        for c in choices:
+            if isinstance(c, dict):
+                p = c.get("path") or c.get("Path") or c.get("value") or ""
+                name = c.get("name") or c.get("label") or _os.path.basename(p)
+            else:
+                p, name = c, _os.path.basename(str(c))
+            if p:
+                opts.append({"value": p, "label": name})
+        return self.select(key, label, opts, default=default)
 
     def text(self, key, label, default=""):
         return self._add({"type": "text", "key": key, "label": label, "default": str(default)})

@@ -18398,7 +18398,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 <div style="font-size:13px; color:var(--text-secondary); margin-bottom:6px" x-text="f.label"></div>
                                 <select class="input" style="width:100%" :value="scripts.dialog.values[f.key]"
                                         @change="scripts.dialog.values[f.key] = $event.target.value; scriptPreviewDebounced()">
-                                    <template x-for="o in (f.options||[])" :key="o"><option :value="o" x-text="o"></option></template>
+                                    <template x-for="o in (f.options||[])" :key="(o && o.value !== undefined) ? o.value : o"><option :value="(o && o.value !== undefined) ? o.value : o" x-text="(o && o.label !== undefined) ? o.label : o"></option></template>
                                 </select>
                             </div>
                             <div x-show="f.type==='text'">
