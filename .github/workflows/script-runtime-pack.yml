@@ -48,7 +48,7 @@ jobs:
           mkdir wheels
           python -m pip install --upgrade pip
           # Full binary dependency closure for THIS interpreter + platform.
-          python -m pip download --only-binary=:all: numpy astropy scipy pillow -d wheels
+          python -m pip download --only-binary=:all: numpy astropy scipy pillow opencv-python-headless -d wheels
           # Zip via Python so we do not depend on a `zip` binary (absent on the
           # Windows runners). Wheels sit at the archive root, as the host expects.
           RID="${{ matrix.rid }}" PYV="$PYV" python - <<'PY'

@@ -12501,7 +12501,7 @@ function ninaApp() {
                 await this.loadScriptRuntime();
                 const st = this.scripts.runtime.install || {};
                 if (st.running) { setTimeout(tick, 1500); return; }
-                if (this.scripts.runtime.ready) this.toast('Scripting runtime installed (numpy + astropy + scipy + Pillow).', 'ok');
+                if (this.scripts.runtime.ready) this.toast('Scripting runtime installed (numpy + astropy + scipy + Pillow + OpenCV).', 'ok');
                 else if (st.error) this.toast('Runtime install failed: ' + st.error, 'error');
             };
             setTimeout(tick, 1000);

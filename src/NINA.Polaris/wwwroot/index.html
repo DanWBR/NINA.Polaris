@@ -13116,7 +13116,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span style="width:9px;height:9px;border-radius:50%;display:inline-block"
                                   :style="scripts.runtime.ready ? 'background:#3fb950' : 'background:#d29922'"></span>
                             <strong style="font-size:13px" x-text="scripts.runtime.ready ? 'Pixel runtime installed' : 'Pixel runtime not installed'"></strong>
-                            <span class="text-muted" style="font-size:11px" x-show="scripts.runtime.ready && scripts.runtime.viaVenv">(numpy + astropy + scipy + Pillow, offline)</span>
+                            <span class="text-muted" style="font-size:11px" x-show="scripts.runtime.ready && scripts.runtime.viaVenv">(numpy + astropy + scipy + Pillow + OpenCV, offline)</span>
                             <button class="btn btn-sm" style="margin-left:auto"
                                     x-show="!scripts.runtime.ready"
                                     :disabled="scripts.runtime.install && scripts.runtime.install.running"

@@ -71,7 +71,7 @@ public sealed class ScriptRuntimeService {
 
     private bool ImportsOk(string python) {
         try {
-            var (code, _) = Run(python, new[] { "-c", "import numpy, astropy, scipy, PIL" }, 20_000);
+            var (code, _) = Run(python, new[] { "-c", "import numpy, astropy, scipy, PIL, cv2" }, 20_000);
             return code == 0;
         } catch { return false; }
     }
@@ -134,7 +134,7 @@ public sealed class ScriptRuntimeService {
             SetPhase("installing (offline)", 70);
             var (ic, iout) = Run(VenvPython, new[] {
                 "-m", "pip", "install", "--no-index", "--find-links", wheels,
-                "numpy", "astropy", "scipy", "pillow"
+                "numpy", "astropy", "scipy", "pillow", "opencv-python-headless"
             }, 600_000);
             if (ic != 0) throw new InvalidOperationException("pip install failed: " + Tail(iout));
 
