@@ -14820,28 +14820,26 @@ function ninaApp() {
             const span = Math.max(1e-6, hi - lo);
             const channels = isRgb
                 ? [
-                    { off: 0,   color: 'rgba(248, 113, 113, 0.7)' },  // R
-                    { off: 256, color: 'rgba(74,  222, 128, 0.7)' },  // G
-                    { off: 512, color: 'rgba(96,  165, 250, 0.7)' }   // B
+                    { off: 0,   color: 'rgba(255, 95, 95, 0.9)' },   // R
+                    { off: 256, color: 'rgba(90, 220, 120, 0.9)' },  // G
+                    { off: 512, color: 'rgba(90, 160, 255, 0.9)' }   // B
                   ]
-                : [{ off: 0, color: 'rgba(150, 180, 220, 0.85)' }];
+                : [{ off: 0, color: 'rgba(230, 235, 245, 0.92)' }];  // white for mono
+            // Shared max so the channel lines keep their relative heights.
+            let gmax = 0;
+            for (const ch of channels) for (let i = 0; i < 256; i++) if (hist[ch.off + i] > gmax) gmax = hist[ch.off + i];
+            const norm = Math.log1p(gmax) || 1;
             for (const ch of channels) {
-                let max = 0;
-                for (let i = 0; i < 256; i++) if (hist[ch.off + i] > max) max = hist[ch.off + i];
-                if (max <= 0) continue;
-                const norm = Math.log1p(max);
-                ctx.fillStyle = ch.color;
+                ctx.strokeStyle = ch.color; ctx.lineWidth = 1.25; ctx.lineJoin = 'round';
                 ctx.beginPath();
-                ctx.moveTo(0, h);
+                let started = false;
                 for (let i = 0; i < 256; i++) {
                     const frac = i / 255;
                     const x = ((frac - lo) / span) * w;
                     const y = h - (Math.log1p(hist[ch.off + i]) / norm) * (h - 4);
-                    ctx.lineTo(x, y);
+                    if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
                 }
-                ctx.lineTo(w, h);
-                ctx.closePath();
-                ctx.fill();
+                ctx.stroke();
             }
 
             // Midline + black/white markers (mirrors the live panel).
@@ -28140,17 +28138,16 @@ function ninaApp() {
             for (let i = 1; i < 255; i++) { if (R[i] > mx) mx = R[i]; if (G[i] > mx) mx = G[i]; if (B[i] > mx) mx = B[i]; }
             const denom = Math.log1p(mx);
             const drawCh = (arr, color) => {
-                ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(0, H);
+                ctx.strokeStyle = color; ctx.lineWidth = 1.25; ctx.lineJoin = 'round'; ctx.beginPath();
                 for (let x = 0; x < W; x++) {
                     const bin = Math.min(255, (x / W * 256) | 0);
                     const v = Math.min(1, Math.log1p(arr[bin]) / denom);
-                    ctx.lineTo(x, H - v * H);
+                    const y = H - v * H;
+                    if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
                 }
-                ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+                ctx.stroke();
             };
-            ctx.globalCompositeOperation = 'lighter';
-            drawCh(R, 'rgba(255,64,64,0.5)'); drawCh(G, 'rgba(64,224,64,0.45)'); drawCh(B, 'rgba(96,128,255,0.55)');
-            ctx.globalCompositeOperation = 'source-over';
+            drawCh(R, 'rgba(255,95,95,0.9)'); drawCh(G, 'rgba(90,220,120,0.9)'); drawCh(B, 'rgba(90,160,255,0.9)');
             // Handles: blackpoint / midtone / whitepoint.
             const p = this.blend[key];
             const bx = p.black * W, wx = p.white * W;
