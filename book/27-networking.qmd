@@ -476,23 +476,24 @@ dollars a month) with a public hostname. One-time setup:
    `relay.yourdomain.com -> your-VPS-IP`.
 2. Open port 443 (standard HTTPS), and optionally port 80 for the
    certificate-issuance redirect.
-3. Run `./NINA.Relay.Server`. It obtains and renews a real Let's
-   Encrypt certificate automatically via LettuceEncrypt
+3. Run it with `Tls:Mode=letsencrypt` and it obtains and renews a
+   real Let's Encrypt certificate automatically via LettuceEncrypt
    [@lettuceencrypt_project], a library that handles the
    certificate paperwork inside the server itself, so remote
    browsers see a normal padlock with no warnings.
 4. Open the admin interface at
-   `https://relay.yourdomain.com/admin` (guarded by a separate
-   admin token set in an environment variable).
-5. Create a **tenant**, the relay's name for one Polaris rig: an
-   identifier such as `polaris-yourname` plus a generated 32-character
-   access token, with an optional monthly traffic quota and token
-   expiry date.
+   `https://relay.yourdomain.com/admin/` (guarded by the
+   `Admin:Password` you set, over HTTP Basic auth).
+5. Create a **tenant**, the relay's name for one Polaris rig: a
+   hostname such as `yourname` plus a generated long random access
+   token, with an optional monthly traffic quota and token expiry
+   date.
 
 The relay keeps its state in a single `tenants.json` file, easy to
 back up.^[Deployment, TLS, and mutual-TLS specifics for integrators
-live in `docs/relay-deployment.md`, `docs/relay-tls.md`, and
-`docs/relay-mtls.md` in the repository.]
+live in `src/NINA.Relay.Server/README.md`; running one shared relay
+for many users, with options and costs, is covered in
+`src/NINA.Relay.Server/HOSTING.md`.]
 
 ### Connecting the host
 
@@ -503,18 +504,20 @@ restart:
 {
   "Relay": {
     "Enabled": true,
-    "ServerUrl": "wss://relay.yourdomain.com/tunnel",
-    "TenantId": "polaris-yourname",
-    "Token": "the-32-char-token-from-server-admin",
-    "ReconnectIntervalSeconds": 5,
-    "UseMtls": false
+    "ServerUrl": "wss://relay.yourdomain.com/_tunnel",
+    "Token": "the-token-from-the-server-admin",
+    "ClientCertPath": "/etc/nina/relay-client.pfx",
+    "ClientCertPassword": "optional-pfx-password"
   }
 }
 ```
 
-The host opens a persistent WebSocket connection (a long-lived
-two-way channel, the same technology the live status feed uses) to
-the relay and keeps it open; the activity bar shows **Relay: ON**.
+The two `ClientCert*` keys are optional and only needed for mTLS;
+there is no tenant id on the host, the relay assigns the hostname
+from the token. The host opens a persistent WebSocket connection (a
+long-lived two-way channel, the same technology the live status feed
+uses) to the relay and keeps it open; its state is reported at
+`GET /api/system/relay` (**Connected** once the tunnel is up).
 Internally the tunnel delivers requests to the host's loopback HTTP
 port (5080 by default, following `Server:Http:Port`), which is one
 of the reasons that port exists.
@@ -544,17 +547,18 @@ tunnel itself can require mTLS (mutual TLS, where the host proves
 its identity to the relay with its own certificate, on top of the
 token).
 
-The host reconnects automatically after any interruption, retrying
-every 5 seconds, and the relay buffers a short window of requests
-across brief drops, so a flaky mobile connection on your side or a
-hiccup on the host's side usually goes unnoticed.
+The host reconnects automatically after any interruption, with an
+exponential backoff that starts at two seconds and grows to a
+one-minute cap. While the tunnel is down the relay answers browser
+requests with a 502; once it reconnects, requests flow again.
 
 Common pitfalls: a "Tunnel not connected" (502) page means the
 host's relay client is not running or the token is wrong; check the
 Polaris log on the host (@sec-administration). A connection that
 drops every 30 seconds usually means the VPS provider's idle
-timeout is shorter than the keepalive; tune
-`WebSocket:PingInterval` in `appsettings.json`. A quota-exceeded
+timeout is shorter than the tunnel's 30-second ping/pong keepalive;
+that interval is fixed, so front the relay with Caddy or nginx, or
+pick a provider that does not cut idle WebSockets. A quota-exceeded
 message means the monthly byte cap is spent; the live image stream
 is the bandwidth hog, so switch it to JPEG mode or live with
 status-only access until the month rolls over.

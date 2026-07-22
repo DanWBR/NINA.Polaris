@@ -41,13 +41,14 @@ hostname:
 
 1. DNS A record: `relay.yourdomain.com → VPS-IP`
 2. Open ports 443 + (optionally 80 for ACME redirect)
-3. Run: `./NINA.Relay.Server`. It uses LettuceEncrypt to obtain a
-   real Let's Encrypt cert automatically on first request
-4. Web admin UI at `https://relay.yourdomain.com/admin` (separate
-   admin token in env var)
-5. Create your first tenant: `polaris-yourname` + generates 32-char
-   token + sets quota (monthly bytes, expiring tokens, per-tenant
-   audit log)
+3. Run it with `Tls:Mode=letsencrypt` and it obtains a real Let's
+   Encrypt cert automatically (or leave TLS off and put Caddy / nginx
+   in front)
+4. Web admin UI at `https://relay.yourdomain.com/admin/`, gated by the
+   `Admin:Password` you set (HTTP Basic)
+5. Create your first tenant: a hostname such as `yourname` + a
+   generated long random token + a quota (monthly bytes, optional
+   token expiry, per-tenant audit log)
 
 Persistent state in `tenants.json` (JSON file backed up easily).
 
@@ -59,25 +60,27 @@ In `appsettings.json` on the Pi:
 {
   "Relay": {
     "Enabled": true,
-    "ServerUrl": "wss://relay.yourdomain.com/tunnel",
-    "TenantId": "polaris-yourname",
-    "Token": "the-32-char-token-from-server-admin",
-    "ReconnectIntervalSeconds": 5,
-    "UseMtls": false  // set true + provide ClientCert/Key files for mTLS
+    "ServerUrl": "wss://relay.yourdomain.com/_tunnel",
+    "Token": "the-token-from-the-server-admin",
+    // Optional mTLS: point at a .pfx; the relay pins its thumbprint.
+    "ClientCertPath": "/etc/nina/relay-client.pfx",
+    "ClientCertPassword": "optional-pfx-password"
   }
 }
 ```
 
-Restart Polaris → the `RelayClient` hosted service opens the
-WebSocket tunnel to the server. Status visible in the activity bar
-("Relay: ON").
+There is no tenant id on the client, the relay assigns your hostname
+from the token. Restart Polaris → the `RelayClient` hosted service
+opens the WebSocket tunnel to the server. Its state is reported at
+`GET /api/system/relay` (**Connected** once the tunnel is up) and in
+the Polaris log.
 
 ## Access from browser
 
 Once tunnel is established, the relay serves the Polaris UI at:
 
 ```
-https://relay.yourdomain.com/t/polaris-yourname/
+https://relay.yourdomain.com/t/yourname/
 ```
 
 Login prompt asks for the tenant token. Same UI as `http://nina.local:5000`
@@ -102,19 +105,21 @@ The relay server is hardened for direct internet exposure:
 
 ## Tunnel behavior
 
-The Pi's `RelayClient` reconnects on every interruption with a 5-second
-backoff. Brief network drops are invisible to the browser side, the
-relay buffers a short window of inbound requests and replays them
-when the tunnel comes back.
+The host's `RelayClient` reconnects automatically on every
+interruption, with an exponential backoff (2 s, growing to a 60 s
+cap). While the tunnel is down the relay answers browser requests
+with a 502 (`tunnel_down`); once it reconnects, new requests flow
+again.
 
 ## Common pitfalls
 
 **Browser shows "Tunnel not connected" 502**, Pi's `RelayClient`
 isn't running or the token is wrong. Check Polaris logs on the Pi.
 
-**Connection drops every 30s**, your VPS provider's idle WS timeout
-is shorter than the default keepalive. Tune `WebSocket:PingInterval`
-in `appsettings.json`.
+**Connection drops every 30s**, your VPS provider's idle WebSocket
+timeout is shorter than the tunnel's 30 s ping/pong keepalive. The
+keepalive interval is fixed; front the relay with Caddy / nginx or
+pick a provider that doesn't cut idle WebSockets.
 
 **Quota exceeded**, monthly cap. Check `/admin` → tenant detail.
 Image stream is the bandwidth hog; switch to JPEG mode (lower bitrate)
@@ -123,6 +128,7 @@ or live with status-only access until the month rolls over.
 ## See also
 
 - [Installation](installation.md), LAN access setup
-- Relay-specific docs: `docs/relay-deployment.md` (server build +
-  deploy), `docs/relay-tls.md` (LettuceEncrypt config), `docs/relay-mtls.md`
-  (client cert setup)
+- Relay server setup + tenant / TLS / mTLS config:
+  `src/NINA.Relay.Server/README.md`
+- Running a shared relay for many users (options + costs):
+  `src/NINA.Relay.Server/HOSTING.md`
