@@ -55,6 +55,24 @@ public sealed class StoragePushService : BackgroundService {
 
     private int _queued;
 
+    // Circuit breaker: a dead/slow storage target must not keep stalling the
+    // single consumer. Each failed SMB attempt blocks for the client timeout
+    // (~15s, with SMB2 encryption burning CPU) and, with reconnect-per-failure,
+    // steals CPU/network from the capture + live-view pipeline — a failing NAS
+    // was starving the /ws/image-stream frame send so the preview went blank.
+    // After CircuitThreshold consecutive failures we stop attempting and park
+    // new items for a growing cooldown; a single success closes the breaker.
+    private const int CircuitThreshold = 3;
+    private static readonly TimeSpan InitialCooldown = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan MaxCooldown = TimeSpan.FromMinutes(5);
+    private int _consecutiveFailures;
+    private DateTime _circuitOpenUntil = DateTime.MinValue;
+    private TimeSpan _circuitCooldown = InitialCooldown;
+
+    /// <summary>True while pushes are paused because the target tripped the
+    /// breaker. Surfaced in status so the UI can show the target is down.</summary>
+    public bool CircuitOpen => DateTime.UtcNow < _circuitOpenUntil;
+
     private sealed record QueueItem(string LocalPath, string RelPath, int Attempts);
 
     public StoragePushService(ImageWriterService writer, ProfileService profile,
@@ -81,6 +99,11 @@ public sealed class StoragePushService : BackgroundService {
 
     /// <summary>Re-enqueue everything parked in the failed list (the "Retry" button).</summary>
     public int RetryFailed() {
+        // Explicit user action ("try now"): close the breaker so the retry
+        // actually attempts instead of being parked again by the cooldown.
+        _circuitOpenUntil = DateTime.MinValue;
+        _consecutiveFailures = 0;
+        _circuitCooldown = InitialCooldown;
         int n = 0;
         while (_failed.TryDequeue(out var item)) {
             if (_queue.Writer.TryWrite(item with { Attempts = 0 })) { Interlocked.Increment(ref _queued); n++; }
@@ -113,6 +136,15 @@ public sealed class StoragePushService : BackgroundService {
         if (!_profile.Active.StoragePushEnabled) return;     // toggled off while queued
         if (!File.Exists(item.LocalPath)) return;            // local gone, nothing to push
 
+        // Breaker open: the target is known-down. Park the item immediately
+        // instead of blocking the consumer on another timeout — this is what
+        // keeps a dead NAS from stealing CPU/network from the live view.
+        if (CircuitOpen) {
+            Failed++;
+            if (_failed.Count < MaxFailedTracked) _failed.Enqueue(item with { Attempts = 0 });
+            return;
+        }
+
         CurrentFile = item.RelPath;
         try {
             await EnsureConnectedAsync(ct);
@@ -121,14 +153,30 @@ public sealed class StoragePushService : BackgroundService {
             LastUploadUtc = DateTime.UtcNow;
             LastError = null;
             CurrentFile = null;
+            // Success closes the breaker and resets the backoff.
+            _consecutiveFailures = 0;
+            _circuitCooldown = InitialCooldown;
         } catch (OperationCanceledException) {
             throw;
         } catch (Exception ex) {
             LastError = ex.Message;
             DropConnection();   // force a fresh connect next time
+            _consecutiveFailures++;
             _logger.LogWarning(ex, "Storage push failed for {Rel} (attempt {N})", item.RelPath, item.Attempts + 1);
 
-            if (item.Attempts + 1 < MaxAttempts) {
+            if (_consecutiveFailures >= CircuitThreshold) {
+                // Trip the breaker: stop hammering the dead target. Park this
+                // item and pause pushes for a growing cooldown (capped), so the
+                // capture/preview pipeline gets the CPU + network back.
+                _circuitOpenUntil = DateTime.UtcNow + _circuitCooldown;
+                _logger.LogWarning(
+                    "Storage target unreachable; pausing pushes for {Sec:n0}s after {N} consecutive failures",
+                    _circuitCooldown.TotalSeconds, _consecutiveFailures);
+                _circuitCooldown = TimeSpan.FromSeconds(
+                    Math.Min(MaxCooldown.TotalSeconds, _circuitCooldown.TotalSeconds * 2));
+                Failed++;
+                if (_failed.Count < MaxFailedTracked) _failed.Enqueue(item with { Attempts = 0 });
+            } else if (item.Attempts + 1 < MaxAttempts) {
                 // Backoff then requeue. Single consumer, so an inline delay
                 // simply paces retries against a flaky/absent share.
                 try { await Task.Delay(TimeSpan.FromSeconds(3 * (item.Attempts + 1)), ct); }

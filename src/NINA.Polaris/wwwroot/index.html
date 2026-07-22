@@ -9838,13 +9838,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         + (armingLoop
                                             ? (289 * (1 - _shutterArmProgress()))
                                             : autorunShutterDashoffset())"></circle>
-                            <template x-if="seqState === 'running' || seqState === 'paused'">
-                                <g>
-                                    <circle class="shutter-track-inner" cx="50" cy="50" r="38"></circle>
-                                    <circle class="shutter-progress-inner" cx="50" cy="50" r="38"
-                                            :style="'stroke-dashoffset:' + autorunExposureDashoffset()"></circle>
-                                </g>
-                            </template>
+                            <!-- x-show (not <template x-if>): a <template> nested in
+                                 <svg> is parsed as an SVG element with no .content,
+                                 so Alpine's x-if throws "cloneNode of undefined". -->
+                            <g x-show="seqState === 'running' || seqState === 'paused'">
+                                <circle class="shutter-track-inner" cx="50" cy="50" r="38"></circle>
+                                <circle class="shutter-progress-inner" cx="50" cy="50" r="38"
+                                        :style="'stroke-dashoffset:' + autorunExposureDashoffset()"></circle>
+                            </g>
                         </svg>
                         <span class="shutter-icon">
                             <svg viewBox="0 0 24 24" x-show="seqState === 'idle'">
