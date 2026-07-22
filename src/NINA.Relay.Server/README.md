@@ -293,6 +293,11 @@ Two reasonable deployment modes:
 
 The protocol and wire format are identical either way.
 
+For a full feasibility write-up of running mode 1 as a **shared, hosted relay
+for many users** — the ZWO "Telescope Network" model, with options, a bandwidth
+cost model, and the non-financial (liability / privacy / ops) costs — see
+[`HOSTING.md`](HOSTING.md).
+
 ## Wire protocol (one-page summary)
 
 Every relay frame on the tunnel WebSocket is binary:
