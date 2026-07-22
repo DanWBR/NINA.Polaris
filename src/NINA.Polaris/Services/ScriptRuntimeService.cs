@@ -55,7 +55,8 @@ public sealed class ScriptRuntimeService {
     /// otherwise the system Python.</summary>
     public string PythonForScripts() => File.Exists(VenvPython) ? VenvPython : SystemPython;
 
-    /// <summary>True when numpy + astropy import under the resolved interpreter.</summary>
+    /// <summary>True when the pixel runtime (numpy + astropy + scipy + Pillow)
+    /// imports under the resolved interpreter.</summary>
     public bool PixelRuntimeReady() => ImportsOk(PythonForScripts());
 
     public object Status() => new {
@@ -70,7 +71,7 @@ public sealed class ScriptRuntimeService {
 
     private bool ImportsOk(string python) {
         try {
-            var (code, _) = Run(python, new[] { "-c", "import numpy, astropy" }, 20_000);
+            var (code, _) = Run(python, new[] { "-c", "import numpy, astropy, scipy, PIL" }, 20_000);
             return code == 0;
         } catch { return false; }
     }
@@ -132,7 +133,8 @@ public sealed class ScriptRuntimeService {
 
             SetPhase("installing (offline)", 70);
             var (ic, iout) = Run(VenvPython, new[] {
-                "-m", "pip", "install", "--no-index", "--find-links", wheels, "numpy", "astropy"
+                "-m", "pip", "install", "--no-index", "--find-links", wheels,
+                "numpy", "astropy", "scipy", "pillow"
             }, 600_000);
             if (ic != 0) throw new InvalidOperationException("pip install failed: " + Tail(iout));
 
