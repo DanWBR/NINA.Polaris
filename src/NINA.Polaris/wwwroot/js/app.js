@@ -7606,6 +7606,30 @@ function ninaApp() {
             finally { this.stretchAuto = savedAuto; }
             const aWhite = ap.shadow + (ap.scaleFactor > 0 ? 1 / ap.scaleFactor : maxVal);
 
+            // Per-channel R/G/B bins for the line histogram, from a colour JPEG
+            // source (raw + server paths are single-channel → white line).
+            if (hasJpeg && j) {
+                const d = j.imageData.data, npix = d.length >> 2;
+                const nb = 256, bR = new Float64Array(nb), bG = new Float64Array(nb), bB = new Float64Array(nb);
+                const st = Math.max(1, Math.floor(npix / 300000));
+                let isColor = false;
+                for (let i = 0; i < npix; i += st) {
+                    const p = i << 2, r = d[p], g = d[p + 1], b = d[p + 2];
+                    bR[r]++; bG[g]++; bB[b]++;
+                    if (!isColor && (r !== g || g !== b)) isColor = true;
+                }
+                if (isColor) {
+                    let pk = 1;
+                    for (let i = 0; i < nb; i++) { if (bR[i] > pk) pk = bR[i]; if (bG[i] > pk) pk = bG[i]; if (bB[i] > pk) pk = bB[i]; }
+                    this.histo.binsR = bR; this.histo.binsG = bG; this.histo.binsB = bB;
+                    this.histo.peakRGB = Math.log1p(pk); this.histo.color = true;
+                } else {
+                    this.histo.color = false; this.histo.binsR = null;
+                }
+            } else {
+                this.histo.color = false; this.histo.binsR = null;
+            }
+
             this.histo.bins = bins;
             this.histo.peak = Math.log1p(peak);
             this.histo.count = cnt;
@@ -7634,6 +7658,7 @@ function ninaApp() {
             for (let i = 0; i < NB; i++) if (bins[i] > peak) peak = bins[i];
             const maxVal = 65535;
             this.histo.bins = bins;
+            this.histo.color = false; this.histo.binsR = null;   // server sends a single (luminance) histogram
             this.histo.peak = Math.log1p(peak);
             this.histo.count = bins.reduce((a, b) => a + b, 0);
             this.histo.min = (ls.colorHistMin || 0) | 0;
@@ -7699,6 +7724,23 @@ function ninaApp() {
         // Draw the histogram bars + black/white marker lines onto the active
         // tab's canvas. No-ops cleanly when the canvas isn't laid out yet
         // (hidden tab) — the next applyManualStretch / tab switch redraws it.
+        // Draw one histogram channel as a polyline (log-scaled). `bins` is a
+        // 256-length array; lo/hi are the visible frac window [0,1].
+        _histoLine(ctx, bins, peakLog, color, w, h, lo, hi) {
+            const NB = bins.length, span = Math.max(1e-6, hi - lo);
+            const pk = peakLog || 1;
+            ctx.strokeStyle = color; ctx.lineWidth = 1.25; ctx.lineJoin = 'round';
+            ctx.beginPath();
+            let started = false;
+            for (let b = 0; b < NB; b++) {
+                const frac = (b + 0.5) / NB;
+                if (frac < lo || frac > hi) continue;
+                const x = ((frac - lo) / span) * w;
+                const y = h - (Math.log1p(bins[b]) / pk) * (h - 1);
+                if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+            }
+            ctx.stroke();
+        },
         drawHistogram() {
             try {
                 // Only LIVE / PREVIEW / AUTORUN(sequence) host the panel; skip
@@ -7722,20 +7764,17 @@ function ninaApp() {
 
                 const bins = this.histo.bins;
                 if (!bins) return;
-                const NB = bins.length;
                 const lo = this.histo.dispLo, hi = this.histo.dispHi;
-                const span = Math.max(1e-6, hi - lo);
-                const peak = this.histo.peak || 1;
-                const barW = Math.max(1, (w / (NB * span)));
 
-                ctx.fillStyle = 'rgba(150,180,220,0.8)';
-                for (let b = 0; b < NB; b++) {
-                    const frac = (b + 0.5) / NB;
-                    if (frac < lo || frac > hi) continue;
-                    const x = ((frac - lo) / span) * w;
-                    const val = Math.log1p(bins[b]) / peak;
-                    const bh = val * (h - 1);
-                    ctx.fillRect(x, h - bh, barW, bh);
+                // Per-channel R/G/B lines for a colour frame, a single white
+                // line for mono.
+                if (this.histo.color && this.histo.binsR) {
+                    const pk = this.histo.peakRGB || 1;
+                    this._histoLine(ctx, this.histo.binsR, pk, 'rgba(255,95,95,0.9)', w, h, lo, hi);
+                    this._histoLine(ctx, this.histo.binsG, pk, 'rgba(90,220,120,0.9)', w, h, lo, hi);
+                    this._histoLine(ctx, this.histo.binsB, pk, 'rgba(90,160,255,0.9)', w, h, lo, hi);
+                } else {
+                    this._histoLine(ctx, bins, this.histo.peak || 1, 'rgba(230,235,245,0.92)', w, h, lo, hi);
                 }
                 // Midpoint tick (helps read the 0..65535 scale like ASIAIR's
                 // centre gridline at 32768).
@@ -7780,17 +7819,17 @@ function ninaApp() {
                 } catch (e) { return; }  // tainted/empty canvas
 
                 const NB = 256;
-                const bins = new Float64Array(NB);
+                const bR = new Float64Array(NB), bG = new Float64Array(NB), bB = new Float64Array(NB);
                 const npx = (data.length / 4) | 0;
                 const step = Math.max(1, Math.floor(npx / 150000)); // subsample
-                let peak = 1;
+                let isColor = false;
                 for (let i = 0; i < npx; i += step) {
-                    const o = i * 4;
-                    const v = (data[o] * 0.299 + data[o + 1] * 0.587 + data[o + 2] * 0.114) | 0;
-                    const b = v < 0 ? 0 : v > 255 ? 255 : v;
-                    bins[b]++;
+                    const o = i * 4, r = data[o], g = data[o + 1], b = data[o + 2];
+                    bR[r]++; bG[g]++; bB[b]++;
+                    if (!isColor && (r !== g || g !== b)) isColor = true;
                 }
-                for (let i = 0; i < NB; i++) if (bins[i] > peak) peak = bins[i];
+                let peak = 1;
+                for (let i = 0; i < NB; i++) { if (bR[i] > peak) peak = bR[i]; if (bG[i] > peak) peak = bG[i]; if (bB[i] > peak) peak = bB[i]; }
                 const logPeak = Math.log1p(peak) || 1;
 
                 const dpr = window.devicePixelRatio || 1;
@@ -7802,17 +7841,17 @@ function ninaApp() {
                 const ctx = cv.getContext('2d');
                 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
                 ctx.clearRect(0, 0, w, h);
-                const barW = Math.max(1, w / NB);
-                ctx.fillStyle = 'rgba(150,180,220,0.8)';
-                for (let b = 0; b < NB; b++) {
-                    const x = (b / NB) * w;
-                    const bh = (Math.log1p(bins[b]) / logPeak) * (h - 1);
-                    ctx.fillRect(x, h - bh, barW, bh);
-                }
                 const xm = 0.5 * w;
                 ctx.strokeStyle = 'rgba(255,255,255,0.12)';
                 ctx.lineWidth = 1;
                 ctx.beginPath(); ctx.moveTo(xm, 0); ctx.lineTo(xm, h); ctx.stroke();
+                if (isColor) {
+                    this._histoLine(ctx, bR, logPeak, 'rgba(255,95,95,0.9)', w, h, 0, 1);
+                    this._histoLine(ctx, bG, logPeak, 'rgba(90,220,120,0.9)', w, h, 0, 1);
+                    this._histoLine(ctx, bB, logPeak, 'rgba(90,160,255,0.9)', w, h, 0, 1);
+                } else {
+                    this._histoLine(ctx, bR, logPeak, 'rgba(230,235,245,0.92)', w, h, 0, 1);
+                }
             } catch (e) { /* ignore */ }
         },
 
@@ -12852,17 +12891,22 @@ function ninaApp() {
             const canvas = document.getElementById('studio-histogram');
             if (!canvas || typeof Chart === 'undefined') return;
             if (this._studioHistogramChart) this._studioHistogramChart.destroy();
+            // Per-channel R/G/B lines when the server provides them, else a
+            // single white luminance line.
+            const rgb = stats.histogramR && stats.histogramG && stats.histogramB;
+            const line = (data, color) => ({
+                data, borderColor: color, borderWidth: 1.25, pointRadius: 0, fill: false, tension: 0
+            });
+            const datasets = rgb
+                ? [line(stats.histogramR, 'rgba(255,95,95,0.9)'),
+                   line(stats.histogramG, 'rgba(90,220,120,0.9)'),
+                   line(stats.histogramB, 'rgba(90,160,255,0.9)')]
+                : [line(stats.histogram, 'rgba(230,235,245,0.9)')];
             this._studioHistogramChart = new Chart(canvas, {
-                type: 'bar',
+                type: 'line',
                 data: {
                     labels: stats.histogram.map((_, i) => i),
-                    datasets: [{
-                        data: stats.histogram,
-                        backgroundColor: '#9cb3ff',
-                        borderWidth: 0,
-                        barPercentage: 1.0,
-                        categoryPercentage: 1.0
-                    }]
+                    datasets
                 },
                 options: {
                     animation: false,
