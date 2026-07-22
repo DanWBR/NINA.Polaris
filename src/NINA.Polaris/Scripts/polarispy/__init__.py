@@ -593,6 +593,17 @@ class Dialog:
     def text(self, key, label, default=""):
         return self._add({"type": "text", "key": key, "label": label, "default": str(default)})
 
+    def blink(self, paths):
+        """Show a blink player that cycles through ``paths`` (play/pause, speed,
+        step) for a blink comparator. Inspection only: nothing is written and
+        ``run()`` returns when the user closes the dialog. ``paths`` may be a
+        list of path strings or of file dicts (as from ``list_dir()``)."""
+        out = []
+        for p in paths:
+            out.append(p if isinstance(p, str) else (p.get("path") or p.get("value") or p.get("Path")))
+        self.spec["blink"] = [p for p in out if p]
+        return self
+
     def buttons(self, ok="OK", cancel="Cancel"):
         self.spec["okLabel"] = ok
         self.spec["cancelLabel"] = cancel

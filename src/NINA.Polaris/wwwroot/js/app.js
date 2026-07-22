@@ -1844,7 +1844,7 @@ function ninaApp() {
         // polarispy script runner. dialog = the declarative form a script blocks on.
         scripts: {
             list: [], loaded: false, jobId: null, job: null, busy: false,
-            dialog: { open: false, seq: -1, title: '', fields: [], values: {}, okLabel: 'OK', cancelLabel: 'Cancel', preview: false, previewUrl: '', previewBusy: false, previewErr: '', dataKind: '', credits: '', showCredits: false },
+            dialog: { open: false, seq: -1, title: '', fields: [], values: {}, okLabel: 'OK', cancelLabel: 'Cancel', preview: false, previewUrl: '', previewBusy: false, previewErr: '', dataKind: '', credits: '', showCredits: false, blink: null, blinkIdx: 0, blinkPlaying: false, blinkFps: 3 },
             // Pixel runtime (numpy + astropy), installed offline from a wheel pack.
             runtime: { ready: false, viaVenv: false, install: { running: false, phase: '', percent: 0, error: null, done: false } },
         },
@@ -12568,8 +12568,11 @@ function ninaApp() {
                 okLabel: spec.okLabel || 'OK', cancelLabel: spec.cancelLabel || 'Cancel',
                 preview: !!spec.preview, previewUrl: '', previewBusy: false, previewErr: '',
                 dataKind: spec.dataKind || '', credits: spec.credits || '', showCredits: false,
+                blink: (spec.blink && spec.blink.length) ? spec.blink : null,
+                blinkIdx: 0, blinkPlaying: false, blinkFps: 3,
             };
             if (this.scripts.dialog.preview) this.$nextTick(() => this._requestScriptPreview());
+            if (this.scripts.dialog.blink) this.$nextTick(() => this._startBlink());
         },
         // Debounced live preview: post the current values, then poll for the
         // rendered PNG the script sends back (matched by seq).
@@ -12607,7 +12610,38 @@ function ninaApp() {
             };
             poll();
         },
+        // ---- Blink comparator player (dlg.blink) ----
+        _blinkUrl(path) {
+            return '/api/files/preview?path=' + encodeURIComponent(path) + '&maxDim=1600';
+        },
+        _startBlink() {
+            const d = this.scripts.dialog;
+            if (!d.blink) return;
+            // Preload every frame so cycling is instant (kept referenced to stay cached).
+            this._blinkPreload = (d.blink || []).map(p => { const im = new Image(); im.src = this._blinkUrl(p); return im; });
+            d.blinkIdx = 0;
+            d.blinkPlaying = true;
+            this._blinkTick();
+        },
+        _blinkTick() {
+            const d = this.scripts.dialog;
+            if (!d.open || !d.blink || !d.blinkPlaying) return;
+            d.blinkIdx = (d.blinkIdx + 1) % d.blink.length;
+            clearTimeout(this._blinkTimer);
+            this._blinkTimer = setTimeout(() => this._blinkTick(), 1000 / Math.max(0.5, d.blinkFps));
+        },
+        blinkToggle() {
+            const d = this.scripts.dialog;
+            d.blinkPlaying = !d.blinkPlaying;
+            if (d.blinkPlaying) this._blinkTick(); else clearTimeout(this._blinkTimer);
+        },
+        blinkStep(delta) {
+            const d = this.scripts.dialog;
+            d.blinkPlaying = false; clearTimeout(this._blinkTimer);
+            d.blinkIdx = (d.blinkIdx + delta + d.blink.length) % d.blink.length;
+        },
         async _submitScriptDialog() {
+            clearTimeout(this._blinkTimer);
             const id = this.scripts.jobId;
             this.scripts.dialog.open = false;
             if (!id) return;
@@ -12615,6 +12649,7 @@ function ninaApp() {
             catch (_) {}
         },
         async _cancelScriptDialog() {
+            clearTimeout(this._blinkTimer);
             const id = this.scripts.jobId;
             this.scripts.dialog.open = false;
             if (!id) return;
