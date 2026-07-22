@@ -146,6 +146,11 @@ public class FrameProcessingService {
                 _logger.LogDebug(ex, "Star detection failed for frame {Id}", frameId);
             }
         }
+        // Per-channel histograms for a colour (3-plane) frame so the UI can
+        // draw R/G/B lines; a mono / raw mosaic stays single-channel.
+        var rgbHist = img.Properties.Channels == 3
+            ? BuildRgbHistograms(img.Data, img.Properties.Width * img.Properties.Height, img.Properties.BitDepth, 256)
+            : ((int[] r, int[] g, int[] b)?)null;
         return new FrameStats(
             Width:    s.Width,
             Height:   s.Height,
@@ -158,6 +163,7 @@ public class FrameProcessingService {
             StarCount: stars.Count,
             HfrAvg:   hfrAvg,
             Histogram: BuildHistogram(img.Data, img.Properties.BitDepth, 256),
+            HistogramR: rgbHist?.r, HistogramG: rgbHist?.g, HistogramB: rgbHist?.b,
             Stars:    stars);
     }
 
@@ -337,6 +343,21 @@ public class FrameProcessingService {
         return h;
     }
 
+    private static (int[] r, int[] g, int[] b) BuildRgbHistograms(ushort[] data, int planeLen, int bitDepth, int bins) {
+        var hr = new int[bins]; var hg = new int[bins]; var hb = new int[bins];
+        double maxVal = (1 << bitDepth) - 1;
+        void Fill(int[] h, int start) {
+            int end = Math.Min(start + planeLen, data.Length);
+            for (int i = start; i < end; i++) {
+                int bin = (int)(data[i] / maxVal * (bins - 1));
+                if (bin < 0) bin = 0; else if (bin >= bins) bin = bins - 1;
+                h[bin]++;
+            }
+        }
+        Fill(hr, 0); Fill(hg, planeLen); Fill(hb, 2 * planeLen);
+        return (hr, hg, hb);
+    }
+
     private static string Sanitize(string s) {
         if (string.IsNullOrWhiteSpace(s)) return "Unknown";
         foreach (var c in Path.GetInvalidFileNameChars()) s = s.Replace(c, '_');
@@ -352,4 +373,5 @@ public record FrameStats(
     int Min, int Max,
     int StarCount, double HfrAvg,
     int[] Histogram,
-    IReadOnlyList<DetectedStarDto> Stars);
+    IReadOnlyList<DetectedStarDto> Stars,
+    int[]? HistogramR = null, int[]? HistogramG = null, int[]? HistogramB = null);
