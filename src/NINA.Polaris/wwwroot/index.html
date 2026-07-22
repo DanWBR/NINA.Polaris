@@ -18420,14 +18420,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 </div>
                 <span class="text-muted" style="font-size:10px">Auto-stretched preview. The saved file keeps its linear data.</span>
               </div>
-              <!-- Blink comparator player -->
+              <!-- Blink comparator player: controls on top, image fills below -->
               <div x-show="scripts.dialog.blink" style="flex:1 1 auto; min-width:0; min-height:0; display:flex; flex-direction:column; gap:8px; margin:14px 0">
-                <div style="position:relative; flex:1 1 auto; min-height:0; background:#000; border:1px solid var(--border); border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center">
-                    <img x-show="scripts.dialog.blink" :src="_blinkUrl(scripts.dialog.blink[scripts.dialog.blinkIdx])" style="width:100%; height:100%; object-fit:contain; display:block">
-                    <div style="position:absolute; top:6px; left:8px; font-size:11px; background:rgba(0,0,0,.55); border-radius:4px; padding:2px 7px; max-width:80%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
-                         x-text="(scripts.dialog.blinkIdx+1) + '/' + scripts.dialog.blink.length + '  ' + (scripts.dialog.blink[scripts.dialog.blinkIdx]||'').split(/[\\/]/).pop()"></div>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px; font-size:12px">
+                <div style="flex:0 0 auto; display:flex; align-items:center; gap:10px; font-size:12px">
                     <button class="btn btn-sm" @click="blinkStep(-1)" title="Previous">‹</button>
                     <button class="btn btn-sm btn-primary" @click="blinkToggle()" x-text="scripts.dialog.blinkPlaying ? '❚❚ Pause' : '► Play'"></button>
                     <button class="btn btn-sm" @click="blinkStep(1)" title="Next">›</button>
@@ -18435,6 +18430,11 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <input type="range" style="flex:1; min-width:60px" min="0.5" max="10" step="0.5"
                            :value="scripts.dialog.blinkFps" @input="scripts.dialog.blinkFps = parseFloat($event.target.value)">
                     <span class="text-muted" style="min-width:44px; text-align:right" x-text="scripts.dialog.blinkFps + ' fps'"></span>
+                </div>
+                <div style="position:relative; flex:1 1 auto; min-height:0; background:#000; border:1px solid var(--border); border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center">
+                    <img x-show="scripts.dialog.blink" :src="_blinkUrl(scripts.dialog.blink[scripts.dialog.blinkIdx])" style="width:100%; height:100%; object-fit:contain; display:block">
+                    <div style="position:absolute; top:6px; left:8px; font-size:11px; background:rgba(0,0,0,.55); border-radius:4px; padding:2px 7px; max-width:80%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
+                         x-text="(scripts.dialog.blinkIdx+1) + '/' + scripts.dialog.blink.length + '  ' + (scripts.dialog.blink[scripts.dialog.blinkIdx]||'').split(/[\\/]/).pop()"></div>
                 </div>
               </div>
             </div>
@@ -18447,7 +18447,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         style="opacity:.85" title="Show script credits">ⓘ Credits</button>
                 <span x-show="!scripts.dialog.credits"></span>
                 <div style="display:flex; gap:8px">
-                    <button class="btn btn-sm" @click="_cancelScriptDialog()" x-text="scripts.dialog.cancelLabel"></button>
+                    <button class="btn btn-sm" x-show="!scripts.dialog.blink" @click="_cancelScriptDialog()" x-text="scripts.dialog.cancelLabel"></button>
                     <button class="btn btn-sm btn-primary" @click="_submitScriptDialog()" x-text="scripts.dialog.okLabel"></button>
                 </div>
             </div>
