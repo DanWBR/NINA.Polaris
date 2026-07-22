@@ -18369,7 +18369,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </template>
             <div :style="scripts.dialog.preview ? 'display:flex; gap:16px; flex:1 1 auto; min-height:0; margin-top:6px' : ''">
               <div :style="scripts.dialog.preview ? 'flex:0 0 300px; width:300px; overflow-y:auto; min-height:0' : ''">
-                <div style="display:flex; flex-direction:column; gap:30px; margin:16px 0 4px; line-height:1.5"
+                <div style="display:grid; grid-template-columns:1fr; grid-auto-rows:minmax(64px, auto); align-items:center; margin:16px 0; line-height:1.5"
                      :style="!scripts.dialog.preview ? 'max-height:60vh; overflow:auto' : ''">
                     <template x-for="(f, i) in scripts.dialog.fields" :key="i">
                         <div x-show="f.type !== 'info'">
@@ -18388,7 +18388,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                        :value="scripts.dialog.values[f.key]"
                                        @input="scripts.dialog.values[f.key] = ($event.target.value===''?null:parseFloat($event.target.value)); scriptPreviewDebounced()">
                             </div>
-                            <label x-show="f.type==='checkbox'" style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text-secondary); min-height:38px">
+                            <label x-show="f.type==='checkbox'" style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text-secondary)">
                                 <input type="checkbox" style="width:16px; height:16px; accent-color:var(--accent)"
                                        :checked="scripts.dialog.values[f.key]"
                                        @change="scripts.dialog.values[f.key] = $event.target.checked; scriptPreviewDebounced()">
