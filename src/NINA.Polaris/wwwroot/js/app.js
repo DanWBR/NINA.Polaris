@@ -8432,6 +8432,39 @@ function ninaApp() {
             // canvas. The source texture is always uploaded at full
             // resolution regardless; this only bounds the OUTPUT canvas.
             const hwMax = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
+            // The SOURCE texture must fit the GPU limit too. WebGL does NOT
+            // throw for an oversize texImage2D: it raises INVALID_VALUE and
+            // leaves the texture incomplete, so the draw silently produced a
+            // BLACK canvas while this function still returned true — meaning
+            // the 2D fallback never ran and the canvas kept whatever it had.
+            // A 4144px-wide sensor on a 4096 MAX_TEXTURE_SIZE (tablet) GPU is
+            // exactly that case. Decimate whole 2x2 Bayer cells so the mosaic
+            // phase survives and the debayer still produces colour.
+            if (width > hwMax || height > hwMax) {
+                const cellsX = Math.floor(width / 2), cellsY = Math.floor(height / 2);
+                let dec = 1;
+                while (Math.floor(cellsX / dec) * 2 > hwMax
+                       || Math.floor(cellsY / dec) * 2 > hwMax) dec++;
+                const ocx = Math.floor(cellsX / dec), ocy = Math.floor(cellsY / dec);
+                const tw = ocx * 2, th = ocy * 2;
+                const out = new Uint16Array(tw * th);
+                for (let cy = 0; cy < ocy; cy++) {
+                    const sy = cy * dec * 2;
+                    const s0 = sy * width, s1 = (sy + 1) * width;
+                    const d0 = (cy * 2) * tw, d1 = (cy * 2 + 1) * tw;
+                    for (let cx = 0; cx < ocx; cx++) {
+                        const sx = cx * dec * 2, dx = cx * 2;
+                        out[d0 + dx] = pixels[s0 + sx];
+                        out[d0 + dx + 1] = pixels[s0 + sx + 1];
+                        out[d1 + dx] = pixels[s1 + sx];
+                        out[d1 + dx + 1] = pixels[s1 + sx + 1];
+                    }
+                }
+                console.warn('[Polaris] frame ' + width + 'x' + height
+                    + ' exceeds GPU MAX_TEXTURE_SIZE ' + hwMax
+                    + '; using a Bayer-aligned ' + tw + 'x' + th + ' texture');
+                pixels = out; width = tw; height = th;
+            }
             const wantDim = this.previewMaxDim | 0;
             const MAX_GPU_DIM = wantDim > 0 ? Math.min(wantDim, hwMax) : hwMax;
             const isColorBayer = (bayerPattern | 0) >= 1 && (bayerPattern | 0) <= 4;
@@ -8481,8 +8514,19 @@ function ninaApp() {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             try {
+                gl.getError();   // clear any stale error first
                 gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16UI, width, height, 0,
                     gl.RED_INTEGER, gl.UNSIGNED_SHORT, pixels);
+                // WebGL reports an illegal/failed upload through getError, NOT
+                // by throwing. Without this check a failed upload left the
+                // texture incomplete and we still returned true, so the draw
+                // painted black and the 2D fallback never got a chance.
+                const glErr = gl.getError();
+                if (glErr !== gl.NO_ERROR) {
+                    console.warn('R16UI texture upload failed: GL error 0x'
+                        + glErr.toString(16) + ' for ' + width + 'x' + height);
+                    return false;
+                }
             } catch (e) {
                 console.warn('R16UI texture upload failed:', e);
                 return false;
