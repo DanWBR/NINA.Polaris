@@ -7388,7 +7388,7 @@ function ninaApp() {
         // only the per-channel shadow + scale differ.
         _autoStretchEndpoints(sampleArr, maxVal) {
             if (!sampleArr || sampleArr.length === 0) {
-                return { shadow: 0, scale: maxVal > 0 ? 1.0 / maxVal : 1.0 };
+                return { shadow: 0, scale: maxVal > 0 ? 1.0 / maxVal : 1.0, xMed: 0 };
             }
             const sorted = Float32Array.from(sampleArr).sort();
             const median = sorted[Math.floor(sorted.length * 0.5)];
@@ -7396,7 +7396,10 @@ function ninaApp() {
             const mad = devs[Math.floor(devs.length * 0.5)];
             const shadow = Math.max(0, median - 3.0 * mad);
             const scale = maxVal > shadow ? 1.0 / (maxVal - shadow) : 1.0;
-            return { shadow, scale };
+            // Normalised median under THIS channel's own endpoints. The caller
+            // needs it to pick a midtone that matches the per-channel scaling.
+            const xMed = Math.max(0, (median - shadow) * scale);
+            return { shadow, scale, xMed };
         },
 
         // Per-channel auto-stretch for an OSC (Bayer) frame: sample the
@@ -7438,11 +7441,22 @@ function ninaApp() {
                 }
             }
             if (rArr.length === 0 || gArr.length === 0 || bArr.length === 0) return null;
-            return {
-                r: this._autoStretchEndpoints(rArr, maxVal),
-                g: this._autoStretchEndpoints(gArr, maxVal),
-                b: this._autoStretchEndpoints(bArr, maxVal)
-            };
+            const r = this._autoStretchEndpoints(rArr, maxVal);
+            const g = this._autoStretchEndpoints(gArr, maxVal);
+            const b = this._autoStretchEndpoints(bArr, maxVal);
+            // The shader shares ONE midtone across channels, so it MUST come
+            // from the same normalisation these endpoints produce. Taking it
+            // from the GLOBAL stretch instead is catastrophic on an OSC frame:
+            // split per channel the background is very uniform, so MAD collapses
+            // to a few ADU, shadow lands right on the median, and the normalised
+            // median is ~7e-4 — while the global midtone is calibrated for ~9e-2
+            // (its MAD is inflated by mixing the Bayer channels). Applying one to
+            // the other mapped the whole background to 8-bit 0.4 -> a black /
+            // "very faint" preview, while mono frames (global path only) were
+            // fine. Measured on a real SV405CC dual-band sub.
+            const xMed = (r.xMed + g.xMed + b.xMed) / 3;
+            const midtone = Math.min(0.999, Math.max(0.001, this._mtf(xMed, 0.15)));
+            return { r, g, b, midtone };
         },
 
         // ── Display colour saturation ────────────────────────────────
@@ -7506,8 +7520,13 @@ function ninaApp() {
             // liveCanvas on every $watch('tab') tick, which was the
             // 'snap appears in LIVE too' regression after the kind
             // routing fix.
+            // When the per-channel path is active its midtone MUST win: the
+            // global one is calibrated for a completely different normalisation
+            // (see _computePerChannelStretch) and renders the frame black.
             this._tryRenderWebGL(f.pixels, f.width, f.height, f.bitDepth,
-                f.bayerPattern, shadow, scaleFactor, midtone, f.frameKind || 0, perChan);
+                f.bayerPattern, shadow, scaleFactor,
+                (perChan && perChan.midtone) ? perChan.midtone : midtone,
+                f.frameKind || 0, perChan);
             // Keep the histogram mini-panel (handles + bars) in sync with the
             // stretch we just applied. Cheap: bins are cached per-frame.
             this.drawHistogram();
@@ -9297,9 +9316,14 @@ function ninaApp() {
                 perChan = this._computePerChannelStretch(pixels, width, height, bayerPattern, maxVal);
             }
 
+            // When the per-channel path is active its midtone MUST win: the
+            // global one is calibrated for a completely different normalisation
+            // (see _computePerChannelStretch) and renders the frame black.
+            const effMidtone = (perChan && perChan.midtone) ? perChan.midtone : midtone;
+
             // Try WebGL2 path first (GPU does debayer + stretch in microseconds)
             if (this._tryRenderWebGL(pixels, width, height, bitDepth,
-                    bayerPattern, shadow, scaleFactor, midtone, frameKind, perChan)) {
+                    bayerPattern, shadow, scaleFactor, effMidtone, frameKind, perChan)) {
                 this.drawHistogram();   // refresh the histogram mini-panel
                 return;
             }
