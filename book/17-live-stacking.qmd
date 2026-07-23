@@ -46,7 +46,7 @@ The right sidebar is split top to bottom: the capture inputs (Exp,
 Gain, Bin, Filter) at the top followed by **Stacking resolution** (see
 @sec-stacking-resolution), the Polaris Shutter centered in the middle,
 and the session readout plus secondary buttons at the bottom.
-The shutter owns the whole live-stack lifecycle, ASIAIR-style — there is
+The shutter owns the whole live-stack lifecycle, ASIAIR-style - there is
 no separate Stack toggle. Tapping the shutter arms stacking and starts
 the LIVE loop: a fresh, empty stack starts silently, while a stopped
 stack that already has frames asks **Continue** (keep adding) or
@@ -59,7 +59,7 @@ The session readout and buttons:
 - **Stacking readout** is a compact pill next to the shutter showing the
   state (Stacking / Stopped), total integration time, frames stacked,
   and frames discarded by the kappa-sigma quality gate. The integration
-  timer counts only while actively stacking — it freezes on stop and at
+  timer counts only while actively stacking - it freezes on stop and at
   the duration cap, and resumes on Continue.
 - **Reset** discards the running stack and the reference; the next
   incoming frame becomes the new reference. This is the explicit "clear

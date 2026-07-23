@@ -230,13 +230,13 @@ least one accessory has a saved selection. It holds five cards:
   Astro Ultimate Powerbox. Like the filter wheel it is multi-driver:
   pick **INDI**, **ASCOM (COM)**, or **Alpaca**, then the device, and
   Connect. Polaris treats it generically as an ASCOM ISwitchV2 device,
-  so there is no per-brand curation — the card simply lists every
+  so there is no per-brand curation - the card simply lists every
   channel the driver exposes: on/off buttons for the 12V outlets,
   a value box plus **Set** for dew-heater / PWM channels, and read-only
   voltage / current / temperature sensors. The **Refresh** button
   re-reads the channel values (useful for the Alpaca and ASCOM paths,
   which cache between writes). Outlets and dew levels are also drivable
-  unattended from the sequencer — see the **Power Box** instruction
+  unattended from the sequencer - see the **Power Box** instruction
   group in @sec-adv-sequencer.
 
 An INDI power driver (for example `indi_pegasus_upb`) exposes its

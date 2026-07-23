@@ -54,9 +54,9 @@ familiar from the ASIAIR (ZWO's all-in-one imaging controller), comes
 from a HiPS survey (sky images cut into small squares that load
 progressively as you zoom, like an online road map). **DSS Color** (the
 Digitized Sky Survey) is the default. A survey picker next to the
-DSS Img toggle switches the imagery layer to another full-sky survey —
+DSS Img toggle switches the imagery layer to another full-sky survey -
 DSS2 red+blue, Mellinger wide-field colour, 2MASS near-infrared, or
-unWISE infrared — all streamed from CDS/alasky, keeping your current
+unWISE infrared - all streamed from CDS/alasky, keeping your current
 pan and zoom. Only DSS Colour ships an offline bundle; the others are
 online-only. Two modes exist for DSS Colour:
 
@@ -118,7 +118,7 @@ Attribution: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg.
 Search results, atlas cards, and the **Tonight's Best** list each show
 a small DSS2 cutout of the object, an ASIAIR-style photo per target, so
 you can tell a galaxy from a nebula at a glance, fully offline. The repo
-bundles **full coverage** — every catalogued object with valid
+bundles **full coverage** - every catalogued object with valid
 coordinates (about 17,700 images, roughly 215 MB, across M, C, NGC, IC,
 Arp, HH, LBN, LDN, Sh2, AGC, and HCG) under `skydata/dso-thumbs/<SLUG>.jpg`
 (for example `M42.jpg`, `NGC7000.jpg`, `SH2279.jpg`), tracked with Git

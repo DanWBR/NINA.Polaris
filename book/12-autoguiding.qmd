@@ -63,7 +63,7 @@ The bottom bar holds only the capture and guide actions (Exp, Gain, and
 Bin sit inline and left-aligned); the settle and dither knobs live in the
 **Dithering** section of the **Status** pane on the right. The
 Status / Settings / Calibration side panel opens directly under the
-Built-In / External backend selector — there is no separate "PHD2
+Built-In / External backend selector - there is no separate "PHD2
 Native" tab, and there is no Disconnect button (the guider connection is
 managed from RIGS). The chart resizes with the window, and **Clear
 History** sits in its bottom-right corner.

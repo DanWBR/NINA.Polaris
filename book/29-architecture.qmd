@@ -317,7 +317,7 @@ implements the client side in three layers:
   reassembles the binary chunks delivered inline in the XML stream.
 - **Device wrappers**: `IndiCamera`, `IndiTelescope`, `IndiFocuser`,
   `IndiFilterWheel`, `IndiRotator`, `IndiFlatDevice`, `IndiDome`,
-  `IndiWeather`, `IndiSwitch` (power boxes — flattens the driver's
+  `IndiWeather`, `IndiSwitch` (power boxes - flattens the driver's
   switch and number vectors into the generic `ISwitchDevice` channel
   model), and `IndiGuider`, each a thin facade over the
   property dictionary for one device kind. `IndiCamera` is the most
