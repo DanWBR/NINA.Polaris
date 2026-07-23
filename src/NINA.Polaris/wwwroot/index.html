@@ -1154,6 +1154,41 @@
                             </template>
                         </span>
                     </div>
+                        <!-- Working resolution. EVERY per-pixel buffer of a
+                             session scales with this (~38 B/px in colour), so
+                             it is what decides whether live stacking fits the
+                             host at all. Options that do not fit are disabled
+                             with the numbers, rather than offered and then
+                             taking the machine down mid-session. Subs on disk
+                             are always full resolution. -->
+                        <div style="padding-bottom:10px">
+                            <div class="text-secondary" style="font-size:13px; margin-bottom:6px">
+                                Stacking resolution
+                            </div>
+                            <select class="input" x-model.number="liveStackBinning"
+                                    @change="saveLiveStackBinning()">
+                                <option :value="0">Auto<template x-if="liveStackAutoBin">
+                                    <span></span></template></option>
+                                <template x-for="o in (liveStackBinOptions || [])" :key="o.bin">
+                                    <option :value="o.bin" :disabled="!o.fits"
+                                            x-text="(o.bin === 1 ? '1:1 Full' : o.bin === 2 ? '1:2 Half' : '1:4 Quarter')
+                                                    + '  ' + o.width + 'x' + o.height
+                                                    + '  ~' + o.estimatedMB + ' MB'
+                                                    + (o.fits ? '' : '  (does not fit)')"></option>
+                                </template>
+                            </select>
+                            <div class="text-muted" style="font-size:11px; margin-top:4px"
+                                 x-show="liveStackBinning === 0 && liveStackAutoBin">
+                                Auto picked <span x-text="'1:' + liveStackAutoBin"></span>
+                                for this camera on this machine.
+                            </div>
+                            <div class="text-warn" style="font-size:11px; margin-top:4px"
+                                 x-show="(liveStackBinOptions || []).some(o => !o.fits)">
+                                ⚠ Greyed-out options need more memory than this machine can
+                                spare (budget ~<span x-text="liveStackBinBudgetMB"></span> MB).
+                                Only the live view is reduced; saved frames stay full resolution.
+                            </div>
+                        </div>
                     <!-- Target identification. Stamped into saved frames
                          (FITS OBJECT) and auto-filled after a plate-solved
                          Slew & Center. 🔍 identifies what the mount is on. -->
@@ -1345,41 +1380,6 @@
                                 </span>
                             </template>
                         </label>
-                        <!-- Working resolution. EVERY per-pixel buffer of a
-                             session scales with this (~38 B/px in colour), so
-                             it is what decides whether live stacking fits the
-                             host at all. Options that do not fit are disabled
-                             with the numbers, rather than offered and then
-                             taking the machine down mid-session. Subs on disk
-                             are always full resolution. -->
-                        <div style="padding-bottom:10px">
-                            <div class="text-secondary" style="font-size:13px; margin-bottom:6px">
-                                Stacking resolution
-                            </div>
-                            <select class="input" x-model.number="liveStackBinning"
-                                    @change="saveLiveStackBinning()">
-                                <option :value="0">Auto<template x-if="liveStackAutoBin">
-                                    <span></span></template></option>
-                                <template x-for="o in (liveStackBinOptions || [])" :key="o.bin">
-                                    <option :value="o.bin" :disabled="!o.fits"
-                                            x-text="(o.bin === 1 ? '1:1 Full' : o.bin === 2 ? '1:2 Half' : '1:4 Quarter')
-                                                    + '  ' + o.width + 'x' + o.height
-                                                    + '  ~' + o.estimatedMB + ' MB'
-                                                    + (o.fits ? '' : '  (does not fit)')"></option>
-                                </template>
-                            </select>
-                            <div class="text-muted" style="font-size:11px; margin-top:4px"
-                                 x-show="liveStackBinning === 0 && liveStackAutoBin">
-                                Auto picked <span x-text="'1:' + liveStackAutoBin"></span>
-                                for this camera on this machine.
-                            </div>
-                            <div class="text-warn" style="font-size:11px; margin-top:4px"
-                                 x-show="(liveStackBinOptions || []).some(o => !o.fits)">
-                                ⚠ Greyed-out options need more memory than this machine can
-                                spare (budget ~<span x-text="liveStackBinBudgetMB"></span> MB).
-                                Only the live view is reduced; saved frames stay full resolution.
-                            </div>
-                        </div>
                         <!-- Save-frames is on but no image output folder is set,
                              so every frame is silently dropped. Tell the user
                              instead of letting them find an empty lights/ folder
