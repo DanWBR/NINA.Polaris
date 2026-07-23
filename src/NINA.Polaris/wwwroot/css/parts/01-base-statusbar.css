@@ -635,6 +635,10 @@ body.asst-dock-dragging {
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.4px;
+    /* Match the other status-bar badges, which are uppercase. Done in CSS
+       rather than by shouting in the markup so the i18n key stays natural
+       ("Abort run") and every translation renders uppercase too. */
+    text-transform: uppercase;
     padding: 3px 12px;
     border-radius: 10px;
     color: #fff;

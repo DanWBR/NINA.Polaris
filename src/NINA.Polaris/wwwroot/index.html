@@ -457,7 +457,12 @@
                   :title="'Current exposure: ' + captureProgressContext() + ' ' + captureProgressLabel()">
                 <span class="chip-icon">◐</span>
                 <span x-text="captureProgressContext()" style="opacity:0.7;margin-right:4px"></span>
-                <span x-text="captureProgressLabel()" style="font-variant-numeric:tabular-nums"></span>
+                <!-- text-transform:none so the unit reads "10s", not "10S": the
+                     chip is uppercased as a whole, which also shouted the
+                     seconds suffix. The context tag beside it is already
+                     uppercase in the source string, so it is unaffected. -->
+                <span x-text="captureProgressLabel()"
+                      style="font-variant-numeric:tabular-nums; text-transform:none"></span>
             </span>
             <span class="status-chip" x-show="cameraTemp !== null">
                 <span class="chip-icon">T</span>
