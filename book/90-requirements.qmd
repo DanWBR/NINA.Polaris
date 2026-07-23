@@ -365,6 +365,12 @@ to buy one; a 4 GB board is a far nicer experience. Note also that GPU
 offload does not help on these small Mali GPUs (the Zero 3's Mali-G31
 measured 0.77x overall, a net loss), so leave the GPU toggle off there.
 
+One case wants 8 GB specifically: running the **AI Assistant on the
+host's local backend**. That model needs roughly 2.5 GB of its own, so a
+4 GB board cannot host it alongside Polaris and a live session. The
+cloud and on-device (browser) assistant backends have no such cost on
+the host; only the on-host local model does.
+
 ## Browser requirements
 
 The client is any modern browser:

@@ -172,8 +172,10 @@ A few notes on that table. Polaris runs on as little as 1.5 GB: a
 1.5 GB Orange Pi Zero 3 handles capture, guiding, plate solving, the
 sequencer, and live stacking (with Auto picking a reduced stacking
 resolution so it does not swap). Below 2 GB the STUDIO batch stacker
-and the AI editor get tight, so 4 GB is the comfortable recommendation
-and 8 GB gives headroom for STUDIO jobs alongside a live session. An
+and the AI editor get tight, so 4 GB is the comfortable recommendation.
+Step up to 8 GB for STUDIO jobs alongside a live session, or to run the
+AI Assistant on the host's local backend: that model needs roughly
+2.5 GB of its own, which a 4 GB board cannot spare on top of Polaris. An
 underpowered PSU is
 the number one source of "USB camera randomly disconnects". Long
 sessions reach 70 C inside a case, and the Pi 5 throttles aggressively
