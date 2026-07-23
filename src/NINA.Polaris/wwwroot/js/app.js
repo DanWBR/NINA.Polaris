@@ -7201,8 +7201,8 @@ function ninaApp() {
                 canvas.width  = bw;
                 canvas.height = bh;
                 const ctx = canvas.getContext('2d');
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
+                ctx.imageSmoothingEnabled = false;
+                // No smoothing: the operator wants the RAW pixels, not an interpolated view.
                 const sat = this._dispSatFilter();
                 if (sat) ctx.filter = sat;
                 ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
@@ -7251,8 +7251,8 @@ function ninaApp() {
                     dst.height = Math.round(src.height * scale);
                 }
                 const ctx = dst.getContext('2d');
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
+                ctx.imageSmoothingEnabled = false;
+                // No smoothing: the operator wants the RAW pixels, not an interpolated view.
                 ctx.drawImage(src, 0, 0, dst.width, dst.height);
             }
         },
@@ -9474,8 +9474,8 @@ function ninaApp() {
                 canvas.height = bh;
                 try {
                     const ctx = canvas.getContext('2d');
-                    ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'high';
+                    ctx.imageSmoothingEnabled = false;
+                    // No smoothing: the operator wants the RAW pixels, not an interpolated view.
                     const sat = this._dispSatFilter();
                     if (sat) ctx.filter = sat;
                     ctx.drawImage(src, 0, 0, canvas.width, canvas.height);
@@ -24998,8 +24998,8 @@ function ninaApp() {
             canvas.height = bh;
             try {
                 const ctx = canvas.getContext('2d');
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
+                ctx.imageSmoothingEnabled = false;
+                // No smoothing: the operator wants the RAW pixels, not an interpolated view.
                 const sat = this._dispSatFilter();
                 if (sat) ctx.filter = sat;
                 ctx.drawImage(cached.src, 0, 0, canvas.width, canvas.height);

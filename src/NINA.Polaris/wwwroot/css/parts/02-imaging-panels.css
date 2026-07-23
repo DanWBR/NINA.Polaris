@@ -871,6 +871,14 @@ button,
     width: 100%;
     height: 100%;
     display: block;
+    /* Show the RAW pixels. The browser bilinear-filters a canvas whose CSS
+       size differs from its backing store, which is what smoothed the frame
+       even though the WebGL texture already uses NEAREST. The 2D blits that
+       feed these canvases run with imageSmoothingEnabled = false for the
+       same reason. crisp-edges is the Firefox spelling; pixelated wins where
+       both are understood. */
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
     /* Preserve the source frame's aspect ratio inside whatever
        container it lands in, without this the bitmap was being
        stretched to fill (e.g. a 4:3 sensor came out 16:9 in the
