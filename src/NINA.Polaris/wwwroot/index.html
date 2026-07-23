@@ -6052,6 +6052,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             title="Send the mount to its mechanical home position (CW down, RA/Dec hard stops). Confirm before clicking.">
                                         Home
                                     </button>
+                                    <!-- Point the OTA nearly straight up so a flat
+                                         panel can rest on the aperture. Server aims
+                                         near the zenith (Dec = latitude, a small
+                                         hour-angle nudge off the meridian) and stops
+                                         tracking so the tube stays vertical. Same
+                                         safety confirm as a normal slew. -->
+                                    <button class="btn btn-sm" @click="pointToZenith()"
+                                            :disabled="!mount.connected || mount.parked"
+                                            title="Slew the mount to point nearly straight up so you can rest a flat panel on the aperture. Tracking stops on arrival so the tube stays vertical.">
+                                        Point up (flats)
+                                    </button>
                                     <!-- Reset-then-home: Park -> Unpark -> Home in
                                          one click. Required for strain-wave mounts
                                          (ZWO AM3) after power-on because their
@@ -18700,7 +18711,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260723-histozoom"></script>
+    <script src="/js/app.js?v=20260723-zenith"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

@@ -88,6 +88,94 @@ public static class TelescopeEndpoints {
             }
         });
 
+        // Aim the OTA nearly straight up so a flat panel can rest on the
+        // aperture without sliding off. There is no Alt/Az slew in the
+        // telescope interface, so the zenith is expressed equatorially:
+        // Dec = site latitude, hour angle = 0 puts the tube dead vertical.
+        // We deliberately nudge the hour angle ~15 min off the meridian
+        // rather than sitting on HA=0, because HA=0 is inside
+        // MountSlewSafety's near-meridian window (every press would warn)
+        // and, on a GEM, the exact meridian is the pier-flip knife-edge.
+        // The nudge goes on whichever side the mount is already on so the
+        // slew never crosses the meridian, leaving the OTA ~3 deg under
+        // vertical (irrelevant for a resting panel). Tracking is stopped on
+        // arrival so the tube stays put instead of drifting off vertical
+        // while flats are shot. Runs the same safety gates as
+        // /api/sky/slew-and-center (RequireHomeAfterTrip + MountSlewSafety).
+        group.MapPost("/slew-zenith", async (EquipmentManager equip,
+                MountSafetyGuardService guard, ProfileService profiles,
+                ZenithSlewRequest? body) => {
+            if (equip.Telescope == null)
+                return Results.BadRequest(new { error = "No telescope selected" });
+
+            bool force = body?.Force ?? false;
+            var utc = DateTime.UtcNow;
+            double lat = profiles.Active.Latitude;
+            double lon = profiles.Active.Longitude;
+            double lst = MeridianFlipService.ComputeLstHours(utc, lon);
+
+            // Read the mount's current side of the meridian so the near-zenith
+            // target lands on the same side (no meridian crossing).
+            var scope = equip.Telescope;
+            double mra = double.NaN, mdec = double.NaN;
+            if (scope.IsConnected) { mra = scope.RightAscension; mdec = scope.Declination; }
+            double sideSign = 1.0;   // default (mount side unknown): west of meridian
+            if (!double.IsNaN(mra)) {
+                double mha = lst - mra;
+                while (mha > 12) mha -= 24;
+                while (mha < -12) mha += 24;
+                sideSign = mha >= 0 ? 1.0 : -1.0;
+            }
+            const double haOffsetHours = 0.25;               // 15 min of time (~3.75 deg)
+            double ra = lst - sideSign * haOffsetHours;       // targetRA = LST - HA
+            while (ra >= 24) ra -= 24;
+            while (ra < 0) ra += 24;
+            double dec = Math.Clamp(lat, -90.0, 90.0);
+
+            // Safety gate #4: after a mount-safety trip, require a re-home first.
+            if (!force && guard.RequireHomeAfterTrip) {
+                return Results.Json(new {
+                    needsConfirm = true,
+                    kind = "safety-stop",
+                    reason = "The mount safety guard has tripped. Find Home to re-establish a "
+                        + "clean pointing model before slewing, or confirm to override.",
+                }, statusCode: 409);
+            }
+            // Safety gate #2: flag a large slew or a below-floor target (the
+            // near-meridian flag should not fire thanks to the HA nudge).
+            if (!force) {
+                var rig = profiles.ActiveEquipmentProfile;
+                double largeMoveDeg = rig?.SlewConfirmDeg ?? MountSlewSafety.LargeMoveDeg;
+                var v = MountSlewSafety.Evaluate(mra, mdec, ra, dec, lat, lon, utc,
+                    guard.AltitudeFloorDeg, largeMoveDeg);
+                if (v.Warn) {
+                    return Results.Json(new {
+                        needsConfirm = true,
+                        kind = "slew-warning",
+                        reason = v.Reason,
+                        moveDeg = double.IsNaN(v.MoveDeg) ? (double?)null : v.MoveDeg,
+                        targetAltDeg = v.TargetAltDeg,
+                        haMinutes = v.HaMinutes,
+                    }, statusCode: 409);
+                }
+            }
+
+            try {
+                await scope.SlewAsync(ra, dec);
+                // Freeze the tube vertical. With tracking on it would drift west
+                // of the zenith over the flat session. Best-effort: a mount that
+                // cannot toggle tracking still ends up pointed up.
+                try { await scope.SetTrackingAsync(false); } catch { /* non-fatal */ }
+                return Results.Ok(new {
+                    status = "slewing",
+                    target = new { ra, dec },
+                    trackingStopped = true
+                });
+            } catch (Exception ex) {
+                return Results.Problem(ex.Message);
+            }
+        });
+
         group.MapPost("/sync", async (EquipmentManager equip, SlewRequest request) => {
             if (equip.Telescope == null)
                 return Results.BadRequest(new { error = "No telescope selected" });
@@ -538,6 +626,9 @@ public static class TelescopeEndpoints {
 
     public record SlewRequest(double Ra, double Dec);
     public record TrackingRequest(bool Enabled);
+    /// <summary>Optional body for POST /slew-zenith. Force=true overrides the
+    /// pre-slew safety confirmation (a null or empty body means Force=false).</summary>
+    public record ZenithSlewRequest(bool Force = false);
     /// <summary>PUT /api/telescope/slew-rate body. ElementName matches
     /// one of the Name strings returned by GET /api/telescope/slew-rates
     /// — typically <c>SLEW_GUIDE</c> / <c>SLEW_CENTERING</c> /

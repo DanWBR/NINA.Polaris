@@ -26157,6 +26157,53 @@ function ninaApp() {
             }
         },
 
+        // Aim the OTA nearly straight up so a flat panel rests on the aperture
+        // without sliding off. The server computes the near-zenith RA/Dec (there
+        // is no Alt/Az slew), nudges ~15 min off the meridian on the mount's
+        // current side so it never crosses the flip line, and stops tracking on
+        // arrival so the tube stays vertical. Reuses the same 409 safety-confirm
+        // flow as slew & center.
+        async pointToZenith() {
+            if (!this.mount?.connected) { this.toast('Connect the mount first', 'warn'); return; }
+            if (this.mount?.parked) { this.toast('Unpark the mount first', 'warn'); return; }
+            const ok = await this._confirmAsync(
+                'The mount will slew at full speed to point nearly straight up, so ' +
+                'you can rest a flat panel on the aperture. Tracking stops on arrival. ' +
+                'Make sure the slew path is clear of obstructions.',
+                {
+                    title: 'Point up for flats?',
+                    okLabel: 'Point up',
+                    cancelLabel: 'Cancel',
+                    danger: true   // full-speed slew
+                });
+            if (!ok) return;
+            await this._slewZenith(false);
+        },
+        async _slewZenith(force) {
+            try {
+                await this.apiPost('/api/telescope/slew-zenith', force ? { force: true } : {});
+                this.toast('Slewing to the flats position', 'info');
+            } catch (e) {
+                if (e && e.status === 409) {
+                    let info = {};
+                    try { info = JSON.parse(e.body || '{}'); } catch { /* ignore */ }
+                    const safety = info.kind === 'safety-stop';
+                    const msg = (info.reason || 'The mount safety guard flagged this slew.')
+                        + '\n\n' + (safety
+                            ? 'Running Find Home first is strongly recommended so the mount '
+                                + 'has a clean pointing model. Slew anyway?'
+                            : 'Continue anyway?');
+                    const proceed = await this._confirmAsync(msg, {
+                        title: safety ? 'Mount safety stop' : 'Confirm slew',
+                        okLabel: 'Slew anyway', cancelLabel: 'Cancel', danger: true
+                    });
+                    if (proceed) return this._slewZenith(true);
+                    return;
+                }
+                this.toast('Point up failed: ' + (e?.message || e), 'error');
+            }
+        },
+
         // Strain-wave-mount workaround. Drivers for the ZWO AM3 and
         // similar harmonic mounts lose their internal position
         // reference on every power cycle: a plain Find Home does
