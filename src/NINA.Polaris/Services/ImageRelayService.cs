@@ -333,12 +333,17 @@ public class ImageRelayService : IDisposable {
             (double)imageData.Data.Length * 2 / Math.Max(compressed.Length, 1),
             _clients.Count);
 
-        var rawFrame = new byte[4 + header.Length + compressed.Length];
-        BitConverter.GetBytes(header.Length).CopyTo(rawFrame, 0);
-        header.CopyTo(rawFrame, 4);
-        compressed.CopyTo(rawFrame, 4 + header.Length);
+        // MEMOPT: send the envelope as TWO WebSocket fragments instead of
+        // building one combined array. Concatenating used to allocate a second
+        // ~20 MB Large Object Heap block per frame purely to memcpy the payload
+        // into it, so 40 MB was live to deliver 20 MB — the exact kind of LOH
+        // churn that fragments the heap on a 1 GB SBC. The browser reassembles
+        // fragments into a single message event, so the client is unchanged.
+        var prefix = new byte[4 + header.Length];
+        BitConverter.GetBytes(header.Length).CopyTo(prefix, 0);
+        header.CopyTo(prefix, 4);
 
-        await BroadcastFrameAsync(rawFrame, ct);
+        await BroadcastFrameAsync(prefix, compressed, ct);
     }
 
     /// <summary>
@@ -481,7 +486,16 @@ public class ImageRelayService : IDisposable {
     /// /ws/image-stream client, with per-client back-pressure (skip a
     /// client still sending the previous frame) and dead-client reaping.
     /// Shared by the RAW (LIVE/PREVIEW) and JPEG (video) paths.</summary>
-    private async Task BroadcastFrameAsync(byte[] frame, CancellationToken ct) {
+    private Task BroadcastFrameAsync(byte[] frame, CancellationToken ct)
+        => BroadcastFrameAsync(frame, null, ct);
+
+    /// <summary>Fan a frame out to every client. When <paramref name="payload"/>
+    /// is non-null the frame is sent as TWO WebSocket fragments (prefix then
+    /// payload) so we never have to concatenate a second multi-MB buffer just
+    /// to hand it to SendAsync. Receivers see one reassembled message either
+    /// way. The per-client SendLock is held across both fragments, so they can
+    /// never interleave with another frame.</summary>
+    private async Task BroadcastFrameAsync(byte[] frame, byte[]? payload, CancellationToken ct) {
         var deadClients = new System.Collections.Concurrent.ConcurrentBag<string>();
 
         // Fan out CONCURRENTLY. This used to await each client in turn, so one
@@ -490,7 +504,7 @@ public class ImageRelayService : IDisposable {
         // a snap POST could sit for tens of seconds after the exposure was
         // already done. Each client has its own SendLock + skip-if-busy
         // backpressure, so they are independent by construction.
-        await Task.WhenAll(_clients.Select(kv => SendToClientAsync(kv.Key, kv.Value, frame, deadClients, ct)));
+        await Task.WhenAll(_clients.Select(kv => SendToClientAsync(kv.Key, kv.Value, frame, payload, deadClients, ct)));
 
         foreach (var id in deadClients) {
             _logger.LogInformation("Removing dead client: {Id}", id);
@@ -498,7 +512,7 @@ public class ImageRelayService : IDisposable {
         }
     }
 
-    private async Task SendToClientAsync(string id, ClientEntry entry, byte[] frame,
+    private async Task SendToClientAsync(string id, ClientEntry entry, byte[] frame, byte[]? payload,
                                          System.Collections.Concurrent.ConcurrentBag<string> deadClients,
                                          CancellationToken ct) {
             if (entry.Ws.State != WebSocketState.Open) {
@@ -531,7 +545,14 @@ public class ImageRelayService : IDisposable {
                 using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 sendCts.CancelAfter(SendTimeout);
                 var sendStart = DateTime.UtcNow;
-                await entry.Ws.SendAsync(frame, WebSocketMessageType.Binary, true, sendCts.Token);
+                if (payload == null) {
+                    await entry.Ws.SendAsync(frame, WebSocketMessageType.Binary, true, sendCts.Token);
+                } else {
+                    // Fragmented: header first (endOfMessage:false), then the
+                    // payload. The peer reassembles them into one message.
+                    await entry.Ws.SendAsync(frame, WebSocketMessageType.Binary, false, sendCts.Token);
+                    await entry.Ws.SendAsync(payload, WebSocketMessageType.Binary, true, sendCts.Token);
+                }
                 entry.LastSendDuration = DateTime.UtcNow - sendStart;
                 entry.ConsecutiveFailures = 0;
                 entry.SkippedFrames = 0;
