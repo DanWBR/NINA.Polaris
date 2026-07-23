@@ -79,7 +79,16 @@ public class ImageRelayService : IDisposable {
     /// LatestImage lifetime, replaced on every RelayImageAsync.</summary>
     public IImageData? LatestImageData => _latestImageData;
 
-    private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(10);
+    // A full-frame raw relay is BIG (a 4144x2822 16-bit sub is ~22 MB raw,
+    // ~19 MB after LZ4 — astro data barely compresses). On an SBC uplink that
+    // is also carrying the storage push (another ~23 MB per capture), 10 s was
+    // not enough to drain one frame: the send timed out, the client was
+    // dropped, and the browser kept showing the last frame that made it
+    // through — the preview looked frozen on a stale image while LIVE/STUDIO
+    // (small server-side JPEGs) stayed fine. Give a frame a realistic window;
+    // the per-client "skip if still sending" backpressure already stops a slow
+    // consumer from building a backlog, so a long timeout costs nothing.
+    private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(60);
     private const int MaxConsecutiveFailures = 3;
 
     public ImageRelayService(ILogger<ImageRelayService> logger) {
