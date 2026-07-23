@@ -124,6 +124,17 @@ public static class LiveStackEndpoints {
             return Results.Ok(stack.GetStatus());
         });
 
+        // Working-resolution options costed for the CAMERA THAT IS ATTACHED, so
+        // the UI can show the number and disable what does not fit instead of
+        // offering a setting that takes the host down mid-session.
+        group.MapGet("/binning-options", (LiveStackingService stack, ProfileService profiles) => {
+            return Results.Ok(new {
+                selected = profiles.ActiveEquipmentProfile?.LiveStackBinning ?? 0,  // 0 = auto
+                budgetMB = stack.StackBudgetMB,
+                options = stack.GetBinningOptions()
+            });
+        });
+
         group.MapGet("/preview", (LiveStackingService stack, ImageRelayService relay, int? quality) => {
             var jpeg = relay.GetLatestJpeg(quality ?? 85);
             if (jpeg == null)

@@ -293,6 +293,10 @@ function ninaApp() {
         // their frames). liveStackColorActive reflects whether colour is
         // actually engaged this session (server: ColorStacking + Bayered ref).
         liveStackColor: true,
+        liveStackBinning: 0,        // 0 = auto (Polaris picks until the user chooses)
+        liveStackBinOptions: [],    // [{bin, estimatedMB, fits, width, height}]
+        liveStackBinBudgetMB: 0,
+        liveStackAutoBin: 0,        // what auto resolved to, for the hint
         liveStackColorActive: false,
         // Per-pixel kappa-sigma outlier rejection on the live stack. Mirrors
         // the LIVE tab toggle; PUT /api/livestack/sigma-rejection updates the
@@ -19355,6 +19359,8 @@ function ninaApp() {
             }
             this.guideGain = rig.nativeGuideGain || 0;
             this.guideBin = rig.nativeGuideBin || 1;
+            this.liveStackBinning = rig.liveStackBinning || 0;
+            this.loadLiveStackBinOptions();
 
             // Auxiliary (second) camera + focuser + optics.
             this.auxCamera = rig.auxCamera || '';
@@ -26847,8 +26853,45 @@ function ninaApp() {
             return Array.from(set).sort((a, b) => a - b);
         },
         setGuideBin(v) {
-            this.guideBin = (Number(v) === 2) ? 2 : 1;
+            const n = Number(v);
+            this.guideBin = (n === 2 || n === 4) ? n : 1;
             this._persistRigSelection({ nativeGuideBin: this.guideBin });
+        },
+
+        // Bytes on the wire + in memory for one guide frame at the current
+        // binning. Surfaced next to the selector because a 4K guide sensor
+        // costs ~16.6 MB EVERY frame, continuously - the dominant fixed cost
+        // of a guiding session on a small-RAM SBC.
+        guideFrameMB() {
+            const w = this.guider?.cameraWidth || 0, h = this.guider?.cameraHeight || 0;
+            const b = Math.max(1, this.guideBin | 0);
+            if (w <= 0 || h <= 0) return 0;
+            return Math.round((w / b) * (h / b) * 2 / (1024 * 1024));
+        },
+
+        // Working-resolution options for the live stack, costed by the server
+        // for the camera that is actually attached (see /binning-options).
+        async loadLiveStackBinOptions() {
+            try {
+                const r = await this.apiGet('/api/livestack/binning-options');
+                if (!r) return;
+                this.liveStackBinOptions = r.options || [];
+                this.liveStackBinBudgetMB = r.budgetMB || 0;
+                if (this.liveStackBinning === 0) {
+                    const fit = this.liveStackBinOptions.find(o => o.fits);
+                    this.liveStackAutoBin = fit ? fit.bin : 0;
+                }
+            } catch (_) { /* optional panel data */ }
+        },
+
+        async saveLiveStackBinning() {
+            const v = Number(this.liveStackBinning) || 0;
+            this.liveStackBinning = v;
+            await this._persistRigSelection({ liveStackBinning: v });
+            this.loadLiveStackBinOptions();
+            this.toast(v === 0
+                ? 'Stacking resolution: Auto'
+                : 'Stacking resolution 1:' + v + ' (applies on the next stack Reset)');
         },
 
         // Connect/disconnect the native guide camera (its own switch on the

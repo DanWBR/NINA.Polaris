@@ -918,6 +918,19 @@ public class EquipmentProfile {
     /// colour EAA rig can opt in while a mono rig stays mono.</summary>
     public bool LiveStackColor { get; set; } = false;
 
+    /// <summary>Working resolution of the live stack: 1 = full, 2 = half,
+    /// 4 = quarter. <b>0 = auto</b>, which is the initial state: Polaris picks
+    /// the largest resolution whose working set fits the host's RAM, and the
+    /// moment the operator selects a value it sticks.
+    ///
+    /// <para>Every per-pixel buffer of a session scales with this: the count
+    /// buffer, the R/G/B accumulators and the eight scratch planes come to
+    /// ~38 bytes per pixel, so a 11.7 MP OSC frame needs ~440 MB at 1:1 and
+    /// ~110 MB at 1:2. This is the setting that decides whether live stacking
+    /// fits on a 1-1.5 GB SBC at all. Only the EAA PREVIEW is reduced — the
+    /// subs written to disk are always full resolution.</para></summary>
+    public int LiveStackBinning { get; set; } = 0;
+
     /// <summary>Per-pixel kappa-sigma outlier rejection on the live stack:
     /// drop cosmic rays / plane trails / dithered hot pixels instead of
     /// folding them into the running mean. Default OFF (extra CPU + a per-

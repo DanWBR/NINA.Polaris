@@ -308,6 +308,11 @@ public static class EquipmentEndpoints {
                     r.NativeGuideGain = update.NativeGuideGain;
                 if (update.NativeGuideBin > 0)
                     r.NativeGuideBin = Math.Clamp(update.NativeGuideBin, 1, 4);
+                // Live-stack working resolution: 0 = auto (Polaris picks), else
+                // 1/2/4. Anything else is ignored so a bad payload can't wedge
+                // the accumulator geometry.
+                if (update.LiveStackBinning is 0 or 1 or 2 or 4)
+                    r.LiveStackBinning = update.LiveStackBinning;
                 // New guide-scope metadata fields (RIGS tab card).
                 // Defensive: clamp aperture to a sane lower bound so
                 // a stray zero doesn't blow up the f-ratio calc on the UI.

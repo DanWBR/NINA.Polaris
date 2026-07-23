@@ -206,6 +206,11 @@ public class LiveStackingService {
     // Only buffers that are consumed inside AddFrameAsync may live here;
     // anything handed to the relay/writer escapes and must stay per-frame.
     // All are lazily sized on first use and nulled in Reset().
+    /// <summary>Working-resolution divisor locked for the current session
+    /// (0 = not resolved yet). Locked on the first frame so the accumulator
+    /// geometry can never change mid-stack; cleared by Reset.</summary>
+    private int _stackBin;
+
     private ushort[]? _scratchCal;
     private ushort[]? _dbR, _dbG, _dbB;
     private ushort[]? _warpR, _warpG, _warpB, _warpMono;
@@ -213,6 +218,132 @@ public class LiveStackingService {
 
     private static void EnsureScratch(ref ushort[]? buf, int length) {
         if (buf == null || buf.Length != length) buf = new ushort[length];
+    }
+
+    /// <summary>
+    /// Pick the live-stack working resolution when the operator left it on auto:
+    /// the largest resolution (smallest bin) whose per-pixel working set still
+    /// fits a slice of the machine's RAM.
+    ///
+    /// <para>A session costs roughly 38 bytes per pixel in colour (4 count + 12
+    /// RGB accumulators + 16 scratch planes + transient) and ~30 in mono, so an
+    /// 11.7 MP OSC frame is ~440 MB at 1:1 and a 26 MP one ~990 MB. Budgeting a
+    /// quarter of physical RAM keeps that from crowding out the capture path,
+    /// INDI and the OS — which is exactly what pushed a 1 GB board over.</para>
+    /// </summary>
+    /// <summary>Resolve the divisor for this session: the operator's per-rig
+    /// choice when they made one, otherwise the auto pick. Auto is only the
+    /// INITIAL state — once a value is stored it always wins.</summary>
+    private int ResolveStackBinning(ImageProperties props) {
+        var configured = _profiles?.ActiveEquipmentProfile?.LiveStackBinning ?? 0;
+        if (configured is 1 or 2 or 4) return configured;
+        bool colour = ColorStacking
+                      && props.BayerPattern != BayerPatternEnum.None
+                      && props.BayerPattern != BayerPatternEnum.Auto;
+        long ram = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+        return ResolveAutoBinning((long)props.Width * props.Height, colour, ram);
+    }
+
+    /// <summary>Per-pixel working-set cost of a live-stack session, in bytes.
+    /// Colour: 4 (count) + 12 (R/G/B accumulators) + 16 (scratch planes) + ~6
+    /// transient. Mono drops the two extra accumulators.</summary>
+    internal static long StackBytesPerPixel(bool colour) => colour ? 38 : 30;
+
+    /// <summary>
+    /// What each working-resolution option would COST for the camera that is
+    /// actually attached, so the UI can show the number and grey out the ones
+    /// that do not fit instead of letting the operator pick something that
+    /// takes the host down mid-session. Driven by the computed cost rather
+    /// than a blanket "low RAM" rule: a 1.2 MP guide-class sensor fits 1:1 on
+    /// any board, while a 26 MP OSC does not fit even on some big ones.
+    /// </summary>
+    public IReadOnlyList<StackBinningOption> GetBinningOptions() {
+        var cam = _equipment?.Camera;
+        long w = cam?.MaxX ?? 0, h = cam?.MaxY ?? 0;
+        if (w <= 0 || h <= 0) { w = _width; h = _height; }
+        long px = w * h;
+        bool colour = ColorStacking;
+        long ram = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+        long budget = Math.Max(96L * 1024 * 1024, ram / 4);
+        var list = new List<StackBinningOption>();
+        foreach (var bin in new[] { 1, 2, 4 }) {
+            long cost = px <= 0 ? 0 : px / ((long)bin * bin) * StackBytesPerPixel(colour);
+            list.Add(new StackBinningOption(
+                Bin: bin,
+                EstimatedMB: (int)(cost / (1024 * 1024)),
+                Fits: px <= 0 || cost <= budget,
+                Width: (int)(w / bin), Height: (int)(h / bin)));
+        }
+        return list;
+    }
+
+    /// <summary>Memory budget the options are measured against (MB).</summary>
+    public int StackBudgetMB =>
+        (int)(Math.Max(96L * 1024 * 1024,
+                       GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 4) / (1024 * 1024));
+
+    internal static int ResolveAutoBinning(long pixelCount, bool colour, long totalRamBytes) {
+        if (pixelCount <= 0) return 1;
+        long perPixel = colour ? 38 : 30;
+        long budget = Math.Max(96L * 1024 * 1024, totalRamBytes / 4);
+        foreach (var bin in new[] { 1, 2, 4 }) {
+            if (pixelCount / ((long)bin * bin) * perPixel <= budget) return bin;
+        }
+        return 4;
+    }
+
+    /// <summary>
+    /// Box-average the frame down by <paramref name="bin"/>. For a CFA frame the
+    /// reduction works on whole 2x2 Bayer cells and averages the pixels sharing a
+    /// cell position, so the output is still a valid mosaic with the SAME pattern
+    /// and everything downstream (debayer, warp, accumulate) keeps working
+    /// unchanged. Returns <paramref name="src"/> itself when bin &lt;= 1.
+    /// </summary>
+    internal static ushort[] BinFrame(ushort[] src, int w, int h, int bin, bool bayer,
+                                      out int newWidth, out int newHeight) {
+        newWidth = w; newHeight = h;
+        if (bin <= 1 || src == null || w <= 0 || h <= 0) return src!;
+
+        if (bayer) {
+            int cellsX = w / (2 * bin), cellsY = h / (2 * bin);
+            if (cellsX <= 0 || cellsY <= 0) return src;
+            newWidth = cellsX * 2; newHeight = cellsY * 2;
+            var dst = new ushort[newWidth * newHeight];
+            int n = bin * bin;
+            for (int cy = 0; cy < cellsY; cy++) {
+                for (int cx = 0; cx < cellsX; cx++) {
+                    // q walks the 4 positions inside the Bayer cell (R,G,G,B).
+                    for (int q = 0; q < 4; q++) {
+                        int qy = q >> 1, qx = q & 1;
+                        int sum = 0;
+                        for (int by = 0; by < bin; by++) {
+                            int rowBase = ((cy * bin + by) * 2 + qy) * w + qx;
+                            for (int bx = 0; bx < bin; bx++) {
+                                sum += src[rowBase + (cx * bin + bx) * 2];
+                            }
+                        }
+                        dst[(cy * 2 + qy) * newWidth + cx * 2 + qx] = (ushort)(sum / n);
+                    }
+                }
+            }
+            return dst;
+        }
+
+        newWidth = w / bin; newHeight = h / bin;
+        if (newWidth <= 0 || newHeight <= 0) { newWidth = w; newHeight = h; return src; }
+        var outp = new ushort[newWidth * newHeight];
+        int cnt = bin * bin;
+        for (int y = 0; y < newHeight; y++) {
+            for (int x = 0; x < newWidth; x++) {
+                int sum = 0;
+                for (int by = 0; by < bin; by++) {
+                    int rb = (y * bin + by) * w + x * bin;
+                    for (int bx = 0; bx < bin; bx++) sum += src[rb + bx];
+                }
+                outp[y * newWidth + x] = (ushort)(sum / cnt);
+            }
+        }
+        return outp;
     }
 
     /// <summary>Count of individual pixel samples rejected as outliers during
@@ -550,6 +681,9 @@ public class LiveStackingService {
         lock (_lock) {
             _stackBuffer = null;
             _countBuffer = null;
+            // Re-resolve the working resolution on the next session (the rig or
+            // the operator's choice may have changed since).
+            _stackBin = 0;
             _stackR = null;
             _stackG = null;
             _stackB = null;
@@ -830,6 +964,34 @@ public class LiveStackingService {
         if (mode == StackMode.Full && preProcSettings.BgeEnabled
                 && _graxpert != null && !_serverBgeUnavailable) {
             data = await ApplyServerBgeAsync(data, props, imageData.MetaData, preProcSettings, ct);
+        }
+
+        // MEMOPT3: reduce the WORKING resolution of the stack. Every per-pixel
+        // buffer of a session (count, R/G/B accumulators, the eight scratch
+        // planes) scales with this, ~38 B/px in colour — 440 MB for an 11.7 MP
+        // OSC frame at 1:1, ~990 MB for a 26 MP one, which simply does not fit
+        // a 1-1.5 GB SBC. Binning happens AFTER calibration/BGE (their masters
+        // are full-resolution) and AFTER SaveFrameIfEnabled, so the subs on disk
+        // are always full res — only the EAA preview is reduced. Star detection
+        // and alignment also get ~bin^2 cheaper, which helps the SBC keep
+        // cadence. Reassigning `props` propagates the new size to everything
+        // downstream, which all reads props.Width/Height.
+        if (_stackBin <= 0) {
+            _stackBin = ResolveStackBinning(props);
+            if (_stackBin > 1) {
+                _logger.LogInformation(
+                    "Live stack: working resolution 1:{Bin} ({W}x{H} -> {NW}x{NH}){Auto}",
+                    _stackBin, props.Width, props.Height,
+                    props.Width / _stackBin, props.Height / _stackBin,
+                    (_profiles?.ActiveEquipmentProfile?.LiveStackBinning ?? 0) <= 0 ? " [auto]" : "");
+            }
+        }
+        if (_stackBin > 1) {
+            bool isBayer = props.BayerPattern != BayerPatternEnum.None
+                        && props.BayerPattern != BayerPatternEnum.Auto;
+            data = BinFrame(data, props.Width, props.Height, _stackBin, isBayer,
+                            out int binW, out int binH);
+            props = props with { Width = binW, Height = binH };
         }
 
         // StarDetector runs in BOTH modes:
@@ -1584,3 +1746,14 @@ public class LiveStackingService {
         public DateTime? LastRejectAt { get; set; }
     }
 }
+/// <summary>One live-stack working-resolution choice, costed for the camera
+/// that is actually attached. <c>Fits</c> is false when the session's per-pixel
+/// working set would exceed the memory budget — the UI greys those out with the
+/// numbers instead of letting the operator pick something that takes the host
+/// down mid-session.</summary>
+/// <param name="Bin">1 = full, 2 = half, 4 = quarter.</param>
+/// <param name="EstimatedMB">Approximate working set for a session at this bin.</param>
+/// <param name="Fits">Whether it stays inside the budget.</param>
+/// <param name="Width">Resulting stack width in pixels.</param>
+/// <param name="Height">Resulting stack height in pixels.</param>
+public record StackBinningOption(int Bin, int EstimatedMB, bool Fits, int Width, int Height);

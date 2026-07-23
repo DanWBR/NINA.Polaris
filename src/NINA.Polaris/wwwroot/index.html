@@ -1340,6 +1340,41 @@
                                 </span>
                             </template>
                         </label>
+                        <!-- Working resolution. EVERY per-pixel buffer of a
+                             session scales with this (~38 B/px in colour), so
+                             it is what decides whether live stacking fits the
+                             host at all. Options that do not fit are disabled
+                             with the numbers, rather than offered and then
+                             taking the machine down mid-session. Subs on disk
+                             are always full resolution. -->
+                        <div style="padding-bottom:10px">
+                            <div class="text-secondary" style="font-size:13px; margin-bottom:6px">
+                                Stacking resolution
+                            </div>
+                            <select class="input" x-model.number="liveStackBinning"
+                                    @change="saveLiveStackBinning()">
+                                <option :value="0">Auto<template x-if="liveStackAutoBin">
+                                    <span></span></template></option>
+                                <template x-for="o in (liveStackBinOptions || [])" :key="o.bin">
+                                    <option :value="o.bin" :disabled="!o.fits"
+                                            x-text="(o.bin === 1 ? '1:1 Full' : o.bin === 2 ? '1:2 Half' : '1:4 Quarter')
+                                                    + '  ' + o.width + 'x' + o.height
+                                                    + '  ~' + o.estimatedMB + ' MB'
+                                                    + (o.fits ? '' : '  (does not fit)')"></option>
+                                </template>
+                            </select>
+                            <div class="text-muted" style="font-size:11px; margin-top:4px"
+                                 x-show="liveStackBinning === 0 && liveStackAutoBin">
+                                Auto picked <span x-text="'1:' + liveStackAutoBin"></span>
+                                for this camera on this machine.
+                            </div>
+                            <div class="text-warn" style="font-size:11px; margin-top:4px"
+                                 x-show="(liveStackBinOptions || []).some(o => !o.fits)">
+                                ⚠ Greyed-out options need more memory than this machine can
+                                spare (budget ~<span x-text="liveStackBinBudgetMB"></span> MB).
+                                Only the live view is reduced; saved frames stay full resolution.
+                            </div>
+                        </div>
                         <!-- Save-frames is on but no image output folder is set,
                              so every frame is silently dropped. Tell the user
                              instead of letting them find an empty lights/ folder
@@ -4789,8 +4824,23 @@
                                :max="(guideCameraGainMax || 0) > 0 ? guideCameraGainMax : null"
                                step="1" class="input-sm" style="width:5em"
                                title="Guide-camera gain: type the value (camera range used as limits when reported)"></label>
-                    <label class="gb-check" x-show="guiderDriver === 'native'"><input type="checkbox"
-                               :checked="guideBin === 2" @change="setGuideBin($event.target.checked ? 2 : 1)"> Bin 2x2</label>
+                    <!-- Guide binning. A big guide sensor costs real memory per
+                         frame (a 4K guider is ~16.6 MB each), so show the cost
+                         and let the operator judge. NOT blocked: on a small
+                         guide sensor bin 1 is cheap, and a hard limit here
+                         could cost the whole session. -->
+                    <label class="gb-check" x-show="guiderDriver === 'native'"
+                           :title="'Guide frame ~' + guideFrameMB() + ' MB at the current binning'">
+                        Bin
+                        <select class="input-sm" style="width:5.5em" x-model.number="guideBin"
+                                @change="setGuideBin(guideBin)">
+                            <option :value="1">1x1</option>
+                            <option :value="2">2x2</option>
+                            <option :value="4">4x4</option>
+                        </select>
+                        <span class="text-muted" x-show="guideFrameMB() >= 4"
+                              x-text="'~' + guideFrameMB() + ' MB/frame'"></span>
+                    </label>
                     <button class="btn btn-sm" @click="guiderLoop()" :disabled="guider.looping">Loop</button>
                     <button class="btn btn-sm btn-primary" @click="guiderStart()" :disabled="guider.guiding || guider.calibrating">Start Guiding</button>
                     <button class="btn btn-sm" @click="guiderFindStar()" :disabled="guider.guiding">Auto-select Star</button>
