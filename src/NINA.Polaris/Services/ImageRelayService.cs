@@ -482,12 +482,28 @@ public class ImageRelayService : IDisposable {
     /// client still sending the previous frame) and dead-client reaping.
     /// Shared by the RAW (LIVE/PREVIEW) and JPEG (video) paths.</summary>
     private async Task BroadcastFrameAsync(byte[] frame, CancellationToken ct) {
-        var deadClients = new List<string>();
+        var deadClients = new System.Collections.Concurrent.ConcurrentBag<string>();
 
-        foreach (var (id, entry) in _clients) {
+        // Fan out CONCURRENTLY. This used to await each client in turn, so one
+        // slow consumer (a tablet on WiFi pulling a ~19 MB raw frame) delayed
+        // every other client AND the capture request that awaits this relay -
+        // a snap POST could sit for tens of seconds after the exposure was
+        // already done. Each client has its own SendLock + skip-if-busy
+        // backpressure, so they are independent by construction.
+        await Task.WhenAll(_clients.Select(kv => SendToClientAsync(kv.Key, kv.Value, frame, deadClients, ct)));
+
+        foreach (var id in deadClients) {
+            _logger.LogInformation("Removing dead client: {Id}", id);
+            UnregisterClient(id);
+        }
+    }
+
+    private async Task SendToClientAsync(string id, ClientEntry entry, byte[] frame,
+                                         System.Collections.Concurrent.ConcurrentBag<string> deadClients,
+                                         CancellationToken ct) {
             if (entry.Ws.State != WebSocketState.Open) {
                 deadClients.Add(id);
-                continue;
+                return;
             }
 
             // Skip clients that are still sending the previous frame
@@ -501,14 +517,14 @@ public class ImageRelayService : IDisposable {
                 acquired = entry.SendLock.Wait(0);
             } catch (ObjectDisposedException) {
                 deadClients.Add(id);
-                continue;
+                return;
             }
             if (!acquired) {
                 entry.SkippedFrames++;
                 if (entry.SkippedFrames % 10 == 0) {
                     _logger.LogWarning("Client {Id} skipped {Count} frames (slow consumer)", id, entry.SkippedFrames);
                 }
-                continue;
+                return;
             }
 
             try {
@@ -539,12 +555,6 @@ public class ImageRelayService : IDisposable {
                 // guard anyway so a teardown race never escapes the relay.
                 try { entry.SendLock.Release(); } catch (ObjectDisposedException) { }
             }
-        }
-
-        foreach (var id in deadClients) {
-            _logger.LogInformation("Removing dead client: {Id}", id);
-            UnregisterClient(id);
-        }
     }
 
     public byte[]? GetLatestJpeg(int quality = 85) {

@@ -485,7 +485,17 @@ catch { /* non-fatal */ }
 // they're unaffected.
 if (httpRedirect) {
     app.Use(async (ctx, next) => {
-        if (!ctx.Request.IsHttps) {
+        // NEVER redirect loopback. The plaintext HTTP port is the documented
+        // INTERNAL channel: the relay tunnel replays browser requests against
+        // http://127.0.0.1:{Server:Http:Port}, and host-local scripts
+        // (polarispy) call the same API there. Bouncing those to HTTPS handed
+        // them a 307 instead of the real response - it silently broke the relay
+        // and produced the "POST /api/script/.../dialog -> HTTP 307" script
+        // failure. Loopback is already auth-exempt (AuthMiddleware), so this
+        // keeps the two consistent.
+        var remote = ctx.Connection.RemoteIpAddress;
+        var isLoopback = remote == null || System.Net.IPAddress.IsLoopback(remote);
+        if (!ctx.Request.IsHttps && !isLoopback) {
             var host = ctx.Request.Host.Host;
             var portSuffix = httpsPort == 443 ? "" : $":{httpsPort}";
             var location = $"https://{host}{portSuffix}{ctx.Request.Path}{ctx.Request.QueryString}";
