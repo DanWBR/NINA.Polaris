@@ -1607,7 +1607,7 @@ function ninaApp() {
         // local mirror of the IndiWeb:AutoStart config flag persisted
         // via /api/system/settings (same plumbing as PHD2 auto-start).
         indiWeb: { status: null, autoStart: false, busy: false, iframeSrc: 'about:blank',
-                   drivers: [], watchdog: null },
+                   watchdog: null },
         // INDI Control Panel sub-tab in RIGS. The launch button posts
         // /api/indi/cp/launch which uses `xpra control :100 start-child
         // indi_control_panel` to spawn the binary inside the same xpra
@@ -34729,22 +34729,13 @@ function ninaApp() {
             // returns OK, and we cache-bust the URL so each (re)load is a real
             // navigation.
             this.indiWebEnsureIframe(false);
-            // Running-driver list + watchdog status power the per-driver restart
-            // panel; only meaningful once indi-web owns a running server.
+            // The auto-restart watchdog status drives the toggle; only
+            // meaningful once indi-web owns a running server.
             if (this.indiWeb.status?.running) {
-                this.indiWebLoadDrivers();
                 this.indiWebLoadWatchdog();
-            } else {
-                this.indiWeb.drivers = [];
             }
         },
 
-        async indiWebLoadDrivers() {
-            try {
-                const r = await this.apiGet('/api/indi/web/drivers');
-                this.indiWeb.drivers = r?.running || [];
-            } catch { this.indiWeb.drivers = []; }
-        },
         async indiWebLoadWatchdog() {
             try { this.indiWeb.watchdog = await this.apiGet('/api/indi/web/watchdog'); }
             catch { /* leave last-known */ }
@@ -34755,22 +34746,6 @@ function ninaApp() {
                 this.toast('Driver watchdog ' + (value ? 'enabled' : 'disabled'), 'ok');
             } catch (e) { this.toast('Watchdog toggle failed: ' + (e.message || e), 'error'); }
         },
-        async indiWebRestartDriver(label) {
-            if (this.indiWeb.busy) return;
-            this.indiWeb.busy = true;
-            try {
-                const r = await this.apiPost('/api/indi/web/drivers/' + encodeURIComponent(label) + '/restart');
-                if (r?.ok) this.toast("Restarted driver '" + label + "'", 'ok');
-                else this.toast('Restart failed: ' + (r?.error || 'unknown'), 'error');
-            } catch (e) {
-                this.toast('Restart failed: ' + (e.message || e), 'error');
-            } finally {
-                this.indiWeb.busy = false;
-                await this.indiWebLoadDrivers();
-                await this.indiWebLoadWatchdog();
-            }
-        },
-
         // Credentialed readiness probe + cache-busting iframe (re)load for the
         // embedded indi-web panel. Mirrors phd2GuiProbeReady / _reloadPhd2GuiIframe.
         //   force=false: only (re)load when the iframe is currently blank

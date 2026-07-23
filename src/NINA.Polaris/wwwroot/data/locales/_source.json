@@ -1945,7 +1945,7 @@
   "Restarted driver '": "",
   "Restarting Polaris… reconnecting shortly": "",
   "Restarting…": "",
-  "Restarts a single wedged INDI driver (e.g. a camera that stopped delivering frames) without dropping the others. Auto-restart fires after repeated capture timeouts, rate-limited.": "",
+  "Restarts a single wedged INDI driver (e.g. a camera that stopped delivering frames) without dropping the others, after repeated capture timeouts, rate-limited. To start, stop, or restart a driver by hand, use the indi-web panel below.": "",
   "Restrict sharpening by measured local signal-to-noise (photon-transfer σ map) rather than a flat background-noise threshold.": "",
   "Resume": "",
   "Resume failed": "",

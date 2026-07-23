@@ -2398,7 +2398,7 @@
   "Restarted driver '": "Driver reiniciado '",
   "Restarting Polaris… reconnecting shortly": "Reiniciando o Polaris… reconectando em breve",
   "Restarting…": "Reiniciando…",
-  "Restarts a single wedged INDI driver (e.g. a camera that stopped delivering frames) without dropping the others. Auto-restart fires after repeated capture timeouts, rate-limited.": "Reinicia um único driver INDI travado (ex.: uma câmera que parou de entregar frames) sem derrubar os outros. O reinício automático dispara após timeouts de captura repetidos, com limite de frequência.",
+  "Restarts a single wedged INDI driver (e.g. a camera that stopped delivering frames) without dropping the others, after repeated capture timeouts, rate-limited. To start, stop, or restart a driver by hand, use the indi-web panel below.": "Reinicia um único driver INDI travado (ex.: uma câmera que parou de entregar frames) sem derrubar os outros, após timeouts de captura repetidos, com limite de frequência. Para iniciar, parar ou reiniciar um driver manualmente, use o painel do indi-web abaixo.",
   "restarts on the new version: no password needed.": "reinicia na nova versão: sem necessidade de senha.",
   "Restrict sharpening by measured local signal-to-noise (photon-transfer σ map) rather than a flat background-noise threshold.": "Restringir o aumento de nitidez com base na relação sinal-ruído local medida (mapa σ de transferência de fótons), em vez de um limiar fixo de ruído de fundo.",
   "Resume": "Retomar",

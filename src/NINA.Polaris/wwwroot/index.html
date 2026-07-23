@@ -7317,9 +7317,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </div>
                         </div>
 
-                        <!-- Wedged-driver watchdog + one-click per-driver
-                             restart. A stuck driver (dropped BLOB) is cured by
-                             bouncing just that driver, not a device reconnect. -->
+                        <!-- Wedged-driver watchdog: monitors the running INDI
+                             drivers and auto-restarts one that stops delivering
+                             (dropped BLOB) without dropping the others. Manual
+                             per-driver restart lives in the indi-web panel
+                             below, so no separate driver list is needed here. -->
                         <div x-show="indiWeb.status?.running" style="margin:10px 0;padding:10px;
                              background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;">
                             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -7329,32 +7331,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                            @change="indiWebWatchdogToggle($event.target.checked)">
                                     <span x-text="indiWeb.watchdog?.enabled ? 'Auto-restart on' : 'Auto-restart off'"></span>
                                 </label>
-                                <span style="flex:1"></span>
-                                <button class="btn btn-sm" @click="indiWebLoadDrivers()" :disabled="indiWeb.busy"
-                                        title="Refresh the running-driver list">⟳ Drivers</button>
                             </div>
                             <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
                                 Restarts a single wedged INDI driver (e.g. a camera that stopped
-                                delivering frames) without dropping the others. Auto-restart fires
-                                after repeated capture timeouts, rate-limited.
+                                delivering frames) without dropping the others, after repeated
+                                capture timeouts, rate-limited. To start, stop, or restart a
+                                driver by hand, use the indi-web panel below.
                             </div>
                             <div x-show="indiWeb.watchdog?.lastAction" style="font-size:11px;margin-top:4px;"
                                  x-text="indiWeb.watchdog?.lastAction
                                     ? ('Last: ' + (indiWeb.watchdog.lastAction.driverLabel || indiWeb.watchdog.lastAction.device) + ' → ' + indiWeb.watchdog.lastAction.result)
                                     : ''"></div>
-                            <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px;">
-                                <template x-for="d in (indiWeb.drivers || [])" :key="d">
-                                    <div style="display:flex;align-items:center;gap:8px;">
-                                        <span style="flex:1;font-size:12px;" x-text="d"></span>
-                                        <button class="btn btn-sm" @click="indiWebRestartDriver(d)"
-                                                :disabled="indiWeb.busy"
-                                                title="Restart just this driver">↻ Restart</button>
-                                    </div>
-                                </template>
-                                <div x-show="(indiWeb.drivers || []).length === 0" style="font-size:12px;color:var(--text-muted);">
-                                    No drivers running (start one from the panel below).
-                                </div>
-                            </div>
                         </div>
 
                         <!-- Iframe (only mounted when running so we
@@ -18711,7 +18698,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260723-zenith"></script>
+    <script src="/js/app.js?v=20260723-indidrvlist"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>
