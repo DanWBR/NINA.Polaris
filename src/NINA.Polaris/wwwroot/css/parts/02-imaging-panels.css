@@ -1442,6 +1442,20 @@ label select.input-sm {
     min-width: 180px;
 }
 
+/* Opt out of the 180px floor above for selects whose options are short
+   FIXED tokens ("1x1" / "2x2" / "4x4", "L" / "R" / "G" / "B"), where the
+   floor buys nothing and just leaves a wide expanse of empty box next to
+   its label. Only the floor is released - the element still takes its
+   width from the inline/utility width beside it, because min-width
+   always beats width and that is what defeated the inline sizing here.
+   Do NOT reach for this on device/target pickers: those carry
+   variable-length text and the floor is what keeps them readable. */
+label > select.input-sm.select-compact,
+label select.input-sm.select-compact {
+    width: auto;
+    min-width: 0;
+}
+
 .search-input {
     flex: 1;
     /* Same tap-friendly height as .input-sm / .input-md (~38 px). */

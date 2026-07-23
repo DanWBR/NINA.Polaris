@@ -43,7 +43,7 @@
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260723-badgecaps">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260723-nofilter">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260723-binselect">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260710-toolrails">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260712-guidetab1">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260712-fieldbugs1">
@@ -4837,7 +4837,7 @@
                     <label class="gb-check" x-show="guiderDriver === 'native'"
                            :title="'Guide frame ~' + guideFrameMB() + ' MB at the current binning'">
                         Bin
-                        <select class="input-sm" style="width:5.5em" x-model.number="guideBin"
+                        <select class="input-sm select-compact" style="width:5.5em" x-model.number="guideBin"
                                 @change="setGuideBin(guideBin)">
                             <option :value="1">1x1</option>
                             <option :value="2">2x2</option>
