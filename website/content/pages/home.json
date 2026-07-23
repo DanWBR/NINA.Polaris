@@ -97,6 +97,17 @@
     "sub": "The built-in benchmark reports a single Polaris score so you can pick a board. Higher is better. Figures below are Release builds.",
     "rows": [
       {
+        "device": "Orange Pi Zero 3 (Allwinner H618)",
+        "url": "http://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-Zero-3.html",
+        "cores": "4 cores",
+        "score": "45",
+        "stacking": "6.9 Mpx/s",
+        "capture": "7.4 Mpx/s",
+        "memory": "10.4 GB/s",
+        "price": "$20-35",
+        "highlight": false
+      },
+      {
         "device": "Raspberry Pi 4 Model B",
         "url": "https://www.raspberrypi.com/products/raspberry-pi-4-model-b/",
         "cores": "4 cores",
@@ -163,7 +174,7 @@
         "highlight": false
       }
     ],
-    "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. The Orange Pi 5 Pro is shown with the OpenCL GPU backend on (242; 227 CPU only) and the Pi 5 at its best, actively cooled run. The Radxa Dragon Q6A is the fastest SBC here and the best value, and runs CPU-only (its Adreno GPU is a net loss). Prices are rough street estimates for the board alone (no SD card, power, or case); the Core i9 row is a full desktop build for reference, not an SBC. Full per-device tables and methodology in the benchmark docs.",
+    "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. The Orange Pi 5 Pro is shown with the OpenCL GPU backend on (242; 227 CPU only) and the Pi 5 at its best, actively cooled run. The Radxa Dragon Q6A is the fastest SBC here and the best value, and runs CPU-only (its Adreno GPU is a net loss). Prices are rough street estimates for the board alone (no SD card, power, or case); the Core i9 row is a full desktop build for reference, not an SBC. The Orange Pi Zero 3 is the entry point: it shows Polaris runs on a 1.5 GB board (its Mali-G31 GPU is a net loss too, so it runs CPU-only). Full per-device tables and methodology in the benchmark docs.",
     "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"
   },
   "comparison": {

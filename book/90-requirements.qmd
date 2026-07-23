@@ -357,6 +357,14 @@ the stacking, is what dominates. On the smallest boards prefer the
 client-side WebAssembly offload, which moves the per-pixel cost into the
 browser entirely.
 
+The smallest board verified so far is a **1.5 GB Orange Pi Zero 3**
+(Allwinner H618, Polaris score ~45): capture, guiding, plate solving and
+the sequencer all run, with live stacking relying on Auto to pick a
+smaller bin. It is proof the app fits a tiny board, not a recommendation
+to buy one; a 4 GB board is a far nicer experience. Note also that GPU
+offload does not help on these small Mali GPUs (the Zero 3's Mali-G31
+measured 0.77x overall, a net loss), so leave the GPU toggle off there.
+
 ## Browser requirements
 
 The client is any modern browser:

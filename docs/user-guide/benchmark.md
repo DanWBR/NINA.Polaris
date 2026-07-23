@@ -1,7 +1,8 @@
 # Hardware benchmark
 
-Polaris runs on a wide range of computers: Raspberry Pi 4 / 5, Orange Pi
-4 Pro, Orange Pi 5 Pro, Radxa Dragon Q6A, x86 mini-PCs and PC sticks, and more. They differ a lot in how
+Polaris runs on a wide range of computers: from a 1.5 GB Orange Pi
+Zero 3 up through the Raspberry Pi 4 / 5, Orange Pi 4 Pro, Orange Pi
+5 Pro, Radxa Dragon Q6A, x86 mini-PCs and PC sticks, and more. They differ a lot in how
 fast they can stack frames and encode the live video stream. The
 **Hardware Benchmark** (Settings → Hardware benchmark) measures your
 machine so you can compare boards and pick the right one for your rig.
@@ -247,6 +248,36 @@ NVIDIA GeForce RTX 5070. Run: 2026-06-12 (Release build - see note).
 > **Debug** scored ~348 - roughly half. The SBC numbers above all come from the
 > Release `.deb`, so compare against the Release figure. Always benchmark a
 > Release build for cross-board comparison.
+
+### Orange Pi Zero 3 (4 cores, Allwinner H618)
+
+Run: 2026-07-23 (three consecutive runs, 43 / 45 / 46). The entry-level
+board here, and the point is that it **works**: Polaris installs and runs
+on a **1.5 GB** SBC. The score is low and live stacking needs the Auto
+resolution to pick a smaller bin (see the memory notes in
+[live-stacking.md](live-stacking.md#stacking-resolution-and-memory)), but
+capture, guiding, plate solving and the sequencer are all usable.
+
+| Metric | Value |
+|---|---|
+| **Polaris score** | **45** |
+| Stacking throughput | 0.41 fps · 6.9 Mpx/s (16.78 MP frames) |
+| Stacking detect / align / resample / stats | 684.96 / 15.2 / 960.73 / 781.85 ms |
+| Capture/video throughput | 0.44 fps · 7.4 Mpx/s |
+| Debayer / JPEG / LZ4 | 504.15 / 1683.14 / 70.62 ms (LZ4 453.1 MB/s) |
+| CPU single / multi-thread | 628 / 2281 MFLOPS (3.63× scaling) |
+| Memory bandwidth | 10.4 GB/s |
+| Thermal | 43.2 → 53.8 °C, no throttling (1.42 GHz held) |
+
+**GPU is a net loss here (leave it off).** The Mali-G31 MP2 measured
+warp 0.4×, debayer 0.32×, blur 3.53×, overall **0.77×** (geo-mean),
+same story as the Radxa Q6A: only the blur beats the CPU, so the
+geo-mean is below 1. Interesting detail for tinkerers: OpenCL does work
+on this board through **Mesa rusticl on the open Panfrost driver**
+(`sudo apt install mesa-opencl-icd` + `RUSTICL_ENABLE=panfrost`), with no
+proprietary libmali or vendor BSP kernel needed. The device shows up as
+`OpenCL: Mali-G31 (Panfrost)` (1 compute unit, 800 MHz). It just is not
+worth using for this pipeline.
 
 ### x86 PC stick
 
