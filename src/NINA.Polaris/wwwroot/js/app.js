@@ -7693,6 +7693,13 @@ function ninaApp() {
             this.histo.avg = Math.round(avg);
             this.histo.std = Math.round(std);
             this.histo._maxVal = maxVal;
+            // TRUE full scale of the data, which is NOT always maxVal: the
+            // bit-depth probe in _renderRawFrame may clamp maxVal down to the
+            // observed range, and binning against that made the un-zoomed
+            // histogram cover 0..maxVal instead of 0..65535 - a permanent zoom
+            // the operator never asked for. A JPEG-derived luminance really is
+            // 0..255 display space, so there full scale IS maxVal.
+            this.histo._fullScale = hasRaw ? ((1 << (f.bitDepth || 16)) - 1) : maxVal;
             this.histo._autoBlack = Math.max(0, Math.min(1, ap.shadow / maxVal));
             this.histo._autoWhite = Math.max(0, Math.min(1, aWhite / maxVal));
             this.histo._autoMid = ap.midtone;
@@ -7721,6 +7728,7 @@ function ninaApp() {
             this.histo.avg = Math.round(ls.colorHistMean || 0);
             this.histo.std = Math.round(ls.colorHistStd || 0);
             this.histo._maxVal = maxVal;
+            this.histo._fullScale = maxVal;   // server bins already span 0..65535
             // Server already stretched the JPEG → keep the handles at identity.
             this.histo._autoBlack = 0;
             this.histo._autoWhite = 1;
@@ -7771,8 +7779,14 @@ function ninaApp() {
                 this.histo.dispLo = Math.max(0, lo);
                 this.histo.dispHi = Math.min(1, Math.max(this.histo.dispLo + 0.05, hi));
             } else {
+                // Zoom off means STATIC and FULL RANGE. dispHi is expressed in
+                // bin-fraction space, so when maxVal was clamped below the real
+                // full scale we open past 1.0 - the bins then occupy only their
+                // true share of the width and histoAxisLabel lands on 0 /
+                // 32768 / 65535 by construction.
+                const full = this.histo._fullScale || maxV;
                 this.histo.dispLo = 0;
-                this.histo.dispHi = 1;
+                this.histo.dispHi = maxV > 0 ? Math.max(1, full / maxV) : 1;
             }
         },
 
