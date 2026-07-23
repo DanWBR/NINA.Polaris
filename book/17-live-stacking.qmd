@@ -43,8 +43,9 @@ running statistics along the bottom.](images/live-view.jpg){#fig-live-stacking}
 ## Controls
 
 The right sidebar is split top to bottom: the capture inputs (Exp,
-Gain, Bin, Filter) at the top, the Polaris Shutter centered in the
-middle, and the session readout plus secondary buttons at the bottom.
+Gain, Bin, Filter) at the top followed by **Stacking resolution** (see
+@sec-stacking-resolution), the Polaris Shutter centered in the middle,
+and the session readout plus secondary buttons at the bottom.
 The shutter owns the whole live-stack lifecycle, ASIAIR-style — there is
 no separate Stack toggle. Tapping the shutter arms stacking and starts
 the LIVE loop: a fresh, empty stack starts silently, while a stopped
@@ -77,6 +78,67 @@ For one-shot-colour (OSC) cameras, colour live stacking is automatic.
 There is no mono/colour toggle; the stacker debayers each frame
 (converts the sensor's raw colour-filter mosaic into a full-colour
 image) and integrates in colour by default.
+
+## Stacking resolution and memory {#sec-stacking-resolution}
+
+Live stacking is the most memory-hungry thing Polaris does, because
+every per-pixel buffer of the session exists at once: the frame count,
+the R/G/B accumulators, the variance terms, and the scratch planes used
+for debayer and alignment. That comes to roughly 38 bytes per pixel in
+colour and 30 in mono. On a 26 MP sensor those 38 bytes per pixel are
+the difference between a session that runs all night and a host that
+gets killed at 3 a.m.
+
+**Stacking resolution** (in the sidebar, just under the Bin buttons)
+decides how much the frame is reduced *before* it enters the stack:
+
+- **Auto** picks the finest resolution that fits the host's memory
+  budget, per camera and per machine. This is the default and it is
+  usually right.
+- **1:1 Full**, **1:2 Half**, **1:4 Quarter** override that choice. Your
+  pick is remembered for that camera on that machine.
+
+Each option shows its output dimensions and its estimated cost, and
+options that do not fit the budget are greyed out rather than offered
+and then taking the host down mid-session.
+
+This setting reduces **only the live view**. Frames saved to disk are
+always written at full sensor resolution, so the subs you keep for
+later processing are never degraded by a choice made here.
+
+### What it actually saves
+
+Measured on an OrangePi 5 Pro (4 GB) with an 11.7 MP OSC camera, total
+resident memory of the Polaris process during a live-stack session:
+
+| Stacking resolution | Total RSS | Cost of the stack itself |
+|---|---|---|
+| 1:1 Full | 903 MB | ~530 MB |
+| 1:2 Half | 450 MB | ~80 MB |
+| 1:4 Quarter | 400 MB | ~30 MB |
+
+The important number is the one that does *not* move: about **370 MB**
+of that total is the host itself (the .NET runtime, the camera and mount
+drivers, catalog caches, preview buffers). No stacking resolution can
+reduce it. Only the second column responds to this setting.
+
+Two things follow from that, and both are practical:
+
+**1:4 is rarely worth it.** It saves about 50 MB over 1:2 while throwing
+away four times the resolution. Reach for it only when 1:2 genuinely
+does not fit, which is what Auto already decides for you. If you are
+choosing by hand, 1:2 is almost always the better trade.
+
+**Judge a board by the second column, not the first.** A 4 GB board runs
+11 MP at 1:1 with room to spare. A 1 GB board cannot, but it is not the
+stacking that fails first: the fixed floor already consumes a third of
+its RAM. On boards in the 1 to 2 GB range, let Auto choose, and expect
+it to land on 1:2.
+
+These figures scale with pixel count, not with sensor size in
+millimetres. A 26 MP camera costs roughly 2.2 times the 11.7 MP numbers
+in the second column, which is why a big OSC can fail to fit 1:1 even on
+a board where a guide-class sensor fits trivially.
 
 ## The stats bar
 

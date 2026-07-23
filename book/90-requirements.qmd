@@ -319,11 +319,43 @@ airlock of a Mars colony.
 | --- | --- | --- |
 | **Raspberry Pi 5 (8 GB)** | Recommended | No compromises. Live stacking plus simultaneous STUDIO jobs are fine. |
 | **Raspberry Pi 4 (4 GB / 8 GB)** | Workhorse | The default target. The PHD2 GUI embed works; client-side WebAssembly live-stack offload takes the heavy math off the Pi. |
-| **Raspberry Pi 3 (1 GB)** | Limited | The app runs, but the PHD2 GUI embed is auto-disabled (32-bit ARM gate). Stacking on the Pi side gets tight; use the client-side offload. |
-| **Raspberry Pi 2 (512 MB)** | Bare minimum | Sequencing and live stacking work; STUDIO batch jobs are not realistic on the host. |
+| **Raspberry Pi 3 (1 GB)** | Limited | The app runs, but the PHD2 GUI embed is auto-disabled (32-bit ARM gate). Host-side stacking is tight: the fixed floor alone takes about a third of the RAM, so expect Auto to choose 1:2 or 1:4, or use the client-side offload. |
+| **Raspberry Pi 2 (512 MB)** | Bare minimum | Sequencing works. Host-side live stacking is doubtful rather than confirmed: the fixed floor measured on a larger board is around 370 MB, which leaves very little for the stack itself, so use the client-side offload. STUDIO batch jobs are not realistic on the host. |
 | **Intel mini-PC (N100, J4125, and similar)** | Good | Headless Linux x64 publish. |
 | **Windows mini-PC / desktop / laptop** | Good | The win-x64 publish or `dotnet run`. The same feature set as Linux, plus the vendor DSLR drivers. |
 | **macOS** | Untested | Should run via `dotnet run` on Apple Silicon; no publish target is shipped. |
+
+### Sizing RAM for your camera
+
+The verdicts above assume a mid-sized sensor. If you are choosing a
+board, size it from your camera instead, because live stacking is what
+sets the ceiling and it scales with **pixel count**, not with the price
+of the board.
+
+Two numbers are enough to budget:
+
+- A **fixed floor of roughly 370 MB** (measured on an OrangePi 5 Pro):
+  the .NET runtime, the camera and mount drivers, catalog caches and
+  preview buffers. Nothing you configure reduces it.
+- **About 38 bytes per pixel** for a colour live-stack session, 30 for
+  mono, on top of that floor.
+
+So an 11.7 MP one-shot-colour camera needs roughly
+`370 MB + 11.7e6 x 38 B` = about 820 MB to stack at full resolution, and
+that matches the 903 MB actually measured. A 26 MP camera needs about
+1.4 GB.
+
+You are not stuck with that figure, because @sec-stacking-resolution
+lets the stack run at reduced resolution while the frames saved to disk
+stay at full sensor resolution. Halving the resolution cuts the
+per-pixel term by four, which brought the same 11.7 MP camera from
+903 MB down to 450 MB. Auto applies this for you.
+
+In short: a 4 GB board stacks anything current at full resolution, a
+2 GB board is comfortable at 1:2, and below 1 GB the fixed floor, not
+the stacking, is what dominates. On the smallest boards prefer the
+client-side WebAssembly offload, which moves the per-pixel cost into the
+browser entirely.
 
 ## Browser requirements
 

@@ -30,7 +30,9 @@ Frame count + reference star count update each second.
 ## Controls (sidebar)
 
 Right sidebar is split top-to-bottom: inputs (Exp / Gain / Bin /
-Filter) at top, Polaris Shutter centered in the middle, the session
+Filter) at top followed by **Stacking resolution** (see
+[Stacking resolution and memory](#stacking-resolution-and-memory)),
+Polaris Shutter centered in the middle, the session
 readout + secondary buttons at bottom. **The shutter owns the whole
 live-stack lifecycle (ASIAIR-style) — there is no separate Stack
 toggle:**
@@ -69,6 +71,54 @@ Session readout + buttons at the bottom:
 For one-shot-colour (OSC) cameras, colour live stacking is automatic —
 there is no mono/colour toggle; the stacker debayers and integrates in
 colour by default.
+
+## Stacking resolution and memory
+
+Every per-pixel buffer of a session is resident at once (frame count,
+R/G/B accumulators, variance terms, debayer + warp scratch), so the
+working set is **~38 B/px colour, ~30 B/px mono**
+(`LiveStackingService.StackBytesPerPixel`). **Stacking resolution**
+(sidebar, under the Bin buttons) box-averages the frame down before it
+enters the stack. The reduction is CFA-preserving: it works on whole
+2x2 Bayer cells, so the output is still a valid mosaic with the same
+pattern and debayer/warp/accumulate keep working unchanged.
+
+- **Auto** (default), `ResolveAutoBinning` returns the first of `1, 2, 4`
+  whose cost fits `budget = max(96 MB, TotalAvailableMemoryBytes / 4)`.
+- **1:1 / 1:2 / 1:4** override it. Persisted per camera + machine.
+- `GET /api/livestack/binning-options` returns each option's
+  `width`/`height`/`estimatedMB`/`fits`; options that do not fit are
+  greyed out in the UI with the budget shown.
+
+Affects the **live view only**. Frames saved to disk are always full
+sensor resolution.
+
+### Measured
+
+OrangePi 5 Pro (4 GB), 11.7 MP OSC, total process RSS:
+
+| Resolution | RSS | Stack cost (RSS minus floor) | `estimatedMB` model |
+|---|---|---|---|
+| 1:1 | 903 MB | ~530 MB | ~445 MB |
+| 1:2 | 450 MB | ~80 MB | ~111 MB |
+| 1:4 | 400 MB | ~30 MB | ~28 MB |
+
+Two things to take from this:
+
+**There is a ~370 MB fixed floor** (runtime, drivers, catalog caches,
+preview buffers) that no stacking resolution touches. Fitting
+`RSS = floor + k·px` through the 1:1 and 1:4 points gives floor ≈ 370 MB
+and predicts 501 MB at 1:2 against 450 measured, which is within the
+noise of RSS sampling. The 38 B/px model is therefore sound for the
+**marginal** cost, and the budget check is right to measure only that.
+
+**1:4 buys ~50 MB over 1:2** for 4x the resolution loss. `ResolveAutoBinning`
+iterates `1, 2, 4` and returns the first that fits, so it already prefers
+1:2; 1:4 only appears when 1:2 genuinely does not fit. Picking 1:4 by
+hand is almost never the right trade.
+
+Scaling is by pixel count: a 26 MP sensor costs ~2.2x the numbers above
+in the stack-cost column.
 
 ## Stats bar
 

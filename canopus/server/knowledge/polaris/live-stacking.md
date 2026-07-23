@@ -6,10 +6,11 @@ watching your DSO target build up while you have a beer.
 
 > **Capture vs. stacking are separate things.** The LIVE *capture loop*
 > always runs on the **server** (the Pi / mini-PC keeps exposing even if
-> your browser is backgrounded, on another tab, or disconnects entirely, > you can run two Polaris tabs and switch freely). The **Compute** dropdown
+> your browser is backgrounded, on another tab, or disconnects entirely —
+> you can run two Polaris tabs and switch freely). The **Compute** dropdown
 > (Auto / Server / Client) only chooses *where the per-frame stacking math
 > runs*, not who drives the camera. On underpowered hosts (Pi 2/3) flip it
-> to client-side WASM offload so the browser owns the accumulator, see
+> to client-side WASM offload so the browser owns the accumulator — see
 > [client-side compute](client-side-compute.md).
 
 ## How it works
@@ -29,20 +30,31 @@ Frame count + reference star count update each second.
 ## Controls (sidebar)
 
 Right sidebar is split top-to-bottom: inputs (Exp / Gain / Bin /
-Filter) at top, Polaris Shutter centered in the middle, secondary
-toggles at bottom. The shutter unifies Capture / Loop / Stop into
-a single gesture button:
+Filter) at top followed by **Stacking resolution** (see
+[Stacking resolution and memory](#stacking-resolution-and-memory)),
+Polaris Shutter centered in the middle, the session
+readout + secondary buttons at bottom. **The shutter owns the whole
+live-stack lifecycle (ASIAIR-style) — there is no separate Stack
+toggle:**
 
-- **Tap shutter** when idle, single capture (snap)
-- **Long-press 600ms** when idle, enter loop mode (ring fills
-  amber during the hold to confirm)
-- **Tap shutter** while exposing or looping, abort
+- **Tap the shutter** to start: it arms stacking and begins the LIVE
+  loop. A fresh/empty stack starts silently; a stopped stack that
+  already has frames asks **Continue** (keep adding) or **Restart**
+  (clear and begin fresh).
+- **Tap again** while running to stop: the capture loop and stacking
+  both stop, but the accumulator is **kept** — the next tap offers
+  Continue / Restart.
 
-Secondary toggles + buttons:
+Session readout + buttons at the bottom:
 
-- **Stack ON / Stack**, toggle integration on/off
-- **Reset** (visible when Stack ON), discards the running stack +
-  reference. Next incoming frame becomes the new reference.
+- **Stacking readout** — a compact pill next to the shutter showing
+  state (⚫ Stacking / ⏸ Stopped), total integration time, frames
+  stacked, and frames discarded (rejected by the kappa-sigma quality
+  gate). The integration timer counts only while actively stacking —
+  it freezes on stop and at the duration cap, and resumes on Continue.
+- **↻ Reset**, discards the running stack + reference and starts a
+  fresh stack on the next frame (the explicit "clear the accumulator"
+  action).
 - **⛶ View**, OpenSeadragon viewer on the current stack
 - **Save**, write the current stack to FITS on demand. User-requested
   saves land in a dedicated `stacked/` subfolder (separate from the
@@ -50,14 +62,63 @@ Secondary toggles + buttons:
 - **Compute** (Auto / Server / Client), per-rig override for
   where the per-frame **stacking math** runs (the capture loop is always
   server-owned regardless of this setting):
-  - **Server**: stacking on the host CPU.
-  - **Client**: stacking in the browser via WASM (offload).
-  - **Auto** (default): the server picks based on the WASM handshake:
+  - **Server** — stacking on the host CPU.
+  - **Client** — stacking in the browser via WASM (offload).
+  - **Auto** (default) — the server picks based on the WASM handshake:
     if a WASM-capable browser is connected it offloads to the client,
     otherwise it stacks on the host.
 
-For one-shot-colour (OSC) cameras, colour live stacking is automatic, there is no mono/colour toggle; the stacker debayers and integrates in
+For one-shot-colour (OSC) cameras, colour live stacking is automatic —
+there is no mono/colour toggle; the stacker debayers and integrates in
 colour by default.
+
+## Stacking resolution and memory
+
+Every per-pixel buffer of a session is resident at once (frame count,
+R/G/B accumulators, variance terms, debayer + warp scratch), so the
+working set is **~38 B/px colour, ~30 B/px mono**
+(`LiveStackingService.StackBytesPerPixel`). **Stacking resolution**
+(sidebar, under the Bin buttons) box-averages the frame down before it
+enters the stack. The reduction is CFA-preserving: it works on whole
+2x2 Bayer cells, so the output is still a valid mosaic with the same
+pattern and debayer/warp/accumulate keep working unchanged.
+
+- **Auto** (default), `ResolveAutoBinning` returns the first of `1, 2, 4`
+  whose cost fits `budget = max(96 MB, TotalAvailableMemoryBytes / 4)`.
+- **1:1 / 1:2 / 1:4** override it. Persisted per camera + machine.
+- `GET /api/livestack/binning-options` returns each option's
+  `width`/`height`/`estimatedMB`/`fits`; options that do not fit are
+  greyed out in the UI with the budget shown.
+
+Affects the **live view only**. Frames saved to disk are always full
+sensor resolution.
+
+### Measured
+
+OrangePi 5 Pro (4 GB), 11.7 MP OSC, total process RSS:
+
+| Resolution | RSS | Stack cost (RSS minus floor) | `estimatedMB` model |
+|---|---|---|---|
+| 1:1 | 903 MB | ~530 MB | ~445 MB |
+| 1:2 | 450 MB | ~80 MB | ~111 MB |
+| 1:4 | 400 MB | ~30 MB | ~28 MB |
+
+Two things to take from this:
+
+**There is a ~370 MB fixed floor** (runtime, drivers, catalog caches,
+preview buffers) that no stacking resolution touches. Fitting
+`RSS = floor + k·px` through the 1:1 and 1:4 points gives floor ≈ 370 MB
+and predicts 501 MB at 1:2 against 450 measured, which is within the
+noise of RSS sampling. The 38 B/px model is therefore sound for the
+**marginal** cost, and the budget check is right to measure only that.
+
+**1:4 buys ~50 MB over 1:2** for 4x the resolution loss. `ResolveAutoBinning`
+iterates `1, 2, 4` and returns the first that fits, so it already prefers
+1:2; 1:4 only appears when 1:2 genuinely does not fit. Picking 1:4 by
+hand is almost never the right trade.
+
+Scaling is by pixel count: a 26 MP sensor costs ~2.2x the numbers above
+in the stack-cost column.
 
 ## Stats bar
 
@@ -98,7 +159,7 @@ The ETA fits a log-log line through your last samples (the SNR of a
 clean stack grows as √N, slope=0.5 on log-log) and solves for the
 frame-count that hits the target. When the fit is weak (R² < 0.6,
 fewer than 3 samples, slope going the wrong way, or extrapolated frames
-beyond the 1000-frame cap), the ETA shows `-` instead of inventing a
+beyond the 1000-frame cap), the ETA shows `—` instead of inventing a
 number. Once you reach the target, `✓ done` replaces the ETA.
 
 ### Reading SNR over time
@@ -196,10 +257,10 @@ benefits your final offline integration.
 
 Panel: LIVE tab → "Auto re-focus / re-center / dither" → **Auto dither**.
 
-- **Every N frames**: dither cadence (counts integrated frames).
-- **Amount (px)**: random offset in guide-camera pixels.
-- **RA only**: restrict the nudge to RA (for mounts with sloppy Dec backlash).
-- **Settle px / for (s) / timeout (s)**, the dithered frame waits for the star
+- **Every N frames** — dither cadence (counts integrated frames).
+- **Amount (px)** — random offset in guide-camera pixels.
+- **RA only** — restrict the nudge to RA (for mounts with sloppy Dec backlash).
+- **Settle px / for (s) / timeout (s)** — the dithered frame waits for the star
   to settle back within tolerance before the next frame is integrated, exactly
   like the AUTORUN sequencer.
 
@@ -209,7 +270,7 @@ Requirements + behaviour:
   routed through the active guider, so it works on both backends. If the guider
   isn't guiding, the dither is skipped (and the gate advances so it doesn't
   re-check every frame).
-- The dither fires *instead of* a recenter on the same frame, a recenter would
+- The dither fires *instead of* a recenter on the same frame — a recenter would
   cancel the offset just applied.
 - Settings live on `EquipmentProfile.LiveStackTriggers` (per rig), same as the
   re-focus / re-center policy.
@@ -219,7 +280,7 @@ The same dither-every-N-frames option also exists for the AUTORUN sequencer
 
 ## Reject outliers (kappa-sigma)
 
-By default the live stack is a plain **running mean**, every frame's pixels are
+By default the live stack is a plain **running mean** — every frame's pixels are
 averaged in, with no per-pixel outlier rejection. That's fast, but a cosmic ray,
 a satellite/plane trail, or a hot pixel is averaged in too (just at reduced
 amplitude).
@@ -227,17 +288,17 @@ amplitude).
 The LIVE tab checkbox **🚫 Reject outliers (kappa-sigma)** (next to "Save each
 frame") adds per-pixel rejection: for each pixel Polaris tracks the running mean
 and spread of the frames seen so far, and a new sample more than **k** sigma away
-is dropped instead of folded in. The threshold **k** (default 3, range 1.5-6) is
+is dropped instead of folded in. The threshold **k** (default 3, range 1.5–6) is
 editable inline; lower = more aggressive.
 
-- It **pays off most combined with dithering**, dithering moves the defect to a
+- It **pays off most combined with dithering** — dithering moves the defect to a
   different sky pixel each frame, so it becomes the outlier that rejection then
   removes cleanly. Without dithering a fixed hot pixel can land on the same sky
   spot repeatedly and look like signal.
 - The first few frames always seed the statistics (nothing is rejected until a
   spread estimate exists), so give it 5+ frames.
 - It runs on the CPU and allocates one extra full-frame buffer, so it costs a
-  little more RAM + per-frame time than the plain mean, off by default, opt in
+  little more RAM + per-frame time than the plain mean — off by default, opt in
   per rig. Takes effect on the next **Reset** (the reference frame allocates the
   buffers).
 - Setting lives on `EquipmentProfile.LiveStackSigmaRejection` / `…Kappa` (per
@@ -354,13 +415,14 @@ LiveStackingService.Reset (e.g. target switch).
 ### BGE (background extraction)
 
 Toggle `Apply GraXpert BGE to each frame before stacking`. Runs the
-GraXpert BGE model on every frame before it is added to the stack, **wherever the stack actually runs**:
+GraXpert BGE model on every frame before it is added to the stack —
+**wherever the stack actually runs**:
 
-- **Client-mode (MetricsOnly) stacking**: the browser runs the BGE
+- **Client-mode (MetricsOnly) stacking** — the browser runs the BGE
   model via WebAssembly + WebGPU. The 208MB model is downloaded lazily
   the first time BGE is enabled in a session (spares bandwidth on rigs
   that never use it).
-- **Server-mode (Full) stacking**: the host runs BGE through its
+- **Server-mode (Full) stacking** — the host runs BGE through its
   GraXpert backend: the GraXpert CLI, or the RK3588 **NPU** fast path
   where available (see [NPU acceleration](npu-acceleration.md)). Per-frame
   BGE on a Pi 4/5 CPU is fast enough at normal exposure cadence. If no
