@@ -49,10 +49,13 @@ public static class AuthEndpoints {
             if (auth.IsConfigured)
                 return Results.Conflict(new { error = "already configured" });
             try {
-                var token = auth.SetInitialPassword(req.Password ?? "");
+                // First-run setup happens on the operator's own device, so
+                // remember it by default (the setup form has no checkbox and
+                // would otherwise send the stale false, never remembering).
+                var token = auth.SetInitialPassword(req.Password ?? "", remember: true);
                 if (token == null)
                     return Results.BadRequest(new { error = "setup failed" });
-                SetSessionCookie(ctx, token, req.Remember);
+                SetSessionCookie(ctx, token, persist: true);
                 return Results.Ok(new { token });
             } catch (ArgumentException ex) {
                 return Results.BadRequest(new { error = ex.Message });
@@ -66,7 +69,7 @@ public static class AuthEndpoints {
             if (!auth.IsConfigured)
                 return Results.BadRequest(new { error = "not configured" });
             var token = auth.Login(req.Password ?? "",
-                ctx.Connection.RemoteIpAddress);
+                ctx.Connection.RemoteIpAddress, req.Remember);
             if (token == null)
                 return Results.Json(new { error = "invalid password" },
                     statusCode: 401);

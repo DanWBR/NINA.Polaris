@@ -85,13 +85,22 @@ public class AuthService : IDisposable {
 
     private TimeSpan SessionTtl => TimeSpan.FromHours(SessionTimeoutHours);
 
+    /// <summary>A "remember on this device" login gets a long, 30-day
+    /// sliding session so the operator is not re-prompted after every idle
+    /// gap between imaging nights (the short SessionTtl expired even though
+    /// the client still held the remembered token, so the client wiped it
+    /// and showed the login overlay). A non-remembered login keeps the
+    /// short SessionTtl.</summary>
+    private static readonly TimeSpan RememberTtl = TimeSpan.FromDays(30);
+    private TimeSpan TtlForSession(SessionInfo s) => s.Remember ? RememberTtl : SessionTtl;
+
     /// <summary>Validates a session token and bumps its activity timestamp.
     /// Returns false for unknown / expired tokens. Loopback bypass is
     /// the middleware's responsibility, not this method's.</summary>
     public bool ValidateToken(string? token) {
         if (string.IsNullOrEmpty(token)) return false;
         if (!_sessions.TryGetValue(token, out var s)) return false;
-        if (DateTime.UtcNow - s.LastActivityAt > SessionTtl) {
+        if (DateTime.UtcNow - s.LastActivityAt > TtlForSession(s)) {
             _sessions.TryRemove(token, out _);
             return false;
         }
@@ -102,7 +111,7 @@ public class AuthService : IDisposable {
     /// <summary>First-run: sets the password when none exists yet. Returns
     /// a session token on success, null when already configured (caller
     /// should redirect to /login).</summary>
-    public string? SetInitialPassword(string password) {
+    public string? SetInitialPassword(string password, bool remember = false) {
         if (IsConfigured) return null;
         ValidatePasswordStrength(password);
         var (hash, salt) = HashPassword(password);
@@ -111,7 +120,7 @@ public class AuthService : IDisposable {
         _profile.Active.AuthHashAlgo = "pbkdf2-sha256-100000";
         _profile.Save();
         _logger.LogInformation("Auth: initial password set");
-        return CreateSession();
+        return CreateSession(remember);
     }
 
     /// <summary>Change password after authenticating with the current one.
@@ -141,7 +150,7 @@ public class AuthService : IDisposable {
     /// <summary>Authenticate with the password. Returns null on failure
     /// (caller surfaces 401 + increments rate-limit). On success
     /// returns a new session token and clears the rate-limit bucket.</summary>
-    public string? Login(string password, IPAddress? remoteIp) {
+    public string? Login(string password, IPAddress? remoteIp, bool remember = false) {
         var ipKey = remoteIp?.ToString() ?? "unknown";
         if (IsRateLimited(ipKey, out var retryAfter)) {
             _logger.LogWarning(
@@ -154,7 +163,7 @@ public class AuthService : IDisposable {
             return null;
         }
         _attempts.TryRemove(ipKey, out _);
-        return CreateSession();
+        return CreateSession(remember);
     }
 
     /// <summary>Drop a single session. Idempotent.</summary>
@@ -192,12 +201,13 @@ public class AuthService : IDisposable {
 
     // ----- internals --------------------------------------------------
 
-    private string CreateSession() {
+    private string CreateSession(bool remember) {
         var token = NewToken();
         _sessions[token] = new SessionInfo {
             Token = token,
             CreatedAt = DateTime.UtcNow,
-            LastActivityAt = DateTime.UtcNow
+            LastActivityAt = DateTime.UtcNow,
+            Remember = remember
         };
         PersistSessions();
         return token;
@@ -233,10 +243,11 @@ public class AuthService : IDisposable {
             var json = File.ReadAllText(_sessionStorePath);
             var entries = JsonSerializer.Deserialize<List<SessionInfo>>(json);
             if (entries == null) return;
-            var cutoff = DateTime.UtcNow - SessionTtl;
             foreach (var s in entries) {
                 if (string.IsNullOrEmpty(s.Token)) continue;
-                if (s.LastActivityAt < cutoff) continue;   // drop stale
+                // Per-session TTL: a remembered session survives a long
+                // idle gap, a normal one only the short default.
+                if (DateTime.UtcNow - s.LastActivityAt > TtlForSession(s)) continue;
                 _sessions[s.Token] = s;
             }
             _logger.LogInformation(
@@ -315,10 +326,9 @@ public class AuthService : IDisposable {
     }
 
     private void SweepExpired() {
-        var cutoff = DateTime.UtcNow - SessionTtl;
         bool removedAny = false;
         foreach (var kv in _sessions.ToArray()) {
-            if (kv.Value.LastActivityAt < cutoff) {
+            if (DateTime.UtcNow - kv.Value.LastActivityAt > TtlForSession(kv.Value)) {
                 if (_sessions.TryRemove(kv.Key, out _)) removedAny = true;
             }
         }
@@ -376,6 +386,11 @@ public class AuthService : IDisposable {
         public string Token { get; set; } = "";
         public DateTime CreatedAt { get; set; }
         public DateTime LastActivityAt { get; set; }
+        /// <summary>Set when the login checked "remember on this device":
+        /// the session then uses the long RememberTtl instead of the short
+        /// default. Defaults false so pre-existing persisted sessions keep
+        /// the old 24h behaviour.</summary>
+        public bool Remember { get; set; }
     }
 
     private sealed class AttemptBucket {

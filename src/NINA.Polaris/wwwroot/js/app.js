@@ -5005,18 +5005,40 @@ function ninaApp() {
             localStorage.removeItem('polaris_token');
         },
 
-        // Called by apiFetch when a request returns 401. Drops the
-        // token + shows the right overlay so the user can recover
-        // without a full reload.
+        // Called by apiFetch when a request returns 401. A 401 is often
+        // TRANSIENT (a sub-request that raced ahead of the token, a proxied
+        // sub-app that was briefly unauthenticated) rather than a real
+        // session loss, so we do NOT tear down the remembered credential on
+        // sight. Instead verify against /api/auth/status: only a confirmed
+        // not-authenticated status clears the token and shows login; a still-
+        // authenticated status (the blip) or a network error keeps the
+        // session so the next request just retries. This is the fix for
+        // "Polaris re-asks for the password even with Remember checked":
+        // a single stray 401 used to wipe localStorage permanently.
         _handle401(payload) {
-            this._authClearToken();
+            // "Not configured" is definitive (first-run), handle immediately.
             if (payload && payload.authConfigured === false) {
+                this._authClearToken();
                 this.auth.needSetup = true;
                 this.auth.needLogin = false;
-            } else {
-                this.auth.needLogin = true;
-                this.auth.needSetup = false;
+                return;
             }
+            if (this._auth401Checking) return;
+            this._auth401Checking = true;
+            const token = this.auth.token
+                || sessionStorage.getItem('polaris_token')
+                || localStorage.getItem('polaris_token') || '';
+            const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+            fetch('/api/auth/status', { cache: 'no-store', credentials: 'same-origin', headers })
+                .then(r => r.json())
+                .then(s => {
+                    if (s && s.authenticated) return;   // transient: keep the session
+                    this._authClearToken();
+                    this.auth.needLogin = true;
+                    this.auth.needSetup = false;
+                })
+                .catch(() => { /* network blip: keep the token, next request retries */ })
+                .finally(() => { this._auth401Checking = false; });
         },
 
         // ---- HELP-1: tutorial stepper + landing helpers ----------------
