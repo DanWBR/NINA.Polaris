@@ -62,7 +62,7 @@ into the palette + drag-drop into any new sequence.
 **Mount**: Slew, Slew & Center, Park, Unpark, Set Tracking, Solve & Sync
 
 **Camera**: Take Exposure, Take Many Exposures, Cool Camera, Warm Camera,
-Take Aux Exposure, Cool Aux Camera, Warm Aux Camera, the *Aux* variants drive
+Take Aux Exposure, Cool Aux Camera, Warm Aux Camera - the *Aux* variants drive
 the secondary (aux) camera and save frames to the `aux/` subtree; exposure /
 gain / binning default to the rig's aux settings when left blank.
 
@@ -77,6 +77,12 @@ guide optical train, not just the imaging one.
 Guider Gain (native guider; PHD2 owns its own gain)
 
 **Dome / Flat Panel / Rotator**: open/close, slew azimuth, set brightness, rotate to angle
+
+**Power Box**: Set Outlet On/Off (a 12V port), Set Dew Heater (a PWM /
+dew channel level), Power Cycle Outlet (off → wait → on, to recover a
+wedged device), and Set Switch Value (generic ISwitchV2 channel by index).
+Outlet / channel indexes match the RIGS Power Box card. A power box must be
+connected in RIGS first.
 
 **Flow control**: Wait For Time, Wait Until Above Horizon, Wait For
 Altitude, Wait For Moon Below Horizon, Wait For Sun Below Horizon

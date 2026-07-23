@@ -15,7 +15,7 @@ about for Polaris:
   modern dGPU) to ~30 minutes (WASM single-thread).
 - **SharedArrayBuffer**, required for multi-threaded WASM. When
   available, the ORT WASM backend uses every CPU core instead of one,
-  for a 4–8× speedup as the GPU-less fallback.
+  for a 4-8× speedup as the GPU-less fallback.
 
 `localhost` is a "secure context" without any cert dance, but only
 when the browser literally types `localhost`. Reaching the same server

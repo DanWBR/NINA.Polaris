@@ -25,11 +25,11 @@ It's justification-aware (a 12-bit sensor delivered left-justified in a
 
 ## Running it
 
-1. Point the camera at a **uniform, constant light source**, a flat
+1. Point the camera at a **uniform, constant light source** - a flat
    panel, an evenly lit wall, or twilight sky. Avoid stars or structure.
 2. Equipment tab → your camera card → **📈 Sensor analysis**.
 3. Adjust the range if needed (min/max gain, gain steps, max exposure,
-   exposure steps), the defaults are fine for a first run.
+   exposure steps) - the defaults are fine for a first run.
 4. Click **Run**. It captures many frames per gain, so it can take a few
    minutes; a progress bar shows where it is, and you can Cancel.
 5. When it finishes you get the green **gain** and red **read-noise**
@@ -43,13 +43,13 @@ produces, not a real sensor).
 
 ## Reading the results
 
-- **e/ADU (gain)**, electrons per ADU. Falls as you raise the gain.
-- **Read noise (e)**: lower is better; the big drop at low-to-mid gain is
+- **e/ADU (gain)** - electrons per ADU. Falls as you raise the gain.
+- **Read noise (e)** - lower is better; the big drop at low-to-mid gain is
   where many cameras have their "unity / HCG" sweet spot.
-- **Full well (e)**: how many electrons a pixel holds before saturating;
+- **Full well (e)** - how many electrons a pixel holds before saturating;
   drops as gain rises.
-- **Dynamic range (stops)**: full well ÷ read noise; highest at low gain.
-- **Unity gain**: the gain where the gain is 1.0 e/ADU; a common starting
+- **Dynamic range (stops)** - full well ÷ read noise; highest at low gain.
+- **Unity gain** - the gain where the gain is 1.0 e/ADU; a common starting
   point for deep-sky imaging.
 
 ## Tips
@@ -57,7 +57,7 @@ produces, not a real sensor).
 - Keep the light **constant** during the whole run; a changing source
   breaks the mean-variance relationship and rows come back marked invalid.
 - If many rows are invalid, the light was too dim (variance never rose) or
-  too bright (frames saturated before the sweep finished), adjust the
+  too bright (frames saturated before the sweep finished) - adjust the
   brightness or the max exposure and re-run.
 - Stop any live stacking / video stream first; the tool refuses to run
   while they're active.

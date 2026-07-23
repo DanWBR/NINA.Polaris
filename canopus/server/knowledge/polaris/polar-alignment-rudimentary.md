@@ -1,7 +1,7 @@
 # Rudimentary polar alignment (single-target iterative)
 
 Polaris ships two polar-alignment workflows. **TPPA** (Three-Point
-Polar Alignment) is the default and what most setups should use, it
+Polar Alignment) is the default and what most setups should use - it
 sweeps the mount through 30° of RA and fits the mount's polar axis
 from three plate-solved points.
 
@@ -12,7 +12,7 @@ where TPPA doesn't work:
 - Mounts that can't tracking-slew freely in RA without obstruction
 - Setups where you've already aligned roughly with a compass + tilt
   app on your phone and just want a one-target sanity check
-- Manual mounts (no GoTo), you point at the target by hand, Polaris
+- Manual mounts (no GoTo) - you point at the target by hand, Polaris
   just captures and solves
 
 ## How it works
@@ -23,11 +23,11 @@ hand:
 1. **Coarse-align physically.** Use a magnetic-declination calculator
    (e.g. NOAA's online tool) plus a tilt app on your smartphone. Align
    the mount as close to true polar as you can eyeball it. This part
-   is outside Polaris: five minutes with the phone gets you within
+   is outside Polaris - five minutes with the phone gets you within
    a degree or two.
 
 2. **Pick a known, visible target.** Anything bright (Sirius, Vega,
-   M42, etc) above the horizon. Visible to the naked eye helps, the
+   M42, etc) above the horizon. Visible to the naked eye helps - the
    plate solver still works fine on faint targets, but you want to
    know roughly where the camera is pointing.
 
@@ -53,10 +53,11 @@ hand:
 6. **Click "Re-capture + solve".** Polaris captures another frame at
    the same mount position (no slew this time) and re-computes the
    error. The convergence sparkline below the result block shows the
-   trend across iterations, bars get shorter and greener as you
+   trend across iterations - bars get shorter and greener as you
    converge.
 
-7. **Repeat until satisfied.** Unlike TPPA, there's no auto-stop, you decide when "good enough" is good enough. Most operators settle
+7. **Repeat until satisfied.** Unlike TPPA, there's no auto-stop -
+   you decide when "good enough" is good enough. Most operators settle
    at 30-60" total error for visual / wide-field; serious deep-sky
    imaging targets < 30".
 
@@ -65,7 +66,7 @@ hand:
 A single plate-solved frame can't tell you what's polar misalignment
 vs what's mount pointing-model error (cone, non-orthogonality, etc).
 Rudimentary attributes the entire pointing offset to polar misalignment,
-which is mathematically wrong, but works iteratively:
+which is mathematically wrong - but works iteratively:
 
 - After 1-2 manual knob nudges, the polar component dominates the
   **change** between iterations
@@ -81,10 +82,10 @@ ASIAIR / N.I.N.A. operators already run by hand.
 Before starting, the pre-flight strip at the top of the sub-pane
 shows ✓ / ✗ for:
 
-- **Camera connected**: required (the workflow captures a frame)
-- **Mount connected**, required for "Slew to target" mode, optional
+- **Camera connected** - required (the workflow captures a frame)
+- **Mount connected** - required for "Slew to target" mode, optional
   for "Use current position" mode (manual mounts)
-- **Site location**, required (the math needs lat/lon to convert
+- **Site location** - required (the math needs lat/lon to convert
   RA/Dec to local alt/az). Set in **Settings → Site location**.
 
 A plate solver also needs to be configured. ASTAP works without any
@@ -112,11 +113,11 @@ or paths. See `docs/user-guide/rigs.md` for solver setup.
   alignment near the zenith is less informative than alignment
   closer to the celestial equator.
 - **No auto-convergence threshold.** Some users want "stop when
-  total < 30 arcsec." Today this is left manual: the sparkline
+  total < 30 arcsec." Today this is left manual - the sparkline
   + colour coding is enough signal for most operators. If demand
   exists, a configurable threshold per rig is a future addition.
 
 ## See also
 
-- `docs/user-guide/end-to-end-workflow.md`: full session walkthrough
-- `docs/user-guide/rigs.md`: plate-solver setup
+- `docs/user-guide/end-to-end-workflow.md` - full session walkthrough
+- `docs/user-guide/rigs.md` - plate-solver setup

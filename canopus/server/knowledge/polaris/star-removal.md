@@ -2,15 +2,15 @@
 
 Polaris can split a master into a **starless** image and a **stars-only**
 image, let you stretch each independently, then recombine them with a
-Screen blend, the classic "process the nebula and the stars separately"
+Screen blend - the classic "process the nebula and the stars separately"
 workflow you'd otherwise do in PixInsight (StarNet + the ImageBlend script).
 
 Two pieces:
 
-1. **Remove stars**: StarNet++ runs as an ONNX model in your browser
+1. **Remove stars** - StarNet++ runs as an ONNX model in your browser
    (same engine as the GraXpert AI ops), producing `_starless` and
    `_stars` sibling FITS.
-2. **[Image Blend](image-blend.md)**: recombine two images with an
+2. **[Image Blend](image-blend.md)** - recombine two images with an
    independent blackpoint/midtones/highlights stretch per layer plus a
    Screen blend and opacity.
 
@@ -19,10 +19,10 @@ Two pieces:
 Polaris supports several star-removal models. When more than one is installed
 the **Remove stars** dialog shows a **Model** dropdown:
 
-- **nox** (StarNet-like, ~54M params): **MIT-licensed** (code *and* weights),
+- **nox** (StarNet-like, ~54M params) - **MIT-licensed** (code *and* weights),
   the recommended default. Native colour model (one inference per tile) plus a
   gray model. StarNet-grade quality with a permissive licence.
-- **starrem2k13** (pix2pix-style U-Net, ~31M params), **MIT-licensed**,
+- **starrem2k13** (pix2pix-style U-Net, ~31M params) - **MIT-licensed**,
   512² tiles processed per channel. (Uses the model from the pinned commit
   `0398ce05`, not the repo main branch's tiny U2NETP, which removes stars poorly.)
 
@@ -32,7 +32,7 @@ convention:
 - **`1.0.0`** = the original **FP32** model (~218 MB nox/StarNet, ~125 MB
   starrem2k13). Best quality; an optional download for desktops.
 - **`1.0.0-fp16`** = the **FP16** quantization (~109 MB nox/StarNet, ~62 MB
-  starrem2k13). This is the **default that runs** on every platform, half the
+  starrem2k13). This is the **default that runs** on every platform - half the
   weights, fits SBCs/phones/tablets via WebGPU/WASM, I/O stays FP32 so accuracy
   is essentially unchanged. It's what ships bundled in the OS images.
 
@@ -41,7 +41,7 @@ The pipeline auto-selects the `-fp16` sibling when it's installed; the FP32
 converted FP32 model, run
 `scripts/quantize_onnx_models.py --fp16 --only <family>` (writes a
 `{version}-fp16` sibling; add `--replace` to overwrite in place instead).
-- **StarNet++** (v1): high-quality removal, but the weights are
+- **StarNet++** (v1) - high-quality removal, but the weights are
   **CC BY-NC-SA (NonCommercial)**, so it is opt-in and you install it yourself.
 
 Both run as ONNX in your browser through the same pipeline (auto-stretch into
@@ -82,7 +82,7 @@ It writes `model.onnx` into
 ### StarNet++ (optional, NonCommercial)
 
 StarNet is **not** bundled by default (the weights are ~207 MB and
-NonCommercial, see Licensing below), so you install it once on the machine
+NonCommercial - see Licensing below), so you install it once on the machine
 that has the file system Polaris serves from:
 
 1. Get the StarNet v1 TensorFlow weights and the
@@ -110,10 +110,10 @@ ready-made `.onnx` files straight from the app instead.
 
 1. Go to **Settings → AI inference (ONNX) → Download models** and click
    **Refresh catalog**. By default this lists the models hosted in the public
-   **N.I.N.A. Polaris model repository** on SourceForge: no configuration
+   **Polaris Astro Controller model repository** on SourceForge - no configuration
    needed (the app ships a bundled `models-index.json`).
 2. Click **⬇ Download** next to a model. It streams onto this device's
-   writable models directory and the registry rescans automatically, no
+   writable models directory and the registry rescans automatically - no
    browser restart needed. A progress bar tracks the transfer.
 
 The downloaded file lands under the writable target dir resolved from your
@@ -122,7 +122,7 @@ profile `OnnxModelsPath` → `/home/polaris/models` (Linux) → the bundled
 
 #### Using a custom bucket instead
 
-Expand **Advanced, use a custom model bucket** to point at your own host
+Expand **Advanced - use a custom model bucket** to point at your own host
 (e.g. a Supabase / S3 bucket). The base URL must serve a `models-index.json`
 plus the directory layout `{base}/{family}-ai-models/{version}/model.onnx`.
 
@@ -160,13 +160,13 @@ plus the directory layout `{base}/{family}-ai-models/{version}/model.onnx`.
 1. Go to **FILES** and select **one** image (a stretched or linear master;
    FITS/XISF).
 2. Click **🌠 Remove stars**. In the options dialog you can tune:
-   - **Model**: starrem2k13 (MIT, default) or StarNet++ (if installed).
+   - **Model** - starrem2k13 (MIT, default) or StarNet++ (if installed).
      Only shown when more than one model is installed.
-   - **Auto-stretch / Stretch strength**: stretch the linear data into
+   - **Auto-stretch / Stretch strength** - stretch the linear data into
      the model's trained domain (leave on for linear stacks).
-   - **Passes**: a 2nd pass re-runs the starless through the net to clean
+   - **Passes** - a 2nd pass re-runs the starless through the net to clean
      bright-star halos (~2× slower).
-   - **Reduce halos** (on by default), a post-process that removes the
+   - **Reduce halos** (on by default) - a post-process that removes the
      residual halos and dark rings StarNet leaves around bright stars
      (see below). **Halo strength** controls how wide the cleanup reaches
      around each star.
@@ -176,31 +176,32 @@ plus the directory layout `{base}/{family}-ai-models/{version}/model.onnx`.
 3. A progress overlay shows the tiled inference. StarNet processes the
    image in 256×256 tiles; on a WebGPU-capable browser this is seconds,
    on plain WASM it can take up to a minute for a large master.
-4. When it finishes, two siblings are written next to the source, `{name}_starless.fits` and `{name}_stars.fits`, and the **before/after
+4. When it finishes, two siblings are written next to the source -
+   `{name}_starless.fits` and `{name}_stars.fits` - and the **before/after
    comparator** opens with the **original on the left and the starless
    result on the right** (drag the divider to compare).
 5. Recombine when you're ready: open **[Image Blend](image-blend.md)** from
    FILES (select `{name}_starless` then `{name}_stars`, or the original
-   plus `{name}_stars`), stretch each layer to taste, the stars layer
-   usually wants a gentler midtone lift than the starless, keep the mode
+   plus `{name}_stars`), stretch each layer to taste - the stars layer
+   usually wants a gentler midtone lift than the starless - keep the mode
    on **Screen**, then **Create new image** to write the recombined result.
 
 The stars-only image is auto-derived as `clamp(original − starless, 0)`,
-so it contains exactly what the network removed, no separate star mask
+so it contains exactly what the network removed - no separate star mask
 step needed.
 
 ## Halo reduction
 
 StarNet v1 removes the star core but tends to leave a soft low-frequency
-**halo**, and sometimes a **dark ring**, around the brightest stars in the
+**halo** - and sometimes a **dark ring** - around the brightest stars in the
 starless image. The optional **Reduce halos** step cleans these up after the
 network runs, entirely in the browser:
 
 1. It builds a star mask from the removed flux (`original − starless`) and
    **dilates** it to cover the halo radius around each star.
 2. Inside that mask it replaces the starless with a **smooth background
-   estimate**, the average of the surrounding pixels that lie *outside* the
-   star regions, so the halo/ring is filled with plausible background.
+   estimate** - the average of the surrounding pixels that lie *outside* the
+   star regions - so the halo/ring is filled with plausible background.
 3. The mask edge is feathered so there's no visible seam.
 
 **Halo strength** raises the coverage radius and fill window: higher removes
@@ -219,7 +220,7 @@ the original.
   channels together; mono is fed to all three input channels and averaged
   back.
 - **GPU**: tick "Use GPU" in the AI settings to push inference onto WebGPU
-  where available. Access Polaris over **https** (or `localhost`), Chrome
+  where available. Access Polaris over **https** (or `localhost`) - Chrome
   blocks WebGPU on plain-HTTP LAN addresses. See [HTTPS setup](https-setup.md).
 - You can also run **Image Blend on its own** for any two matching images:
   select exactly two files in FILES (base first, blend second) and click
@@ -227,19 +228,19 @@ the original.
 
 ## Licensing
 
-**nox** is **MIT**: code and trained weights: Copyright © 2023 Christopher
+**nox** is **MIT** - code and trained weights - Copyright © 2023 Christopher
 Harvey, <https://github.com/charvey2718/nox> (architecture derives from StarNet
 ideas by Nikita Misiura, used under MIT). Notice ships beside each model as
 `nox-{color,gray}-ai-models/1.0.0/LICENSE.txt`.
 
-**starrem2k13** is **MIT**: both the code and the trained weights, Copyright
+**starrem2k13** is **MIT** - both the code and the trained weights - Copyright
 © code2k13 (Ashish Patel), <https://github.com/code2k13/starrem2k13>. MIT
 permits commercial and non-commercial use with attribution; the notice ships
 beside the model as `starrem2k13-ai-models/1.0.0/LICENSE.txt`.
 
 **StarNet++**: the *code* is MIT, but the *pre-trained weights* (and the
 converted `model.onnx`, which embeds them) are
-**Creative Commons Attribution-NonCommercial-ShareAlike 4.0**: Copyright
+**Creative Commons Attribution-NonCommercial-ShareAlike 4.0** - Copyright
 © Nikita Misiura (nekitmm), <https://github.com/nekitmm/starnet>.
 NonCommercial use only, with attribution. The full notice ships beside the
 model as `starnet-ai-models/1.0.0/LICENSE.txt`.

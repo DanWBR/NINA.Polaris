@@ -110,7 +110,7 @@ dmesg | grep -iE 'under-voltage|hwmon|voltage'
 
 **Fix (cheap → expensive):**
 
-1. **Powered USB hub** (~$15-30) — best ratio of cost to fix.
+1. **Powered USB hub** (~$15-30) - best ratio of cost to fix.
    Plug your highest-current devices (EAF, cooled cameras, EFW
    if motor-driven) into the hub; leave lighter devices (USB-
    to-serial mount adapter, GPS dongle) on the Pi direct.
@@ -119,7 +119,7 @@ dmesg | grep -iE 'under-voltage|hwmon|voltage'
 
 2. **Official Raspberry Pi 5.1V 3A USB-C PSU.** The "1.2A USB
    budget" assumes the Pi's input PSU is delivering its rated
-   5.1V — many generic phone chargers sag to 4.9V or less under
+   5.1V - many generic phone chargers sag to 4.9V or less under
    load, which steals headroom from your devices. The official
    Pi PSU has tight regulation under load.
 
@@ -137,7 +137,7 @@ dmesg | grep -iE 'under-voltage|hwmon|voltage'
    separate 12V supply.
 
 **What software CAN'T do:** chunking long moves, settling waits,
-retries — none of these fix under-voltage. They just spread the
+retries - none of these fix under-voltage. They just spread the
 peak draw out, which sometimes works for marginal cases and
 fails when the budget is genuinely exceeded. The Polaris Reset
 button on the focuser card cycles the INDI CONNECTION switch
@@ -236,18 +236,18 @@ File an issue with your mount model, we'd like to support more.
 If a mount tracks for hours past the meridian **without flipping**, the
 RA axis winds the cabling around the head until something snags (a real
 ASIAIR incident on a high-declination target ripped a USB cable). This
-happens when meridian flip is off (or the mount — e.g. a strain-wave
-AM3/AM5 — is set to track far past the meridian) and the session keeps
+happens when meridian flip is off (or the mount - e.g. a strain-wave
+AM3/AM5 - is set to track far past the meridian) and the session keeps
 running, often while clouded out and looping on lost guide stars.
 
 Polaris guards against this with the **mount safety stop** (Meridian
 Flip panel → *Safety guard*, on by default):
 
-- **Past-meridian limit** — stops tracking + aborts the session if the
+- **Past-meridian limit** - stops tracking + aborts the session if the
   target tracks more than *N* minutes past the meridian without a flip
   (default 60). A healthy flipped GEM never trips; a flip-less mount
   trips purely on time past the meridian.
-- **Guide circuit breaker** — stops the session after *N* consecutive
+- **Guide circuit breaker** - stops the session after *N* consecutive
   lost-star failures with no recovery (default 20) instead of looping
   forever.
 

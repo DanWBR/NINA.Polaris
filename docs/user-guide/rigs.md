@@ -70,7 +70,7 @@ needed (this used to be a Settings field; we removed it).
 **gain** number; the field carries a **(?)** helper that explains gain
 in ISO terms (higher gain = brighter + lower read noise, but less
 dynamic range). **DSLR / mirrorless** bodies (INDI gphoto on Linux)
-report **ISO** instead — when the driver publishes a CCD_ISO list,
+report **ISO** instead - when the driver publishes a CCD_ISO list,
 Polaris shows an **ISO dropdown** in the capture controls in place of
 the numeric gain box. See [DSLR on Linux](../dslr-linux.md).
 
@@ -84,7 +84,7 @@ directional pad.
 ### Main Scope Focus Motor / Filter Wheel
 
 Standard select + connect (the focuser card is named after the optical
-train it drives — the **Main Scope Focus Motor**). Filter Wheel exposes
+train it drives - the **Main Scope Focus Motor**). Filter Wheel exposes
 filter swap controls; filter labels come from the rig's `FilterOffsets`
 table (Manage rigs modal).
 
@@ -92,7 +92,7 @@ table (Manage rigs modal).
 
 One card for the whole guide setup, split into three labelled groups:
 
-**Scope** (metadata-only) — like Main Telescope but for the guide
+**Scope** (metadata-only) - like Main Telescope but for the guide
 optics. Focal length + aperture drive PHD2 pixel-scale sanity checks +
 the guiding resolution readout. Two ways to populate:
 
@@ -105,7 +105,7 @@ the guiding resolution readout. Two ways to populate:
   focal length + aperture by hand (for off-catalog scopes). Guide
   scopes take no accessory/reducer, so there is no accessory picker.
 
-**Camera** — behaviour depends on the rig's **Guider driver**
+**Camera** - behaviour depends on the rig's **Guider driver**
 (`native` vs `phd2`, set on this card):
 
 - **Native guider** (default): Polaris manages the guide camera
@@ -118,7 +118,7 @@ the guiding resolution readout. Two ways to populate:
   mirrors PHD2's `get_current_equipment` (read-only) so you can see at
   a glance which guide cam PHD2 is using.
 
-**Focus Motor** — an optional motor on the **guide scope** (some setups
+**Focus Motor** - an optional motor on the **guide scope** (some setups
 motorise it). Driver + device picker + connect toggle. Once connected
 it can be jogged from the FOCUS tab via the **Focuser: Guide** source
 switch, and auto-focused with the Auto V-curve **Optical train: Guide**
@@ -136,21 +136,21 @@ Motor** groups, and carries:
   camera), connect/disconnect, and live status.
 - **Focal length / aperture / brand / model** for the aux optical train
   (its own values, used for the FITS `FOCALLEN` of aux frames).
-- **Exposure / gain / binning** — the aux loop runs on its **own
+- **Exposure / gain / binning** - the aux loop runs on its **own
   cadence**, independent of the main camera.
-- **Enable aux capture** toggle — when on, the aux loop captures + saves
+- **Enable aux capture** toggle - when on, the aux loop captures + saves
   frames automatically whenever a main session (LIVE or AUTORUN) is
   running. It pauses while the mount is busy (dither / settle / meridian
   flip / slew) so trailed frames aren't saved.
-- **Aux Focuser** picker — an optional focuser for the aux train, for
+- **Aux Focuser** picker - an optional focuser for the aux train, for
   manual focusing (and Auto V-curve via **Optical train: Auxiliary**).
 
 Aux frames are written to a **separate `aux/` subtree**
 (`{rig}/aux/{target}/{filter}/{session}/`) so they never mix with the
 main camera's `lights/`. The aux camera is also viewable in the FOCUS
 tab via the **Camera: Auxiliary** source switch. Capture + save is the
-aux camera's main job — no guiding, live stacking or sequencing through
-it — but the **SKY** map does draw its real field of view (see below):
+aux camera's main job - no guiding, live stacking or sequencing through
+it - but the **SKY** map does draw its real field of view (see below):
 when connected it shows a **pink aux FOV rectangle**, and a SKY plate
 solve fires a parallel aux solve so the rectangle reflects the true
 rotation + scale the aux frame will come out with.
@@ -171,7 +171,7 @@ accessory has a saved selection.
   lists every channel: on/off buttons for the 12V outlets, a value box +
   Set for dew-heater / PWM channels, and read-only voltage / current /
   temperature sensors. Outlets and dew levels are also drivable from the
-  Advanced Sequencer — see the **Power Box** instruction group in
+  Advanced Sequencer - see the **Power Box** instruction group in
   [adv-sequencer.md](adv-sequencer.md).
 
 ## Rig management

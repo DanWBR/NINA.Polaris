@@ -1,4 +1,4 @@
-# ASCOM (direct COM) — Windows
+# ASCOM (direct COM) - Windows
 
 Polaris can talk to your ASCOM Platform drivers directly through
 COM-interop, without going through ASCOM Remote Server or the
@@ -43,7 +43,7 @@ shows up greyed out with a hint to install it.
    "ZWO ASI Camera", "iOptron CEM70", "Pegasus FocusCube3").
 4. Pick the driver.
 5. **(Optional)** Click **⚙ Setup** to open the driver's modal
-   setup dialog — COM port pickers, mount-model pickers, filter
+   setup dialog - COM port pickers, mount-model pickers, filter
    naming, whatever the vendor exposed. Polaris waits for you to
    dismiss the form before continuing.
 6. Toggle the connect switch ON. Polaris instantiates the driver,
@@ -61,7 +61,7 @@ different thread (an autofocus loop on the focuser).
 
 Cost: ~1 MB of stack + a kernel thread per connected device. A
 typical 4-device rig (camera + mount + focuser + filter wheel)
-uses 4 extra threads — negligible.
+uses 4 extra threads - negligible.
 
 ## Troubleshooting
 
@@ -96,7 +96,7 @@ ASCOM drivers vary in quality. Some advertise capabilities they
 don't actually support, or throw `PropertyNotImplementedException`
 on properties they're meant to implement. Polaris swallows the
 common failures and substitutes neutral defaults (NaN for
-temperature, false for cooler-on, etc.) — but if a critical method
+temperature, false for cooler-on, etc.) - but if a critical method
 fails, the toast surfaces the COM HRESULT verbatim so you can
 report it to the driver vendor.
 
@@ -115,4 +115,4 @@ but you'll need to either:
 For development without hardware, use the **Equipment Simulator**
 panel in Settings to spawn the ASCOM Omni Simulator. The Omni Sim
 exposes every device type through Alpaca, which Polaris reaches
-via its Alpaca path — no driver registration involved.
+via its Alpaca path - no driver registration involved.

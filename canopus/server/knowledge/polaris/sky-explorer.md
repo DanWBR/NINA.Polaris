@@ -11,19 +11,27 @@ running as a sandboxed WebGL2 sub-app (`/sky/`) inside an iframe.
 The bundled `skydata/` (~4.6 MB, shipped in the repo + publish output)
 covers, fully offline: Hipparcos/Tycho stars (the brighter naked-eye to
 binocular range), the NGC/IC/Messier DSO catalog as labelled markers, IAU
-**constellation lines + names** (on by default, the stick-figure overlay
+**constellation lines + names** (on by default - the stick-figure overlay
 you'd expect), the 88 western constellation **figure illustrations**
 (toggleable artwork), a low-res Milky Way panorama, plus sun / moon /
 planets / asteroids / comets.
 
 **Real deep-sky imagery** (the "I can actually see the nebula/galaxy"
-background, like ASIAIR) comes from the **DSS Color HiPS**. Two modes:
+background, like ASIAIR) comes from a **HiPS survey**. **DSS Color** is
+the default; a **survey picker** next to the 🛰️ DSS Img toggle switches
+the imagery layer to another full-sky survey - **DSS2 red+blue**,
+**Mellinger** (wide-field colour), **2MASS** (near-IR), or **unWISE**
+(infrared) - all streamed from CDS/alasky. Switching keeps your current
+pan/zoom. Two modes for DSS Colour specifically:
 
 - **Online** (default if no local bundle): streamed on demand from CDS
   Strasbourg. Needs a connection.
 - **Offline**: provision the DSS bundle once (see *Offline deep-sky
   imagery* below); the bridge auto-detects it and prefers it, so the rich
   sky works at the telescope with no network.
+
+Only DSS Colour ships an offline pyramid; the other surveys are
+online-only (they stream from CDS, like DSS with imagery on).
 
 Drag to pan, mouse wheel / pinch to zoom. The view aims at whatever
 the host UI tells it via postMessage (mount RA/Dec, search hit,
@@ -33,7 +41,7 @@ the host UI tells it via postMessage (mount RA/Dec, search hit,
 
 To make the sky show real imagery with **no internet at use time**,
 download the DSS Color HiPS into the bundle once with the provisioning
-script. Size scales ~4x per HEALPix order, pick the ceiling that fits
+script. Size scales ~4x per HEALPix order - pick the ceiling that fits
 your SBC card:
 
 | max order | tiles  | approx size | look                                  |
@@ -73,22 +81,29 @@ Attribution: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg.
 
 ## DSO preview thumbnails
 
-Search + Atlas result cards show a small **DSS2 cutout per object** (an
-ASIAIR-style "photo per target") so you can tell a galaxy from a nebula
-at a glance, fully offline. The repo bundles Messier + Caldwell (~206
-images, ~3 MB) under `skydata/dso-thumbs/<SLUG>.jpg` (e.g. `M42.jpg`,
-`C14.jpg`), tracked with Git LFS. The frontend derives the slug from each
-result's catalog + id and hides the image when none is bundled.
+Search + Atlas result cards **and the Tonight's Best list** show a small
+**DSS2 cutout per object** (an ASIAIR-style "photo per target") so you
+can tell a galaxy from a nebula at a glance, fully offline. The repo
+bundles **full coverage** - every catalogued object with valid
+coordinates (~17.7k images across M / C / NGC / IC / Arp / HH / LBN /
+LDN / Sh2 / AGC / HCG, ~215 MB) under `skydata/dso-thumbs/<SLUG>.jpg`
+(e.g. `M42.jpg`, `NGC7000.jpg`, `SH2279.jpg`), tracked with Git LFS. The
+frontend derives the slug from each result's catalog + id (or by parsing
+the object name) and hides the image when none is bundled.
 
-Regenerate or widen coverage (e.g. add bright NGC/IC) with:
+Tonight's Best uses these bundled cutouts first (instant + offline);
+the online `/api/sky/image` NASA/Wikipedia lookup is only a fallback for
+objects with no bundled thumb (planets, comets).
+
+Regenerate or widen coverage with (`--workers` parallelises the fetch,
+≤4 to stay polite to the shared CDS service):
 
 ```bash
-python scripts/build-dso-thumbs.py --catalogs M,C,NGC,IC --max-mag 11 --min-size 3
+python scripts/build-dso-thumbs.py --all-catalogs NGC,IC,AGC,HCG --workers 4
 ```
 
 Resumable (skips existing). Source: DSS2 Color via the CDS hips2fits
-service (STScI/NASA imagery). Distinct from the online `/api/sky/image`
-NASA/Wikipedia lookup, which still works as a fallback when connected.
+service (STScI/NASA imagery).
 
 > **Browser requirement.** WebGL2 is mandatory. On a host with no
 > WebGL2 (e.g. running Polaris's local browser on a Raspberry Pi 2
@@ -113,7 +128,7 @@ R*tree-indexed bundle at `wwwroot/catalogs/dso/dso.db` (~2.6 MB,
 | **AGC**        | 767     | CDS Vizier `VII/110A/table3` (Abell-Corwin-Olowin 1989)  | Public domain  |
 
 The AGC entry is magnitude-trimmed at m10 < 17 to keep the brightest
-~30% of the 2712-cluster catalog, fainter clusters require deep
+~30% of the 2712-cluster catalog - fainter clusters require deep
 imaging beyond typical amateur reach.
 
 To rebuild the bundle from the original sources, run:
@@ -154,7 +169,7 @@ Click a result → it overlays on the map, centred + highlighted.
 
 **Filters** button toggles a panel:
 
-- **Catalog** dropdown: narrow to a single source (NGC / IC / M / C
+- **Catalog** dropdown - narrow to a single source (NGC / IC / M / C
   / Arp / Sh2 / HCG / AGC). Hidden when the expanded DB isn't loaded.
 - **Object type** dropdown (Galaxy / Globular Cluster / HII Region /
   Peculiar Galaxy / Planetary Nebula / Supernova Remnant / ...). The
@@ -163,7 +178,7 @@ Click a result → it overlays on the map, centred + highlighted.
   "And", ...). Hidden when the expanded DB isn't loaded.
 - **Magnitude range** Min/Max inputs
 - **Dec range** Min/Max inputs in degrees (useful for filtering by
-  hemisphere, set MinDec=0 to keep only northern targets, MaxDec=0
+  hemisphere - set MinDec=0 to keep only northern targets, MaxDec=0
   for southern)
 
 ## Tonight's altitude chart
@@ -180,25 +195,31 @@ vs UTC time with:
 Polaris draws the camera footprints on the map so you can frame before
 slewing:
 
-- **Blue rectangle**: the **mount** FOV (main camera), anchored where
+- **Blue rectangle** - the **mount** FOV (main camera), anchored where
   the scope is pointing. Sized from the active rig's focal length +
   the connected camera's sensor; rotated to the solved camera angle
   once a plate solve is available.
-- **Red rectangle**: the **target** framing box. Screen-anchored
+- **Red rectangle** - the **target** framing box. Screen-anchored
   (drag the map to compose) when idle; while imaging with a recent
   solve it snaps to the solved sky position so red converges on blue
   when you're framed correctly.
-- **Pink rectangle**: the **aux camera** FOV, shown when an
+- **Pink rectangle** - the **aux camera** FOV, shown when an
   [Auxiliary Camera System](rigs.md#auxiliary-camera-system) is
-  configured (aux focal length set + the aux sensor reported once it
-  connects). The aux rides the same mount, so it's anchored at the
-  mount position.
-- **Yellow rectangles**: the [mosaic](#mosaic-planner) panels.
+  configured (aux focal length set + a sensor footprint). The sensor
+  geometry is learned from the aux camera the first time it connects
+  and remembered on the rig, so the rectangle keeps showing even
+  before the aux is connected; for DSLRs it can also be filled in
+  manually via the aux pixel/size fields. It starts out **concentric
+  with the red target box** - main and aux ride the same mount, so
+  they're assumed co-pointed - and moves to the aux camera's real sky
+  position once an aux plate solve reports how far off the two
+  actually are (see below).
+- **Yellow rectangles** - the [mosaic](#mosaic-planner) panels.
 
 ### Confirming the aux camera framing
 
 When you run a plate solve from SKY (**Solve & Sync**), Polaris fires a
-**parallel solve on the aux camera** if it's connected, it captures
+**parallel solve on the aux camera** if it's connected - it captures
 one aux frame (aux exposure / gain / binning) and solves it on its own
 hardware, concurrently with the main solve. The pink rectangle then
 snaps onto the aux's **real solved rotation + scale**, so you know for
@@ -223,7 +244,7 @@ Centering → ✓ Centered (12 arcsec error)".
 
 ## Center on Sun / Moon / planet
 
-Plate solving can't lock onto solar-system objects, the Sun/Moon wash the
+Plate solving can't lock onto solar-system objects - the Sun/Moon wash the
 frame out, and a planet shot (long focal length, millisecond exposures) has no
 background stars to match. So Slew & Center fails on them. The **Center on
 body** picker on the map handles them with a *solve-near-and-offset* strategy:
@@ -233,7 +254,7 @@ body** picker on the map handles them with a *solve-near-and-offset* strategy:
 2. Polaris computes the object's apparent topocentric position from its built-in
    ephemeris (your profile location + clock).
 3. It slews a few degrees off to a **nearby star field** and runs the normal
-   plate-solve + sync there, correcting the mount's pointing model right next
+   plate-solve + sync there - correcting the mount's pointing model right next
    to the target, without ever solving the object itself.
 4. It re-reads the ephemeris (the Moon moves ~0.5°/h) and does a precise GoTo
    onto the object. For the Moon/Sun it then switches the mount to **lunar /
@@ -243,7 +264,7 @@ The phase chip shows progress (Computing position → Solving nearby field →
 Slewing to target → Centered), and the offset-field solve streams to the SKY
 solver console like any other solve.
 
-> **⚠ Sun:** selecting the Sun pops a confirmation, only proceed with a
+> **⚠ Sun:** selecting the Sun pops a confirmation - only proceed with a
 > certified full-aperture solar filter fitted. An unfiltered scope on the Sun
 > destroys the camera instantly and can cause permanent eye damage. No software
 > can protect against this.

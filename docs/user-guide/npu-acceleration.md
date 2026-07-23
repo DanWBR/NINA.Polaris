@@ -3,8 +3,8 @@
 Polaris can run the GraXpert AI models (background extraction, denoise) on a
 board's **NPU** instead of the CPU, on two families of SBC:
 
-- **Rockchip RK3588 / RK3588S** (Orange Pi 5 Pro, etc.) — via the RKNPU2 runtime.
-- **Qualcomm** (Radxa Dragon Q6A / QCS6490, Hexagon V68) — via the QAIRT runtime.
+- **Rockchip RK3588 / RK3588S** (Orange Pi 5 Pro, etc.) - via the RKNPU2 runtime.
+- **Qualcomm** (Radxa Dragon Q6A / QCS6490, Hexagon V68) - via the QAIRT runtime.
 
 Both are fully automatic and isolated behind a runtime probe: when a supported
 NPU + the matching runtime + a converted model are present, Polaris uses the NPU;
@@ -37,7 +37,7 @@ works **even if the GraXpert CLI is not installed**.
 ## Requirements on the board
 
 1. An RK3588/RK3588S board with the **RKNPU driver** in the kernel. The stock
-   Orange Pi / vendor Ubuntu images already include it — check with:
+   Orange Pi / vendor Ubuntu images already include it - check with:
 
    ```bash
    ls /dev/dri/renderD*        # an NPU render node should exist
@@ -60,7 +60,7 @@ The `.rknn` models and `librknnrt.so` are produced/fetched at build time and are
 not committed (the models derive from GraXpert's NonCommercial AI weights; the
 runtime is a Rockchip vendor binary).
 
-1. **Convert the ONNX models to RKNN** — on an x86_64 Linux / WSL box with
+1. **Convert the ONNX models to RKNN** - on an x86_64 Linux / WSL box with
    `rknn-toolkit2` (Python 3.11):
 
    ```bash
@@ -99,13 +99,13 @@ versus the CPU/ONNX path.
 
 On Qualcomm SBCs Polaris can run BGE / Denoise on the **Hexagon NPU (HTP)** via
 the **QAIRT** runtime (Qualcomm AI Runtime, formerly "QNN"). On the Radxa Dragon
-Q6A the denoise model runs at about **29.5 ms/tile** (int16) — roughly **150x**
-the CPU onnxruntime baseline (~4488 ms/tile) — and frees the CPU for live
+Q6A the denoise model runs at about **29.5 ms/tile** (int16) - roughly **150x**
+the CPU onnxruntime baseline (~4488 ms/tile) - and frees the CPU for live
 stacking.
 
 ### Integer-only: int16 vs int8
 
-The QCS6490 Hexagon HTP is **integer-only — INT8 and INT16, no FP16** (fp16 on
+The QCS6490 Hexagon HTP is **integer-only - INT8 and INT16, no FP16** (fp16 on
 this chip runs on the GPU/CPU, not the NPU). Polaris ships **int16** models by
 default: that is the production, near-fp16-quality path. An **int8** model is
 ~4x faster (~7.3 ms/tile) but visibly lower quality on denoise, so it is the
@@ -115,7 +115,7 @@ supports it).
 
 ### Requirements on the board
 
-1. A Qualcomm SBC whose Hexagon cDSP is up — Polaris checks for
+1. A Qualcomm SBC whose Hexagon cDSP is up - Polaris checks for
    `/dev/fastrpc-cdsp`:
 
    ```bash
@@ -136,7 +136,7 @@ Confirm detection from **GraXpert status** (`/api/graxpert/status` →
 The HTP context binaries (`*_v68_int16.bin`) and the QAIRT runtime are
 produced/assembled at build time and are **not committed** (the models derive
 from GraXpert's NonCommercial AI weights; the runtime is proprietary, device-
-version-locked Qualcomm code — see `licenses/QAIRT-LICENSE.txt`).
+version-locked Qualcomm code - see `licenses/QAIRT-LICENSE.txt`).
 
 1. **Build an int16 context binary** via Qualcomm AI Hub (`qai_hub`), targeting
    the QCS6490 (device "Dragonwing RB3 Gen 2 Vision Kit"):
@@ -144,7 +144,7 @@ version-locked Qualcomm code — see `licenses/QAIRT-LICENSE.txt`).
    (w8a16), then compile→`qnn_context_binary --quantize_io`. Place the result at
    `wwwroot/graxpert/models/qnn/{family}-ai-models/{version}/{family}_v68_int16.bin`.
 
-   For the **Polaris-trained** models (our own weights — the `.bin` is safe to
+   For the **Polaris-trained** models (our own weights - the `.bin` is safe to
    commit, unlike the GraXpert NonCommercial ones) this whole flow is scripted:
 
    ```bash
@@ -156,18 +156,18 @@ version-locked Qualcomm code — see `licenses/QAIRT-LICENSE.txt`).
    ```
 
    `--all` also converts halo / upscale / decon (the converter handles decon's
-   two inputs — image NCHW 512 + a `params` tensor — automatically). All three
+   two inputs - image NCHW 512 + a `params` tensor - automatically). All three
    now run on the Hexagon NPU (QNN path) once their `.bin` is present:
-   - **Decon** — automatic: a GraXpert "AI Sharpen" / decon run on a FITS takes
+   - **Decon** - automatic: a GraXpert "AI Sharpen" / decon run on a FITS takes
      the NPU like BGE/Denoise (`QnnInferenceService.RunDecon`).
-   - **Halo + Upscale** — via `POST /api/onnx/npu-run { op, path, strength?,
+   - **Halo + Upscale** - via `POST /api/onnx/npu-run { op, path, strength?,
      version? }` (`RunHalo` reuses the denoise pipeline; `RunUpscale` is the 2×
      SR path). A FILES/Editor "run on NPU" button is still TODO, so today these
      are API-only (test with curl). On the Rockchip (RKNN) path halo/upscale/
      decon still fall back to the browser / CLI.
 
    (`qai_hub` = cloud AI Hub path, in the `qnn` env. `qairt-py` is the separate
-   local `qairt-converter` toolchain — same result offline, not used here.)
+   local `qairt-converter` toolchain - same result offline, not used here.)
 
    It reads the input name/shape from each `model.onnx`, runs the same
    w8a16 → `qnn_context_binary` flow, and drops `{family}_v68_int16.bin` under

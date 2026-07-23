@@ -1,6 +1,6 @@
-# N.I.N.A. Polaris, User Guide
+# Polaris Astro Controller, User Guide
 
-Welcome. N.I.N.A. Polaris is a browser-controlled astrophotography
+Welcome. Polaris Astro Controller is a browser-controlled astrophotography
 controller running on a Raspberry Pi, mini-PC, or any small Linux/Windows
 host on your network. You point any device (laptop, tablet, phone) at
 the host and get the full equipment + capture + processing workflow
@@ -9,7 +9,7 @@ without a desktop.
 This guide is split into **flows** (do this to accomplish X) and
 **references** (this is what every control does).
 
-> **Lost in the UI? → [Where do I go to do X?](ui-navigation.md)**: a quick
+> **Lost in the UI? → [Where do I go to do X?](ui-navigation.md)** - a quick
 > map of every panel and a task index (connect gear, pick a target, focus,
 > guide, capture, live-stack, process, settings).
 
@@ -54,7 +54,8 @@ Each tab in the sidebar has its own page. Read the ones you need:
 
 - **[RIGS](rigs.md)**, multi-rig equipment management. INDI/Alpaca/vendor
   drivers, per-role cards (Main Telescope, Camera, Mount, Focuser, Filter
-  Wheel, Guidescope, Guide Camera, Rotator, Flat Panel, Dome, Weather).
+  Wheel, Guidescope, Guide Camera, Rotator, Flat Panel, Dome, Weather,
+  Power Box).
 - **[ASCOM (direct COM)](ascom-com.md)**, Windows-only path to talk to
   ASCOM Platform drivers directly without going through ASCOM Remote
   or the Alpaca Omni Simulator.
@@ -78,10 +79,6 @@ Each tab in the sidebar has its own page. Read the ones you need:
   several targets, each with its own frame list, run in order with
   automatic slew + plate-solve-center, guiding, cooling, auto-focus,
   meridian-flip handling, and end-of-session actions.
-- **[Canopus Assistant](canopus-assistant.md)**, the optional AI co-pilot:
-  plans the night, drives the rig with your approval, and answers questions.
-  Covers the three backends (cloud, on this host, on this device) and their
-  minimum and recommended requirements.
 - **[LIVE](live-stacking.md)**, real-time EAA stacking with auto
   re-focus / re-center triggers. See also
   [client-side compute](client-side-compute.md) for the WASM offload
@@ -125,7 +122,7 @@ Each tab in the sidebar has its own page. Read the ones you need:
   from the browser, without plugging in a screen.
 - **[Software self-update](self-update.md)**, on Pi/SBC `.deb` installs
   a status-bar badge offers a one-click update to the latest GitHub
-  release, download + install the matching `.deb` and reload, no SSH or
+  release - download + install the matching `.deb` and reload, no SSH or
   sudo password.
 
 ## Reference

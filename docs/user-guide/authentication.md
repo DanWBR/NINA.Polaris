@@ -59,7 +59,7 @@ back to the **Sign in** overlay.
 Connections from `127.0.0.1` / `::1` (loopback) skip auth
 entirely. Use cases:
 
-- SSH-tunneling Polaris to your laptop: `ssh -L 5080:localhost:5080 polaris@pi` then `curl http://localhost:5080/api/system/status` — no token needed.
+- SSH-tunneling Polaris to your laptop: `ssh -L 5080:localhost:5080 polaris@pi` then `curl http://localhost:5080/api/system/status` - no token needed.
 - Running scripts ON the Pi against `http://localhost:5080/`: same.
 - Local dev: `dotnet run` + browser on the same machine: no friction.
 
@@ -113,7 +113,7 @@ Save + restart the service:
 sudo systemctl restart polaris.service
 ```
 
-Next browser hit triggers the first-run wizard again — set a new
+Next browser hit triggers the first-run wizard again - set a new
 password there. All previous sessions are invalidated by the
 restart.
 
@@ -160,7 +160,7 @@ restart.
 
 ## See also
 
-- [Raspberry Pi setup](raspberry-pi-setup.md) — first-boot defaults
+- [Raspberry Pi setup](raspberry-pi-setup.md) - first-boot defaults
   including WiFi hotspot credentials.
-- [WiFi management](#) — switching the Pi between Hotspot and
+- [WiFi management](#) - switching the Pi between Hotspot and
   Station modes.

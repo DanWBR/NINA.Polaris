@@ -1,7 +1,7 @@
 # GUIDE tab (native guider)
 
 Polaris ships a built-in autoguider (`NativeGuider`) ported from PHD2's core
-guiding math, single-star centroid, calibration, Hysteresis (RA) + Resist-Switch
+guiding math - single-star centroid, calibration, Hysteresis (RA) + Resist-Switch
 (Dec) algorithms, Dec backlash compensation, multi-star, and pier-side handling.
 It drives the rig's **guide camera** + **mount** directly (ST4-style pulse
 guiding over the mount's PulseGuide), so no external PHD2 process is needed.
@@ -22,17 +22,34 @@ guide camera is on and the GUIDE backend is `native`.
 
 ## Bottom control bar
 
+The bottom bar holds only the capture/guide actions (Exp / Gain / Bin
+inline and left-aligned); the settle + dither knobs live in the
+**Dithering** section of the **Status** pane on the right.
+
 | Control | Meaning |
 |---|---|
 | **Exp (s)** | Guide-camera exposure per frame, picked from a dropdown of presets (0.1, 0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0 s). Persists to the rig. |
 | **Gain** | Guide-camera gain (native only), picked from a dropdown built from the camera's reported min/max plus evenly spaced intermediate values. |
 | **Bin 2x2** | Bin the guide camera 2×2 for a brighter, smaller frame. |
-| **Settle px / s / Timeout** | Settle tolerance, minimum settled time, hard timeout used after calibration starts and after a dither. |
 | **Loop** | Capture continuously without guiding (framing, focusing the guide scope). |
 | **Start Guiding** | Calibrate if needed, auto-select a star, then guide. |
 | **Auto-select Star** | Pick the brightest suitable star. |
 | **Pause / Resume / Stop** | Pause keeps the lock; Stop ends the loop (and aborts an in-progress calibration). |
-| **Dither / px / RA only** | Manual one-shot dither. (Automatic dithering is driven by the AUTORUN sequencer or the LIVE tab, see below.) |
+
+The **Status / Settings / Calibration** side panel opens directly under
+the **Built-In / External** backend selector - there is no separate
+"PHD2 Native" tab, and there is no Disconnect button (the guider
+connection is managed from **RIGS**). The chart above resizes with the
+window so the graph, guide frame, and control bar stay on screen
+together, and **Clear History** sits in the chart's bottom-right corner.
+
+Settle + dither controls (in **Status → Dithering**):
+
+| Control | Meaning |
+|---|---|
+| **Settle px / s / Timeout s** | Settle tolerance, minimum settled time, and the hard timeout used after calibration starts and after a dither. |
+| **Dither px / RA only** | Dither amplitude and axis restriction for the manual and automatic dithers. |
+| **⤡ Dither now** | Fire a one-shot dither immediately (guiding must be active). |
 
 ## Calibration
 
@@ -43,9 +60,9 @@ calibration; **Recalibrate** forces a fresh run.
 
 **Calibration & correction** settings (per rig):
 
-- **Calibration step (ms)**: pulse length per calibration step. Larger steps
+- **Calibration step (ms)** - pulse length per calibration step. Larger steps
   finish faster but overshoot on short focal lengths; smaller steps are gentler.
-- **Max RA / Max DEC duration (ms)**, caps the per-axis correction pulse during
+- **Max RA / Max DEC duration (ms)** - caps the per-axis correction pulse during
   guiding (ASIAIR-style), so a big error can't run the mount away.
 
 During calibration the **crosshair stays pinned** at the start position while the
@@ -61,7 +78,7 @@ calibration loaded from disk rather than freshly measured.
 
 ### Persistence + restore (per equipment)
 
-Calibrations are saved **per rig, keyed by the equipment signature**, guide
+Calibrations are saved **per rig, keyed by the equipment signature** - guide
 camera + driver, binning, guider focal length, and mount + driver. On connect,
 Polaris restores the calibration matching the gear currently fitted.
 
@@ -76,29 +93,29 @@ equipment's calibration; other saved ones stay.
 
 ## Guiding parameters
 
-- **RA algo / Dec algo**, Hysteresis / Lowpass / Lowpass2 / Resist-Switch /
+- **RA algo / Dec algo** - Hysteresis / Lowpass / Lowpass2 / Resist-Switch /
   Predictive (PE + drift) / Identity (defaults: Hysteresis RA, Resist-Switch Dec,
   PHD2's defaults).
-- **Predictive (PE + drift)**: a feed-forward algorithm that *learns* the mount's
+- **Predictive (PE + drift)** - a feed-forward algorithm that *learns* the mount's
   periodic error (worm-gear sinusoid) plus slow drift from the recent guiding
   history and corrects *ahead* of the error instead of only chasing it, similar in
   spirit to PHD2's Predictive PEC. Most useful on the **RA** axis, where worm PE
   dominates. When you pick it on either axis a small panel appears:
-  - **Worm period (s, 0 = auto)**, your mount's worm period if you know it;
+  - **Worm period (s, 0 = auto)** - your mount's worm period if you know it;
     leave at 0 to auto-estimate it from the guiding history.
-  - **History (samples)**: how many recent frames feed the fit (≈ two worm
+  - **History (samples)** - how many recent frames feed the fit (≈ two worm
     periods; default 256).
-  - **Feed-forward blend (0-1)**: how strongly the prediction is applied on top of
+  - **Feed-forward blend (0-1)** - how strongly the prediction is applied on top of
     the reactive baseline (default 0.7; lower is gentler).
   It always falls back to reactive guiding until the model locks on, so it never
   guides worse than the default. The guide graph overlays a **dashed predicted
   curve** (amber = RA, pale-cyan = Dec) so you can see the model tracking the error.
-- **Dec backlash comp (auto-measured)**: applies the slack take-up measured
+- **Dec backlash comp (auto-measured)** - applies the slack take-up measured
   during calibration on a Dec direction reversal. Disabled if calibration didn't
   measure a backlash.
-- **Multi-star guiding**: tracks several stars and guides on their average for a
+- **Multi-star guiding** - tracks several stars and guides on their average for a
   steadier centroid.
-- **On meridian flip**: *Mirror calibration* (reuse, flipping RA by 180° and
+- **On meridian flip** - *Mirror calibration* (reuse, flipping RA by 180° and
   optionally Dec), *Recalibrate*, or *Do nothing*. **Reverse Dec after flip**
   toggles the Dec-pulse reversal used by *Mirror*.
 
@@ -127,14 +144,15 @@ same with the native guider and external PHD2. The guider must be actively
 guiding; the dithered frame waits to settle before the next exposure/integration.
 
 While a dither settles, the native guider shows an **ASIAIR-style settle
-readout**, the live error vs the settle tolerance plus a progress indicator, so you can see it converge instead of guessing. The dither/settle state is also
+readout** - the live error vs the settle tolerance plus a progress indicator -
+so you can see it converge instead of guessing. The dither/settle state is also
 surfaced in the top status-bar guider badge.
 
 ## Star lost
 
 If the native guider loses its guide star it reports **LostLock** (the same
 state PHD2 uses), surfaced in the GUIDE panel and the status bar, and keeps the
-loop responsive while it tries to reacquire, it does not freeze the session.
+loop responsive while it tries to reacquire - it does not freeze the session.
 (Note: a stuck INDI BLOB on some drivers can still require restarting the INDI
 driver; that's a driver-level wedge, not a Polaris reconnect.)
 
@@ -154,7 +172,7 @@ Select the **Simulator** guide camera + mount drivers (RIGS) with guider driver
 
 ## See also
 
-- [GUIDE (PHD2)](guide-phd2.md): external PHD2 backend
+- [GUIDE (PHD2)](guide-phd2.md) - external PHD2 backend
 - [Live stacking → Auto dither](live-stacking.md#auto-dither)
 - [Equipment simulator mode](simulator-mode.md)
 - [Glossary → Calibration / Dither / Guiding](GLOSSARY.md)

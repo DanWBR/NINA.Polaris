@@ -9,7 +9,7 @@ without a desktop.
 This guide is split into **flows** (do this to accomplish X) and
 **references** (this is what every control does).
 
-> **Lost in the UI? → [Where do I go to do X?](ui-navigation.md)** — a quick
+> **Lost in the UI? → [Where do I go to do X?](ui-navigation.md)** - a quick
 > map of every panel and a task index (connect gear, pick a target, focus,
 > guide, capture, live-stack, process, settings).
 
@@ -122,7 +122,7 @@ Each tab in the sidebar has its own page. Read the ones you need:
   from the browser, without plugging in a screen.
 - **[Software self-update](self-update.md)**, on Pi/SBC `.deb` installs
   a status-bar badge offers a one-click update to the latest GitHub
-  release — download + install the matching `.deb` and reload, no SSH or
+  release - download + install the matching `.deb` and reload, no SSH or
   sudo password.
 
 ## Reference

@@ -1,6 +1,6 @@
-# UI navigation: where do I go to do X?
+# UI navigation - where do I go to do X?
 
-A quick "task → panel → what to click" map of the N.I.N.A. Polaris web UI, for
+A quick "task → panel → what to click" map of the Polaris Astro Controller web UI, for
 when you know *what* you want but not *where* it lives. The left sidebar is the
 main navigation rail; each button opens one panel. Some panels have a pill/tab
 row at the top for sub-views.
@@ -25,7 +25,7 @@ row at the top for sub-views.
 | **Config** | Settings | Plate solver, network, authentication, AI/ONNX, colour-calibration data, appearance, and more. |
 | **Help** | Tutorials | Step-by-step walkthroughs, first-night checklist, and troubleshooting. |
 
-> For the assistant: these map to `show_panel` tabs: Home=`home`, Rigs=`equip`,
+> For the assistant: these map to `show_panel` tabs - Home=`home`, Rigs=`equip`,
 > Polar=`polar`, Sky=`sky` (Tonight=`tonight`, Weather=`weather`), Focus=`focus`,
 > Guide=`guide`, Preview=`preview`, Autorun=`sequence`, Plan=`plan`, Live=`live`,
 > Video=`video`, Adv=`seqadv`, Studio=`files`, Config=`settings`, Help=`help`.
@@ -76,7 +76,7 @@ row at the top for sub-views.
 - **Pick the best subs and stack them** → **Studio**: add lights, grade the
   frames, then integrate the keepers into a master.
 - **Colour calibrate** → **Studio**: on a plate-solved RGB master, use
-  **Color Cal (PCC)** or **SPCC**. (Needs WCS in the file: re-solve via
+  **Color Cal (PCC)** or **SPCC**. (Needs WCS in the file - re-solve via
   **Studio → Solve** if matches are low. A white-balance summary chart appears
   when it finishes.)
 - **Combine channels (LRGB / SHO)** → **Studio** (Combine).
@@ -98,7 +98,7 @@ row at the top for sub-views.
 - **Tutorials and troubleshooting** → **Help**.
 
 ## If you're just lost
-Start at **Home** for status, then follow the sidebar top-to-bottom, it's
+Start at **Home** for status, then follow the sidebar top-to-bottom - it's
 ordered like a real session: **Rigs** (connect) → **Sky** (pick a target) →
 **Focus** → **Guide** → **Autorun** or **Plan** (capture) → **Live** (watch) →
 **Studio** (process). **Help** has a guided first-night checklist.

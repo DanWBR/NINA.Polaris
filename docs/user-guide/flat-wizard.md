@@ -84,7 +84,7 @@ saving.
 ## Panel brightness
 
 Sidebar, shown only when a flat device is connected. Slider 0-100.
-**0 means "don't touch the panel"** — useful when you're doing
+**0 means "don't touch the panel"** - useful when you're doing
 sky / T-shirt flats and a panel happens to also be connected but
 you don't want to use it.
 
@@ -166,7 +166,7 @@ biases. The STUDIO library auto-indexes them.
 
 ### Indoor with a flat panel
 
-1. Cap the scope or close the dome shutter — keep ambient light
+1. Cap the scope or close the dome shutter - keep ambient light
    off the panel.
 2. Tube the panel against the dewshield / front of the OTA.
 3. Aba AUTORUN → Flat Wizard sub-tab.
@@ -197,18 +197,18 @@ biases. The STUDIO library auto-indexes them.
 **Search never converges**, the bracket may be too narrow or the
 target ADU is unreachable. Widen Min/Max exposure. Check the
 panel/sky actually reaches your target ADU with a manual capture
-at the max exposure — if the median is still well below target,
+at the max exposure - if the median is still well below target,
 the light source is too dim.
 
 **"Did not converge" for one filter**, the binary search collapsed
 without hitting tolerance. Often happens with narrowband filters
-under broadband sky flats — they transmit so little that the
+under broadband sky flats - they transmit so little that the
 brightest exposure you'd accept still produces a median below
 target. Capture that filter against a panel instead.
 
 **Trained exposure gives wildly wrong ADU on the next run**, the
 illumination changed between sessions (panel brightness mod,
-different sky condition). Run the wizard again — convergence will
+different sky condition). Run the wizard again - convergence will
 be fast (1-2 iterations) and a new value gets cached. The wizard
 always trusts the live measurement over the cache.
 
@@ -218,8 +218,8 @@ click Connect on the card.
 
 ## API
 
-- `GET /api/flatwizard/status` — `{state, progress, lastError}`
-- `GET /api/flatwizard/trained` — `{filter_bin: seconds}` map
+- `GET /api/flatwizard/status` - `{state, progress, lastError}`
+- `GET /api/flatwizard/trained` - `{filter_bin: seconds}` map
 - `POST /api/flatwizard/start` with body
   `{filters[], framesPerFilter, targetAdu, tolerance, minExposure,
   maxExposure, binning, maxSearchIterations}` → 200 / 409 if

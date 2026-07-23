@@ -257,7 +257,7 @@ warmup at app boot.
 
 ## Restarting a wedged driver
 
-Sometimes a single INDI driver stops responding mid-session, most
+Sometimes a single INDI driver stops responding mid-session - most
 often a camera driver that stops delivering frames (a "dropped
 BLOB"): the exposure fires but the image never arrives and the
 capture eventually times out. A device *reconnect* does not fix
@@ -267,18 +267,18 @@ Polaris↔device link.
 When indi-web is running, the **Driver watchdog** panel (top of the
 INDI Drivers sub-tab) gives you two things:
 
-- **Per-driver restart**: every running driver is listed with a
+- **Per-driver restart** - every running driver is listed with a
   `↻ Restart` button that bounces just that one driver on the
   indiserver (via indi-web's `/api/drivers/restart/<label>`),
   leaving the others untouched. Far less disruptive than restarting
   the whole indi-web or the server.
-- **Auto-restart** (on by default): after repeated capture
+- **Auto-restart** (on by default) - after repeated capture
   timeouts for the same camera, Polaris resolves its driver and
   restarts it automatically, then tells you. It is rate-limited
   (a minimum gap between restarts and a cap per 30 min); once the
   cap is hit it stops and asks you to intervene (check cabling /
   power / USB), so a genuinely broken driver isn't bounced forever.
-  It only ever restarts a driver, it never moves hardware.
+  It only ever restarts a driver - it never moves hardware.
 
 Auto-restart only works when indi-web owns the server. If Polaris is
 pointed at an external `indiserver` you started yourself, the
