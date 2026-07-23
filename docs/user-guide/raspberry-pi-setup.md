@@ -40,6 +40,18 @@ Single page on purpose. If you already have a working Pi and just need
 to install Polaris, jump to [Install Polaris](#5-install-polaris).
 Otherwise follow top to bottom.
 
+> **Other arm64 SBCs (Orange Pi, Radxa, etc.).** Polaris runs fine on
+> them, but this guide is written for the Raspberry Pi, so the
+> **Pi-specific steps do not apply**: `raspi-config`, `vcgencmd`,
+> the `/boot/firmware/config.txt` edits (gpu_mem in 2.5,
+> max_usb_current in 2.6), and Raspberry Pi Imager. Flash your board
+> with its own vendor image tool and skip sections 2.5 and 2.6.
+> Everything else (the `.deb`, INDI, ASTAP in 4.3 including the `/tmp`
+> warning, systemd, indi-web) applies unchanged. On low-RAM boards
+> (1 to 2 GB, e.g. the Orange Pi Zero 3) also read the
+> [live-stacking memory notes](live-stacking.md#stacking-resolution-and-memory)
+> before your first EAA session.
+
 ## 0. Hardware checklist
 
 | Item | Pi 4 | Pi 5 | Notes |
@@ -382,34 +394,62 @@ should resolve to `/usr/local/bin/`. The apt versions in `/usr/bin/`
 get shadowed by the PATH order; uninstall them if you want to be
 certain (`sudo apt remove indi-bin phd2 xpra`).
 
-### 4.3. ASTAP star database (one-time, ~290 MB)
+### 4.3. ASTAP star database (one-time)
 
-ASTAP alone cannot solve, it needs a star catalog. The modern V50
-database (Gaia-based, replaces the older H17 Hipparcos catalog) covers
-focal lengths from 50 mm to 2000 mm and ships as a `.deb` that
-installs to the right location automatically:
+ASTAP alone cannot solve; it needs a star catalog. ASTAP publishes
+several, sorted by star density (D05 = 500, D20 = 2000, D50 = 5000,
+D80 = 8000 stars per square degree). You pick one by your **field of
+view**, which depends on focal length and sensor size. A denser
+database solves a smaller field but downloads larger:
+
+| Database | Download | Good for |
+|---|---|---|
+| `d05_star_database.deb` | 101 MB | wide fields only (FOV above ~1.5 deg) |
+| `d20_star_database.deb` | 393 MB | medium fields (FOV down to ~0.5 deg) |
+| `d50_star_database.deb` | 867 MB | **general default**; small fields (FOV down to ~0.3 deg) |
+| `d80_star_database.deb` | 1.2 GB | ultra-narrow fields (FOV below ~0.3 deg) |
+| `w08_star_database_mag08_astap.deb` | under 1 MB | very wide camera lenses (FOV above 20 deg) |
+
+The size is driven by your **narrowest** field, not your widest: a
+long focal length on a small sensor makes a tiny field that needs a
+dense catalog. For a typical 400 to 1500 mm imaging setup, **D50 is the
+right pick** and covers everything. Step up to D80 only for sub-0.3 deg
+fields; drop to D20 or D05 only if you exclusively shoot wide and want
+a smaller download. The official selection chart is on the
+[ASTAP database page](https://www.hnsky.org/astap.htm).
+
+> The older **V50** database is a **photometry** catalog (Johnson-V,
+> with colour data). It can solve, but it is not the plate-solving
+> database and it is ~1 GB. Use the D-series above for plate solving.
+
+Download to your **home directory, not `/tmp`** (see the warning below),
+install, then delete the `.deb`:
 
 ```bash
-cd /tmp
-wget -O v50_star_database.deb \
-  "https://downloads.sourceforge.net/project/astap-program/star_databases/v50_star_database.deb"
-sudo dpkg -i v50_star_database.deb
+cd ~
+wget -O d50_star_database.deb \
+  "https://downloads.sourceforge.net/project/astap-program/star_databases/d50_star_database.deb"
+sudo dpkg -i d50_star_database.deb
+rm d50_star_database.deb   # reclaim ~870 MB once the database is installed
 ```
 
-The postinst lands the chunks in `/opt/astap/` where the ASTAP binary
-looks for them by default. No further configuration needed.
+> ⚠️ **Never download large files into `/tmp` on an SBC.** On most
+> single-board computers `/tmp` is a **tmpfs** (RAM-backed, typically
+> ~50% of RAM), so a ~1 GB database fills it and the download dies
+> partway with a misleading `Cannot write ... (Success)` (that is
+> really "out of space", errno lost). Download to `~` (on the SD card /
+> eMMC) instead, and run `df -h /tmp /` first. This bites small-RAM
+> boards (Orange Pi Zero, Pi Zero 2 W) hardest.
+
+The postinst lands the database in `/opt/astap/` where the ASTAP binary
+looks by default. No further configuration needed.
 
 Verify:
 
 ```bash
-ls /opt/astap/ | head     # should show *.001 / *.290 / etc chunks
+ls /opt/astap/            # shows the installed database files
 astap_cli -h 2>&1 | head  # confirms ASTAP itself runs
 ```
-
-For ultra-narrow fields (Hyperstar f/2 + huge sensor, mosaic tiles
-under 30 arcmin) the deeper V17 database is available on the same
-SourceForge page; for the typical 400-1500 mm imaging setup V50 is
-the right pick.
 
 ### 4.4. GraXpert (manual install)
 
@@ -530,7 +570,7 @@ var). Use it unless you have a specific reason not to.
 ### Option A: Debian .deb (recommended, supersedes sections 4 + 6 + 7)
 
 ```bash
-cd /tmp
+cd ~   # not /tmp: on small-RAM SBCs /tmp is a RAM-backed tmpfs (see 4.3)
 wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb
 sudo apt install ./polaris_arm64.deb
 # 60 to 90 seconds later, postinst prints:
@@ -646,7 +686,7 @@ SSID).
 ## 7. Auto-start on boot (systemd)
 
 Create a unit so Polaris comes back after every reboot, power loss, or
-crash. Skip if you used Docker (option B).
+crash. Skip if you used Docker (option C).
 
 ```bash
 sudo tee /etc/systemd/system/polaris.service > /dev/null <<'EOF'
@@ -832,7 +872,8 @@ End-to-end check from your laptop:
    renders real stars from the GSC catalog based on the simulated
    mount position.
 8. Optionally: STUDIO tab, click any existing FITS frame, click
-   "Plate solve". ASTAP solves in 1 to 5 seconds with the H17 database.
+   "Plate solve". ASTAP solves in 1 to 5 seconds with the database you
+   installed in section 4.3.
 
 If all of that works, you have a fully functional Polaris install.
 Move on to [First-night setup](first-night.md) for the walkthrough of
