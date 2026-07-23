@@ -349,6 +349,17 @@ public class ImageWriterService {
             else if (_equip.Camera is { IsConnected: true } gcam && gcam.Gain > 0)
                 m.Camera.Gain = gcam.Gain;
         }
+        // Camera offset, the same gap class as gain: not every driver stamps
+        // OFFSET into the per-frame metadata (and ICamera exposes no live
+        // Offset to read back the way Gain can be), so several save paths
+        // dropped it entirely and the FITS carried no OFFSET card. Fill from
+        // the rig's configured DefaultOffset, which is what actually got
+        // applied at capture. FITSWriter only emits OFFSET when non-zero,
+        // matching the GAIN behaviour.
+        if (m.Camera.Offset == 0) {
+            var rigOffset = _profile.ActiveEquipmentProfile?.DefaultOffset ?? 0;
+            if (rigOffset > 0) m.Camera.Offset = rigOffset;
+        }
         // Camera identity, same gap: fill from the connected camera when
         // the capture didn't stamp a name (drives CAMERAID / INSTRUME).
         if (string.IsNullOrEmpty(m.Camera.Name)
