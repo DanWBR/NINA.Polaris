@@ -14436,9 +14436,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 </template>
                                 <template x-if="bench.lastResult.thermal && bench.lastResult.thermal.ran && bench.lastResult.thermal.ratedMaxMhz > 0">
                                     <tr><td class="hint" style="padding-left:10px">Throttling</td>
-                                        <td x-show="!bench.lastResult.thermal.throttled" class="text-ok">None — clock held at the rated ceiling.</td>
+                                        <td x-show="!bench.lastResult.thermal.throttled" class="text-ok">None, clock held at the rated ceiling.</td>
                                         <td x-show="bench.lastResult.thermal.throttled" class="text-warn">
-                                            Throttled<span x-show="bench.lastResult.thermal.cause === 'thermal'"> — likely thermal (SoC ran hot; better cooling helps)</span><span x-show="bench.lastResult.thermal.cause === 'power'"> — likely power / undervoltage (clock held down while cool; check the PSU / cable)</span>.</td></tr>
+                                            Throttled<span x-show="bench.lastResult.thermal.cause === 'thermal'">, likely thermal (SoC ran hot; better cooling helps)</span><span x-show="bench.lastResult.thermal.cause === 'power'">, likely power / undervoltage (clock held down while cool; check the PSU / cable)</span>.</td></tr>
                                 </template>
 
                                 <template x-if="bench.lastResult.gpu && bench.lastResult.gpu.ran">
