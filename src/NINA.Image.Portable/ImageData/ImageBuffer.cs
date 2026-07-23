@@ -74,13 +74,38 @@ public class ImageBuffer : IImageBuffer {
             bayerOverride ?? imageData.Properties.BayerPattern);
     }
 
+    /// <summary>Compress into a freshly allocated, exactly-sized array.
+    /// Convenience wrapper over <see cref="RentLz4Compressed"/> for callers that
+    /// want to own the buffer; the streaming path should use the pooled form.</summary>
     public byte[] ToLz4Compressed() {
+        var pooled = RentLz4Compressed(out int length);
+        try {
+            var result = new byte[length];
+            Array.Copy(pooled, result, length);
+            return result;
+        } finally {
+            System.Buffers.ArrayPool<byte>.Shared.Return(pooled);
+        }
+    }
+
+    /// <summary>
+    /// Compress into a buffer rented from <see cref="System.Buffers.ArrayPool{T}"/>.
+    /// The returned array is OVERSIZED: only the first <paramref name="length"/>
+    /// bytes are payload, and <b>the caller owns it and must return it to
+    /// ArrayPool&lt;byte&gt;.Shared</b>.
+    ///
+    /// <para>MEMOPT: the scratch buffers were already pooled (PERF #365), but the
+    /// result was still a fresh exactly-sized array — ~20 MB on a full-frame OSC,
+    /// allocated on the Large Object Heap and thrown away every single frame. That
+    /// churn is what fragments the LOH on a small-RAM SBC (a heap dump showed
+    /// 517 MB live against 1133 MB RSS). Now that the relay sends the header and
+    /// the payload as two WebSocket fragments, the payload no longer has to be
+    /// exactly sized, so it can stay pooled and be reused frame after frame.</para>
+    /// </summary>
+    public byte[] RentLz4Compressed(out int length) {
         // PERF #365: rent the two scratch buffers (the ushort->byte copy
         // and the LZ4 max-size target) from the shared ArrayPool instead
-        // of allocating them per frame. On the streaming path this used to
-        // churn ~3 large arrays/frame (tens of MB on a full-frame OSC),
-        // pressuring the Pi GC. Only the trimmed `result` is a real
-        // allocation now (it outlives this call — it's sent over the WS).
+        // of allocating them per frame.
         int srcLen = _pixels.Length * 2;
         var pool = System.Buffers.ArrayPool<byte>.Shared;
         var sourceBytes = pool.Rent(srcLen);
@@ -91,16 +116,15 @@ public class ImageBuffer : IImageBuffer {
             try {
                 // Rented arrays are oversized; slice to exact lengths so
                 // the codec compresses the right source span.
-                int compressedLen = LZ4Codec.Encode(
+                length = LZ4Codec.Encode(
                     sourceBytes.AsSpan(0, srcLen),
                     compressed.AsSpan(0, maxLen),
                     LZ4Level.L00_FAST);
-                var result = new byte[compressedLen];
-                Array.Copy(compressed, result, compressedLen);
-                return result;
-            } finally {
+            } catch {
                 pool.Return(compressed);
+                throw;
             }
+            return compressed;   // ownership transfers to the caller
         } finally {
             pool.Return(sourceBytes);
         }

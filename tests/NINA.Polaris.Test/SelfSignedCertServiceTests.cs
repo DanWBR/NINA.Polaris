@@ -61,8 +61,17 @@ public class SelfSignedCertServiceTests {
         Assert.That(cert, Is.Not.Null);
         Assert.That(cert.HasPrivateKey, Is.True,
             "Kestrel needs the private key to handshake; PFX export+import must preserve it.");
-        Assert.That(cert.NotAfter, Is.GreaterThan(DateTime.UtcNow.AddYears(4)),
-            "5-year validity (give or take a leap day), make sure we're not creating a same-day-expiry cert.");
+        // 397-day validity. Apple rejects a TLS cert whose span exceeds 398 days
+        // (ERR_CERT_VALIDITY_TOO_LONG on iOS / Chrome-iOS), so the original 5-year
+        // cert was deliberately shortened; this assertion was left behind on that
+        // change and still demanded >4 years. Pin BOTH ends now: long enough that
+        // we are not issuing a near-instantly-expiring cert, short enough to stay
+        // under Apple's cap.
+        var validityDays = (cert.NotAfter - cert.NotBefore).TotalDays;
+        Assert.That(validityDays, Is.GreaterThan(180),
+            "cert must not be near-instantly expiring");
+        Assert.That(validityDays, Is.LessThan(398),
+            "must stay under Apple's 398-day limit or iOS refuses the cert");
         Assert.That(cert.NotBefore, Is.LessThan(DateTime.UtcNow),
             "NotBefore is back-dated so clock-skew on the client doesn't reject the cert.");
         Assert.That(cert.Subject, Does.Contain("NINA.Polaris"));
