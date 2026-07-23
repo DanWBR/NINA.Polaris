@@ -60,8 +60,18 @@ public static class ImageStreamHandler {
             var buffer = new byte[1024];
             while (ws.State == WebSocketState.Open) {
                 try {
-                    using var recvCts = new CancellationTokenSource(PingInterval * 3);
-                    var result = await ws.ReceiveAsync(buffer, recvCts.Token);
+                    // NO artificial receive deadline. This stream is a pure
+                    // CONSUMER: after the handshake the browser never sends
+                    // anything again, and WebSocket ping/pong are control
+                    // frames handled below ReceiveAsync — so a receive timeout
+                    // guillotined EVERY connection on schedule (PingInterval*3
+                    // = 90 s, matching the observed "CONNECT /ws/image-stream
+                    // 200 90013.1ms"). That killed whatever frame was in flight
+                    // and surfaced as the misleading "Send to client timed out",
+                    // leaving the browser stuck on the last frame that made it.
+                    // Dead peers are still detected: KeepAliveInterval pings
+                    // above, plus RequestAborted when the client goes away.
+                    var result = await ws.ReceiveAsync(buffer, context.RequestAborted);
 
                     if (result.MessageType == WebSocketMessageType.Close)
                         break;

@@ -769,10 +769,11 @@ public static class StatusStreamHandler {
         try {
             var buffer = new byte[256];
             while (ws.State == WebSocketState.Open) {
-                using var recvCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
-                recvCts.CancelAfter(PingInterval * 3);
-
-                var result = await ws.ReceiveAsync(buffer, recvCts.Token);
+                // No artificial receive deadline (see ImageStreamHandler): this
+                // stream is a pure consumer, so a CancelAfter here just closed
+                // healthy connections every PingInterval*3. Dead peers are
+                // caught by KeepAliveInterval + the outer cts.
+                var result = await ws.ReceiveAsync(buffer, cts.Token);
                 if (result.MessageType == WebSocketMessageType.Close)
                     break;
             }
