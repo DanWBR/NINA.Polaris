@@ -312,4 +312,87 @@ public class IndiXmlParserTests {
         Assert.That(received, Is.Not.Null);
         Assert.That(received!.Permission, Is.EqualTo(expected));
     }
+
+    // --- setBLOBVector payload decoding (MEMOPT) ---
+    //
+    // The BLOB path decodes base64 incrementally now instead of materialising
+    // the whole payload as a string first (a 22 MB FITS was a 62 MB char[] —
+    // the biggest object in a heap dump on the Orange Pi). These pin the decode
+    // itself: bytes must come out identical to Convert.FromBase64String,
+    // including the whitespace INDI wraps the payload in and a wrong/absent
+    // size attribute.
+
+    private async Task<byte[]?> ParseBlobPayload(string base64Body, string sizeAttr) {
+        string xml = $"""
+            <setBLOBVector device="CCD Simulator" name="CCD1" state="Ok">
+              <oneBLOB name="CCD1" {sizeAttr} format=".fits">{base64Body}</oneBLOB>
+            </setBLOBVector>
+            """;
+
+        IndiProperty? received = null;
+        _parser.PropertyUpdated += p => received = p;
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var stream = XmlStream(xml);
+        await _parser.ParseStreamAsync(stream, cts.Token);
+
+        Assert.That(received, Is.InstanceOf<IndiBlobProperty>());
+        return ((IndiBlobProperty)received!).Values["CCD1"].Data;
+    }
+
+    [Test]
+    public async Task ParseSetBlobVector_DecodesPayload_WithExactSize() {
+        var payload = new byte[64 * 1024];
+        new Random(1234).NextBytes(payload);
+
+        var data = await ParseBlobPayload(Convert.ToBase64String(payload),
+                                          $"size=\"{payload.Length}\"");
+
+        Assert.That(data, Is.Not.Null);
+        Assert.That(data!.Length, Is.EqualTo(payload.Length));
+        Assert.That(data, Is.EqualTo(payload));
+    }
+
+    [Test]
+    public async Task ParseSetBlobVector_DecodesPayload_WithSurroundingWhitespace() {
+        // INDI wraps the payload in newlines - this is what forced the old
+        // .Trim() (and its full second copy of the base64 text).
+        var payload = new byte[9_001];   // not a multiple of 3: exercises padding
+        new Random(99).NextBytes(payload);
+        var b64 = Convert.ToBase64String(payload, Base64FormattingOptions.InsertLineBreaks);
+
+        var data = await ParseBlobPayload($"\n   {b64}\n  ", $"size=\"{payload.Length}\"");
+
+        Assert.That(data, Is.EqualTo(payload));
+    }
+
+    [Test]
+    public async Task ParseSetBlobVector_DecodesPayload_WhenSizeAttributeMissing() {
+        var payload = new byte[5_000];
+        new Random(7).NextBytes(payload);
+
+        var data = await ParseBlobPayload(Convert.ToBase64String(payload), "");
+
+        Assert.That(data, Is.EqualTo(payload));
+    }
+
+    [Test]
+    public async Task ParseSetBlobVector_DecodesPayload_WhenSizeAttributeIsWrong() {
+        var payload = new byte[8_192];
+        new Random(42).NextBytes(payload);
+        var b64 = Convert.ToBase64String(payload);
+
+        // Under-declared: every byte must still come through.
+        Assert.That(await ParseBlobPayload(b64, "size=\"100\""), Is.EqualTo(payload),
+                    "size menor que o real");
+
+        // Over-declared: must trim to the real length, not pad with zeros.
+        Assert.That(await ParseBlobPayload(b64, $"size=\"{payload.Length * 4}\""),
+                    Is.EqualTo(payload), "size maior que o real");
+    }
+
+    [Test]
+    public async Task ParseSetBlobVector_EmptyPayload_YieldsNull() {
+        Assert.That(await ParseBlobPayload("", "size=\"0\""), Is.Null);
+    }
 }

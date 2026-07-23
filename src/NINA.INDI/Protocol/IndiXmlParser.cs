@@ -219,10 +219,7 @@ public class IndiXmlParser {
 
                 byte[]? data = null;
                 if (!isDefine) {
-                    string base64 = subtree.ReadElementContentAsString().Trim();
-                    if (!string.IsNullOrEmpty(base64)) {
-                        data = Convert.FromBase64String(base64);
-                    }
+                    data = ReadBlobBase64(subtree, size);
                 }
 
                 prop.Values[name] = new IndiBlobElement {
@@ -235,6 +232,63 @@ public class IndiXmlParser {
         }
 
         return prop;
+    }
+
+    /// <summary>
+    /// Decode a oneBLOB payload straight from the reader into bytes.
+    ///
+    /// <para>This used to be <c>Convert.FromBase64String(ReadElementContentAsString().Trim())</c>,
+    /// which materialised the ENTIRE base64 text first. For a 22 MB FITS that is
+    /// ~31 M chars = a <b>62 MB</b> <c>char[]</c>, plus a second 62 MB copy from
+    /// <c>Trim()</c> (INDI wraps the payload in newlines, so it always copied),
+    /// before the 23 MB result — roughly 3x the image size in Large Object Heap
+    /// churn per frame. A heap dump on the Orange Pi showed that single char[] as
+    /// the biggest object in the process. <c>ReadElementContentAsBase64</c> decodes
+    /// incrementally and skips whitespace itself, so no text is ever built.</para>
+    ///
+    /// <para><paramref name="declaredSize"/> is INDI's <c>size</c> attribute (the
+    /// DECODED length), so it is the exact capacity: the happy path allocates the
+    /// result once and copies nothing. The probe after a full buffer avoids
+    /// "trimming" a multi-MB array just to discover it was already the right size.
+    /// A wrong/absent size still works, just with a grow.</para>
+    /// </summary>
+    private static byte[]? ReadBlobBase64(XmlReader reader, int declaredSize) {
+        const int Chunk = 64 * 1024;
+
+        if (declaredSize > 0) {
+            var buf = new byte[declaredSize];
+            int total = 0, n;
+            while (total < buf.Length &&
+                   (n = reader.ReadElementContentAsBase64(buf, total, buf.Length - total)) > 0) {
+                total += n;
+            }
+            if (total == 0) return null;
+            if (total < buf.Length) { Array.Resize(ref buf, total); return buf; }
+
+            // Buffer filled exactly. Confirm there is nothing left using a small
+            // scratch so the normal case returns `buf` with zero extra copies.
+            var scratch = new byte[Chunk];
+            int extra = reader.ReadElementContentAsBase64(scratch, 0, scratch.Length);
+            if (extra == 0) return buf;
+
+            // Server sent more than it declared: fall back to appending.
+            using var overflow = new MemoryStream(buf.Length * 2);
+            overflow.Write(buf, 0, buf.Length);
+            overflow.Write(scratch, 0, extra);
+            while ((n = reader.ReadElementContentAsBase64(scratch, 0, scratch.Length)) > 0) {
+                overflow.Write(scratch, 0, n);
+            }
+            return overflow.ToArray();
+        }
+
+        // No usable size attribute: stream into a growing buffer.
+        using var ms = new MemoryStream(Chunk);
+        var chunk = new byte[Chunk];
+        int k;
+        while ((k = reader.ReadElementContentAsBase64(chunk, 0, chunk.Length)) > 0) {
+            ms.Write(chunk, 0, k);
+        }
+        return ms.Length == 0 ? null : ms.ToArray();
     }
 
     private static void ReadVectorAttributes(XmlReader reader, IndiProperty prop) {
