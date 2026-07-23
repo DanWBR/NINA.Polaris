@@ -56,7 +56,7 @@ Otherwise follow top to bottom.
 
 | Item | Pi 4 | Pi 5 | Notes |
 |---|---|---|---|
-| RAM | 4 GB minimum, 8 GB recommended | 4 GB minimum, 8 GB recommended | Pi 4 with 2 GB technically boots but live stacking and editor will swap heavily. |
+| RAM | 2 GB minimum, 4 GB recommended | 2 GB minimum, 4 GB recommended | Runs on as little as 1.5 GB (Orange Pi Zero 3); below 2 GB, live stacking leans on Auto to pick a smaller bin and the STUDIO batch stacker gets tight. 8 GB gives headroom for STUDIO jobs during a live session. |
 | Power supply | Official 5V/3A USB-C | Official 27W USB-C (5V/5A PD) | Underpowered PSU is the #1 source of "USB camera randomly disconnects". |
 | Cooling | Active fan (Pi 4 case fan or Argon ONE) | Active fan mandatory (Pi 5 throttles aggressively without one) | Long sessions get to 70 C inside cases. |
 | Storage | SanDisk Extreme Pro 64 GB+ or USB 3.0 SSD | Pi 5 NVMe HAT + NVMe SSD recommended | SD card is fine for the OS; put image output on a separate SSD via USB 3.0 or NVMe. |

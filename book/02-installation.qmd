@@ -161,17 +161,20 @@ the OS update and reboot.
 
 | Item | Pi 4 | Pi 5 |
 |---|---|---|
-| RAM | 4 GB minimum, 8 GB recommended | 4 GB minimum, 8 GB recommended |
+| RAM | 2 GB minimum, 4 GB recommended | 2 GB minimum, 4 GB recommended |
 | Power supply | Official 5V/3A USB-C | Official 27W USB-C (5V/5A PD) |
 | Cooling | Active fan (case fan or Argon ONE) | Active fan mandatory |
 | Storage | SanDisk Extreme Pro 64 GB+ or USB 3.0 SSD | NVMe HAT + NVMe SSD recommended |
 | Network | Wired Ethernet preferred | Wired Ethernet preferred |
 | USB hub | Powered USB 3.0 hub effectively mandatory with three or more USB devices | Same |
 
-A few notes on that table. A Pi 4 with 2 GB technically boots, but
-live stacking (stacking frames on screen as they arrive) and the
-editor will swap heavily, constantly spilling memory onto the slow SD
-card. An underpowered PSU is
+A few notes on that table. Polaris runs on as little as 1.5 GB: a
+1.5 GB Orange Pi Zero 3 handles capture, guiding, plate solving, the
+sequencer, and live stacking (with Auto picking a reduced stacking
+resolution so it does not swap). Below 2 GB the STUDIO batch stacker
+and the AI editor get tight, so 4 GB is the comfortable recommendation
+and 8 GB gives headroom for STUDIO jobs alongside a live session. An
+underpowered PSU is
 the number one source of "USB camera randomly disconnects". Long
 sessions reach 70 C inside a case, and the Pi 5 throttles aggressively
 without a fan. The SD card is fine for the OS, but put image output on

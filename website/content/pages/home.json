@@ -183,7 +183,7 @@
     "products": ["Polaris", "ASIAIR", "StellaVita 2.0", "StellarMate", "KStars/Ekos", "N.I.N.A.", "PINS"],
     "highlightProduct": "Polaris",
     "legend": "✓ yes · ~ partial or limited · ✗ no",
-    "note": "Polaris is free and open source — the only spend is a 4 GB single-board computer plus an optional (recommended) inexpensive power box such as the SVBony SV241 or the Gemini Power Box, both frequently on sale. There is no proprietary controller to buy and no paid app, OS, or subscription.",
+    "note": "Polaris is free and open source — the only spend is an inexpensive single-board computer (4 GB recommended, and it runs on as little as 1.5 GB) plus an optional (recommended) inexpensive power box such as the SVBony SV241 or the Gemini Power Box, both frequently on sale. There is no proprietary controller to buy and no paid app, OS, or subscription.",
     "rows": [
       { "feature": "Hardware options", "cells": ["RPi · Orange Pi · x86 · Windows", "own box", "own box", "RPi (OS or box)", "Linux · Win · Mac · RPi", "Windows", "Raspberry Pi"] },
       { "feature": "Full web UI (any browser / device)", "star": true, "cells": ["yes", "no:app", "no:app", "partial:EkosLive / VNC", "partial:EkosLive", "no:desktop", "no:VNC"] },
