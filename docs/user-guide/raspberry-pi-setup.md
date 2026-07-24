@@ -30,6 +30,20 @@ managed venv, and enables the systemd unit. See
 [packaging/README.md](../../packaging/README.md) for the full
 breakdown of what the .deb does.
 
+**Ubuntu one-shot script.** On **Ubuntu** (any arm64 SBC or x86 box), the
+repo ships [`deploy/install-ubuntu.sh`](../../deploy/install-ubuntu.sh),
+which does the whole toolchain in one idempotent run: the INDI and PHD2
+PPAs, ASTAP plus a star database, astrometry.net plus a starter index,
+Siril, and finally the Polaris `.deb`. Tunables are environment
+variables (e.g. `STAR_DB=d20`, `WITH_ASTROMETRY=0`):
+
+```bash
+sudo ./deploy/install-ubuntu.sh
+```
+
+It is Ubuntu-only because the PPAs target Ubuntu codenames; on Raspberry
+Pi OS / Debian use the plain `.deb` above or the manual path below.
+
 **Manual path (full understanding):** follow this guide top to bottom.
 Roughly 60 to 90 minutes, mostly waiting on `apt`. Useful if you want
 to know exactly what each component does, or you are building a
