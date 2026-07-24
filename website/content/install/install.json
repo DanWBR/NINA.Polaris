@@ -61,6 +61,16 @@
     "title": "Ready-to-flash images",
     "sub": "The fastest way to get going: each image is a Linux OS with Polaris preinstalled and configured for that board. Flash it to an SD card (or USB / eMMC), boot, and open the browser. Use Raspberry Pi Imager, balenaEtcher, or Rufus. Images live on Google Drive and are added as each board is validated.",
     "bootNote": "On boot, the image starts Polaris automatically and it is ready to use, no setup needed. If the device cannot join a known WiFi network and it has WiFi, it raises its own hotspot named Polaris-Hotspot (password polaris1234). Connect to that, then open the Polaris UI in your browser.",
+    "tips": [
+      {
+        "icon": "🔎",
+        "body": "<strong>Finding and opening Polaris.</strong> Each board serves the UI over HTTPS on port 5000. The easiest way in is your board's IP: find it in your router's device list (or your mesh app, e.g. TP-Link Deco), then open <code>https://&lt;board-ip&gt;:5000</code> in any browser and accept the self-signed certificate once. The friendly <code>&lt;name&gt;.local</code> address only works where mDNS is available: Raspberry Pi OS has it out of the box, but some Orange Pi / Armbian images do not, so on those use the IP. Note that a board can only be reached once it is on your LAN, if it is still on its own Polaris-Hotspot it has not joined your WiFi yet (connect a network cable or set your WiFi in Settings, Network)."
+      },
+      {
+        "icon": "🔄",
+        "body": "<strong>If the in-app update fails</strong> (an authorization or \"policy rules\" error): some older, Ubuntu 22.04-based images ship a passwordless-update rule that their polkit version ignores, so the one-click update cannot install. Update over SSH instead: <code>ssh polaris@&lt;board-ip&gt;</code>, then <code>wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb</code> and <code>sudo apt install ./polaris_arm64.deb</code>. Your profiles and data are kept. See also the manual-update section below."
+      }
+    ],
     "items": [
       {
         "device": "x86-64 PC / mini PC",

@@ -47,6 +47,12 @@ const statusClass = (s: string) => {
             <p>{g.images.bootNote}</p>
           </div>
         )}
+        {g.images.tips && g.images.tips.map((t) => (
+          <div class="img-boot">
+            <span class="img-boot-ico" aria-hidden="true">{t.icon}</span>
+            <p set:html={t.body}></p>
+          </div>
+        ))}
         <div class="img-grid">
           {g.images.items.map((it) => (
             <article class="img-card">
