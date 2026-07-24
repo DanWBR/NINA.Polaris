@@ -1505,6 +1505,33 @@
     user-select: none;
 }
 
+/* SCRIPTS row inside the STUDIO image viewer. Every ported script adds a
+   labelled pill, so the row wrapped to 2-3 lines and stole that much height
+   from the image itself. The phone-width rules in 09-mobile.css can't fix it:
+   the viewer panel is routinely far NARROWER than the viewport (it sits beside
+   the file list), so the constraint is the CONTAINER, not the screen, and a
+   media query never fires. Scroll sideways at every width instead, so the bar
+   is always exactly one row. Same treatment 09-mobile.css gives the other
+   toolbars on a phone. Scoped with .files-actions so it outranks that rule's
+   flex-wrap: wrap regardless of file order, and kept off .files-ai-toolbar so
+   the FILES PROCESSING TOOLS row (the only other user of that class) keeps
+   wrapping as before. */
+.files-actions.files-scripts-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;   /* momentum scroll on iOS */
+    scrollbar-width: thin;
+}
+/* Pills keep their natural size instead of being squashed to fit. */
+.files-actions.files-scripts-toolbar > * { flex: 0 0 auto; }
+/* Slim, unobtrusive scrollbar so the row reads as swipeable. */
+.files-actions.files-scripts-toolbar::-webkit-scrollbar { height: 5px; }
+.files-actions.files-scripts-toolbar::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+    border-radius: 3px;
+}
+
 /* files-body / files-toolbars / files-main are pure grouping wrappers:
    display:contents makes them invisible to layout on normal screens, so
    the toolbars + banners + list remain direct flex children of
