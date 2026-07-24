@@ -117,19 +117,21 @@ the best result.
 
 ### Orange Pi 4 Pro (8 cores, Allwinner A733)
 
-Run: 2026-07-05 with a heatsink + fan (best of several: 156). Passively cooled it
-scored 147/144 on 2026-07-04, so active cooling is worth about a 6% gain here by
-holding the CPU clocks up under the sustained load.
+Run: 2026-07-24 on Polaris 0.96.3, score 180, no thermal throttling
+(53.2 to 69.5 C, clock held at the rated 2.00 GHz). Earlier runs on Polaris
+~0.90 scored 156 (heatsink + fan) / 147 (passive) on 2026-07-04/05; the jump to
+180 is mostly the newer build's much faster capture/encode path (JPEG roughly
+2x, LZ4 up to 2116 MB/s), while stacking is about the same.
 
 | Metric | Value |
 |---|---|
-| **Polaris score** | **156** (147 passively cooled) |
-| Stacking throughput | 2.06 fps · 34.6 Mpx/s (16.78 MP frames) |
-| Stacking detect / align / resample / stats | 119.22 / 0.57 / 174.22 / 191.31 ms |
-| Capture/video throughput | 1.06 fps · 17.8 Mpx/s |
-| Debayer / JPEG / LZ4 | 115.52 / 808.5 / 18.97 ms (LZ4 1686.9 MB/s) |
-| CPU single / multi-thread | 2405 / 7934 MFLOPS (3.3× scaling) |
-| Memory bandwidth | 9.4 GB/s |
+| **Polaris score** | **180** |
+| Stacking throughput | 1.85 fps · 31 Mpx/s (16.78 MP frames) |
+| Stacking detect / align / resample / stats | 140.33 / 4.61 / 202.98 / 193.05 ms |
+| Capture/video throughput | 1.84 fps · 30.9 Mpx/s |
+| Debayer / JPEG / LZ4 | 114.64 / 413.03 / 15.12 ms (LZ4 2116.2 MB/s) |
+| CPU single / multi-thread | 2405 / 7950 MFLOPS (3.31× scaling) |
+| Memory bandwidth | 8.6 GB/s |
 
 Sits between the Raspberry Pi 4 (110) and Pi 5 (211) - a solid mid-range SBC.
 Note: on the stock Orange Pi image the board self-reports only its SoC codename
