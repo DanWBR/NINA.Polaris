@@ -1,0 +1,9 @@
+# .pkla twin of ../../rules.d/50-polaris-nm.rules for polkit < 0.106
+# (e.g. Ubuntu 22.04). Lets the polaris user drive NetworkManager (nmcli:
+# join WiFi, raise the setup hotspot) without a password.
+[Polaris passwordless NetworkManager (polkit < 0.106)]
+Identity=unix-user:polaris
+Action=org.freedesktop.NetworkManager.*
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes

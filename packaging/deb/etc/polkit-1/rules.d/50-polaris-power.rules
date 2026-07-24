@@ -1,3 +1,5 @@
+// TWIN: keep in sync with ../localauthority/50-local.d/50-polaris-power.pkla
+// (that .pkla covers polkit < 0.106 / Ubuntu 22.04, which ignores this JS format).
 // PolicyKit rule shipped by the polaris .deb. Grants the 'polaris'
 // system user (created in postinst) two narrowly-scoped power actions
 // used by PowerService when the browser POSTs /api/system/restart-app

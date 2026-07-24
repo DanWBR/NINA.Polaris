@@ -204,12 +204,10 @@ if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-usb-mount.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-usb-mount.sh"
 fi
 find "$BUILD_DIR/opt/polaris/bin" -type d -exec chmod 0755 {} \; 2>/dev/null || true
-if [ -f "$BUILD_DIR/etc/polkit-1/rules.d/50-polaris-nm.rules" ]; then
-    chmod 0644 "$BUILD_DIR/etc/polkit-1/rules.d/50-polaris-nm.rules"
-fi
-if [ -f "$BUILD_DIR/etc/polkit-1/rules.d/50-polaris-update.rules" ]; then
-    chmod 0644 "$BUILD_DIR/etc/polkit-1/rules.d/50-polaris-update.rules"
-fi
+# All polkit files 0644: the JS .rules/ (honoured by polkit >= 0.106) and
+# the .pkla localauthority twins (honoured by polkit < 0.106, e.g. Ubuntu
+# 22.04). dpkg-deb is picky, so set them regardless of the source mode.
+find "$BUILD_DIR/etc/polkit-1" -type f -exec chmod 0644 {} \; 2>/dev/null || true
 find "$BUILD_DIR/etc" -type d -exec chmod 0755 {} \; 2>/dev/null || true
 
 # 7. Build the .deb

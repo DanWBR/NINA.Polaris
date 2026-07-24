@@ -117,11 +117,16 @@ case "$1" in
         mkdir -p /media/polaris 2>/dev/null || true
         chmod 0755 /media/polaris 2>/dev/null || true
 
-        # PolicyKit reload picks up /etc/polkit-1/rules.d/50-polaris-nm.rules
-        # which grants the polaris user nmcli access without sudo
-        # prompts. polkit may not be installed on minimal containers;
-        # the rule still lives on disk, ready for whenever polkit
-        # arrives.
+        # PolicyKit reload picks up the polaris rules that grant the polaris
+        # user passwordless nmcli / power / clock / self-update access. Two
+        # formats ship because which one polkit honours depends on its
+        # version: /etc/polkit-1/rules.d/*.rules (JavaScript, polkit >=
+        # 0.106) and /etc/polkit-1/localauthority/50-local.d/*.pkla (polkit
+        # < 0.106, e.g. Ubuntu 22.04, which silently ignores the .rules).
+        # Each system uses the one it understands and ignores the other, so
+        # the one-click self-update works on both. polkit may not be
+        # installed on minimal containers; the rules still live on disk,
+        # ready for whenever polkit arrives.
         if [ -d /run/systemd/system ]; then
             systemctl restart polkit.service >/dev/null 2>&1 || true
         fi

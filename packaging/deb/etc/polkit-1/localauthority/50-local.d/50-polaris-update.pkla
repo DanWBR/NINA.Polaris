@@ -1,0 +1,17 @@
+# polkit < 0.106 (e.g. Ubuntu 22.04, which ships polkit 0.105) reads .pkla
+# files, NOT the JavaScript .rules twin in
+# ../../rules.d/50-polaris-update.rules. Without this the one-click
+# self-update fails with an authorization ("policy rules") error on those
+# systems. Newer polkit ignores this file and honours the .rules instead,
+# so shipping both is safe: each system uses the format it understands.
+#
+# Unlike the JS rule, a .pkla cannot scope to a single unit (it matches by
+# action id, not by the unit name), so here the polaris user gets
+# manage-units for any unit. Acceptable: the appliance's polaris user is
+# already in the sudo group.
+[Polaris passwordless self-update (polkit < 0.106)]
+Identity=unix-user:polaris
+Action=org.freedesktop.systemd1.manage-units;org.freedesktop.systemd1.manage-unit-files
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes
