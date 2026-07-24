@@ -97,6 +97,16 @@
         "note": "7-Zip archive; extract before flashing."
       },
       {
+        "device": "Orange Pi Zero 3",
+        "badge": "arm64",
+        "color": "#ff7a18",
+        "url": "https://drive.google.com/uc?export=download&id=1T4ocFcn0oVLvbyEOApi6hKOjCZ6_pi9x",
+        "os": "Armbian 25.5.1 XFCE (Ubuntu 24.04, kernel 6.12.23)",
+        "polaris": "0.96.1 (2026-07-23)",
+        "access": "https://orangepizero3.local:5000/",
+        "note": "Entry-level 1.5 GB board. HDD Raw Copy Tool image (imgcv2): extract the .7z, then write the .img to an SD card with HDD Raw Copy Tool (or balenaEtcher / Rufus). Login password: polaris1234. GPU acceleration stays off here (the Mali-G31 is a net loss on this pipeline)."
+      },
+      {
         "device": "Orange Pi 4 Pro",
         "badge": "arm64",
         "color": "#ff7a18",
