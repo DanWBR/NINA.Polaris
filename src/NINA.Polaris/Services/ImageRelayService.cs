@@ -250,7 +250,7 @@ public class ImageRelayService : IDisposable {
     public Task RelayImageAsync(IImageData imageData, bool stackable, CancellationToken ct = default)
         => RelayImageAsync(imageData, stackable ? FrameKind.Live : FrameKind.Preview, ct);
 
-    public async Task RelayImageAsync(IImageData imageData, FrameKind kind, CancellationToken ct = default) {
+    public Task RelayImageAsync(IImageData imageData, FrameKind kind, CancellationToken ct = default) {
         var frameKind = (int)kind;
         // FIELD3-2: optional vertical flip. Some camera drivers
         // (SV405CC indi_svbony_ccd notably) deliver TOP-DOWN buffers
@@ -304,7 +304,7 @@ public class ImageRelayService : IDisposable {
         _latestImageData = sourceData;
         _latestJpeg = null;
 
-        if (_clients.IsEmpty) return;
+        if (_clients.IsEmpty) return Task.CompletedTask;
 
         // FIELD-3: streaming is RAW-only. The JPEG WS path was
         // deleted (it baked AutoStretch into the JPEG server-side,
@@ -327,7 +327,6 @@ public class ImageRelayService : IDisposable {
         // first compressedLen bytes are real. Returned to the pool below, so the
         // per-frame ~20 MB Large Object Heap allocation is gone entirely.
         var compressed = buffer.RentLz4Compressed(out int compressedLen);
-        try {
 
         _logger.LogInformation(
             "Relaying image {W}x{H} ({BitDepth}-bit): {RawMB:F1}MB raw -> {CompMB:F1}MB LZ4 ({Ratio:F1}x) to {Count} clients",
@@ -347,11 +346,29 @@ public class ImageRelayService : IDisposable {
         BitConverter.GetBytes(header.Length).CopyTo(prefix, 0);
         header.CopyTo(prefix, 4);
 
-        await BroadcastFrameAsync(prefix, compressed, compressedLen, ct);
+        // WSDRAIN: the fan-out is FIRE-AND-FORGET. Awaiting it charged the full
+        // raw-frame drain to every capture: a ~19 MB SV405CC sub takes 10-20 s
+        // to push over an SBC WiFi uplink (measured lastSendMs on a snap loop),
+        // and in a SEQUENTIAL capture loop the previous send has always
+        // finished before the next frame, so the per-client skip-if-busy
+        // backpressure (SendLock.Wait(0)) never fired — the exposure cadence was
+        // gated by the browser's download speed, not the camera. This is why the
+        // SV405CC "took 30-42 s/frame and degraded on the OPi5Pro" while the
+        // smaller SV605CC and every NINA-desktop rig (no raw-over-WiFi relay in
+        // the capture path) were fine. Detaching it makes a slow client simply
+        // SKIP frames instead of throttling capture. The synchronous work above
+        // (LatestImage cache + LZ4) already ran, so /api/image/latest and
+        // GetLatestJpeg see this frame immediately. CancellationToken.None on
+        // purpose: the drain outlives the caller's request scope, and a caller
+        // CTS disposed after return must never fault a healthy in-flight send.
+        _ = BroadcastFrameAsync(prefix, compressed, compressedLen, CancellationToken.None)
+            .ContinueWith(t => {
+                System.Buffers.ArrayPool<byte>.Shared.Return(compressed);
+                if (t.IsFaulted)
+                    _logger.LogWarning(t.Exception, "Background image relay drain faulted");
+            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
 
-        } finally {
-            System.Buffers.ArrayPool<byte>.Shared.Return(compressed);
-        }
+        return Task.CompletedTask;
     }
 
     /// <summary>
