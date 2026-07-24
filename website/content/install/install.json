@@ -64,7 +64,7 @@
     "tips": [
       {
         "icon": "🔎",
-        "body": "<strong>Finding and opening Polaris.</strong> Each board serves the UI over HTTPS on port 5000. The easiest way in is your board's IP: find it in your router's device list (or your mesh app, e.g. TP-Link Deco), then open <code>https://&lt;board-ip&gt;:5000</code> in any browser and accept the self-signed certificate once. The friendly <code>&lt;name&gt;.local</code> address only works where mDNS is available: Raspberry Pi OS has it out of the box, but some Orange Pi / Armbian images do not, so on those use the IP. Note that a board can only be reached once it is on your LAN, if it is still on its own Polaris-Hotspot it has not joined your WiFi yet (connect a network cable or set your WiFi in Settings, Network)."
+        "body": "<strong>Finding and opening Polaris.</strong> Each board serves the UI over HTTPS on port 5000. The easiest way in is your board's IP: find it in your router's list of connected devices (usually under DHCP or Clients in the router's admin page or app), then open <code>https://&lt;board-ip&gt;:5000</code> in any browser and accept the self-signed certificate once. The friendly <code>&lt;name&gt;.local</code> address only works where mDNS is available: Raspberry Pi OS has it out of the box, but some Orange Pi / Armbian images do not, so on those use the IP. Note that a board can only be reached once it is on your LAN, if it is still on its own Polaris-Hotspot it has not joined your WiFi yet (connect a network cable or set your WiFi in Settings, Network)."
       },
       {
         "icon": "🔄",
