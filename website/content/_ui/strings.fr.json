@@ -1,0 +1,50 @@
+{
+  "hero": {
+    "sourceOnGitHub": "Source sur GitHub",
+    "getStarted": "Commencer →",
+    "donate": "❤ Faire un don",
+    "skyMapAlt": "Carte du ciel du contrôleur Polaris Astro",
+    "credit": "IC&nbsp;434 / Tête de cheval et Flamme · © Daniel Wagner Oliveira de Medeiros"
+  },
+  "benchmarks": {
+    "colDevice": "Appareil",
+    "colCores": "Noyaux",
+    "colScore": "Score Polaris",
+    "colStacking": "Empilement",
+    "colCapture": "Capture",
+    "memoryBw": "Mémoire BW",
+    "colPrice": "Environ USD",
+    "bestValue": "meilleur rapport qualité-prix",
+    "more": "Tableaux complets par appareil et méthodologie →"
+  },
+  "comparison": {
+    "feature": "Fonctionnalité",
+    "uniqueTitle": "Une particularité de Polaris dans cette liste",
+    "uniqueLabel": "Une exclusivité Polaris"
+  },
+  "downloads": {
+    "title": "Télécharger et installer",
+    "guide": "Guide de démarrage →",
+    "sourceReleases": "Source et communiqués",
+    "discord": "Discord",
+    "patreon": "Patreon",
+    "donate": "❤ Faire un don",
+    "licence": "Gratuit et open source · GNU AGPL v3 · développé à partir du projet N.I.N.A."
+  },
+  "features": {
+    "comingSoon": "Capture d'écran à venir",
+    "seeEvery": "Découvrez toutes les fonctionnalités, panneau par panneau →"
+  },
+  "gallery": {
+    "screenshotAlt": "Capture d'écran",
+    "close": "Fermer"
+  },
+  "nav": {
+    "toggle": "Afficher/masquer la navigation"
+  },
+  "footer": {
+    "blurb": "Astrophotographie pilotée par navigateur, sur n'importe quel appareil.",
+    "disclaimer": "Une version dérivée de N.I.N.A. développée par la communauté, qui n'est ni affiliée à l'équipe officielle de N.I.N.A. ni soutenue par celle-ci. Pour tout problème lié à Polaris, veuillez ouvrir un ticket sur ce dépôt ; merci de ne pas contacter les développeurs de N.I.N.A. à ce sujet.",
+    "credit": "Image de fond : IC 434 (Tête de Cheval) et NGC 2024 (Flamme), complexe de nuages moléculaires d'Orion."
+  }
+}

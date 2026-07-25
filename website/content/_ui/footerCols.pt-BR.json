@@ -1,0 +1,78 @@
+[
+  {
+    "title": "Projeto",
+    "links": [
+      {
+        "label": "Todos os recursos",
+        "href": "/features",
+        "external": false
+      },
+      {
+        "label": "Ferramentas de IA",
+        "href": "/ai-tools",
+        "external": false
+      },
+      {
+        "label": "Assistente Canopus",
+        "href": "/assistant",
+        "external": false
+      },
+      {
+        "label": "Introdução",
+        "href": "/getting-started",
+        "external": false
+      },
+      {
+        "label": "Sobre",
+        "href": "/about",
+        "external": false
+      },
+      {
+        "label": "Baixar e instalar",
+        "href": "/install",
+        "external": false
+      },
+      {
+        "label": "Repositório do GitHub",
+        "href": "https://github.com/DanWBR/NINA.Polaris"
+      },
+      {
+        "label": "README",
+        "href": "https://github.com/DanWBR/NINA.Polaris/blob/master/README.md"
+      },
+      {
+        "label": "Problemas / solicitações",
+        "href": "https://github.com/DanWBR/NINA.Polaris/issues"
+      },
+      {
+        "label": "Discord (comunidade)",
+        "href": "https://discord.gg/FYQeNhEGDp"
+      },
+      {
+        "label": "Patreon (notícias de desenvolvimento)",
+        "href": "https://www.patreon.com/c/nina_polaris"
+      }
+    ]
+  },
+  {
+    "title": "Relacionado",
+    "links": [
+      {
+        "label": "N.I.N.A. (desktop, upstream)",
+        "href": "https://nighttime-imaging.eu/"
+      },
+      {
+        "label": "Biblioteca INDI",
+        "href": "https://indilib.org/"
+      },
+      {
+        "label": "ASCOM / Alpaca",
+        "href": "https://ascom-standards.org/"
+      },
+      {
+        "label": "Guiding do PHD2",
+        "href": "https://openphdguiding.org/"
+      }
+    ]
+  }
+]

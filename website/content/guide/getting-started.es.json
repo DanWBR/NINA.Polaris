@@ -1,0 +1,78 @@
+{
+  "title": "Primeros pasos",
+  "lede": "Tu primera noche: desde el telescopio montado en el trípode hasta una imagen final que puedas compartir. Este es el proceso rápido: conecta el equipo, orienta y enfoca, captura mediante «live stacking» o una sesión automática sin supervisión, y luego combina las imágenes y edítalas en STUDIO.",
+  "access": {
+    "title": "En primer lugar, abre la interfaz de usuario de Polaris",
+    "sub": "Polaris se ejecuta en el servidor y se controla desde cualquier dispositivo conectado a la misma red. Hay dos formas de acceder a él.",
+    "options": [
+      {
+        "icon": "🌐",
+        "title": "Cualquier navegador",
+        "body": "Conéctate desde cualquier teléfono, tableta u ordenador portátil a la dirección del servidor en el puerto 5000. Utiliza su nombre de host o su dirección IP, y acepta el certificado autofirmado una sola vez.",
+        "code": "https://<ip-or-hostname>:5000"
+      },
+      {
+        "icon": "📱",
+        "title": "Aplicación para Android",
+        "body": "Instala la aplicación para Android desde la página de descargas y ábrela. La aplicación escanea la red y muestra una lista de todas las instancias de Polaris que encuentra, listas para conectarse con un solo toque, sin necesidad de introducir la dirección IP.",
+        "code": ""
+      }
+    ]
+  },
+  "steps": [
+    {
+      "icon": "🛠️",
+      "title": "Prepara tu equipo",
+      "body": "Abre «RIGS» en la barra lateral. Elige un equipo guardado del menú desplegable o crea uno nuevo añadiendo las fichas de tu telescopio principal (marca, modelo, reductor o aplanador, para que la distancia focal y la apertura se rellenen automáticamente), cámara principal, montura, enfocador y rueda de filtros. Haz clic en «Guardar selecciones» para que el equipo recuerde todo para la próxima vez.",
+      "tip": "Una configuración guarda la distancia focal, los valores predeterminados de ganancia y la vinculación del perfil PHD2, que constituye la base para el encuadre y la resolución de placas.",
+      "image": "/assets/screenshots/gs-rigs.jpg"
+    },
+    {
+      "icon": "🔌",
+      "title": "Conecta tu equipo",
+      "body": "En cada tarjeta, selecciona el dispositivo que aparece debajo de la barra de conexión: INDI en Linux, ASCOM o Alpaca en Windows, o un SDK nativo de la cámara. Configura el objetivo del enfriador de la cámara y, a continuación, pulsa «Conectar» en cada dispositivo. Comprueba que la montura esté realizando el seguimiento y que la lista de filtros coincida con tu rueda.",
+      "tip": "La detección automática muestra una lista de los dispositivos que encuentra en la LAN, por lo que la mayoría de los equipos aparecen sin necesidad de introducir una dirección.",
+      "image": "/assets/screenshots/gs-connect.jpg"
+    },
+    {
+      "icon": "📡",
+      "title": "Configurar el sistema de guía",
+      "body": "Cambia a la pestaña GUIDE. Haz clic en «Launch PHD2» (o en «Connect» si ya se está ejecutando) y selecciona el perfil que se ajuste a tu cámara de guiado y a tu montura. Haz clic en «Connect equipment», luego en «Loop», «Find Star» y «Smart Calibrate». Observa cómo se estabiliza el gráfico de RA/Dec; a partir de ese momento, el guiado se ejecutará en segundo plano durante toda la noche.",
+      "tip": "¿Prefieres la interfaz original de PHD2? Abre la pestaña «PHD2 GUI» para controlar la aplicación real integrada a través de xpra o VNC.",
+      "image": "/assets/screenshots/gs-guiding.jpg"
+    },
+    {
+      "icon": "🔬",
+      "title": "Consigue un enfoque nítido",
+      "body": "Abre FOCUS y ejecuta el enfoque automático con curva en V: configura el tamaño del paso y el número de muestras para tu enfocador y pulsa «Start AF». Polaris toma muestras en varias posiciones, ajusta la curva HFR y coloca el enfocador en el punto de mayor nitidez. También puedes enfocar manualmente con los botones de paso a paso mientras observas cómo desciende el HFR.",
+      "tip": "Una HFR más baja implica un enfoque más preciso de las estrellas. El secuenciador puede reenfocar automáticamente cuando la temperatura o la HFR varían durante la noche.",
+      "image": "/assets/screenshots/gs-focus.jpg"
+    },
+    {
+      "icon": "🌌",
+      "title": "Define tu objetivo",
+      "body": "Abre SKY y busca tu objetivo (M31, NGC 7000, etc.), o elige una sugerencia de la pestaña «ESTA NOCHE», ordenada por altitud. Haz clic en el objetivo y, a continuación, en «Slew & Center»: Polaris se desplaza, identifica el objetivo mediante la placa y vuelve a desplazarse hasta que el objetivo quede centrado dentro de la superposición del campo de visión.",
+      "tip": "Slew & Center utiliza el explorador del cielo Stellarium Web Engine, con integración total con la montura, sin necesidad de controlador manual.",
+      "image": "/assets/screenshots/gs-sky.jpg"
+    },
+    {
+      "icon": "📸",
+      "title": "Captura: apilado en directo o ejecución automática",
+      "body": "Hay dos formas de disparar, y puedes combinarlas. Para obtener resultados inmediatos al estilo EAA, abre LIVE y pulsa el obturador: se inicia el bucle y cada fotograma se superpone a la imagen en directo a medida que se captura (pulsa de nuevo para detenerlo; la superposición se conserva). Para una sesión completa de captura de imágenes, abre AUTORUN, añade una fila de parámetros (filtro, exposición, recuento), activa el dithering y la inversión de meridianos si es necesario, configura las acciones finales y pulsa «Iniciar secuencia». Las subimágenes se guardan en el disco para apilarlas más tarde, y puedes seguir viendo cómo se van generando en LIVE.",
+      "tip": "Puedes cerrar el navegador y marcharte. El servidor sigue descargando, así que vuelve por la mañana y encontrarás una carpeta llena de subtítulos.",
+      "image": "/assets/screenshots/gs-live.jpg"
+    },
+    {
+      "icon": "🎨",
+      "title": "Apila y edita en STUDIO y, a continuación, exporta",
+      "body": "Abre STUDIO para convertir tus subimágenes en una imagen final: crea fotogramas de calibración maestros, calibra las luces e intégralas en una imagen maestra. Limpia la imagen con GraXpert AI en el navegador (extracción del fondo, eliminación de ruido y deconvolución, aceleradas en la GPU del cliente o en la NPU del SBC). Perfecciona el tono y el color en el EDITOR y, a continuación, exporta como JPEG, PNG o TIFF de 16 bits.",
+      "tip": "Activa Auto-GraXpert BGE en las acciones finales de ejecución automática y los fotogramas extraídos en segundo plano estarán listos incluso antes de que abras STUDIO.",
+      "image": "/assets/screenshots/gs-studio.jpg"
+    }
+  ],
+  "closing": {
+    "title": "Ese es todo el bucle",
+    "sub": "Esta es la guía rápida. Cada pestaña incluye información más detallada, y la guía de instalación describe todas las herramientas opcionales que puedes añadir.",
+    "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/end-to-end-workflow.md"
+  }
+}

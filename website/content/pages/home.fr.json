@@ -1,0 +1,591 @@
+{
+  "hero": {
+    "eyebrow": "Suite intégrée d'astrophotographie open source",
+    "titleLine1": "Votre installation,",
+    "titleLine2": "",
+    "titleAccent": "N'importe quel appareil.",
+    "lede": "Une session d'imagerie complète, couvrant le matériel, le guiding, le plate solving et le sequencer, fonctionnant sur un Raspberry Pi, un Orange Pi, un mini-PC Windows ou tout autre support, contrôlée depuis le navigateur de votre téléphone, de votre ordinateur portable ou de votre tablette dans la salle chauffée.",
+    "disclaimer": "Polaris Astro Controller est un fork de N.I.N.A. développé par la communauté. Il n'est ni affilié à l'équipe officielle de N.I.N.A., ni soutenu par celle-ci. Pour toute question concernant Polaris, veuillez ouvrir un ticket sur ce dépôt ; merci de ne pas contacter les développeurs de N.I.N.A. à ce sujet.",
+    "image": "/assets/screenshots/hero.jpg"
+  },
+  "featuresSection": {
+    "title": "Tout ce dont vous avez besoin pour votre séance",
+    "sub": "De la connexion du matériel à l'image finale : prise de vue, guiding, framing, live stacking, sequencing et post-traitement par IA, le tout depuis le navigateur."
+  },
+  "features": [
+    {
+      "icon": "🔭",
+      "title": "Connectez n'importe quel équipement : INDI, ASCOM, Alpaca + pilotes natifs",
+      "body": "Communiquez avec votre équipement via INDI (plus de 400 pilotes Linux), via ASCOM et Alpaca sur le réseau local, ou via les SDK natifs des appareils photo ZWO, Player One, SVBONY, Altair, ainsi que des reflex numériques et appareils photo hybrides Canon, Nikon et Sony. La fonction de détection automatique identifie les périphériques présents sur le réseau.",
+      "image": "/assets/screenshots/devices.jpg"
+    },
+    {
+      "icon": "📷",
+      "title": "Systèmes de prise de vue multi-caméras",
+      "body": "Utilisez une deuxième caméra d'imagerie sur la même monture, avec ses propres optiques, paramètres d'exposition et gain, pour une prise de vue en parallèle. Ajoutez un dispositif de mise au point motorisé pour le télescope de guidage et activez l'auto-focus sur n'importe quel système optique : principal, auxiliaire ou de guidage. Les boîtiers reflex numériques et sans miroir bénéficient d'une véritable plage ISO étendue.",
+      "image": "/assets/screenshots/aux-camera.jpg"
+    },
+    {
+      "icon": "📡",
+      "title": "Native guiding via PHD2, with repli on the real application",
+      "body": "Une implémentation native de PHD2 gère directement le guiding, avec un graphique RA/Dec en temps réel, le dithering, la stabilisation et les profils. Si vous souhaitez utiliser l'interface d'origine de PHD2, vous pouvez vous rabattre sur l'application réelle intégrée directement dans le navigateur via xpra ou VNC.",
+      "image": "/assets/screenshots/guiding.jpg"
+    },
+    {
+      "icon": "🌌",
+      "title": "Explorateur du ciel avec rotation et centrage",
+      "body": "Un explorateur du ciel complet, optimisé par le moteur Web Stellarium, avec une intégration totale de la monture. Choisissez n'importe quelle cible, effectuez un déplacement vers celle-ci, puis procédez automatiquement à la plate-solve et au centrage, le tout depuis votre navigateur.",
+      "image": "/assets/screenshots/sky-explorer.jpg"
+    },
+    {
+      "icon": "📅",
+      "title": "Organisez votre soirée de A à Z",
+      "body": "Ajoutez plusieurs cibles à la file d'attente et laissez le planificateur les programmer en fonction de leur visibilité. Chacune d'entre elles est associée à une courbe d'élévation et à une fenêtre de capture que vous pouvez faire glisser pour définir le début et la fin, avec pour chaque cible des paramètres de recentrage, de refocalisation et de cadence de dithering. Polaris sequence les cibles tout au long de la nuit et indique d'emblée la durée totale de la session.",
+      "image": "/assets/screenshots/plan.jpg"
+    },
+    {
+      "icon": "📸",
+      "title": "Panneau de live stacking complet",
+      "body": "Live stacking de type EAA avec alignement, intégration et étirement en temps réel via un flux WebSocket à bande passante adaptative, de sorte que l'image se construit en direct à mesure que chaque image est reçue.",
+      "image": "/assets/screenshots/live-view.jpg"
+    },
+    {
+      "icon": "🎥",
+      "title": "Enregistrement vidéo + traitement",
+      "body": "Enregistrez des vidéos à fréquence d'images record pour l'observation des planètes, de la Lune et du Soleil, puis traitez-les sur place pour obtenir des résultats d'imagerie « lucky imaging ».",
+      "image": "/assets/screenshots/video.jpg"
+    },
+    {
+      "icon": "🌲",
+      "title": "Sequencer avancé",
+      "body": "Un séquenceur arborescent avec des conteneurs, des conditions de boucle et des déclencheurs d'événements : auto-focus en cas de dérive de température ou de HFR, meridian flip, dithering, interruption de sécurité. Glissez-déposez l'intégralité du plan dans le navigateur.",
+      "image": "/assets/screenshots/sequencer.jpg"
+    },
+    {
+      "icon": "🔬",
+      "title": "Auto-focus",
+      "body": "Mise au point automatique avec ajustement de la courbe en V et du HFR, déclenchée par un changement de température ou une dérive du HFR au cours d'une séquence, afin que les étoiles restent bien cadrées toute la nuit.",
+      "image": "/assets/screenshots/autofocus.jpg"
+    },
+    {
+      "icon": "🎨",
+      "title": "STUDIO : stacking + post-traitement par IA",
+      "body": "Un STUDIO complet pour le stacking et le post-traitement complet, comprenant l'extraction d'arrière-plan par IA, le débruitage et la déconvolution via GraXpert, accélérés sur le GPU du client via le navigateur ou sur la NPU du SBC.",
+      "image": "/assets/screenshots/studio.jpg"
+    },
+    {
+      "icon": "🌠",
+      "title": "Suppression des étoiles et recomposition",
+      "body": "Divisez une image principale en calques « sans étoiles » et « étoiles uniquement » à l'aide d'un modèle d'IA intégré au navigateur (nox, starrem2k13 ou StarNet), étirez chaque calque séparément, puis recombinez-les à l'aide de la fonction « Image Blend » (Screen, Add ou Lighten). Un flux de travail permettant de traiter les étoiles séparément, sans avoir besoin de PixInsight.",
+      "image": "/assets/screenshots/star-removal.jpg"
+    },
+    {
+      "icon": "🌟",
+      "title": "Restaurer la couleur de l'étoile",
+      "body": "Corrige la frange de couleur unilatérale (une dominante bleue ou magenta accompagnée d'une encoche sombre) que certains appareils photo à couleur en une seule prise laissent sur les étoiles brillantes. L'alignement des canaux au niveau des sous-pixels et la correction de la symétrie radiale des couleurs et de la luminance permettent de l'éliminer, en tenant compte des pixels voisins pour les champs très denses, grâce à un montage avant/après des étoiles les plus brillantes.",
+      "image": "/assets/screenshots/star-color.jpg"
+    },
+    {
+      "icon": "⚡",
+      "title": "Accélération par GPU et NPU",
+      "body": "Accélération GPU via OpenCL pour les opérations de traitement d'image gourmandes en ressources telles que le débayérisation, l'étirement et le stacking, avec une bascule transparente vers le CPU en l'absence de GPU. De plus, l’extraction d’arrière-plan par IA, la déconvolution et le débruitage s’effectuent via GraXpert, en utilisant le GPU du client dans le navigateur ou le NPU du serveur, avec un sélecteur Auto/NPU/GPU/CPU : Rockchip sur l’Orange Pi 5 Pro, Qualcomm Hexagon sur le Radxa Q6A, ou un canal GPU Vulkan.",
+      "image": "/assets/screenshots/opencl.jpg"
+    }
+  ],
+  "benchmarks": {
+    "title": "Tests de performance effectués sur du matériel réel",
+    "sub": "Le benchmark intégré affiche un score Polaris unique qui vous permet de choisir une carte. Plus le score est élevé, mieux c'est. Les chiffres ci-dessous correspondent à des versions de release.",
+    "rows": [
+      {
+        "device": "Orange Pi Zero 3 (Allwinner H618)",
+        "url": "http://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-Zero-3.html",
+        "cores": "4 cores",
+        "score": "45",
+        "stacking": "6.9 Mpx/s",
+        "capture": "7.4 Mpx/s",
+        "memory": "10.4 GB/s",
+        "price": "$20-35",
+        "highlight": false
+      },
+      {
+        "device": "Raspberry Pi 4 Model B",
+        "url": "https://www.raspberrypi.com/products/raspberry-pi-4-model-b/",
+        "cores": "4 cores",
+        "score": "110",
+        "stacking": "22.2 Mpx/s",
+        "capture": "11.5 Mpx/s",
+        "memory": "4.7 GB/s",
+        "price": "$55-75",
+        "highlight": false
+      },
+      {
+        "device": "Orange Pi 4 Pro (Allwinner A733)",
+        "url": "http://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-4-Pro.html",
+        "cores": "8 cores",
+        "score": "180",
+        "stacking": "31 Mpx/s",
+        "capture": "30.9 Mpx/s",
+        "memory": "8.6 GB/s",
+        "price": "$50-70",
+        "highlight": false
+      },
+      {
+        "device": "Raspberry Pi 5 Model B",
+        "url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
+        "cores": "4 cores",
+        "score": "245",
+        "stacking": "42.1 Mpx/s",
+        "capture": "39.9 Mpx/s",
+        "memory": "8.2 GB/s",
+        "price": "$70-100",
+        "highlight": false
+      },
+      {
+        "device": "Orange Pi 5 Pro (RK3588S)",
+        "url": "http://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-Pro.html",
+        "cores": "8 cores",
+        "score": "274",
+        "stacking": "44.6 Mpx/s",
+        "capture": "46.5 Mpx/s",
+        "memory": "48 GB/s",
+        "price": "$130-160",
+        "highlight": false
+      },
+      {
+        "device": "Radxa Dragon Q6A (QCS6490)",
+        "url": "https://radxa.com/products/dragon/q6a/",
+        "cores": "8 cores",
+        "score": "296",
+        "stacking": "63.8 Mpx/s",
+        "capture": "38.5 Mpx/s",
+        "memory": "13.8 GB/s",
+        "price": "$120-140",
+        "highlight": true
+      },
+      {
+        "device": "Core i9-13900KF + RTX 5070",
+        "url": "",
+        "cores": "32 threads",
+        "score": "936",
+        "stacking": "99.4 Mpx/s",
+        "capture": "89 Mpx/s",
+        "memory": "41 GB/s",
+        "price": "$1,500-2,200",
+        "highlight": false
+      }
+    ],
+    "note": "Le score Polaris est la valeur principale ; les colonnes « Mpx/s » correspondent au débit en temps réel et au débit de capture. L'Orange Pi 5 Pro est présenté avec le backend GPU OpenCL activé (274 ; 227 en mode CPU seul) et le Pi 5 dans ses meilleures conditions, avec un refroidissement actif. Le Radxa Dragon Q6A est le SBC le plus rapide de cette sélection et offre le meilleur rapport qualité-prix ; il fonctionne uniquement avec le CPU (son GPU Adreno constitue une perte nette de performances). Les prix indiqués sont des estimations approximatives du prix public de la carte seule (sans carte SD, alimentation ni boîtier) ; la ligne « Core i9 » correspond à une configuration de PC de bureau complète à titre de référence, et non à un SBC. L’Orange Pi Zero 3 constitue le modèle d’entrée de gamme : il montre que Polaris fonctionne sur une carte de 1,5 Go (son GPU Mali-G31 est lui aussi un frein, il fonctionne donc uniquement avec le processeur). Les tableaux complets par appareil et la méthodologie sont disponibles dans la documentation des tests de performance.",
+    "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"
+  },
+  "comparison": {
+    "title": "Comparaison de Polaris",
+    "sub": "Aux côtés des boîtiers dédiés et des suites bureautiques les plus populaires. Le symbole ★ indique les fonctionnalités qu'aucune autre option de cette liste ne propose. Les cellules reflètent les fonctionnalités annoncées pour chaque produit et sont susceptibles d'être modifiées.",
+    "products": [
+      "Polaris",
+      "ASIAIR",
+      "StellaVita 2.0",
+      "StellarMate",
+      "KStars/Ekos",
+      "N.I.N.A.",
+      "PINS"
+    ],
+    "highlightProduct": "Polaris",
+    "legend": "✓ oui · ~ partiel ou limité · ✗ non",
+    "note": "Polaris est gratuit et open source : la seule dépense consiste en l'achat d'un ordinateur monocarte peu coûteux (4 Go recommandés, mais il fonctionne dès 1,5 Go) ainsi qu'un bloc d'alimentation optionnel (recommandé) et peu coûteux, tel que le SVBony SV241 ou le Gemini Power Box, tous deux souvent en promotion. Il n'y a pas de contrôleur propriétaire à acheter, ni d'application, de système d'exploitation ou d'abonnement payant.",
+    "rows": [
+      {
+        "feature": "Options matérielles",
+        "cells": [
+          "RPi · Orange Pi · x86 · Windows",
+          "own box",
+          "own box",
+          "RPi (OS or box)",
+          "Linux · Win · Mac · RPi",
+          "Windows",
+          "Raspberry Pi"
+        ]
+      },
+      {
+        "feature": "Interface utilisateur Web complète (tout navigateur / appareil)",
+        "star": true,
+        "cells": [
+          "yes",
+          "no:app",
+          "no:app",
+          "partial:EkosLive / VNC",
+          "partial:EkosLive",
+          "no:desktop",
+          "no:VNC"
+        ]
+      },
+      {
+        "feature": "Contrôler plusieurs hôtes à partir d'un seul client",
+        "star": true,
+        "cells": [
+          "yes",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no"
+        ]
+      },
+      {
+        "feature": "Open source",
+        "cells": [
+          "yes:AGPL",
+          "no",
+          "no",
+          "partial:core only",
+          "yes:GPL",
+          "yes",
+          "yes:MPL"
+        ]
+      },
+      {
+        "feature": "Gratuit (pas d'application payante, pas de système d'exploitation payant, pas de boîtier payant)",
+        "cells": [
+          "yes",
+          "no:box",
+          "no:box",
+          "no:paid OS / box",
+          "yes",
+          "yes",
+          "yes"
+        ]
+      },
+      {
+        "feature": "Appareils photo multimarques",
+        "cells": [
+          "yes",
+          "partial:ZWO",
+          "yes",
+          "yes",
+          "yes",
+          "yes",
+          "yes"
+        ]
+      },
+      {
+        "feature": "INDI + ASCOM + Alpaca",
+        "cells": [
+          "yes",
+          "no",
+          "partial:INDI",
+          "partial:INDI",
+          "partial:INDI",
+          "partial:ASCOM / Alpaca",
+          "partial:INDI"
+        ]
+      },
+      {
+        "feature": "Caméra auxiliaire (2e)",
+        "star": true,
+        "cells": [
+          "yes",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no"
+        ]
+      },
+      {
+        "feature": "Focalisateur pour caméra auxiliaire et caméra de guidage",
+        "star": true,
+        "cells": [
+          "yes",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no"
+        ]
+      },
+      {
+        "feature": "Live stacking (EAA)",
+        "cells": [
+          "yes",
+          "yes",
+          "partial",
+          "yes",
+          "yes",
+          "no:plugin",
+          "no"
+        ]
+      },
+      {
+        "feature": "Sequencer avancé + planificateur multi-cibles",
+        "cells": [
+          "yes",
+          "partial",
+          "partial",
+          "yes:scheduler",
+          "yes:scheduler",
+          "yes",
+          "yes"
+        ]
+      },
+      {
+        "feature": "Éditeur d'images intégré / post-traitement",
+        "cells": [
+          "yes",
+          "partial",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no"
+        ]
+      },
+      {
+        "feature": "Outils d'IA (extraction de l'arrière-plan, débruitage, déconvolution, suppression des étoiles)",
+        "star": true,
+        "cells": [
+          "yes",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no"
+        ]
+      },
+      {
+        "feature": "Le traitement et l'IA s'exécutent côté client / dans le navigateur",
+        "star": true,
+        "cells": [
+          "yes",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no"
+        ]
+      },
+      {
+        "feature": "Accélération par GPU / NPU (OpenCL · RKNN · QNN)",
+        "star": true,
+        "cells": [
+          "yes",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no"
+        ]
+      },
+      {
+        "feature": "Flux de travail de post-traitement automatique",
+        "star": true,
+        "cells": [
+          "yes",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no"
+        ]
+      },
+      {
+        "feature": "Assistant IA (chat)",
+        "star": true,
+        "cells": [
+          "yes",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no",
+          "no"
+        ]
+      },
+      {
+        "feature": "Étalonnage photométrique des couleurs (SPCC / PCC)",
+        "cells": [
+          "yes",
+          "no",
+          "no",
+          "no",
+          "no",
+          "partial:plugin",
+          "partial:plugin"
+        ]
+      },
+      {
+        "feature": "Accès Internet à distance intégré",
+        "cells": [
+          "yes",
+          "partial",
+          "no",
+          "yes:EkosLive",
+          "no",
+          "no",
+          "no"
+        ]
+      },
+      {
+        "feature": "Fonctionne sur votre propre matériel (pas de boîtier propriétaire)",
+        "show": false,
+        "cells": [
+          "yes",
+          "no",
+          "no",
+          "partial:paid OS or box",
+          "yes",
+          "yes",
+          "yes"
+        ]
+      },
+      {
+        "feature": "Autoguiding (intégré + PHD2)",
+        "show": false,
+        "cells": [
+          "yes",
+          "yes",
+          "yes",
+          "yes",
+          "yes",
+          "yes",
+          "yes"
+        ]
+      },
+      {
+        "feature": "Plate solving",
+        "show": false,
+        "cells": [
+          "yes",
+          "yes",
+          "partial",
+          "yes",
+          "yes",
+          "yes",
+          "yes"
+        ]
+      },
+      {
+        "feature": "Polar alignment",
+        "show": false,
+        "cells": [
+          "yes",
+          "yes",
+          "yes",
+          "yes",
+          "yes",
+          "partial:plugin",
+          "partial:plugin"
+        ]
+      },
+      {
+        "feature": "Auto-focus",
+        "show": false,
+        "cells": [
+          "yes",
+          "yes",
+          "yes",
+          "yes",
+          "yes",
+          "yes",
+          "yes"
+        ]
+      },
+      {
+        "feature": "Planétaire / capture vidéo + stacking",
+        "show": false,
+        "cells": [
+          "yes",
+          "yes",
+          "partial:record",
+          "partial:record",
+          "partial:record",
+          "no",
+          "no"
+        ]
+      }
+    ]
+  },
+  "closing": {
+    "title": "Gratuit, open source et prêt à être cloné.",
+    "sub": "Sous licence GNU AGPL v3, développé à partir du projet N.I.N.A. Apportez votre propre oscilloscope."
+  },
+  "gallery": {
+    "title": "Plus de captures d'écran",
+    "sub": "Quelques autres aperçus de l'interface, le tout fonctionnant dans le navigateur. Cliquez sur n'importe quelle image pour l'agrandir.",
+    "shots": [
+      {
+        "image": "/assets/screenshots/gs-rigs.jpg",
+        "caption": "Gestionnaire d'équipement : télescope, caméra, monture, dispositif de mise au point et roue à filtres, le tout en un seul endroit"
+      },
+      {
+        "image": "/assets/screenshots/gs-connect.jpg",
+        "caption": "Centre de gestion des périphériques avec sélection des pilotes INDI, ASCOM/Alpaca et natifs"
+      },
+      {
+        "image": "/assets/screenshots/plan-editor.jpg",
+        "caption": "Planification par cible avec une fenêtre d'élévation déplaçable"
+      },
+      {
+        "image": "/assets/screenshots/guide-graph.jpg",
+        "caption": "Graphique de guidage en temps réel avec suivi des erreurs d'ascension droite et de déclinaison"
+      },
+      {
+        "image": "/assets/screenshots/calibration.jpg",
+        "caption": "Guiding calibration review with the full mount calibration report"
+      },
+      {
+        "image": "/assets/screenshots/gs-live.jpg",
+        "caption": "Live view annotée : objets du ciel profond identifiés sur l'image composite"
+      },
+      {
+        "image": "/assets/screenshots/star-removal.jpg",
+        "caption": "Suppression des étoiles : avant et après, les étoiles ayant été isolées dans un calque distinct"
+      },
+      {
+        "image": "/assets/screenshots/remove-stars-dialog.jpg",
+        "caption": "Supprimer les étoiles : choisir un modèle, définir la précision et ajuster le nettoyage des halos"
+      },
+      {
+        "image": "/assets/screenshots/image-blend.jpg",
+        "caption": "Fusion d'images : recombiner les images « sans étoiles » et « avec étoiles » en appliquant un étirement indépendant à chaque calque"
+      },
+      {
+        "image": "/assets/screenshots/plate-solve.jpg",
+        "caption": "Pivotement et centrage : plate solving et centrage sur la cible à partir de la carte du ciel"
+      },
+      {
+        "image": "/assets/screenshots/guide-native.jpg",
+        "caption": "Guiding natif : le graphique des erreurs RA/Dec, le champ de l'étoile de guidage et le panneau d'étalonnage"
+      },
+      {
+        "image": "/assets/screenshots/live-ic4605.jpg",
+        "caption": "Live stacking de l'IC 4605 avec l'histogramme en temps réel et les poignées d'étirement"
+      },
+      {
+        "image": "/assets/screenshots/live-lbn43.jpg",
+        "caption": "Live stacking du LBN 43 depuis un navigateur via le réseau local"
+      },
+      {
+        "image": "/assets/screenshots/live-lbn1110.jpg",
+        "caption": "Live stacking LBN 1110, image par image"
+      },
+      {
+        "image": "/assets/screenshots/live-saturn.jpg",
+        "caption": "Live stacking de la nébuleuse de Saturne (NGC 7009)"
+      },
+      {
+        "image": "/assets/screenshots/star-color.jpg",
+        "caption": "Restauration des couleurs des étoiles : montage « avant/après » des étoiles les plus brillantes"
+      },
+      {
+        "image": "/assets/screenshots/video.jpg",
+        "caption": "VIDÉO : prise de vue lunaire à haute fréquence d'images avec statistiques en direct et déplacement de la monture"
+      }
+    ]
+  }
+}

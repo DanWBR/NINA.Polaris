@@ -11,12 +11,19 @@ import aboutPage from '../../content/about/about.json';
 import aiToolsJson from '../../content/ai-tools/ai-tools.json';
 import assistantJson from '../../content/assistant/assistant.json';
 
+// Chrome that is not page content: nav and footer labels, the strings baked
+// into components, and the two prose fields of `site`. They live in
+// content/_ui/ so the translation pipeline can reach them like any other copy.
+import siteCopy from '../../content/_ui/site.json';
+import navLinksJson from '../../content/_ui/navLinks.json';
+import footerColsJson from '../../content/_ui/footerCols.json';
+import uiStrings from '../../content/_ui/strings.json';
+
 // ---- Static site config (links/meta, not editorial copy) ----
 export const site = {
   name: 'Polaris Astro Controller',
-  tagline: 'Browser-controlled astrophotography for any device',
-  description:
-    "A lightweight, browser-controlled astrophotography control system on ASP.NET Core. Runs on Raspberry Pi, mini PCs, and Windows. INDI + ASCOM/Alpaca, PHD2 guiding, plate solving, live stacking, advanced sequencer, and a relay server for remote access.",
+  tagline: siteCopy.tagline,
+  description: siteCopy.description,
   ogImage: '/assets/horsehead.jpg',
   repo: 'https://github.com/DanWBR/NINA.Polaris',
   issues: 'https://github.com/DanWBR/NINA.Polaris/issues',
@@ -26,48 +33,18 @@ export const site = {
   discord: 'https://discord.gg/FYQeNhEGDp',
 };
 
-export const navLinks = [
-  { label: 'Features', href: '/features' },
-  { label: 'AI Tools', href: '/ai-tools' },
-  { label: 'Assistant', href: '/assistant' },
-  { label: 'Get Started', href: '/getting-started' },
-  { label: 'Download & Install', href: '/install' },
-  // Static Quarto book rendered into public/handbook/ by CI
-  // (deploy-website.yml), not an Astro route.
-  { label: 'Handbook', href: '/handbook/' },
-  { label: 'About', href: '/about' },
-  { label: 'Discord ↗', href: site.discord, external: true },
-  { label: 'Patreon ↗', href: site.patreon, external: true },
-  { label: 'GitHub ↗', href: site.repo, external: true },
-];
+// The Handbook entry points at the static Quarto book rendered into
+// public/handbook/ by CI (deploy-website.yml), not at an Astro route.
+export const navLinks: { label: string; href: string; external?: boolean }[] =
+  navLinksJson;
 
-export const footerCols = [
-  {
-    title: 'Project',
-    links: [
-      { label: 'All features', href: '/features', external: false },
-      { label: 'AI Tools', href: '/ai-tools', external: false },
-      { label: 'Canopus Assistant', href: '/assistant', external: false },
-      { label: 'Getting started', href: '/getting-started', external: false },
-      { label: 'About', href: '/about', external: false },
-      { label: 'Download & Install', href: '/install', external: false },
-      { label: 'GitHub repo', href: site.repo },
-      { label: 'README', href: site.readme },
-      { label: 'Issues / requests', href: site.issues },
-      { label: 'Discord (community)', href: site.discord },
-      { label: 'Patreon (dev news)', href: site.patreon },
-    ],
-  },
-  {
-    title: 'Related',
-    links: [
-      { label: 'N.I.N.A. (desktop, upstream)', href: 'https://nighttime-imaging.eu/' },
-      { label: 'INDI library', href: 'https://indilib.org/' },
-      { label: 'ASCOM / Alpaca', href: 'https://ascom-standards.org/' },
-      { label: 'PHD2 guiding', href: 'https://openphdguiding.org/' },
-    ],
-  },
-];
+export const footerCols: {
+  title: string;
+  links: { label: string; href: string; external?: boolean }[];
+}[] = footerColsJson;
+
+/** Strings that live in components rather than in a page's content file. */
+export const strings = uiStrings;
 
 // ---- Tina-managed editorial content (content/pages/home.json) ----
 export const hero = home.hero;
@@ -226,5 +203,6 @@ export function getContent(lang: Lang = 'en') {
     navLinks: localised('_ui/navLinks', navLinks, lang),
     footerCols: localised('_ui/footerCols', footerCols, lang),
     site: localised('_ui/site', site, lang),
+    strings: localised('_ui/strings', strings, lang),
   };
 }

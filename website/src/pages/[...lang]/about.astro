@@ -53,7 +53,7 @@ const {site, aboutContent: a} = getContent(lang);
               )}
               <div class="author-text">
                 <p class="author-name">
-                  {a.author.intro} <strong>{a.author.name}</strong>{a.author.role && <span class="author-role"> — {a.author.role}</span>}.
+                  {a.author.intro} <strong>{a.author.name}</strong>{a.author.role && <span class="author-role"> - {a.author.role}</span>}.
                 </p>
                 {a.author.bio && a.author.bio.map((para) => <p>{para}</p>)}
                 {a.author.email && <p>Contact: <a href={`mailto:${a.author.email}`}>{a.author.email}</a></p>}

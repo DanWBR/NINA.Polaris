@@ -1,0 +1,50 @@
+{
+  "hero": {
+    "sourceOnGitHub": "Quelle auf GitHub",
+    "getStarted": "Los geht’s →",
+    "donate": "❤ Spenden",
+    "skyMapAlt": "Polaris Astro Controller - Sternenkarte",
+    "credit": "IC 434 / Pferdekopf & Flamme · © Daniel Wagner Oliveira de Medeiros"
+  },
+  "benchmarks": {
+    "colDevice": "Gerät",
+    "colCores": "Kerne",
+    "colScore": "Polaris-Score",
+    "colStacking": "Stapeln",
+    "colCapture": "Erfassung",
+    "memoryBw": "Speicherbandbreite",
+    "colPrice": "ca. USD",
+    "bestValue": "bestes Preis-Leistungs-Verhältnis",
+    "more": "Vollständige Tabellen nach Gerät und Methodik →"
+  },
+  "comparison": {
+    "feature": "Funktion",
+    "uniqueTitle": "Einzigartig bei Polaris auf dieser Liste",
+    "uniqueLabel": "Einzigartig bei Polaris"
+  },
+  "downloads": {
+    "title": "Herunterladen & Installieren",
+    "guide": "Leitfaden für den Einstieg →",
+    "sourceReleases": "Quelle & Veröffentlichungen",
+    "discord": "Discord",
+    "patreon": "Patreon",
+    "donate": "❤ Spenden",
+    "licence": "Kostenlos und Open Source · GNU AGPL v3 · basiert auf dem N.I.N.A.-Projekt."
+  },
+  "features": {
+    "comingSoon": "Screenshot folgt in Kürze",
+    "seeEvery": "Entdecken Sie alle Funktionen, Panel für Panel →"
+  },
+  "gallery": {
+    "screenshotAlt": "Screenshot",
+    "close": "Schließen"
+  },
+  "nav": {
+    "toggle": "Navigation umschalten"
+  },
+  "footer": {
+    "blurb": "Browserbasierte Astrofotografie auf jedem Gerät.",
+    "disclaimer": "Ein von der Community getriebener Fork von N.I.N.A., der weder mit dem offiziellen N.I.N.A.-Team verbunden ist noch von diesem unterstützt wird. Bei Problemen mit Polaris erstelle bitte ein Issue in diesem Repository; wende dich diesbezüglich bitte nicht an die N.I.N.A.-Entwickler.",
+    "credit": "Hintergrund: IC 434 (Pferdekopf) und NGC 2024 (Flamme), Molekülwolkenkomplex im Orion."
+  }
+}

@@ -1,0 +1,457 @@
+{
+  "title": "Canopus-Assistent",
+  "lede": "Ein optionaler KI-Begleiter für Ihre Aufnahmen. Er plant die Nacht, steuert Ihre Ausrüstung mit Ihrer Zustimmung durch Polaris, überwacht Fokus und Nachführung, überprüft Ihre Aufnahmen und beantwortet Fragen zur Astrofotografie - direkt in der Polaris-Weboberfläche. Ein freundlicher Co-Pilot für Anfänger und eine Zeitersparnis für alle.",
+  "tagline": "Ihr persönlicher Co-Pilot für die Astrofotografie - direkt in Polaris integriert.",
+  "glanceTitle": "Auf einen Blick",
+  "glance": [
+    {
+      "label": "Plane deinen Abend.",
+      "text": "Schlägt Ziele für Ihren Himmel, Ihre Zeit und Ihre Ausrüstung vor und erstellt dann im PLAN-Modus einen einsatzbereiten Plan mit mehreren Zielen, den Sie überprüfen können."
+    },
+    {
+      "label": "Fährt den Lkw, sofern dies genehmigt wurde.",
+      "text": "Jede Maßnahme, die Hardware betrifft oder eine laufende Sitzung verändert, wird Ihnen zunächst als Plan vorgelegt, den Sie genehmigen, prüfen oder ablehnen können, sodass Sie stets die Kontrolle behalten."
+    },
+    {
+      "label": "Schaut sich deine Bilder an.",
+      "text": "Wenn Sie fragen: „Ist dieses Bild gut?“, überprüft das Programm das aktuelle Bild (Schärfe, Sternform, Nachlauf, Farbverläufe, Bildausschnitt) und sagt Ihnen, was Sie korrigieren sollten."
+    },
+    {
+      "label": "Kennt sich mit Astrofotografie aus.",
+      "text": "Fundierte Antworten zu den Themen Fokussierung, Nachführung, Belichtung, Filter, Polausrichtung, Kalibrierung und Fehlerdiagnose bei Sub-Aufnahmen."
+    },
+    {
+      "label": "In der Cloud oder komplett offline.",
+      "text": "Führen Sie es in der Cloud, auf Ihrem Polaris-Host oder auf Ihrem eigenen Gerät aus. Zwei der drei Optionen sind kostenlos und verlassen Ihre Hardware zu keinem Zeitpunkt."
+    }
+  ],
+  "featuresTitle": "Was es bewirkt",
+  "features": [
+    {
+      "icon": "🗓️",
+      "title": "Nachtplanung",
+      "color": "#2563eb",
+      "intro": "Sag ihm einfach, was du fotografieren möchtest, und er erledigt den Rest.",
+      "items": [
+        {
+          "label": "Das Beste heute Abend.",
+          "text": "Listet Deep-Sky-Objekte sowie den Mond und die Planeten auf, die für Ihren Standort und Ihr Zeitfenster günstig stehen."
+        },
+        {
+          "label": "Überprüft die wichtigsten Punkte.",
+          "text": "Höhe im Laufe der Nacht, Wetter und Sichtverhältnisse sowie der Einfluss des Mondes auf die einzelnen Ziele."
+        },
+        {
+          "label": "Erstellt den Plan.",
+          "text": "Erstellt im PLAN-Modus einen Bildgebungsplan für mehrere Ziele mit angemessenen Belichtungswerten, Dithering und Nachfokussierung, den Sie überprüfen, anpassen und starten können."
+        }
+      ]
+    },
+    {
+      "icon": "🔭",
+      "title": "Direkte Steuerung, sicher",
+      "color": "#0891b2",
+      "intro": "Es steuert Polaris für Sie, aber niemals hinter Ihrem Rücken.",
+      "items": [
+        {
+          "label": "Maßnahmen, die zunächst genehmigt werden müssen.",
+          "text": "Schwenken, Autofokus, Starten einer Sequenz oder eines Live-Stacks, Meridian-Flip: Jede dieser Aktionen wird Ihnen als Vorschlag unterbreitet, den Sie annehmen oder ablehnen können."
+        },
+        {
+          "label": "Zeigt dir, was gerade passiert.",
+          "text": "Wechselt in der Polaris-Benutzeroberfläche zum entsprechenden Fenster, sodass Sie den Fokus, die Nachführung oder den Live-Stack während des Betriebs beobachten können."
+        },
+        {
+          "label": "Liest die Sitzung ein.",
+          "text": "Beantwortet die Frage „Wie läuft’s?“ anhand des aktuellen Status der Ausrüstung: Verbindung, Aufnahmestand, RMS-Wert der Nachführung, Fokus, Zeit bis zum Meridian."
+        }
+      ]
+    },
+    {
+      "icon": "📷",
+      "title": "Rahmenanalyse",
+      "color": "#7c3aed",
+      "intro": "Ein zweites Paar (sehr geduldiger) Augen für jeden Beitrag. Nur Cloud-Backend.",
+      "items": [
+        {
+          "label": "Ist das gut?",
+          "text": "Überprüft das aktuelle Bild aus den Modi „LIVE“, „PREVIEW“ oder „AUTORUN“ und gibt eine kurze Bewertung ab."
+        },
+        {
+          "label": "Erkennt Probleme.",
+          "text": "Verlängerte oder nachlaufende Sterne, Unschärfe, Farbverläufe und Lichtverschmutzung, Satelliten sowie Probleme bei der Bildkomposition - mit einer konkreten Lösung."
+        }
+      ]
+    },
+    {
+      "icon": "💬",
+      "title": "Astronomisches Wissen",
+      "color": "#16a34a",
+      "intro": "Fragen Sie alles, was Sie wollen - Sie erhalten eine fundierte Antwort, keine Vermutung.",
+      "items": [
+        {
+          "label": "Anleitung und Begründung.",
+          "text": "Fokussierung und HFR, Autoguiding und Dithering, Belichtung und Histogramm, Filter und Lichtverschmutzung, Polausrichtung, Kalibrierungsbilder, Planung und Fehlerdiagnose bei fehlerhaften Einzelbildern."
+        },
+        {
+          "label": "Sorgfältig ausgewählt, keine Halluzination.",
+          "text": "Die Antworten stammen aus einer sorgfältig zusammengestellten Wissensdatenbank zur Astrofotografie und sind auf Ihre Frage zugeschnitten."
+        }
+      ]
+    },
+    {
+      "icon": "🌐",
+      "title": "Spricht Ihre Sprache",
+      "color": "#ea580c",
+      "intro": "Es richtet sich nach der Sprache, die Sie in Polaris eingestellt haben.",
+      "items": [
+        {
+          "label": "Lokalisierte Antworten.",
+          "text": "Antworten, Pläne und Fragen werden in der Sprache Ihrer Polaris-Benutzeroberfläche angezeigt."
+        },
+        {
+          "label": "Ein vertrautes Bild.",
+          "text": "Der Chat passt sich Ihrer Polaris-Schriftart, Ihrem Zoomfaktor und Ihrem Zeilenabstand an und lässt sich an beliebiger Stelle andocken oder frei positionieren."
+        }
+      ]
+    },
+    {
+      "icon": "🔒",
+      "title": "Von Grund auf auf Privatsphäre ausgelegt",
+      "color": "#334155",
+      "intro": "Es steht uns nicht zu, Ihre Gespräche zurückzuhalten.",
+      "items": [
+        {
+          "label": "Chats werden nicht gespeichert.",
+          "text": "Im Cloud-Backend werden Ihre Nachrichten verarbeitet, um eine Antwort zu generieren, und anschließend gelöscht; wir behalten keine Kopie davon. Die lokalen Backends senden überhaupt nichts."
+        },
+        {
+          "label": "Minimale Kontodaten.",
+          "text": "Im Cloud-Backend werden lediglich Ihre E-Mail-Adresse, ein Login-Token und Ihr Abonnementstatus gespeichert. Die Zahlungsabwicklung erfolgt über Stripe; wir haben zu keinem Zeitpunkt Einblick in Ihre Kreditkartendaten. Für die lokalen Backends ist kein Konto erforderlich."
+        }
+      ]
+    }
+  ],
+  "backendsTitle": "Drei Möglichkeiten, das Programm auszuführen",
+  "backendsLede": "Ein Assistent, den du selbst auswählen kannst. Alle drei steuern das Fahrzeug auf dieselbe Weise und wenden dieselben Sicherheitsmaßnahmen an, bei denen zunächst eine Genehmigung erforderlich ist. Wähle einen unter „Einstellungen“ > „Assistent“ aus.",
+  "backends": [
+    {
+      "icon": "☁️",
+      "color": "#2563eb",
+      "title": "Cloud",
+      "tag": "Das leistungsstärkste Gehirn - immer einsatzbereit, keine Installation erforderlich.",
+      "intro": "Die KI des Assistenten läuft auf unseren Servern und gibt eine Antwort zurück; Ihr Browser leitet genehmigte Aktionen an Ihr lokales Polaris-System weiter.",
+      "items": [
+        {
+          "label": "Kosten.",
+          "text": "Kostenpflichtiges Abonnement: 4,99 US-Dollar pro Monat, mit einer 7-tägigen kostenlosen Testphase."
+        },
+        {
+          "label": "Läuft weiter.",
+          "text": "Unsere Server (Microsoft Azure). Kein lokales Modell, keine GPU erforderlich."
+        },
+        {
+          "label": "Minimum.",
+          "text": "Eine Internetverbindung und ein Abonnement. Jedes Gerät, auf dem die Polaris-Weboberfläche läuft."
+        },
+        {
+          "label": "Empfehlenswert.",
+          "text": "Genau. Das ist die leistungsstärkste Option und die einzige, die eine Bildanalyse durchführt (d. h., die Ihre Bilder auswertet)."
+        },
+        {
+          "label": "Datenschutz.",
+          "text": "Nachrichten werden zur Beantwortung verarbeitet und anschließend gelöscht; sie werden nicht zum Trainieren von Modellen verwendet. Es werden lediglich Ihre E-Mail-Adresse, ein Anmeldetoken und Ihr Abonnementstatus gespeichert."
+        }
+      ]
+    },
+    {
+      "icon": "🖥️",
+      "color": "#0891b2",
+      "title": "Auf diesem Host",
+      "tag": "Kostenlos und vollständig offline, läuft auf Ihrem Polaris-Host.",
+      "intro": "Ein kleines Sprachmodell läuft direkt auf dem Polaris-Host, sodass jedes Smartphone oder Tablet in Ihrem Netzwerk zu einem Thin Client wird. Kein Konto, kein Abonnement.",
+      "items": [
+        {
+          "label": "Kosten.",
+          "text": "Kostenlos."
+        },
+        {
+          "label": "Läuft weiter.",
+          "text": "Der Polaris-Host auf der CPU. Eine NPU oder GPU ist ein Pluspunkt, aber keine Voraussetzung."
+        },
+        {
+          "label": "Minimum.",
+          "text": "Ein 64-Bit-Host mit etwa 6 GB freiem Arbeitsspeicher neben Polaris."
+        },
+        {
+          "label": "Empfehlenswert.",
+          "text": "8 GB oder mehr und ein schnellerer Prozessor. Antworten von „Warm“ werden innerhalb weniger Sekunden angezeigt; die erste Antwort einer Sitzung dauert etwas länger, während sich das Modell aufwärmt."
+        },
+        {
+          "label": "Nur Text.",
+          "text": "Plant den Einsatz, steuert das Fahrzeug und beantwortet Fragen. Die Rahmenanalyse (Vision) erfolgt ausschließlich in der Cloud."
+        },
+        {
+          "label": "Datenschutz.",
+          "text": "Alles verbleibt auf Ihrer Hardware. Es werden keine Daten an uns oder an einen KI-Anbieter übermittelt."
+        }
+      ]
+    },
+    {
+      "icon": "📱",
+      "color": "#7c3aed",
+      "title": "Auf diesem Gerät",
+      "tag": "Kostenlos und offline, läuft auf dem Computer oder Smartphone, das Sie gerade nutzen.",
+      "intro": "Das Modell läuft auf Ihrem eigenen Rechner. Auf einem Desktop-Computer nutzt es einen lokalen LLM-Server, den Sie auf der integrierten GPU betreiben; in der mobilen App wird das Modell direkt auf dem Smartphone ausgeführt.",
+      "items": [
+        {
+          "label": "Kosten.",
+          "text": "Kostenlos."
+        },
+        {
+          "label": "Läuft weiter.",
+          "text": "Die GPU Ihres Computers (über Ollama, LM Studio oder llama.cpp) oder Ihr Smartphone in der Polaris-App."
+        },
+        {
+          "label": "Minimum.",
+          "text": "Desktop: Ein lokaler LLM-Server und ein Modell, das die erforderlichen Tools unterstützt und in den Arbeitsspeicher Ihrer GPU passt. Mobilgeräte: Ein Gerät mit 8 GB, da das Modell vollständig in den Arbeitsspeicher geladen wird."
+        },
+        {
+          "label": "Empfehlenswert.",
+          "text": "Desktop: Ein Modell mit 12 bis 24 Milliarden Parametern, das auf einer GPU mit mindestens 16 GB Speicher läuft. Mobilgeräte: Ein Smartphone oder Tablet mit 8 GB Speicher, um flüssige Antworten innerhalb weniger Sekunden zu erhalten."
+        },
+        {
+          "label": "Nur Text.",
+          "text": "Genau wie beim On-Host-Backend: Planung, Rig-Steuerung und Fragen und Antworten; die Frame-Analyse erfolgt ausschließlich in der Cloud."
+        },
+        {
+          "label": "Datenschutz.",
+          "text": "Wird lokal ausgeführt; es verlassen keine Daten Ihren Rechner. Wenn Sie die Desktop-Option auf einen Remote-Endpunkt verweisen, sieht dieser Dienst Ihre Nachrichten gemäß seinen eigenen Bedingungen."
+        }
+      ]
+    }
+  ],
+  "backendsShot": {
+    "caption": "Auswahl des Backends unter „Einstellungen“, „Assistent“: Cloud, auf diesem Host oder auf diesem Gerät, jeweils mit eigenen Steuerelementen.",
+    "src": "/assets/screenshots/assistant-backends.jpg"
+  },
+  "capabilitiesTitle": "Was die einzelnen Backends leisten können",
+  "capabilitiesLede": "Jedes Backend fragt vor jeder Änderung nach und nutzt dieselben Kernwerkzeuge für Planung, Navigation und Rig-Steuerung. Die Cloud-Ebene ergänzt dies um Bildanalyse, den Multi-Target-Planer und die Nachbearbeitung. Die genauen Bezeichnungen der Werkzeuge sind unter den jeweiligen Funktionen aufgeführt.",
+  "capabilitiesColumns": [
+    "Cloud",
+    "On this host",
+    "On this device"
+  ],
+  "capabilities": [
+    {
+      "group": "Planung und Beratung",
+      "rows": [
+        {
+          "feature": "Die besten Beobachtungsziele für heute Abend, Katalogsuche, Höhenverläufe und die astronomische Wettervorhersage",
+          "tools": "get_tonights_best, search_catalog, get_altitude, get_weather",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Beantworten Sie Fragen zur Astrofotografie und zu Polaris aus dem integrierten Handbuch",
+          "tools": "search_knowledge",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Live-Session und Steuerung der Ausrüstung",
+      "rows": [
+        {
+          "feature": "Den Live-Status der Anlage abrufen und die Polaris-Benutzeroberfläche auf das rechte Fenster umschalten",
+          "tools": "get_status, show_panel",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Die Montierung schwenken und das Ziel über die Platte zentrieren",
+          "tools": "slew_to",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Führen Sie einen automatisierten V-Kurven-Autofokus durch",
+          "tools": "run_autofocus",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Live-Stacking (EAA) und Dithering nach Bedarf starten",
+          "tools": "start_live_stack, dither_now",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Die laufende Aufnahmesequenz anhalten",
+          "tools": "Stoppsequenz",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Die Montierung parken oder aus dem Parkmodus holen, die Nachführung beenden, das Live-Stacking beenden",
+          "tools": "park_mount, unpark_mount, stop_guiding, stop_live_stack",
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Planer für mehrere Ziele",
+      "rows": [
+        {
+          "feature": "Einen vollständigen Nachtplan für mehrere Ziele erstellen, auflisten, starten und beenden",
+          "tools": "create_plan, list_plans, start_plan, stop_plan",
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Bildanalyse (Bildverarbeitung)",
+      "rows": [
+        {
+          "feature": "Ein aufgenommenes Bild, das ausgewählte Bild aus der Bibliothek oder die aktuelle Bildschirmanzeige anzeigen",
+          "tools": "analyze_frame, analyze_selected_frame, analyze_current_view",
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Nachbearbeitung (STUDIO)",
+      "rows": [
+        {
+          "feature": "Bibliotheksstatistiken auslesen, Frames aktualisieren und auflisten, bewerten, integrieren und Ergebnisse in der Vorschau anzeigen",
+          "tools": "get_studio_stats, refresh_library, list_frames, grade_frames, integrate_frames, preview_frame",
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Art des Backends",
+      "rows": [
+        {
+          "feature": "Proaktive Überwachung und Anstöße während einer Sitzung",
+          "tools": "",
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
+        },
+        {
+          "feature": "Funktioniert auch ohne Internetverbindung",
+          "tools": "",
+          "cells": [
+            "no",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Kosten",
+          "tools": "",
+          "cells": [
+            "Subscription (US$4.99/mo)",
+            "Free",
+            "Free"
+          ]
+        },
+        {
+          "feature": "Läuft auf",
+          "tools": "",
+          "cells": [
+            "Our cloud (Azure)",
+            "The Polaris host",
+            "The device you browse from"
+          ]
+        }
+      ]
+    }
+  ],
+  "capabilitiesNote": "Bei Aktionen, die zu einer Änderung führen (alles, was das Mount verschiebt, die Zuordnung ändert oder eine laufende Aufgabe stoppt), wird auf jedem Backend immer zuerst eine Bestätigungsmeldung angezeigt.",
+  "screenshotsTitle": "Sehen Sie es in Aktion",
+  "screenshots": [
+    {
+      "caption": "„Was gibt’s heute Abend Schönes?“ Der Assistent analysiert deinen Himmel und das Wetter und schlägt dir Ziele vor - direkt neben dem Polarstern.",
+      "src": "/assets/screenshots/assistant-chat.jpg"
+    },
+    {
+      "caption": "Im PLAN-Modus erstellt das Programm einen vollständigen Nachtplan (Ziele, Belichtungszeiten, Autofokus und Dither), den Sie vor Beginn überprüfen können.",
+      "src": "/assets/screenshots/assistant-plan.jpg"
+    },
+    {
+      "caption": "Bildanalyse: Diese Funktion überprüft das von Ihnen ausgewählte Bild und gibt eine Bewertung zu Schärfe, Sternform, Nachführung und Bildausschnitt ab.",
+      "src": "/assets/screenshots/assistant-frame.jpg"
+    },
+    {
+      "caption": "Es wurde genau das Bild betrachtet, das direkt aus Ihren Studio-Dateien geöffnet wurde - ein manueller Export war nicht erforderlich.",
+      "src": "/assets/screenshots/assistant-frame-view.jpg"
+    }
+  ],
+  "howTitle": "So funktioniert es",
+  "howLede": "Canopus schlägt etwas vor; Sie stimmen zu; Ihr Browser führt die genehmigte Aktion über das LAN auf Ihrem lokalen Polaris-Rechner aus. Die Steuerung kann an drei Orten angesiedelt sein (in der Cloud, auf Ihrem Polaris-Host oder auf dem von Ihnen verwendeten Gerät), kommuniziert jedoch niemals direkt mit Ihrem Teleskop.",
+  "how": [
+    {
+      "label": "Entscheide dich für das Gehirn.",
+      "text": "Führen Sie den Assistenten in der Cloud, auf Ihrem Polaris-Host oder auf Ihrem eigenen Gerät aus. Wählen Sie das Backend unter „Einstellungen“ > „Assistent“ aus; alles andere bleibt unverändert."
+    },
+    {
+      "label": "Browser-Brücke.",
+      "text": "Ihr Browser führt genehmigte Aktionen auf Ihrer lokalen Polaris-API aus und übermittelt den Status zurück. Es besteht keine eingehende Verbindung zu Ihrer Bohranlage."
+    },
+    {
+      "label": "Standardmäßig aktiviert und deaktiviert.",
+      "text": "Die Open-Source-Version von Polaris wird mit einem neutralen, inaktiven Host ausgeliefert. Der Assistent wird nur angezeigt, wenn Sie ihn aktivieren."
+    }
+  ],
+  "pricing": {
+    "price": "US$4.99",
+    "period": "pro Monat",
+    "trial": "7-tägige kostenlose Testphase",
+    "note": "Die Preise gelten für das Cloud-Backend. Die Backends auf dem Host und auf dem Gerät sind kostenlos. Ein einziger Pauschaltarif; jederzeit kündbar, der Zugriff bleibt bis zum Ende des bezahlten Zeitraums bestehen."
+  },
+  "ctaText": "Der Assistent ist optional und nur auf Wunsch verfügbar, mit kostenlosen Offline-Backends; Polaris selbst bleibt kostenlos und Open Source.",
+  "ctaButton": "Polaris herunterladen",
+  "ctaHref": "/install"
+}

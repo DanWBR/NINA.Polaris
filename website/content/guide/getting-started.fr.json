@@ -1,0 +1,78 @@
+{
+  "title": "Pour commencer",
+  "lede": "Votre première nuit, du télescope monté sur trépied à une image finale que vous pouvez partager. Voici le guide rapide : connectez votre équipement, effectuez le guidage et la mise au point, prenez vos clichés en live stacking ou en mode « autorun » sans surveillance, puis effectuez le « stacking » et retouchez vos images dans STUDIO.",
+  "access": {
+    "title": "Commencez par ouvrir l'interface utilisateur de Polaris",
+    "sub": "Polaris fonctionne sur la plateforme et peut être piloté depuis n'importe quel appareil connecté au même réseau. Il existe deux façons d'y accéder.",
+    "options": [
+      {
+        "icon": "🌐",
+        "title": "N'importe quel navigateur",
+        "body": "Connectez-vous depuis n'importe quel téléphone, tablette ou ordinateur portable à l'adresse du serveur sur le port 5000. Utilisez son nom d'hôte ou son adresse IP, puis acceptez le certificat auto-signé une seule fois.",
+        "code": "https://<ip-or-hostname>:5000"
+      },
+      {
+        "icon": "📱",
+        "title": "Application Android",
+        "body": "Installez l'application Android depuis la page de téléchargement, puis ouvrez-la. Elle analyse le réseau et répertorie toutes les instances Polaris détectées, auxquelles vous pouvez vous connecter d'un simple clic, sans avoir à saisir d'adresse IP.",
+        "code": ""
+      }
+    ]
+  },
+  "steps": [
+    {
+      "icon": "🛠️",
+      "title": "Configurez votre équipement",
+      "body": "Ouvrez « RIGS » dans la barre latérale. Choisissez une configuration enregistrée dans le menu déroulant, ou créez-en une nouvelle en ajoutant les fiches correspondant à votre télescope principal (marque, modèle, réducteur ou aplanisseur, afin que la distance focale et l'ouverture soient renseignées automatiquement), votre caméra principale, votre monture, votre dispositif de mise au point et votre roue à filtres. Cliquez sur « Enregistrer les sélections » pour que la configuration soit mémorisée pour la prochaine fois.",
+      "tip": "Une configuration enregistre la distance focale, les valeurs par défaut de gain et le profil PHD2 associé, qui sert de base au framing et au plate solving.",
+      "image": "/assets/screenshots/gs-rigs.jpg"
+    },
+    {
+      "icon": "🔌",
+      "title": "Branchez votre équipement",
+      "body": "Sur chaque carte, sélectionnez le périphérique situé sous la barre de connexion : INDI sous Linux, ASCOM ou Alpaca sous Windows, ou un SDK natif pour caméra. Définissez la cible du refroidisseur de la caméra, puis cliquez sur « Connect » pour chaque périphérique. Vérifiez que la monture effectue un suivi et que la liste des filtres correspond à votre roue.",
+      "tip": "La détection automatique répertorie les périphériques qu'elle détecte sur le réseau local ; ainsi, la plupart des appareils s'affichent sans qu'il soit nécessaire de saisir une adresse.",
+      "image": "/assets/screenshots/gs-connect.jpg"
+    },
+    {
+      "icon": "📡",
+      "title": "Configurer le guiding",
+      "body": "Passez en mode GUIDE. Cliquez sur « Launch PHD2 » (ou sur « Connect » si le logiciel est déjà en cours d'exécution), puis sélectionnez le profil correspondant à votre caméra de guidage et à votre monture. Cliquez sur « Connect equipment », puis sur « Loop », « Find Star » et « Smart Calibrate ». Attendez que le graphique RA/Dec se stabilise ; le guiding s'exécutera alors en arrière-plan toute la nuit.",
+      "tip": "Vous préférez l'interface PHD2 d'origine ? Ouvrez l'onglet « PHD2 GUI » pour contrôler l'application réelle intégrée via xpra ou VNC.",
+      "image": "/assets/screenshots/gs-guiding.jpg"
+    },
+    {
+      "icon": "🔬",
+      "title": "Obtenez une mise au point nette",
+      "body": "Ouvrez FOCUS et lancez l'auto-focus par courbe en V : réglez la taille du pas et le nombre d'échantillons pour votre dispositif de mise au point, puis cliquez sur « Start AF ». Polaris échantillonne plusieurs positions, ajuste la courbe HFR et positionne le dispositif de mise au point sur le point le plus net. Vous pouvez également effectuer la mise au point manuellement à l'aide des boutons pas à pas tout en observant la baisse de la valeur HFR.",
+      "tip": "Un HFR plus faible indique des étoiles plus serrées. Le séquenceur peut refaire la mise au point automatiquement en cas de variations de température ou de HFR au cours de la nuit.",
+      "image": "/assets/screenshots/gs-focus.jpg"
+    },
+    {
+      "icon": "🌌",
+      "title": "Framing votre objectif",
+      "body": "Ouvrez SKY et recherchez votre cible (M31, NGC 7000, etc.), ou choisissez une suggestion dans l'onglet « CE SOIR », classée par altitude. Cliquez sur la cible, puis sur « Slew & Center » : Polaris effectue un déplacement, procède à la localisation par carte et effectue un nouveau déplacement jusqu'à ce que la cible soit centrée dans la superposition du champ de vision.",
+      "tip": "Slew & Center utilise l'explorateur du ciel Stellarium Web Engine, qui offre une intégration complète avec la monture ; aucune télécommande n'est nécessaire.",
+      "image": "/assets/screenshots/gs-sky.jpg"
+    },
+    {
+      "icon": "📸",
+      "title": "Capture : live stacking ou exécution automatique",
+      "body": "Deux modes de prise de vue sont disponibles, que vous pouvez combiner à votre guise. Pour obtenir instantanément des résultats de type EAA, ouvrez LIVE et appuyez sur le déclencheur : cela lance la boucle et superpose chaque image à l'image en direct au fur et à mesure de son enregistrement (appuyez à nouveau pour arrêter - la superposition est conservée). Pour une session d'imagerie complète, ouvrez AUTORUN, ajoutez une ligne de paramètres (filtre, exposition, nombre de prises), activez le dithering et le meridian flip si nécessaire, définissez vos actions de fin, puis cliquez sur « Démarrer la séquence ». Les images intermédiaires sont enregistrées sur le disque pour être empilées ultérieurement, et vous pouvez toujours les voir s'afficher en temps réel dans LIVE.",
+      "tip": "Vous pouvez fermer le navigateur et partir. Le serveur continue à enregistrer les fichiers ; revenez donc demain matin, vous trouverez un dossier rempli de subs.",
+      "image": "/assets/screenshots/gs-live.jpg"
+    },
+    {
+      "icon": "🎨",
+      "title": "Assemblez et modifiez dans STUDIO, puis exportez",
+      "body": "Ouvrez STUDIO pour transformer vos subs en une image finale : créez des images de calibrage de référence, calibrez les lumières, puis intégrez-les dans une image de référence. Nettoyez l'image avec GraXpert AI dans le navigateur (extraction de l'arrière-plan, puis débruitage, puis déconvolution, accélérés sur le GPU du client ou la NPU du SBC). Affinez les tons et les couleurs dans l'EDITOR, puis exportez au format JPEG, PNG ou TIFF 16 bits.",
+      "tip": "Activez Auto-GraXpert BGE dans les actions de fin d'exécution automatique : les images extraites en arrière-plan seront prêtes avant même que vous n'ouvriez STUDIO.",
+      "image": "/assets/screenshots/gs-studio.jpg"
+    }
+  ],
+  "closing": {
+    "title": "Voilà toute la boucle",
+    "sub": "Voici le guide rapide. Chaque onglet renvoie vers une documentation plus détaillée, et le guide d'installation passe en revue tous les outils optionnels que vous pouvez ajouter.",
+    "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/end-to-end-workflow.md"
+  }
+}

@@ -1,0 +1,45 @@
+[
+  {
+    "label": "Funktionen",
+    "href": "/features"
+  },
+  {
+    "label": "KI-Tools",
+    "href": "/ai-tools"
+  },
+  {
+    "label": "Assistent",
+    "href": "/assistant"
+  },
+  {
+    "label": "Erste Schritte",
+    "href": "/getting-started"
+  },
+  {
+    "label": "Herunterladen & Installieren",
+    "href": "/install"
+  },
+  {
+    "label": "Handbuch",
+    "href": "/handbook/"
+  },
+  {
+    "label": "Über",
+    "href": "/about"
+  },
+  {
+    "label": "Discord ↗",
+    "href": "https://discord.gg/FYQeNhEGDp",
+    "external": true
+  },
+  {
+    "label": "Patreon ↗",
+    "href": "https://www.patreon.com/c/nina_polaris",
+    "external": true
+  },
+  {
+    "label": "GitHub ↗",
+    "href": "https://github.com/DanWBR/NINA.Polaris",
+    "external": true
+  }
+]

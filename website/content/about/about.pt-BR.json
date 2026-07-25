@@ -1,0 +1,326 @@
+{
+  "title": "Sobre o Polaris Astro Controller",
+  "logo": "/favicon-192.png",
+  "lede": "O Polaris Astro Controller é um pacote de controle, captura e processamento de astrofotografia auto-hospedado e baseado em navegador. Ele é executado inteiramente no seu próprio dispositivo (um Raspberry Pi, mini PC ou computador) e pode ser acessado a partir de qualquer navegador na sua rede, sem a necessidade de instalar nenhum aplicativo no dispositivo de visualização. Ele controla seu equipamento (INDI, ASCOM, Alpaca e SDKs nativos de câmeras), executa live stacking, guiding, foco, plate solving e sequenciamento, além de incluir um editor completo com extração de fundo por IA, redução de ruído e deconvolução.",
+  "author": {
+    "title": "Autor e contato",
+    "intro": "Criado e mantido por",
+    "name": "Daniel Wagner Oliveira de Medeiros",
+    "role": "Engenheiro químico e desenvolvedor de software",
+    "photo": "/assets/daniel-medeiros.jpg",
+    "bio": [
+      "Daniel is a chemical engineer (UFRN, Brazil) and an experienced software developer with 21+ years of experience. He designs and ships production software across Windows Desktop, Linux and macOS, on mobile (Android and iOS with Xamarin), and increasingly with on-device AI.",
+      "His main project is DWSIM, a free, open-source, CAPE-OPEN-compliant chemical process simulator he has developed since 2008. DWSIM models entire chemical plants: rigorous thermodynamics and phase equilibria, dozens of unit operations, petroleum characterization and dynamic simulation, running on Windows, Linux, macOS and even Android and iOS. It is used worldwide by students, universities and process engineers as an open alternative to commercial simulators, and it won the 2012 CAPE-OPEN Award.",
+      "Polaris Astro Controller brings that same engineering discipline to astrophotography: real numerical and scientific code, from astrometry, guiding and plate solving to image stacking, colour calibration and on-device AI, built to run reliably on hardware as small as a Raspberry Pi. It is where two decades of software engineering meet a lifelong pull toward the night sky."
+    ],
+    "email": "",
+    "github": "https://github.com/DanWBR",
+    "linkedin": "https://www.linkedin.com/in/daniel-medeiros-6a3b9124/",
+    "astrobin": "https://app.astrobin.com/u/DanielWagner#gallery",
+    "dwsim": "https://dwsim.org"
+  },
+  "license": {
+    "title": "Código aberto e licença",
+    "pre": "O Polaris Astro Controller é um software gratuito e de código aberto licenciado sob a",
+    "licenseName": "Licença Pública Geral GNU Affero v3.0 (AGPL-3.0)",
+    "licenseUrl": "https://www.gnu.org/licenses/agpl-3.0.html",
+    "mid": ". É derivado de",
+    "ninaName": "N.I.N.A. - Imagens Noturnas e Astronomia",
+    "ninaUrl": "https://nighttime-imaging.eu/",
+    "post": "por Stefan Berg e colaboradores (MPL-2.0). Os créditos completos de todos os projetos, bibliotecas e conjuntos de dados utilizados estão incluídos no aplicativo e no repositório."
+  },
+  "version": {
+    "title": "Version & source",
+    "body": "Polaris ships frequent releases. The current code, the latest build, and the release notes all live on the project page on GitHub. On a .deb install, Polaris can update itself with one click from the status bar."
+  },
+  "report": {
+    "title": "Relatar um problema",
+    "body": "Encontrou um bug ou tem uma sugestão de recurso? Abra um ticket ou inicie uma discussão no GitHub. O recurso de relatório integrado ao aplicativo preenche automaticamente os detalhes do seu cliente e do servidor para facilitar o diagnóstico."
+  },
+  "support": {
+    "title": "Apoie o projeto",
+    "body": "Polaris continua sendo gratuito e de código aberto. Se ele poupou a você uma noite de trabalho e você gostaria de contribuir, sua ajuda é bem-vinda, mas totalmente opcional. Você também pode acompanhar as novidades sobre o desenvolvimento e participar da comunidade."
+  },
+  "credits": {
+    "title": "Créditos e agradecimentos",
+    "intro": "O Polaris Astro Controller conta com o apoio de uma grande comunidade de projetos de astronomia e de código aberto. De alguns, extraímos código; outros, servem de referência; e muitos fazem parte da pilha de captura e processamento. Agradecemos a todos os autores listados abaixo. Os textos completos das licenças estão incluídos no aplicativo e no repositório de código-fonte.",
+    "groups": [
+      {
+        "title": "Desenvolvido com base no N.I.N.A.",
+        "items": [
+          {
+            "name": "N.I.N.A. - Imagens Noturnas e Astronomia",
+            "url": "https://nighttime-imaging.eu/",
+            "note": "Stefan Berg e os colaboradores do N.I.N.A. Polaris é derivado do N.I.N.A.; grande parte dos módulos de imagem, astrometria, sequencer e modelo de equipamento tem origem nesse projeto (MPL-2.0)."
+          }
+        ]
+      },
+      {
+        "title": "Simulação de guiding e equipamento",
+        "items": [
+          {
+            "name": "PHD2 - Orientação aberta do PHD",
+            "url": "https://openphdguiding.org/",
+            "note": "Andy Galasso, Bret McKee, Craig Stark e os colaboradores do PHD2. Utilizado tanto como guider externo controlado quanto como referência para o autoguiador nativo integrado e para o simulador de engrenagens (Cláusula 3 do BSD)."
+          }
+        ]
+      },
+      {
+        "title": "Processamento de imagens e IA",
+        "items": [
+          {
+            "name": "GraXpert",
+            "url": "https://www.graxpert.com/",
+            "note": "a equipe de desenvolvimento do GraXpert. Modelos ONNX para extração de fundo, redução de ruído e deconvolução, além do algoritmo de ajuste automático de escala que o Polaris utiliza por padrão."
+          },
+          {
+            "name": "nox",
+            "url": "https://github.com/charvey2718/nox",
+            "note": "charvey2718. Modelo de remoção de estrelas semelhante ao StarNet (cores originais e em tons de cinza), que é a configuração padrão da opção “Remover estrelas” em ARQUIVOS. Código e pesos do MIT."
+          },
+          {
+            "name": "starrem2k13",
+            "url": "https://github.com/code2k13/starrem2k13",
+            "note": "code2k13. Modelo U-Net para remoção de estrelas no estilo pix2pix, uma alternativa no “Remove stars”. Código e pesos do MIT."
+          },
+          {
+            "name": "StarNet++",
+            "url": "https://github.com/nekitmm/starnet",
+            "note": "Nikita Misiura (nekitmm). A rede neural original para remoção de estrelas, disponível em “Remove stars”. Código do MIT; os pesos pré-treinados estão sob a licença CC BY-NC-SA 4.0 (Não Comercial)."
+          },
+          {
+            "name": "Siril",
+            "url": "https://siril.org/",
+            "note": "A equipe do Free-Astro / Siril. Integração opcional de pré-processamento externo e stacking."
+          }
+        ]
+      },
+      {
+        "title": "Plate solving",
+        "items": [
+          {
+            "name": "ASTAP",
+            "url": "https://www.hnsky.org/astap.htm",
+            "note": "Han Kleijn. O plate solver rápido padrão offline e o banco de dados de estrelas."
+          },
+          {
+            "name": "Astrometry.net",
+            "url": "https://astrometry.net/",
+            "note": "Dustin Lang, David W. Hogg e colaboradores. Local and online plate solving."
+          },
+          {
+            "name": "PlateSolve3",
+            "url": "https://planewave.com/",
+            "note": "PlaneWave Instruments. Alternative plate solver."
+          }
+        ]
+      },
+      {
+        "title": "Equipamentos, protocolos e SDKs de câmera",
+        "items": [
+          {
+            "name": "Biblioteca INDI",
+            "url": "https://indilib.org/",
+            "note": "Jasem Mutlaq e a comunidade INDI. O principal protocolo de controle de equipamentos (mais de 400 drivers para Linux)."
+          },
+          {
+            "name": "Iniciativa ASCOM e Alpaca",
+            "url": "https://ascom-standards.org/",
+            "note": "A Iniciativa ASCOM. Drivers COM do Windows e o protocolo multiplataforma Alpaca."
+          },
+          {
+            "name": "ZWO ASI SDK",
+            "url": "https://www.zwoastro.com/",
+            "note": "Suzhou ZWO Co., Ltd. Suporte nativo para câmeras ZWO."
+          },
+          {
+            "name": "SVBony SDK",
+            "url": "https://www.svbony.com/",
+            "note": "SVBONY. Suporte nativo à câmera SVBony."
+          },
+          {
+            "name": "SDK do Player One",
+            "url": "https://player-one-astronomy.com/",
+            "note": "Player One Astronomy. Suporte nativo para câmera do Player One."
+          },
+          {
+            "name": "SDK da ToupTek",
+            "url": "https://www.touptek-astro.com/",
+            "note": "ToupTek Astro. Suporte nativo para câmeras ToupTek (e similares a OEM)."
+          },
+          {
+            "name": "SDK da Nikon",
+            "url": "https://sdk.nikonimaging.com/",
+            "note": "Nikon Corporation. Suporte para câmeras DSLR e sem espelho da Nikon."
+          },
+          {
+            "name": "Canon EDSDK",
+            "url": "https://developercommunity.usa.canon.com/",
+            "note": "Canon Inc. Suporte para câmeras DSLR e sem espelho da Canon EOS no Windows."
+          },
+          {
+            "name": "SDK do controle remoto da câmera da Sony",
+            "url": "https://support.d-imaging.sony.co.jp/app/sdk/en/index.html",
+            "note": "Sony Corporation. Suporte para câmeras Sony Alpha no Windows."
+          },
+          {
+            "name": "libgphoto2 / gPhoto2",
+            "url": "http://www.gphoto.org/",
+            "note": "A equipe do gPhoto. Suporte a câmeras DSLR e sem espelho no Linux, por meio do driver INDI do gPhoto."
+          }
+        ]
+      },
+      {
+        "title": "Dados celestes, catálogos e astrometria",
+        "items": [
+          {
+            "name": "OpenNGC",
+            "url": "https://github.com/mattiaverga/OpenNGC",
+            "note": "Mattia Verga. O catálogo integrado de objetos do céu profundo NGC/IC/Messier/Caldwell (CC BY-SA 4.0)."
+          },
+          {
+            "name": "APASS - Levantamento Fotométrico de Todo o Céu da AAVSO",
+            "url": "https://www.aavso.org/apass",
+            "note": "a AAVSO. Fotometria de referência para calibração de cores."
+          },
+          {
+            "name": "Aladin Lite",
+            "url": "https://aladin.cds.unistra.fr/",
+            "note": "CDS, Universidade de Estrasburgo / CNRS. O visualizador interativo do atlas celeste."
+          },
+          {
+            "name": "Stellarium Web Engine",
+            "url": "https://github.com/Stellarium/stellarium-web-engine",
+            "note": "Stellarium Labs / Guillaume Chéreau e colaboradores. A visualização do céu do planetário em WebGL (AGPL-3.0)."
+          },
+          {
+            "name": "Motor de Astronomia",
+            "url": "https://github.com/cosinekitty/astronomy",
+            "note": "Don Cross. Efemérides de alta precisão e cálculo de coordenadas."
+          }
+        ]
+      },
+      {
+        "title": "Bibliotecas de interface do usuário para navegadores",
+        "items": [
+          {
+            "name": "Alpine.js",
+            "url": "https://alpinejs.dev/",
+            "note": "Caleb Porzio e colaboradores. A estrutura reativa por trás da interface do usuário da web."
+          },
+          {
+            "name": "Chart.js",
+            "url": "https://www.chartjs.org/",
+            "note": "Os colaboradores do Chart.js. Gráficos de foco, guiding e estatísticas."
+          },
+          {
+            "name": "OpenSeadragon",
+            "url": "https://openseadragon.github.io/",
+            "note": "os colaboradores do OpenSeadragon. Visualizador de imagens com zoom profundo."
+          },
+          {
+            "name": "noVNC",
+            "url": "https://novnc.com/",
+            "note": "Os autores do noVNC. A interface gráfica PHD2 integrada no Windows (MPL-2.0)."
+          },
+          {
+            "name": "xterm.js",
+            "url": "https://xtermjs.org/",
+            "note": "Os autores do xterm.js. Terminal no navegador."
+          },
+          {
+            "name": "SunCalc",
+            "url": "https://github.com/mourner/suncalc",
+            "note": "Vladimir Agafonkin. Cálculos do sol e do crepúsculo para a visão do céu."
+          },
+          {
+            "name": "SortableJS",
+            "url": "https://sortablejs.github.io/Sortable/",
+            "note": "os colaboradores do SortableJS. Arrastar e soltar no sequencer."
+          }
+        ]
+      },
+      {
+        "title": "Bibliotecas de servidor e .NET",
+        "items": [
+          {
+            "name": "Silk.NET",
+            "url": "https://github.com/dotnet/Silk.NET",
+            "note": "Fundação .NET. Ligações OpenCL para o backend opcional de computação por GPU do SBC."
+          },
+          {
+            "name": "SkiaSharp",
+            "url": "https://github.com/mono/SkiaSharp",
+            "note": "A Microsoft, implementando o Skia do Google. Codificação e renderização de imagens no lado do servidor."
+          },
+          {
+            "name": "LibRaw",
+            "url": "https://www.libraw.org/",
+            "note": "Os autores do LibRaw (LGPL-2.1 / CDDL). Biblioteca compartilhada opcional do sistema, carregada em tempo de execução para decodificar arquivos RAW de câmeras DSLR/sem espelho (CR2/NEF/ARW) em dados lineares reais de 16 bits para o live stack."
+          },
+          {
+            "name": "ONNX Runtime (Web)",
+            "url": "https://onnxruntime.ai/",
+            "note": "Microsoft. Executa os modelos de IA do GraXpert no navegador."
+          },
+          {
+            "name": "YARP",
+            "url": "https://github.com/microsoft/reverse-proxy",
+            "note": "Microsoft. Proxy reverso para as interfaces de usuário da web dos dispositivos embarcados."
+          },
+          {
+            "name": ".NET Community Toolkit (MVVM)",
+            "url": "https://github.com/CommunityToolkit/dotnet",
+            "note": "a Fundação .NET."
+          },
+          {
+            "name": "K4os.Compressão.LZ4",
+            "url": "https://github.com/MiloszKrajewski/K4os.Compression.LZ4",
+            "note": "Milosz Krajewski. Compressão rápida de quadros para a visualização ao vivo."
+          },
+          {
+            "name": "LettuceEncrypt",
+            "url": "https://github.com/natemcmaster/LettuceEncrypt",
+            "note": "Nate McMaster. Certificados automáticos do Let's Encrypt."
+          },
+          {
+            "name": "Serilog",
+            "url": "https://serilog.net/",
+            "note": "Os colaboradores do Serilog. Registros estruturados."
+          },
+          {
+            "name": "Json.NET",
+            "url": "https://www.newtonsoft.com/json",
+            "note": "James Newton-King. Serialização JSON."
+          },
+          {
+            "name": "SSH.NET",
+            "url": "https://github.com/sshnet/SSH.NET",
+            "note": "os colaboradores do SSH.NET."
+          },
+          {
+            "name": "SMBLibrary",
+            "url": "https://github.com/TalAloni/SMBLibrary",
+            "note": "Tal Aloni. Cliente SMB1/SMB2 gerenciado pelo Pure para o backend de envio automático para armazenamento em rede."
+          },
+          {
+            "name": "net-mdns (Makaretu.Dns)",
+            "url": "https://github.com/richardschneider/net-mdns",
+            "note": "Richard Schneider. A descoberta do mDNS no nina.local."
+          },
+          {
+            "name": "SQLite",
+            "url": "https://www.sqlite.org/",
+            "note": "D. Richard Hipp e a equipe do SQLite. Bancos de dados no próprio dispositivo."
+          },
+          {
+            "name": "Ambiente de execução do Rockchip RKNN",
+            "url": "https://github.com/airockchip/rknn-toolkit2",
+            "note": "Rockchip. Aceleração opcional por NPU para modelos de IA em placas RK35xx."
+          }
+        ]
+      }
+    ],
+    "outro": "Além disso, as comunidades mais amplas de astronomia amadora e de software livre, cujas ferramentas, drivers, documentação e feedback tornam possível um projeto como este. Se o seu trabalho for utilizado aqui e não estiver listado, trata-se de um lapso, não de algo intencional; por favor, nos informe no GitHub."
+  }
+}

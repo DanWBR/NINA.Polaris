@@ -1,0 +1,50 @@
+{
+  "hero": {
+    "sourceOnGitHub": "Fuente en GitHub",
+    "getStarted": "Empezar →",
+    "donate": "❤ Haz una donación",
+    "skyMapAlt": "Mapa celeste del Polaris Astro Controller",
+    "credit": "IC&nbsp;434 / Cabeza de Caballo y Llama · © Daniel Wagner Oliveira de Medeiros"
+  },
+  "benchmarks": {
+    "colDevice": "Dispositivo",
+    "colCores": "Núcleos",
+    "colScore": "Puntuación Polaris",
+    "colStacking": "Apilamiento",
+    "colCapture": "Captura",
+    "memoryBw": "Memoria BW",
+    "colPrice": "Aprox. USD",
+    "bestValue": "la mejor relación calidad-precio",
+    "more": "Tablas completas por dispositivo y metodología →"
+  },
+  "comparison": {
+    "feature": "Característica",
+    "uniqueTitle": "Exclusivo de Polaris en esta lista",
+    "uniqueLabel": "Exclusivo de Polaris"
+  },
+  "downloads": {
+    "title": "Descargar e instalar",
+    "guide": "Guía de inicio →",
+    "sourceReleases": "Fuente y comunicados",
+    "discord": "Discord",
+    "patreon": "Patreon",
+    "donate": "❤ Haz una donación",
+    "licence": "Gratuito y de código abierto · GNU AGPL v3 · basado en el proyecto N.I.N.A."
+  },
+  "features": {
+    "comingSoon": "Próximamente habrá una captura de pantalla",
+    "seeEvery": "Descubre todas las características, panel a panel →"
+  },
+  "gallery": {
+    "screenshotAlt": "Captura de pantalla",
+    "close": "Cerrar"
+  },
+  "nav": {
+    "toggle": "Alternar navegación"
+  },
+  "footer": {
+    "blurb": "Astrofotografía controlada desde el navegador en cualquier dispositivo.",
+    "disclaimer": "Una bifurcación de N.I.N.A. impulsada por la comunidad, que no está afiliada ni cuenta con el respaldo del equipo oficial de N.I.N.A. Para incidencias relacionadas con Polaris, abre una incidencia en este repositorio; por favor, no te pongas en contacto con los desarrolladores de N.I.N.A. al respecto.",
+    "credit": "Imagen de fondo: IC 434 (Cabeza de Caballo) y NGC 2024 (Llama), complejo de nubes moleculares de Orión."
+  }
+}

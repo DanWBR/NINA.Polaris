@@ -1,0 +1,499 @@
+{
+  "title": "Descargar e instalar",
+  "lede": "Instala una imagen ya preparada o descarga la versión correspondiente a tu plataforma y sigue los pasos de instalación. A continuación, añade únicamente los componentes opcionales para las funciones que desees; Polaris detecta lo que está instalado en tiempo de ejecución y oculta la interfaz de usuario de cualquier elemento que falte.",
+  "requirements": {
+    "title": "Requisitos del sistema",
+    "sub": "El principal factor limitante es la memoria RAM. El resto funciona sin problemas en un SBC moderno, y varias placas incorporan aceleración por GPU y NPU para las herramientas de IA.",
+    "ramNote": "Polaris consume una media de entre 0,7 y 1,7 GB de RAM, por lo que 2 GB es el mínimo práctico. Una Raspberry Pi 4 con 2 GB sigue ejecutando la aplicación, ya que el WASM del lado del cliente se encarga de las complejas operaciones matemáticas de Live-Stack.",
+    "recommendedNote": "Placa recomendada: la Radxa Dragon Q6A con 4 GB o más. Su potente CPU de Qualcomm registra la puntuación Polaris más alta de todas las SBC probadas hasta la fecha. Si vas a utilizar herramientas de IA, la Orange Pi 5 Pro es una alternativa de probada eficacia, ya que incorpora OpenCL en la GPU y GraXpert AI en la NPU. La Orange Pi 4 Pro (4 GB) también es una opción sólida de gama media (puntuación Polaris de 156 con disipador térmico y ventilador, y de 147 con refrigeración pasiva).",
+    "rows": [
+      {
+        "host": "Raspberry Pi 3",
+        "ram": "1 GB",
+        "status": "Por debajo del objetivo de RAM",
+        "notes": "Broadcom BCM2837 (4 núcleos Cortex-A53, hasta 1,2 GHz), GPU VideoCore IV. Funciona, pero con dificultades; la integración de la interfaz gráfica de usuario de PHD2 se desactiva automáticamente (restricción de ARM de 32 bits)."
+      },
+      {
+        "host": "Raspberry Pi 4",
+        "ram": "2+ GB",
+        "status": "Mínimo",
+        "notes": "Broadcom BCM2711 (4 núcleos Cortex-A72, hasta 1,8 GHz), GPU VideoCore VI, LPDDR4. Requisito mínimo de RAM: 2 GB es lo mínimo necesario para que funcione; el WASM del lado del cliente se encarga de los cálculos matemáticos más exigentes."
+      },
+      {
+        "host": "Raspberry Pi 5",
+        "ram": "2+ GB",
+        "status": "Genial",
+        "notes": "Broadcom BCM2712 (4 núcleos Cortex-A76, hasta 2,4 GHz), GPU VideoCore VII, LPDDR4X. Sin pérdidas: el apilamiento en directo y las tareas simultáneas de Studio funcionan bien."
+      },
+      {
+        "host": "Orange Pi 4 Pro",
+        "ram": "2+ GB",
+        "status": "Bien",
+        "highlight": true,
+        "tag": "GPU + NPU",
+        "notes": "La Polaris alcanza una puntuación de 156 con disipador térmico y ventilador (147 con refrigeración pasiva), lo que la convierte en una placa de computación de gama media muy sólida que se sitúa entre la Raspberry Pi 4 y la Pi 5. La refrigeración activa merece la pena: mantiene las frecuencias de la CPU bajo una carga sostenida. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, hasta 2,0 GHz), GPU Imagination BXM-4-64, NPU de 3 TOPS, LPDDR5. La misma combinación de GPU y NPU que en el 5 Pro (OpenCL en la GPU, GraXpert en la NPU), pendiente de validación."
+      },
+      {
+        "host": "Orange Pi 5 Pro",
+        "ram": "2+ GB",
+        "status": "Genial",
+        "highlight": true,
+        "tag": "GPU + NPU",
+        "notes": "Un dispositivo de uso diario de probada eficacia y la mejor opción si buscas aceleración mediante IA. RK3588S (4x Cortex-A76 + 4x Cortex-A55), GPU Mali-G610, NPU de 6 TOPS. Experiencia completa: OpenCL en la GPU y GraXpert AI en la NPU."
+      },
+      {
+        "host": "Radxa Dragon Q6A",
+        "ram": "4+ GB",
+        "status": "Recomendado",
+        "highlight": true,
+        "tag": "Puntuación máxima",
+        "notes": "El SBC más rápido probado hasta la fecha (puntuación Polaris de 296), gracias al rendimiento de su CPU. Qualcomm QCS6490 (Kryo de ocho núcleos: 1x 2,7 GHz + 3x 2,4 GHz + 4x 1,9 GHz), LPDDR5. Polaris lo ejecuta aquí solo con la CPU: la GPU Adreno 643 supone una pérdida neta y la NPU Hexagon no se utiliza (la ruta de IA es exclusiva de Rockchip), por lo que las herramientas de IA se ejecutan en la CPU."
+      },
+      {
+        "host": "Mini PC, ordenador de sobremesa o portátil con Windows",
+        "ram": "4+ GB",
+        "status": "Características completas",
+        "notes": "Las mismas funciones que en Linux, además de controladores de cámaras réflex digitales de distintos fabricantes."
+      }
+    ]
+  },
+  "images": {
+    "title": "Imágenes listas para flashear",
+    "sub": "La forma más rápida de empezar: cada imagen es un sistema operativo Linux con Polaris preinstalado y configurado para esa placa. Flashéala en una tarjeta SD (o USB / eMMC), arranca el dispositivo y abre el navegador. Utiliza Raspberry Pi Imager, balenaEtcher o Rufus. Las imágenes están disponibles en Google Drive y se van añadiendo a medida que se valida cada placa.",
+    "bootNote": "Al arrancar, la imagen inicia Polaris automáticamente y queda lista para usar, sin necesidad de configuración. Si el dispositivo no puede conectarse a una red Wi-Fi conocida y dispone de Wi-Fi, crea su propio punto de acceso llamado «Polaris-Hotspot» (contraseña: polaris1234). Conéctate a él y, a continuación, abre la interfaz de usuario de Polaris en tu navegador.",
+    "tips": [
+      {
+        "icon": "🔎",
+        "body": "<strong>Cómo encontrar y abrir Polaris.</strong> Cada placa ofrece la interfaz de usuario a través de HTTPS en el puerto 5000. La forma más sencilla de acceder es mediante la dirección IP de tu placa: búscala en la lista de dispositivos conectados de tu router (normalmente en la sección «DHCP» o «Clientes» de la página de administración o la aplicación del router) y, a continuación, abre <code>https://&lt;board-ip&gt;:5000</code> en cualquier navegador y acepta el certificado autofirmado una sola vez. La dirección fácil de recordar <code>&lt;name&gt;.local</code> solo funciona donde haya mDNS disponible: el sistema operativo de Raspberry Pi lo incluye de serie, pero algunas imágenes de Orange Pi o Armbian no, por lo que en esos casos hay que utilizar la dirección IP. Ten en cuenta que solo se puede acceder a una placa una vez que está en tu LAN; si sigue en su propio punto de acceso Polaris, significa que aún no se ha conectado a tu red WiFi (conecta un cable de red o configura tu WiFi en «Ajustes», «Red»)."
+      },
+      {
+        "icon": "🔄",
+        "body": "<strong>Si falla la actualización desde la aplicación</strong> (error de autorización o de «reglas de política»): algunas imágenes antiguas basadas en Ubuntu 22.04 incluyen una regla de actualización sin contraseña que su versión de polkit ignora, por lo que la actualización con un solo clic no se puede instalar. En su lugar, actualiza a través de SSH: <code>ssh polaris@&lt;board-ip&gt;</code>, y a continuación <code>wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb</code> y <code>sudo apt install ./polaris_arm64.deb</code>. Se conservarán tus perfiles y datos. Consulta también la sección sobre actualización manual más abajo."
+      }
+    ],
+    "items": [
+      {
+        "device": "x86-64 PC / mini PC",
+        "badge": "x86-64",
+        "color": "#8b5cf6",
+        "emoji": "🖥️",
+        "url": "https://drive.google.com/uc?export=download&id=1Rb81wMslv7Z7HXDrKP1RmhEbs9feYS-3",
+        "os": "Ubuntu 24.04.4 LTS (x86-64)",
+        "polaris": "0.89.6 (2026-06-26)",
+        "size": "3.8 GB (.7z)",
+        "access": "https://polaris-linux.local:5000/",
+        "note": "Para cualquier PC de 64 bits, mini PC o dispositivo tipo «stick». Archivo 7-Zip; extrae el contenido, grábalo en una unidad USB o en el almacenamiento interno (no en una tarjeta SD) y arranca el sistema."
+      },
+      {
+        "device": "Raspberry Pi 4",
+        "badge": "arm64",
+        "color": "#e11d6b",
+        "url": "https://drive.google.com/uc?export=download&id=1jvrIjXr7MjiUnOjmhLQA8us37eTn9AYH",
+        "os": "Raspberry Pi OS de 64 bits (Debian Trixie)",
+        "polaris": "0.89.7 (2026-06-28)",
+        "size": "7.1 GB (.7z)",
+        "access": "https://polaris-pi4-1.local:5000/",
+        "note": "Archivo 7-Zip; descomprímelo antes de flashearlo."
+      },
+      {
+        "device": "Raspberry Pi 5",
+        "badge": "arm64",
+        "color": "#e11d6b",
+        "url": "https://drive.google.com/uc?export=download&id=1xpPaMUTon2xfVae8OW4SBkyGMqfqvBy-",
+        "os": "Raspberry Pi OS de 64 bits (Debian Trixie)",
+        "polaris": "0.84.6 (2026-06-18)",
+        "size": "8.64 GB (.7z)",
+        "access": "https://polaris-pi.local:5000/",
+        "note": "Archivo 7-Zip; descomprímelo antes de flashearlo."
+      },
+      {
+        "device": "Orange Pi Zero 3",
+        "badge": "arm64",
+        "color": "#ff7a18",
+        "url": "https://drive.google.com/uc?export=download&id=1T4ocFcn0oVLvbyEOApi6hKOjCZ6_pi9x",
+        "os": "Armbian 25.5.1 XFCE (Ubuntu 24.04, kernel 6.12.23)",
+        "polaris": "0.96.1 (2026-07-23)",
+        "size": "4.79 GB (.7z)",
+        "access": "https://orangepizero3.local:5000/",
+        "note": "Placa básica de 1,5 GB. Imagen de HDD Raw Copy Tool (imgcv2): descomprime el archivo .7z y, a continuación, graba el archivo .img en una tarjeta SD con HDD Raw Copy Tool (o balenaEtcher / Rufus). Contraseña de inicio de sesión: polaris1234. La aceleración por GPU permanece desactivada en este caso (la Mali-G31 supone una pérdida neta en esta cadena de procesamiento)."
+      },
+      {
+        "device": "Orange Pi 4 Pro",
+        "badge": "arm64",
+        "color": "#ff7a18",
+        "url": "https://drive.google.com/uc?export=download&id=1YPuDTWRohe6lt1BkTcSSN3tdLUcnDFwA",
+        "os": "Ubuntu 22.04 (arm64)",
+        "polaris": "0.90.1",
+        "size": "2.84 GB (.7z)",
+        "access": "https://polaris-opi4pro-1.local:5000/",
+        "note": "Imagen de HDD Raw Copy Tool (imgcv2). Archivo 7-Zip; extrae el contenido y, a continuación, graba el archivo .img en el almacenamiento interno con HDD Raw Copy Tool. Contraseña de inicio de sesión: polaris1234."
+      },
+      {
+        "device": "Orange Pi 5 Pro",
+        "badge": "arm64",
+        "color": "#ff7a18",
+        "url": "https://drive.google.com/uc?export=download&id=1QsPz0SlwZkN7H9a4cVONtwyBZTuugYg8",
+        "os": "Armbian 26.8.0 KDE (Ubuntu 26.04, kernel 6.1.115)",
+        "polaris": "0.84.7 (2026-06-18)",
+        "size": "7.51 GB (.7z)",
+        "access": "https://polaris-opi5pro-1.local:5000/",
+        "note": "Archivo 7-Zip; descomprímelo antes de flashearlo.",
+        "gpu": "sí",
+        "npu": "sí"
+      },
+      {
+        "device": "Radxa Dragon Q6A",
+        "badge": "arm64",
+        "color": "#10b981",
+        "emoji": "🐉",
+        "url": "https://drive.google.com/uc?export=download&id=1H_NB1AYT77O6DeM-E5D87DznN1QRK_jJ",
+        "os": "Ubuntu 24.04 LTS (arm64)",
+        "polaris": "0.89.8 (2026-06-28)",
+        "size": "12 GB (.7z)",
+        "access": "https://radxa-dragon-q6a.local:5000/",
+        "note": "Archivo 7-Zip; descomprímelo antes de flashearlo.",
+        "gpu": "sí",
+        "npu": "sí"
+      }
+    ],
+    "update": {
+      "title": "Mantener Polaris actualizado",
+      "selfTitle": "Actualización dentro de la aplicación con un solo clic",
+      "selfBadge": "Recomendado",
+      "selfBody": "Todas las instalaciones .deb (incluidas las imágenes listas para flashear mencionadas anteriormente) pueden actualizarse automáticamente. Polaris comprueba si hay nuevas versiones en GitHub al iniciarse y una vez cada hora; cuando existe una compilación más reciente para la arquitectura de tu placa, aparece una insignia verde de «Actualizar» en la barra de estado superior con la nueva versión. Haz clic en ella para ver las notas de la versión y, a continuación, selecciona «Descargar e instalar»: Polaris descarga el archivo .deb correspondiente, lo instala y se reinicia con la nueva versión. Sin SSH, sin apt y sin contraseña de sudo (autorizado por una regla de PolicyKit de alcance muy limitado). Deja la página abierta mientras se actualiza. Tus perfiles y datos se conservan.",
+      "selfImage": "/assets/screenshots/self-update.jpg",
+      "manualTitle": "Actualización manual a través de SSH",
+      "intro": "¿Prefieres la línea de comandos o actualizar varios equipos a la vez? Conéctate por SSH (usuario: polaris, contraseña: polaris), descarga el último archivo .deb e instálalo sobre la versión actual. Se conservarán tus perfiles y datos.",
+      "code": "ssh polaris@<ip-o-nombre-de-host>\nwget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb\nsudo dpkg -i polaris_arm64.deb",
+      "note": "Utiliza el archivo «polaris_arm64.deb» para los SBC con arquitectura ARM (Raspberry Pi, Orange Pi); en los demás casos, elige el paquete que se ajuste a tu placa. Cambia la contraseña predeterminada de «polaris» tras el primer inicio de sesión."
+    }
+  },
+  "download": {
+    "title": "Descargar",
+    "sub": "Descarga la versión del servidor para el equipo en el que se ejecuta tu sistema y, a continuación, sigue los pasos de instalación que se indican a continuación. ¿Prefieres no tener que configurar nada? Utiliza una de las imágenes listas para flashear que aparecen más arriba.",
+    "groups": [
+      {
+        "name": "Servidor (se ejecuta en el equipo)",
+        "note": "Instálalo en la Raspberry Pi, el SBC o el mini PC que controla tu equipo.",
+        "items": [
+          {
+            "label": "Raspberry / Naranja / Banana Pi (SBC arm64)",
+            "badge": ".deb",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb"
+          },
+          {
+            "label": "Linux arm64 (.tar.gz)",
+            "badge": "arm64",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz"
+          },
+          {
+            "label": "Linux x64 (.tar.gz)",
+            "badge": "x64",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-x64.tar.gz"
+          },
+          {
+            "label": "Windows x64 (.zip)",
+            "badge": "x64",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip"
+          },
+          {
+            "label": "Windows arm64 (.zip)",
+            "badge": "arm64",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-arm64.zip"
+          },
+          {
+            "label": "Todas las publicaciones",
+            "badge": "GitHub",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest"
+          }
+        ]
+      },
+      {
+        "name": "Aplicaciones de cliente (que se conectan desde un dispositivo)",
+        "note": "Aplicación nativa opcional para conectarse al servidor. También se puede utilizar cualquier navegador, por lo que no es necesario instalar ninguna aplicación.",
+        "items": [
+          {
+            "label": "Aplicación para Android (.apk)",
+            "badge": "Android",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-android.apk"
+          },
+          {
+            "label": "Aplicación para iOS (TestFlight)",
+            "badge": "iOS",
+            "url": "https://testflight.apple.com/join/A3H24grh"
+          }
+        ]
+      }
+    ]
+  },
+  "tldr": {
+    "title": "Lo mínimo imprescindible para arrancar",
+    "note": "Eso es todo lo que necesita la página de inicio. El resto de funciones tienen sus propias dependencias, que se enumeran a continuación en la sección de componentes opcionales.",
+    "rows": [
+      {
+        "label": "Duración",
+        "windows": ".NET 10 Desktop Runtime (incluido en la versión autónoma)",
+        "linux": ".NET 10 Runtime, o bien utilizar la versión independiente"
+      },
+      {
+        "label": "Sistema binario de Polaris",
+        "windows": "NINA.Polaris.exe",
+        "linux": "NINA.Polaris"
+      },
+      {
+        "label": "Red",
+        "windows": "Puerto TCP 5000 abierto en la LAN",
+        "linux": "Puerto TCP 5000 abierto en la LAN"
+      }
+    ]
+  },
+  "platformsSection": {
+    "title": "Instalar",
+    "sub": "Una vez que tengas los archivos, sigue las instrucciones paso a paso para cada plataforma. Las versiones publicadas son autónomas, por lo que no es necesario instalar ningún entorno de ejecución adicional."
+  },
+  "platforms": [
+    {
+      "name": "Raspberry Pi y ordenadores de placa única (SBC) con arquitectura arm64",
+      "badge": ".deb",
+      "icon": "chip",
+      "color": "#e11d6b",
+      "summary": "La ruta recomendada para cualquier placa Debian o Ubuntu arm64: Raspberry Pi, Orange Pi, Radxa y similares. El archivo .deb crea el usuario, una unidad de systemd, el entorno virtual (venv) de indi-web, las dependencias de apt y un certificado HTTPS autofirmado.",
+      "steps": "wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb\nsudo apt install ./polaris_arm64.deb",
+      "notes": "Se ejecutará en https://<hostname>.local:5000 en unos 30 segundos. Para gestionarlo, utiliza los siguientes comandos: `sudo systemctl status polaris`, `sudo journalctl -u polaris -f` y `sudo systemctl restart polaris`."
+    },
+    {
+      "name": "PC x86-64 (Debian / Ubuntu)",
+      "badge": ".deb",
+      "icon": "chip",
+      "color": "#8b5cf6",
+      "summary": "La misma instalación con un solo comando para cualquier PC o mini PC de 64 bits con procesador Intel o AMD que ejecute Debian o Ubuntu. Configura el usuario, la unidad de systemd, indi-web, las dependencias y el certificado HTTPS, exactamente igual que en la versión para SBC.",
+      "steps": "wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_amd64.deb\nsudo apt install ./polaris_amd64.deb",
+      "notes": "Se ejecuta en https://<hostname>.local:5000 en unos 30 segundos, gestionado por systemd; los comandos de estado, journalctl y reinicio son los mismos que en la versión para arm64."
+    },
+    {
+      "name": "Otros sistemas Linux (portátiles)",
+      "badge": "tar.gz",
+      "icon": "terminal",
+      "color": "#f59e0b",
+      "summary": "Para Fedora, Arch o cualquier distribución que no sea Debian, o cuando prefieras que no haya integración con systemd. Sustituye «linux-arm64» por «linux-x64» para Intel/AMD.",
+      "steps": "wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-arm64.tar.gz\ntar -xzf polaris-linux-arm64.tar.gz\ncd polaris-linux-arm64\n./NINA.Polaris",
+      "notes": "Se ejecuta en primer plano. Configura tu propia unidad de servicio si quieres que se mantenga tras los reinicios."
+    },
+    {
+      "name": "Mini PC con Windows",
+      "badge": ".zip",
+      "icon": "windows",
+      "color": "#38bdf8",
+      "summary": "Portátil, sin instalador. También hay disponible una versión para ARM64 (polaris-win-arm64.zip) para Surface Pro X y algunos ordenadores con Copilot+.",
+      "steps": "Invoke-WebRequest -Uri \"https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip\" -OutFile polaris.zip\nExpand-Archive polaris.zip\ncd polaris-win-x64\n.\\NINA.Polaris.exe",
+      "notes": "Abre https://localhost:5000 y acepta el certificado autofirmado una sola vez. Recuerda habilitar el cortafuegos (véase más abajo)."
+    },
+    {
+      "name": "Docker",
+      "badge": "multi-arch",
+      "icon": "container",
+      "color": "#2496ed",
+      "summary": "Imagen multi-arquitectura (arm64 + amd64). El archivo «compose» del repositorio incluye «indiserver» en la misma pila.",
+      "steps": "docker run -d --network host \\\n  -v $(pwd)/config:/config \\\n  -v $(pwd)/images:/images \\\n  ghcr.io/danwbr/nina-polaris:latest",
+      "notes": "Se montan los volúmenes /config (perfiles) y /images (salida FITS). En Linux, utiliza --network host o reenvía los puertos TCP 5000 y UDP 5353 en Compose."
+    },
+    {
+      "name": "Compilar desde el código fuente",
+      "badge": "dev",
+      "icon": "code",
+      "color": "#a78bfa",
+      "summary": "Para desarrolladores o plataformas no compatibles. Requiere el SDK de .NET 10 y Git (con submódulos).",
+      "steps": "git clone https://github.com/DanWBR/NINA.Polaris.git\ncd NINA.Polaris\n./deploy/publish-linux-arm64.sh   # o publish-linux-x64.sh / publish-win-x64.ps1\n./publish/linux-arm64/NINA.Polaris",
+      "notes": "Compila y prueba la versión net10.0. El submódulo «stellarium-web» incluye archivos .js y .wasm fijos, por lo que solo necesitarás Emscripten si actualizas la versión del motor."
+    }
+  ],
+  "firewall": {
+    "title": "Activa el cortafuegos",
+    "sub": "Polaris escucha en el puerto TCP 5000 (HTTP) y en el puerto UDP 5353 (mDNS, para que se resuelva <nombre de host>.local). Ambos están bloqueados por defecto.",
+    "windows": "New-NetFirewallRule -DisplayName \"Polaris Astro Controller\" -Direction Inbound -Protocol TCP -LocalPort 5000 -Action Allow -Profile Private,Domain\nNew-NetFirewallRule -DisplayName \"mDNS (Polaris)\" -Direction Entrante -Protocol UDP -LocalPort 5353 -Action Permitir -Profile Privado,Dominio",
+    "linux": "sudo ufw allow 5000/tcp\nsudo ufw allow 5353/udp",
+    "note": "En Linux sin ufw: iptables -A INPUT -p tcp --dport 5000 -j ACCEPT. El paquete .deb se encarga de esto por ti."
+  },
+  "optionalSection": {
+    "title": "Componentes opcionales",
+    "sub": "Añade solo lo que necesites. Polaris resalta cada función cuando su herramienta está presente y la desactiva de forma elegante cuando no lo está."
+  },
+  "optionalGroups": [
+    {
+      "name": "Controladores de dispositivos",
+      "icon": "plug",
+      "color": "#2196f3",
+      "intro": "Se necesita al menos un bus para controlar el hardware. Ambos pueden coexistir; el equipo activo almacena la selección del controlador para cada dispositivo.",
+      "items": [
+        {
+          "name": "INDI",
+          "badge": "Linux",
+          "purpose": "Recomendado para Linux. El metapaquete «indi-full» incluye el demonio y más de 100 controladores (ZWO, Canon, EQMod, Celestron, meteorológicos, etc.).",
+          "url": "https://indilib.org/",
+          "windows": "Funciona a través de WSL2 o de una versión de Windi; la mayoría de los usuarios de Windows optan por Alpaca.",
+          "linux": "sudo apt install indi-full"
+        },
+        {
+          "name": "ASCOM / Alpaca",
+          "badge": "Windows",
+          "purpose": "Recomendado en Windows. Polaris detecta los dispositivos Alpaca a través de la LAN mediante UDP.",
+          "url": "https://ascom-standards.org/Downloads/Index.htm",
+          "windows": "Plataforma ASCOM 7+ (gratuita) + el paquete de controladores correspondiente a cada dispositivo. Alpaca activada por defecto.",
+          "linux": "Ejecuta un servidor de dispositivos compatible con Alpaca; la mayoría de los controladores modernos admiten Alpaca de forma nativa."
+        },
+        {
+          "name": "SDK de fabricantes (cámaras réflex digitales / sin espejo)",
+          "badge": "Windows",
+          "purpose": "Cámaras DSLR y sin espejo de Canon, Nikon y Sony en Windows. Coloca los archivos DLL en la carpeta «plugins/» tras registrarte con el fabricante (el EULA prohíbe la redistribución).",
+          "url": "https://developer.canon-asia.com/",
+          "windows": "Canon EDSDK 13.x+ en plugins/canon-edsdk/, Nikon SDK en plugins/nikon-sdk/, Sony SDK en plugins/sony-sdk/.",
+          "linux": "No es necesario: las cámaras réflex digitales utilizan «indi_gphoto_ccd» de «indi-full»."
+        }
+      ]
+    },
+    {
+      "name": "Resolución de placas",
+      "icon": "target",
+      "color": "#f59e0b",
+      "intro": "Es necesario para «Slew & Center» (el bucle de centrado). Aunque no haya ningún solucionador, la opción «Slew Only» sigue moviendo la montura. Polaris activa primero el seguimiento de la Estrella Polar y, a continuación, recurre a un sistema de reserva automático con cualquier sistema que esté instalado.",
+      "items": [
+        {
+          "name": "ASTAP",
+          "badge": "recomendado",
+          "purpose": "Resolutor predeterminado. Rápido (entre 1 y 3 s aproximadamente), funciona sin conexión, del MIT. Recomendado para todo el mundo.",
+          "url": "https://www.hnsky.org/astap.htm",
+          "windows": "El instalador astap.exe + la base de datos de estrellas H17/H18 (~2 GB).",
+          "linux": "sudo apt install astap astap-data"
+        },
+        {
+          "name": "PlateSolve3",
+          "badge": "Windows",
+          "purpose": "Más rápido que ASTAP con distancias focales largas. Gratuito para uso no comercial.",
+          "url": "https://planewave.com/software-and-downloads/",
+          "windows": "Instalador de PlateSolve3.",
+          "linux": "No disponible."
+        },
+        {
+          "name": "Astrometry.net (local)",
+          "badge": "Linux",
+          "purpose": "Es el método de referencia, pero es lento en un Pi (entre 30 y 60 s aproximadamente).",
+          "url": "https://astrometry.net/",
+          "windows": "No es práctico.",
+          "linux": "sudo apt install astrometry.net + archivos de índice."
+        },
+        {
+          "name": "Astrometry.net (en línea)",
+          "badge": "necesita conexión a Internet",
+          "purpose": "Último recurso. Entre 30 y 60 s por resolución, gratuito con una clave API.",
+          "url": "https://nova.astrometry.net",
+          "windows": "Solo clave API.",
+          "linux": "Solo clave API."
+        }
+      ]
+    },
+    {
+      "name": "Autoguiado",
+      "icon": "signal",
+      "color": "#10b981",
+      "intro": "Los guias Polaris vienen de fábrica con PHD2 integrado de serie, por lo que no hay que instalar nada para realizar el guiado básico.",
+      "items": [
+        {
+          "name": "PHD2 (opcional, la aplicación original)",
+          "badge": "opcional",
+          "purpose": "¿Prefieres el PHD2 auténtico en lugar de la implementación nativa? Instálalo en Windows o Linux, y Polaris lo controla desde el propio navegador a través de una vista remota integrada, sin necesidad de una segunda pantalla. Sigue detectando automáticamente el PHD2, cambia de perfil, ejecuta Smart Calibrate y muestra las estadísticas de la guía en tiempo real.",
+          "url": "https://openphdguiding.org/",
+          "windows": "Instalador de PHD2 (gratuito, GPLv3).",
+          "linux": "sudo apt install phd2"
+        },
+        {
+          "name": "Vista remota integrada",
+          "badge": "a distancia",
+          "purpose": "Muestra el PHD2 instalado en la pestaña «GUIDE» de Polaris a través de una conexión remota, sin necesidad de una pantalla adicional. No es compatible con la Raspberry Pi de 32 bits (con activación automática).",
+          "url": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/phd2-gui-embedding.md",
+          "windows": "TightVNC, que Polaris integra en el navegador a través de noVNC.",
+          "linux": "sudo apt install xpra xserver-xorg-video-dummy (xpra 6.0+)."
+        }
+      ]
+    },
+    {
+      "name": "Posprocesamiento",
+      "icon": "wand",
+      "color": "#ec4899",
+      "intro": "Se detecta al iniciar el sistema mediante el localizador de binarios. Polaris desactiva los botones de STUDIO correspondientes cuando falta.",
+      "items": [
+        {
+          "name": "Siril",
+          "badge": "opcional",
+          "purpose": "Sustituye el proceso de apilamiento integrado en STUDIO por scripts de Siril (5 incluidos, además de los que tengas en ~/.siril/scripts).",
+          "url": "https://siril.org/",
+          "windows": "Instalador de Siril.",
+          "linux": "sudo apt install siril"
+        },
+        {
+          "name": "GraXpert",
+          "badge": "opcional",
+          "purpose": "Extracción del fondo (automática por fotograma durante las secuencias si se activa), además de deconvolución y eliminación de ruido en la versión 3.0 y posteriores.",
+          "url": "https://www.graxpert.com/",
+          "windows": "Instalador de GraXpert v3.0+.",
+          "linux": "AppImage de la página de versiones de GraXpert."
+        }
+      ]
+    },
+    {
+      "name": "Simuladores (sin hardware)",
+      "icon": "beaker",
+      "color": "#8b5cf6",
+      "intro": "Prueba todo el proceso sin necesidad de un osciloscopio. A continuación, el simulador de equipos detecta la instalación y genera la pila con un solo clic.",
+      "items": [
+        {
+          "name": "Simuladores INDI",
+          "badge": "Linux",
+          "purpose": "Muestra las estrellas reales del catálogo GSC en la posición simulada de la montura.",
+          "url": "https://indilib.org/",
+          "windows": "Utiliza en su lugar el simulador Alpaca Omni.",
+          "linux": "sudo apt install indi-bin"
+        },
+        {
+          "name": "Simulador Alpaca Omni",
+          "badge": "Windows",
+          "purpose": "Un único archivo .exe que pone a disposición los simuladores de cámaras, telescopios, enfocadores y ruedas de filtros ASCOM a través de Alpaca.",
+          "url": "https://github.com/ASCOMInitiative/ASCOMRemote/releases",
+          "windows": "Descarga y ejecuta el Omni Simulator.",
+          "linux": "Utiliza, en su lugar, los simuladores INDI."
+        }
+      ]
+    },
+    {
+      "name": "Más integraciones",
+      "icon": "puzzle",
+      "color": "#06b6d4",
+      "intro": "Extras, todos opcionales.",
+      "items": [
+        {
+          "name": "Servidor de retransmisión (acceso remoto a Internet)",
+          "badge": "autohospedado",
+          "purpose": "Accede a tu equipo desde cualquier lugar sin exponerlo directamente. Túneles inversos a través de HTTPS con tokens por inquilino, mTLS, cuotas y Let's Encrypt integrado.",
+          "url": "https://github.com/DanWBR/NINA.Polaris/blob/master/src/NINA.Relay.Server/README.md",
+          "windows": "Aloja NINA.Relay.Server en un VPS público (Linux). El lado del equipo no necesita nada adicional.",
+          "linux": "Ejecuta la versión para Linux x64/arm64 en un VPS con un dominio y los puertos 80 y 443 abiertos."
+        },
+        {
+          "name": "Terminal remoto",
+          "badge": "opcional",
+          "purpose": "SSH a través del navegador desde la pestaña «Polaris» para reiniciar servicios en un servidor sin interfaz gráfica. Configura «Terminal:Enabled = true» en el archivo «appsettings.json».",
+          "url": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/remote-terminal.md",
+          "windows": "Add-WindowsCapability -Online -Name OpenSSH.Server y, a continuación, inicia sshd.",
+          "linux": "sudo apt install openssh-server (ya está instalado en Raspberry Pi OS)."
+        },
+        {
+          "name": "Sincronización con Stellarium",
+          "badge": "opcional",
+          "purpose": "Arrastra el objeto seleccionado actualmente en Stellarium a la pestaña «SKY» como objetivo.",
+          "url": "https://stellarium.org/",
+          "windows": "Activa «Plugins» y, a continuación, «Control remoto», y configúralo para conectarse a 127.0.0.1:8090.",
+          "linux": "Igual: activa el complemento de control remoto en 127.0.0.1:8090."
+        }
+      ]
+    }
+  ]
+}

@@ -3,7 +3,8 @@ import { getContent, type Lang } from '../data/site';
 // `lang` is supplied by the page once locale routes exist; until then
 // every caller omits it and getContent('en') returns the English content.
 const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
-const {benchmarks} = getContent(lang);
+const {benchmarks, strings} = getContent(lang);
+const t = strings.benchmarks;
 import FruitIcon from './FruitIcon.astro';
 
 // Highest score drives the relative score bars.
@@ -38,13 +39,13 @@ const emojiFor = (name: string): string | null => {
       <table class="bench">
         <thead>
           <tr>
-            <th class="left">Device</th>
-            <th>Cores</th>
-            <th>Polaris score</th>
-            <th>Stacking</th>
-            <th>Capture</th>
-            <th>Memory BW</th>
-            <th>Approx. USD</th>
+            <th class="left">{t.colDevice}</th>
+            <th>{t.colCores}</th>
+            <th>{t.colScore}</th>
+            <th>{t.colStacking}</th>
+            <th>{t.colCapture}</th>
+            <th>{t.memoryBw}</th>
+            <th>{t.colPrice}</th>
           </tr>
         </thead>
         <tbody>
@@ -61,7 +62,7 @@ const emojiFor = (name: string): string | null => {
                   ) : (
                     r.device
                   )}
-                  {r.highlight && <span class="tag">best value</span>}
+                  {r.highlight && <span class="tag">{t.bestValue}</span>}
                 </td>
                 <td>{r.cores}</td>
                 <td class="score">
@@ -83,7 +84,7 @@ const emojiFor = (name: string): string | null => {
     {benchmarks.note && <p class="bench-note">{benchmarks.note}</p>}
     {benchmarks.docUrl && (
       <p class="bench-link">
-        <a href={benchmarks.docUrl} target="_blank" rel="noopener">Full per-device tables & methodology →</a>
+        <a href={benchmarks.docUrl} target="_blank" rel="noopener">{t.more}</a>
       </p>
     )}
   </div>

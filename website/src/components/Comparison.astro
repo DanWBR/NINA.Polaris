@@ -3,7 +3,8 @@ import { getContent, type Lang } from '../data/site';
 // `lang` is supplied by the page once locale routes exist; until then
 // every caller omits it and getContent('en') returns the English content.
 const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
-const {comparison} = getContent(lang);
+const {comparison, strings} = getContent(lang);
+const t = strings.comparison;
 // Cell encoding (see content/pages/home.json):
 //   "yes" / "partial" / "no"    -> ✓ / ~ / ✗ mark
 //   "yes:AGPL" / "no:box" / ...  -> mark + small qualifier text
@@ -38,7 +39,7 @@ const rows = comparison.rows.filter((r: any) => r.show !== false);
       <table class="cmp">
         <thead>
           <tr>
-            <th class="left feat">Feature</th>
+            <th class="left feat">{t.feature}</th>
             {products.map((p, i) => (
               <th class={i === highlightIdx ? 'is-highlight' : ''}>{p}</th>
             ))}
@@ -49,7 +50,7 @@ const rows = comparison.rows.filter((r: any) => r.show !== false);
             <tr class={r.star ? 'is-star' : ''}>
               <td class="left feat">
                 {r.feature}
-                {r.star && <span class="star" title="Unique to Polaris on this list" aria-label="Unique to Polaris">★</span>}
+                {r.star && <span class="star" title={t.uniqueTitle} aria-label={t.uniqueLabel}>★</span>}
               </td>
               {r.cells.map((raw: string, i: number) => {
                 const c = parseCell(raw);

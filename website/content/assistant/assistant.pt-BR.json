@@ -1,0 +1,457 @@
+{
+  "title": "Assistente Canopus",
+  "lede": "Um assistente de IA opcional para suas sessões de astrofotografia. Ele planeja a noite, controla seu equipamento no Polaris com a sua aprovação, monitora o foco e o guiding, analisa seus quadros e responde a perguntas sobre astrofotografia, tudo diretamente na interface do Polaris. Um copiloto amigável para iniciantes e uma economia de tempo para todos.",
+  "tagline": "Seu copiloto pessoal de astrofotografia, integrado a Polaris.",
+  "glanceTitle": "Em resumo",
+  "glance": [
+    {
+      "label": "Planeje sua noite.",
+      "text": "Sugere alvos de acordo com o céu, o horário e o equipamento à sua disposição e, em seguida, elabora um plano com vários alvos, pronto para ser executado, no modo PLAN, para que você possa analisá-lo."
+    },
+    {
+      "label": "Dirige o caminhão, mediante autorização.",
+      "text": "Qualquer ação que envolva a movimentação de equipamentos ou altere uma sessão em andamento é apresentada como um plano que você deve aprovar, analisar ou rejeitar primeiro, para que você mantenha o controle."
+    },
+    {
+      "label": "Analisa suas imagens.",
+      "text": "Pergunte “esta foto está boa?” e o aplicativo analisa a foto atual (foco, formato das estrelas, rastros, gradientes, framing) e indica o que você precisa corrigir."
+    },
+    {
+      "label": "Tem conhecimento em astrofotografia.",
+      "text": "Respostas fundamentadas sobre foco, guiding, exposição, filtros, polar alignment, calibração e diagnóstico de exposições inadequadas."
+    },
+    {
+      "label": "Na nuvem ou totalmente offline.",
+      "text": "Execute-o na nuvem, no seu servidor Polaris ou no seu próprio dispositivo. Duas das três opções são gratuitas e nunca saem do seu hardware."
+    }
+  ],
+  "featuresTitle": "O que ele faz",
+  "features": [
+    {
+      "icon": "🗓️",
+      "title": "Planejamento noturno",
+      "color": "#2563eb",
+      "intro": "Diga a ele o que você quer fotografar e ele cuida do resto.",
+      "items": [
+        {
+          "label": "O melhor desta noite.",
+          "text": "Classifica alvos do céu profundo, além da Lua e dos planetas, que estão bem posicionados para a sua localização e janela de tempo."
+        },
+        {
+          "label": "Verifica o essencial.",
+          "text": "Altitude ao longo da noite, condições meteorológicas e visibilidade, e como a Lua afeta cada alvo."
+        },
+        {
+          "label": "Elabora o plano.",
+          "text": "Cria um plano de imagem com vários alvos no modo PLAN, incluindo exposições adequadas, dithering e reajuste de foco, para que você possa revisar, ajustar e dar início ao processo."
+        }
+      ]
+    },
+    {
+      "icon": "🔭",
+      "title": "Controle direto, com segurança",
+      "color": "#0891b2",
+      "intro": "Ele opera Polaris para você, mas nunca às suas costas.",
+      "items": [
+        {
+          "label": "Ações que exigem aprovação prévia.",
+          "text": "Rotação, autofocus, início de uma sequência ou live stack, meridian flip: cada uma dessas opções é apresentada como uma proposta que você pode aprovar ou rejeitar."
+        },
+        {
+          "label": "Mostra o que está acontecendo.",
+          "text": "Navega pela interface do usuário do Polaris até o painel relevante para que você possa observar o foco, o guiding ou a live stack enquanto o sistema está em funcionamento."
+        },
+        {
+          "label": "Lê a sessão.",
+          "text": "Responde à pergunta “como está indo?” com informações em tempo real sobre o status do equipamento: conexão, andamento da captura, RMS de guiding, foco e tempo até o meridiano."
+        }
+      ]
+    },
+    {
+      "icon": "📷",
+      "title": "Análise de quadros",
+      "color": "#7c3aed",
+      "intro": "Um segundo par de olhos (muito pacientes) em cada sub. Apenas no backend do Cloud.",
+      "items": [
+        {
+          "label": "Isso está bom?",
+          "text": "Analisa o quadro atual do modo LIVE, PREVIEW ou AUTORUN e apresenta uma breve avaliação."
+        },
+        {
+          "label": "Identifica problemas.",
+          "text": "Estrelas alongadas ou com rastro, foco difuso, gradientes e poluição luminosa, satélites e problemas de framing, com uma solução concreta."
+        }
+      ]
+    },
+    {
+      "icon": "💬",
+      "title": "Conhecimento astrológico",
+      "color": "#16a34a",
+      "intro": "Pergunte o que quiser e receba uma resposta fundamentada, não um palpite.",
+      "items": [
+        {
+          "label": "Como fazer e por quê.",
+          "text": "Focalização e HFR, autoguiding e dithering, exposição e histograma, filtros e poluição luminosa, polar alignment, quadros de calibração, planejamento e diagnóstico de subs com defeito."
+        },
+        {
+          "label": "Selecionado com cuidado, não fruto da imaginação.",
+          "text": "As respostas são extraídas de uma base de conhecimento selecionada sobre astrofotografia e adaptadas à sua pergunta."
+        }
+      ]
+    },
+    {
+      "icon": "🌐",
+      "title": "Fala a sua língua",
+      "color": "#ea580c",
+      "intro": "Ele segue o idioma que você configurou no Polaris.",
+      "items": [
+        {
+          "label": "Respostas localizadas.",
+          "text": "As respostas, os planos e as perguntas são exibidos no idioma da sua interface do usuário do Polaris."
+        },
+        {
+          "label": "Um visual familiar.",
+          "text": "O chat adapta-se à sua fonte Polaris, ao zoom e ao espaçamento, e pode ser acoplado ou ficar flutuante onde você quiser."
+        }
+      ]
+    },
+    {
+      "icon": "🔒",
+      "title": "Concebido para ser privado",
+      "color": "#334155",
+      "intro": "Não cabe a nós guardar suas conversas.",
+      "items": [
+        {
+          "label": "As conversas não são armazenadas.",
+          "text": "No backend na nuvem, suas mensagens são processadas para gerar uma resposta e, em seguida, descartadas; não mantemos nenhuma cópia. Os backends locais nunca enviam absolutamente nada."
+        },
+        {
+          "label": "Dados mínimos da conta.",
+          "text": "No backend na nuvem, apenas seu e-mail, um token de login e o status da sua assinatura são armazenados. O pagamento é processado pelo Stripe; nós nunca temos acesso aos dados do seu cartão. Os backends locais não exigem cadastro."
+        }
+      ]
+    }
+  ],
+  "backendsTitle": "Três maneiras de executá-lo",
+  "backendsLede": "Um assistente, você escolhe qual. Todos os três operam o equipamento da mesma forma e seguem as mesmas normas de segurança, que exigem aprovação prévia. Escolha um em “Configurações”, “Assistente”.",
+  "backends": [
+    {
+      "icon": "☁️",
+      "color": "#2563eb",
+      "title": "Nuvem",
+      "tag": "O cérebro mais poderoso, sempre ativo, sem precisar instalar nada.",
+      "intro": "A IA do assistente é executada em nossos servidores e retorna uma resposta; seu navegador transmite as ações aprovadas para o seu Polaris local.",
+      "items": [
+        {
+          "label": "Custo.",
+          "text": "Assinatura paga: US$ 4,99 por mês, com um período de teste gratuito de 7 dias."
+        },
+        {
+          "label": "Continua.",
+          "text": "Nossos servidores (Microsoft Azure). Sem modelo local, sem necessidade de GPU."
+        },
+        {
+          "label": "Mínimo.",
+          "text": "Uma conexão com a internet e uma assinatura. Qualquer dispositivo que execute a interface de usuário web do Polaris."
+        },
+        {
+          "label": "Recomendado.",
+          "text": "O mesmo. Essa é a opção mais eficaz e a única que realiza análise de framing (examinando suas imagens)."
+        },
+        {
+          "label": "Privacidade.",
+          "text": "As mensagens são processadas para resposta e, em seguida, descartadas, não sendo utilizadas para treinar modelos. Apenas seu e-mail, um token de login e o status da assinatura são armazenados."
+        }
+      ]
+    },
+    {
+      "icon": "🖥️",
+      "color": "#0891b2",
+      "title": "Neste servidor",
+      "tag": "Gratuito e totalmente offline, rodando no seu servidor Polaris.",
+      "intro": "Um pequeno modelo de linguagem é executado diretamente no próprio servidor Polaris, de modo que qualquer celular ou tablet conectado à sua rede se torna um thin client. Sem conta, sem assinatura.",
+      "items": [
+        {
+          "label": "Custo.",
+          "text": "Grátis."
+        },
+        {
+          "label": "Continua.",
+          "text": "O host Polaris, na CPU. Uma NPU ou GPU é um recurso adicional, não um requisito."
+        },
+        {
+          "label": "Mínimo.",
+          "text": "Um host de 64 bits com cerca de 6 GB de RAM livre, rodando o Polaris."
+        },
+        {
+          "label": "Recomendado.",
+          "text": "8 GB ou mais e um processador mais rápido. As respostas “quentes” chegam em poucos segundos; a primeira resposta de uma sessão demora um pouco mais, enquanto o modelo está se aquecendo."
+        },
+        {
+          "label": "Somente texto.",
+          "text": "Planeja a noite, dirige o caminhão e responde às perguntas. A análise de framing (visão) é feita exclusivamente na nuvem."
+        },
+        {
+          "label": "Privacidade.",
+          "text": "Tudo fica no seu equipamento. Nada é enviado para nós nem para nenhum provedor de IA."
+        }
+      ]
+    },
+    {
+      "icon": "📱",
+      "color": "#7c3aed",
+      "title": "Neste dispositivo",
+      "tag": "Gratuito e offline, funciona no computador ou no celular que você estiver usando.",
+      "intro": "O modelo é executado no seu próprio computador. Em um computador desktop, ele utiliza um servidor LLM local executado na GPU nativa; no aplicativo móvel, o modelo é executado diretamente no celular.",
+      "items": [
+        {
+          "label": "Custo.",
+          "text": "Grátis."
+        },
+        {
+          "label": "Continua.",
+          "text": "A GPU do seu computador (por meio do Ollama, do LM Studio ou do llama.cpp) ou o seu celular no aplicativo móvel Polaris."
+        },
+        {
+          "label": "Mínimo.",
+          "text": "Desktop: um servidor LLM local e um modelo compatível com ferramentas que caiba na memória da sua GPU. Celular: um dispositivo com 8 GB, já que o modelo é carregado integralmente na RAM."
+        },
+        {
+          "label": "Recomendado.",
+          "text": "Computador: um modelo com capacidade para ferramentas, com 12 a 24 bilhões de parâmetros, em uma GPU de 16 GB ou mais. Dispositivos móveis: um celular ou tablet com 8 GB de memória, para respostas rápidas em poucos segundos."
+        },
+        {
+          "label": "Somente texto.",
+          "text": "Da mesma forma que o backend no próprio servidor: planejamento, controle da plataforma e perguntas e respostas; a análise de frames é feita exclusivamente na nuvem."
+        },
+        {
+          "label": "Privacidade.",
+          "text": "É executado localmente; nada sai do seu computador. Se você configurar a opção de área de trabalho para um terminal remoto, esse serviço visualiza suas mensagens de acordo com suas próprias regras."
+        }
+      ]
+    }
+  ],
+  "backendsShot": {
+    "caption": "Escolha o backend em Configurações, Assistente: na nuvem, neste host ou neste dispositivo, cada um com seus próprios controles.",
+    "src": "/assets/screenshots/assistant-backends.jpg"
+  },
+  "capabilitiesTitle": "O que cada backend pode fazer",
+  "capabilitiesLede": "Cada backend solicita autorização antes de fazer qualquer alteração e compartilha as mesmas ferramentas essenciais de planejamento, navegação e controle de equipamento. A camada de nuvem acrescenta análise de imagens, o planejador multialvo e o pós-processamento. Os nomes exatos das ferramentas estão listados abaixo de cada recurso.",
+  "capabilitiesColumns": [
+    "Cloud",
+    "On this host",
+    "On this device"
+  ],
+  "capabilities": [
+    {
+      "group": "Planejamento e assessoria",
+      "rows": [
+        {
+          "feature": "Os melhores alvos para esta noite, pesquisa no catálogo, trajetórias de altitude e a previsão do tempo para observação astronômica",
+          "tools": "get_tonights_best, search_catalog, get_altitude, get_weather",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Responda às perguntas sobre astrofotografia e Polaris contidas no manual integrado",
+          "tools": "pesquisa_conhecimento",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Sessão ao vivo e controle do equipamento",
+      "rows": [
+        {
+          "feature": "Leia o status atual da plataforma e alterne a interface do usuário do Polaris para o painel direito",
+          "tools": "get_status, show_panel",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Gire a montagem e utilize a função “plate-solve-center” para centrar um alvo",
+          "tools": "slew_to",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Executar um autofocus com curva em V automatizado",
+          "tools": "executar_foco_automático",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Inicie o empilhamento ao vivo (EAA) e o dither sob demanda",
+          "tools": "start_live_stack, dither_now",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Interromper a sequência de captura em andamento",
+          "tools": "sequência_de_parada",
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Posicionar ou desposicionar a montagem, interromper o guiding, interromper o live stacking",
+          "tools": "park_mount, unpark_mount, stop_guiding, stop_live_stack",
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Planejador multialvo",
+      "rows": [
+        {
+          "feature": "Criar, listar, iniciar e interromper um plano noturno completo com vários alvos",
+          "tools": "create_plan, list_plans, start_plan, stop_plan",
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Análise de imagens (visão computacional)",
+      "rows": [
+        {
+          "feature": "Inspecionar um quadro capturado, o quadro selecionado da biblioteca ou a visualização atual na tela",
+          "tools": "analisar_quadro, analisar_quadro_selecionado, analisar_visualização_atual",
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Pós-processamento (STUDIO)",
+      "rows": [
+        {
+          "feature": "Ler estatísticas da biblioteca, atualizar e listar quadros, classificar, integrar e visualizar os resultados",
+          "tools": "get_studio_stats, refresh_library, list_frames, grade_frames, integrate_frames, preview_frame",
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
+        }
+      ]
+    },
+    {
+      "group": "Natureza do backend",
+      "rows": [
+        {
+          "feature": "Monitoramento proativo e lembretes durante uma sessão",
+          "tools": "",
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
+        },
+        {
+          "feature": "Funciona sem conexão com a internet",
+          "tools": "",
+          "cells": [
+            "no",
+            "yes",
+            "yes"
+          ]
+        },
+        {
+          "feature": "Custo",
+          "tools": "",
+          "cells": [
+            "Subscription (US$4.99/mo)",
+            "Free",
+            "Free"
+          ]
+        },
+        {
+          "feature": "Funciona em",
+          "tools": "",
+          "cells": [
+            "Our cloud (Azure)",
+            "The Polaris host",
+            "The device you browse from"
+          ]
+        }
+      ]
+    }
+  ],
+  "capabilitiesNote": "Ações que alteram o estado (qualquer coisa que mova a montagem, altere a captura ou interrompa uma tarefa em execução) sempre exibem primeiro um cartão de aprovação, em todos os back-ends.",
+  "screenshotsTitle": "Veja como funciona",
+  "screenshots": [
+    {
+      "caption": "“O que tem de bom hoje à noite?” O assistente analisa o céu e as condições meteorológicas e sugere alvos, bem ao lado de Polaris.",
+      "src": "/assets/screenshots/assistant-chat.jpg"
+    },
+    {
+      "caption": "Ele cria um plano noturno completo no modo PLAN (alvos, exposições, autofocus e dither) para você revisar antes de iniciar.",
+      "src": "/assets/screenshots/assistant-plan.jpg"
+    },
+    {
+      "caption": "Análise do framing: ela analisa o vídeo que você selecionou e emite uma avaliação sobre o foco, a forma da estrela, o acompanhamento e o framing.",
+      "src": "/assets/screenshots/assistant-frame.jpg"
+    },
+    {
+      "caption": "O quadro exato que foi analisado foi aberto diretamente dos seus Arquivos do Studio, sem necessidade de exportação manual.",
+      "src": "/assets/screenshots/assistant-frame-view.jpg"
+    }
+  ],
+  "howTitle": "Como funciona",
+  "howLede": "Canopus propõe; você aprova; seu navegador executa a ação aprovada no seu Polaris local pela LAN. O “cérebro” pode estar em três lugares (na nuvem, no seu servidor Polaris ou no dispositivo que você está usando), mas nunca se comunica diretamente com o seu telescópio.",
+  "how": [
+    {
+      "label": "Escolha o cérebro.",
+      "text": "Execute o assistente na nuvem, no seu servidor Polaris ou no seu próprio dispositivo. Escolha o backend em Configurações, Assistente; todo o resto é idêntico."
+    },
+    {
+      "label": "Ponte do navegador.",
+      "text": "Seu navegador executa ações aprovadas na API local do Polaris e transmite o status de volta. Não há conexão de entrada com sua plataforma."
+    },
+    {
+      "label": "Ativado por opção e desativado por padrão.",
+      "text": "O Polaris, de código aberto, vem com um host neutro e inativo. O assistente só aparece se você optar por ativá-lo."
+    }
+  ],
+  "pricing": {
+    "price": "US$4.99",
+    "period": "por mês",
+    "trial": "7 dias de teste gratuito",
+    "note": "O preço refere-se ao backend na nuvem. Os backends no servidor e no dispositivo são gratuitos. Plano único com valor fixo; cancele a qualquer momento e o acesso continuará até o final do período pago."
+  },
+  "ctaText": "O assistente é opcional e de adesão voluntária, com back-ends offline gratuitos; o próprio Polaris continua sendo gratuito e de código aberto.",
+  "ctaButton": "Adquira o Polaris",
+  "ctaHref": "/install"
+}

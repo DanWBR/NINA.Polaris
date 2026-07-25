@@ -1,0 +1,711 @@
+{
+  "title": "Funktionen",
+  "lede": "Polaris Astro Controller ist eine browserbasierte Astrofotografie-Plattform, die auf einem Raspberry Pi, einem Mini-PC oder einem beliebigen kleinen Linux- oder Windows-Host in Ihrem Netzwerk läuft. Richten Sie ein beliebiges Gerät - Laptop, Tablet oder Smartphone - auf den Host aus, und schon steht Ihnen der gesamte Workflow für Ausrüstung, Aufnahme und Bildbearbeitung zur Verfügung, ohne dass Sie eine Desktop-Anwendung installieren müssen. Alle folgenden Funktionen werden über eine einzige Weboberfläche gesteuert, die über ein Seitenleisten-Panel organisiert ist.",
+  "glanceTitle": "Auf einen Blick",
+  "glance": [
+    {
+      "label": "Läuft überall, auch auf kleinen Geräten",
+      "text": "Raspberry Pi 4/5, Orange Pi, x86-Mini-PCs und -Sticks oder ein Windows-Rechner. ARM64, ARMHF und x86-64 werden alle unterstützt."
+    },
+    {
+      "label": "Browser-eigene",
+      "text": "Es muss keine App auf dem Endgerät installiert werden; funktioniert auf Smartphones, Tablets und Laptops über WLAN."
+    },
+    {
+      "label": "Hardwareunabhängig",
+      "text": "INDI, ASCOM Alpaca, die ASCOM-Plattform (Windows COM) und native Hersteller-SDKs (ZWO, Svbony, Player One, ToupTek, Canon/Nikon/Sony DSLR) - alles in einer App."
+    },
+    {
+      "label": "Erfassung und Verarbeitung aus einer Hand",
+      "text": "von der Polausrichtung über die Aufnahme, das Live-Stacking, die Kalibrierung, die Belichtungsintegration und die KI-Bilderbereinigung bis hin zu einem abschließenden, nicht-destruktiven Bearbeitungsschritt mit Export in die Formate JPEG, PNG und TIFF."
+    },
+    {
+      "label": "Offline-First",
+      "text": "Der mitgelieferte Deep-Sky-Katalog, der Sternkatalog und die Himmelskarte funktionieren am Teleskop auch ohne Internetverbindung."
+    },
+    {
+      "label": "Selbstaktualisierend",
+      "text": "Bei .deb-Installationen auf Pi/SBC: Ein-Klick-Update direkt in der App aus GitHub-Releases."
+    }
+  ],
+  "sections": [
+    {
+      "icon": "🏠",
+      "color": "#2196f3",
+      "title": "STARTSEITE",
+      "tag": "Dashboard",
+      "intro": "Das auf „Connect“ angezeigte Lande-Dashboard.",
+      "items": [
+        {
+          "label": "Zusammenfassung der Sitzung",
+          "text": "Aktive Anlage, Verbindungsstatus jedes Geräts und aktuelle Aktivität auf einen Blick."
+        },
+        {
+          "label": "Schnellnavigation",
+          "text": "Gehen Sie direkt zu dem gewünschten Bereich."
+        },
+        {
+          "label": "Informationen zum Gastgeber",
+          "text": "Modell, Betriebssystem, Architektur, Anzahl der Kerne und CPU des Rechners, auf dem Polaris läuft."
+        }
+      ]
+    },
+    {
+      "icon": "🔭",
+      "color": "#e11d6b",
+      "title": "RIGS",
+      "tag": "Geräteverwaltung",
+      "intro": "Zentrale für mehrere Rig-Konfigurationen. Definieren Sie mehrere Teleskop-Konfigurationen (Rigs) und wechseln Sie mit einem Klick zwischen ihnen.",
+      "items": [
+        {
+          "label": "Profile mit mehreren Bohranlagen",
+          "text": "Speichern Sie jeden optischen Strang (Hauptteleskop, Kamera, Montierung, Guider, Zubehör) als benanntes Rig; die gesamte App passt sich neu an, wenn Sie das aktive Rig wechseln."
+        },
+        {
+          "label": "Gerätekarten pro Rolle",
+          "text": "Hauptteleskop, Kamera, Montierung, Fokussierer, Filterrad, Leitfernrohr, Leitkamera, Fokussierer für das Leitfernrohr, Rotator, Flachbildschirm, Kuppel, Wetterüberwachung und Stromversorgungsbox (Schalter/Tau-Hubs wie Pegasus UPB, über INDI/ASCOM/Alpaca, mit Schaltern pro Steckdose und Schiebereglern für die Tauheizung), jeweils mit Ein-/Ausschaltfunktion und Live-Statusanzeige."
+        },
+        {
+          "label": "Zusatzkamera und Fokussierer",
+          "text": "Eine zweite Bildaufnahmekamera auf derselben Halterung mit eigener Optik, Belichtung und Verstärkung, deren Aufnahmen parallel in einem separaten „aux“-Ordner gespeichert werden und die über die Registerkarte „FOCUS“ fokussiert werden kann (manuell oder Auto-V-Kurve)."
+        },
+        {
+          "label": "Verstärkungs- und ISO-abhängig",
+          "text": "Astronomie-Kameras zeigen die analoge Verstärkung mit einer ISO-Erklärung an; DSLR- und spiegellose Kameragehäuse (gphoto unter Linux) verfügen über ein echtes ISO-Auswahlmenü."
+        },
+        {
+          "label": "Verbindungs-Backends an einem Ort",
+          "text": "INDI (TCP/XML) - vollständig nativer Client; ASCOM Alpaca (HTTP) - automatische Erkennung und Verbindung; ASCOM Platform (COM) - direkter Treibenzugriff (nur unter Windows); native Hersteller-SDKs (ZWO ASI, Svbony, Player One, ToupTek und Altair) - direkte Ansteuerung; DSLR über Canon, Nikon und Sony unter Windows, gphoto2 unter Linux."
+        },
+        {
+          "label": "Optische Daten pro Bohranlage",
+          "text": "Brennweite von Haupt- und Führungsobjektiv (wird automatisch anhand der Plate-Solving-Ergebnisse aktualisiert), eine Tabelle mit Filter-Offsets sowie kameraspezifische Übersteuerungen (Bayer-Muster, vertikale Spiegelung) für Kameras, die falsche Metadaten melden."
+        },
+        {
+          "label": "Zuverlässige INDI-Verarbeitung",
+          "text": "Auf „ack“ basierende Eigenschaftsschreibvorgänge, geräteweise konfigurierbare Verzögerungen vor dem Verbindungsaufbau und idempotente Verbindungslogik."
+        },
+        {
+          "label": "Manager für eingebettete INDI-Treiber",
+          "text": "die Indi-Web-Benutzeroberfläche im Panel, sodass Sie INDI-Treiber hinzufügen oder entfernen sowie den Indiserver ohne SSH starten oder stoppen können."
+        },
+        {
+          "label": "Watchdog für Keiltreiber",
+          "text": "Wenn ein einzelner INDI-Treiber keine Frames mehr liefert (ein „Dropped BLOB“), startet Polaris genau diesen Treiber automatisch neu - mit Ratenbegrenzung und unter Wahrung der Hardware-Sicherheit; für jeden laufenden Treiber gibt es zudem eine Ein-Klick-Neustartfunktion, wobei der Rest des Servers davon unberührt bleibt."
+        },
+        {
+          "label": "Live-INDI-Objektbaum",
+          "text": "Sie können alle INDI-Eigenschaften direkt anzeigen und festlegen."
+        }
+      ]
+    },
+    {
+      "icon": "🧭",
+      "color": "#f59e0b",
+      "title": "POLAR",
+      "tag": "Polausrichtung",
+      "intro": "Richten Sie die Polachse der Montierung aus, bevor die Nacht beginnt.",
+      "items": [
+        {
+          "label": "TPPA (Dreipunkt-Polarausrichtung)",
+          "text": "Plate-Solving-gestützt. Erfassen, schwenken und auswerten an drei Punkten - anschließend zeigt Ihnen ein Live-Fehlervektor an, in welche Richtung Sie die Höhen- und Azimutschrauben drehen müssen."
+        },
+        {
+          "label": "Verfeinerungsmodus",
+          "text": "Eine fortlaufende Erfassungs- und Lösungsschleife mit einer Fehleranzeige auf dem Bildschirm, die sich bei jeder Anpassung aktualisiert, sodass man sich dem Wert Null annähert."
+        },
+        {
+          "label": "Einfacher Modus",
+          "text": "Hilfsmittel zur Ausrichtung auf ein einzelnes Ziel für Aufstellungen ohne freie Sicht auf den Himmelspol."
+        }
+      ]
+    },
+    {
+      "icon": "🌌",
+      "color": "#8b5cf6",
+      "title": "SKY",
+      "tag": "Sky Explorer: Karte, heute Abend, Wetter",
+      "intro": "Plane, was du fotografieren willst und wohin du die Kamera richten sollst.",
+      "items": [
+        {
+          "label": "Offline-Sternenkarte",
+          "text": "Interaktiver Himmelsatlas mit integrierten Sternendaten; funktioniert am Teleskop auch ohne Internetverbindung."
+        },
+        {
+          "label": "Hintergrund der tatsächlichen Himmelsdurchmusterung",
+          "text": "Ein echter Fotohintergrund für die Karte mit einer Auswahlfunktion für Vermessungsdaten: DSS Colour (die standardmäßig offline nutzbare Option, deren Größe zwischen etwa 30 MB und 400 MB variieren kann) sowie DSS2, Mellinger, 2MASS und unWISE, die vom CDS gestreamt werden. DSS Colour funktioniert am Teleskop vollständig offline, mit einer Online-Ausweichmöglichkeit, wenn eine Internetverbindung besteht."
+        },
+        {
+          "label": "Zielsuche",
+          "text": "Suchen Sie Deep-Sky-Objekte anhand ihres Namens oder ihrer Katalognummer in der mitgelieferten DSO-Datenbank oder geben Sie RA/DEC manuell ein."
+        },
+        {
+          "label": "DSO-Vorschau-Miniaturansichten",
+          "text": "ein echtes Foto von jedem katalogisierten Objekt in den Suchergebnissen, auf den Atlaskarten und in der „Tonight“-Liste - ein vollständig offline nutzbares, gebündeltes Bildmaterial, das jedes Objekt mit Koordinaten abdeckt (etwa 17.700 Bilder aus M, C, NGC, IC, Arp, Sh2 und weiteren) - so lassen sich Galaxien und Nebel auf einen Blick leicht unterscheiden."
+        },
+        {
+          "label": "FOV-Overlays und Bildausschnitt",
+          "text": "Zeichnen Sie das Sichtfeld Ihrer Kamera auf der Karte ein, drehen Sie es und ziehen Sie es, um ein Ziel einzurahmen; die blauen (Halterung) und roten (Ziel) Rechtecke zeigen die Ergebnisse des Plate Solvings an, zusätzlich gibt es ein rosa Rechteck für das Sichtfeld der Zusatzkamera, wenn ein Zusatzkamerasystem konfiguriert ist."
+        },
+        {
+          "label": "Bestätigung des zusätzlichen Sichtfelds",
+          "text": "Bei einem Plate Solve aus SKY wird eine parallele Auswertung auf der Hardware der Hilfskamera durchgeführt, sodass das rosa Rechteck die tatsächliche Drehung und Skalierung widerspiegelt, mit der das Hilfsfoto ausgegeben wird."
+        },
+        {
+          "label": "Schwenken und zentrieren",
+          "text": "Die Montierung auf ein Ziel ausrichten und die Platte darauf zentrieren."
+        },
+        {
+          "label": "Mosaik-Planer",
+          "text": "Ordnen Sie mehrteilige Mosaike über einem Ziel an - mit einer Live-Vorschau des Kachelrasters, das direkt auf der Sternenkarte angezeigt wird, während Sie Spalten, Zeilen und Überlappungen anpassen."
+        },
+        {
+          "label": "Heute Abend",
+          "text": "Höhenkurven und die für Ihren Standort und das jeweilige Datum am besten geeigneten Objekte für Aufnahmen, mit Dämmerungs- und Nachtfenstern, ein Eintrag pro Objekt (Bezeichnungen wie M31 und NGC 224 werden zusammengefasst), ein Vorschaubild auf jeder Karte; die Rangliste listet zudem große Emissions- und Dunkelnebel auf, für die zwar die Größe, nicht jedoch die Sternenmagnitude angegeben ist."
+        },
+        {
+          "label": "Wetter",
+          "text": "Aktuelle Wetterlage und Vorhersage für den Beobachtungsstandort."
+        },
+        {
+          "label": "Stellarium-Synchronisierung",
+          "text": "die Ansicht von einer Stellarium-Instanz zu einer anderen übertragen."
+        }
+      ]
+    },
+    {
+      "icon": "🔬",
+      "color": "#06b6d4",
+      "title": "FOKUS",
+      "tag": "Fokussierung und Feldanalyse",
+      "intro": "Fokussierung vornehmen und überprüfen sowie den Strahlengang diagnostizieren.",
+      "items": [
+        {
+          "label": "Manueller Fokus",
+          "text": "Den Fokussierer ein- und ausfahren, während eine Live-Vorschau sowie die HFR-Wert (Half-Flux-Radius) und die Laplace-Varianz-Schärfe in Echtzeit angezeigt werden."
+        },
+        {
+          "label": "Autofokus",
+          "text": "Automatischer V-Kurven-Durchlauf mit Parabelanpassung; unempfindlich gegenüber starker Defokussierung, mit einem HFR-vs.-Position-Diagramm des Durchlaufs. Ein Optikstrang-Selektor führt den Durchlauf an der Haupt-, Hilfs- oder Führungskamera sowie dem entsprechenden Fokussiererpaar durch."
+        },
+        {
+          "label": "Hilfs- und Führungsfokussierung",
+          "text": "Die Quellenumschalter für Kamera und Fokussierer (Primär, Hilfs- oder Führungsfernrohr) sind auf ein zweites OTA oder ein motorisiertes Führungsfernrohr ausgerichtet; die manuelle Steuerung (Position, Bereich, GoTo, Abbruch) folgt dem ausgewählten Motor."
+        },
+        {
+          "label": "Bahtinov-Masken-Hilfsprogramm",
+          "text": "Überlagerungsanalyse eines Bahtinov-Beugungsmusters zur präzisen manuellen Fokussierung."
+        },
+        {
+          "label": "Werkzeuge zur Feldanalyse",
+          "text": "Gemeinsame Aufnahme mit mehreren Ansichten. Neigung: Eine Karte der Sensorneigung anhand der Sterngrößen in den Ecken im Vergleich zur Mitte. Aberrationsprüfer: Ein 3×3-Mosaik aus 1:1-Ausschnitten der Ecken und der Mitte zur Beurteilung von Koma, Astigmatismus und Hinterfokus. Inspector: Sternmetriken über das gesamte Bildfeld (Exzentrizität, FWHM) zur Erkennung von Kollimations- und Abstandsfehlern."
+        },
+        {
+          "label": "Sensoranalyse",
+          "text": "den Kamerasensor selbst beschreiben."
+        }
+      ]
+    },
+    {
+      "icon": "📡",
+      "color": "#10b981",
+      "title": "LEITFADEN",
+      "tag": "Autoguiding",
+      "intro": "Sorgen Sie bei Langzeitbelichtungen dafür, dass Sterne rund bleiben - mit zwei austauschbaren Endstücken.",
+      "items": [
+        {
+          "label": "Einheimischer Reiseleiter",
+          "text": "Die mathematischen Berechnungen von PHD2 wurden in C# portiert und steuern die Führungskamera und die Montierung des Systems direkt, ohne dass ein externer PHD2-Prozess erforderlich ist. Multi-Star-Guiding, Speichern und Wiederherstellen von Kalibrierungen pro Gerät, Dithering mit ASIAIR-ähnlicher Auslesung nach Stabilisierung, Erkennung von Sternverlusten durch einen reaktionsschnellen Watchdog, eine Option für einen prädiktiven Algorithmus (Modellierung von periodischen Fehlern und Drift) sowie Meridianumkehr-Erkennung."
+        },
+        {
+          "label": "ZFilter-Algorithmus",
+          "text": "Ein aus PHD2 portierter Tiefpass-Algorithmus, der Leitlichtrauschen und Seeing glättet und gleichzeitig langsame Drift nachverfolgt, mit einer an die jeweilige Ausrüstung angepassten Belichtungsfaktor-Einstellung, um die Reaktionsfähigkeit optimal auf Ihre Ausrüstung abzustimmen."
+        },
+        {
+          "label": "PHD2-Integration",
+          "text": "Volle Kontrolle über ein externes PHD2. Anschließen, Verwalten von Profilen und Geräten, Einstellen der Belichtung, Starten und Herunterfahren, intelligente Kalibrierungssteuerung, Voreinstellungen für Guiding-Algorithmen sowie die integrierte PHD2-Benutzeroberfläche im Browser über xpra (Linux) oder noVNC."
+        },
+        {
+          "label": "Telemetrie zur Live-Führung",
+          "text": "RA/Dec-Fehlerdiagramm, RMS sowie Dither-/Einschwingzustand werden in der oberen Statusleiste angezeigt."
+        }
+      ]
+    },
+    {
+      "icon": "📷",
+      "color": "#38bdf8",
+      "title": "VORSCHAU",
+      "tag": "Testaufnahmen",
+      "intro": "Schnelle Bildausrichtung und Belichtungsprüfung.",
+      "items": [
+        {
+          "label": "Einzelbilder aufnehmen",
+          "text": "mit gewählter Belichtungszeit, Verstärkung und Binning, optional mit Speicherung."
+        },
+        {
+          "label": "Dauerstrommodus",
+          "text": "für die Live-Bildausrichtung."
+        },
+        {
+          "label": "Plate Solving aus der Vorschau",
+          "text": "Den aktuellen Frame berechnen und synchronisieren oder zentrieren."
+        },
+        {
+          "label": "Werkzeuge für das gesamte Bild",
+          "text": "Stretch-Steuerelemente, Statistiken, Sternmarkierungen sowie Fadenkreuz-, Raster- und Pixelanzeige (gemeinsam mit dem Studio-Viewer)."
+        }
+      ]
+    },
+    {
+      "icon": "▶️",
+      "color": "#fb8c00",
+      "title": "AUTORUN",
+      "tag": "Drehplan",
+      "intro": "Ein einfacher Sequenz-Runner gegen das aktuelle Ziel.",
+      "items": [
+        {
+          "label": "Rahmenlisten-Editor",
+          "text": "Belichtungsreihen × Anzahl pro Filter, Verstärkung und Binning."
+        },
+        {
+          "label": "Polaris-Verschluss",
+          "text": "Start- und Stopp-Steuerung mit Echtzeit-Fortschrittsanzeige."
+        },
+        {
+          "label": "Maßnahmen zum Abschluss der Sitzungsperiode",
+          "text": "Kamera und Kühler abkühlen lassen, parken oder nach Hause fahren, den Fokussierer auf Null stellen und optional den Host herunterfahren."
+        },
+        {
+          "label": "Unterregisterkarte „Flat Wizard“",
+          "text": "Automatisierte Flat-Field-Erfassung mit Belichtungswerten, die pro Filter im Binärsuchverfahren ermittelt werden, einem Cache mit optimierten Belichtungswerten und voreingestellten Standardwerten pro Aufstellvorrichtung."
+        }
+      ]
+    },
+    {
+      "icon": "📅",
+      "color": "#ec4899",
+      "title": "PLAN",
+      "tag": "Nachtplaner für mehrere Ziele",
+      "intro": "Planung im ASIAIR-Stil für die gesamte Nacht: Mehrere Ziele mit jeweils eigener Bildliste in die Warteschlange stellen, der Reihe nach abarbeiten, mit automatischer Schwenkbewegung und „Plate-Solve-Center“.",
+      "items": [
+        {
+          "label": "Mehrere Ziele pro Plan",
+          "text": "hinzugefügt über die Katalogsuche, manuelle RA/DEC-Eingabe, die aktuelle Position der Montierung oder visuell in der Himmelskarte eingerahmt."
+        },
+        {
+          "label": "Rahmenlisten pro Ziel",
+          "text": "und eine Verzögerung bis zum ersten Licht."
+        },
+        {
+          "label": "Terminplanung",
+          "text": "Jetzt starten oder zu einem bestimmten Zeitpunkt; beenden, wenn alle Bilder fertig sind, bei astronomischer Morgendämmerung oder zu einem festgelegten Zeitpunkt."
+        },
+        {
+          "label": "Automatisierung auf Planungsebene",
+          "text": "Automatische Nachführung, automatische Kühlung (mit Zieltemperatur), Autofokus pro Ziel oder zu Beginn sowie automatische Meridianumkehr mit Anpassung der Belichtungsumkehr (Minuten nach der Umkehr, Neuzentrierung, Autofokus bei der Umkehr)."
+        },
+        {
+          "label": "Endaktionen",
+          "text": "Aufwärmen und Abkühlen, Parken oder Nach Hause gehen, Fokussierer auf Null stellen und ein durch eine Bestätigung ausgelöstes Herunterfahren des Hosts."
+        },
+        {
+          "label": "Höhenprofil",
+          "text": "jedes Ziels über die gesamte Nacht hinweg, um die Reihenfolge zu überprüfen."
+        },
+        {
+          "label": "Globale Planbibliothek",
+          "text": "Gespeicherte Pläne werden in einer globalen Bibliothek abgelegt, können mit jedem aktiven Rig ausgeführt werden und lassen sich als JSON-Datei exportieren und importieren, um sie zwischen Hosts auszutauschen."
+        }
+      ]
+    },
+    {
+      "icon": "📸",
+      "color": "#3b82f6",
+      "title": "LIVE",
+      "tag": "Live-Stacking (EAA)",
+      "intro": "Elektronisch unterstützte Astronomie in Echtzeit, bei der ein Bild erstellt wird, sobald die Einzelbilder eintreffen.",
+      "items": [
+        {
+          "label": "Auslöser mit einem Fingertipp",
+          "text": "Der Verschluss läuft während der gesamten Sitzung im ASIAIR-Stil ab: Einmal antippen, um das Stapeln zu starten, erneut antippen, um es zu beenden (der Stapel bleibt erhalten, sodass Sie fortfahren oder neu beginnen können), mit einer Live-Anzeige der Belichtungszeit, der gestapelten Bilder und der verworfenen Bilder."
+        },
+        {
+          "label": "Kontinuierliche Integration",
+          "text": "mit Live-Ausrichtung (Sternabgleich) und einer vergrößerbaren Vorschau."
+        },
+        {
+          "label": "Vorverarbeitung pro Einzelbild",
+          "text": "Optionale Kalibrierung (automatisch angepasste Master-Dark-, Flat- und Bias-Bilder) und GraXpert-Hintergrundsubtraktion, die vor dem Hinzufügen jedes Einzelbildes angewendet werden und überall dort ausgeführt werden, wo der Stack läuft: im Browser über WebAssembly und WebGPU oder serverseitig über die GraXpert-CLI oder die RK3588-NPU."
+        },
+        {
+          "label": "OSC-Farbüberlagerung",
+          "text": "automatisch für Einmal-Farbkameras."
+        },
+        {
+          "label": "Kappa-Sigma-Pixelausschluss",
+          "text": "Optional können pixelweise auftretende Ausreißer (Kosmische Strahlung, Flug- oder Satellitenspuren, durch Dithering verursachte heiße Pixel) verworfen werden, anstatt sie in den gleitenden Mittelwert einzubeziehen; gilt pro Aufstellung und lässt sich am besten mit Dithering kombinieren."
+        },
+        {
+          "label": "Auslöser für automatische Neuausrichtung und Neuzentrierung",
+          "text": "einen Autofokus oder eine Neuzentrierung auslösen, wenn der HFR abweicht oder das Zielobjekt sich bewegt."
+        },
+        {
+          "label": "Aktuellen Stapel speichern",
+          "text": "jederzeit im FITS-Format in einen dafür vorgesehenen Ordner für gestapelte Dateien."
+        },
+        {
+          "label": "Auslagerung von Rechenaufgaben auf die Client-Seite",
+          "text": "Auf einem langsamen Server (Pi 2/3) können die Stacking-Berechnungen über WebAssembly direkt im Browser statt auf dem Host ausgeführt werden."
+        },
+        {
+          "label": "Serverseitige Erfassungsschleife",
+          "text": "ein optionaler, experimenteller Modus, bei dem die Erfassungsschleife auf dem Server ausgeführt wird, sodass der Stack auch dann weiter aufgebaut wird, wenn die Verbindung zum Browser unterbrochen wird."
+        },
+        {
+          "label": "Vorschläge für Referenzrahmen",
+          "text": "um die Ausrichtungsqualität zu verbessern."
+        }
+      ]
+    },
+    {
+      "icon": "🎥",
+      "color": "#ef5350",
+      "title": "VIDEO",
+      "tag": "Planeten- und Glücksaufnahmen",
+      "intro": "Aufnahmen mit hoher Bildfrequenz und Bildüberlagerung für Planeten, den Mond und die Sonne.",
+      "items": [
+        {
+          "label": "SER-Erfassung",
+          "text": "Videoaufzeichnung mit hoher Bildrate (getestet bis ca. 100 fps) mit ROI-Subframing."
+        },
+        {
+          "label": "Analyse der Bildqualität",
+          "text": "Laplace-Varianz-Bewertung zur Rangfolge von Einzelbildern."
+        },
+        {
+          "label": "Lucky-Imaging-Stacker",
+          "text": "Die besten N % der Einzelbilder behalten und stapeln."
+        },
+        {
+          "label": "Vorschau auf die Schwenkbewegung (Einblendung)",
+          "text": "Eine kleine Live-Ansicht, während Sie den Planeten zentrieren."
+        }
+      ]
+    },
+    {
+      "icon": "🌲",
+      "color": "#66bb6a",
+      "title": "ADV",
+      "tag": "Erweiterter Sequenzer",
+      "intro": "Ein vollwertiger, baumbasierter Sequenzer im NINA-Stil für komplexe, automatisierte Sets.",
+      "items": [
+        {
+          "label": "Baumstruktur aus Containern, Anweisungen, Bedingungen und Auslösern",
+          "text": "mit Drag-and-Drop-Bearbeitung."
+        },
+        {
+          "label": "Anleitungsbibliothek",
+          "text": "Kamera (kalt/warm/Belichtung), Montierung (Schwenken/Parken/Ausgangsposition suchen), Fokussierer, Filterrad, Guider (Start/Stopp/Dither), Durchflussregelung (Wartezeit) und mehr."
+        },
+        {
+          "label": "Schleifenbedingungen und Ereignisauslöser",
+          "text": "Meridianwechsel, Autofokus auf Temperatur, HFR oder Zeit sowie weitere Auslösebedingungen."
+        },
+        {
+          "label": "JSON-Serialisierung",
+          "text": "Sequenzdokumente speichern, laden und teilen."
+        }
+      ]
+    },
+    {
+      "icon": "🎨",
+      "color": "#ab47bc",
+      "title": "STUDIO",
+      "tag": "Nachbearbeitung",
+      "intro": "Durchsuchen, kalibrieren und integrieren Sie Ihre aufgenommenen Einzelbilder auf dem Host.",
+      "items": [
+        {
+          "label": "Frame-Browser und Bibliothek",
+          "text": "Erfasste Einzelbilder scannen und organisieren."
+        },
+        {
+          "label": "Master-Erstellung",
+          "text": "Master-Darks, Flats und Bias-Bilder erstellen."
+        },
+        {
+          "label": "Kalibrierung",
+          "text": "Master an leichte Rahmen anbringen."
+        },
+        {
+          "label": "Stapelverarbeitung",
+          "text": "Eine Reihe von Leuchten registrieren und in ein übergeordnetes System integrieren, einschließlich Fortschrittsberichten."
+        },
+        {
+          "label": "Drizzle-Integration",
+          "text": "Optional 1x, 2x oder 3x „Drizzle“ (Fruchter und Hook) für gut geditherte, unterabgetastete Daten, mit einer automatischen Empfehlung, die aus der gemessenen FWHM der Einzelbilder berechnet wird, sodass Sie nur dann hochskalieren, wenn dadurch tatsächlich die Auflösung wiederhergestellt wird."
+        },
+        {
+          "label": "Kanalzusammenführung",
+          "text": "Zusammenführung der einzelnen Filter-Masterbilder zu einem Bild: RGB-Komposition (keine Luminanz erforderlich), LRGB (Lab- oder Verhältnis-Kombination, wenn ein Luminanz-Masterbild vorliegt), Schmalband-Paletten mit einem Klick (SHO, HSO, HOS, HOO) mit Kontinuum-Subtraktion (Ha minus R, OIII minus G), frei gestaltbare PixelMath-Funktionen sowie einen OSC-Dualband-Modus, der Ha, SII und OIII aus den One-Shot-Color-Masterbildern Ha+OIII und SII+OIII extrahiert und diese mit automatischer Sternausrichtung kombiniert."
+        },
+        {
+          "label": "Farbkalibrierung",
+          "text": "Siril-basiert und plate-solve-gesteuert: Hintergrundneutralisierung (Zero-Config), manuell (Hintergrund- und Weißreferenzfeld), PCC (Photometric Color Calibration) anhand des mitgelieferten APASS-Sternkatalogs sowie SPCC (SpectroPhotometric Color Calibration), bei der das Spektrum jedes Katalogsterns mit der Sensor- und Filtercharakteristik integriert wird, um einen physikalisch fundierten Weißabgleich zu erzielen - genau wie bei PixInsight SPCC und Siril 1.2+. Die Pickles-Sternspektralbibliothek ist im Lieferumfang enthalten, ebenso wie die importierte Siril-SPCC-Datenbank mit real gemessenen Kurven für Dutzende tatsächlicher Kameras und Filter; SPCC wählt den Sensor und den OSC- oder Mono-Typ automatisch aus dem FITS-Header des Bildes aus (generische Kurven bleiben für Geräte, die nicht in der Liste aufgeführt sind, editierbar). Sowohl PCC als auch SPCC liefern abschließend ein Übersichtsdiagramm zum Weißabgleich, in dem die gemessenen und erwarteten Kanalverhältnisse mit einer robusten linearen Anpassung dargestellt werden."
+        },
+        {
+          "label": "Schnelle Bearbeitung",
+          "text": "Debayering, Hintergrundentfernung, Rauschunterdrückung und Schärfungsdurchläufe."
+        },
+        {
+          "label": "Star Color Repair",
+          "text": "Behebung des einseitigen Farbsaums (ein Blau- oder Magenta-Farbton mit einer dunklen Kerbe), den manche One-Shot-Farbkameras bei hellen Sternen hinterlassen, mithilfe einer Subpixel-Kanalausrichtung und einer Korrektur der radialen Farb- und Luminanzsymmetrie. Berücksichtigung benachbarter Pixel bei dicht besetzten Bildfeldern, mit einer Vorher-Nachher-Montage der hellsten Sterne."
+        },
+        {
+          "label": "Zuschneidewerkzeug",
+          "text": "mit einem Drag-Picker sowie einer Schaltfläche „Auto-Crop“, die das größte vollständig überlappende Rechteck vorschlägt, um die unregelmäßigen Dither-Ränder zu entfernen, die durch leicht versetzte Einbettungen entstanden sind; Sie überprüfen und passen dies vor dem Speichern an."
+        }
+      ]
+    },
+    {
+      "icon": "🖌️",
+      "color": "#26c6da",
+      "title": "REDAKTION",
+      "tag": "Bildbearbeitungsprogramm ohne Datenverlust",
+      "intro": "Ein Bildbearbeitungsprogramm im Lightroom-Stil für Ihr Originalbild.",
+      "items": [
+        {
+          "label": "Einstellungen über Schieberegler",
+          "text": "unterteilt in „Licht“, „Farbe“, „Effekte“ und „Detail“, mit einer Schaltfläche zur automatischen Anpassung als sinnvoller Ausgangspunkt."
+        },
+        {
+          "label": "Zerstörungsfrei",
+          "text": "Änderungen werden in einer separaten Datei namens .edit.json neben der Quelldatei gespeichert; die Originaldatei wird dabei niemals überschrieben."
+        },
+        {
+          "label": "Abschnitt „KI“",
+          "text": "Führen Sie GraXpert BGE, Denoise und Deconvolution direkt im Editor mit einem Vorher-Nachher-Schieberegler aus."
+        },
+        {
+          "label": "Entfernung von Sternen",
+          "text": "Teilt ein Master-Bild mithilfe eines im Browser integrierten KI-Modells (nox oder starrem2k13, beide vom MIT, oder das optional aktivierbare StarNet++) in Bilder ohne Sterne und Bilder nur mit Sternen auf; der Vorgang wird über die Symbolleiste „DATEI“ gestartet. Die optionale Halo-Reduzierung entfernt Ringe und Halos um helle Sterne. Schreibt die FITS-Dateien „_starless“ und „_stars“ und öffnet einen Vorher-Nachher-Vergleich."
+        },
+        {
+          "label": "Bildüberblendung",
+          "text": "Zwei Bilder gleicher Größe mit einer für jede Ebene unabhängigen Anpassung von Schwarzpunkt, Mitteltönen und Lichtern, einem Mischmodus („Screen“, „Add“ oder „Lighten“) sowie einer Deckkraft zusammenfügen. Das Ergebnis im PixInsight-ImageBlend-Stil, bei dem gestreckte Sterne wieder auf eine separat gestreckte Nebelbildschicht gelegt werden, mit Live-Vorschau und einer 16-Bit-_blend-FITS-Ausgabe in voller Auflösung."
+        },
+        {
+          "label": "Exportieren",
+          "text": "in die Formate JPEG, PNG oder TIFF mit Optionen für Qualität und Größenanpassung."
+        },
+        {
+          "label": "Automatische Streckung",
+          "text": "aus GraXpert übernommen (15 % Hintergrund, 3-Sigma) als Standard-Anzeigeskalierung."
+        }
+      ]
+    },
+    {
+      "icon": "🤖",
+      "color": "#7e57c2",
+      "title": "KI-Inferenz",
+      "tag": "ONNX / GraXpert",
+      "intro": "Die KI-Modelle von GraXpert laufen auf der jeweils schnellsten Hardware, ohne dass pro Bild Cloud-Aufrufe erforderlich sind.",
+      "items": [
+        {
+          "label": "GraXpert-Modelle",
+          "text": "Hintergrundextraktion (BGE), Rauschunterdrückung (v2 und v3) sowie Dekonvolution (Sterne und Objekte)."
+        },
+        {
+          "label": "Die eigenen Modelle von Polaris",
+          "text": "Ein Detail-/Schärfungsoptimierer, eine Funktion zur Entfernung von Halos (beseitigt die Reflexionshalos um helle Sterne) sowie ein 2x/4x-Upscaler - alle von Grund auf anhand echter Astrofotos trainiert und quantisierungsfreundlich, sodass sie im Browser oder auf der NPU des SBC ausgeführt werden können."
+        },
+        {
+          "label": "Modelle zur Sternentfernung",
+          "text": "nox und starrem2k13 (beide vom MIT, im Paket enthalten) sowie das optional nutzbare StarNet++ (NonCommercial). Alle sind FP16-quantisiert, sodass sie im Browser auf Smartphones und Tablets über WebGPU oder auf WASM ausgeführt werden können."
+        },
+        {
+          "label": "Modell-Downloader auf dem Gerät",
+          "text": "Laden Sie vorgefertigte .onnx-Modelle aus dem mitgelieferten SourceForge-Katalog oder Ihrem eigenen Bucket auf das Gerät herunter - mit SHA-256-Verifizierung und ohne Docker oder Python auf dem Host (Einstellungen, KI-Inferenz, Modelle herunterladen)."
+        },
+        {
+          "label": "In-Browser-Inferenz",
+          "text": "onnxruntime-web nutzt die GPU (WebGPU) oder WASM-SIMD des Client-Geräts; der Server hostet lediglich die .onnx-Dateien."
+        },
+        {
+          "label": "Serverseitiger CLI-Fallback",
+          "text": "GraXpert auf dem Host - wenn Sie es vorziehen, dass der Host dies übernimmt."
+        },
+        {
+          "label": "NPU-Beschleunigung",
+          "text": "auf Rockchip-RK3588-Boards (RKNPU2, z. B. dem Orange Pi 5 Pro) und auf Qualcomm-Hexagon-Boards (QAIRT, z. B. dem Radxa Dragon Q6A) laufen die Modelle zur Hintergrundextraktion und Rauschunterdrückung auf der NPU etwa fünfmal schneller als auf der CPU, wodurch Rechenkerne für das Live-Stacking freigehalten werden. Automatisch, mit CPU-Fallback."
+        },
+        {
+          "label": "Wähle dein Beschleunigungsprogramm aus",
+          "text": "Wählen Sie für die GraXpert-KI-Operationen zwischen „Auto“, „NPU“, „GPU“ oder „CPU“. Auf Boards mit mehr als einem Beschleuniger läuft neben der NPU ein Vulkan-GPU-Kanal (über ncnn)."
+        },
+        {
+          "label": "OpenCL-GPU-Backend",
+          "text": "Bildberechnungen können, sofern vorhanden, auf die GPU des SBC ausgelagert werden."
+        },
+        {
+          "label": "Unterstützung für RGB-FITS-Dateien",
+          "text": "in den gesamten KI-Pipelines."
+        }
+      ]
+    },
+    {
+      "icon": "📁",
+      "color": "#ffa726",
+      "title": "DATEIEN",
+      "tag": "Datei-Explorer",
+      "intro": "Serverseitiger Dateibrowser.",
+      "items": [
+        {
+          "label": "Durchsuchen, herunterladen und verwalten",
+          "text": "aufgezeichnete Bilder und Ausgaben auf dem Host."
+        },
+        {
+          "label": "Bilder hochladen",
+          "text": "in Studio oder Editor als Ausgangspunkt für die Bearbeitung."
+        }
+      ]
+    },
+    {
+      "icon": "⚙️",
+      "color": "#78909c",
+      "title": "EINSTELLUNGEN",
+      "tag": "Konfiguration und Konnektivität",
+      "intro": "Globale Konfiguration, Host-Verwaltung und Konnektivität.",
+      "items": [
+        {
+          "label": "Profile und Standort",
+          "text": "Standort des Beobachters (mit einem Einrichtungsfenster bei der ersten Nutzung), Einheiten und app-weite Einstellungen."
+        },
+        {
+          "label": "Aussehen",
+          "text": "Design- und Schriftart-Auswahl."
+        },
+        {
+          "label": "Netzwerkmodus (Hotspot und Station)",
+          "text": "WiFi-Panel im ASIAIR-Stil. Der Pi wird beim ersten Start als Hotspot bereitgestellt, sodass Sie ohne Monitor darauf zugreifen können; verbinden Sie ihn mit Ihrem WLAN zu Hause - mit einer 30-sekündigen Sicherheitsfunktion zum Ausprobieren und Zurücksetzen."
+        },
+        {
+          "label": "Fernzugriff (Relay)",
+          "text": "TLS-getunnelter Zugriff auf Ihren Rechner von außerhalb des LANs, optional mit DuckDNS und Let's Encrypt."
+        },
+        {
+          "label": "HTTPS-Einrichtung",
+          "text": "Selbstsigniertes Zertifikat mit Ein-Klick-Aktivierung (Port 5001), damit Client-Geräte WebGPU und Multithread-WASM für browserbasierte KI nutzen können."
+        },
+        {
+          "label": "Authentifizierung",
+          "text": "Anmelde- und Erststart-Assistent zum Schutz der Benutzeroberfläche und der API."
+        },
+        {
+          "label": "Fernterminal",
+          "text": "Eingebettetes SSH-Terminal (xterm.js) zur Verwaltung eines Hosts ohne Bildschirm über den Browser, mit einem Ein-Klick-Starter für das native Tool „raspi-config“ oder „armbian-config“."
+        },
+        {
+          "label": "Taktsynchronisation",
+          "text": "Die UTC-Zeit des Browsers auf einen Pi ohne RTC übertragen."
+        },
+        {
+          "label": "Gerätesimulator",
+          "text": "Integriertes simuliertes Teleskop, Kamera, Fokussierer und Filterrad, das echte Sterne an der simulierten Position darstellt, sodass Plate Solving, Autofokus und Live-Stacking ganz ohne Hardware funktionieren."
+        },
+        {
+          "label": "Benchmark",
+          "text": "synthetische Workloads zum Vergleich der Hardware (CPU, GPU und ein GraXpert-Rauschunterdrückungsdurchlauf auf der NPU der Platine) mit einem gespeicherten Ergebnisverlauf."
+        },
+        {
+          "label": "Automatische Software-Aktualisierung",
+          "text": "Bei der Installation von .deb-Dateien auf Pi/SBC erscheint ein Symbol in der Statusleiste, sobald eine neuere GitHub-Version verfügbar ist; mit einem Klick wird die entsprechende .deb-Datei heruntergeladen, installiert und die neue Version geladen. Es ist kein Passwort erforderlich; die Autorisierung erfolgt über eine PolicyKit-Regel mit eingeschränktem Geltungsbereich."
+        },
+        {
+          "label": "Versions-Rollback",
+          "text": "Einstellungen, Energie, „Version zurücksetzen“ installiert eine beliebige neuere Version über die aktuell ausgeführte Version (einschließlich Downgrade) - online oder offline über das Relay; praktisch, wenn ein Update Probleme verursacht."
+        }
+      ]
+    },
+    {
+      "icon": "❓",
+      "color": "#42a5f5",
+      "title": "HILFE",
+      "tag": "Anleitung in der App",
+      "intro": "Anleitung innerhalb der App.",
+      "items": [
+        {
+          "label": "Schritt-für-Schritt-Anleitungen",
+          "text": "Aufnahme bis zum Export, Checkliste für die erste Nacht und spezifische Arbeitsabläufe (LRGB-Mono, Planetenfotografie, PCC)."
+        },
+        {
+          "label": "Fehlerbehebung - Akkordeon",
+          "text": "sowie Links zum vollständigen Benutzerhandbuch."
+        },
+        {
+          "label": "Ein Problem melden",
+          "text": "öffnet ein vorab ausgefülltes GitHub-Issue oder eine Diskussion, dem bzw. der Diagnosedaten von Client und Server beigefügt sind."
+        }
+      ]
+    },
+    {
+      "icon": "🛰️",
+      "color": "#5c6bc0",
+      "title": "Ständig aktive Benutzeroberfläche",
+      "tag": "In allen Feldern",
+      "intro": "Funktionen, die auf allen Bedienfeldern vorhanden sind.",
+      "items": [
+        {
+          "label": "Obere Statusleiste",
+          "text": "Verbindungsanzeigen (INDI, Alpaca, PHD2), Kameratemperatur, Anzahl der Live-Stack-Bilder, Akkustand des Client-Geräts, Uhrzeit, Dither-/Settle-Status des Guiders, eine Schaltfläche zum globalen Abbruch der Sequenz, die Aktualisierungsanzeige und die Debug-Log-Anzeige."
+        },
+        {
+          "label": "Aktions- und Transferchips",
+          "text": "Echtzeit-Netzwerkdurchsatz, laufende Uploads und Downloads sowie der Fortschritt bei Bildaufnahme und Belichtung."
+        },
+        {
+          "label": "Debug-Protokoll",
+          "text": "Alle Serverprotokolle, HTTP-Anfragen, Toast-Meldungen und Browser-Ausnahmen werden in einem Übersichtsfenster zusammengefasst, können gefiltert und als JSONL für Fehlerberichte exportiert werden."
+        },
+        {
+          "label": "Registerkarten mit mehreren Instanzen",
+          "text": "Mehrere Polaris-Hosts über einen Browser verwalten."
+        },
+        {
+          "label": "Entfernbare Gesundheitschips",
+          "text": "zum Beispiel Warnmeldungen wegen Unterspannung beim Raspberry Pi."
+        }
+      ]
+    },
+    {
+      "icon": "🚀",
+      "color": "#ff7043",
+      "title": "Plattform und Bereitstellung",
+      "tag": "Mach es auf deine Art",
+      "intro": "Führen Sie es dort aus, wo es Ihnen am besten passt.",
+      "items": [
+        {
+          "label": ".deb-Installation mit einem einzigen Befehl",
+          "text": "für Debian und Ubuntu auf arm64-SBCs (Raspberry Pi, Orange Pi, Radxa) sowie auf x86-64-PCs; das Paket kümmert sich um alle Abhängigkeiten, die systemd-Unit, indi-web und die Benutzerkonfiguration."
+        },
+        {
+          "label": "Windows und Linux",
+          "text": "Beide Hosts werden unterstützt."
+        },
+        {
+          "label": "Docker-Image und Compose",
+          "text": "für die Bereitstellung in Containern."
+        },
+        {
+          "label": "Plate Solving",
+          "text": "über ASTAP und andere Solver-Backends."
+        },
+        {
+          "label": "Plugin-System",
+          "text": "zur Erweiterung der App."
+        }
+      ]
+    }
+  ],
+  "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/FEATURES.md",
+  "docLabel": "Vollständige Referenz zu den einzelnen Steuerelementen auf GitHub"
+}

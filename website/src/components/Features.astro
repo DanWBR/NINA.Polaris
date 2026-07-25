@@ -5,7 +5,9 @@ import { getContent, localePath, type Lang } from '../data/site';
 // `lang` is supplied by the page once locale routes exist; until then
 // every caller omits it and getContent('en') returns the English content.
 const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
-const {features, featuresSection} = getContent(lang);
+const {features, featuresSection, strings} = getContent(lang);
+const t = strings.features;
+const g = strings.gallery;
 // At build time, check whether each feature screenshot exists in public/.
 // Missing images fall back to a styled placeholder, never a broken <img>.
 const publicDir = new URL('../../public/', import.meta.url);
@@ -27,9 +29,9 @@ const rows = features.map((f) => {
             {f.exists ? (
               <img src={f.image} alt={f.title} loading="lazy" decoding="async" />
             ) : (
-              <div class="feature-placeholder" role="img" aria-label={`${f.title}: screenshot coming soon`}>
+              <div class="feature-placeholder" role="img" aria-label={`${f.title}: ${t.comingSoon}`}>
                 <span class="ph-icon">{f.icon}</span>
-                <span class="ph-note">screenshot coming soon</span>
+                <span class="ph-note">{t.comingSoon}</span>
               </div>
             )}
           </div>
@@ -43,13 +45,13 @@ const rows = features.map((f) => {
     </div>
 
     <p class="features-more">
-      <a class="btn btn-ghost" href={localePath("/features", lang)}>See every feature, panel by panel →</a>
+      <a class="btn btn-ghost" href={localePath("/features", lang)}>{t.seeEvery}</a>
     </p>
   </div>
 
   <!-- Click-to-zoom lightbox for feature screenshots -->
-  <div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Screenshot">
-    <button class="lightbox-close" type="button" aria-label="Close">×</button>
+  <div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label={g.screenshotAlt}>
+    <button class="lightbox-close" type="button" aria-label={g.close}>×</button>
     <img class="lightbox-img" src="" alt="" />
   </div>
 </section>

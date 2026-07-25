@@ -3,7 +3,8 @@ import { getContent, type Lang } from '../data/site';
 // `lang` is supplied by the page once locale routes exist; until then
 // every caller omits it and getContent('en') returns the English content.
 const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
-const {gallery} = getContent(lang);
+const {gallery, strings} = getContent(lang);
+const g = strings.gallery;
 ---
 
 {gallery && gallery.shots && gallery.shots.length > 0 && (
@@ -23,8 +24,8 @@ const {gallery} = getContent(lang);
     </div>
 
     <!-- Click-to-zoom lightbox for the gallery -->
-    <div class="g-lightbox" id="g-lightbox" hidden role="dialog" aria-modal="true" aria-label="Screenshot">
-      <button class="g-lightbox-close" type="button" aria-label="Close">×</button>
+    <div class="g-lightbox" id="g-lightbox" hidden role="dialog" aria-modal="true" aria-label={g.screenshotAlt}>
+      <button class="g-lightbox-close" type="button" aria-label={g.close}>×</button>
       <img class="g-lightbox-img" src="" alt="" />
     </div>
   </section>

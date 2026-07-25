@@ -1,0 +1,50 @@
+{
+  "hero": {
+    "sourceOnGitHub": "Source on GitHub",
+    "getStarted": "Get Started →",
+    "donate": "❤ Donate",
+    "skyMapAlt": "Polaris Astro Controller sky map",
+    "credit": "IC&nbsp;434 / Horsehead &amp; Flame · © Daniel Wagner Oliveira de Medeiros"
+  },
+  "benchmarks": {
+    "colDevice": "Device",
+    "colCores": "Cores",
+    "colScore": "Polaris score",
+    "colStacking": "Stacking",
+    "colCapture": "Capture",
+    "memoryBw": "Memory BW",
+    "colPrice": "Approx. USD",
+    "bestValue": "best value",
+    "more": "Full per-device tables & methodology →"
+  },
+  "comparison": {
+    "feature": "Feature",
+    "uniqueTitle": "Unique to Polaris on this list",
+    "uniqueLabel": "Unique to Polaris"
+  },
+  "downloads": {
+    "title": "Download & Install",
+    "guide": "Get Started guide →",
+    "sourceReleases": "Source & releases",
+    "discord": "Discord",
+    "patreon": "Patreon",
+    "donate": "❤ Donate",
+    "licence": "Free & open-source · GNU AGPL v3 · built on the N.I.N.A. project."
+  },
+  "features": {
+    "comingSoon": "screenshot coming soon",
+    "seeEvery": "See every feature, panel by panel →"
+  },
+  "gallery": {
+    "screenshotAlt": "Screenshot",
+    "close": "Close"
+  },
+  "nav": {
+    "toggle": "Toggle navigation"
+  },
+  "footer": {
+    "blurb": "Browser-controlled astrophotography on any device.",
+    "disclaimer": "A community-driven fork of N.I.N.A., not affiliated with or supported by the official N.I.N.A. team. For Polaris issues, open an issue on this repository; please do not contact the N.I.N.A. developers about it.",
+    "credit": "Background: IC&nbsp;434 (Horsehead) and NGC&nbsp;2024 (Flame), Orion molecular cloud complex."
+  }
+}

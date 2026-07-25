@@ -1,7 +1,8 @@
 ---
 import { getContent, localePath, type Lang } from '../data/site';
 const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
-const {site, footerCols} = getContent(lang);
+const {site, footerCols, strings} = getContent(lang);
+const t = strings.footer;
 
 // Footer links come from data, not from literal hrefs, so they need the same
 // treatment as the nav: an internal path gets the reader's language, anything
@@ -14,7 +15,7 @@ const linkHref = (href: string, external?: boolean) =>
   <div class="container footer-grid">
     <div>
       <strong>{site.name}</strong>
-      <p>Browser-controlled astrophotography on any device.</p>
+      <p>{t.blurb}</p>
     </div>
     {footerCols.map((col) => (
       <div>
@@ -35,11 +36,9 @@ const linkHref = (href: string, external?: boolean) =>
     ))}
   </div>
   <div class="container footer-fine">
-    A community-driven fork of N.I.N.A., not affiliated with or supported by the
-    official N.I.N.A. team. For Polaris issues, open an issue on this repository;
-    please do not contact the N.I.N.A. developers about it.
+    {t.disclaimer}
     <br />
-    Background: IC&nbsp;434 (Horsehead) and NGC&nbsp;2024 (Flame), Orion molecular cloud complex.
+    <span set:html={t.credit}></span>
   </div>
 </footer>
 

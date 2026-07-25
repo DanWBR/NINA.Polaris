@@ -1,0 +1,12 @@
+[
+  { "label": "Features", "href": "/features" },
+  { "label": "AI Tools", "href": "/ai-tools" },
+  { "label": "Assistant", "href": "/assistant" },
+  { "label": "Get Started", "href": "/getting-started" },
+  { "label": "Download & Install", "href": "/install" },
+  { "label": "Handbook", "href": "/handbook/" },
+  { "label": "About", "href": "/about" },
+  { "label": "Discord ↗", "href": "https://discord.gg/FYQeNhEGDp", "external": true },
+  { "label": "Patreon ↗", "href": "https://www.patreon.com/c/nina_polaris", "external": true },
+  { "label": "GitHub ↗", "href": "https://github.com/DanWBR/NINA.Polaris", "external": true }
+]

@@ -1,0 +1,541 @@
+{
+  "title": "Herramientas de IA",
+  "lede": "Polaris Astro Controller incluye un conjunto completo de herramientas de procesamiento de imágenes basadas en IA que se ejecutan íntegramente en tu hardware local. Sin nube, sin suscripciones, sin que los datos salgan de tu dispositivo. Además de los modelos GraXpert y las cuatro redes de eliminación de estrellas, Polaris entrena y ofrece sus propios modelos, publicados bajo la licencia AGPL y diseñados para que se ejecuten en las NPU de las placas que la gente utiliza realmente.",
+  "glanceTitle": "De un vistazo",
+  "glance": [
+    {
+      "label": "11 herramientas",
+      "text": "que abarca la extracción del fondo, la eliminación de ruido, la deconvolución (con IA y clásica), la eliminación de estrellas, la eliminación de halos y el aumento de resolución al doble"
+    },
+    {
+      "label": "5 backends",
+      "text": "GPU del navegador (WebGPU/WebGL), GPU del SBC a través de OpenCL, NPU Rockchip RKNN, NPU Qualcomm Hexagon (QAIRT), además de una opción alternativa de CPU siempre disponible"
+    },
+    {
+      "label": "100 % local",
+      "text": "Todas las inferencias se ejecutan en tu dispositivo; los modelos se almacenan en caché en IndexedDB tras la primera descarga."
+    },
+    {
+      "label": "4 precisiones",
+      "text": "fp32, fp16, int16 e int8 (entrenamiento con consideración de la cuantificación). Las versiones int16 e int8 son las que hacen posible el funcionamiento de los backends de la NPU."
+    }
+  ],
+  "toolsTitle": "Herramientas de procesamiento de imágenes",
+  "tools": [
+    {
+      "icon": "🌫️",
+      "color": "#6366f1",
+      "title": "Extracción del gradiente de fondo",
+      "tag": "BGE",
+      "source": "polaris-graxpert",
+      "intro": "Elimina los gradientes de contaminación lumínica, el viñeteado y el resplandor irregular del cielo en las imágenes lineales. La red neuronal predice el plano de fondo por sí misma, en lugar de ajustar un polinomio, por lo que sigue una estructura que una superficie ajustada no puede reproducir. Hay dos modelos disponibles: el de GraXpert y el propio de Polaris, entrenados desde cero y publicados bajo la licencia AGPL.",
+      "items": [
+        {
+          "label": "Dos modelos:",
+          "text": "el modelo GraXpert (licencia no comercial) y el modelo Polaris (AGPL, entrenado desde cero con astrofotografías reales). Ambos se descargan bajo demanda; elige el que mejor se adapte a tu licencia y a tu hardware."
+        },
+        {
+          "label": "Compatible con NPU:",
+          "text": "El modelo Polaris también incluye una versión int16, que es la que permite su ejecución en las NPU Rockchip y Hexagon; el modelo GraXpert solo es compatible con fp32/fp16."
+        },
+        {
+          "label": "Así lo prevé el contexto:",
+          "text": "El modelo genera la superficie de gradiente, que luego se resta, de modo que la nebulosidad real no se aplana al aplicar el gradiente."
+        },
+        {
+          "label": "Marcos lineales:",
+          "text": "ejecútalo antes de estirar, con plantillas calibradas, para obtener un resultado óptimo"
+        },
+        {
+          "label": "Dónde:",
+          "text": "Pestaña «Archivos», barra de herramientas «Herramientas de IA» y el editor de imágenes"
+        }
+      ]
+    },
+    {
+      "icon": "✨",
+      "color": "#06b6d4",
+      "title": "Eliminación de ruido mediante IA",
+      "tag": "Eliminar ruido",
+      "source": "polaris-graxpert",
+      "intro": "Elimina el ruido del sensor (ruido de disparo, ruido de lectura y ruido térmico) al tiempo que conserva los detalles astronómicos más sutiles. Hay tres modelos disponibles: GraXpert v2 y v3, y el propio modelo de Polaris, entrenado desde cero y publicado bajo la licencia AGPL. El procesamiento se realiza por mosaicos con fusión suavizada mediante coseno, de modo que no aparecen juntas entre mosaicos en el resultado final.",
+      "items": [
+        {
+          "label": "Tres modelos:",
+          "text": "GraXpert v2 (más ligero, para equipos menos potentes) y v3 (mayor capacidad, mejor para detalles tenues y picos estelares), ambos de uso no comercial; además del modelo Polaris (AGPL)"
+        },
+        {
+          "label": "El único que se adapta a todas las NPU:",
+          "text": "El modelo Polaris incluye versiones para int16 e int8. GraXpert v3 no puede ejecutarse en absoluto en el Qualcomm Hexagon, ya que utiliza LayerNorm y esto requiere una NPU V73 o posterior."
+        },
+        {
+          "label": "Con azulejos con bordes difuminados:",
+          "text": "Las imágenes, independientemente de su tamaño, se procesan en fragmentos superpuestos, por lo que no se aprecia ningún artefacto en los bordes."
+        },
+        {
+          "label": "En color y en blanco y negro:",
+          "text": "Se admiten tanto archivos FITS RGB como de un solo canal; el proceso de procesamiento gestiona automáticamente la disposición de los canales"
+        },
+        {
+          "label": "Lineales y alargados:",
+          "text": "Funciona en ambas fases; se obtienen mejores resultados en matrices calibradas linealmente antes del estiramiento."
+        },
+        {
+          "label": "Dónde:",
+          "text": "Pestaña «Archivos», barra de herramientas «Herramientas de IA» y el editor de imágenes"
+        }
+      ]
+    },
+    {
+      "icon": "⭐",
+      "color": "#f59e0b",
+      "title": "Deconvolución con IA: Estrellas",
+      "tag": "Decon",
+      "source": "graxpert",
+      "intro": "Afilando las fuentes puntuales (estrellas) difuminadas por la atmósfera, el error de seguimiento o la difracción óptica mediante una red neuronal GraXpert entrenada específicamente en campos estelares. Produce estrellas bien definidas y redondas sin los artefactos de «ringing» habituales en los métodos clásicos.",
+      "items": [
+        {
+          "label": "Centrado en las estrellas:",
+          "text": "El modelo está entrenado para enfocar fuentes puntuales compactas; entiende que las estrellas deben ser redondas y no producir halos."
+        },
+        {
+          "label": "Complementa el modelo de objetos:",
+          "text": "Ejecuta primero «Stars» y, a continuación, «Objects» para aumentar la nitidez tanto de las fuentes puntuales como de las estructuras extendidas"
+        },
+        {
+          "label": "En mosaico, 256x256:",
+          "text": "fundido con solapamiento difuminado; apto para masters a resolución completa"
+        },
+        {
+          "label": "Control deslizante «antes/después»:",
+          "text": "El control deslizante de comparación integrado en la interfaz de usuario te permite evaluar el resultado antes de guardar."
+        },
+        {
+          "label": "Dónde:",
+          "text": "Pestaña «Archivos» y barra de herramientas «Herramientas de IA», en la sección «Enfocar con IA»"
+        }
+      ]
+    },
+    {
+      "icon": "🌌",
+      "color": "#8b5cf6",
+      "title": "Deconvolución con IA: Objetos",
+      "tag": "Decon",
+      "source": "graxpert",
+      "intro": "Acentúa los objetos extensos, como galaxias, nebulosas y cúmulos. El modelo GraXpert Objects está optimizado para estructuras espacialmente extensas, en lugar de fuentes puntuales, y permite recuperar los detalles más sutiles de los brazos de las galaxias, las franjas de polvo y las regiones de emisión.",
+      "items": [
+        {
+          "label": "Estructura ampliada:",
+          "text": "Entrenado con imágenes de galaxias y nebulosas para realzar los detalles estructurales finos sin aumentar excesivamente la nitidez en las regiones de emisión uniformes"
+        },
+        {
+          "label": "Maridaje con Stars:",
+          "text": "Para un procesamiento completo de la imagen, ejecuta el modelo «Objects» después del modelo «Stars»; ambos se complementan entre sí."
+        },
+        {
+          "label": "En mosaico, 256x256:",
+          "text": "fundido con solapamiento difuminado; sin juntas entre mosaicos en el resultado final"
+        },
+        {
+          "label": "Control de la fuerza:",
+          "text": "El control deslizante de intensidad ajustable (de 0,1 a 1,0) te permite ajustar el efecto"
+        },
+        {
+          "label": "Dónde:",
+          "text": "Pestaña «Archivos» y barra de herramientas «Herramientas de IA», en la sección «Enfocar con IA»"
+        }
+      ]
+    },
+    {
+      "icon": "🔭",
+      "color": "#0ea5e9",
+      "title": "Deconvolución de Polaris (Detalle)",
+      "tag": "Detalle v1.2",
+      "source": "polaris",
+      "intro": "La red de deconvolución propia de Polaris, entrenada desde cero con pares sintéticos (nítidos y borrosos): todas las imágenes astronómicas reales ya están borrosas debido al «seeing», por lo que no existe una referencia clara a partir de la cual aprender. La convolución de objetivos nítidos con una PSF conocida proporciona pares perfectos en cantidad ilimitada.",
+      "items": [
+        {
+          "label": "Arquitectura «quantization-first»:",
+          "text": "diseñado para que las exportaciones int8 e int16 no pierdan nada. Se utiliza BatchNorm en lugar de LayerNorm, un muestreo ascendente más una convolución en lugar de ConvTranspose, y un único tensor de entrada"
+        },
+        {
+          "label": "¿Por qué esas opciones?:",
+          "text": "provienen del trabajo de la NPU. El Hexagon V68 rechaza directamente LayerNorm (necesita V73 o una versión posterior), ConvTranspose produce artefactos en forma de tablero de ajedrez que se cuantifican mal, y el diseño de múltiples entradas de GraXpert es lo que hizo que su deconvolución se realizara únicamente en la CPU."
+        },
+        {
+          "label": "Funciona en todas partes:",
+          "text": "Un modelo se adapta perfectamente a Hexagon (int8/int16), Rockchip RKNN (fp16), la GPU Adreno, la CPU sin aceleración y el navegador a través de ORT Web."
+        },
+        {
+          "label": "Versiones:",
+          "text": "La versión 1.1 incluye fp32, fp16, int16 e int8; la versión 1.2 añade una compilación w8a16 optimizada para el Hexagon HTP"
+        },
+        {
+          "label": "Dónde:",
+          "text": "Pestaña «Archivos», barra de herramientas «Herramientas de IA» y el editor de imágenes"
+        }
+      ]
+    },
+    {
+      "icon": "🔬",
+      "color": "#3b82f6",
+      "title": "Deconvolución clásica en RL",
+      "tag": "Basado en la física",
+      "source": "classical",
+      "intro": "Deconvolución de Richardson-Lucy basada en una función de distribución de intensidad puntual (PSF) medida directamente a partir de las estrellas presentes en el fotograma. El algoritmo corrige el desenfoque provocado por la atmósfera, el seguimiento y la óptica utilizando la respuesta óptica real del sistema de imagen, en lugar de una red neuronal genérica.",
+      "items": [
+        {
+          "label": "PSF medido:",
+          "text": "El perfil de Moffat, ajustado a las estrellas reales presentes en el encuadre, extrae el FWHM, la excentricidad y la orientación; la PSF es específica de esa sesión de captura."
+        },
+        {
+          "label": "Amortiguación White de 1994:",
+          "text": "Las correcciones se regulan mediante un modelo de ruido por píxel; las regiones con baja relación señal-ruido no se modifican, lo que evita la amplificación del ruido."
+        },
+        {
+          "label": "Modelo de ruido por transferencia de fotones:",
+          "text": "El valor de sigma se calcula a partir de la propia imagen utilizando un modelo de ruido de disparo + ruido de lectura (sigma = √(A*S + B)); no se necesita ningún dato de calibración."
+        },
+        {
+          "label": "Protección de las estrellas:",
+          "text": "una máscara difusa alrededor de las estrellas detectadas, que recompone los núcleos estelares originales tras la deconvolución, evitando el efecto de «ringing» en las fuentes brillantes"
+        },
+        {
+          "label": "FWHM y estadísticas de las estrellas:",
+          "text": "Tras cada ejecución se indican el FWHM en píxeles, la excentricidad y el número de estrellas utilizadas."
+        },
+        {
+          "label": "Dónde:",
+          "text": "Pestaña «ARCHIVOS» en «AI Sharpen», opción «RL clásico»"
+        }
+      ]
+    },
+    {
+      "icon": "🗺️",
+      "color": "#14b8a6",
+      "title": "Deconvolución de campo",
+      "tag": "Que varía espacialmente",
+      "source": "classical",
+      "intro": "Amplía el RL clásico para tener en cuenta la curvatura de campo, la coma y la inclinación: la PSF se mide de forma independiente en una cuadrícula configurable de mosaicos que abarca todo el encuadre. Cada mosaico obtiene su propia PSF, y los resultados se fusionan mediante un difuminado coseno. Ideal para cámaras de campo amplio en las que la forma de las estrellas varía del centro hacia las esquinas.",
+      "items": [
+        {
+          "label": "PSF por azulejo:",
+          "text": "Los perfiles de Moffat se ajustan en cada celda de la cuadrícula de forma independiente; una esquina afectada por el coma utiliza un núcleo diferente al del centro"
+        },
+        {
+          "label": "Cuadrícula configurable:",
+          "text": "De 2x2 a 8x8 mosaicos; cuantos más mosaicos, más precisa es la corrección espacial, aunque a costa de un mayor tiempo de medición"
+        },
+        {
+          "label": "Difuminado con pluma:",
+          "text": "mezcla coseno entre regiones adyacentes de la PSF; la transición es imperceptible en la imagen final"
+        },
+        {
+          "label": "Solución alternativa:",
+          "text": "Las casillas con muy pocas estrellas se asignan al PSF medido más cercano, por lo que siempre se procesa todo el fotograma."
+        },
+        {
+          "label": "Dónde:",
+          "text": "Pestaña «ARCHIVOS» en «AI Sharpen», opción «Field RL»"
+        }
+      ]
+    },
+    {
+      "icon": "🌐",
+      "color": "#22c55e",
+      "title": "Deconvolución RL en el navegador",
+      "tag": "Del lado del cliente",
+      "source": "classical",
+      "intro": "Un nuevo modo en el que el servidor mide la PSF y el modelo de ruido (normalmente entre 5 y 15 segundos), devuelve una carga útil JSON compacta y el navegador ejecuta el complejo bucle de iteraciones de Richardson-Lucy íntegramente en JavaScript. La CPU del servidor SBC queda libre para las tareas de guiado, secuenciación y captura durante el proceso.",
+      "items": [
+        {
+          "label": "El servidor se encarga de la parte científica:",
+          "text": "La extracción de PSF, el ajuste del modelo de ruido y la detección de estrellas se realizan en el servidor; son procesos rápidos y que consumen pocos recursos de la CPU."
+        },
+        {
+          "label": "El navegador se encarga de todo:",
+          "text": "Un motor FFT escrito íntegramente en JavaScript (Cooley-Tukey de base 2) ejecuta en el navegador 512x512 iteraciones de RL con solapamiento reducido y mosaicos."
+        },
+        {
+          "label": "Progreso en tiempo real:",
+          "text": "Una barra de progreso se actualiza tras cada iteración; puedes ver cómo se mejora la nitidez de la imagen en tiempo real en el control deslizante «antes/después»."
+        },
+        {
+          "label": "El mismo algoritmo:",
+          "text": "RL amortiguado blanco de 1994, protección «star» y puerta de ruido idénticos a los de la versión para servidor"
+        },
+        {
+          "label": "Actívalo:",
+          "text": "En la ventana modal «AI Sharpen», marca la casilla «Ejecutar en el navegador» (solo en el modo RL global; el modo de campo sigue ejecutándose en el servidor)."
+        }
+      ]
+    },
+    {
+      "icon": "🚫",
+      "color": "#f97316",
+      "title": "Eliminación de estrellas",
+      "tag": "4 modelos",
+      "source": "graxpert",
+      "intro": "Elimina las estrellas conservando la nebulosidad, para flujos de trabajo de procesamiento en banda estrecha y sin estrellas. Polaris ofrece cuatro redes diferentes de eliminación de estrellas en lugar de una sola, y tres de ellas cuentan con licencia del MIT, por lo que pueden utilizarse con fines comerciales.",
+      "items": [
+        {
+          "label": "nox color y nox gris (MIT):",
+          "text": "Redes similares a StarNet en versiones separadas en color y monocromáticas; elige la que mejor se adapte a tus datos. 208 MB cada una, o 104 MB en FP16."
+        },
+        {
+          "label": "starrem2k13 (MIT):",
+          "text": "una red U-Net más ligera, de 119 MB (59 MB en FP16), la más rápida de las cuatro y una buena primera opción para un SBC"
+        },
+        {
+          "label": "StarNet++ (sin fines comerciales):",
+          "text": "la red original, incluida para garantizar la compatibilidad con los flujos de trabajo existentes. Su licencia prohíbe el uso comercial, razón por la cual existen las alternativas del MIT"
+        },
+        {
+          "label": "arm64 en todo el código:",
+          "text": "Los cuatro se ejecutan como ONNX en las placas Raspberry Pi, Orange Pi y Radxa. StarNet v2 se ha excluido a propósito: es un binario exclusivo para x86."
+        },
+        {
+          "label": "Control de retroalimentación:",
+          "text": "Una vez eliminadas, las estrellas originales se pueden volver a integrar con cualquier nivel de opacidad, para obtener una imagen final en la que las estrellas aparezcan difuminadas, en lugar de desaparecer por completo."
+        },
+        {
+          "label": "Dónde:",
+          "text": "Pestaña «Archivos» y barra de herramientas «Herramientas de IA», opción «Eliminar estrellas»"
+        }
+      ]
+    },
+    {
+      "icon": "💫",
+      "color": "#ec4899",
+      "title": "Extracción del halo",
+      "source": "polaris",
+      "intro": "La red neuronal propia de Polaris, entrenada desde cero con fotografías astronómicas reales, elimina los anillos de halo de difracción que aparecen alrededor de las estrellas brillantes en los refractores y los telescopios newtonianos de alta velocidad. A diferencia de los enfoques clásicos, el modelo comprende el contexto espacial de cada estrella y evita eliminar la nebulosidad auténtica cercana a las fuentes brillantes.",
+      "items": [
+        {
+          "label": "Modelo nativo de Polaris:",
+          "text": "Entrenado con nuestro propio conjunto de datos de astrofotografías reales con halos sintéticos añadidos; no se trata de una versión reempaquetada de GraXpert."
+        },
+        {
+          "label": "Adaptado al contexto:",
+          "text": "La entrada RGB de 3 canales proporciona al modelo suficiente contexto para distinguir los halos de la nebulosidad cercana y las regiones de emisión."
+        },
+        {
+          "label": "Evaluado a más de 50 dB de PSNR:",
+          "text": "La variante fp16 es prácticamente sin pérdidas en comparación con fp32; int16 tiene una diferencia de menos de 0,03 dB."
+        },
+        {
+          "label": "Cuatro precisiones:",
+          "text": "fp32 (referencia), fp16 (recomendado), int16 (NPU/PTQ), int8 con QAT para una compresión máxima"
+        },
+        {
+          "label": "Dónde:",
+          "text": "Barra de herramientas «Herramientas de IA» y sección «IA» del editor, opción «Eliminación de halo»"
+        },
+        {
+          "label": "Precisiones:",
+          "text": "fp32, fp16 e int16; la versión int16 es la que se ejecuta en las NPU"
+        }
+      ],
+      "tag": "Polaris v1.0"
+    },
+    {
+      "icon": "🔍",
+      "color": "#a855f7",
+      "title": "Ampliación de resolución mediante IA",
+      "source": "polaris",
+      "intro": "Ampliación con superresolución al doble utilizando UpscaleNet, una arquitectura U-Net residual propia de Polaris, entrenada con fotografías astronómicas reales y diseñada para la cuantificación int8 compatible con NPU. Resulta útil para preparar imágenes para impresiones de gran formato, pantallas de alta resolución (DPI) o para recuperar más detalles a nivel de píxel.",
+      "items": [
+        {
+          "label": "Polaris UpscaleNet:",
+          "text": "U-Net residual personalizada; realiza un remuestreo al doble de resolución internamente antes del codificador, de modo que la red procesa el espacio de características completo en alta resolución"
+        },
+        {
+          "label": "Evaluado a 50,22 dB PSNR:",
+          "text": "fp16 (50,22 dB) es indistinguible de fp32 (50,21 dB); int16 presenta una diferencia de menos de 0,03 dB"
+        },
+        {
+          "label": "int8 a través de QAT:",
+          "text": "El entrenamiento con consideración de la cuantificación devuelve a int8 a un nivel casi sin pérdidas, después de que el PTQ mostrara una degradación de 3,3 dB."
+        },
+        {
+          "label": "Escala 2x:",
+          "text": "el resultado tiene el doble de las dimensiones de entrada en ambos ejes; un fotograma de 3000 x 2000 pasa a ser de 6000 x 4000"
+        },
+        {
+          "label": "Dónde:",
+          "text": "Barra de herramientas «Herramientas de IA» y sección «IA» del Editor, opción «Aumentar la resolución»"
+        },
+        {
+          "label": "Precisiones:",
+          "text": "fp32, fp16, int16 y una versión int8 generada mediante «Quantization-Aware Training»; con 19 MB, es el modelo más pequeño que ofrece Polaris."
+        }
+      ],
+      "tag": "Polaris v1.0"
+    }
+  ],
+  "backendsTitle": "Backends de aceleración",
+  "backendsLede": "Polaris selecciona automáticamente el backend de inferencia más adecuado para tu hardware. Los modelos se descargan una sola vez y se almacenan en la caché; la comprobación del backend se ejecuta al iniciar la aplicación y se puede anular en «Configuración».",
+  "backends": [
+    {
+      "icon": "🌐",
+      "color": "#3b82f6",
+      "title": "ORT Web (GPU del navegador)",
+      "tag": "WebGPU / WebGL",
+      "intro": "ONNX Runtime Web ejecuta los modelos directamente en el navegador utilizando la GPU del dispositivo en el que se visualiza, lo que libera la CPU del servidor SBC. Se selecciona WebGPU en primer lugar (requiere HTTPS) y, en caso de no estar disponible, se recurre a WebGL en HTTP o en navegadores más antiguos.",
+      "items": [
+        {
+          "label": "Carga del servidor nula:",
+          "text": "La inferencia se ejecuta íntegramente en el navegador; el servidor solo envía el archivo del modelo una vez."
+        },
+        {
+          "label": "Caché de IndexedDB:",
+          "text": "Los modelos se guardan en la memoria del navegador tras la primera descarga; las ejecuciones posteriores son instantáneas, incluso sin conexión."
+        },
+        {
+          "label": "fp16 nativo:",
+          "text": "Los shaders de la GPU ejecutan fp16 a plena velocidad; WebGPU también admite fp32 a modo de referencia."
+        },
+        {
+          "label": "HTTPS para WebGPU:",
+          "text": "WebGPU requiere un contexto seguro; Polaris incluye un certificado autofirmado para su uso en LAN"
+        }
+      ]
+    },
+    {
+      "icon": "⚡",
+      "color": "#f97316",
+      "title": "OpenCL (GPU de SBC)",
+      "tag": "Adreno / Mali / otros",
+      "intro": "La GPU del lado del servidor acelera las operaciones de píxeles que requieren un gran esfuerzo de cálculo (apilado, alineación, normalización) mediante OpenCL. Funciona con Adreno, Mali, PowerVR y otras GPU compatibles con OpenCL 1.2 o superior, habituales en los SBC basados en ARM. Detección automática con recambio a la CPU.",
+      "items": [
+        {
+          "label": "Cálculos de píxeles:",
+          "text": "El apilamiento (sigma-clip, kappa, media), la alineación de estrellas y la normalización por píxel se ejecutan en la GPU."
+        },
+        {
+          "label": "Sonda automática:",
+          "text": "Polaris comprueba la GPU al arrancar; si la prueba falla, recurre de forma silenciosa a la CPU."
+        },
+        {
+          "label": "Enlace de Silk.NET:",
+          "text": "P/Invoke multiplataforma a través de Silk.NET.OpenCL; no se requiere el SDK del proveedor"
+        },
+        {
+          "label": "Alternar:",
+          "text": "Actívalo o desactívalo en «Configuración»; la prueba de rendimiento muestra el rendimiento de la GPU frente al de la CPU en tu equipo"
+        }
+      ]
+    },
+    {
+      "icon": "🧠",
+      "color": "#22c55e",
+      "title": "RKNN / NPU",
+      "tag": "Rockchip RK3588",
+      "intro": "La unidad de procesamiento neuronal (NPU) de los SoC Rockchip RK3588 (Orange Pi 5 Pro, Radxa Rock 5 y otros) ejecuta modelos ONNX a una velocidad cinco veces superior a la de la CPU mediante el entorno de ejecución RKNN. Los modelos se convierten al formato RKNN con cuantificación INT8 opcional.",
+      "items": [
+        {
+          "label": "Aumento de velocidad de 5 veces:",
+          "text": "Se midieron 91 ms frente a 457 ms por mosaico BGE/denoise en comparación con la CPU en el RK3588"
+        },
+        {
+          "label": "Conversión a RKNN:",
+          "text": "Un script de conversión integrado convierte los modelos ONNX fp16/int8 al formato .rknn; el entorno de ejecución los carga de forma transparente."
+        },
+        {
+          "label": "Compatibilidad con INT8:",
+          "text": "La función «do_quantization» de RKNN, aplicada a nuestro conjunto de calibración, permite reducir el consumo de memoria en un 2x más que con fp16."
+        },
+        {
+          "label": "Recurso alternativo automático:",
+          "text": "Si el entorno de ejecución de RKNN no está disponible o falla la conversión de un modelo, el sistema recurre al ORT de la CPU."
+        }
+      ]
+    },
+    {
+      "icon": "📱",
+      "color": "#8b5cf6",
+      "title": "QAIRT / QNN",
+      "tag": "Qualcomm Hexagon",
+      "intro": "Qualcomm AI Runtime (QAIRT, anteriormente QNN) ejecuta modelos en la NPU Hexagon (HTP) de los SBC de Qualcomm, como el Radxa Dragon Q6A (QCS6490, Hexagon V68). La HTP de Hexagon solo admite números enteros, por lo que Polaris ofrece modelos int16 como opción predeterminada, con una calidad cercana a la de fp16.",
+      "items": [
+        {
+          "label": "Hexágono HTP (int16):",
+          "text": "La ruta de producción ejecuta modelos int16 a unos 29,5 ms por mosaico en el Q6A - aproximadamente 150 veces más rápido que el valor de referencia de ONNX Runtime en la CPU - , lo que libera la CPU para el apilamiento en tiempo real."
+        },
+        {
+          "label": "int8 turbo:",
+          "text": "Un modelo int8 es aproximadamente cuatro veces más rápido (unos 7,3 ms por mosaico), pero ofrece una calidad visiblemente inferior en la eliminación de ruido, por lo que se trata de un modo «turbo» opcional y no del predeterminado."
+        },
+        {
+          "label": "Solo números enteros; si no, se recurre a fp16:",
+          "text": "El HTP del QCS6490 no admite fp16; los modelos en fp16 se ejecutan en la GPU o la CPU. El resolutor da prioridad a la conversión fp16 → int16 → int8, reservando el fp16 para futuros SoC cuyo HTP lo admita."
+        },
+        {
+          "label": "Detección automática + anulación:",
+          "text": "detectado a través del puente Hexagon FastRPC y el entorno de ejecución QAIRT incluido; desactívalo con POLARIS_DISABLE_QNN=1"
+        },
+        {
+          "label": "Probado en:",
+          "text": "Radxa Dragon Q6A (QCS6490, Hexagon V68); puntuación en la prueba de rendimiento de la CPU: 296; la placa con la mejor relación calidad-precio de nuestra tabla de resultados"
+        }
+      ]
+    },
+    {
+      "icon": "💻",
+      "color": "#6b7280",
+      "title": "Solución alternativa para la CPU",
+      "tag": "Siempre disponible",
+      "intro": "Todos los modelos se ejecutan en la CPU a través de ONNX Runtime cuando no hay ningún acelerador de hardware disponible o seleccionado. No requiere configuración alguna; el rendimiento varía en función del número de núcleos y subprocesos de la CPU.",
+      "items": [
+        {
+          "label": "Configuración automática:",
+          "text": "La CPU ORT es siempre el último recurso; Polaris siempre podrá ejecutar herramientas de IA, independientemente de la disponibilidad de la GPU."
+        },
+        {
+          "label": "Multihilo:",
+          "text": "ORT utiliza todos los subprocesos de la CPU disponibles para la inferencia en mosaico; una Raspberry Pi 5 (4 núcleos) alcanza un rendimiento aceptable para un uso ligero"
+        },
+        {
+          "label": "fp32 y fp16:",
+          "text": "El backend de la CPU admite ambos niveles de precisión; int8 mediante operadores cuantificados ORT INT8"
+        },
+        {
+          "label": "Anulación:",
+          "text": "En «Configuración» puedes forzar el uso de la CPU para reproducir un resultado de referencia o para dejar la GPU libre para otras cargas de trabajo"
+        }
+      ]
+    }
+  ],
+  "precisionTitle": "Precisión del modelo",
+  "precisionLede": "Cada modelo de IA se ofrece en varias variantes de precisión. Los modelos propios de Polaris se crean mediante un proceso de entrenamiento completo: modelo de referencia en fp32, exportación en fp16 casi sin pérdidas, PTQ estático en int16 y entrenamiento con optimización de cuantificación (QAT) en int8 para una compresión sin artefactos.",
+  "precisions": [
+    {
+      "name": "fp32",
+      "tag": "Referencia",
+      "color": "#6b7280",
+      "desc": "Punto flotante de 32 bits completo. Archivos más grandes, mayor cantidad de memoria; se utiliza como referencia de entrenamiento y para pruebas de referencia de la CPU.",
+      "detail": "Todos los modelos exportados comienzan aquí. Rara vez se utilizan en producción, pero son esenciales para verificar que las variantes cuantificadas no presentan pérdidas."
+    },
+    {
+      "name": "fp16",
+      "tag": "Recomendado",
+      "color": "#3b82f6",
+      "desc": "Formato flotante de 16 bits exportado mediante onnxconverter-common. Prácticamente sin pérdidas en comparación con fp32 (diferencia inferior a 0,01 dB PSNR en nuestras evaluaciones). Aproximadamente dos veces más pequeño. Se ejecuta de forma nativa en aceleradores de GPU y NPU.",
+      "detail": "Configuración predeterminada para las rutas ORT Web (WebGPU/WebGL), OpenCL y RKNN fp16. El mejor equilibrio entre calidad, velocidad y tamaño de archivo."
+    },
+    {
+      "name": "int16",
+      "tag": "Compatible con NPU",
+      "color": "#14b8a6",
+      "desc": "Entero de 16 bits mediante cuantificación estática posterior al entrenamiento (PTQ). Sin pérdida de información en la práctica (con una desviación de 0,03 dB respecto a fp32). Se recomienda para implementaciones de RKNN y Qualcomm QNN que requieran aritmética entera sin pérdida de precisión respecto a int8.",
+      "detail": "Los nodos QDQ (Quantize-Dequantize) insertados por onnxruntime-tools en torno a cada tensor. El conjunto de calibración procede de los datos de entrenamiento."
+    },
+    {
+      "name": "int8 (QAT)",
+      "tag": "Compresión máxima",
+      "color": "#a855f7",
+      "desc": "Entero de 8 bits generado mediante el entrenamiento sensible a la cuantificación: se han insertado «hooks» de cuantificación simulada (STE) durante el ajuste fino para que el modelo aprenda a compensar el error de cuantificación desde el principio.",
+      "detail": "El PTQ int8 mostró una degradación de -3,3 dB en el PSNR durante el aumento de resolución. El QAT lo devuelve a un nivel casi sin pérdidas. La eliminación de halos y el aumento de resolución ya incluyen modelos QAT; bge y denoise lo harán próximamente."
+    }
+  ]
+}

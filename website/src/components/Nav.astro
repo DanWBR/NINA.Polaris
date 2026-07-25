@@ -1,7 +1,7 @@
 ---
 import { getContent, LANGS, localePath, stripLangPrefix, langPrefix, type Lang } from '../data/site';
 const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
-const {navLinks} = getContent(lang);
+const {navLinks, strings} = getContent(lang);
 
 // Internal links must carry the current language, or the first click from
 // /pt-br/ silently drops the reader back into English.
@@ -23,7 +23,7 @@ const LANG_LABEL: Record<Lang, string> = {
     <span class="brand-tag">Astro Controller</span>
   </a>
 
-  <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+  <button class="nav-toggle" aria-label={strings.nav.toggle} aria-expanded="false">
     <span></span><span></span><span></span>
   </button>
 
