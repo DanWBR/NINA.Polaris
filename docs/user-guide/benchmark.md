@@ -140,33 +140,38 @@ Note: on the stock Orange Pi image the board self-reports only its SoC codename
 
 ### Orange Pi 5 Pro (8 cores, RK3588S)
 
-Run: 2026-06-12 (best 242, with the OpenCL GPU backend enabled). Armbian
+Run: 2026-07-23 (best 274, with the OpenCL GPU backend enabled). Armbian
 (Ubuntu) arm64, Mali-G610 via libmali + OpenCL ICD. Earlier CPU-only runs
 (2026-06-09) topped out at 227.
 
 | Metric | Value |
 |---|---|
-| **Polaris score** | **242** (GPU on) / 227 (CPU only) |
-| Stacking throughput | 2.75 fps · 46.2 Mpx/s (16.78 MP frames) |
-| Stacking detect / align / resample / stats | 92.43 / 0.48 / 118 / 152.09 ms |
-| Capture/video throughput | 1.84 fps · 30.9 Mpx/s |
-| Debayer / JPEG / LZ4 | 58.82 / 471.14 / 13.55 ms (LZ4 2361.7 MB/s) |
-| CPU single / multi-thread | 2783 / 12879 MFLOPS (4.63× scaling) |
-| Memory bandwidth | 23.1 GB/s |
-| GPU vs CPU (Mali-G610 r0p0) | warp 3.41× · debayer 1.19× · blur 12.95× · **overall 3.74×** (geo-mean) |
+| **Polaris score** | **274** (GPU on) / 227 (CPU only) |
+| Stacking throughput | 2.66 fps · 44.6 Mpx/s (16.78 MP frames) |
+| Stacking detect / align / resample / stats | 100.46 / 0.5 / 120.96 / 154.43 ms |
+| Capture/video throughput | 2.77 fps · 46.5 Mpx/s |
+| Debayer / JPEG / LZ4 | 62.73 / 283.98 / 14.19 ms (LZ4 2254.5 MB/s) |
+| CPU single / multi-thread | 2762 / 12827 MFLOPS (4.64× scaling) |
+| Memory bandwidth | 48 GB/s |
+| GPU vs CPU (Mali-G610 r0p0) | warp 3.46× · debayer 1.19× · blur 15.97× · **overall 4.04×** (geo-mean) |
 
-Slightly ahead of the Raspberry Pi 5 - the RK3588S big.LITTLE cores give it
-strong multi-thread scaling (4.6× across its 8 cores) and much higher memory
-bandwidth (23 vs ~7 GB/s), which is why its stacking throughput leads. With the
+Scores move between runs on this board: the retained history spans 247 to 274
+on the same OS, twice within five minutes of each other. 274 is the best run,
+which is the figure quoted throughout this page; a typical run lands nearer 260.
+
+Ahead of the Raspberry Pi 5 - the RK3588S big.LITTLE cores give it strong
+multi-thread scaling (4.6× across its 8 cores) and much higher memory
+bandwidth (48 vs ~7 GB/s), which is why its stacking throughput leads. With the
 Mali-G610 OpenCL backend on, the offloaded kernels (alignment warp, separable
-blur, debayer) run ~3.7× faster than the CPU path on average (geometric mean;
+blur, debayer) run ~4× faster than the CPU path on average (geometric mean;
 every op wins here because the shared memory makes offload free), lifting the
-overall score from ~227 to ~242 and freeing CPU headroom during a live-stack
+overall score from ~227 to ~274 and freeing CPU headroom during a live-stack
 session.
 
 > **This is the board's real ceiling - power/governor don't change it.**
 > Measured at full clocks (4× Cortex-A76 @ 2.35 GHz + 4× Cortex-A55 @ 1.8 GHz,
-> their `scaling_max_freq`) and ~47°C, so no thermal throttle. Forcing the
+> their `scaling_max_freq`), the SoC rising 41.6 to 58.2°C under load with the
+> clock held at the rated 2.35 GHz ceiling, so no thermal throttle. Forcing the
 > `performance` governor made no difference (cores already hit max under load),
 > and the score is the same (~1.2 A / ~6 W draw) whether powered from a PC
 > USB-C port or a dedicated 5V/5A PSU - a CPU/memory benchmark with no
@@ -174,7 +179,7 @@ session.
 > multi-thread scaling is architectural: the 4 little A55 cores are far weaker
 > than the 4 big A76s, so ~227 is the SoC's genuine CPU-only limit here, not a
 > power/cooling/config bottleneck - the Mali-G610 OpenCL backend is what lifts
-> the overall score past it (242). Keep the 5V/5A PSU for field stability
+> the overall score past it (274). Keep the 5V/5A PSU for field stability
 > (NVMe + USB + camera + dew heater peaks), not for compute.
 
 ### Radxa Dragon Q6A (8 cores, Qualcomm QCS6490)
@@ -194,8 +199,8 @@ on the noisy little A55 cores). Ubuntu 24.04 (noble) arm64. Kryo cores
 | Memory bandwidth | 13.8 GB/s |
 | GPU vs CPU (Adreno 643, OpenCL) | warp 0.69× · debayer 0.34× · blur 2.56× · **overall 0.84×** (geo-mean) |
 
-The fastest SBC here by a clear margin - ~2.7× the Raspberry Pi 4 and ~22%
-ahead of the Orange Pi 5 Pro (both its CPU-only 227 and GPU-on 242). It leads on
+The fastest SBC here - ~2.7× the Raspberry Pi 4, ~30% ahead of the Orange Pi
+5 Pro CPU-only (227) and ~8% ahead of its GPU-on best (274). It leads on
 raw per-core throughput: the strongest single-thread score of the SBCs (3296
 MFLOPS) and the lowest stacking detect/resample times, which is what drives the
 58.8 Mpx/s stacking throughput. Memory bandwidth (13.2 GB/s) sits between the

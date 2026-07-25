@@ -144,10 +144,10 @@
         "device": "Orange Pi 5 Pro (RK3588S)",
         "url": "http://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/details/Orange-Pi-5-Pro.html",
         "cores": "8 cores",
-        "score": "242",
-        "stacking": "46.2 Mpx/s",
-        "capture": "30.9 Mpx/s",
-        "memory": "23.1 GB/s",
+        "score": "274",
+        "stacking": "44.6 Mpx/s",
+        "capture": "46.5 Mpx/s",
+        "memory": "48 GB/s",
         "price": "$130-160",
         "highlight": false
       },
@@ -174,7 +174,7 @@
         "highlight": false
       }
     ],
-    "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. The Orange Pi 5 Pro is shown with the OpenCL GPU backend on (242; 227 CPU only) and the Pi 5 at its best, actively cooled run. The Radxa Dragon Q6A is the fastest SBC here and the best value, and runs CPU-only (its Adreno GPU is a net loss). Prices are rough street estimates for the board alone (no SD card, power, or case); the Core i9 row is a full desktop build for reference, not an SBC. The Orange Pi Zero 3 is the entry point: it shows Polaris runs on a 1.5 GB board (its Mali-G31 GPU is a net loss too, so it runs CPU-only). Full per-device tables and methodology in the benchmark docs.",
+    "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. The Orange Pi 5 Pro is shown with the OpenCL GPU backend on (274; 227 CPU only) and the Pi 5 at its best, actively cooled run. The Radxa Dragon Q6A is the fastest SBC here and the best value, and runs CPU-only (its Adreno GPU is a net loss). Prices are rough street estimates for the board alone (no SD card, power, or case); the Core i9 row is a full desktop build for reference, not an SBC. The Orange Pi Zero 3 is the entry point: it shows Polaris runs on a 1.5 GB board (its Mali-G31 GPU is a net loss too, so it runs CPU-only). Full per-device tables and methodology in the benchmark docs.",
     "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"
   },
   "comparison": {
