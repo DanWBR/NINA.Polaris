@@ -47,8 +47,14 @@ def apply_states(scenarios: list[Scenario], states: dict[str, dict]) -> list[Sce
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--backend", default="mock", choices=["mock", "transformers", "ortgenai"])
+    ap.add_argument("--backend", default="mock", choices=["mock", "transformers", "ortgenai", "openai"])
     ap.add_argument("--model", default="keyword-router")
+    ap.add_argument(
+        "--base-url",
+        default="http://127.0.0.1:8080/v1",
+        help="OpenAI-compatible endpoint for --backend openai "
+             "(llama-server, Ollama, LM Studio).",
+    )
     ap.add_argument("--states", type=pathlib.Path, default=pathlib.Path("scenarios/states.json"))
     ap.add_argument("--out", type=pathlib.Path, default=None)
     ap.add_argument("--only", default=None, help="Run one scenario by id.")
@@ -91,6 +97,12 @@ def main() -> int:
             "think": args.think,
             "max_new_tokens": args.max_new_tokens,
             "load_4bit": args.load_4bit,
+        }
+    if args.backend == "openai":
+        kw = {
+            "base_url": args.base_url,
+            "think": args.think,
+            "max_new_tokens": args.max_new_tokens,
         }
     backend = make_backend(args.backend, args.model, **kw)
     report = Report(model=args.model, backend=backend.name)

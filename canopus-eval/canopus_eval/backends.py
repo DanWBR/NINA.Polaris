@@ -597,6 +597,96 @@ class OrtGenAIBackend:
         return self.run_messages(build_messages(scenario))
 
 
+
+class OpenAIBackend:
+    """An OpenAI-compatible /v1 endpoint: llama-server, Ollama, LM Studio.
+
+    This exists because the other backends measure a model, not a DEPLOYMENT.
+    `transformers` runs HF weights on a workstation GPU; the SBC tier actually
+    ships a GGUF served by llama-server, and that path has its own tool-calling
+    behaviour (the server applies the model's chat template and may emit native
+    OpenAI `tool_calls` instead of in-text tags). Pointing the eval at the real
+    server is the only way to score what users will run.
+
+    Tools go in the request body rather than being baked into the prompt: that
+    is what the SBC provider does in production, and letting the server own the
+    template is the whole point of testing through it.
+    """
+
+    name = "openai"
+
+    def __init__(
+        self,
+        model: str,
+        base_url: str = "http://127.0.0.1:8080/v1",
+        max_new_tokens: int = 1024,
+        think: bool = False,
+        **_ignored,
+    ) -> None:
+        import httpx
+
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.max_new_tokens = max_new_tokens
+        self.think = think
+        # Generous read timeout: a cold CPU-only 4B on an SBC can take minutes
+        # for the first turn, and a timeout here would be scored as a model
+        # failure -- the measurement bug this harness keeps warning about.
+        self._client = httpx.Client(timeout=httpx.Timeout(600.0, connect=15.0))
+
+    def run_messages(self, msgs: list[dict]) -> tuple[ToolCall, str, int]:
+        body: dict[str, Any] = {
+            "model": self.model,
+            "messages": msgs,
+            "tools": openai_tools(),
+            "tool_choice": "auto",
+            "temperature": 0,
+            "max_tokens": self.max_new_tokens,
+            "stream": False,
+        }
+        if not self.think:
+            # Harmless on servers that do not know it; suppresses Qwen3 thinking.
+            body["chat_template_kwargs"] = {"enable_thinking": False}
+        t0 = time.perf_counter()
+        r = self._client.post(f"{self.base_url}/chat/completions", json=body)
+        ms = int((time.perf_counter() - t0) * 1000)
+        if r.status_code != 200:
+            # A transport failure is NOT a model decision. Return "no call" but
+            # keep the body in the text so the report shows a broken endpoint
+            # instead of scoring it as the model refusing to act.
+            return None, f"[HTTP {r.status_code}] {r.text[:400]}", ms
+        data = r.json()
+        choice = (data.get("choices") or [{}])[0]
+        msg = choice.get("message") or {}
+        text = msg.get("content") or ""
+
+        # Native tool_calls win when present: that is the server having parsed
+        # the model's own format for us, which is strictly more reliable than
+        # re-parsing prose.
+        calls = msg.get("tool_calls") or []
+        if calls:
+            fn = (calls[0] or {}).get("function") or {}
+            raw_args = fn.get("arguments")
+            args = raw_args
+            if isinstance(raw_args, str):
+                try:
+                    args = json.loads(raw_args) if raw_args.strip() else {}
+                except json.JSONDecodeError:
+                    args = {}
+            if not isinstance(args, dict):
+                args = {}
+            # ToolCall is the alias `tuple[str, dict] | None`, not a class.
+            name = fn.get("name")
+            call = (name, args) if name else None
+            return call, text or json.dumps(calls), ms
+
+        # No native call: the model may still have written one in text.
+        return parse_tool_call(text), text, ms
+
+    def generate(self, scenario: Scenario) -> tuple[ToolCall, str, int]:
+        return self.run_messages(build_messages(scenario))
+
+
 def make_backend(kind: str, model: str, **kw) -> Backend:
     if kind == "mock":
         return MockBackend(model)
@@ -609,4 +699,8 @@ def make_backend(kind: str, model: str, **kw) -> Backend:
             max_new_tokens=kw.get("max_new_tokens", 1024),
             think=kw.get("think", False),
         )
-    raise SystemExit(f"unknown backend {kind!r}: use mock, transformers or ortgenai")
+    if kind == "openai":
+        return OpenAIBackend(model, **kw)
+    raise SystemExit(
+        f"unknown backend {kind!r}: use mock, transformers, ortgenai or openai"
+    )

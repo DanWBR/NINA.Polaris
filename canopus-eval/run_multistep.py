@@ -21,8 +21,14 @@ from canopus_eval.multistep import MULTI, run_multistep, score_multistep
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--backend", default="mock", choices=["mock", "transformers", "ortgenai"])
+    ap.add_argument("--backend", default="mock", choices=["mock", "transformers", "ortgenai", "openai"])
     ap.add_argument("--model", default="keyword-router")
+    ap.add_argument(
+        "--base-url",
+        default="http://127.0.0.1:8080/v1",
+        help="OpenAI-compatible endpoint for --backend openai "
+             "(llama-server, Ollama, LM Studio).",
+    )
     ap.add_argument("--think", action="store_true")
     ap.add_argument("--max-new-tokens", type=int, default=1024)
     ap.add_argument("--load-4bit", action="store_true")
