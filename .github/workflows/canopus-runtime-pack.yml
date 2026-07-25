@@ -63,7 +63,7 @@ jobs:
           ( cd pkg && tar czf "$GITHUB_WORKSPACE/canopus-llama-${{ matrix.rid }}.tar.gz" . )
           ls -la "canopus-llama-${{ matrix.rid }}.tar.gz"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: canopus-llama-${{ matrix.rid }}
           path: canopus-llama-${{ matrix.rid }}.tar.gz
@@ -90,7 +90,7 @@ jobs:
           Compress-Archive -Path pkg/* -DestinationPath canopus-llama-win-x64.zip -Force
           Get-Item canopus-llama-win-x64.zip | Format-List Length
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: canopus-llama-win-x64
           path: canopus-llama-win-x64.zip
@@ -116,7 +116,7 @@ jobs:
           ( cd pkg && tar czf "$GITHUB_WORKSPACE/canopus-llama-osx-arm64.tar.gz" . )
           ls -la canopus-llama-osx-arm64.tar.gz
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: canopus-llama-osx-arm64
           path: canopus-llama-osx-arm64.tar.gz
@@ -127,7 +127,7 @@ jobs:
     needs: [linux, windows, macos]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -135,7 +135,7 @@ jobs:
       - run: ls -la dist
 
       - name: Upload to the fixed data-pack release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: data-pack
           # No name/body: keep whatever the data-pack release already shows

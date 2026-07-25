@@ -36,9 +36,9 @@ jobs:
       run:
         working-directory: mobile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
 
@@ -94,7 +94,7 @@ jobs:
       run:
         working-directory: mobile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # App Store Connect rejects uploads built with an old iOS SDK — it
       # requires the current SDK (Xcode 26+). Select the newest Xcode on the
@@ -106,7 +106,7 @@ jobs:
       - name: Show Xcode + iOS SDKs
         run: xcodebuild -version && xcodebuild -showsdks | grep -i iphoneos || true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
 
@@ -260,7 +260,7 @@ jobs:
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
 
       - name: Upload .ipa artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Polaris-ios-ipa
           path: ${{ runner.temp }}/export/*.ipa
