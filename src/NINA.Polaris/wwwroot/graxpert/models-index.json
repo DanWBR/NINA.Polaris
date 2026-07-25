@@ -91,6 +91,34 @@
     "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/denoise-ai-models/3.0.2-fp16/model.onnx"
   },
   {
+    "dir": "denoise-ai-models",
+    "version": "polaris-1.0",
+    "bytes": 240649650,
+    "label": "Polaris Denoise (AGPL) - FP32",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/denoise-ai-models/polaris-1.0/model.onnx"
+  },
+  {
+    "dir": "denoise-ai-models",
+    "version": "polaris-1.0-fp16",
+    "bytes": 120462908,
+    "label": "Polaris Denoise (AGPL) - FP16",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/denoise-ai-models/polaris-1.0-fp16/model.onnx"
+  },
+  {
+    "dir": "denoise-ai-models",
+    "version": "polaris-1.0-int16",
+    "bytes": 120805196,
+    "label": "Polaris Denoise (AGPL) - INT16 (NPU)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/denoise-ai-models/polaris-1.0-int16/model.onnx"
+  },
+  {
+    "dir": "denoise-ai-models",
+    "version": "polaris-1.0-int8",
+    "bytes": 60689881,
+    "label": "Polaris Denoise (AGPL) - INT8 (QAT, NPU)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/denoise-ai-models/polaris-1.0-int8/model.onnx"
+  },
+  {
     "dir": "detail-ai-models",
     "version": "1.1",
     "bytes": 240633924,

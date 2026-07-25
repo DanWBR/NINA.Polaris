@@ -57,19 +57,23 @@
       "color": "#06b6d4",
       "title": "AI Denoise",
       "tag": "Denoise",
-      "source": "graxpert",
-      "intro": "Removes sensor noise (shot noise, read noise, thermal noise) while preserving fine astronomical detail. Two GraXpert model variants are available: v2 (faster, lighter) and v3 (higher quality). Processing is tiled at 256x256 with cosine-feathered blending to eliminate boundary artefacts.",
+      "source": "polaris-graxpert",
+      "intro": "Removes sensor noise (shot noise, read noise, thermal noise) while preserving fine astronomical detail. Three models are available: GraXpert v2 and v3, and Polaris's own, trained from scratch and released under the AGPL. Processing is tiled with cosine-feathered blending so no tile seam appears in the output.",
       "items": [
         {
-          "label": "Tiled 256x256:",
-          "text": "images of any size are processed in overlapping patches; borders are feathered so no tile seam is visible in the output"
+          "label": "Three models:",
+          "text": "GraXpert v2 (lighter, for slower hardware) and v3 (higher capacity, better on faint detail and star spikes), both NonCommercial; plus the Polaris model (AGPL)"
         },
         {
-          "label": "v2 vs v3:",
-          "text": "v2 is the lighter model suitable for slower hardware; v3 has higher capacity and better preserves fine star spikes and faint detail"
+          "label": "The only one that fits every NPU:",
+          "text": "the Polaris model ships int16 and int8 builds. GraXpert v3 cannot run on the Qualcomm Hexagon at all, because it uses LayerNorm and that needs a V73 or newer NPU"
         },
         {
-          "label": "Color and mono:",
+          "label": "Tiled with feathered borders:",
+          "text": "images of any size are processed in overlapping patches, so no boundary artefact is visible"
+        },
+        {
+          "label": "Colour and mono:",
           "text": "both RGB and single-channel FITS are supported; the pipeline handles the channel layout automatically"
         },
         {
