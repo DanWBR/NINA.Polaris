@@ -12,7 +12,10 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using NINA.Polaris.Services.Sequencer;
 using NINA.Polaris.Services.Sequencer.Containers;
 using NINA.Polaris.Services.Sequencer.Instructions;
@@ -78,5 +81,73 @@ public class PowerBoxInstructionsTests {
     public void PowerCycleOutlet_RejectsNegativeOffSeconds() {
         Assert.That(new PowerCycleOutletInstruction { OffSeconds = -1 }.Validate(), Is.Not.Empty);
         Assert.That(new PowerCycleOutletInstruction { OffSeconds = 5 }.Validate(), Is.Empty);
+    }
+
+    // ---- Channel addressing (stable Key vs positional id) ----------------
+    //
+    // The numeric id is a POSITION in the device's channel map, but a saved
+    // sequence outlives that map: it shifts whenever the driver publishes a
+    // different property set. These pin the rule that a recorded Key wins.
+
+    private sealed class FakeSwitch : NINA.Image.Interfaces.ISwitchDevice {
+        private readonly List<NINA.Image.Interfaces.SwitchChannel> _ch;
+        public FakeSwitch(params (string key, string name)[] channels) {
+            _ch = channels.Select((c, i) => new NINA.Image.Interfaces.SwitchChannel(
+                i, c.name, true, 0, 0, 1, 1, true, c.key)).ToList();
+        }
+        public string DeviceName => "Fake";
+        public bool IsConnected => true;
+        public IReadOnlyList<NINA.Image.Interfaces.SwitchChannel> Channels => _ch;
+        public int SwitchCount => _ch.Count;
+        public Task ConnectAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task DisconnectAsync(CancellationToken ct = default) => Task.CompletedTask;
+        public Task SetBoolAsync(int id, bool on, CancellationToken ct = default) => Task.CompletedTask;
+        public Task SetValueAsync(int id, double v, CancellationToken ct = default) => Task.CompletedTask;
+        public Task RefreshAsync(CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    [Test]
+    public void ChannelKey_WinsOverAStaleNumericId() {
+        // The sequence was saved when the mount outlet sat at index 0; the
+        // driver now publishes an extra property ahead of it, so it is at 2.
+        var pb = new FakeSwitch(("USB.PORT_1", "USB 1"),
+                                ("USB.PORT_2", "USB 2"),
+                                ("POWER.DC_3", "DC 3"));
+        var id = PowerBoxTarget.Resolve(pb, "POWER.DC_3", fallbackId: 0);
+        Assert.That(id, Is.EqualTo(2),
+            "a recorded key must follow the channel, not the position it used to have");
+    }
+
+    [Test]
+    public void MissingChannelKey_Throws_RatherThanActingOnThePosition() {
+        var pb = new FakeSwitch(("POWER.DC_1", "DC 1"));
+        // Silently falling back to index 0 is exactly the hazard: on a power
+        // box that means cutting power to an unrelated device.
+        Assert.That(() => PowerBoxTarget.Resolve(pb, "POWER.DC_9", fallbackId: 0),
+            Throws.InvalidOperationException);
+    }
+
+    [Test]
+    public void NoChannelKey_FallsBackToTheNumericId_ForSequencesSavedBefore() {
+        var pb = new FakeSwitch(("POWER.DC_1", "DC 1"), ("POWER.DC_2", "DC 2"));
+        Assert.That(PowerBoxTarget.Resolve(pb, null, fallbackId: 1), Is.EqualTo(1));
+        Assert.That(PowerBoxTarget.Resolve(pb, "", fallbackId: 1), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ChannelKey_SurvivesSerialization() {
+        var doc = new SequenceDocument {
+            Name = "Keys",
+            Root = new SequentialContainer {
+                Name = "Root",
+                Items = new() {
+                    new SetPowerOutletInstruction { Outlet = 2, ChannelKey = "POWER.DC_3", On = true },
+                    new PowerCycleOutletInstruction { Outlet = 0, ChannelKey = "POWER.DC_1", OffSeconds = 4 },
+                }
+            }
+        };
+        var items = ((SequentialContainer)SequenceJson.Deserialize(SequenceJson.Serialize(doc)).Root).Items;
+        Assert.That(((SetPowerOutletInstruction)items[0]).ChannelKey, Is.EqualTo("POWER.DC_3"));
+        Assert.That(((PowerCycleOutletInstruction)items[1]).ChannelKey, Is.EqualTo("POWER.DC_1"));
     }
 }
