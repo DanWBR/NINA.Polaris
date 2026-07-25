@@ -293,6 +293,9 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<Phd2VncSessionServ
 // health probe) runs.
 builder.Services.AddSingleton<IndiWebManagerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<IndiWebManagerService>());
+// INDI profile assistant: stateless sysfs reader behind /api/indi/detect.
+// Singleton only because it has no per-request state; it holds no handles.
+builder.Services.AddSingleton<UsbScanService>();
 // Wedged-INDI-driver watchdog: on repeated BLOB timeouts, restart just that
 // driver through indi-web (a device reconnect can't fix a stuck driver). Dual
 // registration so the hosted StartAsync subscribes to IndiClient.BlobTimeout.
@@ -1321,6 +1324,10 @@ app.MapIndiEndpoints();
 // for the standalone indi_control_panel Qt binary that's no longer
 // packaged on recent Raspberry Pi OS releases).
 app.MapIndiPropertiesEndpoints();
+// INDI profile assistant: USB scan -> proposed drivers -> (on confirm)
+// indi-web profile, so a new rig doesn't start with picking drivers by hand
+// out of ~420 installed entries.
+app.MapIndiDetectEndpoints();
 
 // WebSocket streams
 app.Map("/ws/image-stream", ImageStreamHandler.Handle);

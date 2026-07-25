@@ -51,6 +51,10 @@ namespace NINA.Polaris.Services;
 /// race on the same FIFO and one of them loses. INDI-WEB-4 wires
 /// that delegation; until then the user picks one or the other.
 /// </summary>
+/// <summary>An INDI driver installed on the host, as indi-web reports it.
+/// <paramref name="Label"/> is the identifier every indi-web call takes.</summary>
+public sealed record IndiInstalledDriver(string Label, string? Binary, string? Family);
+
 public class IndiWebManagerService : BackgroundService {
     private readonly IConfiguration _config;
     private readonly ILogger<IndiWebManagerService> _logger;
@@ -302,6 +306,85 @@ public class IndiWebManagerService : BackgroundService {
         }
     }
 
+    /// <summary>Every driver INSTALLED on this host (<c>GET /api/drivers</c>) --
+    /// around 420 entries on a full indi + indi-3rdparty box. Deliberately
+    /// distinct from <see cref="GetRunningDriverLabelsAsync"/>, which only
+    /// reports the drivers of the ACTIVE profile: the profile assistant has to
+    /// check its proposals against what is installed, and using the running set
+    /// there would reject every driver the user has not already configured --
+    /// i.e. exactly the ones it exists to suggest.</summary>
+    public async Task<List<IndiInstalledDriver>> GetInstalledDriversAsync(CancellationToken ct = default) {
+        if (!IsSupportedOs) return [];
+        try {
+            var drivers = await Http.GetFromJsonAsync<List<IndiWebDriver>>("/api/drivers", ct);
+            return drivers?.Where(d => !string.IsNullOrWhiteSpace(d.Label))
+                          .Select(d => new IndiInstalledDriver(d.Label!, d.Binary, d.Family))
+                          .ToList() ?? [];
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "indi-web GET /api/drivers failed");
+            return [];
+        }
+    }
+
+    /// <summary>Profile names indi-web knows about.</summary>
+    public async Task<List<string>> GetProfileNamesAsync(CancellationToken ct = default) {
+        if (!IsSupportedOs) return [];
+        try {
+            var profiles = await Http.GetFromJsonAsync<List<IndiWebProfile>>("/api/profiles", ct);
+            return profiles?.Where(p => !string.IsNullOrWhiteSpace(p.Name))
+                           .Select(p => p.Name!).ToList() ?? [];
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "indi-web GET /api/profiles failed");
+            return [];
+        }
+    }
+
+    /// <summary>Create an indi-web profile and set its driver list, in the two
+    /// calls indi-web requires. The body shape for the driver list
+    /// (<c>[{"label": "..."}]</c>) was verified against a live indi-web rather
+    /// than inferred -- its OpenAPI document declares no request schema.
+    ///
+    /// <para>This MUTATES the user's INDI setup, so nothing calls it
+    /// automatically: the endpoint above it is only reachable from an explicit
+    /// operator confirmation in the UI.</para></summary>
+    public async Task<bool> CreateProfileAsync(string name, IEnumerable<string> driverLabels,
+                                               CancellationToken ct = default) {
+        if (!IsSupportedOs) { LastError = "OS not supported"; return false; }
+        if (string.IsNullOrWhiteSpace(name)) { LastError = "profile name required"; return false; }
+        if (!Running && !await ProbeHealthAsync(ct)) {
+            LastError = "indi-web is not running";
+            return false;
+        }
+        var escaped = Uri.EscapeDataString(name);
+        try {
+            using (var created = await Http.PostAsync($"/api/profiles/{escaped}", content: null, ct)) {
+                if (!created.IsSuccessStatusCode) {
+                    LastError = $"indi-web could not create profile '{name}' (HTTP {(int)created.StatusCode})";
+                    _logger.LogWarning("{Error}", LastError);
+                    return false;
+                }
+            }
+            var payload = driverLabels
+                .Where(l => !string.IsNullOrWhiteSpace(l))
+                .Select(l => new Dictionary<string, string> { ["label"] = l })
+                .ToList();
+            using var set = await Http.PostAsJsonAsync($"/api/profiles/{escaped}/drivers", payload, ct);
+            if (!set.IsSuccessStatusCode) {
+                LastError = $"indi-web rejected the driver list for '{name}' (HTTP {(int)set.StatusCode})";
+                _logger.LogWarning("{Error}", LastError);
+                return false;
+            }
+            _logger.LogInformation("Created indi-web profile '{Name}' with {Count} driver(s)",
+                name, payload.Count);
+            LastError = null;
+            return true;
+        } catch (Exception ex) {
+            LastError = $"indi-web profile creation failed: {ex.Message}";
+            _logger.LogWarning(ex, "indi-web profile creation failed for '{Name}'", name);
+            return false;
+        }
+    }
+
     public Task<bool> RestartDriverAsync(string label, CancellationToken ct = default)
         => DriverActionAsync("restart", label, ct);
     public Task<bool> StartDriverAsync(string label, CancellationToken ct = default)
@@ -341,6 +424,12 @@ public class IndiWebManagerService : BackgroundService {
         public string? Version { get; set; }
         public string? Binary { get; set; }
         public string? Family { get; set; }
+    }
+
+    private sealed class IndiWebProfile {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+        public int Port { get; set; }
     }
 
     /// <summary>TCP probe — true if something is listening on
