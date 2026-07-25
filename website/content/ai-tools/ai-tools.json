@@ -1,12 +1,24 @@
 {
   "title": "AI Tools",
-  "lede": "Polaris Astro Controller ships a full suite of AI-powered image processing tools that run entirely on your local hardware. No cloud, no subscriptions, no data leaving your device. From background removal to super-resolution, every tool is available directly in the browser-based interface.",
+  "lede": "Polaris Astro Controller ships a full suite of AI-powered image processing tools that run entirely on your local hardware. No cloud, no subscriptions, no data leaving your device. Alongside the GraXpert models and four star-removal networks, Polaris trains and ships its own models, released under the AGPL and built so they run on the NPUs in the boards people actually use.",
   "glanceTitle": "At a glance",
   "glance": [
-    { "label": "10 tools", "text": "covering background extraction, denoising, deconvolution, star removal, halo removal, and super-resolution upscaling" },
-    { "label": "5 backends", "text": "browser GPU (WebGPU/WebGL), SBC GPU via OpenCL, Rockchip RKNN NPU, Qualcomm Hexagon NPU (QAIRT), plus an always-available CPU fallback" },
-    { "label": "100% local", "text": "all inference runs on your device; models are cached in IndexedDB after the first download" },
-    { "label": "4 precisions", "text": "fp32, fp16, int16, and int8 (Quantization-Aware Training) for a range of speed/size trade-offs" }
+    {
+      "label": "11 tools",
+      "text": "covering background extraction, denoising, deconvolution (AI and classical), star removal, halo removal, and 2x upscaling"
+    },
+    {
+      "label": "5 backends",
+      "text": "browser GPU (WebGPU/WebGL), SBC GPU via OpenCL, Rockchip RKNN NPU, Qualcomm Hexagon NPU (QAIRT), plus an always-available CPU fallback"
+    },
+    {
+      "label": "100% local",
+      "text": "all inference runs on your device; models are cached in IndexedDB after the first download"
+    },
+    {
+      "label": "4 precisions",
+      "text": "fp32, fp16, int16 and int8 (Quantization-Aware Training). The int16 and int8 builds are what make the NPU backends possible"
+    }
   ],
   "toolsTitle": "Image Processing Tools",
   "tools": [
@@ -15,14 +27,29 @@
       "color": "#6366f1",
       "title": "Background Gradient Extraction",
       "tag": "BGE",
-      "source": "graxpert",
-      "intro": "Removes light-pollution gradients, vignetting, and uneven sky glow from linear frames. The neural network predicts the background plane itself rather than the corrected image, which is then subtracted or divided from the frame. The model sees the full frame at 256x256 for global context, then the predicted gradient is upscaled back to native resolution.",
+      "source": "polaris-graxpert",
+      "intro": "Removes light-pollution gradients, vignetting, and uneven sky glow from linear frames. The neural network predicts the background plane itself rather than fitting a polynomial, so it follows structure a fitted surface cannot. Two models are available: GraXpert's, and Polaris's own, trained from scratch and released under the AGPL.",
       "items": [
-        { "label": "Global context:", "text": "downsampled to 256x256 so the model sees the whole frame in one pass, avoiding tile seams in the background estimate" },
-        { "label": "Safe for nebulosity:", "text": "trained to distinguish smooth gradients from astronomical signal; faint nebulae and extended objects are preserved" },
-        { "label": "Subtraction or division:", "text": "division mode handles multiplicative vignetting; subtraction mode handles additive gradients" },
-        { "label": "Models:", "text": "GraXpert BGE compatible (v1, v2). Polaris BGE model in training" },
-        { "label": "Where:", "text": "FILES tab, AI Tools toolbar, and the image Editor" }
+        {
+          "label": "Two models:",
+          "text": "the GraXpert model (NonCommercial licence) and the Polaris model (AGPL, trained from scratch on real astrophotos). Both are downloaded on demand; pick whichever suits your licensing and hardware"
+        },
+        {
+          "label": "NPU-ready:",
+          "text": "the Polaris model also ships an int16 build, which is what lets it run on the Rockchip and Hexagon NPUs; the GraXpert model is fp32/fp16 only"
+        },
+        {
+          "label": "Predicts the background:",
+          "text": "the model outputs the gradient surface, which is then subtracted, so real nebulosity is not flattened away with the gradient"
+        },
+        {
+          "label": "Linear frames:",
+          "text": "run it before stretching, on calibrated masters, for the cleanest result"
+        },
+        {
+          "label": "Where:",
+          "text": "FILES tab, AI Tools toolbar, and the image Editor"
+        }
       ]
     },
     {
@@ -33,11 +60,26 @@
       "source": "graxpert",
       "intro": "Removes sensor noise (shot noise, read noise, thermal noise) while preserving fine astronomical detail. Two GraXpert model variants are available: v2 (faster, lighter) and v3 (higher quality). Processing is tiled at 256x256 with cosine-feathered blending to eliminate boundary artefacts.",
       "items": [
-        { "label": "Tiled 256x256:", "text": "images of any size are processed in overlapping patches; borders are feathered so no tile seam is visible in the output" },
-        { "label": "v2 vs v3:", "text": "v2 is the lighter model suitable for slower hardware; v3 has higher capacity and better preserves fine star spikes and faint detail" },
-        { "label": "Color and mono:", "text": "both RGB and single-channel FITS are supported; the pipeline handles the channel layout automatically" },
-        { "label": "Linear and stretched:", "text": "works at both stages; best results on linear calibrated masters before stretching" },
-        { "label": "Where:", "text": "FILES tab, AI Tools toolbar, and the image Editor" }
+        {
+          "label": "Tiled 256x256:",
+          "text": "images of any size are processed in overlapping patches; borders are feathered so no tile seam is visible in the output"
+        },
+        {
+          "label": "v2 vs v3:",
+          "text": "v2 is the lighter model suitable for slower hardware; v3 has higher capacity and better preserves fine star spikes and faint detail"
+        },
+        {
+          "label": "Color and mono:",
+          "text": "both RGB and single-channel FITS are supported; the pipeline handles the channel layout automatically"
+        },
+        {
+          "label": "Linear and stretched:",
+          "text": "works at both stages; best results on linear calibrated masters before stretching"
+        },
+        {
+          "label": "Where:",
+          "text": "FILES tab, AI Tools toolbar, and the image Editor"
+        }
       ]
     },
     {
@@ -48,11 +90,26 @@
       "source": "graxpert",
       "intro": "Sharpens point sources (stars) blurred by atmosphere, tracking error, or optical diffraction using a GraXpert neural network trained specifically on star fields. Produces tight, round stars without the ringing artefacts common in classical approaches.",
       "items": [
-        { "label": "Star-focused:", "text": "the model is trained to sharpen compact point sources; it understands that stars should be round and not produce halos" },
-        { "label": "Complements the Objects model:", "text": "run Stars first, then Objects to sharpen both point sources and extended structure" },
-        { "label": "Tiled 256x256:", "text": "feathered overlap blending; safe on full-resolution masters" },
-        { "label": "Before/after slider:", "text": "inline comparison slider in the UI lets you judge the effect before saving" },
-        { "label": "Where:", "text": "FILES tab and AI Tools toolbar, under AI Sharpen" }
+        {
+          "label": "Star-focused:",
+          "text": "the model is trained to sharpen compact point sources; it understands that stars should be round and not produce halos"
+        },
+        {
+          "label": "Complements the Objects model:",
+          "text": "run Stars first, then Objects to sharpen both point sources and extended structure"
+        },
+        {
+          "label": "Tiled 256x256:",
+          "text": "feathered overlap blending; safe on full-resolution masters"
+        },
+        {
+          "label": "Before/after slider:",
+          "text": "inline comparison slider in the UI lets you judge the effect before saving"
+        },
+        {
+          "label": "Where:",
+          "text": "FILES tab and AI Tools toolbar, under AI Sharpen"
+        }
       ]
     },
     {
@@ -63,11 +120,56 @@
       "source": "graxpert",
       "intro": "Sharpens extended objects such as galaxies, nebulae, and clusters. The GraXpert Objects model is optimized for spatially extended structure rather than point sources, recovering fine detail in galaxy arms, dust lanes, and emission regions.",
       "items": [
-        { "label": "Extended structure:", "text": "trained on galaxy and nebula images to sharpen fine structural detail without over-sharpening smooth emission regions" },
-        { "label": "Pair with Stars:", "text": "for full-image processing, run the Objects model after the Stars model; each complements the other" },
-        { "label": "Tiled 256x256:", "text": "feathered overlap blending; no tile seams in the output" },
-        { "label": "Strength control:", "text": "adjustable strength slider (0.1 to 1.0) lets you dial in the effect" },
-        { "label": "Where:", "text": "FILES tab and AI Tools toolbar, under AI Sharpen" }
+        {
+          "label": "Extended structure:",
+          "text": "trained on galaxy and nebula images to sharpen fine structural detail without over-sharpening smooth emission regions"
+        },
+        {
+          "label": "Pair with Stars:",
+          "text": "for full-image processing, run the Objects model after the Stars model; each complements the other"
+        },
+        {
+          "label": "Tiled 256x256:",
+          "text": "feathered overlap blending; no tile seams in the output"
+        },
+        {
+          "label": "Strength control:",
+          "text": "adjustable strength slider (0.1 to 1.0) lets you dial in the effect"
+        },
+        {
+          "label": "Where:",
+          "text": "FILES tab and AI Tools toolbar, under AI Sharpen"
+        }
+      ]
+    },
+    {
+      "icon": "🔭",
+      "color": "#0ea5e9",
+      "title": "Polaris Deconvolution (Detail)",
+      "tag": "Detail v1.2",
+      "source": "polaris",
+      "intro": "Polaris's own deconvolution network, trained from scratch on synthetic (sharp, blurred) pairs: every real astro image is already blurred by seeing, so there is no clean ground truth to learn from. Convolving sharp targets with a known PSF gives perfect pairs in unlimited quantity.",
+      "items": [
+        {
+          "label": "Quantization-first architecture:",
+          "text": "designed so the int8 and int16 exports lose nothing. BatchNorm instead of LayerNorm, nearest-upsample plus conv instead of ConvTranspose, and a single input tensor"
+        },
+        {
+          "label": "Why those choices:",
+          "text": "they come from the NPU work. The Hexagon V68 rejects LayerNorm outright (it needs V73 or newer), ConvTranspose produces checkerboard artefacts that quantize badly, and GraXpert's multi-input design is what kept its deconvolution CPU-only"
+        },
+        {
+          "label": "Runs everywhere:",
+          "text": "one model lowers cleanly to Hexagon (int8/int16), Rockchip RKNN (fp16), the Adreno GPU, plain CPU, and the browser through ORT Web"
+        },
+        {
+          "label": "Versions:",
+          "text": "v1.1 ships fp32, fp16, int16 and int8; v1.2 adds a w8a16 build tuned for the Hexagon HTP"
+        },
+        {
+          "label": "Where:",
+          "text": "FILES tab, AI Tools toolbar, and the image Editor"
+        }
       ]
     },
     {
@@ -78,12 +180,30 @@
       "source": "classical",
       "intro": "Richardson-Lucy deconvolution driven by a PSF measured directly from the stars in the frame. The algorithm reverses the blurring introduced by atmosphere, tracking, and optics using the actual optical response of the imaging system rather than a generic neural network.",
       "items": [
-        { "label": "Measured PSF:", "text": "Moffat profile fit to real stars in the frame extracts FWHM, eccentricity, and orientation; the PSF is specific to that capture session" },
-        { "label": "White 1994 damping:", "text": "corrections are gated by a per-pixel noise model; low-SNR regions are left untouched, preventing noise amplification" },
-        { "label": "Photon-transfer noise model:", "text": "sigma is estimated from the frame itself using a shot + read noise model (sigma = sqrt(A*S + B)); no calibration input needed" },
-        { "label": "Star protection:", "text": "a feathered mask around detected stars composites original star cores back after deconvolution, preventing ringing at bright sources" },
-        { "label": "FWHM and star stats:", "text": "FWHM in pixels, eccentricity, and number of stars used are reported after each run" },
-        { "label": "Where:", "text": "FILES tab under AI Sharpen, Classical RL option" }
+        {
+          "label": "Measured PSF:",
+          "text": "Moffat profile fit to real stars in the frame extracts FWHM, eccentricity, and orientation; the PSF is specific to that capture session"
+        },
+        {
+          "label": "White 1994 damping:",
+          "text": "corrections are gated by a per-pixel noise model; low-SNR regions are left untouched, preventing noise amplification"
+        },
+        {
+          "label": "Photon-transfer noise model:",
+          "text": "sigma is estimated from the frame itself using a shot + read noise model (sigma = sqrt(A*S + B)); no calibration input needed"
+        },
+        {
+          "label": "Star protection:",
+          "text": "a feathered mask around detected stars composites original star cores back after deconvolution, preventing ringing at bright sources"
+        },
+        {
+          "label": "FWHM and star stats:",
+          "text": "FWHM in pixels, eccentricity, and number of stars used are reported after each run"
+        },
+        {
+          "label": "Where:",
+          "text": "FILES tab under AI Sharpen, Classical RL option"
+        }
       ]
     },
     {
@@ -94,11 +214,26 @@
       "source": "classical",
       "intro": "Extends Classical RL to handle field curvature, coma, and tilt: the PSF is measured independently in a configurable grid of tiles across the frame. Each tile gets its own PSF, and the results are blended with cosine feathering. Ideal for wide-field imagers where star shapes change from center to corner.",
       "items": [
-        { "label": "Per-tile PSF:", "text": "Moffat profiles fitted in each grid cell independently; a corner affected by coma uses a different kernel than the center" },
-        { "label": "Configurable grid:", "text": "2x2 to 8x8 tiles; more tiles give finer spatial correction at the cost of longer measurement time" },
-        { "label": "Feathered blending:", "text": "cosine blend between adjacent PSF regions; the transition is invisible in the final image" },
-        { "label": "Fallback:", "text": "tiles with too few stars fall back to the nearest measured PSF, so the whole frame is always processed" },
-        { "label": "Where:", "text": "FILES tab under AI Sharpen, Field RL option" }
+        {
+          "label": "Per-tile PSF:",
+          "text": "Moffat profiles fitted in each grid cell independently; a corner affected by coma uses a different kernel than the center"
+        },
+        {
+          "label": "Configurable grid:",
+          "text": "2x2 to 8x8 tiles; more tiles give finer spatial correction at the cost of longer measurement time"
+        },
+        {
+          "label": "Feathered blending:",
+          "text": "cosine blend between adjacent PSF regions; the transition is invisible in the final image"
+        },
+        {
+          "label": "Fallback:",
+          "text": "tiles with too few stars fall back to the nearest measured PSF, so the whole frame is always processed"
+        },
+        {
+          "label": "Where:",
+          "text": "FILES tab under AI Sharpen, Field RL option"
+        }
       ]
     },
     {
@@ -109,26 +244,60 @@
       "source": "classical",
       "intro": "A new mode where the server measures the PSF and noise model (typically 5 to 15 seconds), returns a compact JSON payload, and the browser runs the heavy Richardson-Lucy iteration loop entirely in JavaScript. The SBC server CPU stays free for guiding, sequencing, and capture during the job.",
       "items": [
-        { "label": "Server does the science:", "text": "PSF extraction, noise model fit, and star detection all run server-side; these are fast and CPU-light" },
-        { "label": "Browser does the work:", "text": "a pure-JavaScript FFT engine (radix-2 Cooley-Tukey) runs 512x512 tiled overlap-save RL iterations in the browser" },
-        { "label": "Real-time progress:", "text": "a progress bar updates after each iteration; you can see the image sharpen live in the before/after slider" },
-        { "label": "Same algorithm:", "text": "identical White 1994 damped RL, star protection, and noise gating as the server-side version" },
-        { "label": "Enable it:", "text": "in the AI Sharpen modal, check the 'Run in browser' checkbox (global RL mode only; field mode stays server-side)" }
+        {
+          "label": "Server does the science:",
+          "text": "PSF extraction, noise model fit, and star detection all run server-side; these are fast and CPU-light"
+        },
+        {
+          "label": "Browser does the work:",
+          "text": "a pure-JavaScript FFT engine (radix-2 Cooley-Tukey) runs 512x512 tiled overlap-save RL iterations in the browser"
+        },
+        {
+          "label": "Real-time progress:",
+          "text": "a progress bar updates after each iteration; you can see the image sharpen live in the before/after slider"
+        },
+        {
+          "label": "Same algorithm:",
+          "text": "identical White 1994 damped RL, star protection, and noise gating as the server-side version"
+        },
+        {
+          "label": "Enable it:",
+          "text": "in the AI Sharpen modal, check the 'Run in browser' checkbox (global RL mode only; field mode stays server-side)"
+        }
       ]
     },
     {
       "icon": "🚫",
       "color": "#f97316",
       "title": "Star Removal",
-      "tag": "StarNet v1",
+      "tag": "4 models",
       "source": "graxpert",
-      "intro": "Removes stars from the image while preserving all nebulosity for narrowband or starless processing workflows. Uses StarNet ONNX v1, converted from the original TensorFlow model, with full arm64 compatibility (unlike StarNet v2 which is x86-only).",
+      "intro": "Removes stars while preserving nebulosity, for narrowband and starless processing workflows. Polaris offers four different star-removal networks rather than one, and three of them are MIT-licensed, so they can be used commercially.",
       "items": [
-        { "label": "Starless output:", "text": "all point sources are removed; extended emission, reflection nebulae, and galaxy structure are preserved" },
-        { "label": "arm64 compatible:", "text": "StarNet v1 ONNX runs on Raspberry Pi, Orange Pi, and Radxa boards; v2 is excluded because it is an x86-only binary" },
-        { "label": "Blend-back control:", "text": "after removal, the original stars can be blended back at any opacity for a final composition with softened stars" },
-        { "label": "RGB and mono:", "text": "color and single-channel frames are both supported" },
-        { "label": "Where:", "text": "FILES tab and AI Tools toolbar, Remove Stars option" }
+        {
+          "label": "nox colour and nox gray (MIT):",
+          "text": "StarNet-like networks in separate colour and monochrome builds; pick the one matching your data. 208 MB each, or 104 MB in FP16"
+        },
+        {
+          "label": "starrem2k13 (MIT):",
+          "text": "a lighter U-Net at 119 MB (59 MB FP16), the fastest of the four and a good first choice on an SBC"
+        },
+        {
+          "label": "StarNet++ (NonCommercial):",
+          "text": "the original network, included for compatibility with existing workflows. Its licence forbids commercial use, which is why the MIT alternatives exist"
+        },
+        {
+          "label": "arm64 throughout:",
+          "text": "all four run as ONNX on Raspberry Pi, Orange Pi and Radxa boards. StarNet v2 is excluded on purpose: it is an x86-only binary"
+        },
+        {
+          "label": "Blend-back control:",
+          "text": "after removal the original stars can be blended back at any opacity, for a final image with softened rather than absent stars"
+        },
+        {
+          "label": "Where:",
+          "text": "FILES tab and AI Tools toolbar, Remove Stars option"
+        }
       ]
     },
     {
@@ -138,12 +307,32 @@
       "source": "polaris",
       "intro": "Polaris's own neural network, trained from scratch on real astrophotos, removes the diffraction halo rings that appear around bright stars in fast refractors and Newtonians. Unlike classical approaches, the model understands the spatial context of each star and avoids removing genuine nebulosity near bright sources.",
       "items": [
-        { "label": "Polaris-native model:", "text": "trained on our own dataset of real astrophotos with synthetic halo augmentation; not a GraXpert repackage" },
-        { "label": "Context-aware:", "text": "RGB 3-channel input gives the model enough context to distinguish halos from nearby nebulosity and emission regions" },
-        { "label": "Evaluated at 50+ dB PSNR:", "text": "fp16 variant is essentially lossless vs fp32; int16 is within 0.03 dB" },
-        { "label": "Four precisions:", "text": "fp32 (reference), fp16 (recommended), int16 (NPU/PTQ), int8 with QAT for maximum compression" },
-        { "label": "Where:", "text": "AI Tools toolbar and the Editor's AI section, Halo Removal option" }
-      ]
+        {
+          "label": "Polaris-native model:",
+          "text": "trained on our own dataset of real astrophotos with synthetic halo augmentation; not a GraXpert repackage"
+        },
+        {
+          "label": "Context-aware:",
+          "text": "RGB 3-channel input gives the model enough context to distinguish halos from nearby nebulosity and emission regions"
+        },
+        {
+          "label": "Evaluated at 50+ dB PSNR:",
+          "text": "fp16 variant is essentially lossless vs fp32; int16 is within 0.03 dB"
+        },
+        {
+          "label": "Four precisions:",
+          "text": "fp32 (reference), fp16 (recommended), int16 (NPU/PTQ), int8 with QAT for maximum compression"
+        },
+        {
+          "label": "Where:",
+          "text": "AI Tools toolbar and the Editor's AI section, Halo Removal option"
+        },
+        {
+          "label": "Precisions:",
+          "text": "fp32, fp16 and int16; the int16 build is the one that runs on the NPUs"
+        }
+      ],
+      "tag": "Polaris v1.0"
     },
     {
       "icon": "🔍",
@@ -152,12 +341,32 @@
       "source": "polaris",
       "intro": "Super-resolution 2x upscaling using Polaris's own UpscaleNet, a residual U-Net architecture trained on real astrophotos and designed for NPU-friendly int8 quantization. Useful for preparing images for large prints, high-DPI displays, or recovering more detail at the pixel level.",
       "items": [
-        { "label": "Polaris UpscaleNet:", "text": "custom residual U-Net; internally 2x-upsamples before the encoder, so the network processes the full high-resolution feature space" },
-        { "label": "Evaluated at 50.22 dB PSNR:", "text": "fp16 (50.22 dB) is indistinguishable from fp32 (50.21 dB); int16 within 0.03 dB" },
-        { "label": "int8 via QAT:", "text": "Quantization-Aware Training brings int8 back to near-lossless after PTQ showed a 3.3 dB degradation" },
-        { "label": "2x scale:", "text": "output is double the input dimensions in both axes; a 3000x2000 frame becomes 6000x4000" },
-        { "label": "Where:", "text": "AI Tools toolbar and the Editor's AI section, Upscale option" }
-      ]
+        {
+          "label": "Polaris UpscaleNet:",
+          "text": "custom residual U-Net; internally 2x-upsamples before the encoder, so the network processes the full high-resolution feature space"
+        },
+        {
+          "label": "Evaluated at 50.22 dB PSNR:",
+          "text": "fp16 (50.22 dB) is indistinguishable from fp32 (50.21 dB); int16 within 0.03 dB"
+        },
+        {
+          "label": "int8 via QAT:",
+          "text": "Quantization-Aware Training brings int8 back to near-lossless after PTQ showed a 3.3 dB degradation"
+        },
+        {
+          "label": "2x scale:",
+          "text": "output is double the input dimensions in both axes; a 3000x2000 frame becomes 6000x4000"
+        },
+        {
+          "label": "Where:",
+          "text": "AI Tools toolbar and the Editor's AI section, Upscale option"
+        },
+        {
+          "label": "Precisions:",
+          "text": "fp32, fp16, int16 and an int8 build produced by Quantization-Aware Training, at 19 MB the smallest model Polaris ships"
+        }
+      ],
+      "tag": "Polaris v1.0"
     }
   ],
   "backendsTitle": "Acceleration Backends",
@@ -170,10 +379,22 @@
       "tag": "WebGPU / WebGL",
       "intro": "ONNX Runtime Web runs models directly in your browser using the GPU on your viewing device, keeping the SBC server CPU free. WebGPU is selected first (requires HTTPS), falling back to WebGL on HTTP or older browsers.",
       "items": [
-        { "label": "Zero server load:", "text": "inference runs entirely in the browser; the server only serves the model file once" },
-        { "label": "IndexedDB cache:", "text": "models are stored in browser storage after the first download; subsequent runs are instant even offline" },
-        { "label": "fp16 native:", "text": "GPU shaders run fp16 at full speed; WebGPU also supports fp32 for reference" },
-        { "label": "HTTPS for WebGPU:", "text": "WebGPU requires a secure context; Polaris includes a self-signed certificate for LAN use" }
+        {
+          "label": "Zero server load:",
+          "text": "inference runs entirely in the browser; the server only serves the model file once"
+        },
+        {
+          "label": "IndexedDB cache:",
+          "text": "models are stored in browser storage after the first download; subsequent runs are instant even offline"
+        },
+        {
+          "label": "fp16 native:",
+          "text": "GPU shaders run fp16 at full speed; WebGPU also supports fp32 for reference"
+        },
+        {
+          "label": "HTTPS for WebGPU:",
+          "text": "WebGPU requires a secure context; Polaris includes a self-signed certificate for LAN use"
+        }
       ]
     },
     {
@@ -183,10 +404,22 @@
       "tag": "Adreno / Mali / other",
       "intro": "The server-side GPU accelerates compute-heavy pixel operations (stacking, alignment, normalization) via OpenCL. Works on Adreno, Mali, PowerVR, and other OpenCL 1.2+ GPUs common in ARM SBCs. Automatic probe with CPU fallback.",
       "items": [
-        { "label": "Pixel math:", "text": "stacking (sigma-clip, kappa, mean), star alignment, per-pixel normalization all run on the GPU" },
-        { "label": "Auto-probe:", "text": "Polaris tests the GPU at startup; if the probe fails it silently falls back to CPU" },
-        { "label": "Silk.NET binding:", "text": "cross-platform P/Invoke via Silk.NET.OpenCL; no vendor SDK required" },
-        { "label": "Toggle:", "text": "enable or disable in Settings; benchmark shows GPU vs CPU throughput on your hardware" }
+        {
+          "label": "Pixel math:",
+          "text": "stacking (sigma-clip, kappa, mean), star alignment, per-pixel normalization all run on the GPU"
+        },
+        {
+          "label": "Auto-probe:",
+          "text": "Polaris tests the GPU at startup; if the probe fails it silently falls back to CPU"
+        },
+        {
+          "label": "Silk.NET binding:",
+          "text": "cross-platform P/Invoke via Silk.NET.OpenCL; no vendor SDK required"
+        },
+        {
+          "label": "Toggle:",
+          "text": "enable or disable in Settings; benchmark shows GPU vs CPU throughput on your hardware"
+        }
       ]
     },
     {
@@ -196,10 +429,22 @@
       "tag": "Rockchip RK3588",
       "intro": "The Neural Processing Unit in Rockchip RK3588 SoCs (Orange Pi 5 Pro, Radxa Rock 5, and others) runs ONNX models at 5x the CPU speed via the RKNN runtime. Models are converted to RKNN format with optional INT8 quantization.",
       "items": [
-        { "label": "5x speedup:", "text": "measured 91 ms vs 457 ms per BGE/denoise tile vs CPU on RK3588" },
-        { "label": "RKNN conversion:", "text": "a bundled conversion script turns ONNX fp16/int8 models into .rknn format; the runtime loads them transparently" },
-        { "label": "INT8 support:", "text": "RKNN do_quantization with our calibration set gives a further 2x memory reduction over fp16" },
-        { "label": "Auto-fallback:", "text": "if the RKNN runtime is not available or a model conversion fails, the system falls back to CPU ORT" }
+        {
+          "label": "5x speedup:",
+          "text": "measured 91 ms vs 457 ms per BGE/denoise tile vs CPU on RK3588"
+        },
+        {
+          "label": "RKNN conversion:",
+          "text": "a bundled conversion script turns ONNX fp16/int8 models into .rknn format; the runtime loads them transparently"
+        },
+        {
+          "label": "INT8 support:",
+          "text": "RKNN do_quantization with our calibration set gives a further 2x memory reduction over fp16"
+        },
+        {
+          "label": "Auto-fallback:",
+          "text": "if the RKNN runtime is not available or a model conversion fails, the system falls back to CPU ORT"
+        }
       ]
     },
     {
@@ -209,11 +454,26 @@
       "tag": "Qualcomm Hexagon",
       "intro": "Qualcomm AI Runtime (QAIRT, formerly QNN) runs models on the Hexagon NPU (HTP) in Qualcomm SBCs such as the Radxa Dragon Q6A (QCS6490, Hexagon V68). The Hexagon HTP is integer-only, so Polaris ships int16 models as the default, near-fp16-quality path.",
       "items": [
-        { "label": "Hexagon HTP (int16):", "text": "the production path runs int16 models at about 29.5 ms/tile on the Q6A — roughly 150x the CPU onnxruntime baseline — freeing the CPU for live stacking" },
-        { "label": "int8 turbo:", "text": "an int8 model is ~4x faster (~7.3 ms/tile) but visibly lower quality on denoise, so it is an optional 'turbo' mode rather than the default" },
-        { "label": "Integer-only, fp16 falls back:", "text": "the QCS6490 HTP has no fp16; fp16 models run on the GPU or CPU instead. The resolver prefers fp16 → int16 → int8, keeping fp16 for future SoCs whose HTP supports it" },
-        { "label": "Auto-detect + override:", "text": "detected via the Hexagon FastRPC bridge and the bundled QAIRT runtime; force it off with POLARIS_DISABLE_QNN=1" },
-        { "label": "Tested on:", "text": "Radxa Dragon Q6A (QCS6490, Hexagon V68); CPU benchmark score 296, best-value board in our benchmark table" }
+        {
+          "label": "Hexagon HTP (int16):",
+          "text": "the production path runs int16 models at about 29.5 ms/tile on the Q6A - roughly 150x the CPU onnxruntime baseline - freeing the CPU for live stacking"
+        },
+        {
+          "label": "int8 turbo:",
+          "text": "an int8 model is ~4x faster (~7.3 ms/tile) but visibly lower quality on denoise, so it is an optional 'turbo' mode rather than the default"
+        },
+        {
+          "label": "Integer-only, fp16 falls back:",
+          "text": "the QCS6490 HTP has no fp16; fp16 models run on the GPU or CPU instead. The resolver prefers fp16 → int16 → int8, keeping fp16 for future SoCs whose HTP supports it"
+        },
+        {
+          "label": "Auto-detect + override:",
+          "text": "detected via the Hexagon FastRPC bridge and the bundled QAIRT runtime; force it off with POLARIS_DISABLE_QNN=1"
+        },
+        {
+          "label": "Tested on:",
+          "text": "Radxa Dragon Q6A (QCS6490, Hexagon V68); CPU benchmark score 296, best-value board in our benchmark table"
+        }
       ]
     },
     {
@@ -223,10 +483,22 @@
       "tag": "Always available",
       "intro": "All models run on CPU via ONNX Runtime when no hardware accelerator is available or selected. No configuration required; performance scales with the number of CPU cores and threads.",
       "items": [
-        { "label": "Zero setup:", "text": "ORT CPU is always the last resort; Polaris will always be able to run AI tools regardless of GPU availability" },
-        { "label": "Multi-threaded:", "text": "ORT uses all available CPU threads for tiled inference; a Raspberry Pi 5 (4 cores) achieves acceptable throughput for light use" },
-        { "label": "fp32 and fp16:", "text": "CPU backend supports both precision levels; int8 via ORT INT8 quantized operators" },
-        { "label": "Override:", "text": "you can force CPU in Settings to reproduce a reference result or to leave the GPU free for other workloads" }
+        {
+          "label": "Zero setup:",
+          "text": "ORT CPU is always the last resort; Polaris will always be able to run AI tools regardless of GPU availability"
+        },
+        {
+          "label": "Multi-threaded:",
+          "text": "ORT uses all available CPU threads for tiled inference; a Raspberry Pi 5 (4 cores) achieves acceptable throughput for light use"
+        },
+        {
+          "label": "fp32 and fp16:",
+          "text": "CPU backend supports both precision levels; int8 via ORT INT8 quantized operators"
+        },
+        {
+          "label": "Override:",
+          "text": "you can force CPU in Settings to reproduce a reference result or to leave the GPU free for other workloads"
+        }
       ]
     }
   ],

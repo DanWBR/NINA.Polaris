@@ -7,6 +7,9 @@ const sourceBadge: Record<string, { label: string; color: string }> = {
   graxpert:      { label: 'GraXpert model',        color: '#2563eb' },
   polaris:       { label: 'Polaris model',          color: '#7c3aed' },
   'polaris-soon':{ label: 'Polaris model (soon)',   color: '#7c3aed' },
+  // A tool can offer a choice of models from different sources: background
+  // extraction ships both GraXpert's and our own, and the licence differs.
+  'polaris-graxpert': { label: 'Polaris + GraXpert models', color: '#7c3aed' },
   classical:     { label: 'Algorithm',              color: '#374151' },
 };
 ---
