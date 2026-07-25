@@ -1,7 +1,7 @@
 ---
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getContent, type Lang } from '../data/site';
+import { getContent, localePath, type Lang } from '../data/site';
 // `lang` is supplied by the page once locale routes exist; until then
 // every caller omits it and getContent('en') returns the English content.
 const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
@@ -43,7 +43,7 @@ const rows = features.map((f) => {
     </div>
 
     <p class="features-more">
-      <a class="btn btn-ghost" href="/features">See every feature, panel by panel →</a>
+      <a class="btn btn-ghost" href={localePath("/features", lang)}>See every feature, panel by panel →</a>
     </p>
   </div>
 

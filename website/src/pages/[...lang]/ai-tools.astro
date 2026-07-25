@@ -1,7 +1,7 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import Footer from '../../components/Footer.astro';
-import { getContent, LANGS, type Lang } from '../../data/site';
+import { getContent, localePath, LANGS, type Lang } from '../../data/site';
 export async function getStaticPaths() {
   // `undefined` for English is what keeps it at the site root: a rest param
   // that resolves to nothing renders the page at the path with no prefix.
@@ -149,7 +149,7 @@ const sourceBadge: Record<string, { label: string; color: string }> = {
     <section class="section section-alt cta-section">
       <div class="container cta-inner">
         <p class="cta-text">All tools run locally. No subscriptions. Your images stay on your device.</p>
-        <a class="btn-primary" href="/install">Download Polaris</a>
+        <a class="btn-primary" href={localePath("/install", lang)}>Download Polaris</a>
       </div>
     </section>
 

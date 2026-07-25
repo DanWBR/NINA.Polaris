@@ -1,9 +1,13 @@
 ---
-import { getContent, type Lang } from '../data/site';
-// `lang` is supplied by the page once locale routes exist; until then
-// every caller omits it and getContent('en') returns the English content.
+import { getContent, localePath, type Lang } from '../data/site';
 const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
 const {site, footerCols} = getContent(lang);
+
+// Footer links come from data, not from literal hrefs, so they need the same
+// treatment as the nav: an internal path gets the reader's language, anything
+// absolute or an anchor is left alone.
+const linkHref = (href: string, external?: boolean) =>
+  external || /^(https?:|mailto:|#)/.test(href) ? href : localePath(href, lang);
 ---
 
 <footer class="site-footer">
@@ -19,7 +23,7 @@ const {site, footerCols} = getContent(lang);
           {col.links.map((l) => (
             <li>
               <a
-                href={l.href}
+                href={linkHref(l.href, l.external)}
                 {...('external' in l && l.external === false
                   ? {}
                   : { target: '_blank', rel: 'noopener' })}

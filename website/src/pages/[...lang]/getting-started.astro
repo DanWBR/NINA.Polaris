@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Layout from '../../layouts/Layout.astro';
 import Footer from '../../components/Footer.astro';
-import { getContent, LANGS, type Lang } from '../../data/site';
+import { getContent, localePath, LANGS, type Lang } from '../../data/site';
 export async function getStaticPaths() {
   // `undefined` for English is what keeps it at the site root: a rest param
   // that resolves to nothing renders the page at the path with no prefix.
@@ -89,7 +89,7 @@ const steps = g.steps.map((s) => ({
           <h2>{g.closing.title}</h2>
           <p>{g.closing.sub}</p>
           <div class="closing-btns">
-            <a class="btn btn-primary" href="/install">Installation guide</a>
+            <a class="btn btn-primary" href={localePath("/install", lang)}>Installation guide</a>
             {g.closing.docUrl && (
               <a class="btn btn-ghost" href={g.closing.docUrl} target="_blank" rel="noopener">Full end-to-end docs ↗</a>
             )}
