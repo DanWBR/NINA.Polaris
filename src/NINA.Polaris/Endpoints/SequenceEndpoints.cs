@@ -52,6 +52,21 @@ public static class SequenceEndpoints {
             });
         });
 
+        // Put the schedule back to its starting state without touching the
+        // items: nothing shot yet, no error, ready to run from the top. This
+        // is the AUTORUN "Reset" button; "Clear" posts an empty list to /.
+        group.MapPost("/reset", (SequenceEngine engine) => {
+            if (engine.State == SequenceState.Running)
+                return Results.Conflict(new { error = "Cannot reset while running" });
+
+            engine.ResetProgress();
+            return Results.Ok(new {
+                message = "Progress reset",
+                itemCount = engine.Items.Count,
+                state = engine.State.ToString().ToLowerInvariant()
+            });
+        });
+
         group.MapPost("/pause", (SequenceEngine engine) => {
             engine.Pause();
             return Results.Ok(new { state = engine.State.ToString().ToLowerInvariant() });

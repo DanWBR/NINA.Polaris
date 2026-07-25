@@ -209,6 +209,10 @@
 .video-pane.controls-collapsed .preview-area {
     margin-right: 36px;
 }
+/* Tap-to-hide reclaims the reserve, as in LIVE / PREVIEW. */
+.video-pane.frame-controls-hidden .preview-area {
+    margin-right: 0;
+}
 /* Floating control sidebar — same treatment as LIVE / PREVIEW
    (translucent, backdrop blur, collapsible via the toggle handle).
    340 px wide (10 px wider than LIVE/PREVIEW because VIDEO has the

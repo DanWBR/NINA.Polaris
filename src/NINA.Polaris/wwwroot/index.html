@@ -9908,9 +9908,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      Stop move to the right sidebar around the shutter. -->
                 <div class="control-row actions" style="margin-top: 1rem; gap: 8px;">
                     <button class="btn" @click="addSequenceItem()" :disabled="seqState === 'running'">+ Add</button>
-                    <button class="btn btn-sm btn-danger" @click="resetSequence()"
+                    <button class="btn btn-sm" @click="resetSequence()"
                             :disabled="seqState === 'running' || sequence.length === 0"
-                            title="Remove all items from the sequence">Reset</button>
+                            title="Set the progress back to the start, keeping every item">Reset</button>
+                    <button class="btn btn-sm btn-danger" @click="clearSequence()"
+                            :disabled="seqState === 'running' || sequence.length === 0"
+                            title="Remove all items from the sequence">Clear</button>
                 </div>
 
                 <!-- Named autorun sets: save the current schedule under a

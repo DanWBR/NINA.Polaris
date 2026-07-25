@@ -2797,5 +2797,9 @@
   "Zoom out (or Ctrl + scroll wheel)": "",
   "Zoom the histogram to the data": "",
   "Zoom to fit (whole frame)": "",
-  "ZWO ASI SDK": ""
+  "ZWO ASI SDK": "",
+  "Clear autorun": "",
+  "Autorun reset to the start": "",
+  "Failed to reset the sequence": "",
+  "Set the progress back to the start, keeping every item": ""
 }

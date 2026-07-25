@@ -149,6 +149,14 @@
 .preview-pane.controls-collapsed > .preview-area {
     margin-right: 36px;  /* 28px handle + 8px gap */
 }
+/* Tap-to-hide gives the reserve back too. The sidebar is invisible and
+   untouchable at that point, so holding room for it would letterbox the
+   frame around a panel that is not there. Declared after the collapsed
+   rule so it wins when both classes sit on the pane. */
+.live-pane.frame-controls-hidden > .preview-area,
+.preview-pane.frame-controls-hidden > .preview-area {
+    margin-right: 0;
+}
 /* AUTORUN + Flat Wizard keep the old in-flow sidebar — they're
    list-driven, not bitmap-driven, so a translucent overlay would
    just hide content with no upside. */

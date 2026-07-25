@@ -314,7 +314,7 @@
   "automatically: no browser cache needed.": "automatiquement: sans avoir besoin du cache du navigateur.",
   "Autorun": "Autorun",
   "Autorun (shooting schedule)": "Autorun (calendrier des tournages)",
-  "Autorun cleared": "L'option « Exécution automatique » a été désactivée",
+  "Autorun cleared": "AUTORUN vidé",
   "AUTORUN: shoot the night": "AUTORUN: une séance photo nocturne",
   "Aux": "Aux",
   "Aux Camera": "Caméra auxiliaire",
@@ -3397,5 +3397,9 @@
   "The profile is started right after it is created, with auto-connect on. Any INDI server currently running is stopped first.": "Le profil est démarré juste après sa création, avec la connexion automatique activée. Tout serveur INDI en cours est arrêté au préalable.",
   "Rename channels": "Renommer les canaux",
   "Readings": "Mesures",
-  "Channel names saved": "Noms des canaux enregistrés"
+  "Channel names saved": "Noms des canaux enregistrés",
+  "Clear autorun": "Vider l'AUTORUN",
+  "Autorun reset to the start": "AUTORUN remis au début",
+  "Failed to reset the sequence": "Échec de la remise à zéro de la séquence",
+  "Set the progress back to the start, keeping every item": "Ramène la progression au début, en conservant tous les éléments"
 }

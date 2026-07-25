@@ -9573,6 +9573,11 @@ function ninaApp() {
                 this._pzState[canvasId] = {
                     // scale unitless, tx/ty in SCREEN PIXELS (origin 0 0)
                     scale: 1, tx: 0, ty: 0,
+                    // Which toolbar fit produced the current transform, so a
+                    // container resize (sidebar dragged, collapsed, hidden)
+                    // can rebuild it instead of leaving stale screen pixels.
+                    // 'fit' | 'width' | 'height' | 'free' (manual zoom/pan)
+                    mode: 'fit',
                     // pinch bookkeeping
                     _pinchDist0: 0, _pinchScale0: 1,
                     _pinchMx0: 0, _pinchMy0: 0,
@@ -9625,6 +9630,7 @@ function ninaApp() {
         _pzReset(canvasId) {
             const s = this._pzGet(canvasId);
             s.scale = 1; s.tx = 0; s.ty = 0;
+            s.mode = 'fit';
             this._pzApply(canvasId);
         },
 
@@ -9642,6 +9648,7 @@ function ninaApp() {
             s.scale = newScale;
             s.tx = mx - (mx - s.tx) * r;
             s.ty = my - (my - s.ty) * r;
+            s.mode = 'free';
             this._pzClamp(s, w, h);
             this._pzApply(canvasId);
         },
@@ -9696,6 +9703,7 @@ function ninaApp() {
             const tx = -m.ox * k;
             const ty = (m.H - m.imgH * k) / 2 - m.oy * k;
             this._pzSet(canvasId, k, tx, ty);
+            this._pzGet(canvasId).mode = 'width';
         },
 
         // Fit height: scale so the image spans the full container
@@ -9707,6 +9715,25 @@ function ninaApp() {
             const ty = -m.oy * k;
             const tx = (m.W - m.imgW * k) / 2 - m.ox * k;
             this._pzSet(canvasId, k, tx, ty);
+            this._pzGet(canvasId).mode = 'height';
+        },
+
+        // Rebuild the transform for the container's CURRENT size.
+        //
+        // tx/ty are screen pixels measured against the box the frame lived in
+        // when the fit was computed. The moment that box changes width -- the
+        // sidebar dragged, collapsed, or faded out by tap-to-hide -- those
+        // pixels point somewhere else and the frame sits off-centre. At the
+        // default 1:1 the CSS object-fit re-centres on its own, so only the
+        // fits and manual zoom need the rebuild.
+        _pzRefit(canvasId) {
+            const s = this._pzGet(canvasId);
+            if (s.mode === 'width') { this._pzFitWidth(canvasId); return; }
+            if (s.mode === 'height') { this._pzFitHeight(canvasId); return; }
+            const m = this._pzMetrics(canvasId);
+            if (!m) return;
+            this._pzClamp(s, m.W, m.H);
+            this._pzApply(canvasId);
         },
 
         // Zoom in / out about the container centre (toolbar +/- buttons).
@@ -9759,6 +9786,24 @@ function ninaApp() {
             // scroll / zoom the whole page while the user pinches
             // on the image.
             areaEl.style.touchAction = 'none';
+
+            // Keep the frame framed while the box around it changes: the
+            // sidebar being dragged, collapsed, or faded out by tap-to-hide
+            // all resize .preview-area, and a transform built for the old
+            // width would leave the image off to one side. Coalesced into a
+            // frame so a drag doesn't re-fit dozens of times per second.
+            if (window.ResizeObserver && !areaEl._pzResizeObserver) {
+                let pending = 0;
+                const ro = new ResizeObserver(() => {
+                    if (pending) return;
+                    pending = requestAnimationFrame(() => {
+                        pending = 0;
+                        self._pzRefit(canvasId);
+                    });
+                });
+                ro.observe(areaEl);
+                areaEl._pzResizeObserver = ro;
+            }
 
             const rectOf = () => areaEl.getBoundingClientRect();
 
@@ -9826,6 +9871,9 @@ function ninaApp() {
                 // means translate is already in screen space).
                 s.tx = s._dragTx0 + (e.clientX - s._dragX0);
                 s.ty = s._dragTy0 + (e.clientY - s._dragY0);
+                // A manual pan leaves any fit behind: a later resize should
+                // keep what the operator framed, not snap back to fit-width.
+                s.mode = 'free';
                 self._pzClamp(s, rect.width, rect.height);
                 self._pzApply(canvasId);
             });
@@ -33990,18 +34038,39 @@ function ninaApp() {
             this.syncSequenceToServer();
         },
 
-        // Reset the whole AUTORUN schedule: clears every item after a
-        // confirm. Refuses while running. Keeps options (dither / MF /
-        // end events) untouched -- this only wipes the target list.
+        // Reset the run, not the schedule: every item stays exactly as it
+        // is and the progress goes back to nothing shot, so the next Start
+        // runs from the top. Deleting the items is Clear, below.
         async resetSequence() {
             if (this.seqState === 'running') {
                 this.toast('Cannot reset while running', 'warn');
                 return;
             }
             if (this.sequence.length === 0) return;
+            try {
+                await this.apiPost('/api/sequence/reset', {});
+            } catch (e) {
+                this.toast('Failed to reset the sequence', 'error');
+                return;
+            }
+            // Pull the zeroed counters straight back rather than waiting for
+            // the next poll, which only runs while a sequence is active.
+            try { await this.pollSeqStatus(); } catch { /* non-fatal */ }
+            this.toast('Autorun reset to the start', 'ok');
+        },
+
+        // Clear the whole AUTORUN schedule: removes every item after a
+        // confirm. Refuses while running. Keeps options (dither / MF /
+        // end events) untouched -- this only wipes the target list.
+        async clearSequence() {
+            if (this.seqState === 'running') {
+                this.toast('Cannot modify while running', 'warn');
+                return;
+            }
+            if (this.sequence.length === 0) return;
             const ok = await this._confirmAsync(
                 'Remove all items from the sequence? This clears the whole schedule.',
-                { title: 'Reset autorun', okLabel: 'Reset', cancelLabel: 'Cancel', danger: true });
+                { title: 'Clear autorun', okLabel: 'Clear', cancelLabel: 'Cancel', danger: true });
             if (!ok) return;
             this.sequence = [];
             this.syncSequenceToServer();
