@@ -146,8 +146,9 @@ public class IndiFilterWheel : NINA.Image.Interfaces.IFilterWheel {
             _client.GetProperty(DeviceName, "FILTER_NAME") is Protocol.IndiTextProperty);
 
     /// <summary>Push a new filter-name set into the driver via INDI
-    /// standard <c>FILTER_NAME</c>. The driver persists these in its
-    /// own config so subsequent reconnects keep them. Element ids
+    /// standard <c>FILTER_NAME</c>, then persist it (see the CONFIG_SAVE
+    /// note at the end of this method -- writing the vector alone only
+    /// changes the RUNNING driver). Element ids
     /// must match what the driver already advertises (typically
     /// <c>FILTER_SLOT_NAME_1</c>..<c>_N</c> sorted by trailing index);
     /// we map <paramref name="names"/>[0] to the lowest-indexed
@@ -179,5 +180,24 @@ public class IndiFilterWheel : NINA.Image.Interfaces.IFilterWheel {
             payload[orderedKeys[i]] = names[i] ?? "";
         }
         await _client.SetTextAsync(DeviceName, "FILTER_NAME", payload, ct);
+        // Writing FILTER_NAME only changes the RUNNING driver instance. Without
+        // a CONFIG_SAVE nothing reaches ~/.indi/{driver}_config.xml, so the
+        // names survive client reconnects (the driver process is still up) but
+        // are silently lost the moment the driver restarts -- a reboot, an
+        // indiserver restart, a profile switch. The user hits this as "I named
+        // my filters yesterday and today they are back to Red/Green/Blue".
+        // The connect path already issues CONFIG_LOAD after CONNECT, so saving
+        // here is the whole other half of the round trip.
+        //
+        // The save is IMMEDIATE, not the 3 s debounced variant the INDI panel
+        // uses, because of a race proven in the field log: a CONFIG_LOAD is
+        // auto-dispatched on every device connect, and one landed in the SAME
+        // SECOND as a name write, reloading the on-disk values over the user's
+        // fresh edit. With a debounce the order becomes
+        //     write new -> LOAD reverts -> save fires 3 s later
+        // which would persist the REVERTED names, cementing the bug instead of
+        // fixing it. Saving synchronously also makes any later CONFIG_LOAD
+        // harmless: it now reloads exactly what we just wrote.
+        await _client.SaveDeviceConfigAsync(DeviceName, ct);
     }
 }
