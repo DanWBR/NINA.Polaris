@@ -453,5 +453,12 @@
   },
   "ctaText": "L'assistant est facultatif et son utilisation est soumise à une adhésion volontaire, avec des backends hors ligne gratuits ; Polaris reste quant à lui gratuit et open source.",
   "ctaButton": "Obtenir Polaris",
-  "ctaHref": "/install"
+  "ctaHref": "/install",
+  "heroBadges": [
+    "Gratuit sur votre propre matériel",
+    "Option cloud : 4,99 US$/mois, essai de 7 jours",
+    "Optionnel, activé seulement si vous le voulez"
+  ],
+  "pricingTitle": "Tarif du backend cloud",
+  "pricingLede": "Seul le backend cloud est payant. Faire tourner l'assistant sur votre hôte Polaris ou sur votre propre appareil est gratuit et ne demande aucun compte."
 }

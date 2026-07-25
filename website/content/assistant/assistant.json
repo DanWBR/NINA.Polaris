@@ -142,11 +142,26 @@
       "tag": "The most capable brain, always on, nothing to install.",
       "intro": "The assistant's AI runs on our servers and returns a reply; your browser relays approved actions to your local Polaris.",
       "items": [
-        { "label": "Cost.", "text": "Paid subscription: US$4.99 per month, with a 7-day free trial." },
-        { "label": "Runs on.", "text": "Our servers (Microsoft Azure). No local model, no GPU needed." },
-        { "label": "Minimum.", "text": "An internet connection and a subscription. Any device that runs the Polaris web UI." },
-        { "label": "Recommended.", "text": "The same. This is the strongest option and the only one that does frame analysis (looking at your images)." },
-        { "label": "Privacy.", "text": "Messages are processed to reply, then discarded, and are not used to train models. Only your email, a login token and subscription status are stored." }
+        {
+          "label": "Cost.",
+          "text": "Paid subscription: US$4.99 per month, with a 7-day free trial."
+        },
+        {
+          "label": "Runs on.",
+          "text": "Our servers (Microsoft Azure). No local model, no GPU needed."
+        },
+        {
+          "label": "Minimum.",
+          "text": "An internet connection and a subscription. Any device that runs the Polaris web UI."
+        },
+        {
+          "label": "Recommended.",
+          "text": "The same. This is the strongest option and the only one that does frame analysis (looking at your images)."
+        },
+        {
+          "label": "Privacy.",
+          "text": "Messages are processed to reply, then discarded, and are not used to train models. Only your email, a login token and subscription status are stored."
+        }
       ]
     },
     {
@@ -156,12 +171,30 @@
       "tag": "Free and fully offline, running on your Polaris host.",
       "intro": "A small language model runs on the Polaris host itself, so any phone or tablet on your network becomes a thin client. No account, no subscription.",
       "items": [
-        { "label": "Cost.", "text": "Free." },
-        { "label": "Runs on.", "text": "The Polaris host, on the CPU. An NPU or GPU is a bonus, not a requirement." },
-        { "label": "Minimum.", "text": "A 64-bit host with about 6 GB of RAM free alongside Polaris." },
-        { "label": "Recommended.", "text": "8 GB or more and a faster processor. Warm replies land in a few seconds; the first reply of a session takes longer while the model warms up." },
-        { "label": "Text-only.", "text": "Plans the night, drives the rig, and answers questions. Frame analysis (vision) is cloud-only." },
-        { "label": "Privacy.", "text": "Everything stays on your hardware. Nothing is sent to us or to any AI provider." }
+        {
+          "label": "Cost.",
+          "text": "Free."
+        },
+        {
+          "label": "Runs on.",
+          "text": "The Polaris host, on the CPU. An NPU or GPU is a bonus, not a requirement."
+        },
+        {
+          "label": "Minimum.",
+          "text": "A 64-bit host with about 6 GB of RAM free alongside Polaris."
+        },
+        {
+          "label": "Recommended.",
+          "text": "8 GB or more and a faster processor. Warm replies land in a few seconds; the first reply of a session takes longer while the model warms up."
+        },
+        {
+          "label": "Text-only.",
+          "text": "Plans the night, drives the rig, and answers questions. Frame analysis (vision) is cloud-only."
+        },
+        {
+          "label": "Privacy.",
+          "text": "Everything stays on your hardware. Nothing is sent to us or to any AI provider."
+        }
       ]
     },
     {
@@ -171,12 +204,30 @@
       "tag": "Free and offline, running on the computer or phone you are using.",
       "intro": "The model runs on your own machine. On a desktop it uses a local LLM server you run on the native GPU; in the mobile app it runs the model on the phone.",
       "items": [
-        { "label": "Cost.", "text": "Free." },
-        { "label": "Runs on.", "text": "Your computer's GPU (through Ollama, LM Studio, or llama.cpp), or your phone in the Polaris mobile app." },
-        { "label": "Minimum.", "text": "Desktop: a local LLM server and a tool-capable model that fits your GPU memory. Mobile: an 8 GB device, since the model loads fully into RAM." },
-        { "label": "Recommended.", "text": "Desktop: a 12 to 24 billion parameter tool-capable model on a 16 GB or larger GPU. Mobile: an 8 GB phone or tablet, for smooth replies in a few seconds." },
-        { "label": "Text-only.", "text": "Same as the on-host backend: planning, rig control, and Q&A; frame analysis is cloud-only." },
-        { "label": "Privacy.", "text": "Runs locally; nothing leaves your machine. If you point the desktop option at a remote endpoint, that service sees your messages under its own terms." }
+        {
+          "label": "Cost.",
+          "text": "Free."
+        },
+        {
+          "label": "Runs on.",
+          "text": "Your computer's GPU (through Ollama, LM Studio, or llama.cpp), or your phone in the Polaris mobile app."
+        },
+        {
+          "label": "Minimum.",
+          "text": "Desktop: a local LLM server and a tool-capable model that fits your GPU memory. Mobile: an 8 GB device, since the model loads fully into RAM."
+        },
+        {
+          "label": "Recommended.",
+          "text": "Desktop: a 12 to 24 billion parameter tool-capable model on a 16 GB or larger GPU. Mobile: an 8 GB phone or tablet, for smooth replies in a few seconds."
+        },
+        {
+          "label": "Text-only.",
+          "text": "Same as the on-host backend: planning, rig control, and Q&A; frame analysis is cloud-only."
+        },
+        {
+          "label": "Privacy.",
+          "text": "Runs locally; nothing leaves your machine. If you point the desktop option at a remote endpoint, that service sees your messages under its own terms."
+        }
       ]
     }
   ],
@@ -186,7 +237,11 @@
   },
   "capabilitiesTitle": "What each backend can do",
   "capabilitiesLede": "Every backend asks before it changes anything and shares the same core planning, navigation and rig-control tools. The cloud tier adds image analysis, the multi-target planner and post-processing. The exact tool names are listed under each capability.",
-  "capabilitiesColumns": ["Cloud", "On this host", "On this device"],
+  "capabilitiesColumns": [
+    "Cloud",
+    "On this host",
+    "On this device"
+  ],
   "capabilities": [
     {
       "group": "Planning and advice",
@@ -194,12 +249,20 @@
         {
           "feature": "Tonight's best targets, catalog search, altitude tracks and the astronomy weather forecast",
           "tools": "get_tonights_best, search_catalog, get_altitude, get_weather",
-          "cells": ["yes", "yes", "yes"]
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
         },
         {
           "feature": "Answer astrophotography and Polaris questions from the built-in manual",
           "tools": "search_knowledge",
-          "cells": ["yes", "yes", "yes"]
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
         }
       ]
     },
@@ -209,32 +272,56 @@
         {
           "feature": "Read the live rig status and switch the Polaris UI to the right panel",
           "tools": "get_status, show_panel",
-          "cells": ["yes", "yes", "yes"]
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
         },
         {
           "feature": "Slew the mount and plate-solve-center on a target",
           "tools": "slew_to",
-          "cells": ["yes", "yes", "yes"]
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
         },
         {
           "feature": "Run an automated V-curve autofocus",
           "tools": "run_autofocus",
-          "cells": ["yes", "yes", "yes"]
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
         },
         {
           "feature": "Start live (EAA) stacking and dither on demand",
           "tools": "start_live_stack, dither_now",
-          "cells": ["yes", "yes", "yes"]
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
         },
         {
           "feature": "Stop the running capture sequence",
           "tools": "stop_sequence",
-          "cells": ["yes", "yes", "yes"]
+          "cells": [
+            "yes",
+            "yes",
+            "yes"
+          ]
         },
         {
           "feature": "Park or unpark the mount, stop guiding, stop live stacking",
           "tools": "park_mount, unpark_mount, stop_guiding, stop_live_stack",
-          "cells": ["yes", "no", "no"]
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
         }
       ]
     },
@@ -244,7 +331,11 @@
         {
           "feature": "Create, list, start and stop a full multi-target night plan",
           "tools": "create_plan, list_plans, start_plan, stop_plan",
-          "cells": ["yes", "no", "no"]
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
         }
       ]
     },
@@ -254,7 +345,11 @@
         {
           "feature": "Inspect a captured frame, the selected library frame, or the current on-screen view",
           "tools": "analyze_frame, analyze_selected_frame, analyze_current_view",
-          "cells": ["yes", "no", "no"]
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
         }
       ]
     },
@@ -264,7 +359,11 @@
         {
           "feature": "Read library stats, refresh and list frames, grade, integrate and preview results",
           "tools": "get_studio_stats, refresh_library, list_frames, grade_frames, integrate_frames, preview_frame",
-          "cells": ["yes", "no", "no"]
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
         }
       ]
     },
@@ -274,22 +373,38 @@
         {
           "feature": "Proactive monitoring and nudges during a session",
           "tools": "",
-          "cells": ["yes", "no", "no"]
+          "cells": [
+            "yes",
+            "no",
+            "no"
+          ]
         },
         {
           "feature": "Works with no internet connection",
           "tools": "",
-          "cells": ["no", "yes", "yes"]
+          "cells": [
+            "no",
+            "yes",
+            "yes"
+          ]
         },
         {
           "feature": "Cost",
           "tools": "",
-          "cells": ["Subscription (US$4.99/mo)", "Free", "Free"]
+          "cells": [
+            "Subscription (US$4.99/mo)",
+            "Free",
+            "Free"
+          ]
         },
         {
           "feature": "Runs on",
           "tools": "",
-          "cells": ["Our cloud (Azure)", "The Polaris host", "The device you browse from"]
+          "cells": [
+            "Our cloud (Azure)",
+            "The Polaris host",
+            "The device you browse from"
+          ]
         }
       ]
     }
@@ -338,5 +453,12 @@
   },
   "ctaText": "The assistant is optional and opt-in, with free offline backends; Polaris itself stays free and open-source.",
   "ctaButton": "Get Polaris",
-  "ctaHref": "/install"
+  "ctaHref": "/install",
+  "heroBadges": [
+    "Free on your own hardware",
+    "Cloud option: US$4.99/mo, 7-day trial",
+    "Optional and opt-in"
+  ],
+  "pricingTitle": "Cloud backend pricing",
+  "pricingLede": "Only the cloud backend costs anything. Running the assistant on your Polaris host or on your own device is free, with no account."
 }

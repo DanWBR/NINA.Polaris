@@ -37,10 +37,13 @@ const capGlyph: Record<string, string> = { yes: '✓', no: '✗', partial: '~' }
         <h1>{p.title}</h1>
         {p.tagline && <p class="tagline">{p.tagline}</p>}
         <p class="lede">{p.lede}</p>
+        {/* Two of the three backends are free, so the badges lead with that
+            and name the price as belonging to the cloud tier. Leading with
+            the subscription read as "this is a paid product". */}
         <div class="hero-meta">
-          <span class="pill">{p.pricing.price} {p.pricing.period}</span>
-          <span class="pill pill-accent">{p.pricing.trial}</span>
-          <span class="pill pill-ghost">Optional · opt-in</span>
+          <span class="pill pill-accent">{p.heroBadges[0]}</span>
+          <span class="pill">{p.heroBadges[1]}</span>
+          <span class="pill pill-ghost">{p.heroBadges[2]}</span>
         </div>
       </div>
     </header>
@@ -250,6 +253,8 @@ const capGlyph: Record<string, string> = { yes: '✓', no: '✗', partial: '~' }
     <!-- ── Pricing ───────────────────────────────────────────────── -->
     <section class="section section-alt">
       <div class="container">
+        <h2 class="block-title">{p.pricingTitle}</h2>
+        {p.pricingLede && <p class="section-lede">{p.pricingLede}</p>}
         <div class="price-card">
           <div class="price-main">
             <span class="price-amount">{p.pricing.price}</span>

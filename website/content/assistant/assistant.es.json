@@ -453,5 +453,12 @@
   },
   "ctaText": "El asistente es opcional y de suscripción voluntaria, con servidores de fondo gratuitos que funcionan sin conexión; Polaris sigue siendo gratuito y de código abierto.",
   "ctaButton": "Consigue Polaris",
-  "ctaHref": "/install"
+  "ctaHref": "/install",
+  "heroBadges": [
+    "Gratis en tu propio hardware",
+    "Opción en la nube: US$ 4,99/mes, prueba de 7 días",
+    "Opcional, tú decides activarlo"
+  ],
+  "pricingTitle": "Precio del backend en la nube",
+  "pricingLede": "Solo el backend en la nube tiene coste. Ejecutar el asistente en el host de Polaris o en tu propio dispositivo es gratis y no requiere cuenta."
 }

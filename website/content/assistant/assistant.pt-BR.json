@@ -453,5 +453,12 @@
   },
   "ctaText": "O assistente é opcional e de adesão voluntária, com back-ends offline gratuitos; o próprio Polaris continua sendo gratuito e de código aberto.",
   "ctaButton": "Adquira o Polaris",
-  "ctaHref": "/install"
+  "ctaHref": "/install",
+  "heroBadges": [
+    "Gratuito no seu próprio hardware",
+    "Opção em nuvem: US$ 4,99/mês, teste de 7 dias",
+    "Opcional, você escolhe ativar"
+  ],
+  "pricingTitle": "Preço do backend em nuvem",
+  "pricingLede": "Só o backend em nuvem tem custo. Rodar o assistente no host do Polaris ou no seu próprio dispositivo é gratuito e não exige conta."
 }
