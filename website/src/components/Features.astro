@@ -1,8 +1,11 @@
 ---
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { features, featuresSection } from '../data/site';
-
+import { getContent, type Lang } from '../data/site';
+// `lang` is supplied by the page once locale routes exist; until then
+// every caller omits it and getContent('en') returns the English content.
+const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
+const {features, featuresSection} = getContent(lang);
 // At build time, check whether each feature screenshot exists in public/.
 // Missing images fall back to a styled placeholder, never a broken <img>.
 const publicDir = new URL('../../public/', import.meta.url);

@@ -1,7 +1,11 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Footer from '../components/Footer.astro';
-import { featurePage as f } from '../data/site';
+import { getContent, type Lang } from '../data/site';
+// `lang` is supplied by the page once locale routes exist; until then
+// every caller omits it and getContent('en') returns the English content.
+const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
+const {featurePage: f} = getContent(lang);
 ---
 
 <Layout

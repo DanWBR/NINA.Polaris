@@ -1,8 +1,11 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Footer from '../components/Footer.astro';
-import { aiToolsPage as p } from '../data/site';
-
+import { getContent, type Lang } from '../data/site';
+// `lang` is supplied by the page once locale routes exist; until then
+// every caller omits it and getContent('en') returns the English content.
+const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
+const {aiToolsPage: p} = getContent(lang);
 const sourceBadge: Record<string, { label: string; color: string }> = {
   graxpert:      { label: 'GraXpert model',        color: '#2563eb' },
   polaris:       { label: 'Polaris model',          color: '#7c3aed' },
