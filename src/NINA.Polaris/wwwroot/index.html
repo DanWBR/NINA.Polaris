@@ -7206,16 +7206,40 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <div class="equip-detail-props" x-show="powerBox.channels.length === 0">
                                     <span class="text-muted">No channels reported.</span>
                                 </div>
-                                <template x-for="ch in powerBox.channels" :key="'pbch-'+ch.id">
+
+                                <!-- Rename. Power boxes label their outlets
+                                     "DC 1".."DC 5", which tells you nothing at
+                                     3am; what matters is which one is the mount.
+                                     Vendors generally cannot store that on the
+                                     device, so Polaris keeps it per rig. -->
+                                <div class="equip-inline-controls" x-show="powerBox.channels.length">
+                                    <button class="btn btn-sm" x-show="!powerBoxEditNames"
+                                            @click="powerBoxStartRename()">Rename channels</button>
+                                    <template x-if="powerBoxEditNames">
+                                        <span style="display:flex; gap:6px;">
+                                            <button class="btn btn-sm btn-primary"
+                                                    @click="powerBoxSaveNames()">Save names</button>
+                                            <button class="btn btn-sm"
+                                                    @click="powerBoxEditNames = false">Cancel</button>
+                                        </span>
+                                    </template>
+                                </div>
+
+                                <!-- Controls: outlets, dew/PWM, adjustable rails -->
+                                <template x-for="ch in powerBoxControls()" :key="'pbch-'+ch.id">
                                     <div class="equip-inline-controls">
-                                        <span style="min-width:96px" x-text="ch.name"></span>
+                                        <span style="min-width:96px" x-show="!powerBoxEditNames"
+                                              :title="ch.name" x-text="ch.displayName || ch.name"></span>
+                                        <input type="text" class="input-sm" style="width:130px"
+                                               x-show="powerBoxEditNames" :placeholder="ch.name"
+                                               x-model="powerBoxNameDraft[ch.key]">
                                         <!-- boolean outlet -->
-                                        <button class="btn btn-sm" x-show="ch.boolean && ch.writable"
+                                        <button class="btn btn-sm" x-show="ch.boolean"
                                                 @click="powerBoxToggle(ch)"
                                                 :class="ch.value ? 'btn-active' : ''"
                                                 x-text="ch.value ? 'ON' : 'OFF'"></button>
                                         <!-- analog / PWM channel -->
-                                        <template x-if="!ch.boolean && ch.writable">
+                                        <template x-if="!ch.boolean">
                                             <span style="display:flex; gap:4px; align-items:center">
                                                 <input type="number" class="input-sm" style="width:70px"
                                                        :min="ch.min" :max="ch.max" :step="ch.step || 1"
@@ -7223,11 +7247,32 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                 <button class="btn btn-sm" @click="powerBoxSetValue(ch)">Set</button>
                                             </span>
                                         </template>
-                                        <!-- read-only sensor -->
-                                        <strong x-show="!ch.writable"
-                                                x-text="(typeof ch.value === 'number' ? ch.value.toFixed(2) : ch.value)"></strong>
                                     </div>
                                 </template>
+
+                                <!-- Readings: read-only channels are
+                                     measurements, not controls. Kept in their
+                                     own block so a dew-point value does not sit
+                                     in the middle of the outlets. -->
+                                <div x-show="powerBoxSensors().length"
+                                     style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+                                    <div style="font-size:11px;color:var(--text-muted);
+                                                text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">
+                                        Readings
+                                    </div>
+                                    <template x-for="ch in powerBoxSensors()" :key="'pbs-'+ch.id">
+                                        <div class="equip-inline-controls">
+                                            <span style="min-width:96px" x-show="!powerBoxEditNames"
+                                                  :title="ch.name" x-text="ch.displayName || ch.name"></span>
+                                            <input type="text" class="input-sm" style="width:130px"
+                                                   x-show="powerBoxEditNames" :placeholder="ch.name"
+                                                   x-model="powerBoxNameDraft[ch.key]">
+                                            <strong x-text="ch.boolean
+                                                ? (ch.value ? 'ON' : 'OFF')
+                                                : (typeof ch.value === 'number' ? ch.value.toFixed(2) : ch.value)"></strong>
+                                        </div>
+                                    </template>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -17933,11 +17978,23 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <div class="modal-overlay" x-show="indiDetect.modalOpen" x-cloak
          @click.self="if(!indiDetect.applying) indiDetect.modalOpen=false"
          @keydown.escape.window="if(!indiDetect.applying) indiDetect.modalOpen=false">
-        <div class="modal-card" style="max-width:680px;">
-            <div class="modal-head">
+        <!-- Height-constrained: this is the tallest dialog in the app (one row
+             per device, plus serial ports, plus the profile field and notes)
+             and .modal-card is `overflow:hidden` with no max-height, so on a
+             short viewport -- a landscape phone is ~400-450 px tall -- the
+             bottom of the card, INCLUDING the Cancel/Create buttons, was simply
+             clipped away with no way to reach it. Cap the card to the viewport
+             and let only the middle scroll, so the title and the actions stay
+             put and the dialog is always completable. min-height:0 on the
+             scroller is required: a flex child defaults to min-height:auto and
+             would refuse to shrink below its content, defeating the overflow. -->
+        <div class="modal-card" style="max-width:680px;max-height:calc(100vh - 40px);
+                                       display:flex;flex-direction:column;">
+            <div class="modal-head" style="flex:0 0 auto;">
                 <span class="modal-icon">🔌</span>
                 <h3>Detected equipment</h3>
             </div>
+            <div style="flex:1 1 auto;min-height:0;overflow-y:auto;margin:0 -4px;padding:0 4px;">
             <p style="font-size:13px;" x-show="indiDetect.devices.length || indiDetect.serialPorts.length">
                 Review what Polaris found, then create the INDI profile. Anything left as
                 Skip is not added, and you can still add it by hand in the indi-web panel.
@@ -17947,8 +18004,16 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 connected, then scan again.
             </p>
 
-            <!-- USB devices -->
-            <template x-for="d in indiDetect.devices" :key="d.path">
+            <!-- USB devices.
+                 NOTE the selects use :selected + @change rather than x-model.
+                 With x-model, Alpine assigns select.value while the <option>s
+                 are still being produced by x-for, finds no match, and the
+                 control silently falls back to the first entry: the dialog
+                 showed "Skip" on rows the model had already resolved, while
+                 the Create button counted them. Binding :selected per option
+                 evaluates after each option exists, so what is displayed and
+                 what gets submitted cannot drift apart. -->
+            <template x-for="d in indiDetectVisibleDevices()" :key="d.path">
                 <div style="border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin:8px 0;">
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                         <strong style="font-size:13px;"
@@ -17963,24 +18028,42 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
                         <span style="font-size:11px;color:var(--text-muted);min-width:52px;">Driver</span>
                         <select class="input input-sm" style="flex:1;"
-                                x-model="indiDetect.choice[d.path]">
-                            <option value="">Skip</option>
-                            <template x-for="c in d.candidates" :key="c">
-                                <option :value="c" x-text="c"></option>
+                                @change="indiDetect.choice[d.path] = $event.target.value">
+                            <option value="" :selected="!indiDetect.choice[d.path]">Skip</option>
+                            <!-- Matched devices get their own short candidate
+                                 list; an unrecognised one falls back to every
+                                 installed driver, grouped by family so it stays
+                                 navigable. -->
+                            <template x-for="c in (d.candidates || [])" :key="c">
+                                <option :value="c" :selected="indiDetect.choice[d.path] === c"
+                                        x-text="c"></option>
                             </template>
-                            <!-- Escape hatch: when the scan could not resolve the
-                                 device, the operator can still pick any installed
-                                 driver instead of leaving the panel. -->
-                            <template x-if="!d.candidates.length">
-                                <template x-for="drv in indiDetect.installedDrivers" :key="drv.label">
-                                    <option :value="drv.label"
-                                            x-text="drv.label + (drv.family ? ' (' + drv.family + ')' : '')"></option>
+                            <template x-if="!d.candidates || !d.candidates.length">
+                                <template x-for="g in indiDetectDriverGroups()" :key="g.family">
+                                    <optgroup :label="g.family">
+                                        <template x-for="drv in g.drivers" :key="drv.label">
+                                            <option :value="drv.label"
+                                                    :selected="indiDetect.choice[d.path] === drv.label"
+                                                    x-text="drv.label"></option>
+                                        </template>
+                                    </optgroup>
                                 </template>
                             </template>
                         </select>
                     </div>
                 </div>
             </template>
+
+            <!-- Internals (WiFi/Bluetooth radios and the like) are hidden by
+                 default but never dropped, so an unrecognised piece of real
+                 equipment is always one click away. -->
+            <div x-show="indiDetectUnknownCount() && !indiDetect.showUnknown"
+                 style="margin:8px 0;">
+                <button class="btn btn-sm" @click="indiDetect.showUnknown = true">
+                    <span x-text="'Show unrecognised devices'"></span>
+                    <span x-text="' (' + indiDetectUnknownCount() + ')'"></span>
+                </button>
+            </div>
 
             <!-- Serial ports: never guessed, always the operator's call. -->
             <template x-for="p in indiDetect.serialPorts" :key="p.device">
@@ -17995,12 +18078,21 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </div>
                     <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
                         <span style="font-size:11px;color:var(--text-muted);min-width:52px;">Driver</span>
+                        <!-- Grouped by INDI family: this list is every installed
+                             driver (~420 on a full install), which is unusable
+                             flat. The family label lives on the optgroup, so the
+                             option text stays just the driver name. -->
                         <select class="input input-sm" style="flex:1;"
-                                x-model="indiDetect.choice['serial:' + p.device]">
-                            <option value="">Skip</option>
-                            <template x-for="drv in indiDetect.installedDrivers" :key="drv.label">
-                                <option :value="drv.label"
-                                        x-text="drv.label + (drv.family ? ' (' + drv.family + ')' : '')"></option>
+                                @change="indiDetect.choice['serial:' + p.device] = $event.target.value">
+                            <option value="" :selected="!indiDetect.choice['serial:' + p.device]">Skip</option>
+                            <template x-for="g in indiDetectDriverGroups()" :key="g.family">
+                                <optgroup :label="g.family">
+                                    <template x-for="drv in g.drivers" :key="drv.label">
+                                        <option :value="drv.label"
+                                                :selected="indiDetect.choice['serial:' + p.device] === drv.label"
+                                                x-text="drv.label"></option>
+                                    </template>
+                                </optgroup>
                             </template>
                         </select>
                     </div>
@@ -18012,13 +18104,18 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <input type="text" class="input input-sm" style="flex:1;"
                        x-model="indiDetect.profileName" placeholder="Polaris">
             </div>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+                The profile is started right after it is created, with auto-connect on.
+                Any INDI server currently running is stopped first.
+            </p>
             <p x-show="indiDetectProfileExists()" style="font-size:11px;color:var(--warning,#d29922);margin-top:6px;">
                 A profile with this name already exists and will be replaced.
             </p>
             <p x-show="indiDetect.error" style="color:var(--danger,#e66);font-size:12px;margin-top:6px;"
                x-text="indiDetect.error"></p>
+            </div><!-- /scroll area -->
 
-            <div class="modal-actions">
+            <div class="modal-actions" style="flex:0 0 auto;padding-top:14px;">
                 <button class="btn btn-sm" :disabled="indiDetect.applying"
                         @click="indiDetect.modalOpen=false">Cancel</button>
                 <button class="btn btn-sm btn-primary"

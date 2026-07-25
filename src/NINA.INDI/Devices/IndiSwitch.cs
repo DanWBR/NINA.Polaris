@@ -118,7 +118,12 @@ public class IndiSwitch : ISwitchDevice {
                 double value = m.IsSwitch
                     ? (_client.GetSwitch(DeviceName, m.Property, m.Element) ? 1 : 0)
                     : _client.GetNumber(DeviceName, m.Property, m.Element);
-                list.Add(new SwitchChannel(i, m.Name, m.IsSwitch, value, m.Min, m.Max, m.Step, m.Writable));
+                // PROPERTY.ELEMENT is the closest thing INDI has to a durable
+                // identity for a channel, and unlike the positional id it holds
+                // across reconnects -- which is what operator-assigned names are
+                // stored against.
+                list.Add(new SwitchChannel(i, m.Name, m.IsSwitch, value,
+                    m.Min, m.Max, m.Step, m.Writable, $"{m.Property}.{m.Element}"));
             }
             return list;
         }

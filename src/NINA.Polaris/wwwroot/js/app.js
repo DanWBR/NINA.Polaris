@@ -1615,7 +1615,7 @@ function ninaApp() {
         // Create button counts truthy values rather than object keys.
         indiDetect: { busy: false, applying: false, modalOpen: false, error: '',
                       devices: [], serialPorts: [], installedDrivers: [],
-                      existingProfiles: [],
+                      existingProfiles: [], showUnknown: false,
                       choice: {}, profileName: 'Polaris' },
         // INDI Control Panel sub-tab in RIGS. The launch button posts
         // /api/indi/cp/launch which uses `xpra control :100 start-child
@@ -1674,6 +1674,11 @@ function ninaApp() {
 
         // Power box (switch / power distribution)
         powerBox: { connected: false, name: '', driver: '', channels: [] },
+        // Rename mode for power-box channels. The draft is keyed by the
+        // channel's stable Key, not its id, so it maps straight onto what the
+        // profile persists.
+        powerBoxEditNames: false,
+        powerBoxNameDraft: {},
 
         // Rotator
         rotator: { connected: false, name: '', position: null, moving: false, reversed: false },
@@ -32193,6 +32198,53 @@ function ninaApp() {
             catch (e) { this.toast('Power box refresh failed', 'error'); }
         },
 
+        // Outlets, dew channels and adjustable rails: the things you can act on.
+        powerBoxControls() {
+            return (this.powerBox.channels || []).filter(c => c.writable);
+        },
+
+        // Read-only channels are measurements (input voltage, current draw,
+        // temperature, humidity, dew point). They come from the same generic
+        // property scan as the outlets, so on a box like the SV241 Pro they
+        // would otherwise sit interleaved with the controls, sorted by INDI
+        // property name, and the panel reads as a wall of unrelated rows.
+        powerBoxSensors() {
+            return (this.powerBox.channels || []).filter(c => !c.writable);
+        },
+
+        // Start editing: seed the draft from what is on screen now, so the
+        // fields open with the current names rather than empty.
+        powerBoxStartRename() {
+            const draft = {};
+            for (const c of (this.powerBox.channels || [])) {
+                if (c.key) draft[c.key] = c.displayName || c.name || '';
+            }
+            this.powerBoxNameDraft = draft;
+            this.powerBoxEditNames = true;
+        },
+
+        async powerBoxSaveNames() {
+            try {
+                // Keyed by the channel's stable Key, never its positional id:
+                // "DC 3 is the mount" has to survive a reconnect that reorders
+                // the channel list.
+                const names = {};
+                for (const [key, value] of Object.entries(this.powerBoxNameDraft || {})) {
+                    const v = (value || '').trim();
+                    // A name equal to the driver's own label carries no
+                    // information, so drop it and let the label show through.
+                    const ch = (this.powerBox.channels || []).find(c => c.key === key);
+                    if (v && v !== (ch?.name || '')) names[key] = v;
+                }
+                await this.apiPut('/api/switch/names', { names });
+                this.powerBoxEditNames = false;
+                this.toast('Channel names saved', 'ok');
+                await this.powerBoxRefresh();
+            } catch (e) {
+                this.toast('Could not save the channel names: ' + (e.message || e), 'error');
+            }
+        },
+
         // --- Guider (PHD2) ---
         async guiderConnect() {
             const native = this.guider.backend === 'native';
@@ -34851,6 +34903,40 @@ function ninaApp() {
             return this.indiDetectSelectedDrivers().length;
         },
 
+        // Devices worth showing by default. Two exclusions:
+        //  - serial bridges, because the SAME physical adapter is already
+        //    listed (actionably) under Serial ports; showing both made one
+        //    focuser look like two devices.
+        //  - unknown devices, which on a real host means the WiFi/Bluetooth
+        //    radio and other internals. They stay reachable behind the toggle
+        //    rather than being filtered by a blocklist, so a genuinely
+        //    unrecognised piece of astro gear is never silently hidden.
+        indiDetectVisibleDevices() {
+            return (this.indiDetect.devices || []).filter(d =>
+                d.confidence !== 'serial-bridge' &&
+                (d.confidence !== 'unknown' || this.indiDetect.showUnknown));
+        },
+
+        indiDetectUnknownCount() {
+            return (this.indiDetect.devices || [])
+                .filter(d => d.confidence === 'unknown').length;
+        },
+
+        // Installed drivers bucketed by INDI family (Telescopes, Focusers,
+        // CCDs...) so the serial-port picker is navigable: a flat list of ~420
+        // entries is technically complete and practically unusable. The server
+        // already sorts by family then label, so insertion order into the Map
+        // is the display order.
+        indiDetectDriverGroups() {
+            const groups = new Map();
+            for (const d of (this.indiDetect.installedDrivers || [])) {
+                const family = d.family || 'Other';
+                if (!groups.has(family)) groups.set(family, []);
+                groups.get(family).push(d);
+            }
+            return [...groups.entries()].map(([family, drivers]) => ({ family, drivers }));
+        },
+
         // A method rather than a stored flag so it re-evaluates as the operator
         // types the profile name.
         indiDetectProfileExists() {
@@ -34876,8 +34962,39 @@ function ninaApp() {
                     return;
                 }
                 this.indiDetect.modalOpen = false;
-                this.toast(`Profile "${name}" ${r?.status === 'updated' ? 'updated' : 'created'}`
-                    + ` with ${drivers.length} driver(s)`, 'ok');
+                // Select the new profile in the embedded indi-web panel.
+                //
+                // This HAS to happen in the browser. indi-web renders its
+                // profile dropdown from a COOKIE, not from server state:
+                //   routes.py: saved_profile = request.cookies.get('indiserver_profile')
+                //   form.tpl:  {% if saved_profile == profile['name'] %}<option selected>
+                // and its start endpoint sets that cookie on the RESPONSE
+                // (`response.set_cookie('indiserver_profile', profile)`).
+                // Polaris starts the profile from the BACKEND, so that
+                // Set-Cookie is delivered to the C# HttpClient and discarded --
+                // the user's browser never sees it, which is why the panel kept
+                // showing the previously selected profile even though the right
+                // one was running. No server-side change can fix that.
+                //
+                // Same name and path indi-web itself uses, so this overwrites
+                // its cookie instead of creating a second one at a different
+                // path (both would be sent, and the wrong one could win). The
+                // iframe is same-origin via the /indi-web/ reverse proxy, whose
+                // default YARP transformer forwards the Cookie header upstream.
+                // Not URL-encoded on purpose: indi-web compares the raw cookie
+                // value against the profile name, so encoding a name with a
+                // space would stop it matching.
+                document.cookie = 'indiserver_profile=' + name + '; path=/; max-age=3600000';
+                if (r?.started) {
+                    this.toast(`Profile "${name}" ${r?.status === 'updated' ? 'updated' : 'created'}`
+                        + ` with ${drivers.length} driver(s) and started`, 'ok');
+                } else {
+                    // The profile is on disk either way, so this is a warning:
+                    // the operator only has to press Start in the panel below.
+                    this.toast(`Profile "${name}" saved, but could not be started: `
+                        + (r?.startError || 'unknown') + '. Start it from the indi-web panel.',
+                        'warn');
+                }
                 // Pull the panel back in sync: indi-web now has a profile it
                 // didn't have a second ago, and the embedded UI caches its
                 // profile list, so a forced reload is what makes the new

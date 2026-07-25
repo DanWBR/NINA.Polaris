@@ -647,6 +647,21 @@ public class EquipmentProfile {
     /// </summary>
     public string[] FilterNames { get; set; } = System.Array.Empty<string>();
 
+    /// <summary>
+    /// Operator-assigned names for power-box channels, keyed by
+    /// <c>SwitchChannel.Key</c> (<c>PROPERTY.ELEMENT</c> over INDI,
+    /// <c>#index</c> over ASCOM/Alpaca) rather than by the positional channel
+    /// id, which shifts if the driver publishes a different property set.
+    ///
+    /// <para>Power boxes label their outlets "DC 1".."DC 5", which tells you
+    /// nothing at 3am; what matters is that DC 3 is the mount. Vendors
+    /// generally cannot store that on the device -- the SV241 Pro's own
+    /// documentation notes that renaming through ASCOM properties does not
+    /// persist -- so the name lives here, per rig, and the API overlays it on
+    /// the channel list. Empty when never edited.</para>
+    /// </summary>
+    public Dictionary<string, string> SwitchChannelNames { get; set; } = new();
+
     // ----- Guider backend selection (native vs PHD2) -----
 
     /// <summary>Which autoguider drives this rig. <c>native</c> (default)

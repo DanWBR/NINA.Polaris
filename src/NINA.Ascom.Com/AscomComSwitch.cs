@@ -95,7 +95,10 @@ public sealed class AscomComSwitch : ISwitchDevice, IDisposable {
                     var d = _descriptors[i];
                     short idx = (short)i;
                     double value = SafeGet(() => ToD(ComMember.Call(_driver!, "GetSwitchValue", idx)), 0);
-                    list.Add(new SwitchChannel(i, d.Name, d.Boolean, value, d.Min, d.Max, d.Step, d.Writable));
+                    // ASCOM addresses switches purely by index, so that is the
+                    // only durable identity available for persisted names.
+                    list.Add(new SwitchChannel(i, d.Name, d.Boolean, value,
+                        d.Min, d.Max, d.Step, d.Writable, $"#{i}"));
                 }
                 return (IReadOnlyList<SwitchChannel>)list;
             }).GetAwaiter().GetResult();

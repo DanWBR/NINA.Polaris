@@ -27,19 +27,59 @@ public static class SwitchEndpoints {
     public static void MapSwitchEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/switch");
 
-        group.MapGet("/status", (EquipmentManager equip) => {
+        group.MapGet("/status", (EquipmentManager equip, ProfileService profileSvc) => {
             if (equip.Switch == null)
                 return Results.Ok(new { connected = false });
+            var names = profileSvc.ActiveEquipmentProfile?.SwitchChannelNames
+                        ?? new Dictionary<string, string>();
             return Results.Ok(new {
                 connected = equip.Switch.IsConnected,
                 name = equip.Switch.DeviceName,
                 driver = equip.SwitchDriver,
                 channels = equip.Switch.Channels.Select(c => new {
-                    id = c.Id, name = c.Name, boolean = c.Boolean,
+                    id = c.Id,
+                    // `name` stays the driver's own label so the UI can always
+                    // show what the hardware calls the channel; `displayName`
+                    // is what the operator named it, when they have.
+                    name = c.Name,
+                    key = c.Key,
+                    displayName = (!string.IsNullOrEmpty(c.Key)
+                                   && names.TryGetValue(c.Key, out var friendly)
+                                   && !string.IsNullOrWhiteSpace(friendly))
+                                  ? friendly : c.Name,
+                    boolean = c.Boolean,
                     value = double.IsNaN(c.Value) ? 0.0 : c.Value,
-                    min = c.Min, max = c.Max, step = c.Step, writable = c.Writable
+                    min = c.Min, max = c.Max, step = c.Step, writable = c.Writable,
+                    // A read-only channel is a MEASUREMENT, not a control: on a
+                    // power box these are the input voltage, current draw,
+                    // temperature, humidity and dew point. They arrive through
+                    // the same generic property scan as the outlets, so without
+                    // this the UI renders a dew-point reading as if it were a
+                    // switch you could flip.
+                    sensor = !c.Writable
                 }).ToList()
             });
+        });
+
+        // Operator-assigned channel names, keyed by the channel's stable Key so
+        // they survive reconnects. Sent as a full map; an empty or whitespace
+        // value clears that channel's name and falls back to the driver label.
+        group.MapPut("/names", (SwitchNamesRequest request,
+                                ProfileService profileSvc) => {
+            var rig = profileSvc.ActiveEquipmentProfile;
+            if (rig == null)
+                return Results.BadRequest(new { error = "No active rig" });
+            if (request?.Names == null)
+                return Results.BadRequest(new { error = "names required" });
+            var cleaned = new Dictionary<string, string>();
+            foreach (var kv in request.Names) {
+                if (string.IsNullOrWhiteSpace(kv.Key)) continue;
+                if (string.IsNullOrWhiteSpace(kv.Value)) continue;
+                cleaned[kv.Key] = kv.Value.Trim();
+            }
+            rig.SwitchChannelNames = cleaned;
+            profileSvc.Save();
+            return Results.Ok(new { status = "saved", count = cleaned.Count });
         });
 
         group.MapPost("/select/{deviceName}", (string deviceName, EquipmentManager equip, string? driver) => {
@@ -138,4 +178,8 @@ public static class SwitchEndpoints {
 
     public record SetSwitchBoolRequest(int Id, bool On);
     public record SetSwitchValueRequest(int Id, double Value);
+
+    /// <param name="Names">Channel Key to operator-assigned name. Replaces the
+    /// stored map wholesale, so the caller sends the full set.</param>
+    public record SwitchNamesRequest(Dictionary<string, string> Names);
 }

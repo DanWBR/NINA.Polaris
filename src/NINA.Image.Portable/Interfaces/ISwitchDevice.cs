@@ -25,6 +25,14 @@ namespace NINA.Image.Interfaces;
 /// channels (voltage / current / temperature / humidity). <see cref="Id"/>
 /// is a stable index the API/UI use to address the channel for writes —
 /// it must not shift between refreshes of the same connected device.</para>
+///
+/// <para><see cref="Key"/> is a stable identity that survives RECONNECTS and
+/// restarts, which <see cref="Id"/> does not: the id is a position in the
+/// current channel map and would shift if the driver published a different
+/// property set. Anything persisted against a channel (operator-assigned
+/// names, a device-to-outlet mapping) must key off this instead. Format is
+/// per-backend and opaque to callers: <c>PROPERTY.ELEMENT</c> for INDI,
+/// <c>#index</c> for ASCOM/Alpaca, which have no richer identity to offer.</para>
 /// </summary>
 public sealed record SwitchChannel(
     int Id,
@@ -34,7 +42,8 @@ public sealed record SwitchChannel(
     double Min,
     double Max,
     double Step,
-    bool Writable);
+    bool Writable,
+    string Key = "");
 
 /// <summary>
 /// A generic multi-channel switch / power box (ASCOM ISwitchV2 semantics),

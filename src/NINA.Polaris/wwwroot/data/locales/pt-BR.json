@@ -3392,5 +3392,10 @@
   "A profile with this name already exists and will be replaced.": "Já existe um perfil com esse nome e ele será substituído.",
   "Skip": "Ignorar",
   "Create profile": "Criar perfil",
-  "Creating…": "Criando…"
+  "Creating…": "Criando…",
+  "Show unrecognised devices": "Mostrar dispositivos não reconhecidos",
+  "The profile is started right after it is created, with auto-connect on. Any INDI server currently running is stopped first.": "O perfil é iniciado logo após ser criado, com conexão automática ligada. Qualquer servidor INDI em execução é parado antes.",
+  "Rename channels": "Renomear canais",
+  "Readings": "Leituras",
+  "Channel names saved": "Nomes dos canais salvos"
 }

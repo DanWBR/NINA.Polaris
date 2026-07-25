@@ -462,7 +462,9 @@ public class AlpacaSwitch : ISwitchDevice {
             for (int i = 0; i < _descriptors.Count; i++) {
                 var d = _descriptors[i];
                 double value = i < _values.Length ? _values[i] : 0;
-                list.Add(new SwitchChannel(i, d.Name, d.Boolean, value, d.Min, d.Max, d.Step, d.Writable));
+                // Alpaca, like ASCOM, addresses switches by index only.
+                list.Add(new SwitchChannel(i, d.Name, d.Boolean, value,
+                    d.Min, d.Max, d.Step, d.Writable, $"#{i}"));
             }
             return list;
         }
