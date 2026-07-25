@@ -4,7 +4,7 @@
   "requirements": {
     "title": "Requisitos del sistema",
     "sub": "El principal factor limitante es la memoria RAM. El resto funciona sin problemas en un SBC moderno, y varias placas incorporan aceleración por GPU y NPU para las herramientas de IA.",
-    "ramNote": "Polaris consume una media de entre 0,7 y 1,7 GB de RAM, por lo que 2 GB es el mínimo práctico. Una Raspberry Pi 4 con 2 GB sigue ejecutando la aplicación, ya que el WASM del lado del cliente se encarga de las complejas operaciones matemáticas de Live-Stack.",
+    "ramNote": "Polaris dimensiona el live stack según la placa en la que se ejecuta: elige una resolución de stacking 1:1, 1:2 o 1:4 para que el working set quepa en una cuarta parte de la memoria disponible. Una cámara en color de 12 MP cuesta unos 900 MB en 1:1 y 450 MB en 1:2, sobre un piso fijo de unos 370 MB. 2 GB va holgado, las placas de 1,5 GB funcionan con una resolución de stacking reducida, y el WASM en el cliente puede llevar todo el cálculo del stacking al navegador.",
     "recommendedNote": "Placa recomendada: la Radxa Dragon Q6A con 4 GB o más. Su potente CPU de Qualcomm registra la puntuación Polaris más alta de todas las SBC probadas hasta la fecha. Si vas a utilizar herramientas de IA, la Orange Pi 5 Pro es una alternativa de probada eficacia, ya que incorpora OpenCL en la GPU y GraXpert AI en la NPU. La Orange Pi 4 Pro (4 GB) también es una opción sólida de gama media (puntuación Polaris de 156 con disipador térmico y ventilador, y de 147 con refrigeración pasiva).",
     "rows": [
       {
@@ -17,7 +17,7 @@
         "host": "Raspberry Pi 4",
         "ram": "2+ GB",
         "status": "Mínimo",
-        "notes": "Broadcom BCM2711 (4 núcleos Cortex-A72, hasta 1,8 GHz), GPU VideoCore VI, LPDDR4. Requisito mínimo de RAM: 2 GB es lo mínimo necesario para que funcione; el WASM del lado del cliente se encarga de los cálculos matemáticos más exigentes."
+        "notes": "Broadcom BCM2711 (4x Cortex-A72, hasta 1,8 GHz), GPU VideoCore VI, LPDDR4. Holgado con 2 GB: el live stack baja solo a una resolución de stacking menor, y el WASM en el cliente puede asumir el cálculo pesado."
       },
       {
         "host": "Raspberry Pi 5",
@@ -161,11 +161,7 @@
       "selfTitle": "Actualización dentro de la aplicación con un solo clic",
       "selfBadge": "Recomendado",
       "selfBody": "Todas las instalaciones .deb (incluidas las imágenes listas para flashear mencionadas anteriormente) pueden actualizarse automáticamente. Polaris comprueba si hay nuevas versiones en GitHub al iniciarse y una vez cada hora; cuando existe una compilación más reciente para la arquitectura de tu placa, aparece una insignia verde de «Actualizar» en la barra de estado superior con la nueva versión. Haz clic en ella para ver las notas de la versión y, a continuación, selecciona «Descargar e instalar»: Polaris descarga el archivo .deb correspondiente, lo instala y se reinicia con la nueva versión. Sin SSH, sin apt y sin contraseña de sudo (autorizado por una regla de PolicyKit de alcance muy limitado). Deja la página abierta mientras se actualiza. Tus perfiles y datos se conservan.",
-      "selfImage": "/assets/screenshots/self-update.jpg",
-      "manualTitle": "Actualización manual a través de SSH",
-      "intro": "¿Prefieres la línea de comandos o actualizar varios equipos a la vez? Conéctate por SSH (usuario: polaris, contraseña: polaris), descarga el último archivo .deb e instálalo sobre la versión actual. Se conservarán tus perfiles y datos.",
-      "code": "ssh polaris@<ip-o-nombre-de-host>\nwget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb\nsudo dpkg -i polaris_arm64.deb",
-      "note": "Utiliza el archivo «polaris_arm64.deb» para los SBC con arquitectura ARM (Raspberry Pi, Orange Pi); en los demás casos, elige el paquete que se ajuste a tu placa. Cambia la contraseña predeterminada de «polaris» tras el primer inicio de sesión."
+      "selfImage": "/assets/screenshots/self-update.jpg"
     }
   },
   "download": {

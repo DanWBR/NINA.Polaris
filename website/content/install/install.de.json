@@ -4,7 +4,7 @@
   "requirements": {
     "title": "Systemanforderungen",
     "sub": "Der größte Engpass ist der Arbeitsspeicher. Alles andere läuft auf einem modernen SBC problemlos, und einige Boards bieten zudem GPU- und NPU-Beschleunigung für die KI-Tools.",
-    "ramNote": "Polaris benötigt im Durchschnitt 0,7 bis 1,7 GB RAM, daher sind 2 GB die praktische Untergrenze. Ein Raspberry Pi 4 mit 2 GB kann die App ebenfalls ausführen, wobei WASM auf der Client-Seite die rechenintensiven Live-Stack-Berechnungen übernimmt.",
+    "ramNote": "Polaris passt den Live-Stack an das Board an, auf dem er läuft: Er wählt eine Stacking-Auflösung von 1:1, 1:2 oder 1:4, damit das Working Set in ein Viertel des verfügbaren Speichers passt. Eine 12-MP-Farbkamera kostet rund 900 MB bei 1:1 und 450 MB bei 1:2, über einem festen Sockel von etwa 370 MB. 2 GB sind bequem, Boards mit 1,5 GB laufen mit reduzierter Stacking-Auflösung, und WASM auf der Clientseite kann die gesamte Stacking-Rechnung in den Browser verlagern.",
     "recommendedNote": "Empfohlenes Board: das Radxa Dragon Q6A mit 4 GB oder mehr. Seine leistungsstarke Qualcomm-CPU erzielt den höchsten Polaris-Wert aller bisher getesteten SBCs. Wenn Sie vor allem auf KI-Tools setzen, ist der Orange Pi 5 Pro die bewährte Alternative, die zusätzlich OpenCL auf der GPU und GraXpert AI auf der NPU bietet. Auch der Orange Pi 4 Pro (4 GB) ist eine solide Option im mittleren Leistungsbereich (Polaris-Wert 156 mit Kühlkörper und Lüfter, 147 bei passiver Kühlung).",
     "rows": [
       {
@@ -17,7 +17,7 @@
         "host": "Raspberry Pi 4",
         "ram": "2+ GB",
         "status": "Mindestwert",
-        "notes": "Broadcom BCM2711 (4x Cortex-A72, bis zu 1,8 GHz), VideoCore VI-GPU, LPDDR4. Die Mindestanforderung an den Arbeitsspeicher: 2 GB sind für den Betrieb erforderlich; WASM auf Client-Seite übernimmt die rechenintensiven Aufgaben."
+        "notes": "Broadcom BCM2711 (4x Cortex-A72, bis 1,8 GHz), VideoCore-VI-GPU, LPDDR4. Mit 2 GB bequem: Der Live-Stack geht von selbst auf eine niedrigere Stacking-Auflösung, und WASM auf der Clientseite kann die schwere Rechnung übernehmen."
       },
       {
         "host": "Raspberry Pi 5",
@@ -161,11 +161,7 @@
       "selfTitle": "In-App-Update mit einem Klick",
       "selfBadge": "Empfohlen",
       "selfBody": "Jede .deb-Installation (einschließlich der oben genannten, sofort flashenbaren Images) kann sich selbst aktualisieren. Polaris überprüft beim Start und einmal pro Stunde GitHub auf neue Releases; sobald ein neuerer Build für die Architektur Ihres Boards vorliegt, erscheint in der oberen Statusleiste ein grünes „Update“-Symbol mit der neuen Version. Klicken Sie darauf, um die Versionshinweise anzuzeigen, und wählen Sie anschließend „Herunterladen & installieren“: Polaris ruft das passende .deb-Paket ab, installiert es und startet mit der neuen Version neu. Kein SSH, kein apt und kein sudo-Passwort (autorisiert durch eine streng begrenzte PolicyKit-Regel). Lassen Sie die Seite geöffnet, während sie sich selbst aktualisiert. Ihre Profile und Daten bleiben erhalten.",
-      "selfImage": "/assets/screenshots/self-update.jpg",
-      "manualTitle": "Manuelles Update über SSH",
-      "intro": "Bevorzugen Sie die Befehlszeile oder möchten Sie mehrere Rechner gleichzeitig aktualisieren? Melden Sie sich per SSH an (Benutzername: polaris, Passwort: polaris), laden Sie die neueste .deb-Datei herunter und installieren Sie sie über die derzeitige Version. Ihre Profile und Daten bleiben dabei erhalten.",
-      "code": "ssh polaris@<IP-Adresse oder Hostname>\nwget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb\nsudo dpkg -i polaris_arm64.deb",
-      "note": "Verwenden Sie „polaris_arm64.deb“ für ARM-SBCs (Raspberry Pi, Orange Pi); wählen Sie andernfalls das für Ihr Board passende Paket aus. Ändern Sie das Standardpasswort für „polaris“ nach der ersten Anmeldung."
+      "selfImage": "/assets/screenshots/self-update.jpg"
     }
   },
   "download": {

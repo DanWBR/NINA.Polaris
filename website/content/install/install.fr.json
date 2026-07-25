@@ -4,7 +4,7 @@
   "requirements": {
     "title": "Configuration requise",
     "sub": "Le principal facteur limitant est la mémoire vive (RAM). Tout le reste fonctionne sans problème sur un SBC moderne, et plusieurs cartes intègrent une accélération par GPU et NPU pour les outils d'IA.",
-    "ramNote": "Polaris utilise en moyenne entre 0,7 et 1,7 Go de RAM ; 2 Go constituent donc le seuil minimum pratique. Un Raspberry Pi 4 doté de 2 Go permet tout de même d'exécuter l'application, le WASM côté client prenant en charge les calculs mathématiques intensifs du live stack.",
+    "ramNote": "Polaris dimensionne le live stack selon la carte sur laquelle il tourne : il choisit une résolution de stacking 1:1, 1:2 ou 1:4 pour que l'empreinte mémoire tienne dans un quart de la mémoire disponible. Une caméra couleur de 12 MP coûte environ 900 Mo en 1:1 et 450 Mo en 1:2, au-dessus d'un plancher fixe d'environ 370 Mo. 2 Go est confortable, les cartes de 1,5 Go fonctionnent avec une résolution de stacking réduite, et le WASM côté client peut déporter tout le calcul du stacking dans le navigateur.",
     "recommendedNote": "Carte recommandée : la Radxa Dragon Q6A avec 4 Go ou plus. Son puissant processeur Qualcomm affiche le meilleur score Polaris parmi tous les SBC testés à ce jour. Si vous comptez beaucoup sur les outils d’IA, l’Orange Pi 5 Pro constitue une alternative éprouvée, grâce à l’ajout d’OpenCL sur le GPU et de GraXpert AI sur le NPU. L'Orange Pi 4 Pro (4 Go) constitue également une option de milieu de gamme fiable (score Polaris de 156 avec dissipateur thermique et ventilateur, 147 en refroidissement passif).",
     "rows": [
       {
@@ -17,7 +17,7 @@
         "host": "Raspberry Pi 4",
         "ram": "2+ GB",
         "status": "Minimum",
-        "notes": "Broadcom BCM2711 (4 cœurs Cortex-A72, jusqu'à 1,8 GHz), GPU VideoCore VI, LPDDR4. Mémoire vive minimale : 2 Go sont nécessaires pour le fonctionnement ; le WASM côté client prend en charge les calculs intensifs."
+        "notes": "Broadcom BCM2711 (4x Cortex-A72, jusqu'à 1,8 GHz), GPU VideoCore VI, LPDDR4. Confortable avec 2 Go : le live stack redescend seul à une résolution de stacking plus basse, et le WASM côté client peut prendre en charge le gros du calcul."
       },
       {
         "host": "Raspberry Pi 5",
@@ -161,11 +161,7 @@
       "selfTitle": "Mise à jour dans l'application en un clic",
       "selfBadge": "Recommandé",
       "selfBody": "Chaque installation .deb (y compris les images prêtes à être flashées ci-dessus) peut se mettre à jour automatiquement. Polaris vérifie la présence de nouvelles versions sur GitHub au démarrage et toutes les heures ; lorsqu’une version plus récente existe pour l’architecture de votre carte, un badge vert « Mise à jour » apparaît dans la barre d’état supérieure, indiquant la nouvelle version. Cliquez dessus pour consulter les notes de mise à jour, puis sélectionnez « Télécharger et installer » : Polaris récupère le fichier .deb correspondant, l'installe et redémarre sur la nouvelle version. Pas besoin de SSH, d'apt ni de mot de passe sudo (autorisé par une règle PolicyKit au champ d'application strictement défini). Laissez la page ouverte pendant qu'elle se rafraîchit. Vos profils et vos données sont conservés.",
-      "selfImage": "/assets/screenshots/self-update.jpg",
-      "manualTitle": "Mise à jour manuelle via SSH",
-      "intro": "Vous préférez la ligne de commande ou la mise à jour simultanée de plusieurs machines ? Connectez-vous via SSH (utilisateur : Polaris, mot de passe : Polaris), téléchargez le dernier fichier .deb et installez-le par-dessus la version actuelle. Vos profils et vos données seront conservés.",
-      "code": "ssh polaris@<ADRESSE-IP-ou-nom-d'hôte>\nwget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb\nsudo dpkg -i polaris_arm64.deb",
-      "note": "Utilisez le fichier polaris_arm64.deb pour les micro-ordinateurs ARM (Raspberry Pi, Orange Pi) ; dans le cas contraire, choisissez le paquet adapté à votre carte. Modifiez le mot de passe par défaut « Polaris » après votre première connexion."
+      "selfImage": "/assets/screenshots/self-update.jpg"
     }
   },
   "download": {

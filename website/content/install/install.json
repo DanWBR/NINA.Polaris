@@ -4,7 +4,7 @@
   "requirements": {
     "title": "System requirements",
     "sub": "The main limiting factor is RAM. Everything else is comfortable on a modern SBC, and several boards add GPU and NPU acceleration for the AI tools.",
-    "ramNote": "Polaris uses 0.7 to 1.7 GB of RAM on average, so 2 GB is the practical floor. A Raspberry Pi 4 with 2 GB still runs the app, with client-side WASM offloading the heavy live-stack math.",
+    "ramNote": "Polaris sizes the live stack to the board it runs on: it picks a 1:1, 1:2 or 1:4 stacking resolution so the working set stays inside a quarter of the memory available to it. A 12 MP colour camera costs roughly 900 MB at 1:1 and 450 MB at 1:2, over a fixed floor of about 370 MB. 2 GB is comfortable, 1.5 GB boards work at a reduced stacking resolution, and client-side WASM can move the stacking maths into the browser entirely.",
     "recommendedNote": "Recommended board: the Radxa Dragon Q6A with 4 GB or more. Its strong Qualcomm CPU posts the highest Polaris score of every SBC tested so far. If you lean on the AI tools, the Orange Pi 5 Pro is the proven alternative, adding OpenCL on the GPU and GraXpert AI on the NPU. The Orange Pi 4 Pro (4 GB) is a solid mid-range option too (Polaris score 156 with a heatsink and fan, 147 passively cooled).",
     "rows": [
       {
@@ -17,7 +17,7 @@
         "host": "Raspberry Pi 4",
         "ram": "2+ GB",
         "status": "Minimum",
-        "notes": "Broadcom BCM2711 (4x Cortex-A72, up to 1.8 GHz), VideoCore VI GPU, LPDDR4. The RAM floor: 2 GB is the minimum to run; client-side WASM offloads the heavy math."
+        "notes": "Broadcom BCM2711 (4x Cortex-A72, up to 1.8 GHz), VideoCore VI GPU, LPDDR4. Comfortable at 2 GB: the live stack drops to a lower stacking resolution on its own, and client-side WASM can offload the heavy math."
       },
       {
         "host": "Raspberry Pi 5",
@@ -161,11 +161,7 @@
       "selfTitle": "One-click in-app update",
       "selfBadge": "Recommended",
       "selfBody": "Every .deb install (including the ready-to-flash images above) can update itself. Polaris checks GitHub for new releases on startup and once an hour; when a newer build exists for your board's architecture, a green Update badge appears in the top status bar with the new version. Click it for the release notes, then Download & install: Polaris fetches the matching .deb, installs it, and reloads on the new version. No SSH, no apt, and no sudo password (authorized by a tightly-scoped PolicyKit rule). Leave the page open while it refreshes itself. Your profiles and data are kept.",
-      "selfImage": "/assets/screenshots/self-update.jpg",
-      "manualTitle": "Manual update over SSH",
-      "intro": "Prefer the command line, or updating several rigs at once? SSH in (user polaris, password polaris), download the latest .deb, and install it over the running version. Your profiles and data are kept.",
-      "code": "ssh polaris@<ip-or-hostname>\nwget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb\nsudo dpkg -i polaris_arm64.deb",
-      "note": "Use polaris_arm64.deb for ARM SBCs (Raspberry Pi, Orange Pi); pick the package that matches your board otherwise. Change the default polaris password after first login."
+      "selfImage": "/assets/screenshots/self-update.jpg"
     }
   },
   "download": {
