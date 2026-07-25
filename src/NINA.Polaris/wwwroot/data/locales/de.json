@@ -3380,5 +3380,17 @@
   "ZWO ASI SDK": "ZWO ASI SDK",
   "× scaling)": "× Skalierung)",
   "⚠ Greyed-out options need more memory than this machine can spare (budget ~": "⚠ Ausgegraute Optionen brauchen mehr Speicher, als dieser Rechner freigeben kann (Budget ~",
-  "⛔ Abort run": "⛔ Lauf abbrechen"
+  "⛔ Abort run": "⛔ Lauf abbrechen",
+  "Auto-Detect and Setup INDI Drivers": "INDI-Treiber automatisch erkennen und einrichten",
+  "Let Polaris detect and setup INDI Drivers automatically. If a device driver is not detected, you can add it manually using the indi-web panel below.": "Lassen Sie Polaris die INDI-Treiber automatisch erkennen und einrichten. Wird ein Gerätetreiber nicht erkannt, können Sie ihn im indi-web-Panel unten manuell hinzufügen.",
+  "Detect equipment": "Ausrüstung erkennen",
+  "Detected equipment": "Erkannte Ausrüstung",
+  "Review what Polaris found, then create the INDI profile. Anything left as Skip is not added, and you can still add it by hand in the indi-web panel.": "Prüfen Sie, was Polaris gefunden hat, und erstellen Sie dann das INDI-Profil. Was auf Überspringen bleibt, wird nicht hinzugefügt und kann weiterhin von Hand im indi-web-Panel ergänzt werden.",
+  "No USB devices were detected. Check that the equipment is powered and connected, then scan again.": "Keine USB-Geräte erkannt. Prüfen Sie, ob die Ausrüstung eingeschaltet und angeschlossen ist, und suchen Sie erneut.",
+  "Serial port. Mounts and most focusers connect through a generic USB-serial adapter, so Polaris cannot tell which device this is.": "Serieller Port. Montierungen und die meisten Fokussierer nutzen einen generischen USB-Seriell-Adapter, daher kann Polaris nicht erkennen, um welches Gerät es sich handelt.",
+  "Profile name": "Profilname",
+  "A profile with this name already exists and will be replaced.": "Ein Profil mit diesem Namen existiert bereits und wird ersetzt.",
+  "Skip": "Überspringen",
+  "Create profile": "Profil erstellen",
+  "Creating…": "Wird erstellt…"
 }

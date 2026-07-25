@@ -84,9 +84,20 @@ public static class IndiDetectEndpoints {
                     byId = p.ByIdName,
                     device = p.Device,
                 }),
+                // The full installed list rides along so the UI can offer a
+                // driver picker for the serial ports (and for anything it had
+                // to mark unknown) without a second round trip. ~420 entries of
+                // two short strings, grouped by family on the client.
+                installedDrivers = installed
+                    .OrderBy(d => d.Family ?? "", StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(d => d.Label, StringComparer.OrdinalIgnoreCase)
+                    .Select(d => new { label = d.Label, family = d.Family }),
                 installedDriverCount = installed.Count,
                 driverListAvailable = canFilter,
                 indiWebRunning = web.Running,
+                // So the review dialog can warn BEFORE the operator commits
+                // that the name they picked would replace an existing profile.
+                existingProfiles = await web.GetProfileNamesAsync(ct),
             });
         });
 

@@ -3380,5 +3380,17 @@
   "ZWO ASI SDK": "SDK ZWO ASI",
   "× scaling)": "× mise à l'échelle)",
   "⚠ Greyed-out options need more memory than this machine can spare (budget ~": "⚠ Les options grisées demandent plus de mémoire que cette machine ne peut libérer (budget ~",
-  "⛔ Abort run": "⛔ Interrompre la séquence"
+  "⛔ Abort run": "⛔ Interrompre la séquence",
+  "Auto-Detect and Setup INDI Drivers": "Détecter et configurer les pilotes INDI automatiquement",
+  "Let Polaris detect and setup INDI Drivers automatically. If a device driver is not detected, you can add it manually using the indi-web panel below.": "Laissez Polaris détecter et configurer les pilotes INDI automatiquement. Si le pilote d'un appareil n'est pas détecté, vous pouvez l'ajouter manuellement dans le panneau indi-web ci-dessous.",
+  "Detect equipment": "Détecter l'équipement",
+  "Detected equipment": "Équipement détecté",
+  "Review what Polaris found, then create the INDI profile. Anything left as Skip is not added, and you can still add it by hand in the indi-web panel.": "Vérifiez ce que Polaris a trouvé, puis créez le profil INDI. Ce qui reste sur Ignorer n'est pas ajouté, et vous pouvez toujours l'ajouter à la main dans le panneau indi-web.",
+  "No USB devices were detected. Check that the equipment is powered and connected, then scan again.": "Aucun périphérique USB détecté. Vérifiez que l'équipement est alimenté et connecté, puis relancez la détection.",
+  "Serial port. Mounts and most focusers connect through a generic USB-serial adapter, so Polaris cannot tell which device this is.": "Port série. Les montures et la plupart des moteurs de mise au point utilisent un adaptateur USB-série générique, Polaris ne peut donc pas savoir de quel appareil il s'agit.",
+  "Profile name": "Nom du profil",
+  "A profile with this name already exists and will be replaced.": "Un profil portant ce nom existe déjà et sera remplacé.",
+  "Skip": "Ignorer",
+  "Create profile": "Créer le profil",
+  "Creating…": "Création…"
 }

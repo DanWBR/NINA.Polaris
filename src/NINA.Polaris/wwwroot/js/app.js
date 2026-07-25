@@ -1608,6 +1608,15 @@ function ninaApp() {
         // via /api/system/settings (same plumbing as PHD2 auto-start).
         indiWeb: { status: null, autoStart: false, busy: false, iframeSrc: 'about:blank',
                    watchdog: null },
+        // INDI profile assistant (/api/indi/detect). `choice` maps a device key
+        // to the driver label the operator picked -- USB devices are keyed by
+        // their sysfs path, serial ports by 'serial:/dev/ttyUSB0', so the two
+        // lists can never collide. Empty string means Skip, which is why the
+        // Create button counts truthy values rather than object keys.
+        indiDetect: { busy: false, applying: false, modalOpen: false, error: '',
+                      devices: [], serialPorts: [], installedDrivers: [],
+                      existingProfiles: [],
+                      choice: {}, profileName: 'Polaris' },
         // INDI Control Panel sub-tab in RIGS. The launch button posts
         // /api/indi/cp/launch which uses `xpra control :100 start-child
         // indi_control_panel` to spawn the binary inside the same xpra
@@ -34791,6 +34800,95 @@ function ninaApp() {
                     this.indiWeb.iframeSrc = '/indi-web/?_=' + Date.now();
                 }
             } catch (e) { /* transient; next refresh retries */ }
+        },
+
+        // ---- INDI profile assistant ------------------------------------
+        // Scan USB, pre-select whatever came back unambiguous, and open the
+        // review modal. Read-only: nothing is written to the INDI setup until
+        // indiDetectApply().
+        async indiDetectScan() {
+            if (this.indiDetect.busy) return;
+            this.indiDetect.busy = true;
+            this.indiDetect.error = '';
+            try {
+                const r = await this.apiGet('/api/indi/detect');
+                if (r?.error) { this.indiDetect.error = r.error; return; }
+                this.indiDetect.devices = r?.devices || [];
+                this.indiDetect.serialPorts = r?.serialPorts || [];
+                this.indiDetect.installedDrivers = r?.installedDrivers || [];
+                this.indiDetect.existingProfiles = r?.existingProfiles || [];
+                // Pre-tick only the single-candidate matches. An ambiguous row
+                // (the rebadged-camera case) is left blank on purpose: picking
+                // one of a dozen equally-likely brands for the user would be a
+                // guess wearing the costume of a decision.
+                const choice = {};
+                for (const d of this.indiDetect.devices) {
+                    choice[d.path] = (d.candidates && d.candidates.length === 1)
+                        ? d.candidates[0] : '';
+                }
+                for (const p of this.indiDetect.serialPorts) {
+                    choice['serial:' + p.device] = '';
+                }
+                this.indiDetect.choice = choice;
+                this.indiDetect.modalOpen = true;
+            } catch (e) {
+                this.indiDetect.error = 'Detection failed: ' + (e.message || e);
+            } finally {
+                this.indiDetect.busy = false;
+            }
+        },
+
+        // Drivers the operator actually settled on. Deduplicated because two
+        // devices can legitimately map to one driver (a ZWO camera and its EFW
+        // are separate USB devices, but several vendors expose one driver that
+        // serves multiple units) and indi-web would otherwise get it twice.
+        indiDetectSelectedDrivers() {
+            return [...new Set(Object.values(this.indiDetect.choice || {})
+                .filter(v => !!v))];
+        },
+
+        indiDetectSelectedCount() {
+            return this.indiDetectSelectedDrivers().length;
+        },
+
+        // A method rather than a stored flag so it re-evaluates as the operator
+        // types the profile name.
+        indiDetectProfileExists() {
+            const name = (this.indiDetect.profileName || '').trim();
+            if (!name) return false;
+            return (this.indiDetect.existingProfiles || [])
+                .some(p => p.toLowerCase() === name.toLowerCase());
+        },
+
+        async indiDetectApply() {
+            if (this.indiDetect.applying) return;
+            const drivers = this.indiDetectSelectedDrivers();
+            if (!drivers.length) return;
+            const name = (this.indiDetect.profileName || '').trim() || 'Polaris';
+            this.indiDetect.applying = true;
+            this.indiDetect.error = '';
+            try {
+                const r = await this.apiPost('/api/indi/detect/profile',
+                    { name, drivers });
+                if (r?.error) {
+                    this.indiDetect.error = r.error
+                        + (r.drivers ? ': ' + r.drivers.join(', ') : '');
+                    return;
+                }
+                this.indiDetect.modalOpen = false;
+                this.toast(`Profile "${name}" ${r?.status === 'updated' ? 'updated' : 'created'}`
+                    + ` with ${drivers.length} driver(s)`, 'ok');
+                // Pull the panel back in sync: indi-web now has a profile it
+                // didn't have a second ago, and the embedded UI caches its
+                // profile list, so a forced reload is what makes the new
+                // profile actually visible to the user.
+                await this.indiWebStatusRefresh();
+                this.indiWebEnsureIframe(true);
+            } catch (e) {
+                this.indiDetect.error = 'Could not create the profile: ' + (e.message || e);
+            } finally {
+                this.indiDetect.applying = false;
+            }
         },
 
         async indiWebStart() {

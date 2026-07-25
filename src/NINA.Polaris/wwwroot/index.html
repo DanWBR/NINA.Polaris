@@ -7317,6 +7317,37 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </div>
                         </div>
 
+                        <!-- INDI profile assistant. Scans USB and proposes a
+                             driver set, so setting up a new rig doesn't start
+                             with picking from ~420 installed drivers by hand.
+                             It NARROWS rather than divines: cameras resolve
+                             cleanly, the ToupTek platform can only be narrowed
+                             to a candidate list, and anything behind a
+                             USB-serial bridge is not identifiable at all --
+                             hence the "add it manually below" wording. Nothing
+                             is written until the operator confirms in the
+                             modal. -->
+                        <div x-show="indiWeb.status?.running" style="margin:10px 0;padding:10px;
+                             background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;">
+                            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                                <div style="flex:1 1 320px;min-width:0;">
+                                    <strong style="font-size:13px;">Auto-Detect and Setup INDI Drivers</strong>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+                                        Let Polaris detect and setup INDI Drivers automatically. If a
+                                        device driver is not detected, you can add it manually using the
+                                        indi-web panel below.
+                                    </div>
+                                </div>
+                                <button class="btn btn-sm btn-primary" style="margin-left:auto;flex:0 0 auto;"
+                                        :disabled="indiDetect.busy" @click="indiDetectScan()">
+                                    <span x-text="indiDetect.busy ? 'Detecting…' : 'Detect equipment'"></span>
+                                </button>
+                            </div>
+                            <div x-show="indiDetect.error" x-cloak
+                                 style="font-size:11px;color:var(--danger,#e66);margin-top:6px;"
+                                 x-text="indiDetect.error"></div>
+                        </div>
+
                         <!-- Wedged-driver watchdog: monitors the running INDI
                              drivers and auto-restarts one that stops delivering
                              (dropped BLOB) without dropping the others. Manual
@@ -17887,6 +17918,119 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="btn btn-sm btn-primary" :disabled="starColor.busy"
                         @click="starColorRun()">
                     <span x-text="starColor.busy ? 'Running…' : 'Run'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- INDI profile assistant: review + confirm.
+         Deliberately a confirmation step, not a one-click apply: creating a
+         profile rewrites the user's INDI setup, and the scan cannot resolve
+         everything on its own (rebadged cameras share a USB id; anything on a
+         USB-serial bridge is unidentifiable). So the operator settles the
+         ambiguous rows here and the Create button stays disabled until every
+         device either has a driver or is explicitly skipped. -->
+    <div class="modal-overlay" x-show="indiDetect.modalOpen" x-cloak
+         @click.self="if(!indiDetect.applying) indiDetect.modalOpen=false"
+         @keydown.escape.window="if(!indiDetect.applying) indiDetect.modalOpen=false">
+        <div class="modal-card" style="max-width:680px;">
+            <div class="modal-head">
+                <span class="modal-icon">🔌</span>
+                <h3>Detected equipment</h3>
+            </div>
+            <p style="font-size:13px;" x-show="indiDetect.devices.length || indiDetect.serialPorts.length">
+                Review what Polaris found, then create the INDI profile. Anything left as
+                Skip is not added, and you can still add it by hand in the indi-web panel.
+            </p>
+            <p style="font-size:13px;" x-show="!indiDetect.devices.length && !indiDetect.serialPorts.length">
+                No USB devices were detected. Check that the equipment is powered and
+                connected, then scan again.
+            </p>
+
+            <!-- USB devices -->
+            <template x-for="d in indiDetect.devices" :key="d.path">
+                <div style="border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin:8px 0;">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <strong style="font-size:13px;"
+                                x-text="d.product || (d.vendorId + ':' + d.productId)"></strong>
+                        <span class="text-muted" style="font-size:11px;"
+                              x-text="d.vendorId + ':' + d.productId
+                                      + (d.manufacturer ? ' · ' + d.manufacturer : '')
+                                      + ' · ' + d.speedMbps + ' Mbps'"></span>
+                    </div>
+                    <div x-show="d.note" style="font-size:11px;color:var(--text-muted);margin-top:4px;"
+                         x-text="d.note"></div>
+                    <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;color:var(--text-muted);min-width:52px;">Driver</span>
+                        <select class="input input-sm" style="flex:1;"
+                                x-model="indiDetect.choice[d.path]">
+                            <option value="">Skip</option>
+                            <template x-for="c in d.candidates" :key="c">
+                                <option :value="c" x-text="c"></option>
+                            </template>
+                            <!-- Escape hatch: when the scan could not resolve the
+                                 device, the operator can still pick any installed
+                                 driver instead of leaving the panel. -->
+                            <template x-if="!d.candidates.length">
+                                <template x-for="drv in indiDetect.installedDrivers" :key="drv.label">
+                                    <option :value="drv.label"
+                                            x-text="drv.label + (drv.family ? ' (' + drv.family + ')' : '')"></option>
+                                </template>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Serial ports: never guessed, always the operator's call. -->
+            <template x-for="p in indiDetect.serialPorts" :key="p.device">
+                <div style="border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin:8px 0;">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <strong style="font-size:13px;" x-text="p.device"></strong>
+                        <span class="text-muted" style="font-size:11px;" x-text="p.byId"></span>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+                        Serial port. Mounts and most focusers connect through a generic
+                        USB-serial adapter, so Polaris cannot tell which device this is.
+                    </div>
+                    <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;color:var(--text-muted);min-width:52px;">Driver</span>
+                        <select class="input input-sm" style="flex:1;"
+                                x-model="indiDetect.choice['serial:' + p.device]">
+                            <option value="">Skip</option>
+                            <template x-for="drv in indiDetect.installedDrivers" :key="drv.label">
+                                <option :value="drv.label"
+                                        x-text="drv.label + (drv.family ? ' (' + drv.family + ')' : '')"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+            </template>
+
+            <div style="margin-top:12px;display:flex;align-items:center;gap:8px;">
+                <span style="font-size:11px;color:var(--text-muted);min-width:80px;">Profile name</span>
+                <input type="text" class="input input-sm" style="flex:1;"
+                       x-model="indiDetect.profileName" placeholder="Polaris">
+            </div>
+            <p x-show="indiDetectProfileExists()" style="font-size:11px;color:var(--warning,#d29922);margin-top:6px;">
+                A profile with this name already exists and will be replaced.
+            </p>
+            <p x-show="indiDetect.error" style="color:var(--danger,#e66);font-size:12px;margin-top:6px;"
+               x-text="indiDetect.error"></p>
+
+            <div class="modal-actions">
+                <button class="btn btn-sm" :disabled="indiDetect.applying"
+                        @click="indiDetect.modalOpen=false">Cancel</button>
+                <button class="btn btn-sm btn-primary"
+                        :disabled="indiDetect.applying || !indiDetectSelectedCount()"
+                        @click="indiDetectApply()">
+                    <!-- Label and count are separate text nodes on purpose: the
+                         i18n layer keys off the English string, so baking the
+                         number into it ("Create profile (2)") would never match
+                         a catalog entry and the button would stay English. -->
+                    <span x-text="indiDetect.applying ? 'Creating…' : 'Create profile'"></span>
+                    <span x-show="!indiDetect.applying"
+                          x-text="' (' + indiDetectSelectedCount() + ')'"></span>
                 </button>
             </div>
         </div>
