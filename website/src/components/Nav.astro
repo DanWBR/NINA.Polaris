@@ -1,13 +1,23 @@
 ---
-import { getContent, type Lang } from '../data/site';
-// `lang` is supplied by the page once locale routes exist; until then
-// every caller omits it and getContent('en') returns the English content.
+import { getContent, LANGS, localePath, stripLangPrefix, langPrefix, type Lang } from '../data/site';
 const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
 const {navLinks} = getContent(lang);
+
+// Internal links must carry the current language, or the first click from
+// /pt-br/ silently drops the reader back into English.
+const linkHref = (href: string, external?: boolean) =>
+  external || /^(https?:|mailto:|#)/.test(href) ? href : localePath(href, lang);
+
+// The switcher points at the SAME page in each language rather than the home
+// page: being thrown back to the top of the site is the classic annoyance here.
+const here = stripLangPrefix(Astro.url.pathname);
+const LANG_LABEL: Record<Lang, string> = {
+  en: 'English', 'pt-BR': 'Português', es: 'Español', fr: 'Français', de: 'Deutsch',
+};
 ---
 
 <nav class="nav">
-  <a class="brand" href="/">
+  <a class="brand" href={localePath('/', lang)}>
     <img class="brand-badge" src="/img/polaris-badge.png" alt="Polaris Astro Controller" width="28" height="28" />
     <span class="brand-name">Polaris</span>
     <span class="brand-tag">Astro Controller</span>
@@ -20,12 +30,24 @@ const {navLinks} = getContent(lang);
   <div class="nav-links">
     {navLinks.map((l) => (
       <a
-        href={l.href}
+        href={linkHref(l.href, l.external)}
         {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}
       >
         {l.label}
       </a>
     ))}
+
+    <div class="lang-switch">
+      {LANGS.map((l) => (
+        <a
+          href={`${langPrefix(l)}${here}` || '/'}
+          hreflang={l}
+          lang={l}
+          class={l === lang ? 'is-current' : undefined}
+          aria-current={l === lang ? 'true' : undefined}
+        >{LANG_LABEL[l]}</a>
+      ))}
+    </div>
   </div>
 </nav>
 
@@ -150,4 +172,14 @@ const {navLinks} = getContent(lang);
       border-top: 1px solid var(--border);
     }
   }
+</style>
+
+<style>
+  /* Language switcher. Plain links, not a dropdown: they are crawlable and
+     work without JavaScript, which matters because these are the URLs the
+     search engine follows to find the translations. */
+  .lang-switch { display: flex; gap: 10px; align-items: center; margin-left: 8px; }
+  .lang-switch a { font-size: 13px; opacity: 0.7; }
+  .lang-switch a:hover { opacity: 1; }
+  .lang-switch a.is-current { opacity: 1; font-weight: 600; text-decoration: underline; }
 </style>

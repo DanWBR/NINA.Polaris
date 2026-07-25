@@ -1,10 +1,16 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import Footer from '../components/Footer.astro';
-import { getContent, type Lang } from '../data/site';
-// `lang` is supplied by the page once locale routes exist; until then
-// every caller omits it and getContent('en') returns the English content.
-const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
+import Layout from '../../layouts/Layout.astro';
+import Footer from '../../components/Footer.astro';
+import { getContent, LANGS, type Lang } from '../../data/site';
+export async function getStaticPaths() {
+  // `undefined` for English is what keeps it at the site root: a rest param
+  // that resolves to nothing renders the page at the path with no prefix.
+  return LANGS.map((l) => ({
+    params: { lang: l === 'en' ? undefined : l.toLowerCase() },
+    props: { lang: l },
+  }));
+}
+const { lang } = Astro.props as { lang: Lang };
 const {assistantPage: p} = getContent(lang);
 // Screenshots are spaced through the page. Each is full-width; until a real
 // image is dropped in (set `src`), a full-width placeholder box is shown.
@@ -17,7 +23,7 @@ const capGroups: any[] = (p as any).capabilities ?? [];
 const capGlyph: Record<string, string> = { yes: '✓', no: '✗', partial: '~' };
 ---
 
-<Layout
+<Layout lang={lang}
   title="Canopus Assistant: AI co-pilot for Polaris Astro Controller"
   description="Canopus Assistant is an optional AI companion for Polaris Astro Controller: it plans your night, drives the rig with your approval, inspects your frames, and answers astrophotography questions inside the Polaris web UI. A paid cloud plan (US$4.99/mo, 7-day trial) plus free, fully offline on-host and on-device backends."
 >
@@ -266,7 +272,7 @@ const capGlyph: Record<string, string> = { yes: '✓', no: '✗', partial: '~' }
     </section>
 
   </main>
-  <Footer />
+  <Footer lang={lang} />
 </Layout>
 
 <style>

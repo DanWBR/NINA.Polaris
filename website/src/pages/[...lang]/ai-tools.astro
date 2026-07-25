@@ -1,10 +1,16 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import Footer from '../components/Footer.astro';
-import { getContent, type Lang } from '../data/site';
-// `lang` is supplied by the page once locale routes exist; until then
-// every caller omits it and getContent('en') returns the English content.
-const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
+import Layout from '../../layouts/Layout.astro';
+import Footer from '../../components/Footer.astro';
+import { getContent, LANGS, type Lang } from '../../data/site';
+export async function getStaticPaths() {
+  // `undefined` for English is what keeps it at the site root: a rest param
+  // that resolves to nothing renders the page at the path with no prefix.
+  return LANGS.map((l) => ({
+    params: { lang: l === 'en' ? undefined : l.toLowerCase() },
+    props: { lang: l },
+  }));
+}
+const { lang } = Astro.props as { lang: Lang };
 const {aiToolsPage: p} = getContent(lang);
 const sourceBadge: Record<string, { label: string; color: string }> = {
   graxpert:      { label: 'GraXpert model',        color: '#2563eb' },
@@ -17,7 +23,7 @@ const sourceBadge: Record<string, { label: string; color: string }> = {
 };
 ---
 
-<Layout
+<Layout lang={lang}
   title="AI Tools, Polaris Astro Controller"
   description="All AI-powered image processing tools in Polaris Astro Controller: background extraction, AI denoise, classical and AI deconvolution, star removal, halo removal, and super-resolution upscaling. Runs fully local on browser GPU, OpenCL, RKNN NPU, or CPU."
 >
@@ -148,7 +154,7 @@ const sourceBadge: Record<string, { label: string; color: string }> = {
     </section>
 
   </main>
-  <Footer />
+  <Footer lang={lang} />
 </Layout>
 
 <style>

@@ -1,12 +1,18 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import Footer from '../components/Footer.astro';
-import Icon from '../components/Icon.astro';
-import FruitIcon from '../components/FruitIcon.astro';
-import { getContent, type Lang } from '../data/site';
-// `lang` is supplied by the page once locale routes exist; until then
-// every caller omits it and getContent('en') returns the English content.
-const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
+import Layout from '../../layouts/Layout.astro';
+import Footer from '../../components/Footer.astro';
+import Icon from '../../components/Icon.astro';
+import FruitIcon from '../../components/FruitIcon.astro';
+import { getContent, LANGS, type Lang } from '../../data/site';
+export async function getStaticPaths() {
+  // `undefined` for English is what keeps it at the site root: a rest param
+  // that resolves to nothing renders the page at the path with no prefix.
+  return LANGS.map((l) => ({
+    params: { lang: l === 'en' ? undefined : l.toLowerCase() },
+    props: { lang: l },
+  }));
+}
+const { lang } = Astro.props as { lang: Lang };
 const {installGuide: g} = getContent(lang);
 // Pick a fruit glyph from a board name.
 const fruitFor = (name: string): 'raspberry' | 'orange' | null => {
@@ -26,7 +32,7 @@ const statusClass = (s: string) => {
 };
 ---
 
-<Layout
+<Layout lang={lang}
   title={`${g.title}, Polaris Astro Controller`}
   description="Install Polaris Astro Controller on Raspberry Pi, Linux, Windows, or Docker, plus the optional components for plate solving, guiding, post-processing, and more."
 >
@@ -331,7 +337,7 @@ const statusClass = (s: string) => {
     </section>
   </main>
 
-  <Footer />
+  <Footer lang={lang} />
 </Layout>
 
 <style>

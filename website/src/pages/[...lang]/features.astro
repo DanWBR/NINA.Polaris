@@ -1,14 +1,20 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import Footer from '../components/Footer.astro';
-import { getContent, type Lang } from '../data/site';
-// `lang` is supplied by the page once locale routes exist; until then
-// every caller omits it and getContent('en') returns the English content.
-const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
+import Layout from '../../layouts/Layout.astro';
+import Footer from '../../components/Footer.astro';
+import { getContent, LANGS, type Lang } from '../../data/site';
+export async function getStaticPaths() {
+  // `undefined` for English is what keeps it at the site root: a rest param
+  // that resolves to nothing renders the page at the path with no prefix.
+  return LANGS.map((l) => ({
+    params: { lang: l === 'en' ? undefined : l.toLowerCase() },
+    props: { lang: l },
+  }));
+}
+const { lang } = Astro.props as { lang: Lang };
 const {featurePage: f} = getContent(lang);
 ---
 
-<Layout
+<Layout lang={lang}
   title="Features, Polaris Astro Controller"
   description="The full Polaris Astro Controller feature map, organized by sidebar panel: equipment, polar alignment, sky explorer, focus, guiding, capture, planning, live stacking, video, the advanced sequencer, studio post-processing, the editor, and AI inference."
 >
@@ -71,7 +77,7 @@ const {featurePage: f} = getContent(lang);
       </div>
     </section>
   </main>
-  <Footer />
+  <Footer lang={lang} />
 </Layout>
 
 <style>

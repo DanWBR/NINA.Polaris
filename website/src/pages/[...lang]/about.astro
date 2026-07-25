@@ -1,14 +1,20 @@
 ---
-import Layout from '../layouts/Layout.astro';
-import Footer from '../components/Footer.astro';
-import { getContent, type Lang } from '../data/site';
-// `lang` is supplied by the page once locale routes exist; until then
-// every caller omits it and getContent('en') returns the English content.
-const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
+import Layout from '../../layouts/Layout.astro';
+import Footer from '../../components/Footer.astro';
+import { getContent, LANGS, type Lang } from '../../data/site';
+export async function getStaticPaths() {
+  // `undefined` for English is what keeps it at the site root: a rest param
+  // that resolves to nothing renders the page at the path with no prefix.
+  return LANGS.map((l) => ({
+    params: { lang: l === 'en' ? undefined : l.toLowerCase() },
+    props: { lang: l },
+  }));
+}
+const { lang } = Astro.props as { lang: Lang };
 const {site, aboutContent: a} = getContent(lang);
 ---
 
-<Layout
+<Layout lang={lang}
   title="About, Polaris Astro Controller"
   description="What Polaris Astro Controller is, who makes it, its open-source license, and how to support the project."
 >
@@ -132,7 +138,7 @@ const {site, aboutContent: a} = getContent(lang);
       </div>
     </section>
   </main>
-  <Footer />
+  <Footer lang={lang} />
 </Layout>
 
 <style>

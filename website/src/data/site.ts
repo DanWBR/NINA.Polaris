@@ -118,6 +118,26 @@ export function langPrefix(lang: Lang): string {
   return lang === 'en' ? '' : `/${lang.toLowerCase()}`;
 }
 
+/**
+ * Drop a leading language segment from a path, so a page can rebuild the same
+ * URL in another language. Returns a path that always starts with '/'.
+ */
+export function stripLangPrefix(pathname: string): string {
+  for (const l of LANGS) {
+    if (l === 'en') continue;
+    const p = `/${l.toLowerCase()}`;
+    if (pathname === p || pathname.startsWith(`${p}/`)) {
+      return pathname.slice(p.length) || '/';
+    }
+  }
+  return pathname || '/';
+}
+
+/** Prefix an internal link with the current language. */
+export function localePath(pathname: string, lang: Lang): string {
+  return `${langPrefix(lang)}${stripLangPrefix(pathname)}` || '/';
+}
+
 export function isLang(value: unknown): value is Lang {
   return typeof value === 'string' && (LANGS as string[]).includes(value);
 }

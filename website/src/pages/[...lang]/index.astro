@@ -1,0 +1,30 @@
+---
+import { LANGS, type Lang } from '../../data/site';
+export async function getStaticPaths() {
+  // `undefined` for English is what keeps it at the site root: a rest param
+  // that resolves to nothing renders the page at the path with no prefix.
+  return LANGS.map((l) => ({
+    params: { lang: l === 'en' ? undefined : l.toLowerCase() },
+    props: { lang: l },
+  }));
+}
+const { lang } = Astro.props as { lang: Lang };
+import Layout from '../../layouts/Layout.astro';
+import Hero from '../../components/Hero.astro';
+import Features from '../../components/Features.astro';
+import Benchmarks from '../../components/Benchmarks.astro';
+import Comparison from '../../components/Comparison.astro';
+import Gallery from '../../components/Gallery.astro';
+import Downloads from '../../components/Downloads.astro';
+import Footer from '../../components/Footer.astro';
+---
+
+<Layout lang={lang}>
+  <Hero lang={lang} />
+  <Features lang={lang} />
+  <Benchmarks lang={lang} />
+  <Comparison lang={lang} />
+  <Gallery lang={lang} />
+  <Downloads lang={lang} />
+  <Footer lang={lang} />
+</Layout>

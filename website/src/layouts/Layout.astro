@@ -1,8 +1,8 @@
 ---
 import '../styles/global.css';
-import { getContent, type Lang } from '../data/site';
-// `lang` is supplied by the page once locale routes exist; until then
-// every caller omits it and getContent('en') returns the English content.
+import { getContent, LANGS, langPrefix, stripLangPrefix, type Lang } from '../data/site';
+// English is the default so a page that has not been given a language still
+// renders, rather than failing the build.
 const { lang = 'en' as Lang } = Astro.props as { lang?: Lang };
 const {site} = getContent(lang);
 import Nav from '../components/Nav.astro';
@@ -19,10 +19,19 @@ const {
 
 const ogImage = new URL(site.ogImage, Astro.site ?? Astro.url).href;
 const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url).href;
+
+// The same page in every language, built from the current path with its
+// language prefix removed. English first, so it can serve as x-default.
+const bare = stripLangPrefix(Astro.url.pathname);
+const altLinks = LANGS.map((l) => ({
+  lang: l,
+  hreflang: l,
+  href: new URL(`${langPrefix(l)}${bare}` || '/', Astro.site ?? Astro.url).href,
+}));
 ---
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang={lang}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -34,6 +43,14 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url).href;
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon-180.png" />
     <link rel="canonical" href={canonical} />
+
+    {/* Reciprocal hreflang. Without it Google treats the translations as
+        near-duplicates and picks one itself, usually the wrong one for the
+        reader. x-default points at English, which is the source. */}
+    {altLinks.map((a) => (
+      <link rel="alternate" hreflang={a.hreflang} href={a.href} />
+    ))}
+    <link rel="alternate" hreflang="x-default" href={altLinks[0].href} />
 
     <title>{title}</title>
     <meta name="description" content={description} />
@@ -55,7 +72,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url).href;
     <meta name="generator" content={Astro.generator} />
   </head>
   <body>
-    <Nav />
+    <Nav lang={lang} />
     <slot />
   </body>
 </html>
