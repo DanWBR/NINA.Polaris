@@ -90,7 +90,7 @@ public static class IndiDeviceCatalog {
             return new IndiDeviceMatch(
                 IndiMatchConfidence.SerialBridge, null, Array.Empty<string>(),
                 $"{bridge} USB-serial adapter. The device behind it (mount, focuser, " +
-                "flat panel...) cannot be identified from USB -- pick its driver yourself.");
+                "flat panel) cannot be identified from USB, so pick its driver yourself.");
         }
 
         switch (vid) {

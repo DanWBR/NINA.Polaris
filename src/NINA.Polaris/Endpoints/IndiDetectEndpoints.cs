@@ -133,10 +133,21 @@ public static class IndiDetectEndpoints {
                 return Results.Json(new { error = web.LastError ?? "profile creation failed" },
                                     statusCode: 500);
             }
+
+            // Select + start the profile we just wrote. Without this the
+            // assistant stops one step short of useful: the profile exists but
+            // indiserver is still running the old one (or nothing at all), so
+            // no device actually comes up. Reported separately from the
+            // creation result -- a profile that exists but failed to start is a
+            // partial success the operator can finish by hand, not a reason to
+            // claim the whole operation failed.
+            var started = await web.StartServerAsync(req.Name, ct);
             return Results.Ok(new {
                 status = replaced ? "updated" : "created",
                 profile = req.Name,
                 drivers = req.Drivers,
+                started,
+                startError = started ? null : web.LastError,
             });
         });
     }

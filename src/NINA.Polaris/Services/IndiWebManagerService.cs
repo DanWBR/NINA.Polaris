@@ -368,19 +368,121 @@ public class IndiWebManagerService : BackgroundService {
                 .Where(l => !string.IsNullOrWhiteSpace(l))
                 .Select(l => new Dictionary<string, string> { ["label"] = l })
                 .ToList();
-            using var set = await Http.PostAsJsonAsync($"/api/profiles/{escaped}/drivers", payload, ct);
-            if (!set.IsSuccessStatusCode) {
-                LastError = $"indi-web rejected the driver list for '{name}' (HTTP {(int)set.StatusCode})";
-                _logger.LogWarning("{Error}", LastError);
-                return false;
+            using (var set = await Http.PostAsJsonAsync($"/api/profiles/{escaped}/drivers", payload, ct)) {
+                if (!set.IsSuccessStatusCode) {
+                    LastError = $"indi-web rejected the driver list for '{name}' (HTTP {(int)set.StatusCode})";
+                    _logger.LogWarning("{Error}", LastError);
+                    return false;
+                }
             }
-            _logger.LogInformation("Created indi-web profile '{Name}' with {Count} driver(s)",
+
+            // A freshly created profile comes back with autostart=0 and
+            // autoconnect=0 (verified against a live indi-web), which means the
+            // user would create a profile here and then still have to start the
+            // server and connect every device by hand -- most of the work the
+            // assistant exists to remove. Set both, LAST, so neither the create
+            // nor the driver-list call can clobber them.
+            var settings = new Dictionary<string, int> {
+                ["port"] = 7624, ["autostart"] = 1, ["autoconnect"] = 1,
+            };
+            using (var upd = await Http.PutAsJsonAsync($"/api/profiles/{escaped}", settings, ct)) {
+                if (!upd.IsSuccessStatusCode) {
+                    // The profile itself is valid at this point, so this is a
+                    // warning rather than a failure: the user just has to start
+                    // it by hand.
+                    _logger.LogWarning(
+                        "Profile '{Name}' created but autostart/autoconnect could not be set (HTTP {Code})",
+                        name, (int)upd.StatusCode);
+                }
+            }
+            _logger.LogInformation(
+                "Created indi-web profile '{Name}' with {Count} driver(s), autostart + autoconnect on",
                 name, payload.Count);
             LastError = null;
             return true;
         } catch (Exception ex) {
             LastError = $"indi-web profile creation failed: {ex.Message}";
             _logger.LogWarning(ex, "indi-web profile creation failed for '{Name}'", name);
+            return false;
+        }
+    }
+
+    /// <summary>The profile indiserver is currently running, or null when no
+    /// server is up.</summary>
+    public async Task<string?> GetActiveProfileAsync(CancellationToken ct = default) {
+        if (!IsSupportedOs) return null;
+        try {
+            var status = await Http.GetFromJsonAsync<List<IndiWebServerStatus>>("/api/server/status", ct);
+            var first = status?.FirstOrDefault();
+            if (first == null) return null;
+            return string.Equals(first.Status, "True", StringComparison.OrdinalIgnoreCase)
+                ? first.ActiveProfile : null;
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "indi-web GET /api/server/status failed");
+            return null;
+        }
+    }
+
+    /// <summary>Bring indiserver up on <paramref name="profile"/>, stopping
+    /// whatever is running first.
+    ///
+    /// <para>The stop is explicit rather than relying on start-over-start: this
+    /// runs right after the profile assistant writes a profile, and leaving the
+    /// PREVIOUS profile's drivers alive would silently keep the old device set
+    /// attached, which looks exactly like "the new profile did nothing".</para>
+    ///
+    /// <para>Switching profiles necessarily drops the drivers the old one had
+    /// running, so only call this from a path the operator explicitly
+    /// confirmed.</para></summary>
+    public async Task<bool> StartServerAsync(string profile, CancellationToken ct = default) {
+        if (!IsSupportedOs) { LastError = "OS not supported"; return false; }
+        if (string.IsNullOrWhiteSpace(profile)) { LastError = "profile required"; return false; }
+        if (!Running && !await ProbeHealthAsync(ct)) {
+            LastError = "indi-web is not running";
+            return false;
+        }
+        try {
+            if (await GetActiveProfileAsync(ct) != null) {
+                using var stop = await Http.PostAsync("/api/server/stop", content: null, ct);
+                if (!stop.IsSuccessStatusCode) {
+                    _logger.LogWarning("indi-web server stop returned HTTP {Code}", (int)stop.StatusCode);
+                }
+                // indiserver needs a moment to release port 7624 before the
+                // next bind; without it the start can come back "ok" against a
+                // socket that is still closing.
+                await Task.Delay(1500, ct);
+            }
+            var url = $"/api/server/start/{Uri.EscapeDataString(profile)}";
+            using var start = await Http.PostAsync(url, content: null, ct);
+            if (!start.IsSuccessStatusCode) {
+                LastError = $"indi-web could not start profile '{profile}' (HTTP {(int)start.StatusCode})";
+                _logger.LogWarning("{Error}", LastError);
+                return false;
+            }
+
+            // CONFIRM the switch instead of trusting the 200. indiserver needs a
+            // few seconds to come up, and indi-web only reports the new
+            // active_profile once it has. The caller reloads the indi-web iframe
+            // as soon as this returns, and that page renders its profile
+            // dropdown FROM active_profile -- so returning early left the panel
+            // showing the previously running profile and made a successful
+            // switch look like it had been ignored.
+            for (int i = 0; i < 12; i++) {
+                await Task.Delay(750, ct);
+                var active = await GetActiveProfileAsync(ct);
+                if (string.Equals(active, profile, StringComparison.OrdinalIgnoreCase)) {
+                    _logger.LogInformation("indiserver started on profile '{Profile}'", profile);
+                    LastError = null;
+                    return true;
+                }
+            }
+            LastError = $"indi-web accepted the start but still reports " +
+                        $"'{await GetActiveProfileAsync(ct) ?? "no profile"}' as active";
+            _logger.LogWarning("{Error}", LastError);
+            return false;
+        } catch (Exception ex) {
+            LastError = $"indi-web start '{profile}' failed: {ex.Message}";
+            _logger.LogWarning(ex, "indi-web start '{Profile}' failed", profile);
             return false;
         }
     }
@@ -430,6 +532,14 @@ public class IndiWebManagerService : BackgroundService {
         public int Id { get; set; }
         public string? Name { get; set; }
         public int Port { get; set; }
+    }
+
+    private sealed class IndiWebServerStatus {
+        /// <summary>indi-web reports this as the STRING "True"/"False",
+        /// not a JSON boolean.</summary>
+        public string? Status { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("active_profile")]
+        public string? ActiveProfile { get; set; }
     }
 
     /// <summary>TCP probe — true if something is listening on
