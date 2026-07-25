@@ -1,73 +1,66 @@
 [
   {
-    "dir": "nox-color-ai-models",
-    "version": "1.0.0",
-    "bytes": 218424132,
-    "label": "nox colour (StarNet-like, MIT) - star removal, FP32",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-color-ai-models/1.0.0/model.onnx"
-  },
-  {
-    "dir": "nox-color-ai-models",
-    "version": "1.0.0-fp16",
-    "bytes": 109241715,
-    "label": "nox colour (StarNet-like, MIT) - star removal, FP16 (default)",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-color-ai-models/1.0.0-fp16/model.onnx"
-  },
-  {
-    "dir": "nox-gray-ai-models",
-    "version": "1.0.0",
-    "bytes": 218399679,
-    "label": "nox gray (StarNet-like, MIT) - star removal, FP32",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-gray-ai-models/1.0.0/model.onnx"
-  },
-  {
-    "dir": "nox-gray-ai-models",
-    "version": "1.0.0-fp16",
-    "bytes": 109229542,
-    "label": "nox gray (StarNet-like, MIT) - star removal, FP16 (default)",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-gray-ai-models/1.0.0-fp16/model.onnx"
-  },
-  {
-    "dir": "starrem2k13-ai-models",
-    "version": "1.0.0",
-    "bytes": 124513510,
-    "label": "starrem2k13 (U-Net, MIT) - star removal, FP32",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starrem2k13-ai-models/1.0.0/model.onnx"
-  },
-  {
-    "dir": "starrem2k13-ai-models",
-    "version": "1.0.0-fp16",
-    "bytes": 62268180,
-    "label": "starrem2k13 (U-Net, MIT) - star removal, FP16 (default)",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starrem2k13-ai-models/1.0.0-fp16/model.onnx"
-  },
-  {
-    "dir": "starnet-ai-models",
-    "version": "1.0.0",
-    "bytes": 217708816,
-    "label": "StarNet++ (NonCommercial) - star removal, FP32",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starnet-ai-models/1.0.0/model.onnx"
-  },
-  {
-    "dir": "starnet-ai-models",
-    "version": "1.0.0-fp16",
-    "bytes": 108871968,
-    "label": "StarNet++ (NonCommercial) - star removal, FP16 (default)",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starnet-ai-models/1.0.0-fp16/model.onnx"
-  },
-  {
     "dir": "bge-ai-models",
     "version": "1.0.1",
     "bytes": 217663463,
     "label": "GraXpert Background Extraction (NonCommercial)",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/bge-ai-models/1.0.1/model.onnx"
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/bge-ai-models/graxpert-1.0.1/model.onnx"
   },
   {
     "dir": "bge-ai-models",
     "version": "1.0.1-fp16",
     "bytes": 108842113,
     "label": "GraXpert Background Extraction (NonCommercial, FP16 - iOS)",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/bge-ai-models/1.0.1-fp16/model.onnx"
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/bge-ai-models/graxpert-1.0.1-fp16/model.onnx"
+  },
+  {
+    "dir": "bge-ai-models",
+    "version": "polaris-1.0.0",
+    "bytes": 240649651,
+    "label": "Polaris Background Extraction (AGPL) - FP32",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/bge-ai-models/polaris-1.0.0/model.onnx"
+  },
+  {
+    "dir": "bge-ai-models",
+    "version": "polaris-1.0.0-fp16",
+    "bytes": 120462909,
+    "label": "Polaris Background Extraction (AGPL) - FP16",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/bge-ai-models/polaris-1.0.0-fp16/model.onnx"
+  },
+  {
+    "dir": "bge-ai-models",
+    "version": "polaris-1.0.0-int16",
+    "bytes": 120805180,
+    "label": "Polaris Background Extraction (AGPL) - INT16 (NPU)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/bge-ai-models/polaris-1.0.0-int16/model.onnx"
+  },
+  {
+    "dir": "deconvolution-object-ai-models",
+    "version": "1.0.1",
+    "bytes": 279252211,
+    "label": "GraXpert Deconvolution - Objects (NonCommercial)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-object-ai-models/1.0.1/model.onnx"
+  },
+  {
+    "dir": "deconvolution-object-ai-models",
+    "version": "1.0.1-fp16",
+    "bytes": 140384795,
+    "label": "GraXpert Deconvolution - Objects (NonCommercial, FP16 - iOS)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-object-ai-models/1.0.1-fp16/model.onnx"
+  },
+  {
+    "dir": "deconvolution-stars-ai-models",
+    "version": "1.0.0",
+    "bytes": 279252211,
+    "label": "GraXpert Deconvolution - Stars (NonCommercial)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-stars-ai-models/1.0.0/model.onnx"
+  },
+  {
+    "dir": "deconvolution-stars-ai-models",
+    "version": "1.0.0-fp16",
+    "bytes": 140384795,
+    "label": "GraXpert Deconvolution - Stars (NonCommercial, FP16 - iOS)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-stars-ai-models/1.0.0-fp16/model.onnx"
   },
   {
     "dir": "denoise-ai-models",
@@ -98,31 +91,164 @@
     "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/denoise-ai-models/3.0.2-fp16/model.onnx"
   },
   {
-    "dir": "deconvolution-stars-ai-models",
+    "dir": "detail-ai-models",
+    "version": "1.1",
+    "bytes": 240633924,
+    "label": "Polaris Deconvolution v1.1 (AGPL) - FP32",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/detail-ai-models/1.1/model.onnx"
+  },
+  {
+    "dir": "detail-ai-models",
+    "version": "1.1-fp16",
+    "bytes": 120445518,
+    "label": "Polaris Deconvolution v1.1 (AGPL) - FP16",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/detail-ai-models/1.1-fp16/model.onnx"
+  },
+  {
+    "dir": "detail-ai-models",
+    "version": "1.1-int16",
+    "bytes": 120781744,
+    "label": "Polaris Deconvolution v1.1 (AGPL) - INT16 (NPU)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/detail-ai-models/1.1-int16/model.onnx"
+  },
+  {
+    "dir": "detail-ai-models",
+    "version": "1.1-int8",
+    "bytes": 60667531,
+    "label": "Polaris Deconvolution v1.1 (AGPL) - INT8 (QAT, NPU)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/detail-ai-models/1.1-int8/model.onnx"
+  },
+  {
+    "dir": "detail-ai-models",
+    "version": "1.2",
+    "bytes": 240633924,
+    "label": "Polaris Deconvolution v1.2 (AGPL) - FP32",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/detail-ai-models/1.2/model.onnx"
+  },
+  {
+    "dir": "detail-ai-models",
+    "version": "1.2-fp16",
+    "bytes": 120445518,
+    "label": "Polaris Deconvolution v1.2 (AGPL) - FP16",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/detail-ai-models/1.2-fp16/model.onnx"
+  },
+  {
+    "dir": "detail-ai-models",
+    "version": "1.2-int16",
+    "bytes": 120781774,
+    "label": "Polaris Deconvolution v1.2 (AGPL) - INT16 (NPU)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/detail-ai-models/1.2-int16/model.onnx"
+  },
+  {
+    "dir": "detail-ai-models",
+    "version": "1.2-w8a16",
+    "bytes": 60673173,
+    "label": "Polaris Deconvolution v1.2 (AGPL) - W8A16 (Hexagon)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/detail-ai-models/1.2-w8a16/model.onnx"
+  },
+  {
+    "dir": "halo-ai-models",
+    "version": "polaris-1.0.0",
+    "bytes": 240649650,
+    "label": "Polaris Halo Removal (AGPL) - FP32",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/halo-ai-models/polaris-1.0.0/model.onnx"
+  },
+  {
+    "dir": "halo-ai-models",
+    "version": "polaris-1.0.0-fp16",
+    "bytes": 120462908,
+    "label": "Polaris Halo Removal (AGPL) - FP16",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/halo-ai-models/polaris-1.0.0-fp16/model.onnx"
+  },
+  {
+    "dir": "halo-ai-models",
+    "version": "polaris-1.0.0-int16",
+    "bytes": 120805205,
+    "label": "Polaris Halo Removal (AGPL) - INT16 (NPU)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/halo-ai-models/polaris-1.0.0-int16/model.onnx"
+  },
+  {
+    "dir": "nox-color-ai-models",
     "version": "1.0.0",
-    "bytes": 279252211,
-    "label": "GraXpert Deconvolution - Stars (NonCommercial)",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-stars-ai-models/1.0.0/model.onnx"
+    "bytes": 218424132,
+    "label": "nox colour (StarNet-like, MIT) - star removal, FP32",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-color-ai-models/1.0.0/model.onnx"
   },
   {
-    "dir": "deconvolution-stars-ai-models",
+    "dir": "nox-color-ai-models",
     "version": "1.0.0-fp16",
-    "bytes": 140384795,
-    "label": "GraXpert Deconvolution - Stars (NonCommercial, FP16 - iOS)",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-stars-ai-models/1.0.0-fp16/model.onnx"
+    "bytes": 109241715,
+    "label": "nox colour (StarNet-like, MIT) - star removal, FP16 (default)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-color-ai-models/1.0.0-fp16/model.onnx"
   },
   {
-    "dir": "deconvolution-object-ai-models",
-    "version": "1.0.1",
-    "bytes": 279252211,
-    "label": "GraXpert Deconvolution - Objects (NonCommercial)",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-object-ai-models/1.0.1/model.onnx"
+    "dir": "nox-gray-ai-models",
+    "version": "1.0.0",
+    "bytes": 218399679,
+    "label": "nox gray (StarNet-like, MIT) - star removal, FP32",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-gray-ai-models/1.0.0/model.onnx"
   },
   {
-    "dir": "deconvolution-object-ai-models",
-    "version": "1.0.1-fp16",
-    "bytes": 140384795,
-    "label": "GraXpert Deconvolution - Objects (NonCommercial, FP16 - iOS)",
-    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/deconvolution-object-ai-models/1.0.1-fp16/model.onnx"
+    "dir": "nox-gray-ai-models",
+    "version": "1.0.0-fp16",
+    "bytes": 109229542,
+    "label": "nox gray (StarNet-like, MIT) - star removal, FP16 (default)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/nox-gray-ai-models/1.0.0-fp16/model.onnx"
+  },
+  {
+    "dir": "starnet-ai-models",
+    "version": "1.0.0",
+    "bytes": 217708816,
+    "label": "StarNet++ (NonCommercial) - star removal, FP32",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starnet-ai-models/1.0.0/model.onnx"
+  },
+  {
+    "dir": "starnet-ai-models",
+    "version": "1.0.0-fp16",
+    "bytes": 108871968,
+    "label": "StarNet++ (NonCommercial) - star removal, FP16 (default)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starnet-ai-models/1.0.0-fp16/model.onnx"
+  },
+  {
+    "dir": "starrem2k13-ai-models",
+    "version": "1.0.0",
+    "bytes": 124513510,
+    "label": "starrem2k13 (U-Net, MIT) - star removal, FP32",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starrem2k13-ai-models/1.0.0/model.onnx"
+  },
+  {
+    "dir": "starrem2k13-ai-models",
+    "version": "1.0.0-fp16",
+    "bytes": 62268180,
+    "label": "starrem2k13 (U-Net, MIT) - star removal, FP16 (default)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/starrem2k13-ai-models/1.0.0-fp16/model.onnx"
+  },
+  {
+    "dir": "upscale-ai-models",
+    "version": "polaris-1.0.0",
+    "bytes": 75749395,
+    "label": "Polaris Upscaling 2x (AGPL) - FP32",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/upscale-ai-models/polaris-1.0.0/model.onnx"
+  },
+  {
+    "dir": "upscale-ai-models",
+    "version": "polaris-1.0.0-fp16",
+    "bytes": 37982088,
+    "label": "Polaris Upscaling 2x (AGPL) - FP16",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/upscale-ai-models/polaris-1.0.0-fp16/model.onnx"
+  },
+  {
+    "dir": "upscale-ai-models",
+    "version": "polaris-1.0.0-int16",
+    "bytes": 38178922,
+    "label": "Polaris Upscaling 2x (AGPL) - INT16 (NPU)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/upscale-ai-models/polaris-1.0.0-int16/model.onnx"
+  },
+  {
+    "dir": "upscale-ai-models",
+    "version": "polaris-1.0.0-int8",
+    "bytes": 19273873,
+    "label": "Polaris Upscaling 2x (AGPL) - INT8 (QAT, NPU)",
+    "url": "https://downloads.sourceforge.net/project/nina-polaris/ai-models/upscale-ai-models/polaris-1.0.0-int8/model.onnx"
   }
 ]
