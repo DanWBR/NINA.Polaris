@@ -27,7 +27,7 @@
     },
     {
       "icon": "📡",
-      "title": "Native guiding of the PHD2, with fallback to the real app",
+      "title": "Guiding nativo do PHD2, com fallback para o app real",
       "body": "Uma implementação nativa do PHD2 controla diretamente o guiding, com um gráfico de RA/Dec em tempo real, dither, estabilização e perfis. Quando você quiser a interface original do PHD2, recorra ao aplicativo real incorporado diretamente no navegador via xpra ou VNC.",
       "image": "/assets/screenshots/guiding.jpg"
     },
@@ -560,7 +560,7 @@
       },
       {
         "image": "/assets/screenshots/guide-native.jpg",
-        "caption": "Native guiding: the RA/Dec error graph, the guiding star field, and the calibration panel"
+        "caption": "Guiding nativo: o gráfico de erro RA/Dec, o campo da estrela-guia e o painel de calibração"
       },
       {
         "image": "/assets/screenshots/live-ic4605.jpg",

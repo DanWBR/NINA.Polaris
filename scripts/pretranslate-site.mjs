@@ -52,8 +52,17 @@ const FILES = {
 const SKIP_KEYS = new Set([
   'icon', 'color', 'url', 'href', 'image', 'src', 'alt', 'source', 'id',
   'score', 'stacking', 'capture', 'memory', 'price', 'cores', 'device',
-  'version', 'external', 'highlight', 'anchor', 'slug',
+  'version', 'external', 'highlight', 'anchor', 'slug', 'highlightProduct',
 ]);
+
+// Arrays whose string elements are data, not copy. `products` is the column
+// header row of the comparison table: competitor brand names.
+const SKIP_ARRAYS = new Set(['products']);
+
+// The comparison table encodes a cell as "yes" / "partial" / "no", optionally
+// with a ":qualifier" suffix (see parseCell in Comparison.astro). Translating
+// the token turns the tick into plain text, so it is not copy either.
+const MARK_CELL = /^(yes|no|partial)(:|$)/;
 
 // Terms the astrophotography audience expects in English. Wrapping them tells
 // DeepL to leave them alone; the same rule the app's catalogs follow.
@@ -74,6 +83,7 @@ function isProse(value) {
   if (!s) return false;
   if (/^(https?:|mailto:|\/|#|\$)/.test(s)) return false;   // link or token
   if (!/[A-Za-z]{3}/.test(s)) return false;                  // emoji, numbers
+  if (MARK_CELL.test(s)) return false;                       // table tick
   return true;
 }
 
@@ -203,14 +213,32 @@ async function translateBatch(texts, target, glossaryId) {
   return data.translations.map((t) => cleanDashes(unprotect(t.text)));
 }
 
-/** Collect every translatable leaf, remembering where it came from. */
-function collect(node, slots, key = null) {
-  if (Array.isArray(node)) { node.forEach((v, i) => collect(v, slots, key)); return; }
+/**
+ * Collect every translatable leaf, remembering where it came from.
+ *
+ * Two things this has to get right, both of which it got wrong at first and
+ * silently shipped English into the locale files:
+ *   - an array of plain strings (`bio: ["...", "...", "..."]`) is a leaf per
+ *     element, with the array as the owner and the index as the key;
+ *   - SKIP_KEYS names leaf values that must not be translated (a hex colour,
+ *     an href). Applying it to containers pruned whole subtrees, which is how
+ *     `version: { body: "..." }` never got translated in any language.
+ */
+function collect(node, slots) {
+  if (Array.isArray(node)) {
+    node.forEach((v, i) => {
+      if (isProse(v)) slots.push({ owner: node, key: i, text: v });
+      else collect(v, slots);
+    });
+    return;
+  }
   if (node && typeof node === 'object') {
     for (const [k, v] of Object.entries(node)) {
-      if (SKIP_KEYS.has(k)) continue;
-      if (isProse(v)) slots.push({ owner: node, key: k, text: v });
-      else collect(v, slots, k);
+      if (typeof v === 'string') {
+        if (!SKIP_KEYS.has(k) && isProse(v)) slots.push({ owner: node, key: k, text: v });
+      } else if (!SKIP_ARRAYS.has(k)) {
+        collect(v, slots);
+      }
     }
   }
 }

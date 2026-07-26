@@ -392,7 +392,7 @@
           "feature": "Kosten",
           "tools": "",
           "cells": [
-            "Subscription (US$4.99/mo)",
+            "Abo (4,99 US$/Monat)",
             "Free",
             "Free"
           ]
@@ -401,9 +401,9 @@
           "feature": "Läuft auf",
           "tools": "",
           "cells": [
-            "Our cloud (Azure)",
-            "The Polaris host",
-            "The device you browse from"
+            "Unsere Cloud (Azure)",
+            "Der Polaris-Host",
+            "Das Gerät, das Sie nutzen"
           ]
         }
       ]

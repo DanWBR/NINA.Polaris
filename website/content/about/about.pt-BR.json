@@ -9,9 +9,9 @@
     "role": "Engenheiro químico e desenvolvedor de software",
     "photo": "/assets/daniel-medeiros.jpg",
     "bio": [
-      "Daniel is a chemical engineer (UFRN, Brazil) and an experienced software developer with 21+ years of experience. He designs and ships production software across Windows Desktop, Linux and macOS, on mobile (Android and iOS with Xamarin), and increasingly with on-device AI.",
-      "His main project is DWSIM, a free, open-source, CAPE-OPEN-compliant chemical process simulator he has developed since 2008. DWSIM models entire chemical plants: rigorous thermodynamics and phase equilibria, dozens of unit operations, petroleum characterization and dynamic simulation, running on Windows, Linux, macOS and even Android and iOS. It is used worldwide by students, universities and process engineers as an open alternative to commercial simulators, and it won the 2012 CAPE-OPEN Award.",
-      "Polaris Astro Controller brings that same engineering discipline to astrophotography: real numerical and scientific code, from astrometry, guiding and plate solving to image stacking, colour calibration and on-device AI, built to run reliably on hardware as small as a Raspberry Pi. It is where two decades of software engineering meet a lifelong pull toward the night sky."
+      "Daniel é engenheiro químico (UFRN, Brasil) e desenvolvedor de software com mais de 21 anos de experiência. Ele projeta e entrega software de produção para Windows Desktop, Linux e macOS, para mobile (Android e iOS com Xamarin) e, cada vez mais, com IA rodando no próprio dispositivo.",
+      "Seu projeto principal é o DWSIM, um simulador de processos químicos livre, de código aberto e compatível com CAPE-OPEN que ele desenvolve desde 2008. O DWSIM modela plantas químicas inteiras: termodinâmica rigorosa e equilíbrio de fases, dezenas de operações unitárias, caracterização de petróleo e simulação dinâmica, rodando em Windows, Linux, macOS e até Android e iOS. É usado no mundo inteiro por estudantes, universidades e engenheiros de processo como alternativa aberta aos simuladores comerciais, e ganhou o CAPE-OPEN Award de 2012.",
+      "O Polaris Astro Controller traz essa mesma disciplina de engenharia para a astrofotografia: código numérico e científico de verdade, de astrometria, guiding e plate solving a stacking de imagens, calibração de cor e IA no dispositivo, feito para rodar de forma confiável em hardware do tamanho de um Raspberry Pi. É onde duas décadas de engenharia de software encontram um fascínio de uma vida pelo céu noturno."
     ],
     "email": "",
     "github": "https://github.com/DanWBR",
@@ -30,8 +30,8 @@
     "post": "por Stefan Berg e colaboradores (MPL-2.0). Os créditos completos de todos os projetos, bibliotecas e conjuntos de dados utilizados estão incluídos no aplicativo e no repositório."
   },
   "version": {
-    "title": "Version & source",
-    "body": "Polaris ships frequent releases. The current code, the latest build, and the release notes all live on the project page on GitHub. On a .deb install, Polaris can update itself with one click from the status bar."
+    "title": "Versão e código-fonte",
+    "body": "O Polaris tem releases frequentes. O código atual, o build mais recente e as notas de versão ficam todos na página do projeto no GitHub. Numa instalação por .deb, o Polaris se atualiza com um clique na barra de status."
   },
   "report": {
     "title": "Relatar um problema",
@@ -111,7 +111,7 @@
           {
             "name": "PlateSolve3",
             "url": "https://planewave.com/",
-            "note": "PlaneWave Instruments. Alternative plate solver."
+            "note": "PlaneWave Instruments. Plate solver alternativo."
           }
         ]
       },
