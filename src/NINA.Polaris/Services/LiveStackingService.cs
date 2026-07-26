@@ -97,8 +97,18 @@ public class LiveStackingService {
     // the frame and wait for one that actually carries a pattern (or use the
     // per-rig override). Capped so a genuinely-mono camera that somehow has
     // colour stacking enabled still eventually stacks (in mono).
+    //
+    // The cap has to be SMALL, and bounded in wall-clock time as well as in
+    // frames. A CFA dropout is a driver hiccup that clears in a frame or two;
+    // a mono camera never carries a pattern at all, and it is indistinguishable
+    // from a dropout on the first frame. The frame cap used to be 30, which on
+    // 120 s subs meant a mono operator watched an hour of "waiting for a Bayer
+    // pattern" before the stack started: reported in the field as "live
+    // stacking does not work with a mono camera".
     private int _colorDeferrals;
-    private const int MaxColorDeferrals = 30;
+    private DateTime? _colorDeferStart;
+    private const int MaxColorDeferrals = 3;
+    private const double MaxColorDeferSeconds = 20;
     private int _width;
     private int _height;
     // Last frame's bit depth + metadata, retained so SaveCurrentStack can
@@ -698,6 +708,7 @@ public class LiveStackingService {
             _bayerPattern = BayerPatternEnum.None;
             _lastGoodBayer = BayerPatternEnum.None;
             _colorDeferrals = 0;
+            _colorDeferStart = null;
             _referenceStars = null;
             _flipped = false;
             _referencePier = PierSide.pierUnknown;
@@ -1026,14 +1037,23 @@ public class LiveStackingService {
                     // the next, which almost always carries the pattern. Cap
                     // it so a genuinely-mono setup with colour left on still
                     // proceeds (in mono) after a few seconds.
-                    if (wantColour && !haveUsablePattern
-                            && _colorDeferrals < MaxColorDeferrals) {
-                        _colorDeferrals++;
-                        _logger.LogWarning(
-                            "Live stack: first frame has no Bayer pattern (CFA dropout) but colour is on — deferring init ({N}/{Max}) instead of falling back to mono",
-                            _colorDeferrals, MaxColorDeferrals);
-                        RecordReject("waiting for a Bayer pattern (CFA dropout on first frame)");
-                        return;
+                    if (wantColour && !haveUsablePattern) {
+                        _colorDeferStart ??= DateTime.UtcNow;
+                        var waited = (DateTime.UtcNow - _colorDeferStart.Value).TotalSeconds;
+                        if (_colorDeferrals < MaxColorDeferrals && waited < MaxColorDeferSeconds) {
+                            _colorDeferrals++;
+                            _logger.LogWarning(
+                                "Live stack: first frame has no Bayer pattern (CFA dropout) but colour is on — deferring init ({N}/{Max}, {Waited:F0}s of {Budget:F0}s) instead of falling back to mono",
+                                _colorDeferrals, MaxColorDeferrals, waited, MaxColorDeferSeconds);
+                            RecordReject("waiting for a Bayer pattern (CFA dropout on first frame)");
+                            return;
+                        }
+                        // Budget spent: this is a mono camera, not a hiccup.
+                        // Say so plainly, and name the setting to change, or
+                        // the operator only sees the deferral warnings.
+                        _logger.LogInformation(
+                            "Live stack: no Bayer pattern after {N} frame(s) / {Waited:F0}s, so this is a mono sensor. Stacking in mono; turn Colour stacking off for this rig (or set a Bayer pattern override) to skip the wait",
+                            _colorDeferrals, waited);
                     }
 
                     // First frame: initialize buffers and set as reference.

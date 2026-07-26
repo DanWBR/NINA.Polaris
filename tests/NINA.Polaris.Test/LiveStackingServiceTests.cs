@@ -240,4 +240,29 @@ public class LiveStackingServiceTests {
         svc.Reset();
         Assert.That(svc.Mode, Is.EqualTo(StackMode.MetricsOnly));
     }
+
+    /// <summary>
+    /// A mono camera with Colour stacking left on must start stacking almost
+    /// immediately, in mono. The first frame carries no Bayer pattern, which is
+    /// indistinguishable from a CFA dropout, so the service defers a couple of
+    /// frames before committing; the cap used to be 30 frames, which on long
+    /// subs read as "live stacking does not work with a mono camera".
+    /// </summary>
+    [Test]
+    public async Task AddFrame_MonoSensorWithColourOn_StartsStackingWithinAFewFrames() {
+        var svc = MakeService();
+        svc.ColorStacking = true;
+        svc.Start();
+
+        for (var i = 0; i < 4; i++) {
+            await svc.AddFrameAsync(MakeFrame());
+            if (svc.FrameCount > 0) break;
+        }
+
+        Assert.That(svc.FrameCount, Is.GreaterThan(0),
+            "A mono frame must not be deferred forever just because Colour stacking is on.");
+        Assert.That(svc.ColorActive, Is.False,
+            "With no Bayer pattern anywhere the session has to run in mono.");
+        Assert.That(svc.GetStackedResult().Length, Is.EqualTo(64 * 64));
+    }
 }
