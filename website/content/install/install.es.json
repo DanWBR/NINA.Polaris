@@ -68,7 +68,7 @@
       },
       {
         "icon": "🔄",
-        "body": "<strong>Si falla la actualización desde la aplicación</strong> (error de autorización o de «reglas de política»): algunas imágenes antiguas basadas en Ubuntu 22.04 incluyen una regla de actualización sin contraseña que su versión de polkit ignora, por lo que la actualización con un solo clic no se puede instalar. En su lugar, actualiza a través de SSH: <code>ssh polaris@&lt;board-ip&gt;</code>, y a continuación <code>wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb</code> y <code>sudo apt install ./polaris_arm64.deb</code>. Se conservarán tus perfiles y datos. Consulta también la sección sobre actualización manual más abajo."
+        "body": "<strong>Si falla la actualización desde la aplicación</strong> (error de autorización o de «reglas de política»): algunas imágenes antiguas basadas en Ubuntu 22.04 incluyen una regla de actualización sin contraseña que su versión de polkit ignora, por lo que la actualización con un solo clic no se puede instalar. En su lugar, actualiza a través de SSH: <code>ssh polaris@&lt;board-ip&gt;</code>, y a continuación <code>wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb</code> y <code>sudo apt install ./polaris_arm64.deb</code>. Se conservarán tus perfiles y datos."
       }
     ],
     "items": [
@@ -123,10 +123,10 @@
         "color": "#ff7a18",
         "url": "https://drive.google.com/uc?export=download&id=1YPuDTWRohe6lt1BkTcSSN3tdLUcnDFwA",
         "os": "Ubuntu 22.04 (arm64)",
-        "polaris": "0.90.1",
-        "size": "2.84 GB (.7z)",
+        "polaris": "0.96.4 (2026-07-24)",
+        "size": "2.88 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
-        "note": "Imagen de HDD Raw Copy Tool (imgcv2). Archivo 7-Zip; extrae el contenido y, a continuación, graba el archivo .img en el almacenamiento interno con HDD Raw Copy Tool. Contraseña de inicio de sesión: polaris1234."
+        "note": "Imagen raw reducida (shrink). Archivo 7-Zip: extrae el .7z y escribe el .img en el almacenamiento interno con HDD Raw Copy Tool (o balenaEtcher / Rufus). Contraseña de acceso: polaris1234."
       },
       {
         "device": "Orange Pi 5 Pro",

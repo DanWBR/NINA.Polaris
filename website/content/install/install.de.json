@@ -68,7 +68,7 @@
       },
       {
         "icon": "🔄",
-        "body": "<strong>Falls das In-App-Update fehlschlägt</strong> (Fehler bei der Autorisierung oder bei den „Policy-Regeln“): Einige ältere, auf Ubuntu 22.04 basierende Images enthalten eine „Passwortlos-Update“-Regel, die von ihrer Polkit-Version ignoriert wird, sodass das Ein-Klick-Update nicht installiert werden kann. Führen Sie das Update stattdessen über SSH durch: <code>ssh polaris@&lt;board-ip&gt;</code>, anschließend <code>wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb</code> und <code>sudo apt install ./polaris_arm64.deb</code>. Ihre Profile und Daten bleiben dabei erhalten. Siehe auch den Abschnitt „Manuelles Update“ weiter unten."
+        "body": "<strong>Falls das In-App-Update fehlschlägt</strong> (Fehler bei der Autorisierung oder bei den „Policy-Regeln“): Einige ältere, auf Ubuntu 22.04 basierende Images enthalten eine „Passwortlos-Update“-Regel, die von ihrer Polkit-Version ignoriert wird, sodass das Ein-Klick-Update nicht installiert werden kann. Führen Sie das Update stattdessen über SSH durch: <code>ssh polaris@&lt;board-ip&gt;</code>, anschließend <code>wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb</code> und <code>sudo apt install ./polaris_arm64.deb</code>. Ihre Profile und Daten bleiben dabei erhalten."
       }
     ],
     "items": [
@@ -123,10 +123,10 @@
         "color": "#ff7a18",
         "url": "https://drive.google.com/uc?export=download&id=1YPuDTWRohe6lt1BkTcSSN3tdLUcnDFwA",
         "os": "Ubuntu 22.04 (arm64)",
-        "polaris": "0.90.1",
-        "size": "2.84 GB (.7z)",
+        "polaris": "0.96.4 (2026-07-24)",
+        "size": "2.88 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
-        "note": "HDD Raw Copy Tool-Image (imgcv2). 7-Zip-Archiv; entpacken Sie es und schreiben Sie anschließend die .img-Datei mit dem HDD Raw Copy Tool auf den internen Speicher. Anmeldekennwort: polaris1234."
+        "note": "Verkleinertes Raw-Image (shrink). 7-Zip-Archiv: Entpacken Sie die .7z und schreiben Sie die .img mit HDD Raw Copy Tool (oder balenaEtcher / Rufus) auf den internen Speicher. Login-Passwort: polaris1234."
       },
       {
         "device": "Orange Pi 5 Pro",

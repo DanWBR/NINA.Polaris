@@ -68,7 +68,7 @@
       },
       {
         "icon": "🔄",
-        "body": "<strong>Se a atualização pelo aplicativo falhar</strong> (erro de autorização ou de “regras de política”): algumas imagens mais antigas, baseadas no Ubuntu 22.04, vêm com uma regra de atualização sem senha que a versão do polkit delas ignora, de modo que a atualização com um clique não consegue ser instalada. Faça a atualização via SSH: <code>ssh polaris@&lt;board-ip&gt;</code>, depois <code>wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb</code> e <code>sudo apt install ./polaris_arm64.deb</code>. Seus perfis e dados serão preservados. Consulte também a seção sobre atualização manual abaixo."
+        "body": "<strong>Se a atualização pelo aplicativo falhar</strong> (erro de autorização ou de “regras de política”): algumas imagens mais antigas, baseadas no Ubuntu 22.04, vêm com uma regra de atualização sem senha que a versão do polkit delas ignora, de modo que a atualização com um clique não consegue ser instalada. Faça a atualização via SSH: <code>ssh polaris@&lt;board-ip&gt;</code>, depois <code>wget https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris_arm64.deb</code> e <code>sudo apt install ./polaris_arm64.deb</code>. Seus perfis e dados serão preservados."
       }
     ],
     "items": [
@@ -123,10 +123,10 @@
         "color": "#ff7a18",
         "url": "https://drive.google.com/uc?export=download&id=1YPuDTWRohe6lt1BkTcSSN3tdLUcnDFwA",
         "os": "Ubuntu 22.04 (arm64)",
-        "polaris": "0.90.1",
-        "size": "2.84 GB (.7z)",
+        "polaris": "0.96.4 (2026-07-24)",
+        "size": "2.88 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
-        "note": "Imagem do HDD Raw Copy Tool (imgcv2). Arquivo compactado com o 7-Zip; extraia e, em seguida, grave o arquivo .img no armazenamento interno usando o HDD Raw Copy Tool. Senha de login: polaris1234."
+        "note": "Imagem raw compactada (shrink). Arquivo 7-Zip: extraia o .7z e grave o .img no armazenamento interno com o HDD Raw Copy Tool (ou balenaEtcher / Rufus). Senha de login: polaris1234."
       },
       {
         "device": "Orange Pi 5 Pro",
