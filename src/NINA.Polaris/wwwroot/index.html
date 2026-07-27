@@ -43,12 +43,12 @@
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260723-badgecaps">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260723-binselect">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260724-scriptscroll">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260712-guidetab1">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260726-setsearch">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260712-fieldbugs1">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260713-touchtip">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260712-uipolish1">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260714-overlayfix">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260712-rename1">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260707-density2">
@@ -12178,7 +12178,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             <!-- SETTINGS -->
             <div x-show="tab === 'settings'" class="tab-panel"
                  x-init="$watch('tab', t => { if (t === 'settings') { loadSimulatorSettings(); loadPowerInfo(); } })">
-                <div class="panel-header">Settings</div>
+                <div class="panel-header">Settings</div>
+
+                <!-- Settings search. 25 cards under 8 category headers is more
+                     than anyone scans, so this filters the accordion live:
+                     matching cards open, the rest (and any category header left
+                     empty) hide. Matching runs on the RENDERED text, so it works
+                     in whatever language the UI is showing. -->
+                <div class="settings-search">
+                    <input class="input" type="search" x-model="settingsQuery"
+                           @input="applySettingsSearch()"
+                           @keyup.escape="clearSettingsSearch()"
+                           placeholder="Search settings…"
+                           aria-label="Search settings">
+                    <button class="btn btn-sm" x-show="settingsQuery"
+                            @click="clearSettingsSearch()" title="Clear search">✕</button>
+                    <span class="text-muted settings-search-count" x-show="settingsQuery"
+                          x-text="settingsMatchCount === 0
+                                  ? 'No settings match'
+                                  : settingsMatchCount + ' of ' + settingsCardCount'"></span>
+                </div>
 
                 <!-- Card grid, FAQ-style accordion. Each .settings-section
                      collapses to its <h3> header; clicking the header toggles
@@ -18949,7 +18968,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260723-authremember"></script>
+    <script src="/js/app.js?v=20260726-setsearch"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

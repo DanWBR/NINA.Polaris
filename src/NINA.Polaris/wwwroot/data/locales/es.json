@@ -3403,5 +3403,9 @@
   "Failed to reset the sequence": "No se pudo reiniciar la secuencia",
   "Set the progress back to the start, keeping every item": "Devuelve el progreso al principio, conservando todos los elementos",
   "💾 saving": "💾 guardando",
-  "💾 saved": "💾 guardado"
+  "💾 saved": "💾 guardado",
+  "Search settings…": "Buscar en los ajustes…",
+  "Search settings": "Buscar en los ajustes",
+  "No settings match": "Ningún ajuste coincide",
+  "Clear search": "Limpiar búsqueda"
 }

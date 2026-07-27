@@ -930,6 +930,31 @@
 .settings-accordion .settings-section.is-collapsed {
     padding-bottom: 0;
 }
+/* ---- Settings search bar ----
+   Sits between the panel header and the card grid. The field takes the row
+   and the clear button plus the result count ride on the right, matching the
+   other single-line control rows in the app. */
+.settings-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+}
+.settings-search .input {
+    flex: 1;
+    min-width: 0;
+}
+.settings-search-count {
+    font-size: 12px;
+    white-space: nowrap;
+}
+/* Filtered out by the search. !important because a collapsed card already
+   carries display rules and Alpine's x-show writes inline styles on some of
+   these nodes. */
+.settings-hidden {
+    display: none !important;
+}
+
 /* Raw solver process output panel (plate-solve result card). */
 .solver-output > pre {
     margin: 6px 0 0;

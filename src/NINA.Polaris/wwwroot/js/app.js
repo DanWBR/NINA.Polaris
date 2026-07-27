@@ -26824,6 +26824,90 @@ function ninaApp() {
             });
         },
         // Start every settings card collapsed (called from the grid's x-init).
+        // ---- Settings search -------------------------------------------
+        //
+        // The cards are static markup, not data, so the filter works on the
+        // DOM: match each card's RENDERED text (which the i18n layer has
+        // already translated, so searching in the UI's own language just
+        // works), hide the misses, and open the hits so the matching row is
+        // visible without a second click. Category headers whose whole group
+        // is hidden go too, otherwise the results are separated by headings
+        // that lead nowhere.
+        settingsQuery: '',
+        settingsMatchCount: 0,
+        settingsCardCount: 0,
+
+        // Lowercase + strip diacritics, so "observatorio" finds
+        // "Observatório" and "Höhe" is reachable from "hohe".
+        _settingsNorm(t) {
+            return (t || '').toLowerCase()
+                .normalize('NFD').replace(/[̀-ͯ]/g, '');
+        },
+
+        applySettingsSearch() {
+            const grid = document.querySelector('.settings-grid.settings-accordion');
+            if (!grid) return;
+            const q = this._settingsNorm(this.settingsQuery).trim();
+            const cards = [...grid.querySelectorAll(':scope > .settings-section')];
+            this.settingsCardCount = cards.length;
+
+            if (!q) { this.clearSettingsSearch(); return; }
+
+            // Remember the pre-search collapsed state once, so clearing the
+            // box restores what the operator had open rather than collapsing
+            // everything on them.
+            if (!grid._settingsPreSearch) {
+                grid._settingsPreSearch = new Map(
+                    cards.map(c => [c, c.classList.contains('is-collapsed')]));
+            }
+
+            let hits = 0;
+            for (const card of cards) {
+                const match = this._settingsNorm(card.textContent).includes(q);
+                card.classList.toggle('settings-hidden', !match);
+                // Open the hits; a matching card that stayed collapsed would
+                // look like a false positive.
+                card.classList.toggle('is-collapsed', !match);
+                if (match) hits++;
+            }
+            this.settingsMatchCount = hits;
+            this._syncSettingsCatHeaders(grid);
+        },
+
+        clearSettingsSearch() {
+            this.settingsQuery = '';
+            this.settingsMatchCount = 0;
+            const grid = document.querySelector('.settings-grid.settings-accordion');
+            if (!grid) return;
+            const prev = grid._settingsPreSearch;
+            grid.querySelectorAll(':scope > .settings-section').forEach(c => {
+                c.classList.remove('settings-hidden');
+                if (prev && prev.has(c)) c.classList.toggle('is-collapsed', prev.get(c));
+            });
+            grid._settingsPreSearch = null;
+            this._syncSettingsCatHeaders(grid);
+        },
+
+        // A category header owns every sibling up to the next header; hide it
+        // when they are all filtered out.
+        _syncSettingsCatHeaders(grid) {
+            const kids = [...grid.children];
+            let header = null, groupHasVisible = false;
+            const settle = () => {
+                if (header) header.classList.toggle('settings-hidden', !groupHasVisible);
+            };
+            for (const el of kids) {
+                if (el.classList.contains('settings-cat-header')) {
+                    settle();
+                    header = el; groupHasVisible = false;
+                } else if (el.classList.contains('settings-section')
+                           && !el.classList.contains('settings-hidden')) {
+                    groupHasVisible = true;
+                }
+            }
+            settle();
+        },
+
         collapseAllSettings(gridEl) {
             if (!gridEl) return;
             gridEl.querySelectorAll(':scope > .settings-section').forEach(c => {
