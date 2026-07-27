@@ -64,6 +64,13 @@ public interface IGuider {
     double RaAggression => 0.70;
     double DecAggression => 0.70;
 
+    /// <summary>RA/Dec minimum-move deadband (pixels) and the declination guide
+    /// mode (auto | north | south | off). Surfaced on the same terms as
+    /// aggression, so the settings sliders survive the 1 Hz status stream.</summary>
+    double MinMoveRaPx => 0.15;
+    double MinMoveDecPx => 0.15;
+    string DecGuideMode => "auto";
+
     /// <summary>Image scale in arcsec/pixel of the guide camera + scope.</summary>
     double PixelScale { get; }
 

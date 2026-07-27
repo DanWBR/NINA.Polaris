@@ -450,6 +450,7 @@ public class ProfileService {
             NativeMaxDecDurationMs = src.NativeMaxDecDurationMs,
             NativeRaAlgorithm = src.NativeRaAlgorithm,
             NativeDecAlgorithm = src.NativeDecAlgorithm,
+            NativeDecGuideMode = src.NativeDecGuideMode,
             NativePredictiveWormPeriodSec = src.NativePredictiveWormPeriodSec,
             NativePredictiveWindowSamples = src.NativePredictiveWindowSamples,
             NativePredictiveBlend = src.NativePredictiveBlend,

@@ -196,6 +196,12 @@ public static class StatusStreamHandler {
                             settleProgress = activeGuider.SettleProgress,
                             raAggression = activeGuider.RaAggression,
                             decAggression = activeGuider.DecAggression,
+                            // Min move + Dec guide mode ride along with aggression:
+                            // the client replaces its whole `guider` object on every
+                            // tick, so anything missing here resets the sliders.
+                            minMoveRaPx = activeGuider.MinMoveRaPx,
+                            minMoveDecPx = activeGuider.MinMoveDecPx,
+                            decGuideMode = activeGuider.DecGuideMode,
                             pixelScale = activeGuider.PixelScale,
                             rmsRA = activeGuider.RmsRA,
                             rmsDec = activeGuider.RmsDec,

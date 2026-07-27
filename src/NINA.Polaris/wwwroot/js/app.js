@@ -213,6 +213,11 @@ function ninaApp() {
         // before the change could be sent (field report).
         guideAggr: { ra: 70, dec: 70 },
         _guideAggrEditing: false,
+        // Same arrangement for the per-axis minimum move, in hundredths of a
+        // pixel so the slider can work in integers (0.15 px = 15).
+        guideMinMove: { ra: 15, dec: 15 },
+        _guideMinMoveEditing: false,
+        nativeDecGuideMode: 'auto',
         cameraTemp: null,
         // Counts captures driven by the CLIENT-side capture() loop. Nothing reads
         // it any more: the LIVE stats bar used to, but LIVE capture is server-owned
@@ -19544,7 +19549,12 @@ function ninaApp() {
             this.aux.binning = rig.auxBinning || 1;
             this.aux.enabled = !!rig.auxEnabled;
             this.nativeRaAlgorithm = rig.nativeRaAlgorithm || 'hysteresis';
+            // Predictive is RA-only now (worm-gear PE has no Dec analogue), so a
+            // rig saved with it on Dec reads back as the default, matching what
+            // the guider actually builds.
             this.nativeDecAlgorithm = rig.nativeDecAlgorithm || 'resistswitch';
+            if (this.nativeDecAlgorithm === 'predictive') this.nativeDecAlgorithm = 'resistswitch';
+            this.nativeDecGuideMode = rig.nativeDecGuideMode || 'auto';
             this.nativeBacklashComp = !!rig.nativeBacklashComp;
             this.nativeMultiStar = rig.nativeMultiStar !== false;
             this.nativeCalibrationStepMs = rig.nativeCalibrationStepMs || 1000;
@@ -22442,10 +22452,10 @@ function ninaApp() {
                 // (the actual image lands on previewCanvas via the WS
                 // image-stream broadcast that the backend kicked off).
                 if (r?.saved) {
-                    // Self-expiring: no reactive clock in the page, so clear
-                    // the flag on a timer rather than diffing against "now".
-                    this.preview.savedAt = Date.now();
-                    clearTimeout(this._previewSavedTimer);
+                    // Self-expiring: no reactive clock in the page, so clear
+                    // the flag on a timer rather than diffing against "now".
+                    this.preview.savedAt = Date.now();
+                    clearTimeout(this._previewSavedTimer);
                     this._previewSavedTimer = setTimeout(() => { this.preview.savedAt = 0; }, 5000);
                     this.toast('Snap saved · HFR ' + (r.stats?.hfr?.toFixed?.(2) || '--')
                         + ' · ' + (r.stats?.starCount ?? '--') + ' stars', 'ok', 2500);
@@ -32822,6 +32832,15 @@ function ninaApp() {
                 this.phd2AlgoParams = r;
             } catch (e) { /* PHD2 disconnected */ }
         },
+        // PHD2 names the deadband "MinMove" on every axis algorithm, but the
+        // exact casing follows whichever algorithm is selected. Return the
+        // actual key so the promoted slider can read and write it; null when
+        // the axis has no such knob (Identity).
+        _phd2MinMoveKey(axis) {
+            const bag = this.phd2AlgoParams?.axes?.[axis];
+            if (!bag) return null;
+            return Object.keys(bag).find(k => k.toLowerCase() === 'minmove') || null;
+        },
         async phd2SetAlgoParam(axis, name, value) {
             if (!isFinite(value)) return;
             try {
@@ -33123,6 +33142,35 @@ function ninaApp() {
                     })
                 });
             } catch (e) { this.toast('Aggression update failed: ' + (e.message || e), 'error'); }
+        },
+        // Per-axis minimum move (px). Same contract as setGuideAggression: pass
+        // null for the axis you are not changing. Errors under the deadband are
+        // left alone, which is how seeing noise stops being chased.
+        async setGuideMinMove(ra, dec) {
+            if (ra != null) this.guider.minMoveRaPx = ra;
+            if (dec != null) this.guider.minMoveDecPx = dec;
+            try {
+                await this.apiFetch('/api/guider/settings/minmove', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ra: this.guider.minMoveRaPx ?? 0.15,
+                        dec: this.guider.minMoveDecPx ?? 0.15
+                    })
+                });
+            } catch (e) { this.toast('Min move update failed: ' + (e.message || e), 'error'); }
+        },
+        // Declination guide mode: auto | north | south | off.
+        async setNativeDecGuideMode(mode) {
+            this.nativeDecGuideMode = mode;
+            this.guider.decGuideMode = mode;
+            try {
+                await this.apiFetch('/api/guider/settings/dec-guide-mode', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode })
+                });
+            } catch (e) { this.toast('Dec guide mode failed: ' + (e.message || e), 'error'); }
         },
         async guiderClearHistory() {
             try {
@@ -37377,13 +37425,13 @@ function ninaApp() {
                 // default "Filter N" slot names and drop the labels the
                 // user set. If the active rig has saved names, push them
                 // back so the labels survive a driver reset.
-                // Arm the restore on the offline->online edge, then let the
-                // pump retry until it can actually answer (see below).
-                if (fwOnline && !fwWasOnline) {
-                    this._fwRestoreSettled = false;
-                    this._fwRestoreTries = 0;
-                }
-                if (fwOnline) this._pumpFilterNameRestore();
+                // Arm the restore on the offline->online edge, then let the
+                // pump retry until it can actually answer (see below).
+                if (fwOnline && !fwWasOnline) {
+                    this._fwRestoreSettled = false;
+                    this._fwRestoreTries = 0;
+                }
+                if (fwOnline) this._pumpFilterNameRestore();
                 else this._fwRestoreSettled = true;
             }
             // Belt-and-suspenders: also sync on every WS tick so if a
@@ -37562,11 +37610,14 @@ function ninaApp() {
                         peakRA: g.peakRA || 0,
                         peakDec: g.peakDec || 0,
                         stepCount: g.stepCount || 0,
-                        // Aggression isn't in the WS tick (it's a setting, not
-                        // telemetry); preserve whatever loadGuiderStatus/REST
-                        // populated so the sliders don't snap back to default.
+                        // Settings, not telemetry: the tick carries them, but keep
+                        // the REST-loaded value as a fallback so the sliders never
+                        // snap back to default on a payload that omits them.
                         raAggression: g.raAggression ?? this.guider.raAggression ?? 0.7,
                         decAggression: g.decAggression ?? this.guider.decAggression ?? 0.7,
+                        minMoveRaPx: g.minMoveRaPx ?? this.guider.minMoveRaPx ?? 0.15,
+                        minMoveDecPx: g.minMoveDecPx ?? this.guider.minMoveDecPx ?? 0.15,
+                        decGuideMode: g.decGuideMode ?? this.guider.decGuideMode ?? 'auto',
                         lastAlert: g.lastAlert || null,
                         lastAlertSeverity: g.lastAlertSeverity || 'warn',
                         lastSettleStatus: g.lastSettleStatus || null,
@@ -37593,6 +37644,10 @@ function ninaApp() {
                         // Native dark library / bad-pixel-map status (null for PHD2).
                         darkCalibration: g.darkCalibration || null
                     };
+                    // Dec guide mode drives a <select>, so mirror the server value
+                    // into the field the options bind to (another client, or a rig
+                    // switch, can change it under us).
+                    if (g.decGuideMode) this.nativeDecGuideMode = g.decGuideMode;
                     // Mirror the dark-cal mode/frames into the local edit model
                     // unless the user is mid-edit (selecting the dropdown).
                     if (g.darkCalibration && !this._guideCalEditing) {

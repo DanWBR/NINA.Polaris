@@ -29,7 +29,10 @@ public static class GuiderEndpoints {
                     connected = false,
                     appState = "Stopped",
                     raAggression = rig?.NativeRaAggression ?? 0.70,
-                    decAggression = rig?.NativeDecAggression ?? 0.70
+                    decAggression = rig?.NativeDecAggression ?? 0.70,
+                    minMoveRaPx = rig?.NativeMinMoveRaPx ?? 0.15,
+                    minMoveDecPx = rig?.NativeMinMoveDecPx ?? 0.15,
+                    decGuideMode = rig?.NativeDecGuideMode ?? "auto"
                 });
 
             return Results.Ok(new {
@@ -56,6 +59,11 @@ public static class GuiderEndpoints {
                 // ASIAIR-style 10..150% sliders. Profile-backed, applies live.
                 raAggression = rig?.NativeRaAggression ?? 0.70,
                 decAggression = rig?.NativeDecAggression ?? 0.70,
+                // Per-axis minimum-move deadband (px) + declination guide mode,
+                // same round trip as aggression so the sliders survive a reload.
+                minMoveRaPx = rig?.NativeMinMoveRaPx ?? 0.15,
+                minMoveDecPx = rig?.NativeMinMoveDecPx ?? 0.15,
+                decGuideMode = rig?.NativeDecGuideMode ?? "auto",
                 // PHD2-only calibration snapshot (null when native).
                 calibration = g.Backend == "phd2" ? phd2.Calibration : null
             });
@@ -76,6 +84,35 @@ public static class GuiderEndpoints {
             // Apply to the running native guider without a restart.
             (guiders.Active as NativeGuider)?.ApplyAlgorithmSettings();
             return Results.Ok(new { raAggression = ra, decAggression = dec });
+        });
+
+        // Per-axis minimum move (px): errors smaller than this are left alone,
+        // so seeing noise is not chased. Persisted on the active rig and
+        // applied live, exactly like aggression.
+        group.MapPut("/settings/minmove", (MinMoveDto dto,
+                ActiveGuiderProvider guiders, ProfileService profiles) => {
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig == null) return Results.BadRequest(new { error = "No active rig." });
+            double ra = Math.Clamp(dto.Ra, 0.0, 5.0);
+            double dec = Math.Clamp(dto.Dec, 0.0, 5.0);
+            profiles.UpdateEquipmentProfile(rig.Id, r => {
+                r.NativeMinMoveRaPx = ra;
+                r.NativeMinMoveDecPx = dec;
+            });
+            (guiders.Active as NativeGuider)?.ApplyAlgorithmSettings();
+            return Results.Ok(new { minMoveRaPx = ra, minMoveDecPx = dec });
+        });
+
+        // Declination guide mode: auto | north | south | off. Read by the guide
+        // loop on every frame, so no rebuild is needed.
+        group.MapPut("/settings/dec-guide-mode", (DecGuideModeDto dto, ProfileService profiles) => {
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig == null) return Results.BadRequest(new { error = "No active rig." });
+            var mode = (dto.Mode ?? "auto").Trim().ToLowerInvariant();
+            if (mode != "auto" && mode != "north" && mode != "south" && mode != "off")
+                return Results.BadRequest(new { error = "Mode must be auto, north, south or off." });
+            profiles.UpdateEquipmentProfile(rig.Id, r => r.NativeDecGuideMode = mode);
+            return Results.Ok(new { decGuideMode = mode });
         });
 
         // Predictive (PE + drift) tuning for the native guider: worm period
@@ -843,6 +880,8 @@ public static class GuiderEndpoints {
     public record SyncProfileRequest(string? RigId);
     public record AlgoParamRequest(string Axis, string Name, double Value);
     public record AggressionDto(double Ra, double Dec);
+    public record MinMoveDto(double Ra, double Dec);
+    public record DecGuideModeDto(string? Mode);
     public record PredictiveDto(double WormPeriodSec, int WindowSamples, double Blend);
     public record ModeBody(string? Mode);
     public record FramesBody(int Frames);

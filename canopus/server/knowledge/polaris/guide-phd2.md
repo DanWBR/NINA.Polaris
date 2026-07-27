@@ -112,10 +112,16 @@ Three curated bundles applied via `set_algo_param`:
 - **Custom**, sentinel; auto-set when you edit any knob in the
   Advanced disclosure. Persists the override bag on the rig.
 
-Click a preset pill to apply + persist. The Advanced `<details>`
-section below lets you tune individual knobs (Hysteresis,
-Aggressiveness, MinMove, FastSwitch per axis) and saves whichever you
-touch as a Custom preset.
+Click a preset pill to apply + persist.
+
+**Min move** for each axis sits right under the preset pills as a slider
+(0 to 2 px), since it is the knob most sessions actually need: errors
+smaller than it are not corrected, so raising it stops the mount chasing
+seeing. It writes straight through to PHD2 and flips the preset to Custom.
+
+The Advanced `<details>` section below exposes every remaining knob PHD2
+reports for the selected algorithm (Hysteresis, Aggressiveness, MinMove,
+FastSwitch, per axis) and saves whichever you touch as a Custom preset.
 
 ### Profile sync indicator
 

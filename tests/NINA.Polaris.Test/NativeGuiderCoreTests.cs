@@ -698,4 +698,37 @@ public class NativeGuiderCoreTests {
         Assert.That(input, Is.EqualTo(0.0).Within(0.02), "residual driven to ~0");
         Assert.That(sumCorr, Is.EqualTo(trueError).Within(0.02), "corrections sum to the offset");
     }
+
+    // ---- Declination guide mode ----
+
+    [TestCase("auto", GuideDirections.guideNorth, false)]
+    [TestCase("auto", GuideDirections.guideSouth, false)]
+    [TestCase("north", GuideDirections.guideNorth, false)]
+    [TestCase("north", GuideDirections.guideSouth, true)]
+    [TestCase("south", GuideDirections.guideNorth, true)]
+    [TestCase("south", GuideDirections.guideSouth, false)]
+    [TestCase("off", GuideDirections.guideNorth, true)]
+    [TestCase("off", GuideDirections.guideSouth, true)]
+    public void DecGuideMode_SuppressesOnlyTheForbiddenDirection(
+            string mode, GuideDirections dir, bool suppressed) {
+        Assert.That(NativeGuider.SuppressesDecPulse(mode, dir), Is.EqualTo(suppressed));
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase("nonsense")]
+    public void DecGuideMode_UnknownOrMissing_GuidesBothWays(string? mode) {
+        // A rig saved before the setting existed carries no mode; that must
+        // mean "auto", never "stop guiding Dec".
+        Assert.That(NativeGuider.SuppressesDecPulse(mode, GuideDirections.guideNorth), Is.False);
+        Assert.That(NativeGuider.SuppressesDecPulse(mode, GuideDirections.guideSouth), Is.False);
+    }
+
+    [Test]
+    public void DecGuideMode_IsCaseAndWhitespaceInsensitive() {
+        Assert.That(NativeGuider.SuppressesDecPulse("North", GuideDirections.guideSouth), Is.True);
+        Assert.That(NativeGuider.SuppressesDecPulse("  south  ", GuideDirections.guideNorth), Is.True);
+        Assert.That(NativeGuider.SuppressesDecPulse("OFF", GuideDirections.guideNorth), Is.True);
+    }
 }

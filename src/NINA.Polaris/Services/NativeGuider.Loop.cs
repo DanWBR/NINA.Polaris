@@ -201,6 +201,10 @@ public sealed partial class NativeGuider {
         var raDir = raCorr >= 0 ? GuideDirections.guideEast : GuideDirections.guideWest;
         var decDir = decCorr >= 0 ? GuideDirections.guideNorth : GuideDirections.guideSouth;
 
+        // Declination guide mode: applied here, at the move stage, so the
+        // algorithm still sees every error.
+        if (SuppressesDecPulse(Rig.NativeDecGuideMode, decDir)) decMs = 0;
+
         // Dec backlash compensation: on a direction reversal, add the measured
         // slack take-up, re-clamped to the runaway guard.
         if (decMs > 0) decMs = Math.Min(_backlashComp.Adjust(decDir, decMs), maxDecMs);

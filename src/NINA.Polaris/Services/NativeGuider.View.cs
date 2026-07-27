@@ -45,8 +45,13 @@ public sealed partial class NativeGuider {
             hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99),
             wormPeriodSec: wormSec, predictiveWindow: predWin, predictiveBlend: predBlend,
             zfilterExpFactor: zExp);
+        // Predictive models worm-gear periodic error, which only the RA axis
+        // has, so Dec no longer offers it. A rig saved while it did falls back
+        // to the default instead of feed-forwarding a phantom worm.
+        var decAlgoName = string.IsNullOrWhiteSpace(Rig.NativeDecAlgorithm) ? "resistswitch" : Rig.NativeDecAlgorithm;
+        if (decAlgoName.Equals("predictive", StringComparison.OrdinalIgnoreCase)) decAlgoName = "resistswitch";
         _decAlgo = GuideAlgorithmFactory.Create(
-            string.IsNullOrWhiteSpace(Rig.NativeDecAlgorithm) ? "resistswitch" : Rig.NativeDecAlgorithm,
+            decAlgoName,
             minMove: Math.Max(0.0, Rig.NativeMinMoveDecPx),
             aggression: Math.Clamp(Rig.NativeDecAggression, 0.0, 2.0),
             hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99),
@@ -61,6 +66,22 @@ public sealed partial class NativeGuider {
         double measuredBacklash = Rig.NativeBacklashComp ? _calibration.BacklashMs : 0;
         _backlashComp = new BacklashComp(measuredBacklash, Rig.NativeBacklashMaxMs);
         _backlashComp.Reset();
+    }
+
+    /// <summary>Declination guide mode (PHD2's): "auto" pulses both ways;
+    /// "north"/"south" allow one direction only, which is how a mount whose Dec
+    /// backlash makes reversals unreliable is guided (leave the polar alignment
+    /// slightly off so the drift always pushes one way, and correct against it);
+    /// "off" stops Dec guiding entirely. Anything unrecognised means auto.</summary>
+    internal static bool SuppressesDecPulse(string? mode, GuideDirections dir) {
+        if (string.IsNullOrWhiteSpace(mode)) return false;
+        var m = mode.Trim();
+        if (m.Equals("off", StringComparison.OrdinalIgnoreCase)) return true;
+        if (m.Equals("north", StringComparison.OrdinalIgnoreCase))
+            return dir == GuideDirections.guideSouth;
+        if (m.Equals("south", StringComparison.OrdinalIgnoreCase))
+            return dir == GuideDirections.guideNorth;
+        return false;
     }
 
     private static int RateToMs(double px, double ratePxPerMs) {

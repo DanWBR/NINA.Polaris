@@ -168,6 +168,10 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     public bool IsSettling { get; private set; }
     public double RaAggression => Rig.NativeRaAggression;
     public double DecAggression => Rig.NativeDecAggression;
+    public double MinMoveRaPx => Rig.NativeMinMoveRaPx;
+    public double MinMoveDecPx => Rig.NativeMinMoveDecPx;
+    public string DecGuideMode => string.IsNullOrWhiteSpace(Rig.NativeDecGuideMode)
+        ? "auto" : Rig.NativeDecGuideMode;
     // True from the moment a dither offset is applied until the settle that
     // follows it completes. Distinct from IsSettling (which also covers the
     // post-start settle) so the UI can show a "Dithering" state and so we can

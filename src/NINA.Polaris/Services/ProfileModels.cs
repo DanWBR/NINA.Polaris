@@ -723,8 +723,14 @@ public class EquipmentProfile {
     public string NativeRaAlgorithm { get; set; } = "hysteresis";
 
     /// <summary>Native guider Dec-axis algorithm: resistswitch (default),
-    /// lowpass, lowpass2, hysteresis, predictive, or identity.</summary>
+    /// lowpass, lowpass2, hysteresis, zfilter, or identity. Predictive is
+    /// RA-only: it models worm-gear periodic error, which Dec does not have.</summary>
     public string NativeDecAlgorithm { get; set; } = "resistswitch";
+
+    /// <summary>Declination guide mode (PHD2's): auto (default, pulse both
+    /// ways), north or south (one direction only, for mounts whose Dec
+    /// backlash makes reversals unreliable), or off (no Dec guiding).</summary>
+    public string NativeDecGuideMode { get; set; } = "auto";
 
     /// <summary>Predictive algorithm: worm period in seconds for the periodic-error
     /// feed-forward. 0 = auto-estimate from the guiding history.</summary>

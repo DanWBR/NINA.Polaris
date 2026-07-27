@@ -94,19 +94,33 @@ equipment's calibration; other saved ones stay.
 ## Guiding parameters
 
 - **RA algo / Dec algo** - Hysteresis / Lowpass / Lowpass2 / Resist-Switch /
-  Predictive (PE + drift) / Identity (defaults: Hysteresis RA, Resist-Switch Dec,
-  PHD2's defaults).
+  ZFilter / Identity, plus Predictive (PE + drift) on RA (defaults: Hysteresis RA,
+  Resist-Switch Dec, PHD2's defaults).
+- **Aggressiveness (RA / Dec)** - the fraction of the measured error corrected each
+  frame, 10-150 % (default 70 %). Lower is gentler and slower, higher is snappier
+  but can oscillate. Applies to the running guider without a restart.
+- **Min move (RA / Dec)** - the per-axis deadband in pixels (default 0.15 px).
+  Errors smaller than this are not corrected, which is what stops the mount from
+  chasing seeing. Raise it when the graph is busy but there is no real drift; lower
+  it for a long focal length or excellent seeing.
+- **Dec guide mode** - PHD2's declination guide mode. *Auto* pulses both ways.
+  *North only* / *South only* allow a single direction, the standard answer to a
+  mount whose Dec backlash makes reversals unreliable: leave the polar alignment
+  slightly off so the drift always pushes the same way, and correct only against
+  it. *Off* stops Dec guiding entirely. The algorithm still sees every error; the
+  mode is applied at the pulse stage.
 - **Predictive (PE + drift)** - a feed-forward algorithm that *learns* the mount's
   periodic error (worm-gear sinusoid) plus slow drift from the recent guiding
   history and corrects *ahead* of the error instead of only chasing it, similar in
-  spirit to PHD2's Predictive PEC. Most useful on the **RA** axis, where worm PE
-  dominates. When you pick it on either axis a small panel appears:
+  spirit to PHD2's Predictive PEC. It is offered on **RA only**, because the worm
+  periodic error it models has no declination analogue. When you pick it a small
+  panel appears:
   - **Worm period (s, 0 = auto)** - your mount's worm period if you know it;
     leave at 0 to auto-estimate it from the guiding history.
   - **History (samples)** - how many recent frames feed the fit (≈ two worm
     periods; default 256).
-  - **Feed-forward blend (0-1)** - how strongly the prediction is applied on top of
-    the reactive baseline (default 0.7; lower is gentler).
+  - **Feed-forward blend** - slider, 0 to 1: how strongly the prediction is applied
+    on top of the reactive baseline (default 0.7; lower is gentler).
   It always falls back to reactive guiding until the model locks on, so it never
   guides worse than the default. The guide graph overlays a **dashed predicted
   curve** (amber = RA, pale-cyan = Dec) so you can see the model tracking the error.

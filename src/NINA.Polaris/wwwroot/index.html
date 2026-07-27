@@ -4343,6 +4343,27 @@
                         <span class="text-muted" style="font-size:11px"
                               x-show="phd2ActivePreset === 'Custom'">(Custom)</span>
                     </div>
+                    <!-- Min move, promoted out of the Advanced disclosure below:
+                         it is the knob people actually reach for, PHD2 exposes it
+                         on both axes, and a 0.01-step number box is a poor way to
+                         tune a deadband. Writes through to PHD2 (and the rig's
+                         custom bag) like every other knob here. -->
+                    <div class="guide-aggr" style="margin-top:8px"
+                         x-show="phd2AlgoParams && phd2AlgoParams.axes">
+                        <template x-for="axis in Object.keys(phd2AlgoParams?.axes || {})" :key="'phd2mm-'+axis">
+                            <div class="guide-aggr-row" x-show="_phd2MinMoveKey(axis)">
+                                <label>
+                                    <span x-text="axis.toUpperCase() + ' min move'"></span>
+                                    <span class="text-muted"
+                                          x-text="Number(phd2AlgoParams.axes[axis][_phd2MinMoveKey(axis)] ?? 0).toFixed(2) + ' px'"></span>
+                                </label>
+                                <input type="range" min="0" max="2" step="0.05"
+                                       :value="phd2AlgoParams.axes[axis][_phd2MinMoveKey(axis)] ?? 0"
+                                       @input="phd2AlgoParams.axes[axis][_phd2MinMoveKey(axis)] = Number($event.target.value)"
+                                       @change="phd2SetAlgoParam(axis, _phd2MinMoveKey(axis), Number($event.target.value))">
+                            </div>
+                        </template>
+                    </div>
                     <details class="phd2-algo-advanced" style="margin-top:6px">
                         <summary style="font-size:11px;color:var(--text-muted);cursor:pointer">
                             Advanced, individual algorithm knobs
@@ -4582,6 +4603,46 @@
                         </div>
                     </div>
 
+                    <!-- Per-axis minimum move: the deadband under which an error
+                         is left alone, so the mount is not sent chasing seeing.
+                         Sliders work in hundredths of a pixel (0.15 px = 15);
+                         same dragging guard as the aggressiveness block. -->
+                    <div class="guide-aggr guide-group" x-show="guideSideTab === 'settings'"
+                         x-effect="if (!_guideMinMoveEditing) {
+                             guideMinMove.ra = Math.round((guider.minMoveRaPx ?? 0.15) * 100);
+                             guideMinMove.dec = Math.round((guider.minMoveDecPx ?? 0.15) * 100);
+                         }">
+                        <div class="guide-side-title">Minimum move</div>
+                        <div class="guide-aggr-row">
+                            <label>RA min move
+                                <span class="text-muted" x-text="(guideMinMove.ra / 100).toFixed(2) + ' px'"></span>
+                            </label>
+                            <input type="range" min="0" max="100" step="1"
+                                   x-model.number="guideMinMove.ra"
+                                   @pointerdown="_guideMinMoveEditing = true"
+                                   @touchstart="_guideMinMoveEditing = true"
+                                   @pointerup="_guideMinMoveEditing = false"
+                                   @change="setGuideMinMove(guideMinMove.ra / 100, null); _guideMinMoveEditing = false">
+                        </div>
+                        <div class="guide-aggr-row">
+                            <label>Dec min move
+                                <span class="text-muted" x-text="(guideMinMove.dec / 100).toFixed(2) + ' px'"></span>
+                            </label>
+                            <input type="range" min="0" max="100" step="1"
+                                   x-model.number="guideMinMove.dec"
+                                   @pointerdown="_guideMinMoveEditing = true"
+                                   @touchstart="_guideMinMoveEditing = true"
+                                   @pointerup="_guideMinMoveEditing = false"
+                                   @change="setGuideMinMove(null, guideMinMove.dec / 100); _guideMinMoveEditing = false">
+                        </div>
+                        <div class="hint">
+                            Errors smaller than this are not corrected. Raise it when
+                            the mount is chasing seeing (busy graph, no real drift);
+                            lower it for a long focal length or excellent seeing.
+                            Default 0.15 px.
+                        </div>
+                    </div>
+
                     <!-- Dark library / bad-pixel map (native guider only). A
                          single build captures darks for the current
                          exposure/gain/bin and derives a hot-pixel map; the mode
@@ -4720,18 +4781,39 @@
                             </template>
                         </select>
                     </div>
+                    <!-- Dec gets the same list MINUS predictive: that algorithm
+                         feed-forwards worm-gear periodic error, which only the
+                         RA axis has. Offering it on Dec was a real user
+                         complaint, and the guider ignores it there anyway. -->
                     <div class="equip-driver-row" style="margin-top:6px">
                         <label class="equip-driver-label">Dec algo</label>
                         <select class="equip-select equip-driver-select"
                                 @change="setNativeAlgorithm('dec', $event.target.value)">
-                            <template x-for="a in nativeGuideAlgorithms" :key="'gdec-'+a.id">
+                            <template x-for="a in nativeGuideAlgorithms.filter(x => x.id !== 'predictive')" :key="'gdec-'+a.id">
                                 <option :value="a.id" :selected="nativeDecAlgorithm === a.id" x-text="a.name"></option>
                             </template>
                         </select>
                     </div>
-                    <!-- Predictive (PE + drift) tuning, shown only when an axis
-                         uses the predictive algorithm. -->
-                    <div x-show="nativeRaAlgorithm === 'predictive' || nativeDecAlgorithm === 'predictive'"
+                    <!-- Declination guide mode (PHD2's). North/South-only is the
+                         standard answer to a mount with bad Dec backlash. -->
+                    <div class="equip-driver-row" style="margin-top:6px">
+                        <label class="equip-driver-label">Dec guide mode</label>
+                        <select class="equip-select equip-driver-select"
+                                @change="setNativeDecGuideMode($event.target.value)">
+                            <option value="auto" :selected="nativeDecGuideMode === 'auto'">Auto (both directions)</option>
+                            <option value="north" :selected="nativeDecGuideMode === 'north'">North only</option>
+                            <option value="south" :selected="nativeDecGuideMode === 'south'">South only</option>
+                            <option value="off" :selected="nativeDecGuideMode === 'off'">Off (no Dec guiding)</option>
+                        </select>
+                    </div>
+                    <div class="hint" style="margin-top:4px" x-show="nativeDecGuideMode !== 'auto'">
+                        One-direction Dec avoids backlash reversals: leave the polar
+                        alignment slightly off so the drift always pushes the same
+                        way, and correct only against it.
+                    </div>
+                    <!-- Predictive (PE + drift) tuning, shown only when RA uses
+                         the predictive algorithm. -->
+                    <div x-show="nativeRaAlgorithm === 'predictive'"
                          style="margin-top:8px; padding:8px; border:1px solid var(--border); border-radius:8px">
                         <div class="text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px">Predictive (PE + drift)</div>
                         <div class="cal-corr-grid">
@@ -4745,11 +4827,15 @@
                                        :value="nativePredictiveWindowSamples"
                                        @change="setNativePredictive('nativePredictiveWindowSamples', $event.target.value)">
                             </label>
-                            <label class="gb-field">Feed-forward blend (0-1)
-                                <input type="number" min="0" max="1" step="0.05"
-                                       :value="nativePredictiveBlend"
-                                       @change="setNativePredictive('nativePredictiveBlend', $event.target.value)">
+                        </div>
+                        <div class="guide-aggr-row" style="margin-top:8px">
+                            <label>Feed-forward blend
+                                <span class="text-muted" x-text="Number(nativePredictiveBlend).toFixed(2)"></span>
                             </label>
+                            <input type="range" min="0" max="1" step="0.05"
+                                   :value="nativePredictiveBlend"
+                                   @input="nativePredictiveBlend = Number($event.target.value)"
+                                   @change="setNativePredictive('nativePredictiveBlend', $event.target.value)">
                         </div>
                         <div class="hint" style="margin-top:6px">
                             Learns the worm-gear periodic error + drift and corrects ahead of
@@ -4761,12 +4847,14 @@
                     <div x-show="nativeRaAlgorithm === 'zfilter' || nativeDecAlgorithm === 'zfilter'"
                          style="margin-top:8px; padding:8px; border:1px solid var(--border); border-radius:8px">
                         <div class="text-muted" style="font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px">ZFilter</div>
-                        <div class="cal-corr-grid">
-                            <label class="gb-field" style="grid-column:1/-1; flex-direction:row; align-items:center; gap:8px">Exposure factor (1-20)
-                                <input type="number" min="1" max="20" step="0.5" style="max-width:120px"
-                                       :value="nativeZFilterExpFactor"
-                                       @change="setNativeZFilterExpFactor($event.target.value)">
+                        <div class="guide-aggr-row">
+                            <label>Exposure factor
+                                <span class="text-muted" x-text="Number(nativeZFilterExpFactor).toFixed(1) + '×'"></span>
                             </label>
+                            <input type="range" min="1" max="20" step="0.5"
+                                   :value="nativeZFilterExpFactor"
+                                   @input="nativeZFilterExpFactor = Number($event.target.value)"
+                                   @change="setNativeZFilterExpFactor($event.target.value)">
                         </div>
                         <div class="hint" style="margin-top:6px">
                             Low-pass smoothing strength: the equivalent exposure after filtering
@@ -12187,25 +12275,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             <!-- SETTINGS -->
             <div x-show="tab === 'settings'" class="tab-panel"
                  x-init="$watch('tab', t => { if (t === 'settings') { loadSimulatorSettings(); loadPowerInfo(); } })">
-                <div class="panel-header">Settings</div>
-
-                <!-- Settings search. 25 cards under 8 category headers is more
-                     than anyone scans, so this filters the accordion live:
-                     matching cards open, the rest (and any category header left
-                     empty) hide. Matching runs on the RENDERED text, so it works
-                     in whatever language the UI is showing. -->
-                <div class="settings-search">
-                    <input class="input" type="search" x-model="settingsQuery"
-                           @input="applySettingsSearch()"
-                           @keyup.escape="clearSettingsSearch()"
-                           placeholder="Search settings…"
-                           aria-label="Search settings">
-                    <button class="btn btn-sm" x-show="settingsQuery"
-                            @click="clearSettingsSearch()" title="Clear search">✕</button>
-                    <span class="text-muted settings-search-count" x-show="settingsQuery"
-                          x-text="settingsMatchCount === 0
-                                  ? 'No settings match'
-                                  : settingsMatchCount + ' of ' + settingsCardCount'"></span>
+                <div class="panel-header">Settings</div>
+
+                <!-- Settings search. 25 cards under 8 category headers is more
+                     than anyone scans, so this filters the accordion live:
+                     matching cards open, the rest (and any category header left
+                     empty) hide. Matching runs on the RENDERED text, so it works
+                     in whatever language the UI is showing. -->
+                <div class="settings-search">
+                    <input class="input" type="search" x-model="settingsQuery"
+                           @input="applySettingsSearch()"
+                           @keyup.escape="clearSettingsSearch()"
+                           placeholder="Search settings…"
+                           aria-label="Search settings">
+                    <button class="btn btn-sm" x-show="settingsQuery"
+                            @click="clearSettingsSearch()" title="Clear search">✕</button>
+                    <span class="text-muted settings-search-count" x-show="settingsQuery"
+                          x-text="settingsMatchCount === 0
+                                  ? 'No settings match'
+                                  : settingsMatchCount + ' of ' + settingsCardCount'"></span>
                 </div>
 
                 <!-- Card grid, FAQ-style accordion. Each .settings-section
@@ -19104,7 +19192,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260727-wifipicker"></script>
+    <script src="/js/app.js?v=20260727-guideminmove"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>
