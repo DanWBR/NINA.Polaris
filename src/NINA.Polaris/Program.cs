@@ -151,6 +151,7 @@ builder.Services.AddHostedService<NINA.Polaris.Services.Logging.GuideSessionLogS
 // happens headless and for every client, not only when a browser is open on
 // the right page at the right moment.
 builder.Services.AddHostedService<FilterNameRestoreService>();
+builder.Services.AddSingleton<DiskInstallService>();
 builder.Services.AddSingleton<ImageRelayService>();
 builder.Services.AddSingleton<CameraStreamService>();
 // Server-owned LIVE capture loop — now the only LIVE loop (the LIVE shutter

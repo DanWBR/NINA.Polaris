@@ -3408,5 +3408,16 @@
   "Search settings": "Einstellungen durchsuchen",
   "No settings match": "Keine Einstellung passt",
   "Clear search": "Suche löschen",
-  "Idle time between auto-captures. 0 captures back-to-back; raise it to throttle a slow host.": "Wartezeit zwischen automatischen Aufnahmen. 0 nimmt ohne Pause auf; erhöhen Sie den Wert für einen langsamen Host."
+  "Idle time between auto-captures. 0 captures back-to-back; raise it to throttle a slow host.": "Wartezeit zwischen automatischen Aufnahmen. 0 nimmt ohne Pause auf; erhöhen Sie den Wert für einen langsamen Host.",
+  "💽 Install to internal disk": "💽 Auf interne Platte installieren",
+  "Install to internal disk": "Auf interne Platte installieren",
+  "Copy this running system onto an internal disk": "Dieses laufende System auf eine interne Platte kopieren",
+  "Copies the system you are running right now onto a disk in this machine and makes it bootable. Your profiles, rigs and settings come along. When it finishes, power off, remove the USB stick and boot from the disk.": "Kopiert das gerade laufende System auf eine Platte in diesem Rechner und macht sie bootfähig. Ihre Profile, Rigs und Einstellungen kommen mit. Danach ausschalten, den USB-Stick abziehen und von der Platte booten.",
+  "⚠ This system does not look like it booted from removable media. Installing from an already-installed disk is usually not what you want.": "⚠ Dieses System scheint nicht von einem Wechseldatenträger gebootet zu sein. Von einer bereits installierten Platte zu installieren ist meist nicht gewollt.",
+  "Looking for disks…": "Suche nach Platten…",
+  "No other disk found in this machine.": "Keine weitere Platte in diesem Rechner gefunden.",
+  "Type ERASE to confirm": "ERASE eingeben zum Bestätigen",
+  "Erase and install": "Löschen und installieren",
+  "Installed. Power off, remove the USB stick and boot from the disk.": "Installiert. Ausschalten, USB-Stick abziehen und von der Platte booten.",
+  "The installer reported a problem. The log is below.": "Der Installer meldet ein Problem. Das Log steht unten."
 }

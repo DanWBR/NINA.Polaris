@@ -72,6 +72,37 @@ public static class SystemEndpoints {
         // "Optimize SBC" launcher (runs them via the Remote Terminal over SSH
         // to localhost; root is the user's own sudo). Linux-only; cheap path
         // probe, no subprocess.
+        // ---- Clone this USB stick onto an internal disk -------------------
+        //
+        // Writing the image to the disk you want to boot from is the awkward
+        // part of setting a mini PC up, so the image can install ITSELF: boot
+        // from the stick, pick the SSD here, and the running system is cloned
+        // onto it. The dangerous work lives in polaris-install-to-disk, the
+        // same script an SSH user runs; these endpoints only enumerate and
+        // launch it.
+        group.MapGet("/install-targets", (DiskInstallService disk) =>
+            Results.Ok(disk.GetTargets()));
+
+        group.MapGet("/install-to-disk/status", (DiskInstallService disk) => Results.Ok(new {
+            running = disk.IsRunning,
+            succeeded = disk.LastSucceeded,
+            log = disk.Log
+        }));
+
+        group.MapPost("/install-to-disk", (DiskInstallRequest req, DiskInstallService disk) => {
+            var targets = disk.GetTargets();
+            if (!targets.Available)
+                return Results.BadRequest(new { error = targets.Reason ?? "not available here" });
+            var chosen = targets.Targets.FirstOrDefault(t => t.Device == req.Device);
+            if (chosen == null)
+                return Results.BadRequest(new { error = "unknown device" });
+            if (chosen.IsBootDisk)
+                return Results.BadRequest(new { error = "that is the disk the system booted from" });
+            if (!disk.Start(req.Device))
+                return Results.Conflict(new { error = "an install is already running" });
+            return Results.Ok(new { status = "started", device = req.Device });
+        });
+
         group.MapGet("/sbc-tools", () => {
             bool Has(params string[] paths) =>
                 OperatingSystem.IsLinux() && paths.Any(System.IO.File.Exists);
@@ -542,3 +573,5 @@ public static class SystemEndpoints {
     record TerminalEnableRequest(bool Enabled);
     record UiLanguageRequest(string? Language);
 }
+/// <summary>Body of POST /api/system/install-to-disk.</summary>
+public record DiskInstallRequest(string Device);

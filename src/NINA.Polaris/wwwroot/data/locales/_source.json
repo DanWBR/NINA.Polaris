@@ -2808,5 +2808,16 @@
   "Search settings": "",
   "No settings match": "",
   "Clear search": "",
-  "Idle time between auto-captures. 0 captures back-to-back; raise it to throttle a slow host.": ""
+  "Idle time between auto-captures. 0 captures back-to-back; raise it to throttle a slow host.": "",
+  "💽 Install to internal disk": "",
+  "Install to internal disk": "",
+  "Copy this running system onto an internal disk": "",
+  "Copies the system you are running right now onto a disk in this machine and makes it bootable. Your profiles, rigs and settings come along. When it finishes, power off, remove the USB stick and boot from the disk.": "",
+  "⚠ This system does not look like it booted from removable media. Installing from an already-installed disk is usually not what you want.": "",
+  "Looking for disks…": "",
+  "No other disk found in this machine.": "",
+  "Type ERASE to confirm": "",
+  "Erase and install": "",
+  "Installed. Power off, remove the USB stick and boot from the disk.": "",
+  "The installer reported a problem. The log is below.": ""
 }

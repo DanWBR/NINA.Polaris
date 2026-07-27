@@ -3408,5 +3408,16 @@
   "Search settings": "Buscar en los ajustes",
   "No settings match": "Ningún ajuste coincide",
   "Clear search": "Limpiar búsqueda",
-  "Idle time between auto-captures. 0 captures back-to-back; raise it to throttle a slow host.": "Tiempo de espera entre capturas automáticas. 0 captura de forma continua; súbelo para aliviar un host lento."
+  "Idle time between auto-captures. 0 captures back-to-back; raise it to throttle a slow host.": "Tiempo de espera entre capturas automáticas. 0 captura de forma continua; súbelo para aliviar un host lento.",
+  "💽 Install to internal disk": "💽 Instalar en el disco interno",
+  "Install to internal disk": "Instalar en el disco interno",
+  "Copy this running system onto an internal disk": "Copiar este sistema en ejecución a un disco interno",
+  "Copies the system you are running right now onto a disk in this machine and makes it bootable. Your profiles, rigs and settings come along. When it finishes, power off, remove the USB stick and boot from the disk.": "Copia el sistema que estás ejecutando ahora a un disco de esta máquina y lo deja arrancable. Tus perfiles, equipos y ajustes van con él. Al terminar, apaga, quita el USB y arranca desde el disco.",
+  "⚠ This system does not look like it booted from removable media. Installing from an already-installed disk is usually not what you want.": "⚠ Este sistema no parece haber arrancado desde un medio extraíble. Instalar desde un disco ya instalado no suele ser lo que se busca.",
+  "Looking for disks…": "Buscando discos…",
+  "No other disk found in this machine.": "No se ha encontrado ningún otro disco en esta máquina.",
+  "Type ERASE to confirm": "Escribe ERASE para confirmar",
+  "Erase and install": "Borrar e instalar",
+  "Installed. Power off, remove the USB stick and boot from the disk.": "Instalado. Apaga, quita el USB y arranca desde el disco.",
+  "The installer reported a problem. The log is below.": "El instalador ha informado de un problema. El registro está abajo."
 }

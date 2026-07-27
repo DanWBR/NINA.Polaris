@@ -13247,6 +13247,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 title="Reinstall a previous Polaris release (downgrade)">
                             ↩ Roll back version
                         </button>
+                        <!-- Only appears when the host can actually do it: Linux,
+                             UEFI, the tool present, and a disk that is not the one
+                             we booted from. See DiskInstallService.GetTargets. -->
+                        <button class="btn btn-sm" x-show="diskInstall.available" x-cloak
+                                @click="openDiskInstall()"
+                                title="Copy this running system onto an internal disk">
+                            💽 Install to internal disk
+                        </button>
                     </div>
                     <p class="text-muted" x-show="update.currentVersion"
                        style="font-size:11px; margin-top:8px">
@@ -18521,6 +18529,113 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          appears when a newer version exists). Lists recent releases; the running
          one is badged, older ones offer "Roll back", newer ones "Update". The
          capture loop / install reuses the same machinery as the updater. -->
+    <!-- Install to internal disk. The image is meant to be written to a USB
+         stick (which anyone can do) and then moved onto the machine's SSD from
+         here, instead of writing 13 GB to a disk you cannot boot from. -->
+    <div class="modal-overlay" x-show="diskInstall.open" x-cloak
+         @click.self="!diskInstall.running && (diskInstall.open = false)"
+         @keydown.escape.window="!diskInstall.running && (diskInstall.open = false)">
+        <div class="modal-card" style="max-width:620px">
+            <div class="modal-head">
+                <span class="modal-icon">💽</span>
+                <h3>Install to internal disk</h3>
+            </div>
+
+            <template x-if="!diskInstall.running && !diskInstall.done">
+                <div>
+                    <p style="opacity:.85;font-size:.85em;margin-bottom:8px">
+                        Copies the system you are running right now onto a disk in this
+                        machine and makes it bootable. Your profiles, rigs and settings
+                        come along. When it finishes, power off, remove the USB stick and
+                        boot from the disk.
+                    </p>
+                    <p class="hint" x-show="!diskInstall.runningFromRemovable"
+                       style="font-size:.8em;margin-bottom:8px">
+                        ⚠ This system does not look like it booted from removable media.
+                        Installing from an already-installed disk is usually not what you want.
+                    </p>
+                    <p style="font-size:.8em;opacity:.75;margin-bottom:10px">
+                        Booted from <b x-text="diskInstall.bootDisk || '?'"></b>, which is
+                        excluded from the list.
+                    </p>
+
+                    <div x-show="diskInstall.loading" style="display:flex;align-items:center;gap:8px;margin:14px 0">
+                        <div class="spinner" style="width:16px;height:16px"></div>
+                        <span style="font-size:.85em">Looking for disks…</span>
+                    </div>
+
+                    <template x-if="!diskInstall.loading && diskInstall.targets.length === 0">
+                        <p class="text-muted" style="font-size:.85em">
+                            No other disk found in this machine.
+                        </p>
+                    </template>
+
+                    <template x-for="t in diskInstall.targets" :key="t.device">
+                        <label style="display:flex;align-items:center;gap:10px;padding:8px 0;
+                                      border-bottom:1px solid var(--border);cursor:pointer">
+                            <input type="radio" name="diskInstallTarget" :value="t.device"
+                                   x-model="diskInstall.device">
+                            <span>
+                                <b x-text="t.device"></b>
+                                <span class="text-muted" x-text="' · ' + t.size + (t.model ? ' · ' + t.model : '')"></span>
+                            </span>
+                        </label>
+                    </template>
+
+                    <template x-if="diskInstall.device">
+                        <div style="margin-top:14px">
+                            <p style="color:var(--danger);font-size:.85em;margin-bottom:6px">
+                                Everything on <b x-text="diskInstall.device"></b> will be erased.
+                            </p>
+                            <label style="font-size:.8em;display:block;margin-bottom:4px">
+                                Type ERASE to confirm
+                            </label>
+                            <input class="input" type="text" x-model="diskInstall.confirm"
+                                   placeholder="ERASE" autocomplete="off" style="max-width:200px">
+                        </div>
+                    </template>
+
+                    <p x-show="diskInstall.error"
+                       style="color:var(--danger);font-size:.8em;margin-top:10px"
+                       x-text="diskInstall.error"></p>
+                </div>
+            </template>
+
+            <template x-if="diskInstall.running">
+                <div>
+                    <div style="display:flex;align-items:center;gap:8px;margin:6px 0 10px">
+                        <div class="spinner" style="width:16px;height:16px"></div>
+                        <span style="font-size:.9em">Copying to <b x-text="diskInstall.device"></b>. This takes several minutes; leave the machine on.</span>
+                    </div>
+                    <pre x-text="diskInstall.log"
+                         style="max-height:260px;overflow:auto;font-size:.75em;white-space:pre-wrap"></pre>
+                </div>
+            </template>
+
+            <template x-if="diskInstall.done">
+                <div>
+                    <p style="text-align:center;font-size:1.4em;margin-bottom:4px"
+                       x-text="diskInstall.succeeded ? '✅' : '⚠'"></p>
+                    <p style="text-align:center;margin-bottom:10px"
+                       x-text="diskInstall.succeeded
+                               ? 'Installed. Power off, remove the USB stick and boot from the disk.'
+                               : 'The installer reported a problem. The log is below.'"></p>
+                    <pre x-text="diskInstall.log"
+                         style="max-height:220px;overflow:auto;font-size:.75em;white-space:pre-wrap"></pre>
+                </div>
+            </template>
+
+            <div class="modal-actions" style="margin-top:10px">
+                <button class="btn btn-sm" @click="diskInstall.open = false"
+                        :disabled="diskInstall.running">Close</button>
+                <button class="btn btn-sm btn-danger"
+                        x-show="!diskInstall.running && !diskInstall.done"
+                        :disabled="!diskInstall.device || diskInstall.confirm !== 'ERASE'"
+                        @click="startDiskInstall()">Erase and install</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay" x-show="update.rollbackOpen" x-cloak
          @click.self="!update.installing && (update.rollbackOpen = false)"
          @keydown.escape.window="!update.installing && (update.rollbackOpen = false)">
@@ -18968,7 +19083,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260727-fwnames2"></script>
+    <script src="/js/app.js?v=20260727-diskinstall"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

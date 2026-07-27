@@ -4318,6 +4318,9 @@ function ninaApp() {
             // to the shader from the very first frame, even before
             // the operator opens the Manage Rigs modal.
             this.loadCameraQuirks();
+            // Cheap one-shot: decides whether the Software update card shows
+            // the "Install to internal disk" button at all.
+            this.probeDiskInstall();
             // PANZOOM: bind pinch-to-zoom + drag-to-pan on the three
             // main image preview areas. Deferred to next tick so the
             // DOM has settled after Alpine's x-init hydration pass.
@@ -26933,6 +26936,102 @@ function ninaApp() {
             });
         },
         // Start every settings card collapsed (called from the grid's x-init).
+        // ---- Install to internal disk ----------------------------------
+        //
+        // The x64 image is meant to be written to a USB stick and then moved
+        // onto the mini PC's SSD from here: you cannot write an image to the
+        // disk you booted from, which is what made that step painful. The
+        // server owns the dangerous half (polaris-install-to-disk); this is
+        // the picker, the confirmation and the log tail.
+        diskInstall: {
+            available: false,       // host can do it at all (Linux + UEFI + tool)
+            open: false,
+            loading: false,
+            bootDisk: null,
+            runningFromRemovable: false,
+            targets: [],
+            device: '',
+            confirm: '',
+            running: false,
+            done: false,
+            succeeded: false,
+            log: '',
+            error: null
+        },
+        _diskInstallPoll: null,
+
+        // Probed once per session so the button only exists where it works.
+        async probeDiskInstall() {
+            try {
+                const r = await (await this.apiFetch('/api/system/install-targets')).json();
+                this.diskInstall.available = !!r?.available
+                    && (r.targets || []).some(t => !t.isBootDisk);
+                this.diskInstall.bootDisk = r?.bootDisk || null;
+                this.diskInstall.runningFromRemovable = !!r?.runningFromRemovable;
+            } catch (e) { this.diskInstall.available = false; }
+        },
+
+        async openDiskInstall() {
+            const d = this.diskInstall;
+            d.open = true; d.error = null; d.confirm = ''; d.device = '';
+            d.done = false; d.log = '';
+            d.loading = true;
+            try {
+                const r = await (await this.apiFetch('/api/system/install-targets')).json();
+                d.bootDisk = r?.bootDisk || null;
+                d.runningFromRemovable = !!r?.runningFromRemovable;
+                d.targets = (r?.targets || []).filter(t => !t.isBootDisk);
+                if (!r?.available) d.error = r?.reason || 'Not available on this host.';
+            } catch (e) {
+                d.error = 'Could not list the disks: ' + (e?.message || e);
+            } finally {
+                d.loading = false;
+            }
+            // An install started before a reload is still running server-side.
+            this._pollDiskInstall();
+        },
+
+        async startDiskInstall() {
+            const d = this.diskInstall;
+            if (!d.device || d.confirm !== 'ERASE') return;
+            d.error = null;
+            try {
+                const resp = await this.apiPost('/api/system/install-to-disk', { device: d.device });
+                const r = await resp.json();
+                if (r?.status !== 'started') { d.error = r?.error || 'Could not start.'; return; }
+                d.running = true;
+                d.log = '';
+                this._pollDiskInstall();
+            } catch (e) {
+                d.error = 'Could not start: ' + (e?.message || e);
+            }
+        },
+
+        // Poll while the modal is open and something is running. Deliberately
+        // slow: this is a multi-minute copy, not a progress bar.
+        _pollDiskInstall() {
+            clearTimeout(this._diskInstallPoll);
+            const tick = async () => {
+                const d = this.diskInstall;
+                try {
+                    const r = await (await this.apiFetch('/api/system/install-to-disk/status')).json();
+                    d.log = r?.log || '';
+                    if (r?.running) {
+                        d.running = true;
+                    } else if (d.running) {
+                        // Was running, now is not: it finished on this visit.
+                        d.running = false;
+                        d.done = true;
+                        d.succeeded = r?.succeeded === true;
+                    }
+                } catch (e) { /* transient, keep polling */ }
+                if (this.diskInstall.open && this.diskInstall.running) {
+                    this._diskInstallPoll = setTimeout(tick, 2000);
+                }
+            };
+            tick();
+        },
+
         // ---- Settings search -------------------------------------------
         //
         // The cards are static markup, not data, so the filter works on the
