@@ -16,9 +16,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
+using NINA.Polaris.Endpoints;
 using NINA.Polaris.Services;
 
 namespace NINA.Polaris.Test;
@@ -148,5 +150,103 @@ public class RigPartialPutTests {
         } finally {
             try { Directory.Delete(dir, recursive: true); } catch { }
         }
+    }
+
+    // ---- The STRING half of the same hole (RigPatch) ----
+    //
+    // Nullable value types made "absent" detectable, but strings keep their
+    // property initialiser, and several of those initialisers are real-looking
+    // values: Name = "Default", NativeRaAlgorithm = "hysteresis",
+    // NativeDecAlgorithm = "resistswitch", NativePierSideHandling = "mirror".
+    // A one-field body bound straight to EquipmentProfile therefore arrived at
+    // the handler claiming the rig was called "Default" — non-blank, so the
+    // blank-guard let it through and the operator's "SV503" rig was renamed.
+    // RigPatch.Merge seeds the model from the STORED rig instead.
+
+    private static EquipmentProfile StoredRig() => new() {
+        Name = "SV503",
+        Camera = "0",
+        CameraDriver = "zwo-sdk",
+        Telescope = "ZWO AM3 USB",
+        NativeRaAlgorithm = "predictive",
+        NativeDecAlgorithm = "lowpass",
+        NativeDecGuideMode = "north",
+        NativePierSideHandling = "recalibrate",
+        PHD2AlgoPreset = "Smooth",
+        FilterNames = new[] { "Red", "Green", "Blue" },
+        DefaultOffset = 120,
+        FocalLengthMm = 478
+    };
+
+    [Test]
+    public void Merge_ComputeModeOnlyBody_KeepsTheRigName() {
+        var merged = RigPatch.Merge(StoredRig(),
+            JsonNode.Parse("""{ "liveStackComputeMode": "server" }""")!.AsObject());
+
+        Assert.Multiple(() => {
+            Assert.That(merged.Name, Is.EqualTo("SV503"),
+                "the reported bug: an absent name arrived as the initialiser \"Default\"");
+            Assert.That(merged.LiveStackComputeMode, Is.EqualTo("server"), "the field actually sent");
+        });
+    }
+
+    [Test]
+    public void Merge_PartialBody_KeepsEveryStringWithANonEmptyDefault() {
+        var merged = RigPatch.Merge(StoredRig(),
+            JsonNode.Parse("""{ "coolerRampDegPerMinute": 1.5 }""")!.AsObject());
+
+        Assert.Multiple(() => {
+            Assert.That(merged.NativeRaAlgorithm, Is.EqualTo("predictive"));
+            Assert.That(merged.NativeDecAlgorithm, Is.EqualTo("lowpass"));
+            Assert.That(merged.NativeDecGuideMode, Is.EqualTo("north"));
+            Assert.That(merged.NativePierSideHandling, Is.EqualTo("recalibrate"));
+            Assert.That(merged.PHD2AlgoPreset, Is.EqualTo("Smooth"));
+            Assert.That(merged.CameraDriver, Is.EqualTo("zwo-sdk"));
+            Assert.That(merged.Camera, Is.EqualTo("0"));
+            Assert.That(merged.Telescope, Is.EqualTo("ZWO AM3 USB"));
+            Assert.That(merged.FilterNames, Is.EqualTo(new[] { "Red", "Green", "Blue" }),
+                "collections are absent just as easily as strings");
+            Assert.That(merged.FocalLengthMm, Is.EqualTo(478));
+            Assert.That(merged.CoolerRampDegPerMinute, Is.EqualTo(1.5));
+        });
+    }
+
+    [Test]
+    public void Merge_PresentValues_StillWin() {
+        var merged = RigPatch.Merge(StoredRig(),
+            JsonNode.Parse("""{ "name": "Backyard", "nativeDecGuideMode": "off", "defaultOffset": 30 }""")!.AsObject());
+
+        Assert.Multiple(() => {
+            Assert.That(merged.Name, Is.EqualTo("Backyard"), "a real rename must still apply");
+            Assert.That(merged.NativeDecGuideMode, Is.EqualTo("off"));
+            Assert.That(merged.DefaultOffset, Is.EqualTo(30));
+        });
+    }
+
+    [Test]
+    public void Merge_ExplicitBlankName_LeavesTheGuardToRejectIt() {
+        // A blank name still reaches the handler as blank (not as the stored
+        // value), so the existing !IsNullOrWhiteSpace guard is what drops it.
+        var merged = RigPatch.Merge(StoredRig(),
+            JsonNode.Parse("""{ "name": "  " }""")!.AsObject());
+        Assert.That(merged.Name, Is.EqualTo("  "));
+    }
+
+    [Test]
+    public void Merge_NullBodyOrEmptyObject_ChangesNothing() {
+        foreach (var patch in new JsonObject?[] { null, new JsonObject() }) {
+            var merged = RigPatch.Merge(StoredRig(), patch);
+            Assert.That(merged.Name, Is.EqualTo("SV503"));
+            Assert.That(merged.NativeDecAlgorithm, Is.EqualTo("lowpass"));
+        }
+    }
+
+    [Test]
+    public void Merge_PascalCaseBody_DoesNotCollideWithTheStoredSpelling() {
+        // An old/other client may send PascalCase. Case-insensitive binding
+        // would otherwise see both "name" and "Name" for the same property.
+        var merged = RigPatch.Merge(StoredRig(),
+            JsonNode.Parse("""{ "Name": "Backyard" }""")!.AsObject());
+        Assert.That(merged.Name, Is.EqualTo("Backyard"));
     }
 }

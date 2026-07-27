@@ -7027,7 +7027,26 @@ function ninaApp() {
             // The chip starts already at 100% (loaded=total=byteLength)
             // and _transferEnd's natural ~800ms hold gives the user
             // time to read it before it fades.
-            if (arrayBuffer.byteLength >= 64 * 1024) {
+            //
+            // VIDEO (FrameKind 3) is exempt: a planetary stream delivers
+            // frames continuously, so an ~800ms chip per frame means a
+            // permanent wall of "JPEG frame … done" across the activity
+            // bar. One-off snaps and stacked frames still flash a chip;
+            // a live stream doesn't need one to tell you it is running.
+            // Both wire shapes carry FrameKind at arrayBuffer offset 24
+            // (header offset 20 + the 4-byte length prefix — see the long
+            // note in _renderRawFrame before touching this).
+            let chipFrameKind = headeredJpegKind;
+            if (chipFrameKind == null && !isBareJpeg && view.length >= 30) {
+                const dvk = new DataView(arrayBuffer);
+                const hlk = dvk.getInt32(0, true);
+                if (hlk >= 24 && hlk <= 64) chipFrameKind = dvk.getInt32(24, true);
+            }
+            // A running camera stream suppresses the chips too: a legacy
+            // bare JPEG carries no FrameKind to test, and while the stream
+            // is up every frame is stream traffic anyway.
+            const chipsMuted = chipFrameKind === 3 || this.cameraStream?.running === true;
+            if (arrayBuffer.byteLength >= 64 * 1024 && !chipsMuted) {
                 const tid = this._transferStart({
                     label: (isJpeg ? 'JPEG' : 'RAW') + ' frame',
                     direction: 'down',

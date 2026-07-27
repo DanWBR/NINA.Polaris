@@ -12,6 +12,8 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using NINA.Polaris.Services;
 using NINA.INDI.Client;
 
@@ -83,7 +85,25 @@ public static class EquipmentEndpoints {
             return Results.Ok(clone);
         });
 
-        group.MapPut("/rigs/{id}", (string id, EquipmentProfile update, ProfileService profiles) => {
+        // The body is read as raw JSON and merged onto the STORED rig (RigPatch)
+        // instead of being bound straight to an EquipmentProfile. Binding gave
+        // every absent property its C# initialiser, and those initialisers are
+        // real-looking values: a compute-mode-only PUT arrived carrying
+        // Name = "Default", NativeRaAlgorithm = "hysteresis", NativeDecAlgorithm
+        // = "resistswitch", NativePierSideHandling = "mirror" — which is exactly
+        // how a rig named "SV503" came back as "Default" with its guiding setup
+        // reset. After the merge, absent ⇒ the stored value, so the guards and
+        // clamps below run against real input only.
+        group.MapPut("/rigs/{id}", async (string id, HttpRequest request, ProfileService profiles) => {
+            var stored = profiles.ListEquipmentProfiles().FirstOrDefault(r => r.Id == id);
+            if (stored == null) return Results.NotFound(new { error = "Rig not found" });
+            JsonObject? patch;
+            try {
+                patch = await request.ReadFromJsonAsync<JsonObject>();
+            } catch (JsonException ex) {
+                return Results.BadRequest(new { error = "Invalid rig body: " + ex.Message });
+            }
+            var update = RigPatch.Merge(stored, patch);
             var ok = profiles.UpdateEquipmentProfile(id, r => {
                 // Identity + primary-device selections are the
                 // source-of-truth fields the operator complained about
