@@ -337,4 +337,30 @@ public class LiveStackingServiceTests {
 
         Assert.That(svc.ClientStackStalled, Is.False);
     }
+
+    /// <summary>
+    /// In MetricsOnly the capture endpoint hands the frame to this service
+    /// INSTEAD of the relay, so this service has to broadcast it or the browser
+    /// receives nothing: the LIVE image freezes and the WASM client has no
+    /// pixels to accumulate. Regression for the Q6A report ("only the first
+    /// frame arrived"), where seven frames were processed and zero relayed.
+    /// </summary>
+    [Test]
+    public async Task MetricsOnly_RelaysEveryRawFrame() {
+        var relay = new ImageRelayService(NullLogger<ImageRelayService>.Instance);
+        var svc = new LiveStackingService(relay, NullLogger<LiveStackingService>.Instance);
+        svc.Mode = StackMode.MetricsOnly;
+        svc.Start();
+
+        // The relay records the frame it last broadcast; asserting it tracks
+        // each frame we push proves the broadcast actually happened.
+        for (var i = 0; i < 3; i++) {
+            var frame = MakeFrame();
+            await svc.AddFrameAsync(frame);
+            Assert.That(relay.LatestImageData, Is.SameAs(frame),
+                $"Frame {i + 1} never reached the client.");
+        }
+
+        Assert.That(svc.FrameCount, Is.EqualTo(3));
+    }
 }

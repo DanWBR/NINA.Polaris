@@ -529,26 +529,26 @@ public class LiveStackingService {
     /// Switched to <see cref="StackMode.MetricsOnly"/> by the WASM
     /// handshake (CLST-5) when a WASM-capable client is connected and
     /// the active rig hasn't forced server-side.</summary>
-    public StackMode Mode { get; set; } = StackMode.Full;
-
-    // CLST-6: MetricsOnly hands the accumulation to the browser, so the
-    // server keeps NO stack. If the client that promised to do the work never
-    // reports back - its WASM failed to load, the tab was backgrounded, or the
-    // capable client is a different browser from the one the operator is
-    // watching - then nobody stacks and the viewer sees single frames with
-    // /api/livestack/preview 404ing. Count the frames we process without a
-    // peep from the client and hand the work back to the server.
-    private int _framesSinceClientMetrics;
-    private const int MaxSilentClientFrames = 3;
-
-    /// <summary>True when MetricsOnly was in force but no client reported
-    /// stack progress for <see cref="MaxSilentClientFrames"/> frames. The mode
-    /// evaluator treats this as "no capable client" so the server resumes
-    /// accumulating. Cleared as soon as a client reports again.</summary>
-    public bool ClientStackStalled { get; private set; }
-
-    /// <summary>Raised when <see cref="ClientStackStalled"/> changes, so the
-    /// composition root can re-run its mode evaluation.</summary>
+    public StackMode Mode { get; set; } = StackMode.Full;
+
+    // CLST-6: MetricsOnly hands the accumulation to the browser, so the
+    // server keeps NO stack. If the client that promised to do the work never
+    // reports back - its WASM failed to load, the tab was backgrounded, or the
+    // capable client is a different browser from the one the operator is
+    // watching - then nobody stacks and the viewer sees single frames with
+    // /api/livestack/preview 404ing. Count the frames we process without a
+    // peep from the client and hand the work back to the server.
+    private int _framesSinceClientMetrics;
+    private const int MaxSilentClientFrames = 3;
+
+    /// <summary>True when MetricsOnly was in force but no client reported
+    /// stack progress for <see cref="MaxSilentClientFrames"/> frames. The mode
+    /// evaluator treats this as "no capable client" so the server resumes
+    /// accumulating. Cleared as soon as a client reports again.</summary>
+    public bool ClientStackStalled { get; private set; }
+
+    /// <summary>Raised when <see cref="ClientStackStalled"/> changes, so the
+    /// composition root can re-run its mode evaluation.</summary>
     public event Action<bool>? ClientStackStalledChanged;
 
     // LSPP-3+4: per-frame pre-processing. Settings read from the active
@@ -1347,11 +1347,7 @@ public class LiveStackingService {
         } else {
             // MetricsOnly: bookkeep frame count + dimensions so triggers
             // and status broadcasts have something to render, but skip
-            // the accumulator. The raw frame is still relayed via
-            // ImageRelayService elsewhere in the capture path (see
-            // SequenceEngine / ImageRelayService.RelayImageAsync from
-            // the camera capture endpoint), the WASM client picks it
-            // up from the existing /ws/image-stream raw mode.
+            // the accumulator.
             lock (_lock) {
                 if (_frameCount == 0) {
                     _startedAt = DateTime.UtcNow;
@@ -1362,6 +1358,24 @@ public class LiveStackingService {
                 }
                 _frameCount++;
             }
+
+            // ...and RELAY THE RAW FRAME, because nothing else will.
+            //
+            // This block used to assume the capture path had already
+            // broadcast it. It had not: CameraEndpoints routes a frame
+            // either to this service OR to the relay, never both
+            // (feedStack && IsRunning ? AddFrameAsync : RelayImageAsync).
+            // So with the live stack running in MetricsOnly the server
+            // sent the browser nothing at all: the LIVE image froze on
+            // whatever was on screen before the stack started, and the
+            // WASM client had no pixels to accumulate, which surfaced as
+            // cum=0.0 frame after frame. Seen on the Q6A: seven frames
+            // processed, zero relays in the log.
+            //
+            // The RAW frame is the right thing to send here. It carries
+            // the Bayer code the WASM stacker needs to lock a colour
+            // session, and the client displays its own accumulator.
+            await _relay.RelayImageAsync(imageData, FrameKind.LiveStack, ct);
         }
 
         // Compute median HFR from the already-detected stars (no extra
@@ -1560,14 +1574,14 @@ public class LiveStackingService {
     /// untouched.</summary>
     public void InjectClientStackMetrics(int frameCount, double frameSnr, double cumulativeSnr,
                                           int? bgeProcessed, int? bgeFallback, string? bgeError) {
-        // A live client: reset the watchdog and clear any stall latch.
-        _framesSinceClientMetrics = 0;
-        if (ClientStackStalled) {
-            ClientStackStalled = false;
-            _logger.LogInformation("Live stack: client stacker reporting again");
-            try { ClientStackStalledChanged?.Invoke(false); }
-            catch (Exception ex) { _logger.LogDebug(ex, "ClientStackStalledChanged handler threw"); }
-        }
+        // A live client: reset the watchdog and clear any stall latch.
+        _framesSinceClientMetrics = 0;
+        if (ClientStackStalled) {
+            ClientStackStalled = false;
+            _logger.LogInformation("Live stack: client stacker reporting again");
+            try { ClientStackStalledChanged?.Invoke(false); }
+            catch (Exception ex) { _logger.LogDebug(ex, "ClientStackStalledChanged handler threw"); }
+        }
         if (Mode != StackMode.MetricsOnly) return;
         // Defensive: only update when the WASM client's frameCount is
         // not behind ours (it lags by ≤1 due to async dispatch). A
