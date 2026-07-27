@@ -56,14 +56,21 @@ const norm = (s) => decodeEntities(s).replace(/\s+/g, ' ').trim();
 // HTML+JS scrape. Recall is sacrificed for precision so the catalog (and the
 // translation/Crowdin effort) isn't polluted with junk keys. Anything missed
 // here just stays English at runtime (graceful), so erring strict is safe.
-function keep(s) {
+// `opts.prose` relaxes the two characters that are code-ish in markup but
+// perfectly ordinary in a sentence: `"` (quoted phrases, e.g. use "Connect
+// all") and `=` (e.g. Green = connected). Only pass it for a source where the
+// remaining rules already reject the code: see the tour.js branch.
+function keep(s, opts) {
     s = norm(s);
     if (!s || s.length < 2 || s.length > 320) return false;
     if (!/[A-Za-z]/.test(s)) return false;                       // needs a letter
     if (/^[^A-Za-z(À-ÿ]/.test(s)) return false;                  // must START with a letter or "("
     if (/^[a-z]/.test(s) && !/\s/.test(s)) return false;         // lone lowercase token (identifier/var)
     // Code-ish / Alpine-binding / expression fragments:
-    if (/[_<>{}=`$@#"]|=>|::|\|\||&&|\(\)|\/\/|\bx-[a-z]|@click|\bfunction\b/.test(s)) return false;
+    const codeish = opts && opts.prose
+        ? /[_<>{}`$@#]|=>|::|\|\||&&|\(\)|\/\/|\bx-[a-z]|@click|\bfunction\b/
+        : /[_<>{}=`$@#"]|=>|::|\|\||&&|\(\)|\/\/|\bx-[a-z]|@click|\bfunction\b/;
+    if (codeish.test(s)) return false;
     if (/\b(null|undefined|true|false|return)\b/.test(s) && !/\s\w+\s\w+/.test(s)) return false;
     if (/^[-A-Za-z0-9]+\.[A-Za-z]/.test(s) && !/\s/.test(s)) return false; // dotted identifier
     if (/^[a-z]+([A-Z][a-z]+)+$/.test(s)) return false;          // camelCase identifier
@@ -103,12 +110,57 @@ for (const m of js.matchAll(callRe)) {
 // ---- tour.js --------------------------------------------------------------
 // Every quoted string literal; keep() filters out CSS selectors, class names
 // and other code fragments, leaving the user-facing step/offer/button copy.
+//
+// A bare literal regex over the raw file is NOT enough here: an apostrophe in a
+// // comment ("Cards that don't exist on this platform") opens a bogus string
+// and desynchronises the quote pairing for every literal after it. So walk the
+// file with a small scanner that knows comments and regex literals, the way the
+// index.html branch strips <!-- --> before scanning.
+function jsStringLiterals(src) {
+    const out = [];
+    let prev = '';                       // last significant char: regex vs. divide
+    for (let i = 0; i < src.length; i++) {
+        const c = src[i];
+        if (c === '/' && src[i + 1] === '/') {            // line comment
+            while (i < src.length && src[i] !== '\n') i++;
+            continue;
+        }
+        if (c === '/' && src[i + 1] === '*') {            // block comment
+            const end = src.indexOf('*/', i + 2);
+            if (end < 0) break;
+            i = end + 1;
+            continue;
+        }
+        if (c === '/' && /[(,=:[!&|?{};+\-*%^~]/.test(prev)) {   // regex literal
+            for (i++; i < src.length && src[i] !== '/' && src[i] !== '\n'; i++) {
+                if (src[i] === '\\') { i++; continue; }
+                if (src[i] === '[') for (i++; i < src.length && src[i] !== ']'; i++) if (src[i] === '\\') i++;
+            }
+            prev = '/';
+            continue;
+        }
+        if (c === '"' || c === "'" || c === '`') {        // string / template
+            let buf = '';
+            for (i++; i < src.length && src[i] !== c; i++) {
+                if (src[i] === '\\') { buf += src[i] + (src[i + 1] || ''); i++; continue; }
+                buf += src[i];
+            }
+            out.push(buf);
+            prev = c;
+            continue;
+        }
+        if (!/\s/.test(c)) prev = c;
+    }
+    return out;
+}
+
 if (existsSync(TOURJS)) {
-    const tourjs = readFileSync(TOURJS, 'utf8');
-    const strRe = /(['"`])((?:\\.|(?!\1)[\s\S])*?)\1/g;
-    for (const m of tourjs.matchAll(strRe)) {
-        const raw = m[2].replace(/\\(['"`\\])/g, '$1');
-        if (keep(raw)) found.add(norm(raw));
+    for (const lit of jsStringLiterals(readFileSync(TOURJS, 'utf8'))) {
+        const raw = lit.replace(/\\(['"`\\])/g, '$1');
+        // Not copy: DOM/keyboard identifiers passed to querySelector, key
+        // comparisons and addEventListener, which survive the rules above.
+        if (/^(Escape|Enter|Arrow(Up|Down|Left|Right))$/.test(raw.trim())) continue;
+        if (keep(raw, { prose: true })) found.add(norm(raw));
     }
 }
 
