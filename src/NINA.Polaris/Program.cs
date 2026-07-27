@@ -146,6 +146,11 @@ builder.Services.AddHostedService<NINA.Polaris.Services.Logging.LogRotatorServic
 // ASIAIR-style per-session guiding logs: native → PHD2-compatible guide log,
 // external PHD2 → copy of PHD2's own log. Opt-out via profile.SaveGuideLogs.
 builder.Services.AddHostedService<NINA.Polaris.Services.Logging.GuideSessionLogService>();
+// Filter labels belong to the rig, not to the driver: INDI wheels come back
+// from a restart advertising "Filter 1..N". Restore them server-side so it
+// happens headless and for every client, not only when a browser is open on
+// the right page at the right moment.
+builder.Services.AddHostedService<FilterNameRestoreService>();
 builder.Services.AddSingleton<ImageRelayService>();
 builder.Services.AddSingleton<CameraStreamService>();
 // Server-owned LIVE capture loop — now the only LIVE loop (the LIVE shutter

@@ -25041,22 +25041,32 @@ function ninaApp() {
         // my filter names".
         async _maybeRestoreFilterNames() {
             try {
-                // Wheel can't be renamed: nothing to do, ever.
-                if (!this.filterWheel?.capabilities?.editNames) return true;
-                // Rigs not loaded yet -> unknown, ask again next tick.
+                // NOTHING here is settled by a "not ready" answer. Everything
+                // this reads is published asynchronously after the wheel
+                // reconnects, so a snapshot taken too early says "no" to
+                // questions whose answer becomes "yes" a second later. Only a
+                // definitive outcome settles; the pump's attempt cap ends the
+                // rest. Getting this wrong is what made the first fix miss:
+                // editNames is derived LIVE from the INDI FILTER_NAME property
+                // (IndiFilterWheel.Capabilities), which does not exist yet in
+                // the first ticks after a reconnect, and treating false as
+                // "this wheel can't be renamed, ever" retired the retry before
+                // the property arrived.
+                if (!this.filterWheel?.capabilities?.editNames) return false;
                 if (!Array.isArray(this.rigs) || this.rigs.length === 0) return false;
                 if (!this.activeRigId) return false;
                 const rig = this.rigs.find(r => r.id === this.activeRigId);
                 if (!rig) return false;
                 const saved = rig.filterNames;
-                // Rig loaded and has no saved names: settled, nothing to push.
+                // Rig loaded and carries no saved names: settled, nothing to
+                // push, and no later event can change that.
                 if (!Array.isArray(saved) || saved.length === 0) return true;
                 const current = this.filterWheel.filters || [];
-                // Slot list still arriving from the driver -> retry.
-                if (current.length === 0) return false;
-                if (current.length !== saved.length) return true;
+                // Slot list still arriving, or arriving a slot at a time.
+                if (current.length !== saved.length) return false;
                 const same = current.every((n, i) => n === saved[i]);
                 if (same) return true;
+                console.log('[Polaris] restoring filter names from the rig:', saved);
                 await this.apiFetch('/api/filterwheel/names', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -25065,8 +25075,10 @@ function ninaApp() {
                 this.filterWheel.filters = [...saved];
                 return true;
             } catch (e) {
-                // Driver may not support it. Settled either way, don't spin.
-                return true;
+                // The PUT itself failed (driver rejected it, wheel busy).
+                // Not settled: the pump retries within its budget.
+                console.warn('[Polaris] filter-name restore attempt failed:', e);
+                return false;
             }
         },
 
@@ -25076,8 +25088,13 @@ function ninaApp() {
         // 1 Hz PUT attempt running all night.
         _pumpFilterNameRestore() {
             if (this._fwRestoreSettled) return;
-            if ((this._fwRestoreTries = (this._fwRestoreTries || 0) + 1) > 30) {
+            // ~1 Hz tick, so this is roughly a minute. It has to outlast a
+            // whole INDI reconnect (driver restart, CONFIG_LOAD, property
+            // snapshot), not just a page load.
+            if ((this._fwRestoreTries = (this._fwRestoreTries || 0) + 1) > 60) {
                 this._fwRestoreSettled = true;
+                console.warn('[Polaris] gave up restoring filter names: '
+                    + 'the wheel never reported editable names with a matching slot count');
                 return;
             }
             this._maybeRestoreFilterNames().then(settled => {
