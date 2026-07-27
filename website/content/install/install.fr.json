@@ -99,10 +99,10 @@
         "device": "Raspberry Pi 5",
         "badge": "arm64",
         "color": "#e11d6b",
-        "url": "https://drive.google.com/uc?export=download&id=1xpPaMUTon2xfVae8OW4SBkyGMqfqvBy-",
+        "url": "https://drive.google.com/uc?export=download&id=1HwRKVgoJPOvy65UzI8ae37nfBag3hKEj",
         "os": "Raspberry Pi OS 64 bits (Debian Trixie)",
-        "polaris": "0.84.6 (2026-06-18)",
-        "size": "8.64 GB (.7z)",
+        "polaris": "0.96.13 (2026-07-27)",
+        "size": "8.49 GB (.7z)",
         "access": "https://polaris-pi.local:5000/",
         "note": "Fichier d'archive 7-Zip ; à décompresser avant la mise à jour."
       },
