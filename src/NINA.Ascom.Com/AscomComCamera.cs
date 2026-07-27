@@ -59,6 +59,9 @@ public sealed class AscomComCamera : ICamera, IDisposable {
     private bool _canCool, _canBin, _canAbort, _canRoi, _hasGain, _hasOffset;
     private int _gainMin, _gainMax;
     private int _offsetMin, _offsetMax;
+    // ICameraV2 ExposureMin / ExposureMax, in seconds. Null when the driver
+    // leaves them unimplemented (both throw PropertyNotImplementedException).
+    private double? _minExpSec, _maxExpSec;
     // OSC / Bayer mosaic metadata cached at Connect time. ASCOM's
     // SensorType property reports the matrix layout (RGGB/BGGR/etc);
     // we project that onto Polaris's BayerPatternEnum + SensorType so
@@ -144,6 +147,11 @@ public sealed class AscomComCamera : ICamera, IDisposable {
     public int GainMin => _hasGain ? _gainMin : 0;
     public int GainMax => _hasGain ? _gainMax : 0;
 
+    // Exposure bounds probed at connect (ExposureMin / ExposureMax, seconds).
+    // Null when the driver doesn't implement them.
+    public double? MinExposureSeconds => _driver == null ? null : _minExpSec;
+    public double? MaxExposureSeconds => _driver == null ? null : _maxExpSec;
+
     // ICameraV3 Offset (int, unlike the short Gain). 0 when the driver has no
     // value-based offset range (probed via OffsetMin/OffsetMax at connect).
     public int Offset => _driver == null || !_hasOffset ? 0
@@ -204,6 +212,15 @@ public sealed class AscomComCamera : ICamera, IDisposable {
             _gainMax = (int)(short)_driver.GainMax;
             _hasGain = _gainMax > _gainMin;
         } catch { _hasGain = false; }
+        // ICameraV2 ExposureMin / ExposureMax, already in SECONDS. Probed as a
+        // pair like the gain range: a driver that doesn't implement them throws
+        // and we leave the bounds unknown so the UI keeps its own defaults.
+        _minExpSec = null; _maxExpSec = null;
+        try {
+            var expMin = (double)_driver.ExposureMin;
+            var expMax = (double)_driver.ExposureMax;
+            if (expMin > 0 && expMax > expMin) { _minExpSec = expMin; _maxExpSec = expMax; }
+        } catch { }
         // Same probe for the (value-based) offset range. Index-based offset
         // drivers (an Offsets list) throw here and stay _hasOffset = false.
         _hasOffset = false;

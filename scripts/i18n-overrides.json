@@ -237,7 +237,9 @@
     "to run the model on the Polaris host (works from any browser), or install the Polaris app to run it natively on this device.": "para executar o modelo no host Polaris (funciona em qualquer navegador), ou instale o app do Polaris para executá-lo nativamente neste dispositivo.",
     "Top bar: app + version": "Barra superior: aplicativo e versão",
     "USB drive:": "Dispositivo USB:",
-    "USB revert:": "Reversão do USB:"
+    "USB revert:": "Reversão do USB:",
+    "Exposure one step down (hold to repeat)": "Exposição um passo abaixo (segure para repetir)",
+    "Exposure one step up (hold to repeat)": "Exposição um passo acima (segure para repetir)"
   },
   "es": {
     "Start": "Iniciar",
@@ -441,7 +443,9 @@
     "to run the model on the Polaris host (works from any browser), or install the Polaris app to run it natively on this device.": "para ejecutar el modelo en el host de Polaris (funciona desde cualquier navegador), o instala la app de Polaris para ejecutarlo de forma nativa en este dispositivo.",
     "Top bar: app + version": "Barra superior: aplicación y versión",
     "USB drive:": "Unidad USB:",
-    "USB revert:": "Restauración del USB:"
+    "USB revert:": "Restauración del USB:",
+    "Exposure one step down (hold to repeat)": "Exposición un paso abajo (mantén para repetir)",
+    "Exposure one step up (hold to repeat)": "Exposición un paso arriba (mantén para repetir)"
   },
   "fr": {
     "Start": "Démarrer",
@@ -645,7 +649,9 @@
     "to run the model on the Polaris host (works from any browser), or install the Polaris app to run it natively on this device.": "pour exécuter le modèle sur l'hôte Polaris (fonctionne depuis n'importe quel navigateur), ou installez l'application Polaris pour l'exécuter nativement sur cet appareil.",
     "Top bar: app + version": "Barre supérieure : application et version",
     "USB drive:": "Clé USB :",
-    "USB revert:": "Rétablissement USB :"
+    "USB revert:": "Rétablissement USB :",
+    "Exposure one step down (hold to repeat)": "Exposition d'un cran vers le bas (maintenir pour répéter)",
+    "Exposure one step up (hold to repeat)": "Exposition d'un cran vers le haut (maintenir pour répéter)"
   },
   "de": {
     "Start": "Start",
@@ -849,6 +855,8 @@
     "to run the model on the Polaris host (works from any browser), or install the Polaris app to run it natively on this device.": "um das Modell auf dem Polaris-Host auszuführen (funktioniert in jedem Browser), oder installieren Sie die Polaris-App, um es nativ auf diesem Gerät auszuführen.",
     "Top bar: app + version": "Obere Leiste: App und Version",
     "USB drive:": "USB-Laufwerk:",
-    "USB revert:": "USB-Zurücksetzung:"
+    "USB revert:": "USB-Zurücksetzung:",
+    "Exposure one step down (hold to repeat)": "Belichtung eine Stufe niedriger (halten zum Wiederholen)",
+    "Exposure one step up (hold to repeat)": "Belichtung eine Stufe höher (halten zum Wiederholen)"
   }
 }

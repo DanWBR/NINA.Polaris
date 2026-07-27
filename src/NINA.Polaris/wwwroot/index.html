@@ -3528,10 +3528,20 @@
                                         @pointerdown.prevent="startWheelRepeat('exp', -1)"
                                         @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
                                         @pointercancel="stopWheelRepeat()"
-                                        title="Exposure -1 ms (hold to repeat)">&minus;</button>
+                                        title="Exposure one step down (hold to repeat)">&minus;</button>
+                                <!-- Ladder wheel: the rungs come from
+                                     videoExposureLadderMs(), trimmed to what the
+                                     connected camera reports it accepts. Sub-
+                                     millisecond rungs read as microseconds
+                                     ("500µ") — the Sun through a filter still
+                                     saturates at 1 ms. min/max/step remain as the
+                                     fallback for a camera that reports no limits
+                                     and as bounds for the inline numeric edit. -->
                                 <div data-wheel-picker
                                      data-label="Exposure (ms)"
-                                     data-min="1" data-max="5000" data-step="1"
+                                     data-min="0.02" data-max="30000" data-step="0.01"
+                                     data-ladder="videoExposureLadderMs"
+                                     data-ladder-format="videoExposureFormatMs"
                                      data-bind="video.exposure" data-scale="1000"
                                      :data-disabled="videoRecording.recording"></div>
                                 <button class="btn btn-sm wheel-nudge" style="touch-action:none"
@@ -3539,7 +3549,7 @@
                                         @pointerdown.prevent="startWheelRepeat('exp', 1)"
                                         @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
                                         @pointercancel="stopWheelRepeat()"
-                                        title="Exposure +1 ms (hold to repeat)">+</button>
+                                        title="Exposure one step up (hold to repeat)">+</button>
                             </div>
                             <div class="wheel-col">
                                 <button class="btn btn-sm wheel-nudge" style="touch-action:none"
@@ -3598,6 +3608,26 @@
                                 </div>
                             </template>
                         </div>
+
+                        <!-- Filter selector. Planetary and solar work is
+                             filter work (IR-pass on Jupiter, a solar
+                             continuum filter, RGB channel runs), so the
+                             wheel belongs next to the capture wheels
+                             instead of forcing a trip to another tab.
+                             Same endpoint + state as the LIVE/PREVIEW
+                             selector; hidden when no wheel is connected. -->
+                        <label class="video-filter-row" x-show="filterWheel.connected">
+                            <span>Filter</span>
+                            <select class="input-sm"
+                                    :value="filterWheel.currentFilter"
+                                    :disabled="videoRecording.recording"
+                                    @change="setFilter($event.target.value)">
+                                <template x-for="f in filterWheel.filters" :key="'vf-'+f">
+                                    <option :value="f" x-text="f"
+                                            :selected="f === filterWheel.currentFilter"></option>
+                                </template>
+                            </select>
+                        </label>
 
                         <!-- SHUT-3: Polaris Shutter for VIDEO Record.
                             Tap = toggle (start when idle, stop when
@@ -19192,7 +19222,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260727-rigpatch"></script>
+    <script src="/js/app.js?v=20260727-videoexp"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

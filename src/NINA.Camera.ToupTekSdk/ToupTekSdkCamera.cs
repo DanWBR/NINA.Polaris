@@ -38,6 +38,7 @@ public sealed class ToupTekSdkCamera : ICamera {
     private BayerPatternEnum _bayer = BayerPatternEnum.None;
     private bool _isColor, _supportsCooler;
     private int _gainMin, _gainMax = 100;
+    private double? _minExpSec, _maxExpSec;
 
     private int _gain;
     private int _offset;   // sensor black level (OPTION_BLACKLEVEL); stamped into FITS
@@ -102,6 +103,12 @@ public sealed class ToupTekSdkCamera : ICamera {
 
     public int GainMin => _gainMin;
     public int GainMax => _gainMax;
+
+    /// <summary>Exposure bounds from the SDK's ExpTimeRange, cached at connect
+    /// (it's a fixed sensor property). null when the SDK didn't answer.</summary>
+    public double? MinExposureSeconds => _connected ? _minExpSec : null;
+    public double? MaxExposureSeconds => _connected ? _maxExpSec : null;
+
     public IReadOnlyList<int> IsoOptions { get; } = Array.Empty<int>();
     public int SelectedIso => 0;
 
@@ -151,6 +158,15 @@ public sealed class ToupTekSdkCamera : ICamera {
         if (cam.get_ExpoAGainRange(out ushort gmin, out ushort gmax, out _)) {
             _gainMin = gmin; _gainMax = gmax;
         }
+        // Exposure range, in MICROSECONDS per the toupcam SDK.
+        _minExpSec = null; _maxExpSec = null;
+        try {
+            if (cam.get_ExpTimeRange(out uint expMin, out uint expMax, out _)
+                    && expMin > 0 && expMax > expMin) {
+                _minExpSec = expMin / 1_000_000.0;
+                _maxExpSec = expMax / 1_000_000.0;
+            }
+        } catch { }
 
         _roiX = 0; _roiY = 0; _roiW = _maxX; _roiH = _maxY; _bin = 1;
         _gain = _gainMin;

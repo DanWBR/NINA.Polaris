@@ -57,6 +57,12 @@ public sealed class SimGuideCamera : ICamera {
     public int Gain => _gain;
     public int GainMin => 0;
     public int GainMax => 100;
+
+    /// <summary>Plausible bounds for a fake camera: 0.1 ms to 1 h. Nothing in
+    /// the renderer enforces them, they just give the UI a range to bound its
+    /// exposure picker with instead of leaving it unbounded.</summary>
+    public double? MinExposureSeconds => _connected ? 0.0001 : null;
+    public double? MaxExposureSeconds => _connected ? 3600.0 : null;
     public IReadOnlyList<int> IsoOptions => Array.Empty<int>();
     public int SelectedIso => 0;
 

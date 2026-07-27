@@ -85,6 +85,12 @@ public interface ICamera {
     /// </summary>
     bool? IsColorSensor => null;
 
+    /// <summary>Shortest / longest single exposure the driver accepts, in
+    /// seconds. null means the driver does not report a range and the caller
+    /// should fall back to its own sensible bounds.</summary>
+    double? MinExposureSeconds => null;
+    double? MaxExposureSeconds => null;
+
     /// <summary>ISO values the camera supports, in ASA. Empty list
     /// means the backend doesn't expose ISO (typical for dedicated
     /// astronomy cameras).</summary>

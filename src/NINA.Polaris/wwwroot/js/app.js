@@ -23140,7 +23140,15 @@ function ninaApp() {
             try {
                 const r = await this.apiGet('/api/camera/status');
                 if (r && r.capabilities) {
+                    const prevMin = this.cameraCaps.minExposureSec;
+                    const prevMax = this.cameraCaps.maxExposureSec;
                     this.cameraCaps = Object.assign({}, this.cameraCaps, r.capabilities);
+                    // The driver's exposure limits bound the VIDEO wheel's
+                    // ladder; rebuild it whenever they change (camera swap).
+                    if (this.cameraCaps.minExposureSec !== prevMin
+                        || this.cameraCaps.maxExposureSec !== prevMax) {
+                        this._refreshLadderPickers();
+                    }
                 }
                 // Sensor dimensions feed the FOV pills (so a 1920 pill
                 // greys out on a 1280-wide sensor) + the "centered ·
@@ -24819,9 +24827,18 @@ function ninaApp() {
             // locks them, so the saved SER keeps constant settings.
             if (which === 'exp') {
                 if (this.videoRecording.recording) return;
-                let ms = Math.round((this.video.exposure || 0) * 1000) + dir;
-                ms = Math.min(5000, Math.max(1, ms));
-                this.video.exposure = ms / 1000;
+                // One LADDER position per press, not ±1 ms: the wheel spans
+                // microseconds to seconds, so a fixed millisecond step would
+                // be useless at one end and glacial at the other.
+                const ladder = this.videoExposureLadderMs();
+                const cur = (this.video.exposure || 0) * 1000;
+                let i = 0, bestErr = Infinity;
+                for (let k = 0; k < ladder.length; k++) {
+                    const err = Math.abs(Math.log(Math.max(cur, 1e-9) / ladder[k]));
+                    if (err < bestErr) { bestErr = err; i = k; }
+                }
+                i = Math.min(ladder.length - 1, Math.max(0, i + dir));
+                this.video.exposure = ladder[i] / 1000;
             } else if (which === 'gain') {
                 if (this.videoRecording.recording) return;
                 let g = (this.video.gain | 0) + dir;
@@ -27275,7 +27292,14 @@ function ninaApp() {
         // Native guide-camera gain + binning (mirrors the imaging camera's
         // per-capture tunables, persisted on the rig).
         setGuideGain(v) {
-            this.guideGain = Math.max(0, Number(v) || 0);
+            let g = Math.max(0, Number(v) || 0);
+            // Clamp to what the camera advertises, when it advertises anything.
+            // Typing 40 into a ToupTek (floor 100) otherwise persisted a value
+            // the driver refuses on every frame.
+            const lo = Number(this.guideCameraGainMin) || 0;
+            const hi = Number(this.guideCameraGainMax) || 0;
+            if (hi > lo) g = Math.min(hi, Math.max(lo, g));
+            this.guideGain = g;
             this._persistRigSelection({ nativeGuideGain: this.guideGain });
         },
         // Gain values offered by the GUIDE Gain dropdown: the guide camera's
@@ -36832,7 +36856,24 @@ function ninaApp() {
                     scale: parseFloat(el.dataset.scale || '1'),
                     bind: el.dataset.bind || '',
                 };
+                // data-ladder names a method on this component that returns
+                // the allowed values (and optionally a formatter). Used by the
+                // VIDEO exposure wheel, whose range depends on the connected
+                // camera and spans µs to seconds.
+                if (el.dataset.ladder && typeof this[el.dataset.ladder] === 'function') {
+                    opts.values = this[el.dataset.ladder]();
+                }
+                if (el.dataset.ladderFormat
+                    && typeof this[el.dataset.ladderFormat] === 'function') {
+                    opts.format = this[el.dataset.ladderFormat].bind(this);
+                }
                 const picker = new WheelPicker(el, opts);
+                // Keep a handle so the ladder can be rebuilt when the camera
+                // (and therefore its exposure limits) changes.
+                if (el.dataset.ladder) {
+                    this._ladderPickers = this._ladderPickers || [];
+                    this._ladderPickers.push({ picker, fn: el.dataset.ladder });
+                }
                 if (opts.bind) {
                     // Initial value from the bound Alpine field.
                     const initial = this._wheelGetBound(opts.bind);
@@ -36852,6 +36893,56 @@ function ninaApp() {
                     });
                 }
             }
+        },
+        // ---- VIDEO exposure ladder -------------------------------------
+        //
+        // Planetary and solar work needs exposures the old 1..5000 ms wheel
+        // could not reach: the Sun through a filter still saturates at 1 ms.
+        // A single linear step can't serve 50 µs and 5 s at once, so the
+        // wheel takes an explicit ladder instead, roughly geometric, and is
+        // trimmed to what the camera says it accepts (capabilities
+        // minExposureSec / maxExposureSec, reported by the SDK / INDI /
+        // ASCOM driver). Unknown limits fall back to the full ladder.
+        videoExposureLadderMs() {
+            const rungs = [
+                0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 0.7,
+                1, 1.5, 2, 3, 5, 7, 10, 15, 20, 30, 50, 70,
+                100, 150, 200, 300, 500, 700,
+                1000, 1500, 2000, 3000, 5000, 10000, 15000, 30000
+            ];
+            const caps = this.cameraCaps || {};
+            const loMs = Number(caps.minExposureSec) > 0
+                ? Number(caps.minExposureSec) * 1000 : null;
+            const hiMs = Number(caps.maxExposureSec) > 0
+                ? Number(caps.maxExposureSec) * 1000 : null;
+            let out = rungs.filter(v => (loMs == null || v >= loMs - 1e-9)
+                                     && (hiMs == null || v <= hiMs + 1e-9));
+            // Always offer the camera's actual limits as the end rungs, so
+            // the fastest exposure it can do is reachable even when it falls
+            // between two of ours (e.g. a 32 µs floor).
+            if (loMs != null && (!out.length || out[0] > loMs)) out.unshift(loMs);
+            if (hiMs != null && (!out.length || out[out.length - 1] < hiMs)) out.push(hiMs);
+            return out.length ? out : rungs;
+        },
+        // Wheel label for a ladder value in ms: sub-millisecond rungs read as
+        // microseconds ("500 µ") so the operator isn't parsing 0.0005.
+        videoExposureFormatMs(v) {
+            if (v < 1) return Math.round(v * 1000) + 'µ';
+            if (v < 10) return String(+v.toFixed(2));
+            return String(Math.round(v));
+        },
+        // Called after the camera capabilities land (connect / camera swap):
+        // rebuild every ladder-backed wheel against the new limits.
+        _refreshLadderPickers() {
+            for (const entry of (this._ladderPickers || [])) {
+                if (typeof this[entry.fn] !== 'function') continue;
+                entry.picker.setValues(this[entry.fn]());
+            }
+            // Re-anchor the bound field onto the new ladder so the value the
+            // UI shows is the value that will actually be sent.
+            const p = (this._ladderPickers || [])
+                .find(e => e.fn === 'videoExposureLadderMs');
+            if (p) this.video.exposure = p.picker.value / 1000;
         },
         _wheelGetBound(path) {
             const parts = path.split('.');
@@ -37240,6 +37331,17 @@ function ninaApp() {
             if (eq.guideCamera) {
                 this.guideCameraGainMin = eq.guideCamera.gainMin || 0;
                 this.guideCameraGainMax = eq.guideCamera.gainMax || 0;
+                // A stored gain below the camera's floor is not a setting, it's
+                // a value the driver will refuse (ToupTek's INDI gain starts at
+                // 100, the rig default is 40). Lift it once, so the number the
+                // operator sees is the one the sensor runs at and the dark
+                // library is keyed by. Only upward, and only from a real range.
+                const lo = Number(this.guideCameraGainMin) || 0;
+                const hi = Number(this.guideCameraGainMax) || 0;
+                if (hi > lo && Number(this.guideGain) < lo) {
+                    this.setGuideGain(lo);
+                    this.toast(`Guide gain raised to the camera minimum (${lo})`, 'info');
+                }
             }
             // Aux camera + focuser connection state + aux capture loop status.
             this.auxCameraConnected = !!(eq.auxCamera && eq.auxCamera.connected);
@@ -38806,7 +38908,16 @@ class WheelPicker {
         this.max = opts.max;
         this.step = opts.step || 1;
         this.label = opts.label || '';
-        this.value = this._clamp(this.min);
+        // Optional LADDER mode: an explicit, ascending list of values the
+        // wheel may take, instead of a uniform min..max..step ramp. Exposure
+        // needs it — the useful range spans 50 µs (solar, with a filter) to
+        // several seconds, which no single linear step can cover. In ladder
+        // mode "one step" is one position in the list. `format` renders a
+        // value; without it the step's decimal count is used, as before.
+        this.values = Array.isArray(opts.values) && opts.values.length
+            ? opts.values.slice().sort((a, b) => a - b) : null;
+        this.format = typeof opts.format === 'function' ? opts.format : null;
+        this.value = this.values ? this.values[0] : this._clamp(this.min);
         this.onChange = null;
 
         this.el.classList.add('wheel-picker');
@@ -38858,13 +38969,41 @@ class WheelPicker {
     }
 
     _clamp(v) {
+        if (this.values) {
+            if (v <= this.values[0]) return this.values[0];
+            const last = this.values[this.values.length - 1];
+            return v >= last ? last : v;
+        }
         if (v < this.min) return this.min;
         if (v > this.max) return this.max;
         return v;
     }
     _snap(v) {
+        if (this.values) return this.values[this._indexOf(v)];
         const k = Math.round((v - this.min) / this.step);
         return this._clamp(this.min + k * this.step);
+    }
+    /// Nearest ladder position to an arbitrary value. Nearest in RATIO, not
+    /// in absolute difference: the ladder is roughly geometric, so 0.7 ms
+    /// belongs next to 0.5/1 rather than being swallowed by the coarse end.
+    _indexOf(v) {
+        if (!this.values) return 0;
+        let best = 0, bestErr = Infinity;
+        for (let i = 0; i < this.values.length; i++) {
+            const a = this.values[i];
+            const err = (a > 0 && v > 0) ? Math.abs(Math.log(v / a)) : Math.abs(v - a);
+            if (err < bestErr) { bestErr = err; best = i; }
+        }
+        return best;
+    }
+    /// The value one ladder position (or one step) away from the current one.
+    valueAtOffset(n) {
+        if (this.values) {
+            const i = Math.min(this.values.length - 1,
+                               Math.max(0, this._indexOf(this.value) + n));
+            return this.values[i];
+        }
+        return this._clamp(this.value + n * this.step);
     }
     _decimals() {
         const s = String(this.step);
@@ -38872,7 +39011,17 @@ class WheelPicker {
         return i < 0 ? 0 : (s.length - i - 1);
     }
     _format(v) {
+        if (this.format) return this.format(v);
         return v.toFixed(this._decimals());
+    }
+
+    /// Replace the ladder (e.g. after the connected camera reports its
+    /// exposure limits) and re-anchor the current value onto it.
+    setValues(arr) {
+        this.values = Array.isArray(arr) && arr.length
+            ? arr.slice().sort((a, b) => a - b) : null;
+        this.value = this._snap(this.value);
+        this._render();
     }
 
     setValue(v, silent) {
@@ -38887,17 +39036,28 @@ class WheelPicker {
         // Render a virtualised window of (VISIBLE_COUNT + 4) items
         // centered on this.value. The list itself is translated so
         // the centre item sits at the centre band.
-        const dec = this._decimals();
         const stepsAroundCenter = Math.floor(WheelPicker.VISIBLE_COUNT / 2) + 2;
         const items = [];
-        for (let i = -stepsAroundCenter; i <= stepsAroundCenter; i++) {
-            const v = this.value + i * this.step;
-            if (v < this.min - this.step || v > this.max + this.step) {
-                items.push({ value: null, blank: true });
-            } else if (v < this.min || v > this.max) {
-                items.push({ value: null, blank: true });
-            } else {
-                items.push({ value: v, blank: false });
+        if (this.values) {
+            // Ladder mode: the neighbours are the adjacent list entries, and
+            // the ends of the list render blank instead of wrapping.
+            const centre = this._indexOf(this.value);
+            for (let i = -stepsAroundCenter; i <= stepsAroundCenter; i++) {
+                const idx = centre + i;
+                items.push(idx >= 0 && idx < this.values.length
+                    ? { value: this.values[idx], blank: false }
+                    : { value: null, blank: true });
+            }
+        } else {
+            for (let i = -stepsAroundCenter; i <= stepsAroundCenter; i++) {
+                const v = this.value + i * this.step;
+                if (v < this.min - this.step || v > this.max + this.step) {
+                    items.push({ value: null, blank: true });
+                } else if (v < this.min || v > this.max) {
+                    items.push({ value: null, blank: true });
+                } else {
+                    items.push({ value: v, blank: false });
+                }
             }
         }
         // Build / reuse children
@@ -38913,9 +39073,7 @@ class WheelPicker {
             const child = this.list.children[i];
             const offset = i - stepsAroundCenter;          // -N..+N
             const absOffset = Math.abs(offset);
-            child.textContent = items[i].blank
-                ? ''
-                : items[i].value.toFixed(dec);
+            child.textContent = items[i].blank ? '' : this._format(items[i].value);
             child.classList.toggle('wheel-picker-item--center', offset === 0);
             child.classList.toggle('wheel-picker-item--adjacent', absOffset === 1);
         }
@@ -38943,8 +39101,16 @@ class WheelPicker {
         // up on the wheel as your finger pulls down). One ITEM_HEIGHT
         // of finger movement = one step.
         const stepsDelta = -deltaY / WheelPicker.ITEM_HEIGHT;
-        const target = this._dragStartValue + stepsDelta * this.step;
-        const snapped = this._snap(target);
+        let snapped;
+        if (this.values) {
+            // Ladder: a step of finger travel moves one POSITION, so the
+            // fine end (µs) and the coarse end (seconds) drag the same way.
+            const i = Math.min(this.values.length - 1, Math.max(0,
+                this._indexOf(this._dragStartValue) + Math.round(stepsDelta)));
+            snapped = this.values[i];
+        } else {
+            snapped = this._snap(this._dragStartValue + stepsDelta * this.step);
+        }
         if (snapped !== this.value) {
             this.value = snapped;
             this._render();
@@ -38972,7 +39138,7 @@ class WheelPicker {
         if (this.el.dataset.disabled === 'true') return;
         ev.preventDefault();
         const direction = ev.deltaY > 0 ? 1 : -1;
-        this.setValue(this.value + direction * this.step);
+        this.setValue(this.valueAtOffset(direction));
     }
 
     _onDoubleClick(ev) {
@@ -38990,9 +39156,11 @@ class WheelPicker {
         const input = document.createElement('input');
         input.type = 'number';
         input.className = 'wheel-picker-edit';
-        input.min = String(this.min);
-        input.max = String(this.max);
-        input.step = String(this.step);
+        // In ladder mode the typed value is free-form: it snaps to the
+        // nearest rung on commit, and the bounds come from the ladder.
+        input.min = String(this.values ? this.values[0] : this.min);
+        input.max = String(this.values ? this.values[this.values.length - 1] : this.max);
+        input.step = this.values ? 'any' : String(this.step);
         input.value = this._format(this.value);
         // Absolutely positioned at the centre band so it visually
         // replaces the highlighted item without DOM reordering.

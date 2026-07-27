@@ -241,6 +241,32 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// at Information level).</summary>
     private void RaiseInfo(string msg) => RaiseAlert(msg, "info");
 
+    // Guards the one-shot "gain clamped" alert so it doesn't fire per frame.
+    private int _gainClampAnnouncedFor = int.MinValue;
+
+    /// <summary>The gain the guide loop actually captures with: the rig's
+    /// stored value clamped to the connected camera's advertised range.
+    /// ToupTek's INDI driver publishes Gain min=100, and the rig default is
+    /// 40 — the driver then rejected the write, and worse, the dark library
+    /// was keyed by the STORED gain while the frames came off the sensor at
+    /// the driver's minimum, so the darks no longer matched the lights.
+    /// One resolver, used by the capture path, the dark library and the log.
+    /// Falls back to the stored value when the camera reports no range.</summary>
+    internal int EffectiveGuideGain {
+        get {
+            var stored = Rig.NativeGuideGain;
+            var cam = _equipment.GuideCamera;
+            if (cam == null || cam.GainMax <= cam.GainMin || cam.GainMax <= 0) return stored;
+            var clamped = Math.Clamp(stored, cam.GainMin, cam.GainMax);
+            if (clamped != stored && _gainClampAnnouncedFor != stored) {
+                _gainClampAnnouncedFor = stored;
+                RaiseAlert($"Guide gain {stored} is outside the camera's range "
+                    + $"({cam.GainMin}-{cam.GainMax}); using {clamped}.");
+            }
+            return clamped;
+        }
+    }
+
     private void RecomputePixelScale() {
         var cam = _equipment.GuideCamera;
         var fl = Rig.GuiderFocalLengthMm;

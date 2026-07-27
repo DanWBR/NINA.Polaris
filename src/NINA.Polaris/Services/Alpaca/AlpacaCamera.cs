@@ -58,6 +58,9 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
     private int _maxBinX = 1;
     private int _gainMin, _gainMax;
     private int _offsetMin, _offsetMax;
+    // Alpaca exposuremin / exposuremax, in seconds. Null when the server
+    // doesn't implement them.
+    private double? _minExpSec, _maxExpSec;
 
     public string Host { get; }
     public int Port { get; }
@@ -156,6 +159,11 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
     public int GainMin => _hasGain ? _gainMin : 0;
     public int GainMax => _hasGain ? _gainMax : 0;
 
+    // Exposure bounds cached at connect (exposuremin/exposuremax, seconds).
+    // Null when the server doesn't expose them.
+    public double? MinExposureSeconds => _connected ? _minExpSec : null;
+    public double? MaxExposureSeconds => _connected ? _maxExpSec : null;
+
     // Value-based offset (offsetmin/offsetmax probed at connect). 0 when the
     // driver has no offset range (or uses an index-based Offsets list).
     public int Offset => _hasOffset ? SafeGet(() => _client.GetAsync<int>("offset"), 0) : 0;
@@ -249,6 +257,15 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
             _gainMax = await _client.GetAsync<int>("gainmax", ct);
             _hasGain = _gainMax > _gainMin;
         } catch { _hasGain = false; }
+        // ICameraV2 exposure bounds, already in SECONDS. Probed as a pair like
+        // the gain range: servers that don't implement them return an error and
+        // the bounds stay unknown so the UI keeps its own defaults.
+        _minExpSec = null; _maxExpSec = null;
+        try {
+            var expMin = await _client.GetAsync<double>("exposuremin", ct);
+            var expMax = await _client.GetAsync<double>("exposuremax", ct);
+            if (expMin > 0 && expMax > expMin) { _minExpSec = expMin; _maxExpSec = expMax; }
+        } catch { /* not implemented; leave unknown */ }
         // Same probe for the value-based offset range.
         _hasOffset = false;
         try {

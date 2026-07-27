@@ -39,6 +39,7 @@ public sealed class AsiSdkCamera : ICamera {
     private BayerPatternEnum _bayer = BayerPatternEnum.None;
     private bool _isColor, _supportsCooler;
     private int _gainMin, _gainMax;
+    private double? _minExpSec, _maxExpSec;
     private int _offset;
 
     private int _gain;
@@ -105,6 +106,12 @@ public sealed class AsiSdkCamera : ICamera {
 
     public int GainMin => _gainMin;
     public int GainMax => _gainMax;
+
+    /// <summary>Exposure bounds from the ASI_EXPOSURE control caps, cached at
+    /// connect (fixed per camera). null when the SDK didn't answer.</summary>
+    public double? MinExposureSeconds => _connected ? _minExpSec : null;
+    public double? MaxExposureSeconds => _connected ? _maxExpSec : null;
+
     public IReadOnlyList<int> IsoOptions { get; } = Array.Empty<int>();
     public int SelectedIso => 0;
 
@@ -148,13 +155,25 @@ public sealed class AsiSdkCamera : ICamera {
         _pixelSize = info.PixelSize;
         _supportsCooler = info.IsCoolerCam != 0;
 
+        _minExpSec = null; _maxExpSec = null;
         if (ASIGetNumOfControls(_cameraId, out var nCtrl) == ASI_ERROR_CODE.ASI_SUCCESS) {
             for (int i = 0; i < nCtrl; i++) {
                 var caps = new ASI_CONTROL_CAPS();
                 if (ASIGetControlCaps(_cameraId, i, ref caps) != ASI_ERROR_CODE.ASI_SUCCESS) continue;
-                if ((ASI_CONTROL_TYPE)caps.ControlType == ASI_CONTROL_TYPE.ASI_GAIN) {
-                    _gainMin = (int)caps.MinValue.Value;
-                    _gainMax = (int)caps.MaxValue.Value;
+                switch ((ASI_CONTROL_TYPE)caps.ControlType) {
+                    case ASI_CONTROL_TYPE.ASI_GAIN:
+                        _gainMin = (int)caps.MinValue.Value;
+                        _gainMax = (int)caps.MaxValue.Value;
+                        break;
+                    case ASI_CONTROL_TYPE.ASI_EXPOSURE: {
+                        // ASI_EXPOSURE caps are in MICROSECONDS.
+                        long emin = (long)caps.MinValue.Value, emax = (long)caps.MaxValue.Value;
+                        if (emin > 0 && emax > emin) {
+                            _minExpSec = emin / 1_000_000.0;
+                            _maxExpSec = emax / 1_000_000.0;
+                        }
+                        break;
+                    }
                 }
             }
         }

@@ -382,7 +382,12 @@ public static class CameraEndpoints {
                     iso = equip.Camera.Capabilities.SupportsIso,
                     bulb = equip.Camera.Capabilities.SupportsBulb,
                     videoStream = equip.Camera.Capabilities.SupportsVideoStream,
-                    whiteBalance = equip.Camera.Capabilities.SupportsWhiteBalance
+                    whiteBalance = equip.Camera.Capabilities.SupportsWhiteBalance,
+                    // Driver-reported exposure bounds, in seconds. Null when the
+                    // backend doesn't report a range and the UI should fall back
+                    // to its own defaults.
+                    minExposureSec = equip.Camera.MinExposureSeconds,
+                    maxExposureSec = equip.Camera.MaxExposureSeconds
                 }
             });
         });

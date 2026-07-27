@@ -85,7 +85,11 @@ public sealed partial class NativeGuider {
 
     private (int expMs, int gain, int bin) CalParams() {
         int expMs = Math.Max(50, Rig.NativeGuideExposureMs);
-        int gain = Rig.NativeGuideGain;
+        // The EFFECTIVE gain, not the stored one: a dark set has to be keyed by
+        // (and shot at) the gain the sensor really runs at. ToupTek's INDI
+        // driver floors Gain at 100, so a rig left on the 40 default produced
+        // darks filed under g40 that were subtracted from g100 lights.
+        int gain = EffectiveGuideGain;
         int bin = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4);
         return (expMs, gain, bin);
     }

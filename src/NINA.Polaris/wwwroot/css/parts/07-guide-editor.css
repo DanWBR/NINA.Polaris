@@ -853,6 +853,21 @@
 /* Row layout: wheel pickers sit side by side with a label above
    each one. The video sidebar stacks them in a 2-col grid for
    compactness. */
+/* VIDEO filter row: label above, select full-width, sitting under the
+   exposure/gain wheels and above the shutter. */
+.video-filter-row {
+    display: block;
+    margin: 10px auto 0;
+    max-width: 260px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.video-filter-row select {
+    display: block;
+    width: 100%;
+    margin-top: 3px;
+}
+
 .wheel-picker-group {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));

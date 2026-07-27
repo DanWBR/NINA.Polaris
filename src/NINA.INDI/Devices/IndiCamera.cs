@@ -116,6 +116,24 @@ public class IndiCamera : ICamera {
         }
     }
 
+    /// <summary>Exposure bounds the driver advertises on the
+    /// <c>CCD_EXPOSURE_VALUE</c> number element. INDI publishes these in
+    /// SECONDS already, so no conversion. Read live (the property tree is the
+    /// cache) and null when the driver doesn't advertise a usable range.</summary>
+    public double? MinExposureSeconds => ExposureBounds()?.Min;
+    public double? MaxExposureSeconds => ExposureBounds()?.Max;
+
+    private (double Min, double Max)? ExposureBounds() {
+        if (!IsConnected) return null;
+        var prop = _client.GetProperty(DeviceName, "CCD_EXPOSURE") as IndiNumberProperty;
+        if (prop != null
+            && prop.Values.TryGetValue("CCD_EXPOSURE_VALUE", out var el)
+            && el.Min > 0 && el.Max > el.Min) {
+            return (el.Min, el.Max);
+        }
+        return null;
+    }
+
     /// <summary>Read the Bayer mosaic pattern from the INDI
     /// <c>CCD_CFA</c> text property (<c>CFA_TYPE</c> element).
     /// Most OSC drivers (indi_asi_ccd, indi_svbony_ccd, indi_qhy_ccd,

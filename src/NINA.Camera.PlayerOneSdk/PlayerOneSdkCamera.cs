@@ -38,6 +38,7 @@ public sealed class PlayerOneSdkCamera : ICamera {
     private BayerPatternEnum _bayer = BayerPatternEnum.None;
     private bool _isColor, _supportsCooler;
     private int _gainMin, _gainMax;
+    private double? _minExpSec, _maxExpSec;
     private int _offset;
 
     private int _gain;
@@ -101,6 +102,12 @@ public sealed class PlayerOneSdkCamera : ICamera {
 
     public int GainMin => _gainMin;
     public int GainMax => _gainMax;
+
+    /// <summary>Exposure bounds from the POA_EXPOSURE config attributes, cached
+    /// at connect (fixed per camera). null when the SDK didn't answer.</summary>
+    public double? MinExposureSeconds => _connected ? _minExpSec : null;
+    public double? MaxExposureSeconds => _connected ? _maxExpSec : null;
+
     public IReadOnlyList<int> IsoOptions { get; } = Array.Empty<int>();
     public int SelectedIso => 0;
 
@@ -142,6 +149,19 @@ public sealed class PlayerOneSdkCamera : ICamera {
             _gainMin = attr.minValue.intValue;
             _gainMax = attr.maxValue.intValue;
         }
+        // Exposure range, likewise from the config attributes. POA_EXPOSURE is
+        // an integer config in MICROSECONDS.
+        _minExpSec = null; _maxExpSec = null;
+        try {
+            var expAttr = new POAConfigAttributes();
+            if (POAGetConfigAttributesByConfigID(_cameraId, POAConfig.POA_EXPOSURE, ref expAttr) == POAErrors.POA_OK) {
+                long emin = expAttr.minValue.intValue, emax = expAttr.maxValue.intValue;
+                if (emin > 0 && emax > emin) {
+                    _minExpSec = emin / 1_000_000.0;
+                    _maxExpSec = emax / 1_000_000.0;
+                }
+            }
+        } catch { }
 
         _imgFormat = _bitDepth > 8 ? POAImgFormat.POA_RAW16 : POAImgFormat.POA_RAW8;
         POASetImageFormat(_cameraId, _imgFormat);

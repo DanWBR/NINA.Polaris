@@ -69,7 +69,7 @@ public sealed partial class NativeGuider {
         // settings are being applied (and at what values).
         _logger.LogInformation(
             "Native guide loop ({Mode}) starting: exposure={ExpMs}ms gain={Gain} bin={Bin}",
-            mode, Math.Max(50, Rig.NativeGuideExposureMs), Rig.NativeGuideGain, Rig.NativeGuideBin);
+            mode, Math.Max(50, Rig.NativeGuideExposureMs), EffectiveGuideGain, Rig.NativeGuideBin);
         try {
             while (!ct.IsCancellationRequested) {
                 long iterStart = NowMs();
@@ -323,17 +323,10 @@ public sealed partial class NativeGuider {
     private async Task<IImageData?> CaptureFullAsync(ICamera cam, CancellationToken ct) {
         int expMs = Math.Max(50, Rig.NativeGuideExposureMs);
         int bin = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4);
-        // Clamp the configured gain to the guide camera's real range. A stale
-        // or out-of-range profile value (e.g. carried over from a different
-        // camera) makes some SDKs wrap/saturate and the guide star brightness
-        // jumps around erratically; clamping keeps it within [GainMin, GainMax].
-        int? gain = null;
-        if (Rig.NativeGuideGain > 0) {
-            var g = Rig.NativeGuideGain;
-            if (cam.GainMax > cam.GainMin && cam.GainMax > 0)
-                g = Math.Clamp(g, cam.GainMin, cam.GainMax);
-            gain = g;
-        }
+        // Gain comes from the single resolver (EffectiveGuideGain) so the
+        // capture, the dark library and the log can never disagree about
+        // which gain the sensor is running at.
+        int? gain = Rig.NativeGuideGain > 0 ? EffectiveGuideGain : null;
         var opts = new CaptureOptions(Gain: gain, BinX: bin, BinY: bin);
         // Bound the capture to a guide-sized budget. CaptureAsync honours the
         // token (it registers cancellation on its BLOB TCS), so a linked CTS
