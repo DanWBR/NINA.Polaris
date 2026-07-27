@@ -213,6 +213,12 @@ function ninaApp() {
         // before the change could be sent (field report).
         guideAggr: { ra: 70, dec: 70 },
         _guideAggrEditing: false,
+        // Self-signed-certificate gate. wsBlocked flips when the page is on
+        // HTTPS, the server answers plain requests, but no WebSocket ever
+        // opened — the browser is refusing the upgrade because the cert is
+        // not trusted. See _startWsCertWatch.
+        certGate: { wsBlocked: false, open: false, loading: false, guides: [] },
+        _wsEverOpened: false,
         // Same arrangement for the per-axis minimum move, in hundredths of a
         // pixel so the slider can work in integers (0.15 px = 15).
         guideMinMove: { ra: 15, dec: 15 },
@@ -4265,6 +4271,7 @@ function ninaApp() {
 
             this.connectStatusWs();
             this.connectImageWs();
+            this._startWsCertWatch();
             this.loadSettingsFromServer();
             this.loadDitherSettings();
             this.loadMfSettings();
@@ -6786,6 +6793,12 @@ function ninaApp() {
             ws.onopen = () => {
                 this._statusWsAttempt = 0;
                 this.serverReachable = true;
+                // A WebSocket that opened proves the browser trusts this
+                // origin's certificate for upgrades too — clear the cert gate
+                // and the one-shot reload guard (see _startWsCertWatch).
+                this._wsEverOpened = true;
+                this.certGate.wsBlocked = false;
+                try { sessionStorage.removeItem('polaris-ws-cert-reload'); } catch (e) { }
             };
 
             ws.onmessage = (evt) => {
@@ -6882,6 +6895,87 @@ function ninaApp() {
             ws.onerror = () => { };
 
             this.imageWs = ws;
+        },
+
+        // ---- Self-signed certificate gate --------------------------------
+        //
+        // Polaris serves HTTPS with its own certificate. A browser that has
+        // not been told to trust it shows an interstitial for the PAGE, and
+        // the user clicks through — but Firefox does NOT extend that
+        // exception to the WebSocket handshakes the same page load then
+        // makes. Every retry fails, the UI sits there with no live data, and
+        // only a second page load fixes it. That is exactly the field report:
+        // "the websockets will not establish until the certificate is there /
+        // it shows up after the second page load".
+        //
+        // So: if the page is on HTTPS and no WebSocket has EVER opened, but a
+        // plain fetch to the same origin works (server is up, cert accepted
+        // for documents), the browser is blocking the upgrade. Reload once —
+        // that is the manual workaround, automated — and if it survives the
+        // reload, stop guessing and put the certificate in front of the user.
+        _startWsCertWatch() {
+            if (location.protocol !== 'https:') return;   // no TLS, no gate
+            const RELOAD_KEY = 'polaris-ws-cert-reload';
+            setTimeout(async () => {
+                if (this._wsEverOpened) return;
+                // Discriminate "browser blocks the upgrade" from "server is
+                // down": only the first has a working same-origin fetch.
+                let reachable = false;
+                try {
+                    const r = await fetch('/api/auth/status', { cache: 'no-store' });
+                    reachable = !!r;
+                } catch (e) { reachable = false; }
+                if (!reachable) return;   // the connection banner owns this case
+                // Never reload out from under a login / set-password form:
+                // it would wipe what the user is typing. Those screens show
+                // the certificate card instead and let the user decide.
+                if (this.auth?.needSetup || this.auth?.needLogin) {
+                    this.certGate.wsBlocked = true;
+                    return;
+                }
+                let alreadyReloaded = false;
+                try { alreadyReloaded = !!sessionStorage.getItem(RELOAD_KEY); } catch (e) { }
+                if (!alreadyReloaded) {
+                    try { sessionStorage.setItem(RELOAD_KEY, String(Date.now())); } catch (e) { }
+                    location.reload();
+                    return;
+                }
+                this.certGate.wsBlocked = true;
+            }, 7000);
+        },
+        // Download the host's certificate so the operator can install it as a
+        // trust anchor. Auth-exempt on the server (it is public by design), so
+        // this works from the first-run screen before any password exists.
+        certGateDownloadUrl() { return '/api/tls/ca.crt'; },
+        async certGateOpen() {
+            this.certGate.open = true;
+            if (this.certGate.guides.length) return;
+            this.certGate.loading = true;
+            try {
+                const os = this._certGuessOs();
+                const r = await fetch('/api/tls/install-instructions?os='
+                                      + encodeURIComponent(os), { cache: 'no-store' });
+                const j = await r.json();
+                this.certGate.guides = j?.guides || [];
+            } catch (e) {
+                this.certGate.guides = [];
+            } finally {
+                this.certGate.loading = false;
+            }
+        },
+        certGateClose() { this.certGate.open = false; },
+        certGateReload() {
+            try { sessionStorage.removeItem('polaris-ws-cert-reload'); } catch (e) { }
+            location.reload();
+        },
+        _certGuessOs() {
+            const ua = (navigator.userAgent || '').toLowerCase();
+            if (/iphone|ipad|ipod/.test(ua)) return 'ios';
+            if (/android/.test(ua)) return 'android';
+            if (/mac os x|macintosh/.test(ua)) return 'macos';
+            if (/windows/.test(ua)) return 'windows';
+            if (/linux/.test(ua)) return 'linux';
+            return '';
         },
 
         scheduleReconnect(type) {

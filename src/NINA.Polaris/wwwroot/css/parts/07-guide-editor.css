@@ -1058,6 +1058,75 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
 }
+/* Self-signed certificate help. Lives inside the auth modal (first run) and
+   as a standalone banner + dialog once signed in. */
+.auth-cert {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+    text-align: left;
+}
+.auth-cert-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.auth-cert-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+.cert-banner {
+    position: fixed;
+    top: var(--statusbar-height);
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: var(--warn, #b8860b);
+    color: #fff;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+}
+.cert-help-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 16px;
+}
+.cert-help-frame {
+    width: min(560px, 94vw);
+    max-height: 86vh;
+    overflow-y: auto;
+    position: relative;
+}
+.cert-help-guide h3 {
+    font-size: 14px;
+    margin: 12px 0 6px;
+}
+.cert-help-guide ol {
+    margin: 0 0 8px 18px;
+    padding: 0;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.cert-help-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+}
+
 .auth-modal {
     width: min(420px, 92vw);
     padding: 28px 28px 22px;

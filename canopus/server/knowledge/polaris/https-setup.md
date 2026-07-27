@@ -81,10 +81,24 @@ the cert expires in ~5 years).
 
 ### Step 1, download the cert (every OS)
 
-On the device you want to add: open Polaris over HTTPS, click
-through the warning once, go to **Settings → 🔒 HTTPS endpoints**,
-and click **⬇ Download certificate**. The file `polaris-root.crt`
-saves to your Downloads folder.
+The **first-run screen** (where you set the password) offers this
+directly: **Download certificate** and **How to install it**, so a new
+rig can be trusted before you ever reach the app. Both endpoints are
+open, no sign-in needed.
+
+Otherwise, on the device you want to add: open Polaris over HTTPS,
+click through the warning once, go to **Settings → 🔒 HTTPS
+endpoints**, and click **⬇ Download certificate**. The file
+`polaris-root.crt` saves to your Downloads folder.
+
+> **"The page loads but nothing is live"** — a browser that has not
+> been told to trust the certificate clicks through for the *page* and
+> then refuses the *WebSocket* upgrade that page opens, so the UI sits
+> there with no data and a reload appears to fix it. Firefox is the
+> strict one. Polaris detects that state (page loads, plain requests
+> answer, no WebSocket ever opens), reloads once by itself, and if it
+> survives the reload shows a banner with the download + instructions.
+> Installing the certificate is the real fix.
 
 You can also download it directly: `https://polaris-app.local:5000/api/system/server-cert`
 (replace the hostname with whichever name resolves on your LAN).

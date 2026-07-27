@@ -184,6 +184,29 @@
                     then restart the polaris service.
                 </p>
             </form>
+            <!-- Certificate, offered at first boot on purpose. Polaris serves
+                 HTTPS with its own certificate; a browser that has not been
+                 told to trust it clicks through for the page but then refuses
+                 the WebSocket upgrade, leaving a UI with no live data (the
+                 "only works after the second page load" report). Dealing with
+                 it here, once, beats discovering it later as a half-working
+                 app. Both endpoints behind these buttons are auth-exempt, so
+                 they work before a password exists. -->
+            <div class="auth-cert">
+                <div class="auth-cert-title">🔒 This rig uses its own certificate</div>
+                <p class="auth-hint">
+                    Your browser will keep warning about it, and some browsers
+                    block the live connection entirely, until you install it as
+                    a trusted certificate on this device. Once per device.
+                </p>
+                <div class="auth-cert-actions">
+                    <a class="btn btn-sm btn-primary" :href="certGateDownloadUrl()"
+                       download="polaris-root.crt">Download certificate</a>
+                    <button type="button" class="btn btn-sm" @click="certGateOpen()">
+                        How to install it
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Returning-user login: configured=true, !authenticated. -->
@@ -210,6 +233,76 @@
                     Sign in
                 </button>
             </form>
+            <!-- Same certificate help on the returning-user screen, but only
+                 once we know the browser is actually blocking the upgrade —
+                 a device that already trusts the cert should not be nagged. -->
+            <div class="auth-cert" x-show="certGate.wsBlocked">
+                <div class="auth-cert-title">🔒 Live connection blocked by the certificate</div>
+                <p class="auth-hint">
+                    This browser accepted the page but is refusing the live
+                    connection because it does not trust this rig's certificate.
+                    Install it on this device to fix it for good.
+                </p>
+                <div class="auth-cert-actions">
+                    <a class="btn btn-sm btn-primary" :href="certGateDownloadUrl()"
+                       download="polaris-root.crt">Download certificate</a>
+                    <button type="button" class="btn btn-sm" @click="certGateOpen()">
+                        How to install it
+                    </button>
+                    <button type="button" class="btn btn-sm" @click="certGateReload()">
+                        Reload page
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Certificate banner for an already-signed-in session: same detection,
+         shown outside the auth overlay so a running session that loses the
+         live feed to the same cause gets told why. -->
+    <div class="cert-banner" x-show="certGate.wsBlocked && !auth.needSetup && !auth.needLogin" x-cloak>
+        <span>🔒 No live connection: this browser does not trust the rig's certificate.</span>
+        <a class="btn btn-sm btn-primary" :href="certGateDownloadUrl()"
+           download="polaris-root.crt">Download certificate</a>
+        <button class="btn btn-sm" @click="certGateOpen()">How to install it</button>
+        <button class="btn btn-sm" @click="certGateReload()">Reload</button>
+    </div>
+
+    <!-- Per-OS install steps, served by /api/tls/install-instructions (the
+         same source the Settings TLS panel renders, so the wording lives in
+         one place). Auth-exempt, so this opens on the first-run screen too. -->
+    <div class="cert-help-modal" x-show="certGate.open" x-cloak
+         @keydown.escape.window="certGateClose()">
+        <div class="location-setup-frame cert-help-frame">
+            <button class="mosaic-close" @click="certGateClose()" title="Close">✕</button>
+            <h2>🔒 Install this rig's certificate</h2>
+            <p class="text-muted" style="font-size:13px;margin-bottom:14px">
+                Polaris signs its own HTTPS certificate. Installing it as a
+                trusted certificate stops the browser warnings and lets the
+                live connection through. Only needed once per device.
+            </p>
+            <p class="text-muted" x-show="certGate.loading">Loading steps…</p>
+            <template x-for="g in certGate.guides" :key="g.osKey">
+                <div class="cert-help-guide">
+                    <h3>
+                        <span x-text="g.osLabel"></span>
+                        <span class="text-muted" style="font-weight:400"
+                              x-show="g.estimatedMinutes > 0"
+                              x-text="'· about ' + g.estimatedMinutes + ' min'"></span>
+                    </h3>
+                    <ol>
+                        <template x-for="(s, i) in (g.steps || [])" :key="i">
+                            <li x-text="s"></li>
+                        </template>
+                    </ol>
+                </div>
+            </template>
+            <div class="cert-help-actions">
+                <a class="btn btn-sm btn-primary" :href="certGateDownloadUrl()"
+                   download="polaris-root.crt">Download certificate</a>
+                <button class="btn btn-sm" @click="certGateReload()">Reload page</button>
+                <button class="btn btn-sm" @click="certGateClose()">Close</button>
+            </div>
         </div>
     </div>
 
@@ -19222,7 +19315,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260727-videoexp"></script>
+    <script src="/js/app.js?v=20260727-certgate"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

@@ -239,7 +239,18 @@
     "USB drive:": "Dispositivo USB:",
     "USB revert:": "Reversão do USB:",
     "Exposure one step down (hold to repeat)": "Exposição um passo abaixo (segure para repetir)",
-    "Exposure one step up (hold to repeat)": "Exposição um passo acima (segure para repetir)"
+    "Exposure one step up (hold to repeat)": "Exposição um passo acima (segure para repetir)",
+    "Download certificate": "Baixar certificado",
+    "How to install it": "Como instalar",
+    "Loading steps…": "Carregando os passos…",
+    "Reload page": "Recarregar a página",
+    "Polaris signs its own HTTPS certificate. Installing it as a trusted certificate stops the browser warnings and lets the live connection through. Only needed once per device.": "O Polaris assina o próprio certificado HTTPS. Instalá-lo como certificado confiável acaba com os avisos do navegador e libera a conexão ao vivo. Só precisa ser feito uma vez por dispositivo.",
+    "This browser accepted the page but is refusing the live connection because it does not trust this rig's certificate. Install it on this device to fix it for good.": "Este navegador aceitou a página, mas está recusando a conexão ao vivo porque não confia no certificado deste equipamento. Instale-o neste dispositivo para resolver de vez.",
+    "Your browser will keep warning about it, and some browsers block the live connection entirely, until you install it as a trusted certificate on this device. Once per device.": "O navegador vai continuar avisando, e alguns bloqueiam a conexão ao vivo por completo, até você instalá-lo como certificado confiável neste dispositivo. Uma vez por dispositivo.",
+    "🔒 This rig uses its own certificate": "🔒 Este equipamento usa o próprio certificado",
+    "🔒 Live connection blocked by the certificate": "🔒 Conexão ao vivo bloqueada pelo certificado",
+    "🔒 Install this rig's certificate": "🔒 Instalar o certificado deste equipamento",
+    "🔒 No live connection: this browser does not trust the rig's certificate.": "🔒 Sem conexão ao vivo: este navegador não confia no certificado do equipamento."
   },
   "es": {
     "Start": "Iniciar",
@@ -445,7 +456,18 @@
     "USB drive:": "Unidad USB:",
     "USB revert:": "Restauración del USB:",
     "Exposure one step down (hold to repeat)": "Exposición un paso abajo (mantén para repetir)",
-    "Exposure one step up (hold to repeat)": "Exposición un paso arriba (mantén para repetir)"
+    "Exposure one step up (hold to repeat)": "Exposición un paso arriba (mantén para repetir)",
+    "Download certificate": "Descargar certificado",
+    "How to install it": "Cómo instalarlo",
+    "Loading steps…": "Cargando los pasos…",
+    "Reload page": "Recargar la página",
+    "Polaris signs its own HTTPS certificate. Installing it as a trusted certificate stops the browser warnings and lets the live connection through. Only needed once per device.": "Polaris firma su propio certificado HTTPS. Instalarlo como certificado de confianza acaba con los avisos del navegador y deja pasar la conexión en vivo. Solo hace falta una vez por dispositivo.",
+    "This browser accepted the page but is refusing the live connection because it does not trust this rig's certificate. Install it on this device to fix it for good.": "Este navegador aceptó la página, pero rechaza la conexión en vivo porque no confía en el certificado de este equipo. Instálalo en este dispositivo para resolverlo definitivamente.",
+    "Your browser will keep warning about it, and some browsers block the live connection entirely, until you install it as a trusted certificate on this device. Once per device.": "El navegador seguirá avisando, y algunos bloquean la conexión en vivo por completo, hasta que lo instales como certificado de confianza en este dispositivo. Una vez por dispositivo.",
+    "🔒 This rig uses its own certificate": "🔒 Este equipo usa su propio certificado",
+    "🔒 Live connection blocked by the certificate": "🔒 Conexión en vivo bloqueada por el certificado",
+    "🔒 Install this rig's certificate": "🔒 Instalar el certificado de este equipo",
+    "🔒 No live connection: this browser does not trust the rig's certificate.": "🔒 Sin conexión en vivo: este navegador no confía en el certificado del equipo."
   },
   "fr": {
     "Start": "Démarrer",
@@ -651,7 +673,18 @@
     "USB drive:": "Clé USB :",
     "USB revert:": "Rétablissement USB :",
     "Exposure one step down (hold to repeat)": "Exposition d'un cran vers le bas (maintenir pour répéter)",
-    "Exposure one step up (hold to repeat)": "Exposition d'un cran vers le haut (maintenir pour répéter)"
+    "Exposure one step up (hold to repeat)": "Exposition d'un cran vers le haut (maintenir pour répéter)",
+    "Download certificate": "Télécharger le certificat",
+    "How to install it": "Comment l'installer",
+    "Loading steps…": "Chargement des étapes…",
+    "Reload page": "Recharger la page",
+    "Polaris signs its own HTTPS certificate. Installing it as a trusted certificate stops the browser warnings and lets the live connection through. Only needed once per device.": "Polaris signe son propre certificat HTTPS. L'installer comme certificat de confiance supprime les avertissements du navigateur et laisse passer la connexion en direct. Une seule fois par appareil.",
+    "This browser accepted the page but is refusing the live connection because it does not trust this rig's certificate. Install it on this device to fix it for good.": "Ce navigateur a accepté la page mais refuse la connexion en direct, car il ne fait pas confiance au certificat de cet équipement. Installez-le sur cet appareil pour régler le problème définitivement.",
+    "Your browser will keep warning about it, and some browsers block the live connection entirely, until you install it as a trusted certificate on this device. Once per device.": "Le navigateur continuera d'avertir, et certains bloquent complètement la connexion en direct, tant que vous ne l'installez pas comme certificat de confiance sur cet appareil. Une seule fois par appareil.",
+    "🔒 This rig uses its own certificate": "🔒 Cet équipement utilise son propre certificat",
+    "🔒 Live connection blocked by the certificate": "🔒 Connexion en direct bloquée par le certificat",
+    "🔒 Install this rig's certificate": "🔒 Installer le certificat de cet équipement",
+    "🔒 No live connection: this browser does not trust the rig's certificate.": "🔒 Pas de connexion en direct : ce navigateur ne fait pas confiance au certificat de l'équipement."
   },
   "de": {
     "Start": "Start",
@@ -857,6 +890,17 @@
     "USB drive:": "USB-Laufwerk:",
     "USB revert:": "USB-Zurücksetzung:",
     "Exposure one step down (hold to repeat)": "Belichtung eine Stufe niedriger (halten zum Wiederholen)",
-    "Exposure one step up (hold to repeat)": "Belichtung eine Stufe höher (halten zum Wiederholen)"
+    "Exposure one step up (hold to repeat)": "Belichtung eine Stufe höher (halten zum Wiederholen)",
+    "Download certificate": "Zertifikat herunterladen",
+    "How to install it": "Installationsanleitung",
+    "Loading steps…": "Schritte werden geladen…",
+    "Reload page": "Seite neu laden",
+    "Polaris signs its own HTTPS certificate. Installing it as a trusted certificate stops the browser warnings and lets the live connection through. Only needed once per device.": "Polaris signiert sein HTTPS-Zertifikat selbst. Wird es als vertrauenswürdiges Zertifikat installiert, verschwinden die Browser-Warnungen und die Live-Verbindung kommt durch. Nur einmal pro Gerät nötig.",
+    "This browser accepted the page but is refusing the live connection because it does not trust this rig's certificate. Install it on this device to fix it for good.": "Dieser Browser hat die Seite akzeptiert, verweigert aber die Live-Verbindung, weil er dem Zertifikat dieser Ausrüstung nicht vertraut. Installieren Sie es auf diesem Gerät, um das dauerhaft zu beheben.",
+    "Your browser will keep warning about it, and some browsers block the live connection entirely, until you install it as a trusted certificate on this device. Once per device.": "Der Browser warnt weiter, und manche blockieren die Live-Verbindung ganz, bis Sie es auf diesem Gerät als vertrauenswürdiges Zertifikat installieren. Einmal pro Gerät.",
+    "🔒 This rig uses its own certificate": "🔒 Diese Ausrüstung nutzt ein eigenes Zertifikat",
+    "🔒 Live connection blocked by the certificate": "🔒 Live-Verbindung durch das Zertifikat blockiert",
+    "🔒 Install this rig's certificate": "🔒 Zertifikat dieser Ausrüstung installieren",
+    "🔒 No live connection: this browser does not trust the rig's certificate.": "🔒 Keine Live-Verbindung: Dieser Browser vertraut dem Zertifikat der Ausrüstung nicht."
   }
 }
