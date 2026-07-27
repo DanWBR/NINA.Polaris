@@ -3401,5 +3401,7 @@
   "Clear autorun": "Limpar o AUTORUN",
   "Autorun reset to the start": "AUTORUN reiniciado do começo",
   "Failed to reset the sequence": "Falha ao reiniciar a sequência",
-  "Set the progress back to the start, keeping every item": "Volta o progresso para o começo, mantendo todos os itens"
+  "Set the progress back to the start, keeping every item": "Volta o progresso para o começo, mantendo todos os itens",
+  "💾 saving": "💾 salvando",
+  "💾 saved": "💾 salvo"
 }

@@ -1268,6 +1268,10 @@ function ninaApp() {
             binning: 1,
             filter: '',          // empty = keep current filter
             saveToDisk: false,
+            // When the last snap was actually written to disk. Drives the
+            // transient "saved" chip in the stats bar; saveToDisk itself is
+            // a persistent MODE and must not be shown as an action.
+            savedAt: 0,
             // Which camera to snap from: 'main' | 'guide' | 'aux'. Aux/guide
             // snaps relay to the same previewCanvas (kind=preview) and never
             // feed the live stack, but CAN opt into disk save (aux → aux/ tree,
@@ -22388,6 +22392,11 @@ function ninaApp() {
                 // (the actual image lands on previewCanvas via the WS
                 // image-stream broadcast that the backend kicked off).
                 if (r?.saved) {
+                    // Self-expiring: no reactive clock in the page, so clear
+                    // the flag on a timer rather than diffing against "now".
+                    this.preview.savedAt = Date.now();
+                    clearTimeout(this._previewSavedTimer);
+                    this._previewSavedTimer = setTimeout(() => { this.preview.savedAt = 0; }, 5000);
                     this.toast('Snap saved · HFR ' + (r.stats?.hfr?.toFixed?.(2) || '--')
                         + ' · ' + (r.stats?.starCount ?? '--') + ' stars', 'ok', 2500);
                 } else {

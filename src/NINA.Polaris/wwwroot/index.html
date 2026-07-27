@@ -3424,7 +3424,14 @@
                     <span>Median: <strong x-text="preview.lastStats?.median?.toFixed?.(0) ?? '--'"></strong></span>
                     <span>SNR: <strong x-text="preview.lastStats?.snr?.toFixed?.(1) ?? '--'"></strong></span>
                     <span x-show="stats.width > 0">Res: <strong x-text="stats.width + '×' + stats.height">--</strong></span>
-                    <span class="text-ok" x-show="preview.saveToDisk">💾 saving</span>
+                    <!-- Transient: "saving" only while a snap that will be written
+                         is in flight, then "saved" for a few seconds. It used to be
+                         bound to preview.saveToDisk, which is a persistent SETTING,
+                         so the floppy sat there for ever and read as a save that
+                         never finished. The mode itself is the checkbox. -->
+                    <span class="text-ok" x-show="preview.saveToDisk && preview.busy">💾 saving</span>
+                    <span class="text-ok"
+                          x-show="!preview.busy && preview.savedAt">💾 saved</span>
                     <span x-show="preview.lastSnapAt" class="text-muted"
                           x-text="'last: ' + (preview.lastSnapAt
                                               ? new Date(preview.lastSnapAt).toLocaleTimeString()

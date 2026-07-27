@@ -3401,5 +3401,7 @@
   "Clear autorun": "Vider l'AUTORUN",
   "Autorun reset to the start": "AUTORUN remis au début",
   "Failed to reset the sequence": "Échec de la remise à zéro de la séquence",
-  "Set the progress back to the start, keeping every item": "Ramène la progression au début, en conservant tous les éléments"
+  "Set the progress back to the start, keeping every item": "Ramène la progression au début, en conservant tous les éléments",
+  "💾 saving": "💾 enregistrement",
+  "💾 saved": "💾 enregistré"
 }
