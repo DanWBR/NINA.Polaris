@@ -2807,5 +2807,6 @@
   "Search settings…": "",
   "Search settings": "",
   "No settings match": "",
-  "Clear search": ""
+  "Clear search": "",
+  "Idle time between auto-captures. 0 captures back-to-back; raise it to throttle a slow host.": ""
 }

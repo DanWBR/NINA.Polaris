@@ -553,7 +553,11 @@ function ninaApp() {
             running: false,
             exposureSec: 2,
             gain: 100,
-            intervalSec: 2,
+            // 0 = capture back-to-back, like the PREVIEW loop. Focusing is
+            // a feedback loop: an idle gap on top of the exposure is why
+            // operators gave up on this tab and focused in PREVIEW instead.
+            // Raise it to throttle a slow host.
+            intervalSec: 0,
             minStars: 3,
             samples: [],
             bestHfr: null,
@@ -25300,9 +25304,16 @@ function ninaApp() {
             // Schedule next tick after intervalSec. setTimeout chain
             // (not setInterval) so a slow capture doesn't stack
             // backlogged ticks.
+            const gapMs = Math.max(0, (this.manualFocus.intervalSec | 0) * 1000);
+            if (gapMs === 0) {
+                // Yield once so the UI paints this frame + its metrics
+                // before the next exposure starts, then go again. Same
+                // shape as previewTakeSnap's loop.
+                this.$nextTick(() => this._manualFocusTick());
+                return;
+            }
             this._manualFocusTimer = setTimeout(
-                () => this._manualFocusTick(),
-                Math.max(500, (this.manualFocus.intervalSec | 0) * 1000));
+                () => this._manualFocusTick(), gapMs);
         },
         // Helpers for the live metrics block in the sidebar.
         manualFocusLastSample() {

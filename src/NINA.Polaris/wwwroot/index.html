@@ -2603,9 +2603,9 @@
                             <label style="display:flex; align-items:center; gap:6px">
                                 Interval (s)
                                 <input type="number" x-model.number="manualFocus.intervalSec"
-                                       min="1" max="30" step="1" class="input-sm" style="width:60px"
+                                       min="0" max="30" step="1" class="input-sm" style="width:60px"
                                        :disabled="manualFocus.running"
-                                       title="Time between auto-captures during the loop">
+                                       title="Idle time between auto-captures. 0 captures back-to-back; raise it to throttle a slow host.">
                             </label>
                             <label style="display:flex; align-items:center; gap:6px">
                                 Min stars
@@ -18968,7 +18968,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260726-setsearch"></script>
+    <script src="/js/app.js?v=20260726-focusloop"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

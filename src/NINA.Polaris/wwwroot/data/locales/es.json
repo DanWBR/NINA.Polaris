@@ -3407,5 +3407,6 @@
   "Search settings…": "Buscar en los ajustes…",
   "Search settings": "Buscar en los ajustes",
   "No settings match": "Ningún ajuste coincide",
-  "Clear search": "Limpiar búsqueda"
+  "Clear search": "Limpiar búsqueda",
+  "Idle time between auto-captures. 0 captures back-to-back; raise it to throttle a slow host.": "Tiempo de espera entre capturas automáticas. 0 captura de forma continua; súbelo para aliviar un host lento."
 }
