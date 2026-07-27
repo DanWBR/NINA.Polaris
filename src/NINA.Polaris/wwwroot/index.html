@@ -14061,7 +14061,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <span class="text-muted" style="font-size:11px" x-text="asst.mobilePct + '%'"></span>
                                     </div>
                                     <p x-show="!asst.mobileRamOk && asst.mobileTotalMem" style="font-size:11px; color:#d29922; margin:6px 0 0"
-                                       x-text="'⚠ This device has ' + (asst.mobileTotalMem/1e9).toFixed(1) + ' GB RAM; the model needs about ' + (asst.mobileNeedMem/1e9).toFixed(1) + ' GB resident. The system may kill the app — a bigger-RAM device is recommended.'"></p>
+                                       x-text="'⚠ This device has ' + (asst.mobileTotalMem/1e9).toFixed(1) + ' GB RAM; the model needs about ' + (asst.mobileNeedMem/1e9).toFixed(1) + ' GB resident. The system may kill the app, so a bigger-RAM device is recommended.'"></p>
                                     <template x-if="asst.mobileStatus && asst.mobileStatus.modelReady">
                                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:4px">
                                             <span x-show="asst.mobileStatus.running" style="font-size:12px; color:#3fb950">✓ model running on this device</span>

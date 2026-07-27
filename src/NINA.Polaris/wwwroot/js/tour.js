@@ -43,62 +43,62 @@
             },
             {
                 target: '[data-tour="rigs-connect"]', placement: 'bottom',
-                title: 'RIGS — your equipment',
+                title: 'RIGS: your equipment',
                 body: 'Pick a rig, connect to INDI or Alpaca, then use "Connect all" to bring every selected device online at once.',
                 before: function (a) { a.tab = 'equip'; if (a.equipTab !== undefined) a.equipTab = 'equipment'; if (a._applyTabSideEffects) a._applyTabSideEffects('equip'); }
             },
             {
                 target: '[data-tour="sky-search"]', placement: 'bottom',
-                title: 'SKY — find a target',
+                title: 'SKY: find a target',
                 body: 'Search for an object by name or click the map, frame it, then send the mount there. You can also center on the Sun, Moon or a planet.',
                 before: function (a) { a.tab = 'sky'; if (a._applyTabSideEffects) a._applyTabSideEffects('sky'); }
             },
             {
                 target: '[data-tour="preview-actions"]', placement: 'bottom',
-                title: 'PREVIEW — test frames & plate solve',
+                title: 'PREVIEW: test frames & plate solve',
                 body: 'Snap single frames to check framing and focus, and plate-solve to confirm exactly where the scope is pointing.',
                 before: function (a) { a.tab = 'preview'; }
             },
             {
                 target: '[data-tour="focus-actions"]', placement: 'left',
-                title: 'FOCUS — sharpen the stars',
+                title: 'FOCUS: sharpen the stars',
                 body: 'Run an automatic V-curve focus or focus by hand watching the HFR. Good focus is the single biggest quality win.',
                 before: function (a) { a.tab = 'focus'; if (a.focusTab !== undefined) a.focusTab = 'vcurve'; }
             },
             {
                 target: '[data-tour="guide-actions"]', placement: 'bottom',
-                title: 'GUIDE — track accurately',
+                title: 'GUIDE: track accurately',
                 body: 'Calibrate and start guiding (built-in or PHD2) so long exposures stay pin-sharp all night.',
                 before: function (a) { a.tab = 'guide'; }
             },
             {
                 target: '[data-tour="autorun-actions"]', placement: 'bottom',
-                title: 'AUTORUN — shoot the night',
-                body: 'Build a capture schedule — filters, exposures, counts, dithering, meridian flip — and let it run unattended.',
+                title: 'AUTORUN: shoot the night',
+                body: 'Build a capture schedule (filters, exposures, counts, dithering, meridian flip) and let it run unattended.',
                 before: function (a) { a.tab = 'sequence'; if (a.autorunTab !== undefined) a.autorunTab = 'sequence'; if (a._applyTabSideEffects) a._applyTabSideEffects('sequence'); }
             },
             {
                 target: '[data-tour="nav-live"]', placement: 'right',
-                title: 'LIVE — watch it stack',
+                title: 'LIVE: watch it stack',
                 body: 'Open the LIVE view: frames stack in real time here (ASIAIR-style), so you watch the image build up as the session goes on.',
                 before: function (a) { a.tab = 'live'; if (a.quickControlsCollapsed) a.quickControlsCollapsed = false; }
             },
             {
                 target: '[data-tour="nav-studio"]', placement: 'right',
-                title: 'STUDIO — stack & process',
+                title: 'STUDIO: stack & process',
                 body: "After the night, STUDIO is your processing workspace. Let's walk through its tools, from raw frames to a finished image.",
                 before: function (a) { a.tab = 'files'; if (a.filesInit) a.filesInit(); }
             },
             {
                 target: '[data-tour="studio-stack"]', placement: 'left',
                 title: 'Stacking',
-                body: 'Drop your lights (and calibration frames) into the Stack workspace and integrate them into a single master — building masters, calibrating, and combining channels into RGB/LRGB.',
+                body: 'Drop your lights (and calibration frames) into the Stack workspace and integrate them into a single master: building masters, calibrating, and combining channels into RGB/LRGB.',
                 before: function (a) { a.tab = 'files'; }
             },
             {
                 target: '[data-tour="studio-starremoval"]', placement: 'bottom',
                 title: 'Star removal',
-                body: 'Split the master into a starless image + a stars-only image (StarNet, in the browser) — the basis for star reduction and processing the nebula separately.',
+                body: 'Split the master into a starless image + a stars-only image (StarNet, in the browser): the basis for star reduction and processing the nebula separately.',
                 before: function (a) { a.tab = 'files'; }
             },
             {
@@ -128,7 +128,7 @@
             {
                 target: '[data-tour="nav-help"]', placement: 'right',
                 title: "That's the tour!",
-                body: 'Full step-by-step tutorials live in the Help tab — including two optional deep-dives: a tour of the top/bottom status bars and a walk through every Settings card. Clear skies!',
+                body: 'Full step-by-step tutorials live in the Help tab, including two optional deep-dives: a tour of the top/bottom status bars and a walk through every Settings card. Clear skies!',
                 before: function () { /* stay put */ }
             }
         ];
@@ -142,12 +142,12 @@
             {
                 center: true,
                 title: 'Status bars',
-                body: "Polaris frames every screen between two status bars. Let's go over what each item means — top bar first, then the bottom one.",
+                body: "Polaris frames every screen between two status bars. Let's go over what each item means, top bar first, then the bottom one.",
                 before: function (a) { a.tab = 'home'; }
             },
             {
                 target: '.brand', placement: 'bottom', skipIfMissing: true,
-                title: 'Top bar — app + version',
+                title: 'Top bar: app + version',
                 body: 'The Polaris Astro Controller logo (click it to jump Home) and the running version number.'
             },
             {
@@ -168,7 +168,7 @@
             {
                 target: '.status-clock', placement: 'bottom', skipIfMissing: true,
                 title: 'Chips + clock',
-                body: 'This area shows live chips when relevant — current-exposure progress, camera temperature, stacked-frame count, this client device\'s battery — plus the wall clock.'
+                body: 'This area shows live chips when relevant (current-exposure progress, camera temperature, stacked-frame count, this client device\'s battery), plus the wall clock.'
             },
             {
                 target: '.log-badge', placement: 'bottom', skipIfMissing: true,
@@ -183,7 +183,7 @@
             {
                 target: '.fullscreen-badge', placement: 'bottom', skipIfMissing: true,
                 title: 'Fullscreen',
-                body: 'Hide the browser chrome — handy on a mini-PC kiosk or a tablet at the scope.'
+                body: 'Hide the browser chrome: handy on a mini-PC kiosk or a tablet at the scope.'
             },
             {
                 target: '.ui-lock-badge', placement: 'bottom', skipIfMissing: true,
@@ -192,14 +192,14 @@
             },
             {
                 target: '[data-tour="statusbar-stats"]', placement: 'top', skipIfMissing: true,
-                title: 'Bottom — capture stats',
+                title: 'Bottom: capture stats',
                 body: 'In LIVE/PREVIEW the bottom stats line shows the latest frame quality: detected stars, HFR (focus), mean level, SNR, frame count and stacking state.',
                 before: function (a) { a.tab = 'live'; }
             },
             {
                 target: '.activity-bar-ops', placement: 'top', skipIfMissing: true,
                 title: 'Activity chips',
-                body: 'The footer shows what the server is busy with right now — running jobs, background tasks, warnings — as compact chips.'
+                body: 'The footer shows what the server is busy with right now (running jobs, background tasks, warnings) as compact chips.'
             },
             {
                 target: '.activity-net', placement: 'top', skipIfMissing: true,
@@ -213,7 +213,7 @@
             },
             {
                 center: true,
-                title: 'Status bars — done',
+                title: 'Status bars: done',
                 body: 'Those two bars give you situational awareness from any screen. Back to imaging!'
             }
         ];
@@ -224,8 +224,8 @@
     function settingsSteps() {
         var open = function (a) { a.tab = 'settings'; };
         return [
-            { center: true, title: 'Settings', body: "Let's walk through the Settings cards one by one — what each one is for. Cards that don't apply to your device are skipped.", before: open },
-            { target: '[data-tour="set-https"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'HTTPS certificate', body: 'Generate/install a TLS certificate so the browser trusts the server over HTTPS — needed for WebGPU and secure remote access.' },
+            { center: true, title: 'Settings', body: "Let's walk through the Settings cards one by one: what each one is for. Cards that don't apply to your device are skipped.", before: open },
+            { target: '[data-tour="set-https"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'HTTPS certificate', body: 'Generate/install a TLS certificate so the browser trusts the server over HTTPS, needed for WebGPU and secure remote access.' },
             { target: '[data-tour="set-storage"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Auto-push to network storage', body: 'Automatically copy saved frames to a NAS / network share as they are written.' },
             { target: '[data-tour="set-appearance"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Appearance', body: 'UI language, theme, font and density.' },
             { target: '[data-tour="set-skyimg"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Sky imagery (offline DSS)', body: 'Download deep-sky survey tiles for offline use, so the Sky map shows real imagery without internet.' },
@@ -233,10 +233,10 @@
             { target: '[data-tour="set-auth"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Authentication', body: 'Set or change the password that protects remote access to Polaris.' },
             { target: '[data-tour="set-devicename"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Device name', body: 'The friendly name shown in the browser tab, mDNS (nina.local) and on the network.' },
             { target: '[data-tour="set-platesolve"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Plate solving', body: 'Pick and configure the solver (ASTAP, Astrometry.net…) used by Slew & Center and recovery.' },
-            { target: '[data-tour="set-clock"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Clock', body: "Sync the server clock — important because accurate time drives the mount's coordinate calculations." },
+            { target: '[data-tour="set-clock"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Clock', body: "Sync the server clock, important because accurate time drives the mount's coordinate calculations." },
             { target: '[data-tour="set-power"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Power', body: 'Shut down or reboot the server host (SBC) safely from the UI.' },
             { target: '[data-tour="set-network"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Network (WiFi)', body: 'View and switch the WiFi network the server is connected to.' },
-            { target: '[data-tour="set-observatory"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Observatory', body: 'Your site latitude/longitude/altitude — used for the sky, twilight, altitude charts and GoTo.' },
+            { target: '[data-tour="set-observatory"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Observatory', body: 'Your site latitude/longitude/altitude, used for the sky, twilight, altitude charts and GoTo.' },
             { target: '[data-tour="set-imageoutput"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Image output', body: 'Shows where captured frames are saved (the Studio root); the folder picker itself lives in the FILES tab.' },
             { target: '[data-tour="set-imagecache"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Image cache', body: 'Polaris keeps rendered previews + thumbnails on disk; here you see usage and can clear it.' },
             { target: '[data-tour="set-gpu"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'GPU acceleration (OpenCL)', body: 'Use the GPU to speed up image math (stacking/stretch) when an OpenCL device is available.' },
@@ -245,8 +245,8 @@
             { target: '[data-tour="set-debuglog"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Debug logging', body: 'Control log verbosity and optionally persist the debug log to disk for troubleshooting.' },
             { target: '[data-tour="set-tools"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'External tools', body: 'Paths to optional external programs (e.g. Siril, GraXpert) Polaris can hand off to.' },
             { target: '[data-tour="set-ai"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'AI inference (ONNX)', body: 'Manage the AI models (star removal, denoise, deconvolution, BGE) and where they run (browser/NPU/CLI).' },
-            { target: '[data-tour="set-reset"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Reset to factory defaults', body: 'Danger zone — wipe all settings and start fresh. Use only as a last resort.' },
-            { center: true, title: 'Settings — done', body: "That's the full Settings tour. You can revisit it any time from Help." }
+            { target: '[data-tour="set-reset"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Reset to factory defaults', body: 'Danger zone: wipe all settings and start fresh. Use only as a last resort.' },
+            { center: true, title: 'Settings: done', body: "That's the full Settings tour. You can revisit it any time from Help." }
         ];
     }
 
