@@ -1037,7 +1037,17 @@ public class LiveStackingService {
                     // the next, which almost always carries the pattern. Cap
                     // it so a genuinely-mono setup with colour left on still
                     // proceeds (in mono) after a few seconds.
-                    if (wantColour && !haveUsablePattern) {
+                    //
+                    // Unless the backend positively reports a MONO sensor, in
+                    // which case there is nothing to wait for: stack in mono on
+                    // frame one. Only `false` short-circuits; `null` means the
+                    // backend cannot tell and the deferral still applies.
+                    bool knownMono = _equipment?.Camera?.IsColorSensor == false;
+                    if (wantColour && !haveUsablePattern && knownMono) {
+                        _logger.LogInformation(
+                            "Live stack: the camera reports a mono sensor, so stacking in mono. Colour stacking is on for this rig but there is no CFA to wait for");
+                    }
+                    if (wantColour && !haveUsablePattern && !knownMono) {
                         _colorDeferStart ??= DateTime.UtcNow;
                         var waited = (DateTime.UtcNow - _colorDeferStart.Value).TotalSeconds;
                         if (_colorDeferrals < MaxColorDeferrals && waited < MaxColorDeferSeconds) {

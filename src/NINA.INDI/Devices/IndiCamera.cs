@@ -150,6 +150,25 @@ public class IndiCamera : ICamera {
         }
     }
 
+    /// <summary>Mono or CFA, for callers that must choose a pipeline before
+    /// any frame arrives (see ICamera.IsColorSensor).
+    ///
+    /// INDI has no explicit mono flag, so this reads the PRESENCE of the
+    /// CCD_CFA property rather than its value: a driver defines the property
+    /// only for a CFA sensor, whereas the ELEMENT can momentarily go blank
+    /// (which is what the _lastCfa cache above exists for). Absence is only
+    /// meaningful once the device is connected, because the property snapshot
+    /// arrives asynchronously after connect; a driver that publishes CCD_CFA
+    /// unusually late would look mono, and the per-rig BayerPatternOverride
+    /// stays the escape hatch for that.</summary>
+    public bool? IsColorSensor {
+        get {
+            if (!IsConnected) return null;
+            if (_lastCfa != BayerPatternEnum.None) return true;
+            return _client.GetProperty(DeviceName, "CCD_CFA") != null;
+        }
+    }
+
     // INDI cameras don't surface gain in a standardised property, the
     // CCD_CONTROLS group varies by driver (gain / Gain / GAIN). Plumb a
     // best-effort read here and return 0 when nothing matches.

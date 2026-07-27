@@ -53,6 +53,7 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
     private double _pixelSizeX, _pixelSizeY;
     private int _bitDepth = 16;
     private int _sensorType; // 0=Mono 1=Color 2=RGGB 3=CMYG 4=CMYG2 5=LRGB
+    private bool _sensorTypeKnown;
     private bool _canCool, _canBin, _canAbort, _hasGain, _hasOffset;
     private int _maxBinX = 1;
     private int _gainMin, _gainMax;
@@ -107,6 +108,14 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
     private volatile bool _connected;
 
     public bool IsConnected => _connected;
+
+    /// <summary>From the Alpaca sensortype property, but only when the
+    /// server answered it: the 0 fallback is also "Monochrome", so an
+    /// unimplemented property must stay unknown. See ICamera.IsColorSensor.
+    /// </summary>
+    public bool? IsColorSensor => !_connected || !_sensorTypeKnown
+        ? null
+        : _sensorType != 0;
 
     public CameraStates State {
         get {
@@ -179,7 +188,12 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
         _maxY = await SafeGetAsync(() => _client.GetAsync<int>("cameraysize", ct), 0);
         _pixelSizeX = await SafeGetAsync(() => _client.GetAsync<double>("pixelsizex", ct), 0d);
         _pixelSizeY = await SafeGetAsync(() => _client.GetAsync<double>("pixelsizey", ct), 0d);
-        _sensorType = await SafeGetAsync(() => _client.GetAsync<int>("sensortype", ct), 0);
+        // Nullable read: the 0 fallback for a server that does not expose
+        // sensortype means the same as a genuine "Monochrome" answer, and
+        // IsColorSensor must not confuse the two.
+        var sensorRaw = await SafeGetAsync<int?>(() => _client.GetAsync<int?>("sensortype", ct), null);
+        _sensorTypeKnown = sensorRaw.HasValue;
+        _sensorType = sensorRaw ?? 0;
 
         // Reset ROI to the full sensor. The ASCOM Remote Server (or
         // Alpaca Omni Simulator) hosts the same ICameraV3 driver as

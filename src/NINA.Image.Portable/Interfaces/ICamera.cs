@@ -68,6 +68,23 @@ public interface ICamera {
     int GainMin => 0;
     int GainMax => 0;
 
+    /// <summary>Does this sensor have a colour filter array?
+    ///
+    /// Deliberately TRI-STATE, because <see cref="BayerPatternEnum.None"/> on a
+    /// frame cannot answer the question: it means "mono" for a mono camera and
+    /// "colour, layout not published yet" for an OSC whose driver dropped its
+    /// CFA. Consumers that must pick a mono or a colour pipeline up front (live
+    /// stacking above all) need to tell those two apart.
+    ///
+    ///   <c>false</c> - the driver or SDK positively reports a mono sensor.
+    ///   <c>true</c>  - positively reports a CFA sensor.
+    ///   <c>null</c>  - the backend cannot say; fall back to what the frames carry.
+    ///
+    /// The default is <c>null</c>: a backend that does not know must never claim
+    /// mono, or a colour session would silently stack grey for the whole night.
+    /// </summary>
+    bool? IsColorSensor => null;
+
     /// <summary>ISO values the camera supports, in ASA. Empty list
     /// means the backend doesn't expose ISO (typical for dedicated
     /// astronomy cameras).</summary>

@@ -68,6 +68,10 @@ public sealed class AscomComCamera : ICamera, IDisposable {
     private SensorTypeEnum _sensorType = SensorTypeEnum.Monochrome;
     private BayerPatternEnum _bayerPattern = BayerPatternEnum.None;
 
+    // Did the driver actually answer SensorType? Only then can we state
+    // mono-vs-colour; see ICamera.IsColorSensor.
+    private bool _sensorTypeKnown;
+
     public AscomComCamera(string progId) {
         _progId = progId ?? throw new ArgumentNullException(nameof(progId));
         _disp = new AscomComStaDispatcher($"ASCOM-Camera-{progId}");
@@ -76,6 +80,14 @@ public sealed class AscomComCamera : ICamera, IDisposable {
     public string DeviceName => _deviceName;
     public bool IsConnected => _driver != null
         && _disp.Invoke<bool>(() => SafeGet<bool>(() => _driver!.Connected)).Result;
+
+    /// <summary>From ICameraV3.SensorType, but only when the driver actually
+    /// answered: a driver that leaves the property unimplemented also reads as
+    /// Monochrome, and claiming mono on that basis would stack a colour
+    /// session grey. See ICamera.IsColorSensor.</summary>
+    public bool? IsColorSensor => !IsConnected || !_sensorTypeKnown
+        ? null
+        : _sensorType != SensorTypeEnum.Monochrome;
 
     public CameraStates State {
         get {
@@ -206,7 +218,13 @@ public sealed class AscomComCamera : ICamera, IDisposable {
         // drivers that don't implement the property fall to
         // Monochrome / no Bayer (safe default — debayer skipped).
         // ZWO's ASCOM driver for the ASI715MC reports 2 (RGGB) here.
-        var ascomSensor = SafeGet<int>(() => (int)_driver.SensorType, 0);
+        // Read it as NULLABLE: the fallback for a driver that does not
+        // implement SensorType is 0, which is indistinguishable from a
+        // driver that genuinely reports Monochrome. IsColorSensor has to
+        // tell those apart, so remember whether the read worked.
+        var ascomSensorRaw = SafeGet<int?>(() => (int)_driver.SensorType, null);
+        _sensorTypeKnown = ascomSensorRaw.HasValue;
+        var ascomSensor = ascomSensorRaw ?? 0;
         _sensorType = ascomSensor switch {
             1 => SensorTypeEnum.Color,
             2 => SensorTypeEnum.RGGB,

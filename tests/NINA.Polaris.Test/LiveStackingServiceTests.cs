@@ -17,6 +17,7 @@ using NINA.Core.Enum;
 using NINA.Image.ImageData;
 using NINA.Polaris.Services;
 using NUnit.Framework;
+using NINA.Image.Interfaces;
 
 namespace NINA.Polaris.Test;
 
@@ -265,4 +266,35 @@ public class LiveStackingServiceTests {
             "With no Bayer pattern anywhere the session has to run in mono.");
         Assert.That(svc.GetStackedResult().Length, Is.EqualTo(64 * 64));
     }
+
+    /// <summary>
+    /// When the backend positively reports a mono sensor there is no CFA to
+    /// wait for, so the very first frame must integrate: not one deferral, let
+    /// alone the frame/time budget. The simulator camera reports mono, which is
+    /// what makes this checkable without hardware.
+    /// </summary>
+    [Test]
+    public async Task AddFrame_CameraReportsMonoSensor_StacksOnTheFirstFrame() {
+        var indi = new NINA.INDI.Client.IndiClient("localhost", 7624);
+        var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance,
+            new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache(),
+            new NINA.Polaris.Services.Simulator.Gear.SimGearService());
+        var cam = equip.SelectCamera("sim", "sim");
+        await cam.ConnectAsync();
+        Assert.That(cam.IsColorSensor, Is.False,
+            "Precondition: the simulator has to declare its sensor mono.");
+
+        var relay = new ImageRelayService(NullLogger<ImageRelayService>.Instance);
+        var svc = new LiveStackingService(relay, NullLogger<LiveStackingService>.Instance,
+            equipment: equip);
+        svc.ColorStacking = true;
+        svc.Start();
+
+        await svc.AddFrameAsync(MakeFrame());
+
+        Assert.That(svc.FrameCount, Is.EqualTo(1),
+            "A declared-mono sensor must not cost even one deferred frame.");
+        Assert.That(svc.ColorActive, Is.False);
+    }
+
 }

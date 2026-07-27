@@ -71,6 +71,15 @@ public class ICameraContractTests {
         Assert.That(opts.ImageType, Is.Null);
     }
 
+    /// <summary>The safe default for the mono-vs-colour signal is UNKNOWN.
+    /// A backend that cannot tell must never answer false: claiming mono on a
+    /// guess makes the live stacker run a colour session in grey all night.
+    /// </summary>
+    [Test]
+    public void IsColorSensor_DefaultsToUnknown_NotMono() {
+        Assert.That(((ICamera)new FakeCamera()).IsColorSensor, Is.Null);
+    }
+
     private sealed class FakeCamera : ICamera {
         public string DeviceName => "fake";
         public bool IsConnected => false;

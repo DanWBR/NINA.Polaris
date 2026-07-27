@@ -37,6 +37,11 @@ public sealed class SimGuideCamera : ICamera {
 
     public string DeviceName => "Simulator";
     public bool IsConnected => _connected;
+
+    /// <summary>The simulator renders a mono star field, so say so rather
+    /// than leaving the live stacker to infer it from an absent CFA.</summary>
+    public bool? IsColorSensor => _connected ? false : null;
+
     public CameraStates State { get; private set; } = CameraStates.Idle;
 
     public double Temperature => -10.0;

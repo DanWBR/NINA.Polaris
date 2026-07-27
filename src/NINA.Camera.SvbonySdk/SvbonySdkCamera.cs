@@ -99,6 +99,11 @@ public sealed class SvbonySdkCamera : ICamera {
     public double PixelSizeX => _pixelSize;
     public double PixelSizeY => _pixelSize;
     public int Gain => _gain;
+    /// <summary>The SDK answers this outright, from SVB_CAMERA_PROPERTY.IsColorCam,
+    /// so the live stacker never has to guess mono-vs-colour from an
+    /// absent Bayer pattern.</summary>
+    public bool? IsColorSensor => _connected ? _isColor : null;
+
     public int GainMin => _gainMin;
     public int GainMax => _gainMax;
     public IReadOnlyList<int> IsoOptions { get; } = Array.Empty<int>();
