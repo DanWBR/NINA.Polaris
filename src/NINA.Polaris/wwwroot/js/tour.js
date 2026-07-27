@@ -209,7 +209,7 @@
             {
                 target: '.activity-bar-host', placement: 'top', skipIfMissing: true,
                 title: 'Host stats',
-                body: 'The server machine at a glance: CPU, RAM, free disk, device model, and a clock-skew warning if the server clock drifts. Disk colour warns before you run out of space.'
+                body: 'The server machine at a glance: CPU, RAM, disk used, device model, and a clock-skew warning if the server clock drifts. Disk colour warns before you run out of space.'
             },
             {
                 center: true,

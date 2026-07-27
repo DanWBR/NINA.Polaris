@@ -34953,8 +34953,9 @@ function ninaApp() {
             const usedPct = (100 * (1 - free / total)).toFixed(1);
             return 'Capture root: ' + root
                 + '\nMount: ' + (mount || '(unknown)')
-                + '\nFree: ' + free.toFixed(1) + ' GB of ' + total.toFixed(1) + ' GB'
-                + '\nUsed: ' + usedPct + '%';
+                + '\nUsed: ' + (total - free).toFixed(1) + ' GB of ' + total.toFixed(1)
+                + ' GB (' + usedPct + '%)'
+                + '\nFree: ' + free.toFixed(1) + ' GB';
         },
         // Picks an emoji icon matching the device kind classification
         // done server-side by HostInfo.ClassifyLinuxModel /
@@ -36646,13 +36647,23 @@ function ninaApp() {
             return `${usedMB} / ${totalMB} MB`;
         },
 
-        // Compact variant for narrow screens: free memory only (the
-        // used/total pair overflowed the activity bar on phones).
-        formatHostRamFree(usedMB, totalMB) {
+        // Compact variant for narrow screens: used memory only (the
+        // used/total pair overflowed the activity bar on phones). Shows the
+        // same quantity as the full readout, just without the total.
+        formatHostRamUsed(usedMB, totalMB) {
             if (!totalMB || totalMB <= 0) return '--';
-            const freeMB = Math.max(0, totalMB - usedMB);
-            if (totalMB >= 1024) return `${(freeMB / 1024).toFixed(1)} GB`;
-            return `${freeMB} MB`;
+            const u = Math.max(0, usedMB);
+            if (totalMB >= 1024) return `${(u / 1024).toFixed(1)} GB`;
+            return `${u} MB`;
+        },
+
+        // Occupied space on the capture volume. The server reports free +
+        // total (that's what the OS gives us), but the bar reads as
+        // "how much of this disk is gone", matching the RAM chip next to it.
+        hostDiskUsedGB() {
+            const total = this.host.diskTotalGB || 0;
+            const free = this.host.diskFreeGB || 0;
+            return Math.max(0, total - free);
         },
 
         // This browser tab's JS heap in MB, or null when the engine doesn't

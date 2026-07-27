@@ -120,7 +120,9 @@
     "Erase and install": "Apagar e instalar",
     "Idle time between auto-captures. 0 captures back-to-back; raise it to throttle a slow host.": "Tempo ocioso entre capturas automáticas. 0 captura sem pausa; aumente para segurar um host lento.",
     "The profile is started right after it is created, with auto-connect on. Any INDI server currently running is stopped first.": "O perfil é iniciado logo após ser criado, com conexão automática ligada. Qualquer servidor INDI em execução é parado antes.",
-    "Readings": "Leituras"
+    "Readings": "Leituras",
+    "System memory used": "Memória do sistema usada",
+    "The server machine at a glance: CPU, RAM, disk used, device model, and a clock-skew warning if the server clock drifts. Disk colour warns before you run out of space.": "A máquina do servidor num relance: CPU, RAM, disco ocupado, modelo do dispositivo e um aviso de desvio se o relógio do servidor sair do lugar. A cor do disco avisa antes de acabar o espaço."
   },
   "es": {
     "Start": "Iniciar",
@@ -213,7 +215,9 @@
     "Erase and install": "Borrar e instalar",
     "Idle time between auto-captures. 0 captures back-to-back; raise it to throttle a slow host.": "Tiempo de espera entre capturas automáticas. 0 captura sin pausa; súbelo para frenar un host lento.",
     "The profile is started right after it is created, with auto-connect on. Any INDI server currently running is stopped first.": "El perfil se inicia justo después de crearse, con la conexión automática activada. Cualquier servidor INDI en ejecución se detiene antes.",
-    "Readings": "Lecturas"
+    "Readings": "Lecturas",
+    "System memory used": "Memoria del sistema usada",
+    "The server machine at a glance: CPU, RAM, disk used, device model, and a clock-skew warning if the server clock drifts. Disk colour warns before you run out of space.": "La máquina del servidor de un vistazo: CPU, RAM, disco ocupado, modelo del dispositivo y un aviso de desfase si el reloj del servidor se desvía. El color del disco avisa antes de quedarte sin espacio."
   },
   "fr": {
     "Start": "Démarrer",
@@ -306,7 +310,9 @@
     "Erase and install": "Effacer et installer",
     "Idle time between auto-captures. 0 captures back-to-back; raise it to throttle a slow host.": "Temps d'attente entre les captures automatiques. 0 enchaîne sans pause ; augmentez-le pour ménager un hôte lent.",
     "The profile is started right after it is created, with auto-connect on. Any INDI server currently running is stopped first.": "Le profil est démarré juste après sa création, avec la connexion automatique activée. Tout serveur INDI en cours d'exécution est arrêté avant.",
-    "Readings": "Relevés"
+    "Readings": "Relevés",
+    "System memory used": "Mémoire système utilisée",
+    "The server machine at a glance: CPU, RAM, disk used, device model, and a clock-skew warning if the server clock drifts. Disk colour warns before you run out of space.": "La machine serveur en un coup d'oeil : CPU, RAM, disque occupé, modèle de l'appareil et un avertissement si l'horloge du serveur dérive. La couleur du disque prévient avant la panne d'espace."
   },
   "de": {
     "Start": "Start",
@@ -399,6 +405,8 @@
     "Erase and install": "Löschen und installieren",
     "Idle time between auto-captures. 0 captures back-to-back; raise it to throttle a slow host.": "Wartezeit zwischen Auto-Aufnahmen. 0 nimmt ohne Pause auf; erhöhen Sie sie, um einen langsamen Host zu entlasten.",
     "The profile is started right after it is created, with auto-connect on. Any INDI server currently running is stopped first.": "Das Profil wird direkt nach dem Anlegen gestartet, mit aktivierter Auto-Verbindung. Ein laufender INDI-Server wird vorher gestoppt.",
-    "Readings": "Messwerte"
+    "Readings": "Messwerte",
+    "System memory used": "Genutzter Systemspeicher",
+    "The server machine at a glance: CPU, RAM, disk used, device model, and a clock-skew warning if the server clock drifts. Disk colour warns before you run out of space.": "Der Server-Rechner auf einen Blick: CPU, RAM, belegter Speicherplatz, Gerätemodell und eine Warnung, wenn die Serveruhr abweicht. Die Farbe des Disk-Werts warnt, bevor der Platz ausgeht."
   }
 }

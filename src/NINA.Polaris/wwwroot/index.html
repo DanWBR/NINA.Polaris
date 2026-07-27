@@ -15637,16 +15637,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <span class="activity-host-value" :class="hostCpuClass()"
                       x-text="(host.cpuPercent || 0).toFixed(0) + '%'"></span>
             </span>
-            <!-- Narrow screens (see the activity-bar media query): the
-                 full used/total pair swaps for a free-only readout, and
-                 the Client + Polaris chips hide entirely — the stats row
-                 was eating the whole bar on phones (field report). -->
-            <span class="activity-host-stat" title="System memory (free on narrow screens)">
+            <!-- Both chips read used / total. Narrow screens (see the
+                 activity-bar media query) drop the total and keep the used
+                 figure, and the Client + Polaris chips hide entirely — the
+                 stats row was eating the whole bar on phones (field report). -->
+            <span class="activity-host-stat" title="System memory used">
                 <span class="activity-host-label">RAM</span>
                 <span class="activity-host-value host-val-full" :class="hostMemClass()"
                       x-text="formatHostRam(host.memoryUsedMB, host.memoryTotalMB)"></span>
                 <span class="activity-host-value host-val-compact" :class="hostMemClass()"
-                      x-text="formatHostRamFree(host.memoryUsedMB, host.memoryTotalMB)"></span>
+                      x-text="formatHostRamUsed(host.memoryUsedMB, host.memoryTotalMB)"></span>
             </span>
             <!-- This browser's JS heap (Chromium only; performance.memory is
                  not exposed by Safari/Firefox, and there is no portable browser
@@ -15656,19 +15656,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <span class="activity-host-label">Client</span>
                 <span class="activity-host-value" x-text="clientMemMB() + ' MB'"></span>
             </span>
-            <!-- Disk free / total on the volume hosting the active
+            <!-- Disk used / total on the volume hosting the active
                  rig's capture root. Hidden when the server didn't
-                 manage to probe a mount (no rig, sandbox). Colour
+                 manage to probe a mount (no rig, sandbox). Colour still
                  reflects free-space pressure so a near-full SSD is
                  obvious before a sequence runs into an ENOSPC. -->
             <span class="activity-host-stat" :title="hostDiskTooltip()"
                   x-show="host.diskTotalGB > 0">
                 <span class="activity-host-label">Disk</span>
                 <span class="activity-host-value host-val-full" :class="hostDiskClass()"
-                      x-text="(host.diskFreeGB || 0).toFixed(0)
+                      x-text="hostDiskUsedGB().toFixed(0)
                               + ' / ' + (host.diskTotalGB || 0).toFixed(0) + ' GB'"></span>
                 <span class="activity-host-value host-val-compact" :class="hostDiskClass()"
-                      x-text="(host.diskFreeGB || 0).toFixed(0) + ' GB'"></span>
+                      x-text="hostDiskUsedGB().toFixed(0) + ' GB'"></span>
             </span>
             <span class="activity-host-stat activity-host-polaris" title="Polaris process CPU + memory"
                   x-show="host.processCpuPercent != null">
@@ -19192,7 +19192,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260727-guideminmove"></script>
+    <script src="/js/app.js?v=20260727-hostusedtotal"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>
