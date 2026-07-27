@@ -82,7 +82,7 @@
         "polaris": "0.89.6 (2026-06-26)",
         "size": "2.99 GB (.7z)",
         "access": "https://polaris-linux.local:5000/",
-        "note": "Para cualquier PC de 64 bits, mini PC o dispositivo tipo «stick». Archivo 7-Zip; extrae el contenido, grábalo en una unidad USB o en el almacenamiento interno (no en una tarjeta SD) y arranca el sistema."
+        "note": "Para cualquier PC o mini PC de 64 bits. Archivo 7-Zip: extrae, escribe el .img en una memoria USB con balenaEtcher o Rufus y arranca desde ella. Para pasar Polaris al SSD interno de la máquina, arranca desde el USB y ejecuta sudo polaris-install-to-disk: clona el sistema en marcha al disco que elijas y lo deja arrancable, así que nunca tienes que escribir la imagen en un disco desde el que no puedes arrancar."
       },
       {
         "device": "Raspberry Pi 4",

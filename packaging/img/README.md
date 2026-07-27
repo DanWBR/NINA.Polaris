@@ -9,6 +9,24 @@ autoinstall (subiquity)** installer, so the ESP + GRUB are laid down exactly
 like a normal USB install. That is what makes it boot reliably on real UEFI
 hardware.
 
+## Getting it onto an internal SSD
+
+You never have to write the image to the disk you want to boot from. Put the
+`.img` on a **USB stick** (balenaEtcher / Rufus), boot the mini PC from it,
+and let the running system install itself:
+
+```bash
+sudo polaris-install-to-disk            # menu of the disks it can see
+sudo polaris-install-to-disk /dev/nvme0n1 --yes
+```
+
+[`polaris-install-to-disk.sh`](polaris-install-to-disk.sh) partitions the
+target (GPT: 512 M ESP + ext4 root filling the disk), rsyncs the running root,
+rewrites `fstab` with the new UUIDs, installs GRUB into the target ESP and
+clears the machine-id so the clone is its own machine. It refuses to touch the
+disk it booted from and asks before erasing anything. Then power off, pull the
+stick, boot from the SSD -- profiles and settings came along with the copy.
+
 ## What's in the image
 
 Encoded in [`scripts/install-polaris-linux.sh`](../../scripts/install-polaris-linux.sh),

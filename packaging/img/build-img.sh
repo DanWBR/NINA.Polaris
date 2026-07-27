@@ -206,6 +206,11 @@ if [ -z "$SKIP_PAYLOAD" ]; then
     dl "${SF}/linux_installer/astap_command-line_version_Linux_amd64.zip" "astap_cli.zip" 0
     dl "${SF}/star_databases/d80_star_database.deb" "d80_star_database.deb" 0
 
+    # Ship the self-install tool in the payload so the image gets it even
+    # when the guest network is unusable (the whole reason the payload
+    # exists). The installer copies it to /usr/local/sbin.
+    cp -f "$SCRIPT_DIR/polaris-install-to-disk.sh" "$PAYLOAD_DIR/" 2>/dev/null || true
+
     info "Building payload iso (label POLARIS)"
     genisoimage -quiet -V POLARIS -J -r -o "$WORK/payload.iso" "$PAYLOAD_DIR"
     PAYLOAD_ARGS=(-drive file="$WORK/payload.iso",media=cdrom)

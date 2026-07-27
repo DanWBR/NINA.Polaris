@@ -256,6 +256,30 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
 systemctl enable polaris-growroot.service || note_fail "enable growroot service"
+
+# ---------------------------------------------------------------------------
+# 1c. Self-install tool (image -> internal disk)
+# ---------------------------------------------------------------------------
+# The point of the flashable image is that you never have to write 13 GB to a
+# disk you cannot boot from: put the image on a USB stick, boot the mini PC
+# from it, and run this to clone the running system onto the internal SSD.
+# Payload first (the guest network is the unreliable part of an image build),
+# repo as the fallback.
+banner "Self-install tool"
+ITD=/usr/local/sbin/polaris-install-to-disk
+if [ -n "$PAYLOAD" ] && [ -s "$PAYLOAD/polaris-install-to-disk.sh" ]; then
+    install -m0755 "$PAYLOAD/polaris-install-to-disk.sh" "$ITD" || note_fail "install self-install tool"
+else
+    RAW="https://raw.githubusercontent.com/${POLARIS_REPO}/master/packaging/img/polaris-install-to-disk.sh"
+    if fetch "$RAW" /tmp/itd.sh; then
+        install -m0755 /tmp/itd.sh "$ITD" || note_fail "install self-install tool"
+    else
+        note_fail "download self-install tool"
+    fi
+fi
+# Its dependencies. grub-efi-amd64-bin carries grub-install for the target.
+apt_try gdisk rsync dosfstools parted
+[ "$DEB_ARCH" = amd64 ] && apt_try grub-efi-amd64-bin
 fi   # end appliance-only section
 
 # ---------------------------------------------------------------------------
