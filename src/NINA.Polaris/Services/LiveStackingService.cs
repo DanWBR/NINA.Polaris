@@ -529,7 +529,27 @@ public class LiveStackingService {
     /// Switched to <see cref="StackMode.MetricsOnly"/> by the WASM
     /// handshake (CLST-5) when a WASM-capable client is connected and
     /// the active rig hasn't forced server-side.</summary>
-    public StackMode Mode { get; set; } = StackMode.Full;
+    public StackMode Mode { get; set; } = StackMode.Full;
+
+    // CLST-6: MetricsOnly hands the accumulation to the browser, so the
+    // server keeps NO stack. If the client that promised to do the work never
+    // reports back - its WASM failed to load, the tab was backgrounded, or the
+    // capable client is a different browser from the one the operator is
+    // watching - then nobody stacks and the viewer sees single frames with
+    // /api/livestack/preview 404ing. Count the frames we process without a
+    // peep from the client and hand the work back to the server.
+    private int _framesSinceClientMetrics;
+    private const int MaxSilentClientFrames = 3;
+
+    /// <summary>True when MetricsOnly was in force but no client reported
+    /// stack progress for <see cref="MaxSilentClientFrames"/> frames. The mode
+    /// evaluator treats this as "no capable client" so the server resumes
+    /// accumulating. Cleared as soon as a client reports again.</summary>
+    public bool ClientStackStalled { get; private set; }
+
+    /// <summary>Raised when <see cref="ClientStackStalled"/> changes, so the
+    /// composition root can re-run its mode evaluation.</summary>
+    public event Action<bool>? ClientStackStalledChanged;
 
     // LSPP-3+4: per-frame pre-processing. Settings read from the active
     // rig on every frame so live toggles take effect without a restart.
@@ -709,6 +729,8 @@ public class LiveStackingService {
             _lastGoodBayer = BayerPatternEnum.None;
             _colorDeferrals = 0;
             _colorDeferStart = null;
+            _framesSinceClientMetrics = 0;
+            ClientStackStalled = false;
             _referenceStars = null;
             _flipped = false;
             _referencePier = PierSide.pierUnknown;
@@ -1378,6 +1400,22 @@ public class LiveStackingService {
         _logger.LogInformation("Live stack: frame {N} added, {Stars} stars (HFR={Hfr:F2}, snr={Snr:F1} cum={Cum:F1}), mode={Mode}",
             _frameCount, stars.Count, medianHfr, LastFrameSnr, CumulativeSnr, mode);
 
+        // CLST-6 watchdog: in MetricsOnly the browser owns the accumulator and
+        // reports back through InjectClientStackMetrics. Silence means nobody
+        // is stacking, so give the job back to the server rather than let the
+        // operator watch un-stacked frames all night.
+        if (mode == StackMode.MetricsOnly) {
+            _framesSinceClientMetrics++;
+            if (_framesSinceClientMetrics > MaxSilentClientFrames && !ClientStackStalled) {
+                ClientStackStalled = true;
+                _logger.LogWarning(
+                    "Live stack: {N} frames in MetricsOnly with no client-stack-progress, so no one is accumulating. Falling back to server-side stacking (the browser's WASM stacker is missing or stalled)",
+                    _framesSinceClientMetrics);
+                try { ClientStackStalledChanged?.Invoke(true); }
+                catch (Exception ex) { _logger.LogDebug(ex, "ClientStackStalledChanged handler threw"); }
+            }
+        }
+
         // Snapshot handlers + await sequentially. Any handler that
         // throws is logged + swallowed, one bad subscriber can't
         // poison the chain. Slow handlers (AF, recenter) pause the
@@ -1522,6 +1560,14 @@ public class LiveStackingService {
     /// untouched.</summary>
     public void InjectClientStackMetrics(int frameCount, double frameSnr, double cumulativeSnr,
                                           int? bgeProcessed, int? bgeFallback, string? bgeError) {
+        // A live client: reset the watchdog and clear any stall latch.
+        _framesSinceClientMetrics = 0;
+        if (ClientStackStalled) {
+            ClientStackStalled = false;
+            _logger.LogInformation("Live stack: client stacker reporting again");
+            try { ClientStackStalledChanged?.Invoke(false); }
+            catch (Exception ex) { _logger.LogDebug(ex, "ClientStackStalledChanged handler threw"); }
+        }
         if (Mode != StackMode.MetricsOnly) return;
         // Defensive: only update when the WASM client's frameCount is
         // not behind ours (it lags by ≤1 due to async dispatch). A

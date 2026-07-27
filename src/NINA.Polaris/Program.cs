@@ -548,7 +548,12 @@ app.Services.GetRequiredService<RefocusSuggestionService>();
         var newMode = rigOverride switch {
             "server" => StackMode.Full,
             "client" => StackMode.MetricsOnly,
-            _        => relay.WasmCapableClientCount > 0 ? StackMode.MetricsOnly : StackMode.Full
+            // A capable client that never reports progress is worse than no
+            // client at all: nobody accumulates and the operator watches raw
+            // frames. The watchdog latches ClientStackStalled and we treat it
+            // as "no capable client" until one reports again.
+            _        => relay.WasmCapableClientCount > 0 && !liveStack.ClientStackStalled
+                            ? StackMode.MetricsOnly : StackMode.Full
         };
         if (liveStack.Mode != newMode) {
             liveStack.Mode = newMode;
@@ -558,6 +563,7 @@ app.Services.GetRequiredService<RefocusSuggestionService>();
         }
     }
     relay.WasmCapableCountChanged += _ => EvaluateMode("client-handshake");
+    liveStack.ClientStackStalledChanged += _ => EvaluateMode("client-stack-watchdog");
     profiles.EquipmentProfileActivated += _ => EvaluateMode("rig-switch");
 
     // Per-rig save-frames-to-disk toggle. The runtime flag on

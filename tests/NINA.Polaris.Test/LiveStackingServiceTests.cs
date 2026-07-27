@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NINA.Core.Enum;
 using NINA.Image.ImageData;
 using NINA.Polaris.Services;
+using System.Collections.Generic;
 using NUnit.Framework;
 using NINA.Image.Interfaces;
 
@@ -297,4 +298,43 @@ public class LiveStackingServiceTests {
         Assert.That(svc.ColorActive, Is.False);
     }
 
+
+    /// <summary>
+    /// MetricsOnly hands accumulation to the browser. If the browser never
+    /// reports back, nobody is stacking and the operator watches raw frames
+    /// while /api/livestack/preview 404s. After a few silent frames the
+    /// service must say so, so the mode evaluator can take the work back.
+    /// </summary>
+    [Test]
+    public async Task MetricsOnly_WithNoClientProgress_FlagsTheStallAfterAFewFrames() {
+        var svc = MakeService();
+        svc.Mode = StackMode.MetricsOnly;
+        svc.Start();
+
+        var stalls = new List<bool>();
+        svc.ClientStackStalledChanged += v => stalls.Add(v);
+
+        for (var i = 0; i < 5; i++) await svc.AddFrameAsync(MakeFrame());
+
+        Assert.That(svc.ClientStackStalled, Is.True,
+            "Silent client must be reported, otherwise nothing accumulates anywhere.");
+        Assert.That(stalls, Is.EqualTo(new[] { true }),
+            "The event fires once on the transition, not per frame.");
+    }
+
+    /// <summary>A client that IS reporting must keep MetricsOnly: the whole
+    /// point is to spare the host the accumulation.</summary>
+    [Test]
+    public async Task MetricsOnly_WithClientProgress_DoesNotStall() {
+        var svc = MakeService();
+        svc.Mode = StackMode.MetricsOnly;
+        svc.Start();
+
+        for (var i = 0; i < 5; i++) {
+            await svc.AddFrameAsync(MakeFrame());
+            svc.InjectClientStackMetrics(i + 1, frameSnr: 10, cumulativeSnr: 12);
+        }
+
+        Assert.That(svc.ClientStackStalled, Is.False);
+    }
 }
