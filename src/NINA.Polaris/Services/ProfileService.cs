@@ -536,12 +536,26 @@ public class ProfileService {
         return copy;
     }
 
+    /// <summary>Fired after an edit to the rig that is CURRENTLY ACTIVE.
+    /// Distinct from <see cref="EquipmentProfileActivated"/>, which only
+    /// fires when the operator switches rigs: some runtime state is derived
+    /// from per-rig FIELDS and has to be recomputed when one of them changes
+    /// under the same rig. The live-stack compute mode is the case that
+    /// prompted this: changing it in the UI left the running mode untouched
+    /// until the next client connect or rig switch.
+    /// Handlers run on the calling thread, keep them fast.</summary>
+    public event Action<EquipmentProfile>? ActiveEquipmentProfileEdited;
+
     public bool UpdateEquipmentProfile(string id, Action<EquipmentProfile> update) {
         EnsureMigratedToEquipmentProfiles();
         var rig = _activeProfile.EquipmentProfiles.FirstOrDefault(e => e.Id == id);
         if (rig == null) return false;
         update(rig);
         Save();
+        if (id == _activeProfile.ActiveEquipmentProfileId) {
+            try { ActiveEquipmentProfileEdited?.Invoke(rig); }
+            catch (Exception ex) { _logger.LogWarning(ex, "ActiveEquipmentProfileEdited handler threw"); }
+        }
         return true;
     }
 

@@ -565,6 +565,11 @@ app.Services.GetRequiredService<RefocusSuggestionService>();
     relay.WasmCapableCountChanged += _ => EvaluateMode("client-handshake");
     liveStack.ClientStackStalledChanged += _ => EvaluateMode("client-stack-watchdog");
     profiles.EquipmentProfileActivated += _ => EvaluateMode("rig-switch");
+    // The per-rig LiveStackComputeMode override lives on the rig, so editing
+    // it has to re-evaluate too. Without this the operator could set
+    // "server" in the UI and watch the stacker stay in MetricsOnly until
+    // the next client connect or rig switch.
+    profiles.ActiveEquipmentProfileEdited += _ => EvaluateMode("rig-edit");
 
     // Per-rig save-frames-to-disk toggle. The runtime flag on
     // LiveStackingService is the source of truth at frame-receive
