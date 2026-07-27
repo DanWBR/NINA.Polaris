@@ -2819,5 +2819,7 @@
   "Type ERASE to confirm": "",
   "Erase and install": "",
   "Installed. Power off, remove the USB stick and boot from the disk.": "",
-  "The installer reported a problem. The log is below.": ""
+  "The installer reported a problem. The log is below.": "",
+  "Join a different WiFi": "",
+  "so it stops broadcasting its own network. Auto-reverts": ""
 }

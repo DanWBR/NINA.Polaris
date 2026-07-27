@@ -8767,12 +8767,21 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             <div class="editor-export-backdrop" x-show="networkStation.open" x-cloak
                  @click.self="networkStation.open = networkSwitching">
                 <div class="editor-export-modal">
-                    <h3>Switch to Station mode</h3>
-                    <p class="hint" style="margin-bottom: 8px">
+                    <h3 x-text="network?.mode === 'station'
+                                ? 'Join a different WiFi'
+                                : 'Switch to Station mode'"></h3>
+                    <p class="hint" style="margin-bottom: 8px" x-show="network?.mode !== 'station'">
                         Polaris will hand the Pi to your home WiFi and stop broadcasting
                         the <code x-text="(network && network?.hotspotSsid) || 'Polaris-Hotspot'"></code> hotspot.
                         If the connection fails (wrong password / out of range), the
                         hotspot auto-reverts after 30 s.
+                    </p>
+                    <p class="hint" style="margin-bottom: 8px" x-show="network?.mode === 'station'">
+                        Polaris will leave <code x-text="network?.ssid || 'the current network'"></code>
+                        and join the one you pick, so the page you are reading this on
+                        will lose contact for a moment. If the new network cannot be
+                        joined, the hotspot comes back after 30 s and you can reach the
+                        rig there.
                     </p>
                     <label class="editor-export-row">
                         <span>Network</span>
@@ -13387,6 +13396,18 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         x-show="network?.mode !== 'station'">
                                     Switch to Station mode
                                 </button>
+                                <!-- The picker used to be reachable ONLY from
+                                     hotspot mode, so a rig already on WiFi had no
+                                     way to join a different network: you had to
+                                     drop to the hotspot (losing the link you were
+                                     using) or SSH in. Same dialog, same endpoint,
+                                     which re-points the polaris-station profile. -->
+                                <button class="btn btn-primary"
+                                        @click="networkOpenSwitchDialog()"
+                                        x-show="network?.mode === 'station'"
+                                        :disabled="networkSwitching">
+                                    Join a different WiFi
+                                </button>
                                 <button class="btn"
                                         @click="networkSwitchToHotspot()"
                                         x-show="network?.mode === 'station'"
@@ -13401,7 +13422,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <p class="text-muted" style="font-size: 11px; margin-top: 6px; max-width:560px">
                                 Default hotspot: <code>Polaris-Hotspot</code> / <code>polaris1234</code>.
                                 Switching to Station mode hands the Pi to your home WiFi
-                                so it stops broadcasting its own network?. Auto-reverts
+                                so it stops broadcasting its own network. Auto-reverts
                                 to Hotspot after 30 s if the new connection cannot get a DHCP lease.
                                 <template x-if="network?.autoHotspotFallback">
                                     <span> If you take the rig somewhere your saved WiFi is out of
@@ -19083,7 +19104,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260727-diskinstall"></script>
+    <script src="/js/app.js?v=20260727-wifipicker"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

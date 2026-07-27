@@ -2727,7 +2727,6 @@
   "SNR": "SNR",
   "SNR & HFR": "SNR et HFR",
   "SNR:": "SNR :",
-  "so it stops broadcasting its own network?. Auto-reverts": "Pour qu'il cesse de diffuser son propre réseau ?. Rétroaction automatique",
   "so you never need an ethernet cable to reach it.": "vous n'avez donc jamais besoin d'un câble Ethernet pour y accéder.",
   "Software update available": "Mise à jour logicielle disponible",
   "Solve": "Résoudre",
@@ -3419,5 +3418,7 @@
   "Type ERASE to confirm": "Tapez ERASE pour confirmer",
   "Erase and install": "Effacer et installer",
   "Installed. Power off, remove the USB stick and boot from the disk.": "Installé. Éteignez, retirez la clé USB et démarrez sur le disque.",
-  "The installer reported a problem. The log is below.": "L'installateur a signalé un problème. Le journal est ci-dessous."
+  "The installer reported a problem. The log is below.": "L'installateur a signalé un problème. Le journal est ci-dessous.",
+  "Join a different WiFi": "Rejoindre un autre WiFi",
+  "so it stops broadcasting its own network. Auto-reverts": "pour qu'il cesse de diffuser son propre réseau. Revient tout seul"
 }
