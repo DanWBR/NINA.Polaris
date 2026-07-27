@@ -97,10 +97,26 @@ The root filesystem auto-grows to fill the real disk on first boot (a
 self-disabling `polaris-growroot.service` runs `growpart` + `resize2fs`), so a
 20G image flashed onto a big SSD still uses the whole drive.
 
-> **Why not PiShrink?** It truncates this GPT/UEFI image too tightly to leave
-> room for the 33-sector GPT backup table, producing a non-bootable image that
-> drops to an initramfs prompt (`UUID=... does not exist`). Compressing a
+> **Why not PiShrink?** It truncates this GPT/UEFI image to one sector past
+> the last partition, leaving no room for the 33-sector GPT backup table. The
+> kernel then cannot even enumerate the partitions, and a flashed stick drops
+> to an initramfs prompt (`UUID=... does not exist`). Compressing a
 > modest-sized raw image is simpler and actually boots.
+>
+> If you inherit an already-shrunk image, it IS recoverable, contrary to what
+> this note used to claim: give the backup table somewhere to live and rewrite
+> it. `sgdisk -e` on its own fails because the table would overlap the
+> partition, which is what makes it look unfixable.
+>
+> ```bash
+> truncate -s +1M image.img     # room for the backup GPT
+> sgdisk -e image.img           # move it to the new end of the disk
+> sgdisk -v image.img           # expect "No problems found"
+> ```
+>
+> Verified 2026-07-27 by booting a repaired image under QEMU/OVMF to the login
+> prompt with `polaris.service` started. Still not a reason to shrink: this is
+> a rescue, not a workflow.
 
 By default the script scrapes `releases.ubuntu.com/<release>/` for the latest
 live-server point release, so it won't 404 when Ubuntu rotates them. Pin an
