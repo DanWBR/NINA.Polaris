@@ -288,6 +288,18 @@ let _scanTimers = [];
 function clearScanTimers() { _scanTimers.forEach(clearTimeout); _scanTimers = []; }
 
 async function scan() {
+  if (!ZeroConf) {
+    discovered.clear();
+    renderList();
+    probeFallback();
+    els.scanHint.textContent =
+      'Automatic discovery needs the installed app. Enter the address below.';
+    return;
+  }
+  // The guard comes FIRST. It used to sit below probeFallback(), so every
+  // re-trigger (opening the picker, closing the last tab) fired another burst
+  // of probes even while a scan was already running.
+  if (_scanning) return;            // already searching — don't stack watchers
   discovered.clear();
   renderList();
   // Direct-probe fallback runs on EVERY scan, in parallel with mDNS —
@@ -295,16 +307,16 @@ async function scan() {
   // discovery comes up empty (see the block above). Fire-and-forget:
   // results stream into `discovered` as probes resolve.
   probeFallback();
-  if (!ZeroConf) {
-    els.scanHint.textContent =
-      'Automatic discovery needs the installed app. Enter the address below.';
-    return;
-  }
-  if (_scanning) return;            // already searching — don't stack watchers
   _scanning = true;
   clearScanTimers();
-  // Close any watcher left over from a previous scan before opening a new one.
-  try { await ZeroConf.close(); } catch {}
+  // Close any watcher left over from a previous scan before opening a new one,
+  // but DO NOT await it. close() is the call that tears down the jmDNS thread
+  // and releases the multicast lock; on Android it can take seconds, or hang
+  // outright when the previous watcher was left running by an app kill. This
+  // await sat on the launch path and froze the WebView's main thread with it,
+  // which is what "the app goes not responding after reopening" looks like.
+  // (watch() below is deliberately un-awaited for the same reason.)
+  try { Promise.resolve(ZeroConf.close()).catch(() => {}); } catch {}
   els.scanHint.innerHTML = '<span class="spinner"></span>Searching the local network…';
   try {
     // Don't await watch(): on Android the native call can be slow to settle,
@@ -370,6 +382,9 @@ function addInstance(origin, name, { activate = false } = {}) {
     instances.set(origin, { origin, name: name || hostLabel(origin), frame });
     // Keep the screen on for the imaging session once the first instance opens.
     if (instances.size === 1) { try { if (KeepAwake) KeepAwake.keepAwake(); } catch {} }
+    // Discovery has done its job: drop the multicast lock rather than leave it
+    // running behind the session (the 8 s timer was the only thing closing it).
+    stopScan();
     persistSet();
   }
   renderTabs();
@@ -510,7 +525,26 @@ function showPicker() {
 
 function hidePicker() {
   document.body.classList.remove('picker-open');
+  stopScan();
 }
+
+// Release the multicast lock + jmDNS thread. Anything that ends the need for
+// discovery calls this, so the native side is idle before the app is
+// backgrounded or killed: a watcher that survives into the next launch is what
+// makes the FOLLOWING close() hang.
+function stopScan() {
+  clearScanTimers();
+  _scanning = false;
+  try { if (ZeroConf) Promise.resolve(ZeroConf.close()).catch(() => {}); } catch {}
+}
+
+// An app kill while the watcher is open is exactly the case that wedges the
+// next launch, and Android gives no reliable "about to die" callback -- but it
+// does hide the page first. Tear discovery down there.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') stopScan();
+});
+window.addEventListener('pagehide', stopScan);
 
 // Refresh the "Last used" + "Reopen last (N)" rows on the picker.
 async function refreshPickerExtras() {
