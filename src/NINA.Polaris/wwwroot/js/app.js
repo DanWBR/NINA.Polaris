@@ -6864,7 +6864,7 @@ function ninaApp() {
                     return;
                 }
                 this._netRx(evt.data.byteLength || 0);
-                this.handleImageFrame(evt.data);
+                this._enqueueImageFrame(evt.data);
             };
 
             ws.onclose = () => {
@@ -6902,6 +6902,49 @@ function ninaApp() {
         // pre-processing (ORT inference). The WS handler that calls
         // this (`evt.data`) doesn't await -- that's fine, the message
         // event loop just sees a Promise it ignores.
+        // Frames arrived straight into handleImageFrame, un-awaited and with no
+        // overlap guard, so every WS message started its own decode. When a
+        // frame takes longer to process than the next one takes to arrive -- a
+        // 20 MP sub on a tablet, doubly so in client-compute mode where the
+        // browser also stacks it -- the chains pile up on the main thread and
+        // the OS eventually calls the app not responding.
+        //
+        // One in flight at a time, and a single-slot pending queue: a frame
+        // that lands while we're busy REPLACES the one waiting, because for a
+        // display the newest frame is the only interesting one. Under sustained
+        // overload this drops intermediate frames, which is the right trade
+        // against a frozen UI (and in client-compute mode it is also the signal
+        // that the device cannot keep up with the stack).
+        _enqueueImageFrame(buf) {
+            this._pendingFrame = buf;
+            if (this._frameBusy) {
+                this._framesDropped = (this._framesDropped || 0) + 1;
+                return;
+            }
+            this._drainImageFrames();
+        },
+
+        async _drainImageFrames() {
+            if (this._frameBusy) return;
+            this._frameBusy = true;
+            try {
+                while (this._pendingFrame) {
+                    const buf = this._pendingFrame;
+                    this._pendingFrame = null;
+                    try {
+                        await this.handleImageFrame(buf);
+                    } catch (e) {
+                        console.warn('[Polaris] frame handling failed:', e);
+                    }
+                    // Yield to the event loop between frames so input, layout
+                    // and the status tick get a turn even at full rate.
+                    await new Promise(r => setTimeout(r, 0));
+                }
+            } finally {
+                this._frameBusy = false;
+            }
+        },
+
         async handleImageFrame(arrayBuffer) {
             this.liveActive = true;
             // Timestamp every delivered frame so the live-stack restore
@@ -24985,23 +25028,61 @@ function ninaApp() {
         // No-op unless: the wheel supports name editing, the rig has
         // saved names, the slot count matches, and the driver's current
         // names actually differ (so we don't spam an identical push).
+        // Returns TRUE when the question is settled (restored, already
+        // correct, or nothing to restore) and FALSE when the answer isn't
+        // knowable yet and the caller should try again on a later tick.
+        //
+        // That distinction is the whole point. This used to fire once, on the
+        // offline->online transition, and bail silently when the rig list
+        // hadn't loaded. On a page RELOAD the WS status tick beats the rigs
+        // REST call, so the one shot was spent before the saved names were in
+        // memory and the labels stayed at the driver's defaults for the rest
+        // of the session. Reported from the field as "refreshed the tab, lost
+        // my filter names".
         async _maybeRestoreFilterNames() {
             try {
-                if (!this.filterWheel?.capabilities?.editNames) return;
+                // Wheel can't be renamed: nothing to do, ever.
+                if (!this.filterWheel?.capabilities?.editNames) return true;
+                // Rigs not loaded yet -> unknown, ask again next tick.
+                if (!Array.isArray(this.rigs) || this.rigs.length === 0) return false;
+                if (!this.activeRigId) return false;
                 const rig = this.rigs.find(r => r.id === this.activeRigId);
-                const saved = rig?.filterNames;
-                if (!Array.isArray(saved) || saved.length === 0) return;
+                if (!rig) return false;
+                const saved = rig.filterNames;
+                // Rig loaded and has no saved names: settled, nothing to push.
+                if (!Array.isArray(saved) || saved.length === 0) return true;
                 const current = this.filterWheel.filters || [];
-                if (current.length !== saved.length) return;
+                // Slot list still arriving from the driver -> retry.
+                if (current.length === 0) return false;
+                if (current.length !== saved.length) return true;
                 const same = current.every((n, i) => n === saved[i]);
-                if (same) return;
+                if (same) return true;
                 await this.apiFetch('/api/filterwheel/names', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ names: saved })
                 });
                 this.filterWheel.filters = [...saved];
-            } catch (e) { /* driver may not support it; ignore */ }
+                return true;
+            } catch (e) {
+                // Driver may not support it. Settled either way, don't spin.
+                return true;
+            }
+        },
+
+        // Drives _maybeRestoreFilterNames from the status tick: keeps asking
+        // while the answer is "not yet", and stops as soon as it settles.
+        // Capped so a driver that never publishes its slots can't leave a
+        // 1 Hz PUT attempt running all night.
+        _pumpFilterNameRestore() {
+            if (this._fwRestoreSettled) return;
+            if ((this._fwRestoreTries = (this._fwRestoreTries || 0) + 1) > 30) {
+                this._fwRestoreSettled = true;
+                return;
+            }
+            this._maybeRestoreFilterNames().then(settled => {
+                if (settled) this._fwRestoreSettled = true;
+            });
         },
 
         // PUT /api/filterwheel/names — pushes the edited names back
@@ -37180,7 +37261,14 @@ function ninaApp() {
                 // default "Filter N" slot names and drop the labels the
                 // user set. If the active rig has saved names, push them
                 // back so the labels survive a driver reset.
-                if (fwOnline && !fwWasOnline) this._maybeRestoreFilterNames();
+                // Arm the restore on the offline->online edge, then let the
+                // pump retry until it can actually answer (see below).
+                if (fwOnline && !fwWasOnline) {
+                    this._fwRestoreSettled = false;
+                    this._fwRestoreTries = 0;
+                }
+                if (fwOnline) this._pumpFilterNameRestore();
+                else this._fwRestoreSettled = true;
             }
             // Belt-and-suspenders: also sync on every WS tick so if a
             // race between this handler and refreshDevices() left a
