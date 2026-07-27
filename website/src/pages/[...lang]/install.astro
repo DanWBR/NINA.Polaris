@@ -22,6 +22,17 @@ const fruitFor = (name: string): 'raspberry' | 'orange' | null => {
   return null;
 };
 
+// The boards with no fruit still deserve a glyph, or the rows below the Pis
+// and the Orange Pis read as a different, lesser kind of entry. Same mapping
+// the benchmark table uses (Benchmarks.astro).
+const emojiFor = (name: string): string | null => {
+  const t = (name || '').toLowerCase();
+  if (t.includes('dragon') || t.includes('radxa')) return '🐉';
+  if (t.includes('core i') || t.includes('rtx') || t.includes('pc')
+      || t.includes('desktop') || t.includes('laptop')) return '🖥️';
+  return null;
+};
+
 // Map a free-text status to a colour class for the requirements table.
 const statusClass = (s: string) => {
   const t = (s || '').toLowerCase();
@@ -230,6 +241,9 @@ const statusClass = (s: string) => {
                 <tr class={r.highlight ? 'is-highlight' : ''}>
                   <td class="left rowlabel">
                     {fruitFor(r.host) && <FruitIcon name={fruitFor(r.host)!} />}
+                    {!fruitFor(r.host) && emojiFor(r.host) && (
+                      <span class="host-emoji" aria-hidden="true">{emojiFor(r.host)}</span>
+                    )}
                     {r.host}
                     {r.tag && <span class="gpu-tag">{r.tag}</span>}
                   </td>
@@ -596,6 +610,8 @@ const statusClass = (s: string) => {
   .img-card h3 { font-size: 16px; font-weight: 700; }
   .img-id { display: flex; align-items: center; gap: 11px; min-width: 0; }
   .sq-emoji { font-size: 20px; line-height: 1; }
+  /* Same weight as the FruitIcon glyphs so the column reads as one list. */
+  .host-emoji { margin-right: 7px; font-size: 15px; vertical-align: -1px; }
   /* FruitIcon ships an inline margin for use before text; center it in the square. */
   .sq-icon :global(.fruit) { margin-right: 0; vertical-align: 0; }
   .sq-icon {
