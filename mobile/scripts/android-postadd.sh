@@ -51,4 +51,35 @@ else
   echo "warning: $SRC missing — keeping stock MainActivity" >&2
 fi
 
+# capacitor-zeroconf runs jmDNS on the MAIN THREAD.
+#
+#   getBridge().executeOnMainThread(() -> implementation.watchService(...))
+#
+# watchService() creates the JmDNS instance, acquires the WiFi multicast lock
+# and opens sockets; close() tears all of that down. On Android that is
+# hundreds of milliseconds to seconds of blocking work, and the plugin posts
+# it straight to the main looper -- so the app freezes a few seconds after
+# launch, every launch, with or without tabs open. iOS is unaffected because
+# its half of the plugin uses Bonjour, which is async by nature.
+#
+# Not awaiting the promise in JS does NOT help: the block happens inside the
+# plugin regardless of what the caller does with the returned promise. It has
+# to move off the main thread here.
+#
+# Bridge.execute() posts to the background taskHandler; executeOnMainThread()
+# posts to the main looper. Nothing in these three methods touches the view
+# hierarchy, so the background handler is the correct one. Idempotent: the
+# substitution is a no-op once applied.
+ZC="node_modules/capacitor-zeroconf/android/src/main/java/io/trik/capacitor/zeroconf/ZeroConfPlugin.java"
+if [ -f "$ZC" ]; then
+  if grep -q 'executeOnMainThread' "$ZC"; then
+    echo "Moving capacitor-zeroconf jmDNS calls off the main thread …"
+    perl -0pi -e 's/\.executeOnMainThread\(/.execute(/g' "$ZC"
+  else
+    echo "capacitor-zeroconf already patched (jmDNS off the main thread)."
+  fi
+else
+  echo "warning: $ZC missing -- skipping the zeroconf threading patch" >&2
+fi
+
 echo "Done. Next: npx cap sync android"
