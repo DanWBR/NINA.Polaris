@@ -258,6 +258,15 @@
       "notes": "Running at https://<hostname>.local:5000 in about 30 seconds. Manage it with: sudo systemctl status polaris, sudo journalctl -u polaris -f, sudo systemctl restart polaris."
     },
     {
+      "name": "Mini PC, full stack (recommended)",
+      "badge": "one command",
+      "icon": "chip",
+      "color": "#0891b2",
+      "summary": "Install Ubuntu with its own installer (it partitions the SSD properly and uses all of it), then run one command. This adds everything the ready-to-flash image has and the .deb alone does not: INDI with third-party drivers, PHD2, astrometry.net, ASTAP with the d80 database, and Polaris itself. It is the very script the image is built from, so the two cannot drift apart.",
+      "steps": "curl -fsSL https://raw.githubusercontent.com/DanWBR/NINA.Polaris/master/scripts/install-polaris-linux.sh | sudo bash",
+      "notes": "No 13 GB image to write to an internal disk. Add --addon to install the software on a machine you already use, without creating the polaris user, autologin, hostname or sleep policy."
+    },
+    {
       "name": "x86-64 PC (Debian / Ubuntu)",
       "badge": ".deb",
       "icon": "chip",

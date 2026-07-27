@@ -258,6 +258,15 @@
       "notes": "Wird in etwa 30 Sekunden unter https://<hostname>.local:5000 gestartet. Verwalten Sie den Dienst mit folgenden Befehlen: sudo systemctl status polaris, sudo journalctl -u polaris -f, sudo systemctl restart polaris."
     },
     {
+      "name": "Mini-PC, komplette Umgebung (empfohlen)",
+      "badge": "ein Befehl",
+      "icon": "chip",
+      "color": "#0891b2",
+      "summary": "Installieren Sie Ubuntu mit dessen eigenem Installer (er partitioniert die SSD korrekt und nutzt sie ganz aus) und führen Sie dann einen Befehl aus. Damit kommt alles mit, was das fertige Image hat und das .deb allein nicht bringt: INDI mit Fremdtreibern, PHD2, astrometry.net, ASTAP mit der d80-Datenbank und Polaris selbst. Es ist genau das Skript, aus dem das Image gebaut wird, beide können also nicht auseinanderlaufen.",
+      "steps": "curl -fsSL https://raw.githubusercontent.com/DanWBR/NINA.Polaris/master/scripts/install-polaris-linux.sh | sudo bash",
+      "notes": "Kein 13-GB-Image, das auf eine interne Platte geschrieben werden muss. Mit --addon installieren Sie die Software auf einem Rechner, den Sie ohnehin nutzen, ohne polaris-Benutzer, Autologin, Hostname oder Ruhezustandsregeln."
+    },
+    {
       "name": "x86-64-PC (Debian / Ubuntu)",
       "badge": ".deb",
       "icon": "chip",

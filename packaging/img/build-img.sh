@@ -143,15 +143,22 @@ bsdtar -C "$WORK" -xf "$ISO" casper/vmlinuz casper/initrd \
 info "Rendering autoinstall seed (user: $POLARIS_USER, host: $HOSTNAME_NAME, polaris: $POLARIS_VERSION)"
 PWHASH="$(openssl passwd -6 "$POLARIS_PASS")"
 
-# Embed provision.sh (with the chosen knobs exported) as base64 in late-commands.
+# Embed the installer (with the chosen knobs exported) as base64 in
+# late-commands. The script is scripts/install-polaris-linux.sh, the same one
+# users run by hand on a fresh Ubuntu -- one recipe, so the image and the
+# documented install cannot drift.
 PROVISION_RENDERED="$WORK/provision.sh"
 {
     echo "#!/bin/bash"
+    # An image IS the appliance case: dedicated user, autologin, hostname,
+    # no-suspend, grow-root. Explicit so a future default flip cannot
+    # silently produce a half-configured image.
+    echo "export POLARIS_SETUP_MODE=appliance"
     echo "export POLARIS_VERSION='${POLARIS_VERSION}'"
     echo "export POLARIS_USER='${POLARIS_USER}'"
     echo "export POLARIS_PASS='${POLARIS_PASS}'"
     echo "export TARGET_HOSTNAME='${HOSTNAME_NAME}'"
-    cat "$SCRIPT_DIR/provision.sh"
+    cat "$SCRIPT_DIR/../../scripts/install-polaris-linux.sh"
 } > "$PROVISION_RENDERED"
 B64="$(base64 -w0 "$PROVISION_RENDERED")"
 

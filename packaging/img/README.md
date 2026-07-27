@@ -11,7 +11,9 @@ hardware.
 
 ## What's in the image
 
-Encoded in [`provision.sh`](provision.sh):
+Encoded in [`scripts/install-polaris-linux.sh`](../../scripts/install-polaris-linux.sh),
+which is also the installer users run by hand on a fresh Ubuntu (so the
+image and the documented install are the same recipe):
 
 - INDI (`indi-full`, incl. 3rd party drivers) + PHD2, from their PPAs
   (`ppa:mutlaqja/ppa`, `ppa:pch/phd2`)
@@ -28,7 +30,7 @@ Encoded in [`provision.sh`](provision.sh):
 
 The big/critical artifacts (Polaris + ASTAP debs + the 1.25 GB d80 database)
 are **pre-downloaded on the host** and handed to the guest as an iso labelled
-`POLARIS`. `provision.sh` installs them from that local mount and only hits the
+`POLARIS`. the installer installs them from that local mount and only hits the
 network as a fallback. This sidesteps QEMU's emulated NAT, which times out
 badly against github/fastly and SourceForge under TCG emulation. The files are
 cached in `./payload/` between runs. Disable with `SKIP_PAYLOAD=1` to let the
@@ -44,7 +46,7 @@ sudo apt install qemu-system-x86 ovmf cloud-image-utils \
                  libarchive-tools genisoimage openssl wget
 
 cd packaging/img
-chmod +x build-img.sh provision.sh
+chmod +x build-img.sh ../../scripts/install-polaris-linux.sh
 ./build-img.sh
 ```
 
@@ -109,13 +111,13 @@ First boot: `https://polaris-linux.local:5000`, or
   `Environment.GetFolderPath(LocalApplicationData)` returns an *empty string*
   when `~/.local/share` doesn't exist, which makes Polaris resolve its TLS
   cert / profile / log paths relative to `/opt/polaris` and crash-loop. The
-  `--system` polaris user gets no skel, so `provision.sh` creates the dir (and
+  `--system` polaris user gets no skel, so the installer creates the dir (and
   the deb postinst now does too). If you ever see Polaris failing with
   `DirectoryNotFoundException: .../NINA.Polaris/cert`, this is why.
-- **Resilience:** `provision.sh` does not use `set -e`. A failed *optional*
+- **Resilience:** the installer does not use `set -e`. A failed *optional*
   component (ASTAP, astrometry, a PPA) is collected, the apt state is repaired
   so it can't cascade, and a summary is printed at the end. Only a missing
-  Polaris `.deb` fails the build. Re-run `sudo bash provision.sh` on the booted
+  Polaris `.deb` fails the build. Re-run `sudo bash install-polaris-linux.sh` on the booted
   system to retry anything listed.
 - **Why not `astrometry-data-2mass`?** That package downloads its data at dpkg
   *configure* time; an interrupted fetch leaves dpkg unrecoverable and breaks
@@ -126,8 +128,16 @@ First boot: `https://polaris-linux.local:5000`, or
   (`astap_amd64.deb`, `astap_command-line_version_Linux_amd64.zip`,
   `d80_star_database.deb`). If SourceForge renames them, override via
   `ASTAP_GUI_URL` / `ASTAP_CLI_URL` / `ASTAP_D80_URL`.
-- `provision.sh` is **standalone**: you can also run it on a plain Ubuntu
-  netinst (`sudo bash provision.sh`) to get the same setup without building an
+- The installer is **standalone**, and that is now the supported route for a
+  mini PC: install stock Ubuntu with its own installer (which partitions the
+  SSD properly and fills it), then run one command to get the same setup
+  without writing a 13 GB image to an internal disk:
+
+      curl -fsSL https://raw.githubusercontent.com/DanWBR/NINA.Polaris/master/scripts/install-polaris-linux.sh | sudo bash
+
+  `--addon` installs the software without creating the polaris user, autologin,
+  hostname or sleep policy, for someone putting Polaris on a machine they
+  already use. Running it by hand gives the same setup without building an
   image at all (it just downloads everything since there's no payload mount).
 - No `/dev/kvm`? The build still works under TCG emulation, just slowly, and
   the host-side payload makes that path far more reliable.

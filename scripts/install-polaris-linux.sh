@@ -1,18 +1,37 @@
 #!/bin/bash
 # =============================================================================
-# N.I.N.A. Polaris - in-target provisioning for the x64 bare-metal image
+# N.I.N.A. Polaris - Linux installer
 # =============================================================================
-# Runs INSIDE the freshly installed Ubuntu system (via curtin in-target during
-# autoinstall, or by hand inside a chroot / on a fresh netinst). Encodes the
-# full "image ready for Polaris" recipe:
+# Turns a fresh Debian/Ubuntu into a Polaris box, and is the SAME script the
+# bare-metal image is built from (packaging/img/build-img.sh runs it inside the
+# autoinstall). One recipe, so the documented install and the shipped image
+# cannot drift apart.
+#
+#   curl -fsSL https://raw.githubusercontent.com/DanWBR/NINA.Polaris/master/scripts/install-polaris-linux.sh | sudo bash
+#
+# Why this exists: the .deb installs Polaris and nothing else. The surrounding
+# stack is the actual work, and it is what the image was really for:
 #
 #   - INDI (+ 3rd party drivers) and PHD2 from their PPAs
 #   - astrometry.net + a light index database (tycho2)
 #   - ASTAP (GUI + CLI) + the d80 star database
-#   - default user (polaris/polaris) with passwordless sudo + autologin
-#   - SSH enabled, hostname polaris-linux
-#   - all suspend/hibernate disabled
-#   - the prebuilt polaris_amd64.deb (the one essential step)
+#   - the Polaris package itself
+#
+# Modes (POLARIS_SETUP_MODE, or --appliance / --addon):
+#
+#   appliance (default)  A machine dedicated to Polaris. Also creates the
+#                        polaris user with passwordless sudo, console
+#                        autologin, sets the hostname, disables suspend, and
+#                        installs the first-boot grow-root unit.
+#   addon                Someone's existing machine. Installs the software and
+#                        touches NOTHING else: no new user, no autologin, no
+#                        hostname change, no sleep policy.
+#
+# Other knobs (all overridable from the environment):
+#   POLARIS_VERSION   "latest" (default) or e.g. 0.96.10
+#   POLARIS_USER      appliance mode only, default "polaris"
+#   POLARIS_PASS      appliance mode only, default "polaris"
+#   TARGET_HOSTNAME   appliance mode only, default "polaris-linux"
 #
 # Robustness (learned the hard way building under emulated QEMU networking):
 #   * Big/critical artifacts (Polaris + ASTAP debs + d80) are read from a local
@@ -28,9 +47,6 @@
 #   * astrometry-data-2mass is deliberately avoided: it downloads at dpkg
 #     configure time and an interrupted fetch leaves dpkg in an unrecoverable
 #     state. tycho2 is small and ships the data in the package.
-#
-# Override anything via the environment (build-img.sh injects POLARIS_VERSION /
-# POLARIS_USER / POLARIS_PASS / TARGET_HOSTNAME).
 # =============================================================================
 set -uo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -43,10 +59,41 @@ POLARIS_USER="${POLARIS_USER:-polaris}"
 POLARIS_PASS="${POLARIS_PASS:-polaris}"
 TARGET_HOSTNAME="${TARGET_HOSTNAME:-polaris-linux}"
 POLARIS_REPO="${POLARIS_REPO:-DanWBR/NINA.Polaris}"
+POLARIS_SETUP_MODE="${POLARIS_SETUP_MODE:-appliance}"
+
+for arg in "$@"; do
+    case "$arg" in
+        --appliance) POLARIS_SETUP_MODE=appliance ;;
+        --addon)     POLARIS_SETUP_MODE=addon ;;
+        -h|--help)
+            sed -n '2,52p' "$0" | sed 's/^# \?//'
+            exit 0 ;;
+        *) echo "unknown option: $arg (try --help)" >&2; exit 2 ;;
+    esac
+done
+case "$POLARIS_SETUP_MODE" in
+    appliance|addon) ;;
+    *) echo "POLARIS_SETUP_MODE must be 'appliance' or 'addon'" >&2; exit 2 ;;
+esac
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "This installer needs root: re-run with sudo." >&2
+    exit 1
+fi
+
+# The image build only ever targeted amd64, but the same recipe serves arm64
+# boards that were installed from a plain Debian/Ubuntu rather than a Polaris
+# image. Pick the package flavours from the running system.
+DEB_ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
+case "$DEB_ARCH" in
+    amd64) ASTAP_ARCH=amd64 ;;
+    arm64) ASTAP_ARCH=aarch64 ;;
+    *) echo "Unsupported architecture: $DEB_ARCH (amd64 and arm64 only)" >&2; exit 2 ;;
+esac
 
 SF="https://downloads.sourceforge.net/project/astap-program"
-ASTAP_GUI_URL="${ASTAP_GUI_URL:-${SF}/linux_installer/astap_amd64.deb}"
-ASTAP_CLI_URL="${ASTAP_CLI_URL:-${SF}/linux_installer/astap_command-line_version_Linux_amd64.zip}"
+ASTAP_GUI_URL="${ASTAP_GUI_URL:-${SF}/linux_installer/astap_${ASTAP_ARCH}.deb}"
+ASTAP_CLI_URL="${ASTAP_CLI_URL:-${SF}/linux_installer/astap_command-line_version_Linux_${ASTAP_ARCH}.zip}"
 ASTAP_D80_URL="${ASTAP_D80_URL:-${SF}/star_databases/d80_star_database.deb}"
 
 # ---------------------------------------------------------------------------
@@ -109,6 +156,10 @@ apt_try software-properties-common wget ca-certificates curl gnupg unzip \
 # ---------------------------------------------------------------------------
 # 1. Local config first (no network - always succeeds)
 # ---------------------------------------------------------------------------
+# Appliance only. On someone else's machine, creating a passwordless-sudo
+# user, hijacking tty1 with an autologin, renaming the host and masking
+# suspend would all be unwelcome surprises.
+if [ "$POLARIS_SETUP_MODE" = appliance ]; then
 banner "User $POLARIS_USER + autologin + hostname + no-suspend"
 if ! id "$POLARIS_USER" &>/dev/null; then
     useradd -m -s /bin/bash "$POLARIS_USER" || note_fail "useradd $POLARIS_USER"
@@ -127,6 +178,18 @@ chmod 440 "/etc/sudoers.d/${POLARIS_USER}"
 PHOME="$(getent passwd "$POLARIS_USER" | cut -d: -f6)"
 PHOME="${PHOME:-/home/$POLARIS_USER}"
 install -d -o "$POLARIS_USER" -g "$POLARIS_USER" "$PHOME/.local/share" "$PHOME/.config"
+fi
+
+# Needed in BOTH modes: .NET's GetFolderPath(LocalApplicationData) returns an
+# empty string when ~/.local/share is missing, and Polaris then resolves its
+# cert/profile/log paths relative to /opt/polaris and crash-loops. In addon
+# mode the service runs as the user who invoked sudo, so fix that home too.
+RUN_USER="${SUDO_USER:-}"
+if [ -n "$RUN_USER" ] && id "$RUN_USER" &>/dev/null; then
+    RHOME="$(getent passwd "$RUN_USER" | cut -d: -f6)"
+    [ -n "$RHOME" ] && install -d -o "$RUN_USER" -g "$RUN_USER"         "$RHOME/.local/share" "$RHOME/.config" 2>/dev/null || true
+fi
+if [ "$POLARIS_SETUP_MODE" = appliance ]; then
 
 mkdir -p /etc/systemd/system/getty@tty1.service.d
 cat >/etc/systemd/system/getty@tty1.service.d/autologin.conf <<EOF
@@ -158,6 +221,8 @@ EOF
 # oneshot grows it to fill the actual disk on the first boot, then never runs
 # again. growpart resizes the GPT partition, resize2fs grows the mounted ext4
 # online (same approach cloud-init uses). Idempotent + self-disabling.
+# Only meaningful for a flashed image whose root partition is smaller than
+# the disk. A normal install already fills it.
 banner "First-boot grow-root service"
 cat >/usr/local/sbin/polaris-growroot.sh <<'EOF'
 #!/bin/bash
@@ -191,6 +256,7 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
 systemctl enable polaris-growroot.service || note_fail "enable growroot service"
+fi   # end appliance-only section
 
 # ---------------------------------------------------------------------------
 # 2. PPAs: INDI (+ 3rd party drivers) and PHD2
@@ -212,12 +278,12 @@ systemctl enable ssh || note_fail "enable ssh"
 # ---------------------------------------------------------------------------
 banner "Polaris ($POLARIS_VERSION)"
 if [ "$POLARIS_VERSION" = "latest" ]; then
-    POLARIS_URL="https://github.com/${POLARIS_REPO}/releases/latest/download/polaris_amd64.deb"
+    POLARIS_URL="https://github.com/${POLARIS_REPO}/releases/latest/download/polaris_${DEB_ARCH}.deb"
 else
-    POLARIS_URL="https://github.com/${POLARIS_REPO}/releases/download/v${POLARIS_VERSION}/polaris_${POLARIS_VERSION}_amd64.deb"
+    POLARIS_URL="https://github.com/${POLARIS_REPO}/releases/download/v${POLARIS_VERSION}/polaris_${POLARIS_VERSION}_${DEB_ARCH}.deb"
 fi
 POLARIS_OK=0
-if install_deb "polaris_amd64.deb" "$POLARIS_URL" "polaris.deb"; then
+if install_deb "polaris_${DEB_ARCH}.deb" "$POLARIS_URL" "polaris.deb"; then
     systemctl enable polaris || note_fail "enable polaris service"
     POLARIS_OK=1
 fi
@@ -250,7 +316,7 @@ fi
 
 install_deb "d80_star_database.deb" "$ASTAP_D80_URL" "astap d80 db" || true
 
-rm -rf /tmp/astap*.deb /tmp/astap_cli.zip /tmp/astapcli /tmp/d80*.deb /tmp/polaris_amd64.deb 2>/dev/null || true
+rm -rf /tmp/astap*.deb /tmp/astap_cli.zip /tmp/astapcli /tmp/d80*.deb /tmp/polaris_*.deb 2>/dev/null || true
 [ -n "$PAYLOAD" ] && umount /mnt/payload 2>/dev/null || true
 
 # ---------------------------------------------------------------------------

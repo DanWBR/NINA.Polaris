@@ -258,6 +258,15 @@
       "notes": "Le service est en cours d'exécution à l'adresse https://<HOSTNAME>.local:5000 depuis environ 30 secondes. Pour le gérer, utilisez les commandes suivantes : sudo systemctl status Polaris, sudo journalctl -u Polaris -f, sudo systemctl restart Polaris."
     },
     {
+      "name": "Mini PC, pile complète (recommandé)",
+      "badge": "une commande",
+      "icon": "chip",
+      "color": "#0891b2",
+      "summary": "Installez Ubuntu avec son propre installateur (il partitionne le SSD correctement et utilise tout le disque), puis lancez une commande. Cela installe tout ce que contient l'image prête à flasher et que le .deb seul n'apporte pas : INDI avec les pilotes tiers, PHD2, astrometry.net, ASTAP avec la base d80, et Polaris lui-même. C'est le script même dont l'image est issue, les deux ne peuvent donc pas diverger.",
+      "steps": "curl -fsSL https://raw.githubusercontent.com/DanWBR/NINA.Polaris/master/scripts/install-polaris-linux.sh | sudo bash",
+      "notes": "Aucune image de 13 Go à écrire sur un disque interne. Ajoutez --addon pour installer sur une machine que vous utilisez déjà, sans créer l'utilisateur polaris, l'autologin, le nom d'hôte ni la politique de veille."
+    },
+    {
       "name": "PC x86-64 (Debian / Ubuntu)",
       "badge": ".deb",
       "icon": "chip",
