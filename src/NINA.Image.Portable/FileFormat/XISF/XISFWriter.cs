@@ -286,6 +286,20 @@ public static class XISFWriter {
                     WriteFitsKeyword(xw, "FOCTEMP", Fmt(meta.Focuser.Temperature), null);
             }
 
+            // Guiding for this exposure, same keys as the FITS writer so both
+            // formats describe a frame identically.
+            if (meta.Guiding.SampleCount > 0) {
+                WriteFitsKeyword(xw, "GUIDRMS", Fmt(meta.Guiding.RmsTotalArcsec), "Guiding RMS total (arcsec)");
+                WriteFitsKeyword(xw, "GUIDRMSR", Fmt(meta.Guiding.RmsRaArcsec), "Guiding RMS RA (arcsec)");
+                WriteFitsKeyword(xw, "GUIDRMSD", Fmt(meta.Guiding.RmsDecArcsec), "Guiding RMS Dec (arcsec)");
+                WriteFitsKeyword(xw, "GUIDPEAK", Fmt(meta.Guiding.PeakArcsec), "Worst guide error (arcsec)");
+                WriteFitsKeyword(xw, "GUIDNSMP",
+                    meta.Guiding.SampleCount.ToString(CultureInfo.InvariantCulture),
+                    "Guide samples in exposure");
+                if (!string.IsNullOrEmpty(meta.Guiding.Backend))
+                    WriteFitsKeyword(xw, "GUIDER", meta.Guiding.Backend, null);
+            }
+
             if (rotator != null && !string.IsNullOrEmpty(rotator.Name)) {
                 WriteFitsKeyword(xw, "ROTNAME", rotator.Name, null);
                 if (Math.Abs(rotator.Angle) > 0.001)

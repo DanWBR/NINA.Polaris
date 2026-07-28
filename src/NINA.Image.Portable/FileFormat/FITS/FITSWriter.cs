@@ -219,6 +219,23 @@ public static class FITSWriter {
             Add(cards, "FOCUSTEM", Fmt(meta.Focuser.Temperature));
         }
 
+        // ---- Guiding (this exposure only) ----
+        // There is no established FITS convention for guiding RMS: upstream
+        // N.I.N.A. exposes it to filename patterns but writes no header, so
+        // these keys are ours. Names respect the 8-character limit and the
+        // comments carry the units, which is what a reader needs to sort a
+        // night's subs by tracking quality. Omitted entirely when the frame
+        // has no guiding data, rather than writing a misleading zero.
+        if (meta.Guiding.SampleCount > 0) {
+            Add(cards, "GUIDRMS", Fmt(meta.Guiding.RmsTotalArcsec), "Guiding RMS total (arcsec)");
+            Add(cards, "GUIDRMSR", Fmt(meta.Guiding.RmsRaArcsec), "Guiding RMS RA (arcsec)");
+            Add(cards, "GUIDRMSD", Fmt(meta.Guiding.RmsDecArcsec), "Guiding RMS Dec (arcsec)");
+            Add(cards, "GUIDPEAK", Fmt(meta.Guiding.PeakArcsec), "Worst guide error (arcsec)");
+            Add(cards, "GUIDNSMP", meta.Guiding.SampleCount.ToString(CultureInfo.InvariantCulture),
+                "Guide samples in exposure");
+            AddStr(cards, "GUIDER", meta.Guiding.Backend);
+        }
+
         // ---- Rotator (optional, separate metadata bag) ----
         if (rotator != null) {
             AddStr(cards, "ROTNAME", rotator.Name);

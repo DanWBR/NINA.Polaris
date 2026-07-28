@@ -95,15 +95,18 @@ public class ImageWriterService {
 
     private readonly SkyCatalogService? _sky;
     private readonly PlateSolveService? _plateSolve;
+    private readonly ActiveGuiderProvider? _guiders;
 
     public ImageWriterService(EquipmentManager equip, ProfileService profile,
         ILogger<ImageWriterService> logger,
-        SkyCatalogService? sky = null, PlateSolveService? plateSolve = null) {
+        SkyCatalogService? sky = null, PlateSolveService? plateSolve = null,
+        ActiveGuiderProvider? guiders = null) {
         _equip = equip;
         _profile = profile;
         _logger = logger;
         _sky = sky;
         _plateSolve = plateSolve;
+        _guiders = guiders;
     }
 
     public void ResetSessionCounter() => _sessionFrameNumber = 0;
@@ -327,6 +330,28 @@ public class ImageWriterService {
         return 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a)) / D2R;
     }
 
+    /// <summary>Fill <see cref="ImageMetaData.Guiding"/> from the guide steps
+    /// recorded inside this frame's exposure window. No-ops when the frame
+    /// already carries stats, when no guider is attached, or when the exposure
+    /// time is unknown — the header then simply omits the guiding keys rather
+    /// than claiming a zero RMS, which would read as perfect tracking.</summary>
+    private void StampGuiding(ImageMetaData m) {
+        if (m.Guiding.SampleCount > 0) return;
+        var guider = _guiders?.Active;
+        if (guider == null || !guider.IsConnected) return;
+        var exposureSec = m.Exposure.ExposureTime;
+        if (!(exposureSec > 0)) return;
+        try {
+            var end = m.CreationTime;
+            var start = end.AddSeconds(-exposureSec);
+            m.Guiding = GuidingStatsCollector.Summarise(
+                guider.SnapshotSteps(), start, end, guider.Backend);
+        } catch (Exception ex) {
+            // A header nicety must never cost a frame.
+            _logger.LogDebug(ex, "Guiding stats for the frame header failed");
+        }
+    }
+
     private void EnrichMetadata(IImageData imageData, UserProfile profile,
         string? targetName, string imageType, int gain) {
         var m = imageData.MetaData;
@@ -360,6 +385,15 @@ public class ImageWriterService {
             var rigOffset = _profile.ActiveEquipmentProfile?.DefaultOffset ?? 0;
             if (rigOffset > 0) m.Camera.Offset = rigOffset;
         }
+
+        // How the mount tracked DURING this exposure, so the night's subs can
+        // be sorted by guiding and the effect on the stars judged from the
+        // files. Scoped to the exposure window on purpose: the guider's own
+        // running RMS covers the whole session, so one gust would drag every
+        // frame's number down equally and the correlation would be lost.
+        // CreationTime is stamped when the frame arrives, so the window ends
+        // there and reaches back one exposure.
+        StampGuiding(m);
         // Camera identity, same gap: fill from the connected camera when
         // the capture didn't stamp a name (drives CAMERAID / INSTRUME).
         if (string.IsNullOrEmpty(m.Camera.Name)

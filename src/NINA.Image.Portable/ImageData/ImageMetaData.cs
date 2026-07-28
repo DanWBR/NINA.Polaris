@@ -37,7 +37,29 @@ public class ImageMetaData {
     public FilterWheelInfo FilterWheel { get; set; } = new();
     public FocuserInfo Focuser { get; set; } = new();
     public WeatherInfo Weather { get; set; } = new();
+    public GuidingInfo Guiding { get; set; } = new();
     public DateTime CreationTime { get; set; } = DateTime.UtcNow;
+
+    /// <summary>How well the mount tracked DURING this exposure, so a night's
+    /// subframes can be sorted by guiding quality and the effect on star shape
+    /// judged from the files themselves. Everything is in arcseconds on sky
+    /// (not guide-camera pixels), which is what makes frames from different
+    /// guide scopes comparable. SampleCount == 0 means "no guiding data for
+    /// this frame" and nothing is written to the header.</summary>
+    public class GuidingInfo {
+        public double RmsTotalArcsec { get; set; }
+        public double RmsRaArcsec { get; set; }
+        public double RmsDecArcsec { get; set; }
+        /// <summary>Worst single-sample total excursion in the window: what
+        /// catches the gust that smeared one frame out of fifty.</summary>
+        public double PeakArcsec { get; set; }
+        /// <summary>Guide exposures the statistics are computed from. Two
+        /// samples and 200 samples are not the same claim, so the reader can
+        /// weigh the number.</summary>
+        public int SampleCount { get; set; }
+        /// <summary>"native" or "phd2".</summary>
+        public string Backend { get; set; } = string.Empty;
+    }
 
     public class CameraInfo {
         public string Name { get; set; } = string.Empty;
