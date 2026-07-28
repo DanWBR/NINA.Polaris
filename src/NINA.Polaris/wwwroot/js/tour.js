@@ -138,54 +138,74 @@
     // item uses skipIfMissing so chips that only appear in certain states
     // (battery, camera temp, transfers…) are skipped rather than shown empty.
     function statusbarSteps() {
+        // Both bars can be collapsed to a sliver, and on a narrow screen their
+        // contents live in a ••• tray that is display:none until opened. A
+        // hidden anchor has no box, so waitForTarget would burn a second per
+        // step and then skip it: the whole tour would quietly render as
+        // nothing. Unfold everything before pointing at it.
+        function bars(a) {
+            if (a.setStatusBarHidden) a.setStatusBarHidden(false);
+            if (a.setActivityBarHidden) a.setActivityBarHidden(false);
+            a.statusTrayOpen = true;
+            a.activityTrayOpen = true;
+        }
         return [
             {
                 center: true,
                 title: 'Status bars',
                 body: "Polaris frames every screen between two status bars. Let's go over what each item means, top bar first, then the bottom one.",
-                before: function (a) { a.tab = 'home'; }
+                before: function (a) { bars(a); a.tab = 'home'; }
             },
             {
+                before: bars,
                 target: '.brand', placement: 'bottom', skipIfMissing: true,
                 title: 'Top bar: app + version',
                 body: 'The Polaris Astro Controller logo (click it to jump Home) and the running version number.'
             },
             {
+                before: bars,
                 target: '[data-tour="statusbar-indi"]', placement: 'bottom', skipIfMissing: true,
                 title: 'INDI status',
                 body: 'Whether the INDI server is connected. Green = connected, grey = off. Click it to jump to the Equipment tab.'
             },
             {
+                before: bars,
                 target: '[data-tour="statusbar-alpaca"]', placement: 'bottom', skipIfMissing: true,
                 title: 'Alpaca status',
                 body: 'ASCOM Alpaca devices discovered on the network, with a count. Click to open Equipment on the Alpaca source.'
             },
             {
+                before: bars,
                 target: '[data-tour="statusbar-phd2"]', placement: 'bottom', skipIfMissing: true,
                 title: 'Guiding status',
                 body: "The guider's connection + state (idle, guiding, lost…). Click to open the Guide tab."
             },
             {
+                before: bars,
                 target: '.status-clock', placement: 'bottom', skipIfMissing: true,
                 title: 'Chips + clock',
                 body: 'This area shows live chips when relevant (current-exposure progress, camera temperature, stacked-frame count, this client device\'s battery), plus the wall clock.'
             },
             {
+                before: bars,
                 target: '.log-badge', placement: 'bottom', skipIfMissing: true,
                 title: 'Debug log',
                 body: 'Opens the in-app log. The badge turns amber/red with a count when there are unread warnings or errors.'
             },
             {
+                before: bars,
                 target: '[data-tour="statusbar-night"]', placement: 'bottom', skipIfMissing: true,
                 title: 'Night mode',
                 body: 'Toggle the red, dark-adapted colour scheme for use at the telescope.'
             },
             {
+                before: bars,
                 target: '.fullscreen-badge', placement: 'bottom', skipIfMissing: true,
                 title: 'Fullscreen',
                 body: 'Hide the browser chrome: handy on a mini-PC kiosk or a tablet at the scope.'
             },
             {
+                before: bars,
                 target: '.ui-lock-badge', placement: 'bottom', skipIfMissing: true,
                 title: 'Lock UI',
                 body: 'Block accidental taps: the screen stays visible but only the floating unlock pill is clickable.'
@@ -194,22 +214,31 @@
                 target: '[data-tour="statusbar-stats"]', placement: 'top', skipIfMissing: true,
                 title: 'Bottom: capture stats',
                 body: 'In LIVE/PREVIEW the bottom stats line shows the latest frame quality: detected stars, HFR (focus), mean level, SNR, frame count and stacking state.',
-                before: function (a) { a.tab = 'live'; }
+                before: function (a) { bars(a); a.tab = 'live'; }
             },
             {
+                before: bars,
                 target: '.activity-bar-ops', placement: 'top', skipIfMissing: true,
                 title: 'Activity chips',
                 body: 'The footer shows what the server is busy with right now (running jobs, background tasks, warnings) as compact chips.'
             },
             {
+                before: bars,
                 target: '.activity-net', placement: 'top', skipIfMissing: true,
                 title: 'Network traffic',
                 body: 'Live client↔server data rate: ↓ received and ↑ sent, so you can see frames and previews flowing.'
             },
             {
+                before: bars,
                 target: '.activity-bar-host', placement: 'top', skipIfMissing: true,
                 title: 'Host stats',
                 body: 'The server machine at a glance: CPU, RAM, disk used, device model, and a clock-skew warning if the server clock drifts. Disk colour warns before you run out of space.'
+            },
+            {
+                before: bars,
+                target: '.activity-collapse', placement: 'top', skipIfMissing: true,
+                title: 'Getting the bars out of the way',
+                body: 'Both bars fold away with this chevron, leaving a few pixels you tap to bring them back. On a narrow screen their contents move into a ••• button instead, so the row never wraps over the page.'
             },
             {
                 center: true,

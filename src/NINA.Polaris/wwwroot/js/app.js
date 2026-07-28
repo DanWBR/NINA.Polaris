@@ -5283,6 +5283,7 @@ function ninaApp() {
                         body: [
                             'Open https://polaris-pi.local:5000 from any device on the same WiFi. On the Pi the hostname is whatever you set; on a fresh .deb install it defaults to polaris-pi.',
                             'Your browser will warn about a self-signed certificate. That is expected, Polaris generates one on first boot so HTTPS works on the LAN without a CA. Click Advanced / Proceed; the browser remembers the exception per device.',
+                            'The set-password screen carries a certificate card with a download button and per-platform install instructions. Installing it is optional but worth doing once per device: an accepted-by-exception certificate still blocks the WebSocket on some browsers, which shows up as a page that loads and then never updates.',
                             'If polaris-pi.local does not resolve, fall back to the IP printed in the install summary or hostname -I on the Pi.'
                         ],
                         tip: 'HTTPS on port 5000 is required for in-browser GraXpert (WebGPU). HTTP on port 5080 is loopback-only for SSH tunnels.'
@@ -5328,7 +5329,7 @@ function ninaApp() {
                         docLink: 'rigs.md',
                         body: [
                             'RIGS tab is where every camera / mount / focuser / filter wheel lives. Pick a driver (INDI is the default on Linux + cross-platform, Alpaca / native vendor drivers also work), connect, and Polaris remembers it as part of the active rig profile.',
-                            'For Linux + INDI: open the "INDI Drivers" sub-tab, enable indi-web, pick your hardware from the Web Manager, then come back to "Connect" sub-tab and hit Connect All.',
+                            'For Linux + INDI: open the "INDI Drivers" sub-tab and click "Detect equipment". Polaris scans the USB bus and the serial ports, maps what it finds to the matching INDI drivers and offers to build the profile for you. If your hardware is not in that table, fall back to picking the drivers by hand in the Web Manager. Either way, come back to the "Connect" sub-tab and hit Connect All.',
                             'When the badges turn green you are ready to start capturing. The full Capture-to-export tutorial picks up from here.'
                         ],
                         tip: 'No hardware on hand? Enable Simulator on Settings → Equipment simulator and you get a fake CCD + Telescope + Focuser + FilterWheel to drive the whole pipeline end-to-end.'
@@ -5408,16 +5409,17 @@ function ninaApp() {
                         ]
                     },
                     {
-                        title: 'Start guiding with PHD2',
+                        title: 'Start guiding',
                         tab: 'guide',
                         tabLabel: 'GUIDE',
                         screenshot: 'capture/07-guide.jpg',
                         docLink: 'guide-phd2.md',
                         body: [
-                            'GUIDE tab embeds the PHD2 protocol client + (on Linux) the actual PHD2 GUI via xpra. Pick a profile (or create one in the wizard), connect equipment, hit Calibrate then Guide.',
-                            'Polaris also offers Smart Calibrate: one click computes step size from pixel scale + guide rate, slews to the celestial equator for the cleanest calibration, runs it, validates the result. Saves 5 minutes of manual setup per session.'
+                            'Two backends, picked per rig in RIGS > Guider: Built-In runs Polaris\'s own guider (no PHD2 install, no second app to keep alive), External drives PHD2 over its protocol and, on Linux, embeds the real PHD2 GUI via xpra.',
+                            'Either way the sequence is the same: connect the guide camera, calibrate, then guide. Smart Calibrate does the setup for you in one click: it computes step size from pixel scale + guide rate, slews to the celestial equator for the cleanest calibration, runs it and validates the result.',
+                            'The built-in guider exposes per-axis Min-move and the Dec guide mode (Auto / North / South / Off) in its settings. Dec has no predictive option on purpose: PPEC-style prediction models periodic error, which is an RA phenomenon.'
                         ],
-                        tip: 'No PHD2? It is optional. Short subs (<1 min) work unguided on a well-polar-aligned mount. Long DSO subs need guiding.'
+                        tip: 'Guiding is optional. Short subs (under a minute) work unguided on a well-polar-aligned mount. Long DSO subs need it.'
                     },
                     {
                         title: 'Build the sequence in AUTORUN',
@@ -5430,7 +5432,7 @@ function ninaApp() {
                             'For a typical 3-hour OSC session: target name, 60-120 lights of 60-120s each, dither every 3, refocus on +/-3 degC delta, meridian flip enabled. Hit Start.',
                             'The big round shutter button is the universal capture control (same component appears in PREVIEW, FOCUS, VIDEO, and LIVE tabs). Tap = single snap, long-press (~600ms) = loop, tap while a capture is running = abort. The progress ring around it fills as the exposure advances so you always know how far in you are.'
                         ],
-                        warn: 'Advanced (ADV) sequencer is the tree-based version with conditional containers and parallel branches. Pick that for multi-target nights with rotator + filter wheel choreography.'
+                        warn: 'Two other tabs run sequences. ADV is the tree-based sequencer with conditional containers and parallel branches, for rotator + filter wheel choreography. PLAN is the multi-target planner: give it a list of targets and constraints for the night and it builds the schedule, then hands it to the same engine.'
                     },
                     {
                         title: 'Watch live stacking',
@@ -5450,7 +5452,8 @@ function ninaApp() {
                         screenshot: 'capture/10-studio.jpg',
                         docLink: 'files.md',
                         body: [
-                            'STUDIO is the unified post-capture workspace: file browser on the left, Stack workspace pinned to the right. Browse to your captures, multi-select the lights, click "+ Add selection" on the Lights slot card; repeat for darks, flats, biases by browsing to those folders.',
+                            'STUDIO is the unified post-capture workspace, split into three sub-tabs at the top: Files (the browser and the processing toolbars), Stacking (the calibration + integration workspace) and Auto Workflow (a saved pipeline you can replay over a folder).',
+                            'In Files, browse to your captures and multi-select the lights. In Stacking, click "+ Add selection" on the Lights slot card; repeat for darks, flats and biases by browsing to those folders.',
                             'Then click the action buttons under the slots in order: Master Dark / Flat / Bias to build masters from raw cal frames, Calibrate Lights to apply them, Integrate to align + stack with sigma-clipping. Multi-night targets: just add both sessions\' lights into the same slot.'
                         ],
                         tip: 'Turn on the "Show FITS metadata" toggle in the browser to see IMAGETYP / FILTER / TARGET / EXPOSURE columns -- makes it trivial to spot the right frames in a folder full of mixed captures.'
@@ -5462,8 +5465,10 @@ function ninaApp() {
                         screenshot: 'capture/11-ai.jpg',
                         docLink: 'onnx-inference.md',
                         body: [
-                            'Pick the integrated master in the browser and click the GraXpert icons in the toolbar (BGE for gradient removal, Decon for sharpening, Denoise for noise reduction). All three run in the browser via WebAssembly + WebGPU when supported; falls back to CLI subprocess on the server otherwise.',
-                            'Typical order: BGE first to flatten the background, then optionally Denoise and Decon. Each operation writes a sibling FITS (suffixed _bge / _decon / _denoise) so you keep the original.'
+                            'Select the integrated master in Files and use the PROCESSING TOOLS row: BGE flattens the background, Detail sharpens, Denoise reduces noise. Those three run in the browser via WebAssembly + WebGPU when supported, and fall back to a CLI subprocess on the server otherwise.',
+                            'The same row carries the rest of the single-frame tools: Starless (star removal), Halo, Upscale, Star fix, Crop, Analyze, Solve, and the two colour calibrations (PCC and SPCC).',
+                            'Typical order: BGE first to flatten the background, then optionally Denoise and Detail. Each operation writes a sibling FITS (suffixed _bge / _decon / _denoise and so on) so you keep the original.',
+                            'Below it, SIRIL SCRIPTS holds the ported Siril scripts, and the list follows your selection: one file selected offers the single-frame ones, no selection or several offers the ones that consume a set. Any of the single-frame scripts can also be dropped into an Auto Workflow as a step.'
                         ]
                     },
                     {
@@ -5556,6 +5561,7 @@ function ninaApp() {
                         docLink: 'video-planetary.md',
                         body: [
                             'VIDEO → Capture sub-tab. Set exposure (5-20ms for Jupiter, 30-80ms for Saturn at f/20+), gain high enough to fill the histogram to ~60%, click Record. Polaris streams native CCD_VIDEO_STREAM (INDI) or falls back to a tight capture loop.',
+                            'The exposure picker goes below a millisecond, down to whatever your camera reports as its minimum, which is what the Sun and the Moon need at short focal ratios. There is a filter picker beside it, so a solar or narrowband run does not mean leaving the tab.',
                             'Aim for 5-20 thousand frames. SER files end up in {rig}/planetary/{target}/, openable in AutoStakkert / RegiStax later if you want to compare.'
                         ],
                         tip: 'Crop to a tight ROI around the planet, smaller frames = higher framerate = more "lucky" moments captured.'
@@ -5592,7 +5598,8 @@ function ninaApp() {
                         docLink: 'color-calibration.md',
                         body: [
                             'Photometric color calibration removes the color bias of your sensor + filters + atmosphere by comparing the brightness of stars in your image against a catalog of stars with known colors (APASS).',
-                            'Result: the white point is mathematically calibrated, not eyeballed. Every nebula renders in its "true" color. The alternative (manual color balance sliders) is fast but subjective.'
+                            'Result: the white point is mathematically calibrated, not eyeballed. Every nebula renders in its "true" color. The alternative (manual color balance sliders) is fast but subjective.',
+                            'Polaris ships two of these. PCC matches APASS B-V colours, and is the one to use when you do not know your exact filter set. SPCC integrates star spectra through your sensor QE and filter curves, so it is more accurate when the rig is described properly, and it is the right choice for narrowband and for any mono LRGB set.'
                         ]
                     },
                     {
@@ -5602,21 +5609,23 @@ function ninaApp() {
                         screenshot: 'pcc/02-solve.png',
                         docLink: 'color-calibration.md',
                         body: [
-                            'PCC needs to know where each star in your image is on the sky. Open STUDIO, browse to the integrated master, add it to the Lights slot in the Stack workspace, then run the integration pipeline (or use an already-integrated master). The Integrate step bakes WCS coordinates into the output FITS header via ASTAP.',
+                            'PCC needs to know where each star in your image is on the sky. The Integrate step bakes WCS coordinates into the output FITS header via ASTAP, so an integrated master is usually solved already.',
+                            'If it is not, select the file in STUDIO > Files and click Solve in the PROCESSING TOOLS row; that writes the WCS into the header in place.',
                             'Without WCS the catalog match cannot run. Polaris will refuse to start PCC and tell you why.'
                         ]
                     },
                     {
-                        title: 'Run PCC, apply the gains',
+                        title: 'Run PCC or SPCC, apply the gains',
                         tab: 'files',
                         tabLabel: 'STUDIO',
                         screenshot: 'pcc/03-run.png',
                         docLink: 'color-calibration.md',
                         body: [
-                            'Add the plate-solved master to the Lights slot, hit the Color Cal action button. Polaris queries the APASS catalog for stars in your field, matches them with the stars it detects, fits per-channel gains that minimize the color error.',
-                            'Output: a new color-calibrated master appears in the browser. Single-select it and click the Edit icon to continue in the editor modal.'
+                            'Select the plate-solved master in STUDIO > Files and click PCC (or SPCC) in the PROCESSING TOOLS row. A modal opens with the settings and a preview.',
+                            'PCC queries the APASS catalog for stars in your field, matches them against the stars it detects, and fits per-channel gains that minimise the colour error. SPCC does the same match but weighs each star through your sensor QE and filter curves, which is why it asks for the rig\'s optics in Settings first.',
+                            'Output: a new colour-calibrated master appears in the browser. Single-select it and click Edit to continue in the editor modal.'
                         ],
-                        warn: 'The APASS star catalog (~80 MB) is downloaded once from inside Polaris: open the Color Calibration panel and click "Download APASS catalog". Photometric mode needs it; Background mode does not.'
+                        warn: 'The APASS star catalog (~80 MB) is downloaded once from inside Polaris: Settings > Colour calibration data, "Download APASS catalog". Photometric mode needs it; Background mode does not.'
                     }
                 ],
 
@@ -5656,6 +5665,7 @@ function ninaApp() {
                         title: "PHD2 won't connect / no guide camera",
                         docLink: 'guide-phd2.md',
                         body: [
+                            "First: you may not need PHD2 at all. RIGS > Guider has a Built-In backend that guides from Polaris itself, with no second application to install or keep alive. Switch to it and the rest of this entry stops applying.",
                             "PHD2 must be running BEFORE you click Connect in GUIDE. Polaris doesn't auto-launch on Windows; on Linux the Phd2GuiSessionService can launch xpra + PHD2 for you (toggle in Settings).",
                             "The guide camera lives inside PHD2's profile, not in Polaris's RIGS tab. Pick the right PHD2 profile (the dropdown in GUIDE → Control) and Polaris will sync.",
                             "Smart Calibrate fails with 'no star found': lower the SigmaThreshold in PHD2 Brain → Star detection, or hand-pick a star in the PHD2 GUI tab."
