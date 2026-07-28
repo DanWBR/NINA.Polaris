@@ -5238,6 +5238,7 @@ function ninaApp() {
             try {
                 if (tabId === 'sky') {
                     this.$nextTick(() => this.initSkyViewer && this.initSkyViewer());
+                    this._skyWatchdog();
                 } else if (tabId === 'files') {
                     this.filesInit && this.filesInit();
                 } else if (tabId === 'tonight') {
@@ -5247,6 +5248,42 @@ function ninaApp() {
                 }
             } catch (e) { /* best effort -- tab still switches */ }
         },
+
+        // The sky iframe can fail in ways that leave its own "Loading sky
+        // engine…" panel on screen forever: a blocked script, a WebGL context
+        // the engine cannot create, an asset that never resolves. From out
+        // here that is indistinguishable from "still loading", and a user with
+        // a black rectangle has nothing to report except that it is black.
+        //
+        // So give it a deadline. The bridge posts `ready` within a second or
+        // two on every machine that works, so silence at 20s means it is not
+        // coming. Say so, and write it to the Polaris log: that line is what
+        // turns "the sky is stuck" into something diagnosable from an exported
+        // log, without asking the operator to open the browser console.
+        _skyWatchdog() {
+            clearTimeout(this._skyWatchdogTimer);
+            if (this._skyBridgeReady) return;
+            this._skyWatchdogTimer = setTimeout(() => {
+                if (this._skyBridgeReady || this.tab !== 'sky') return;
+                const detail = 'sky bridge did not report ready within 20s'
+                    + ' (iframe src=' + (this.skySuspended ? 'about:blank (suspended)' : '/sky/')
+                    + ', webgl2=' + this._skyWebgl2Support() + ')';
+                this._logFromClient('error', detail, { source: 'sky' });
+                this.toast('The sky map did not start. Open the LOG panel for the'
+                    + ' details, and check that this browser has WebGL2.', 'error', 9000);
+            }, 20000);
+        },
+
+        // Cheap local WebGL2 probe, only used to enrich the watchdog line: the
+        // engine needs WebGL2 and a machine without it is the most common
+        // reason the iframe never comes up.
+        _skyWebgl2Support() {
+            try {
+                const c = document.createElement('canvas');
+                return !!c.getContext('webgl2');
+            } catch (e) { return 'probe failed'; }
+        },
+
 
         _helpPersist() {
             if (!this.help.tutorial) return;
@@ -12521,6 +12558,7 @@ function ninaApp() {
                 switch (msg.type) {
                     case 'ready':
                         this._skyBridgeReady = true;
+                        clearTimeout(this._skyWatchdogTimer);   // it came up
                         this._skyBridgeVersion = msg.version || 'unknown';
                         this._skyEngineLoaded = !!msg.engineLoaded;
                         this._skyEngineMissing = !!msg.engineMissing;
