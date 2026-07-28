@@ -107,9 +107,21 @@ for (const frag of text.split(SENTINEL)) {
 // literals are real keys. Scanned separately because the two rules above only
 // see STATIC text and STATIC attributes, which is why "Day", "Night", "Unlock
 // UI" and friends kept showing up as orphans while being visibly translated.
+//
+// A binding often CONCATENATES a literal with state ("'(rated ' + amps + ')'").
+// Those halves never appear alone in the DOM, so they can never match: drop the
+// ones that give themselves away with unbalanced parentheses or an embedded
+// newline (multi-line titles are always built by concatenation).
+const balanced = (s) => {
+    let d = 0;
+    for (const c of s) { if (c === '(') d++; else if (c === ')' && --d < 0) return false; }
+    return d === 0;
+};
 for (const m of html.matchAll(/(?:x-text|:title|:aria-label|:placeholder|:alt)\s*=\s*"([^"]*)"/g)) {
     for (const lit of m[1].matchAll(/'((?:\\.|[^'\\])*)'/g)) {
+        if (/\\n/.test(lit[1])) continue;
         const raw = lit[1].replace(/\\(['"`\\])/g, '$1');
+        if (!balanced(raw)) continue;
         if (keep(raw, { prose: true })) found.add(norm(raw));
     }
 }
