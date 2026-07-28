@@ -38,6 +38,24 @@ namespace NINA.Polaris.Services;
 public class ClockSyncService {
     private readonly ILogger<ClockSyncService> _logger;
 
+    /// <summary>One sync at a time.
+    ///
+    /// systemd-timedated serialises its own D-Bus calls and answers a second
+    /// caller with "Failed to set time: Previous request is not finished,
+    /// refusing", which reached the operator as a red error toast for what is
+    /// really a harmless collision. The client already disables its button
+    /// while a sync is in flight, but that flag lives in ONE browser tab:
+    /// a phone and a laptop both watching the same rig each think they are
+    /// the only one. The gate has to be here, where the host is.
+    /// </summary>
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
+    /// <summary>How long a second caller waits for the first to finish. The
+    /// whole operation is capped at 3s (set-ntp) + 5s (set-time), so this is
+    /// long enough to swallow a real overlap and short enough that a wedged
+    /// timedatectl does not hold the request open.</summary>
+    private static readonly TimeSpan GateWait = TimeSpan.FromSeconds(12);
+
     public ClockSyncService(ILogger<ClockSyncService> logger) {
         _logger = logger;
     }
@@ -71,6 +89,26 @@ public class ClockSyncService {
                 + $"than 10 years off ({sanity:F0} days). Check the "
                 + "device clock first.");
         }
+
+        // Serialise: see the comment on _gate. The wait is deliberate rather
+        // than a busy-reject, because two clients pressing Sync seconds apart
+        // both want the same thing and both should get it.
+        if (!await _gate.WaitAsync(GateWait, ct)) {
+            _logger.LogWarning("clock sync: another sync still running after {S}s",
+                GateWait.TotalSeconds);
+            return ClockSyncResult.Fail(
+                "Another clock sync is still running on the host. "
+                + "Wait a few seconds and try again.");
+        }
+        try {
+            return await SetUtcCoreAsync(clientUtc, ct);
+        } finally {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>The actual sync, run under <see cref="_gate"/>.</summary>
+    private async Task<ClockSyncResult> SetUtcCoreAsync(DateTime clientUtc, CancellationToken ct) {
 
         // IMPORTANT: `timedatectl set-time "YYYY-MM-DD HH:MM:SS"` parses
         // the wall-clock string in the machine's LOCAL timezone, NOT UTC
