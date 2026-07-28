@@ -1349,13 +1349,20 @@
    removed and replaced with a muted chevron, comfortable padding + a
    wider min so the placeholder and drive labels are not clipped. No
    max-width cap (dropdowns fill available space per house style). */
-.files-roots {
-    min-width: 190px;
-    /* Overrides .input-sm's 38px touch height: this select sits in a slim
-       strip, not in a form. */
+/* Slimmer than .input-sm's 38px touch height: this select sits in a thin
+   strip, not in a form. Scoped through .files-addr so it also outranks the
+   density stylesheet, which loads later and would otherwise keep .input-sm's
+   9px vertical padding: with the shorter box that padding leaves ~8px of
+   content and clips the label top and bottom. */
+.files-addr .files-roots {
     min-height: 28px;
     height: 28px;
+    padding: 0 30px 0 12px;
     font-size: 12px;
+    line-height: 26px;
+}
+.files-roots {
+    min-width: 190px;
     /* Coach Chromium/Windows to render the native option popup dark, else
        it falls back to a white list with washed-out light text (matches
        the app-wide select pattern, e.g. 06-modals-overlays.css). */
