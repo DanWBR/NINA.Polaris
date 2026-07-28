@@ -281,7 +281,8 @@
     "View and switch the WiFi network the server is connected to.": "Veja e troque a rede Wi-Fi à qual o servidor está conectado.",
     "Whether the INDI server is connected. Green = connected, grey = off. Click it to jump to the Equipment tab.": "Indica se o servidor INDI está conectado. Verde = conectado, cinza = desligado. Clique para ir à aba “Equipamento”.",
     "Your site latitude/longitude/altitude, used for the sky, twilight, altitude charts and GoTo.": "A latitude, a longitude e a altitude do seu local, usadas para o céu, o crepúsculo, os gráficos de altitude e o GoTo.",
-    "Focus motor": "Motor de foco"
+    "Focus motor": "Motor de foco",
+    "Target identified:": "Alvo identificado:"
   },
   "es": {
     "Start": "Iniciar",
@@ -529,7 +530,8 @@
     "View and switch the WiFi network the server is connected to.": "Consulta y cambia la red Wi-Fi a la que está conectado el servidor.",
     "Whether the INDI server is connected. Green = connected, grey = off. Click it to jump to the Equipment tab.": "Indica si el servidor INDI está conectado. Verde = conectado, gris = apagado. Haz clic para ir a la pestaña «Equipo».",
     "Your site latitude/longitude/altitude, used for the sky, twilight, altitude charts and GoTo.": "La latitud, la longitud y la altitud de tu ubicación, usadas para el cielo, el crepúsculo, los gráficos de altitud y el GoTo.",
-    "Focus motor": "Motor de enfoque"
+    "Focus motor": "Motor de enfoque",
+    "Target identified:": "Objetivo identificado:"
   },
   "fr": {
     "Start": "Démarrer",
@@ -777,7 +779,8 @@
     "View and switch the WiFi network the server is connected to.": "Consultez et changez le réseau Wi-Fi auquel le serveur est connecté.",
     "Whether the INDI server is connected. Green = connected, grey = off. Click it to jump to the Equipment tab.": "Indique si le serveur INDI est connecté. Vert = connecté, gris = éteint. Cliquez pour accéder à l'onglet « Équipement ».",
     "Your site latitude/longitude/altitude, used for the sky, twilight, altitude charts and GoTo.": "La latitude, la longitude et l'altitude de votre site, utilisées pour le ciel, le crépuscule, les courbes de hauteur et le GoTo.",
-    "Focus motor": "Moteur de mise au point"
+    "Focus motor": "Moteur de mise au point",
+    "Target identified:": "Cible identifiée :"
   },
   "de": {
     "Start": "Start",
@@ -1025,6 +1028,7 @@
     "View and switch the WiFi network the server is connected to.": "Zeigen Sie das WLAN an, mit dem der Server verbunden ist, und wechseln Sie es.",
     "Whether the INDI server is connected. Green = connected, grey = off. Click it to jump to the Equipment tab.": "Zeigt an, ob der INDI-Server verbunden ist. Grün = verbunden, grau = aus. Klicken Sie hier, um zur Registerkarte „Ausrüstung“ zu wechseln.",
     "Your site latitude/longitude/altitude, used for the sky, twilight, altitude charts and GoTo.": "Breitengrad, Längengrad und Höhe Ihres Standorts, verwendet für Himmel, Dämmerung, Höhendiagramme und GoTo.",
-    "Focus motor": "Fokusmotor"
+    "Focus motor": "Fokusmotor",
+    "Target identified:": "Ziel erkannt:"
   }
 }

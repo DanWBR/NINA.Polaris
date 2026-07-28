@@ -881,6 +881,13 @@ function ninaApp() {
         // (left alone). identifyBusy gates the Identify button spinner.
         targetName: '',
         targetNameAuto: true,
+        // Same flag for the VIDEO panel's own target field. True until the
+        // operator types there, so a plate solve may fill it but never
+        // overwrite a name they chose.
+        videoTargetNameAuto: true,
+        // Pointing of the last solve we ran an identify for, so the repeating
+        // background solve doesn't re-query the catalog for the same field.
+        _lastSolveIdentify: null,
         identifyBusy: false,
 
         // Sequence
@@ -16868,6 +16875,12 @@ function ninaApp() {
             else this._silentSolve = { busy: false, lastAtMs: Date.now(), lastMarker: null };
             try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); }
             catch (e) { /* SKY engine may not be live */ }
+            // Name the field from the solve. Every successful solve lands here
+            // (manual, background, Slew & Center), and the solved centre is the
+            // honest input for "what am I looking at" — better than mount.ra/dec,
+            // which is exactly the value the solve just corrected. Fire and
+            // forget: a catalog lookup must never hold up the frame.
+            this._identifyFromSolve(raDeg / 15, decDeg);
         },
 
         _pushSkyFovOverlays() {
@@ -23066,6 +23079,8 @@ function ninaApp() {
                     return;
                 }
                 this.video.targetName = r.name;
+                // Filled by us, not typed: a later plate solve may refine it.
+                this.videoTargetNameAuto = true;
                 this.toast(
                     'Detected ' + r.name + ' (' + r.angularSepDeg.toFixed(2) + '° from centre)',
                     'success');
@@ -23085,6 +23100,57 @@ function ninaApp() {
         // The user typed in the target field → stop auto-identify from
         // clobbering it on the next centre.
         onTargetNameInput() { this.targetNameAuto = false; },
+        onVideoTargetNameInput() { this.videoTargetNameAuto = false; },
+
+        // Write an identified name into every panel's target field. A name the
+        // operator typed is never overwritten: the *Auto flags mark the fields
+        // we filled ourselves, and the @input handlers clear them the moment
+        // the user takes over. LIVE and PREVIEW share `targetName`; VIDEO has
+        // its own field and its own flag.
+        _applyIdentifiedName(name) {
+            if (!name) return false;
+            let changed = false;
+            if (!this.targetName || this.targetNameAuto) {
+                changed = this.targetName !== name;
+                this.targetName = name;
+                this.targetNameAuto = true;
+            }
+            if (this.video && (!this.video.targetName || this.videoTargetNameAuto)) {
+                changed = changed || this.video.targetName !== name;
+                this.video.targetName = name;
+                this.videoTargetNameAuto = true;
+            }
+            return changed;
+        },
+
+        // Called from _applySolvedFrame after ANY successful plate solve, with
+        // the SOLVED pointing. The silent background solve fires every few
+        // frames, so this has to be quiet and cheap: skip when the pointing has
+        // not really moved (the same field identifies the same object), and
+        // only toast when the name actually changes.
+        async _identifyFromSolve(raHours, decDeg) {
+            if (!Number.isFinite(raHours) || !Number.isFinite(decDeg)) return;
+            // Both fields already hold a name the operator typed: nothing to
+            // fill, so don't spend the request.
+            const mainTaken = !!this.targetName && !this.targetNameAuto;
+            const videoTaken = !!this.video?.targetName && !this.videoTargetNameAuto;
+            if (mainTaken && videoTaken) return;
+
+            const last = this._lastSolveIdentify;
+            if (last) {
+                const dRa = Math.abs(raHours - last.raHours) * 15
+                            * Math.cos(decDeg * Math.PI / 180);
+                const dDec = Math.abs(decDeg - last.decDeg);
+                if (Math.hypot(dRa, dDec) < 1 / 60) return;   // < 1', same field
+            }
+            this._lastSolveIdentify = { raHours, decDeg };
+
+            const before = this.targetName;
+            await this._identifyAt(raHours, decDeg, /*silent*/ true);
+            if (this.targetName && this.targetName !== before) {
+                this.toast('Target identified: ' + this.targetName, 'ok');
+            }
+        },
 
         // ── Sticky UI field persistence (server-side) ───────────────
         // Field report: panel exposure/gain (and friends) reset to defaults
@@ -23183,14 +23249,22 @@ function ninaApp() {
                 if (!silent) this.toast('Mount RA/Dec unavailable', 'warn');
                 return null;
             }
+            return this._identifyAt(ra, dec, silent);
+        },
+
+        // Identify what sits at a given pointing and put it in the target
+        // fields. Split out of identifyTarget so a plate solve can pass its
+        // OWN coordinates: the solve is where the camera actually looked,
+        // while mount.ra/dec is only where the mount believes it is — the
+        // whole reason one plate-solves in the first place.
+        async _identifyAt(ra, dec, silent = false) {
             this.identifyBusy = true;
             try {
                 const fov = this._fovRadiusDeg();
                 const r = await this.apiGet('/api/sky/identify?ra=' + encodeURIComponent(ra)
                     + '&dec=' + encodeURIComponent(dec) + '&fov=' + encodeURIComponent(fov));
                 if (r?.found) {
-                    this.targetName = r.displayName || r.name;
-                    this.targetNameAuto = true;
+                    this._applyIdentifiedName(r.displayName || r.name);
                     const within = r.withinExtent ? 'in frame'
                         : (r.separationArcmin != null ? r.separationArcmin.toFixed(1) + "' off centre" : '');
                     if (!silent) this.toast('Target: ' + this.targetName
@@ -23201,8 +23275,7 @@ function ninaApp() {
                 const p = await this.apiGet('/api/sky/nearest-planet?ra='
                     + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec));
                 if (p?.found && p.angularSepDeg <= Math.max(this._fovRadiusDeg() * 1.5, 2)) {
-                    this.targetName = p.name;
-                    this.targetNameAuto = true;
+                    this._applyIdentifiedName(p.name);
                     if (!silent) this.toast('Target: ' + p.name
                         + ' (' + p.angularSepDeg.toFixed(2) + '° from centre)', 'success');
                     return p;

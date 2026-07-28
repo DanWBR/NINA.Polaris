@@ -3931,6 +3931,7 @@
                                 Target name
                                 <span style="display:inline-flex; align-items:center; gap:4px">
                                     <input type="text" x-model="video.targetName"
+                                           @input="onVideoTargetNameInput()"
                                            class="input-sm" style="width:120px"
                                            :disabled="cameraStream.running || videoRecording.recording">
                                     <!-- One-click "what is the mount pointing at?"
@@ -19330,7 +19331,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260728-focusbtns"></script>
+    <script src="/js/app.js?v=20260728-solveident"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>
