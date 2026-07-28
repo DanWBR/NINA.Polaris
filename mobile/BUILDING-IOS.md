@@ -132,6 +132,20 @@ off-LAN.
 > Certificate Trust Settings) still works and is harmless, but is no longer
 > necessary.
 
+### Fullscreen
+
+`WKWebView` ships with the element Fullscreen API **off**, so Polaris's
+fullscreen badge failed inside the iOS app while working in the Android one.
+`mobile/ios-src/PolarisBridgeViewController.swift` subclasses
+`CAPBridgeViewController` and enables the preference on the webview
+configuration; `scripts/ios-postadd.sh` copies it in and rewrites the custom
+class in `Main.storyboard` so the scene instantiates it. Both steps are
+undone by a fresh `npx cap add ios`, which is why the script re-applies them.
+
+Note this only covers the **app**. Safari on iPhone has no Fullscreen API for
+web pages at all, so the badge cannot work there; Add to Home Screen is the
+way to lose the browser bars.
+
 ---
 
 ## 4. Build & run

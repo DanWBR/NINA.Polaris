@@ -6741,11 +6741,24 @@ function ninaApp() {
                     if (el.requestFullscreen) await el.requestFullscreen();
                     else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
                     else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
-                    else throw new Error('Fullscreen API not supported in this browser');
+                    else { this.toast(this._noFullscreenHint(), 'warn', 9000); return; }
                 }
             } catch (e) {
                 this.toast('Fullscreen toggle failed: ' + (e?.message || e), 'error');
             }
+        },
+
+        // Why the badge did nothing, and what to do instead. Safari on iPhone
+        // implements fullscreen for <video> only, never for a page, so there
+        // is nothing to retry and no flag to flip: the way to lose the browser
+        // bars is to install the page. Worth saying explicitly, because the
+        // same badge works on the same phone inside the Polaris app.
+        _noFullscreenHint() {
+            const iOS = /iP(hone|od|ad)/.test(navigator.userAgent)
+                || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            return iOS
+                ? 'Safari on iPhone has no fullscreen for web pages. Share then "Add to Home Screen", and open Polaris from that icon to run it without the browser bars.'
+                : 'This browser does not offer the Fullscreen API.';
         },
 
         // FIELD-6: activity-bar chip dismissal. Session-only Set so
