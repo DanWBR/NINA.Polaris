@@ -65,25 +65,6 @@
     font-size: 11px;
 }
 
-/* POLARUI: decorative telescope outline behind the POLAR panel (both
-   the TPPA and Rudimentary sub-panes). Applied to .content — the actual
-   scroll container — so `background-attachment: scroll` (the default)
-   pins it to the panel viewport while the UI scrolls over it, instead
-   of an absolute layer that grew with the content and scrolled away.
-   Scoped by the `polar-bg` class Alpine toggles only on the POLAR tab.
-   The near-opaque panel-coloured gradient layered over the image fades
-   it to a faint watermark while keeping the text fully legible. */
-.content.polar-bg {
-    background-image:
-        linear-gradient(color-mix(in srgb, var(--bg-primary) 92%, transparent),
-                        color-mix(in srgb, var(--bg-primary) 92%, transparent)),
-        url('/img/telescope-outline.svg');
-    background-repeat: no-repeat, no-repeat;
-    background-position: center center, center bottom;
-    background-size: cover, cover;
-    background-attachment: scroll, scroll;
-}
-
 /* RDPA-4: Rudimentary polar alignment sub-pane styles. */
 .polar-tabstrip {
     display: flex;
