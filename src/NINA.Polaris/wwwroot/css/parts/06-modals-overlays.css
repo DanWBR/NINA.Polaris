@@ -1412,6 +1412,10 @@
         gap: 10px;
         padding: 10px 12px;
         min-width: 170px;
+        /* Cap the width or the host group, a wide row of stats, drags the
+           panel off the left edge of the screen. */
+        max-width: min(88vw, 320px);
+        box-sizing: border-box;
         max-height: 60vh;
         overflow-y: auto;
         background: var(--bg-secondary);
@@ -1428,6 +1432,35 @@
         margin-right: 0;
         width: 100%;
         justify-content: flex-start;
+    }
+    /* The host group is a row of stats in its own right; stack it too, one
+       label + value per line. */
+    .activity-bar-tray-items .activity-bar-host {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    .activity-bar-tray-items .activity-host-stat {
+        justify-content: space-between;
+        white-space: nowrap;
+        gap: 10px;
+    }
+    /* The panel is exactly the room those readouts lacked in the strip, so
+       undo the narrow-screen thinning here: the Client and Polaris chips come
+       back and the numbers show used AND total again. */
+    .activity-bar-tray-items .activity-host-stat.activity-host-client,
+    .activity-bar-tray-items .activity-host-stat.activity-host-polaris {
+        display: inline-flex;
+    }
+    .activity-bar-tray-items .activity-host-value.host-val-full { display: inline; }
+    .activity-bar-tray-items .activity-host-value.host-val-compact { display: none; }
+    /* The divider after the device name separated it from the stats in a row;
+       in a column it is just a line down the right edge. */
+    .activity-bar-tray-items .activity-host-device {
+        padding-right: 0;
+        margin-right: 0;
+        border-right: none;
+        max-width: 100%;
     }
 }
 
