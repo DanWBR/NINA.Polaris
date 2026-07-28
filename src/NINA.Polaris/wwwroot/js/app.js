@@ -36998,11 +36998,22 @@ function ninaApp() {
                     picker.onChange = (v) => {
                         this._wheelSetBound(opts.bind, v / opts.scale);
                     };
-                    this.$watch(opts.bind, (v) => {
-                        if (Number.isFinite(v) && v * opts.scale !== picker.value) {
-                            picker.setValue(v * opts.scale, /*silent*/ true);
-                        }
-                    });
+                    // ONE watcher per bound field, pointing at whichever picker
+                    // is currently mounted for it. A wheel inside x-if (the
+                    // VIDEO focus wheel, remounted every time its collapsible
+                    // group opens) would otherwise add a watcher per mount,
+                    // each holding a detached picker alive.
+                    this._boundPickers = this._boundPickers || {};
+                    const firstForField = !(opts.bind in this._boundPickers);
+                    this._boundPickers[opts.bind] = picker;
+                    if (firstForField) {
+                        this.$watch(opts.bind, (v) => {
+                            const live = this._boundPickers[opts.bind];
+                            if (live && Number.isFinite(v) && v * opts.scale !== live.value) {
+                                live.setValue(v * opts.scale, /*silent*/ true);
+                            }
+                        });
+                    }
                 }
             }
         },

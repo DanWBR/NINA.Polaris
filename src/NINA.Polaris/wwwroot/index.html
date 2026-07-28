@@ -2568,7 +2568,19 @@
                      (stepper + step config + info) which was eating
                      ~180px of vertical real estate before the user
                      even saw the focus preview. -->
-                <div class="focus-controls focus-controls-compact" x-show="focusJogConnected">
+                <!-- Same collapsible group as the capture panels, sharing one
+                     preference: fold the motor controls once and they stay
+                     folded everywhere. The live position stays in the header,
+                     so the tab still tells you where the focuser is. -->
+                <details class="focus-group" x-show="focusJogConnected"
+                         :open="focusGroupOpen"
+                         @toggle="setFocusGroupOpen($event.target.open)">
+                    <summary class="focus-group-head">
+                        <span class="focus-group-title">Focus motor</span>
+                        <span class="focus-group-pos" x-text="focusPosition">0</span>
+                        <span class="focus-readout-warn" x-show="focusMoving">MOVING</span>
+                    </summary>
+                <div class="focus-controls focus-controls-compact">
                     <!-- ASIAIR-style stepper: two pairs of arrow
                          buttons (SLOW + FAST) plus the live position
                          readout in the middle. focusJogConnected follows the
@@ -2645,6 +2657,7 @@
                         </button>
                     </div>
                 </div>
+                </details>
 
                 <!-- MFOC-1: tabstrip splitting Manual Assist (HFR
                      loop + Bahtinov for users without a motor or
@@ -3663,6 +3676,21 @@
                                         @pointercancel="stopWheelRepeat()"
                                         title="Gain +1 (hold to repeat)">+</button>
                             </div>
+                        </div>
+
+                        <!-- Focus motor: its own collapsible group instead of
+                             a third column in the wheel row, so it can fold
+                             away like the one in PREVIEW and the FOCUS tab.
+                             Shares focusGroupOpen with them. -->
+                        <details class="focus-group" x-show="focusJogConnected"
+                                 :open="focusGroupOpen"
+                                 @toggle="setFocusGroupOpen($event.target.open)">
+                            <summary class="focus-group-head">
+                                <span class="focus-group-title">Focus motor</span>
+                                <span class="focus-group-pos" x-text="focusPosition">0</span>
+                                <span class="focus-readout-warn" x-show="focusMoving">MOVING</span>
+                            </summary>
+                            <div class="wheel-picker-group">
                             <!-- Wrapped in template x-if (rather than
              x-show) because the WheelPicker
              constructor snapshots data-max ONCE
@@ -3678,7 +3706,17 @@
              :data-max BEFORE the MutationObserver
              sees the new <div> and our
              _mountWheelPickers() runs. -->
-                            <template x-if="focusJogConnected && focusMaxPosition > 0">
+                            <!-- ...and the group's open state joins that
+                                 condition, for the same reason one step
+                                 further: a wheel mounted inside a CLOSED
+                                 <details> measures clientHeight 0, so its
+                                 centre-band math is built on a zero-height
+                                 container and the drum renders off-centre
+                                 until you drag it. Gating the x-if on
+                                 focusGroupOpen defers the mount to the moment
+                                 the group is opened, when the container has a
+                                 real height. -->
+                            <template x-if="focusJogConnected && focusMaxPosition > 0 && focusGroupOpen">
                                 <div class="wheel-col">
                                     <button class="btn btn-sm wheel-nudge" style="touch-action:none"
                                             :disabled="focusMoving"
@@ -3700,7 +3738,8 @@
                                             @click="videoWheelNudge('focus', 1)" title="Focus +10">+</button>
                                 </div>
                             </template>
-                        </div>
+                            </div>
+                        </details>
 
                         <!-- Filter selector. Planetary and solar work is
                              filter work (IR-pass on Jupiter, a solar
@@ -19315,7 +19354,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260728-focusgroup"></script>
+    <script src="/js/app.js?v=20260728-focusgroup2"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>
