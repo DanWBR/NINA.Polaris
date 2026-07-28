@@ -15691,7 +15691,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             :class="{ 'has-activities': activityChips().length > 0,
                       'activity-bar-collapsed': activityBarHidden }"
             @click="if (activityBarHidden) setActivityBarHidden(false)"
-            :title="activityBarHidden ? 'Show the status bar' : ''">
+            :title="activityBarHidden ? $t('Show the status bar') : ''">
         <div class="activity-bar-ops">
             <template x-for="chip in activityChips()" :key="chip.id">
                 <span class="activity-chip"
@@ -15764,7 +15764,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
              transfer progress stay in the bar, because those are the ones the
              operator is watching in real time. Inert at desktop widths. -->
         <div class="activity-tray" @click.outside="activityTrayOpen = false">
-            <button class="btn-icon activity-tray-toggle"
+            <button class="btn-icon activity-tray-toggle" data-i18n
                     @click="activityTrayOpen = !activityTrayOpen"
                     :class="{ 'status-tray-toggle-active': activityTrayOpen }"
                     :aria-expanded="activityTrayOpen ? 'true' : 'false'"
@@ -15901,7 +15901,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
         </div><!-- /.activity-tray -->
         <!-- Collapse handle. Deliberately faint: it is housekeeping, not a
              control anyone needs to find quickly. -->
-        <button class="activity-collapse" @click.stop="setActivityBarHidden(true)"
+        <button class="activity-collapse" data-i18n @click.stop="setActivityBarHidden(true)"
                 title="Hide the status bar" aria-label="Hide the status bar">
             <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
                 <path d="M5 8l7 6 7-6M5 14l7 6 7-6" fill="none" stroke="currentColor"
@@ -18143,7 +18143,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- i18n runtime. Loads BEFORE Alpine (non-deferred) so window.I18N + the
          $t magic are ready when Alpine hydrates. English = identity (no fetch,
          no observer, zero overhead). See js/i18n.js. -->
-    <script src="/js/i18n.js?v=20260712-rename1"></script>
+    <script src="/js/i18n.js?v=20260728-optin"></script>
     <script src="/js/lib/alpine.min.js" defer></script>
     <!-- Cache buster on app.js so JS fixes propagate without users
          having to remember Ctrl+Shift+R. Bump the v= when shipping
@@ -19408,7 +19408,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260728-helprefresh"></script>
+    <script src="/js/app.js?v=20260728-i18nopt"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

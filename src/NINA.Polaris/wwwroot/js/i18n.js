@@ -93,11 +93,26 @@
         return (hit != null && hit !== '' && hit !== key) ? hit : null;
     }
 
-    // A text node should be skipped if it (or an ancestor) opts out via
-    // data-no-i18n (hot/numeric regions, terminal, charts, user data).
+    // A node is skipped if it (or an ancestor) opts out via data-no-i18n
+    // (hot/numeric regions, terminal, charts, user data).
+    //
+    // data-i18n opts a subtree back IN. The nearest of the two attributes
+    // wins, so an island of ordinary UI text can live inside an excluded
+    // region: the activity bar is data-no-i18n as a whole, because its
+    // readouts change several times a second and re-walking them is pure
+    // waste, but the tray button in it is a normal labelled control whose
+    // tooltip deserves translating like any other.
+    //
+    // An element carrying BOTH attributes counts as excluded: closest()
+    // returns that element, and the safer reading of a contradiction is to
+    // leave the text alone.
+    function excluded(el) {
+        if (!el || !el.closest) return false;
+        var m = el.closest('[data-no-i18n], [data-i18n]');
+        return !!m && m.hasAttribute('data-no-i18n');
+    }
     function optedOut(node) {
-        var el = node.nodeType === 3 ? node.parentElement : node;
-        return !!(el && el.closest && el.closest('[data-no-i18n]'));
+        return excluded(node.nodeType === 3 ? node.parentElement : node);
     }
 
     function translateTextNode(node) {
@@ -119,7 +134,7 @@
 
     function translateAttrs(el, only) {
         if (!el || el.nodeType !== 1 || !el.getAttribute) return;
-        if (el.closest && el.closest('[data-no-i18n]')) return;
+        if (excluded(el)) return;
         var list = only ? [only] : ATTRS;
         for (var i = 0; i < list.length; i++) {
             var a = list[i];
@@ -136,7 +151,9 @@
         if (!root) return;
         if (root.nodeType === 3) { translateTextNode(root); return; }
         if (root.nodeType !== 1) return;
-        if (root.closest && root.closest('[data-no-i18n]')) return;
+        // Bail on an excluded root, unless it contains an opted-in island: the
+        // per-node checks below would find it, but only if we get that far.
+        if (excluded(root) && !(root.querySelector && root.querySelector('[data-i18n]'))) return;
         // Attributes on the root + descendants.
         translateAttrs(root);
         var els = root.querySelectorAll ? root.querySelectorAll('*') : [];

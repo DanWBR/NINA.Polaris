@@ -60,9 +60,12 @@ const norm = (s) => decodeEntities(s).replace(/\s+/g, ' ').trim();
 // perfectly ordinary in a sentence: `"` (quoted phrases, e.g. use "Connect
 // all") and `=` (e.g. Green = connected). Only pass it for a source where the
 // remaining rules already reject the code: see the tour.js branch.
+// `opts.maxLen` raises the length cap for sources that are known to be prose,
+// like the HELP tutorial bodies, whose paragraphs run past the default 320.
 function keep(s, opts) {
     s = norm(s);
-    if (!s || s.length < 2 || s.length > 320) return false;
+    const maxLen = (opts && opts.maxLen) || 320;
+    if (!s || s.length < 2 || s.length > maxLen) return false;
     if (!/[A-Za-z]/.test(s)) return false;                       // needs a letter
     if (/^[^A-Za-z(À-ÿ]/.test(s)) return false;                  // must START with a letter or "("
     if (/^[a-z]/.test(s) && !/\s/.test(s)) return false;         // lone lowercase token (identifier/var)
@@ -96,6 +99,19 @@ for (const m of html.matchAll(/(?<![:\w-])(title|placeholder|aria-label|alt)\s*=
 const text = html.replace(/<[^>]+>/g, SENTINEL);
 for (const frag of text.split(SENTINEL)) {
     if (keep(frag)) found.add(norm(frag));
+}
+// Alpine bindings that pick a literal at runtime:
+//     x-text="nightMode ? 'Day' : 'Night'"
+//     :title="collapsed ? 'Show the top bar' : ''"
+// The observer translates whichever branch is written into the DOM, so those
+// literals are real keys. Scanned separately because the two rules above only
+// see STATIC text and STATIC attributes, which is why "Day", "Night", "Unlock
+// UI" and friends kept showing up as orphans while being visibly translated.
+for (const m of html.matchAll(/(?:x-text|:title|:aria-label|:placeholder|:alt)\s*=\s*"([^"]*)"/g)) {
+    for (const lit of m[1].matchAll(/'((?:\\.|[^'\\])*)'/g)) {
+        const raw = lit[1].replace(/\\(['"`\\])/g, '$1');
+        if (keep(raw, { prose: true })) found.add(norm(raw));
+    }
 }
 
 // ---- app.js ---------------------------------------------------------------
@@ -154,6 +170,30 @@ function jsStringLiterals(src) {
     return out;
 }
 
+// ---- app.js: the HELP tutorials ------------------------------------------
+// Step copy lives in plain object literals (title:/body:/tip:/warn:) the same
+// way the tour's does, so the t()/toast() scan above never saw it and the whole
+// in-app tutorial set stayed English in every language. Only this function's
+// body is scanned, not all of app.js: a blanket literal scrape over 36k lines
+// of selectors, endpoints and state paths would bury the catalog in junk.
+{
+    const start = js.indexOf('_helpTutorials() {');
+    if (start >= 0) {
+        // Walk braces from the function body to find its end.
+        let depth = 0, end = -1;
+        for (let i = js.indexOf('{', start); i < js.length; i++) {
+            if (js[i] === '{') depth++;
+            else if (js[i] === '}' && --depth === 0) { end = i; break; }
+        }
+        if (end > start) {
+            for (const lit of jsStringLiterals(js.slice(start, end))) {
+                const raw = lit.replace(/\\(['"`\\])/g, '$1');
+                if (keep(raw, { prose: true, maxLen: 600 })) found.add(norm(raw));
+            }
+        }
+    }
+}
+
 if (existsSync(TOURJS)) {
     for (const lit of jsStringLiterals(readFileSync(TOURJS, 'utf8'))) {
         const raw = lit.replace(/\\(['"`\\])/g, '$1');
@@ -169,15 +209,21 @@ let existing = {};
 if (existsSync(OUT)) {
     try { existing = JSON.parse(readFileSync(OUT, 'utf8')); } catch { existing = {}; }
 }
+// Orphans: in the old file but no longer extracted. They are KEPT and merely
+// reported. This scraper's recall is deliberately imperfect (a string built in
+// JS and rendered through Alpine is translated at runtime but may be invisible
+// here), so a missing hit is not proof the string is gone. Dropping a key
+// silently throws away four translations; keeping a dead one costs a line of
+// JSON. Prune by hand once you have confirmed the string really left the app.
+const orphans = Object.keys(existing).filter((k) => !found.has(k));
+
 const merged = {};
-const keys = [...found].sort((a, b) => a.localeCompare(b));
+const keys = [...found, ...orphans].sort((a, b) => a.localeCompare(b));
 let added = 0;
 for (const k of keys) {
     merged[k] = Object.prototype.hasOwnProperty.call(existing, k) ? existing[k] : '';
     if (!(k in existing)) added++;
 }
-// Orphans: in the old file but no longer extracted.
-const orphans = Object.keys(existing).filter((k) => !found.has(k));
 
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, JSON.stringify(merged, null, 2) + '\n', 'utf8');
