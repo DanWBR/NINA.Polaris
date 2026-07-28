@@ -42,7 +42,7 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260728-statustray">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260728-traylabels">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260728-toolbarscroll">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260728-navscroll">
@@ -658,6 +658,10 @@
                           fill="none" stroke="currentColor" stroke-width="2"
                           stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
+                <!-- Caption for the tray, where a bare glyph in a stacked list
+                     gives the reader nothing to go on. Hidden in the status bar
+                     itself, which is icon-only by design. -->
+                <span class="tray-label" x-text="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'"></span>
             </button>
             <!-- UI lock: blocks accidental taps (eats pointer events via a
                  full-window overlay) while still letting you watch the
@@ -683,6 +687,7 @@
                           fill="none" stroke="currentColor" stroke-width="2"
                           stroke-linecap="round"/>
                 </svg>
+                <span class="tray-label" x-text="uiLocked ? 'Unlock UI' : 'Lock UI'"></span>
             </button>
             </div><!-- /.status-bar-tray-items -->
             </div><!-- /.status-tray -->
@@ -19366,7 +19371,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260728-trays"></script>
+    <script src="/js/app.js?v=20260728-traylabels"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

@@ -645,6 +645,8 @@ body.asst-dock-dragging {
     gap: 10px;
 }
 .status-tray-toggle { display: none; }
+/* Captions that only the tray shows: in the bar the badges are icon-only. */
+.tray-label { display: none; }
 
 /* Global panic / abort button in the status bar. Red, pulsing so it reads
    as an emergency control, visible from every tab while a run is active. */
@@ -810,12 +812,20 @@ body.asst-dock-dragging {
         z-index: 200;
     }
     .status-bar-tray-items.status-tray-open { display: flex; }
-    /* Badges are sized for a row; in the panel they read as list entries. */
-    .status-bar-tray-items > * {
+    /* Badges are sized for a row; in the panel they read as list entries:
+       glyph first, caption next to it, everything on the same left edge.
+       Scoped through .status-bar so this outranks .btn-icon regardless of
+       which stylesheet file loads later. */
+    .status-bar .status-bar-tray-items > * {
+        display: flex;
+        align-items: center;
         justify-content: flex-start;
+        gap: 8px;
         width: 100%;
         text-align: left;
     }
+    /* The captions the bar keeps hidden. */
+    .status-bar .status-bar-tray-items .tray-label { display: inline; }
 }
 /* Unread-log dot on the collapsed toggle, so a warning or an error still
    announces itself with the LOG badge tucked away. */
