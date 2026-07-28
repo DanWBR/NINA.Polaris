@@ -1940,7 +1940,7 @@ function ninaApp() {
         // forecast is the raw DTO from the backend. weatherDays() /
         // weatherBestWindows() (declared below) derive view-model data
         // on the fly, using SunCalc for sun + moon ephemeris.
-        weather: { forecast: null, loading: false, error: '', lastFetched: null },
+        weather: { forecast: null, loading: false, error: '', errorCard: '', lastFetched: null },
         _weatherLastKey: '',
 
         // Studio (post-processing), ST-1 frame browser + ST-2 viewer
@@ -2076,6 +2076,9 @@ function ninaApp() {
         // a per-name thumbnail cache filled on demand by _kickTonightThumbs.
         tonight: {
             items: [], envelope: null, loading: false, error: '',
+            // Settings card this error is about, so the message can offer a
+            // way there instead of naming a page and leaving you to find it.
+            errorCard: '',
             lastFetched: null, filter: 'all', fitsFovOnly: false,
             thumbs: {}      // { [name]: { url, title, credit, missing } }
         },
@@ -14114,6 +14117,7 @@ function ninaApp() {
             if (lat == null || lng == null
                 || (Math.abs(lat) < 0.01 && Math.abs(lng) < 0.01)) {
                 this.weather.error = 'Set your observing location in Settings first.';
+                this.weather.errorCard = 'observatory-card';
                 this.weather.forecast = null;
                 return;
             }
@@ -14125,6 +14129,7 @@ function ninaApp() {
             this._weatherLastKey = key;
             this.weather.loading = true;
             this.weather.error = '';
+            this.weather.errorCard = '';
             try {
                 const r = await this.apiGet(`/api/weather/forecast?lat=${lat}&lon=${lng}`);
                 this.weather.forecast = r;
@@ -15688,6 +15693,7 @@ function ninaApp() {
             if (lat == null || lng == null
                 || (Math.abs(lat) < 0.01 && Math.abs(lng) < 0.01)) {
                 this.tonight.error = 'Set your observing location in Settings first.';
+                this.tonight.errorCard = 'observatory-card';
                 this.tonight.items = [];
                 return;
             }
@@ -15696,6 +15702,7 @@ function ninaApp() {
             this._tonightLastKey = lat + ',' + lng;
             this.tonight.loading = true;
             this.tonight.error = '';
+            this.tonight.errorCard = '';
             try {
                 const r = await this.apiGet('/api/sky/tonights-best?limit=120');
                 this.tonight.items = r.items || [];
@@ -36489,8 +36496,14 @@ function ninaApp() {
             // model + OS + (arch + cores) + optional CPU brand line.
             // CPU is null on hosts where /proc/cpuinfo or WMI failed
             //, only render the line when we actually have it.
-            let s = d.model + '\n' + d.os + '\n' + d.architecture + ' · ' + d.cores + ' cores';
-            if (d.cpu) s += '\n' + d.cpu;
+            // Each line is labelled. The first is whatever SMBIOS reports as
+            // the machine, and on cheap mini PCs that can be almost anything:
+            // one of them just says "156", unreadable on its own but perfectly
+            // clear as "Device: 156" (field report).
+            let s = 'Device: ' + d.model
+                  + '\nOS: ' + d.os
+                  + '\nArchitecture: ' + d.architecture + ' · ' + d.cores + ' cores';
+            if (d.cpu) s += '\nCPU: ' + d.cpu;
             return s;
         },
 
@@ -37497,9 +37510,15 @@ function ninaApp() {
                 if (b < 1024 * 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB';
                 return (b / 1024 / 1024 / 1024).toFixed(2) + ' GB';
             };
-            return 'Session totals\n'
+            // Say WHICH link this is. It counts bytes between this browser and
+            // Polaris, nothing else. A user watched a 181 MB pack land on the
+            // host in seconds while this read 8 KB/s and fairly called it fake
+            // news: that download never crossed this link, the host pulled it
+            // from the internet itself.
+            return 'Traffic between this browser and Polaris, this session\n'
                  + '  ↓ ' + fmtTotal(this.net.rxTotal) + ' received\n'
-                 + '  ↑ ' + fmtTotal(this.net.txTotal) + ' sent';
+                 + '  ↑ ' + fmtTotal(this.net.txTotal) + ' sent\n'
+                 + 'Downloads the HOST makes (catalogs, models, packs) do not cross this link and are not counted.';
         },
 
         // ---- WiFi signal indicator (status bar, next to net rx/tx) ----

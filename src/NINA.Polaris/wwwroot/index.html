@@ -9294,7 +9294,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <!-- Error / no-location -->
-                <div x-show="tonight.error" class="weather-message" x-text="tonight.error"></div>
+                <div x-show="tonight.error" class="weather-message">
+                    <span x-text="tonight.error"></span>
+                    <!-- A hint that names a settings page should take you there. -->
+                    <button class="btn btn-sm" x-show="tonight.errorCard" x-cloak
+                            @click="openSettingsCard(tonight.errorCard)">Open Settings</button>
+                </div>
 
                 <!-- Filter chips -->
                 <div class="tonight-filters" x-show="!tonight.error && tonight.items.length">
@@ -9440,7 +9445,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <!-- Error / no-location states -->
-                <div x-show="weather.error" class="weather-message" x-text="weather.error"></div>
+                <div x-show="weather.error" class="weather-message">
+                    <span x-text="weather.error"></span>
+                    <button class="btn btn-sm" x-show="weather.errorCard" x-cloak
+                            @click="openSettingsCard(weather.errorCard)">Open Settings</button>
+                </div>
 
                 <!-- Best windows tonight callout -->
                 <div x-show="weather.forecast && weatherBestWindows().length" class="weather-window-callout">
@@ -13720,7 +13729,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div><!-- /.settings-card-body -->
                 </div>
 
-                <div class="settings-section">
+                <div class="settings-section" id="observatory-card">
                     <h3 data-tour="set-observatory"><span class="settings-card-icon">🌍</span>Observatory</h3>
 
                     <!-- Two helpers above the raw lat/lng inputs: address
@@ -19408,7 +19417,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260728-respjson"></script>
+    <script src="/js/app.js?v=20260728-fieldfix"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

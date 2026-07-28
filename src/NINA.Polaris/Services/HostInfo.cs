@@ -305,6 +305,13 @@ public static class HostInfo {
     /// Driving the fallback to motherboard / CPU info in that case.</summary>
     internal static bool IsPlaceholderModel(string? s) {
         if (string.IsNullOrWhiteSpace(s)) return true;
+        // A model with no letter in it is not a name. Some mini-PC vendors
+        // leave a bare number in product_name, and one of those ("156") reached
+        // the activity bar as the device label with nothing to explain it: the
+        // user could not tell what the number even was (field report). Falling
+        // through to the board name, and then the CPU, always yields something
+        // readable. Every genuine model name carries at least one letter.
+        if (!s.Any(char.IsLetter)) return true;
         var lower = s.ToLowerInvariant();
         // The full set of OEM placeholders SMBIOS tools complain about.
         // See for example dmidecode's bad-strings list.
