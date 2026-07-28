@@ -142,6 +142,12 @@ configuration; `scripts/ios-postadd.sh` copies it in and rewrites the custom
 class in `Main.storyboard` so the scene instantiates it. Both steps are
 undone by a fresh `npx cap add ios`, which is why the script re-applies them.
 
+The same subclass hides the **system status bar** (`prefersStatusBarHidden`),
+since Polaris draws its own top bar with the clock and battery. The notch
+strip is not reclaimed: without `viewport-fit=cover` the webview keeps the
+page below the safe area, so that strip goes empty rather than showing the
+iOS clock.
+
 Note this only covers the **app**. Safari on iPhone has no Fullscreen API for
 web pages at all, so the badge cannot work there; Add to Home Screen is the
 way to lose the browser bars.

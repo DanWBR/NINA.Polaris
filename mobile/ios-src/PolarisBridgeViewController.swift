@@ -34,4 +34,18 @@ class PolarisBridgeViewController: CAPBridgeViewController {
         }
         return super.webView(with: frame, configuration: configuration)
     }
+
+    // Hide the system status bar. Polaris already draws its own top bar with
+    // the clock, the battery and the session chips, so the iOS one is a
+    // duplicate that costs a row of a UI made almost entirely of dense
+    // readouts. Honoured because the generated Info.plist keeps
+    // UIViewControllerBasedStatusBarAppearance true and this is the root
+    // controller.
+    //
+    // Note the notch area itself is not reclaimed: the template does not set
+    // viewport-fit=cover, so WKWebView keeps insetting the page below the
+    // safe area and the strip simply goes empty instead of showing the system
+    // clock. Reclaiming it would mean the page handling env(safe-area-inset-*)
+    // itself.
+    override var prefersStatusBarHidden: Bool { true }
 }
