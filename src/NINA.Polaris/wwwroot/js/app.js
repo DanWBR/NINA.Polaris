@@ -4606,6 +4606,30 @@ function ninaApp() {
             return resp.json();
         },
 
+        // POST/PUT that PARSE the answer, the way apiGet does.
+        //
+        // apiPost and apiPut hand back the raw Response, which is right for a
+        // caller that wants the status or a stream. It is a trap for everyone
+        // else, because reading a field off a Response does not fail: it
+        // yields undefined, quietly. That is how a created rig entered the
+        // list with an undefined id and a toast reading "Created rig:
+        // undefined", and how the next delete went to
+        // /api/equipment/rigs/undefined and came back 400 (field report).
+        // Twenty-three call sites carried the same defect. Use these whenever
+        // you want the body.
+        //
+        // A non-2xx never reaches here: apiFetch throws ApiError first, unless
+        // the caller declared the status in expectStatuses, and such a caller
+        // wants the Response anyway.
+        async apiPostJson(url, body = null, opts = {}) {
+            const resp = await this.apiPost(url, body, opts);
+            return resp.json();
+        },
+        async apiPutJson(url, body = null, opts = {}) {
+            const resp = await this.apiPut(url, body, opts);
+            return resp.json();
+        },
+
         // ─── AUTH helper for <img>, <iframe>, <a> URLs ─────────────────
         //
         // Browser <img src=...> and <iframe src=...> requests don't
@@ -16345,7 +16369,7 @@ function ninaApp() {
                     `Studio will rescan this tree on its next open.`,
                     { title: 'Set Studio root', okLabel: 'Set root' })) return;
             try {
-                const r = await this.apiPost('/api/files/studio-root', null, {
+                const r = await this.apiPostJson('/api/files/studio-root', null, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ path: dir.fullPath })
@@ -16640,7 +16664,7 @@ function ninaApp() {
             this.tonight._prefetching = true;
             try {
                 this.toast?.('Downloading object thumbnails, may take a couple of minutes…', 'info');
-                const r = await this.apiPost('/api/sky/image/prefetch', {});
+                const r = await this.apiPostJson('/api/sky/image/prefetch', {});
                 this.toast?.(
                     `Prefetch done · ${r.foundCount}/${r.attemptedCount} images, ` +
                     `${(r.downloadedBytes / 1024 / 1024).toFixed(1)} MB downloaded`,
@@ -19914,7 +19938,7 @@ function ninaApp() {
         async createNewRig() {
             if (!this.newRigName) return;
             try {
-                const rig = await this.apiPost('/api/equipment/rigs', { name: this.newRigName });
+                const rig = await this.apiPostJson('/api/equipment/rigs', { name: this.newRigName });
                 this.rigs.push(rig);
                 this.newRigName = '';
                 this.toast(`Created rig: ${rig.name}`, 'ok');
@@ -19930,7 +19954,7 @@ function ninaApp() {
             });
             if (!name) return;
             try {
-                const rig = await this.apiPost('/api/equipment/rigs/clone', { newName: name });
+                const rig = await this.apiPostJson('/api/equipment/rigs/clone', { newName: name });
                 this.rigs.push(rig);
                 this.toast(`Cloned to: ${rig.name}`, 'ok');
             } catch (e) { this.toast('Clone failed', 'error'); }
@@ -23104,7 +23128,7 @@ function ninaApp() {
                 return;
             }
             try {
-                const r = await this.apiPost('/api/camera/stream/start', {
+                const r = await this.apiPostJson('/api/camera/stream/start', {
                     exposure: this.preview.exposure,
                     gain: this.preview.gain,
                     binning: parseInt(this.preview.binning)
@@ -23609,7 +23633,7 @@ function ninaApp() {
         async videoStartStack() {
             if (!this.video.processSerPath) return;
             try {
-                const r = await this.apiPost('/api/video/stack/start', {
+                const r = await this.apiPostJson('/api/video/stack/start', {
                     serPath: this.video.processSerPath,
                     keepPercent: this.video.keepPercent,
                     outputName: this.video.outputName
@@ -23983,7 +24007,7 @@ function ninaApp() {
                         label = 'Live stacking started';
                 }
                 this.toast(label, 'ok');
-                const r = await this.apiPost(url);
+                const r = await this.apiPostJson(url);
                 if (action === 'start-with-prep' && r) {
                     if (r.refocusFired || r.recenterFired) {
                         const parts = [];
@@ -26160,7 +26184,7 @@ function ninaApp() {
             if (this.polar.refreshBusy) return;
             this.polar.refreshBusy = true;
             try {
-                const r = await this.apiPost('/api/polar/refine/once');
+                const r = await this.apiPostJson('/api/polar/refine/once');
                 if (r && r.solved === false) {
                     this.toast('Refresh failed: ' + (r.error || 'solve failed'), 'error');
                 }
@@ -26232,7 +26256,7 @@ function ninaApp() {
                     gain: this.polar.gain,
                     settleSeconds: this.polar.settleSec
                 };
-                const r = await this.apiPost('/api/polar/rudimentary/start', body);
+                const r = await this.apiPostJson('/api/polar/rudimentary/start', body);
                 this._rudimentaryAbsorbResult(r);
                 if (r.ok) this.toast('Solved · total error ' + this.formatArcsec(r.totalErrorArcsec), 'success');
                 else if (r.error) this.toast(r.error, 'error');
@@ -26247,7 +26271,7 @@ function ninaApp() {
             if (!this.rudimentary.lastSolved) return;
             this.rudimentary.busy = true;
             try {
-                const r = await this.apiPost('/api/polar/rudimentary/resolve', {});
+                const r = await this.apiPostJson('/api/polar/rudimentary/resolve', {});
                 this._rudimentaryAbsorbResult(r);
                 if (r.ok) this.toast('Re-solved · total error ' + this.formatArcsec(r.totalErrorArcsec), 'success');
                 else if (r.error) this.toast(r.error, 'error');
@@ -26635,7 +26659,7 @@ function ninaApp() {
                 // The endpoint blocks (up to 30 s) until INDI reports
                 // the wheel settled — that's where we get the real
                 // "done" signal to surface to the user.
-                const r = await this.apiPost(
+                const r = await this.apiPostJson(
                     `/api/filterwheel/filter/${encodeURIComponent(filterName)}`);
                 if (r?.settled) {
                     this.toast('Filter: ' + (r.filter || filterName), 'ok');
@@ -26652,7 +26676,7 @@ function ninaApp() {
         async setFilterPosition(slot) {
             this.toast('Moving to slot: ' + slot, 'info');
             try {
-                const r = await this.apiPost(`/api/filterwheel/position/${slot}`);
+                const r = await this.apiPostJson(`/api/filterwheel/position/${slot}`);
                 if (r?.settled) {
                     this.toast(
                         'Filter wheel at slot ' + (r.position || slot)
@@ -33102,7 +33126,7 @@ function ninaApp() {
         async launchPhd2() {
             this.toast('Launching PHD2…', 'ok');
             try {
-                const r = await this.apiPost('/api/guider/process/launch');
+                const r = await this.apiPostJson('/api/guider/process/launch');
                 if (r.running) {
                     this.toast('PHD2 is up, connecting…', 'ok');
                     // Wait a beat then try the JSON-RPC connect
@@ -33215,7 +33239,7 @@ function ninaApp() {
         // ----- PH2X-4: Smart Calibrate -----
         async phd2SmartCalibrate() {
             try {
-                const r = await this.apiPost('/api/guider/calibrate/smart', {
+                const r = await this.apiPostJson('/api/guider/calibrate/smart', {
                     slewToEquator: !!this.smartCalibrate.slewToEquator,
                     timeoutSeconds: 240
                 });
@@ -33383,7 +33407,7 @@ function ninaApp() {
         async phd2GuiRelaunchPhd2() {
             this.phd2GuiBusy = true;
             try {
-                const r = await this.apiPost('/api/guider/gui-session/relaunch-phd2');
+                const r = await this.apiPostJson('/api/guider/gui-session/relaunch-phd2');
                 if (r.phd2Running) {
                     this.toast('PHD2 relaunched inside session', 'ok');
                 } else {
@@ -33463,7 +33487,7 @@ function ninaApp() {
         async phd2VncStartService() {
             this.phd2VncBusy = true;
             try {
-                const r = await this.apiPost('/api/guider/vnc-session/start-service');
+                const r = await this.apiPostJson('/api/guider/vnc-session/start-service');
                 if (r.serviceRunning) {
                     this.toast('TightVNC service started', 'ok');
                 } else {
@@ -33481,7 +33505,7 @@ function ninaApp() {
         async phd2VncStopService() {
             this.phd2VncBusy = true;
             try {
-                const r = await this.apiPost('/api/guider/vnc-session/stop-service');
+                const r = await this.apiPostJson('/api/guider/vnc-session/stop-service');
                 if (!r.serviceRunning) {
                     this.toast('TightVNC service stopped', 'warn');
                 } else {
@@ -35441,7 +35465,7 @@ function ninaApp() {
             // checkbox @change debounce racing the button click.
             await this.saveSimulatorSettings();
             try {
-                const resp = await this.apiPost('/api/simulator/launch', {
+                const resp = await this.apiPostJson('/api/simulator/launch', {
                     devices: this.simulatorSettings.devices,
                     port: this.simulatorSettings.port
                 });
@@ -35785,7 +35809,7 @@ function ninaApp() {
             this.indiDetect.applying = true;
             this.indiDetect.error = '';
             try {
-                const r = await this.apiPost('/api/indi/detect/profile',
+                const r = await this.apiPostJson('/api/indi/detect/profile',
                     { name, drivers });
                 if (r?.error) {
                     this.indiDetect.error = r.error
@@ -35843,7 +35867,7 @@ function ninaApp() {
             if (this.indiWeb.busy) return;
             this.indiWeb.busy = true;
             try {
-                const r = await this.apiPost('/api/indi/web/start');
+                const r = await this.apiPostJson('/api/indi/web/start');
                 if (r?.running) {
                     this.toast('indi-web started', 'ok');
                 } else {
@@ -35912,7 +35936,7 @@ function ninaApp() {
             if (this.indiCp.busy) return;
             this.indiCp.busy = true;
             try {
-                const r = await this.apiPost('/api/indi/cp/launch');
+                const r = await this.apiPostJson('/api/indi/cp/launch');
                 if (r?.launched) {
                     this.toast('INDI Control Panel launched', 'ok');
                     // Cache-bust the iframe src so the HTML5 xpra client
@@ -36049,7 +36073,7 @@ function ninaApp() {
         async setCamCtrl(item, value, auto) {
             if (!item || !item.writable) return;
             try {
-                const r = await this.apiPost('/api/camera/controls/' + encodeURIComponent(item.id), {
+                const r = await this.apiPostJson('/api/camera/controls/' + encodeURIComponent(item.id), {
                     value: Number(value),
                     auto: auto === undefined ? !!item.auto : !!auto,
                     which: this.camCtrl.which,
@@ -38801,7 +38825,7 @@ function ninaApp() {
         async _advSeqDoStart(resume) {
             this.advSeqResumePrompt = false;
             if (!resume) await this.advSeqSaveDoc();
-            const r = await this.apiPost('/api/sequencer/start' + (resume ? '?resume=1' : ''));
+            const r = await this.apiPostJson('/api/sequencer/start' + (resume ? '?resume=1' : ''));
             this.advSeq.state = r.state;
             this.advSeq.lastError = r.error;
             if (r.error) this.toast('Start failed: ' + r.error, 'error');
@@ -38811,14 +38835,14 @@ function ninaApp() {
             await this.apiPost('/api/sequencer/stop');
         },
         async advSeqValidate() {
-            const r = await this.apiPost('/api/sequencer/validate');
+            const r = await this.apiPostJson('/api/sequencer/validate');
             this.advSeq.errors = r.errors || [];
             this.toast(this.advSeq.errors.length === 0 ? 'No issues' : (this.advSeq.errors.length + ' issue(s)'),
                 this.advSeq.errors.length === 0 ? 'ok' : 'warn');
         },
         async advSeqSaveDoc() {
             const payload = this._advSeqPrepareForServer(this.advSeq.doc);
-            const r = await this.apiPost('/api/sequencer/document', payload);
+            const r = await this.apiPostJson('/api/sequencer/document', payload);
             this.advSeq.errors = r.validation || [];
             this.advSeqDirty = false;
         },
@@ -39056,7 +39080,7 @@ function ninaApp() {
             const already = this.alpacaIsConnected(srv, d);
             const targetConnect = !already;
             try {
-                const r = await this.apiPost(
+                const r = await this.apiPostJson(
                     `/api/alpaca/${path}/connect?host=${encodeURIComponent(srv.host)}&port=${srv.port}&device=${d.deviceNumber}&connect=${targetConnect}`);
                 this.alpaca.connected[`${srv.host}:${srv.port}:${d.deviceType}:${d.deviceNumber}`] = !!r.connected;
                 this.toast(`${d.deviceName} ${r.connected ? 'connected' : 'disconnected'}`, 'ok');
