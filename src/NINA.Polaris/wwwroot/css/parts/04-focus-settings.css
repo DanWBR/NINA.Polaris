@@ -458,6 +458,29 @@
 .sky-map-overlay-actions .btn {
     white-space: nowrap;
 }
+/* One row, scrolled sideways. Wrapping stacked a second line of buttons over
+   the map, and this overlay sits ON the picture: every row it takes is sky
+   the operator cannot see. */
+.sky-map-overlay-actions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;   /* momentum scroll on iOS */
+    scrollbar-width: thin;
+}
+.sky-map-overlay-actions > * { flex: 0 0 auto; }
+.sky-map-overlay-actions::-webkit-scrollbar { height: 5px; }
+.sky-map-overlay-actions::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+    border-radius: 3px;
+}
+/* Expanded "Solve frame" is the exception: its panel drops to its own
+   full-width line (see .slew-center-tune[open] below), which needs wrapping,
+   and a scroll container would clip it. */
+.sky-map-overlay-actions:has(.slew-center-tune[open]) {
+    flex-wrap: wrap;
+    overflow: visible;
+}
 
 /* "Center on Sun/Moon/planet" inline cluster inside the map actions overlay:
    body picker + action button + a small phase chip while a job runs. Stays
