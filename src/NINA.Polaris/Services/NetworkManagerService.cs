@@ -275,17 +275,47 @@ public class NetworkManagerService : BackgroundService {
 
     // ----- scan -----
 
+    /// <summary>Neighbouring WiFi networks, strongest first.</summary>
+    /// <remarks>
+    /// Forces a fresh scan with <c>--rescan yes</c>. With <c>auto</c> nmcli
+    /// answers from its cache and only rescans if that cache is older than
+    /// ~30s, and the cache right after a connect holds little beyond the
+    /// network the adapter is ON: the field report was a picker that listed
+    /// the device's own network and nothing else.
+    ///
+    /// Some drivers refuse an explicit scan while the interface is running an
+    /// AP ("Scanning not allowed while ..."), which is exactly the state a
+    /// first-time user is in when they open this picker on the hotspot. So a
+    /// refused rescan falls back to the cached list instead of failing: a
+    /// stale list beats an empty one.
+    ///
+    /// The host's own hotspot SSID is dropped from the result. It is not a
+    /// network anyone can join from here, and offering it as a target invites
+    /// exactly the "connect the adapter to itself" confusion that was
+    /// reported.
+    /// </remarks>
     public async Task<List<WifiNetwork>> ScanAsync(CancellationToken ct = default) {
         if (!NmcliInstalled || !HasWifiInterface) return new();
-        var res = await RunCommandAsync("nmcli",
-            $"-t -f SSID,SIGNAL,SECURITY,IN-USE device wifi list ifname {Shell(WifiInterface!)} --rescan auto",
-            ct, timeoutMs: 15000);
+        string ListArgs(string rescan) =>
+            $"-t -f SSID,SIGNAL,SECURITY,IN-USE device wifi list ifname {Shell(WifiInterface!)} --rescan {rescan}";
+
+        var res = await RunCommandAsync("nmcli", ListArgs("yes"), ct, timeoutMs: 25000);
+        if (res.exitCode != 0) {
+            _logger.LogDebug("wifi rescan refused ({Err}); falling back to the cached list",
+                res.stderr.Trim());
+            res = await RunCommandAsync("nmcli", ListArgs("auto"), ct, timeoutMs: 15000);
+        }
+
         var byBest = new Dictionary<string, WifiNetwork>(StringComparer.OrdinalIgnoreCase);
         foreach (var line in res.stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)) {
             var parts = SplitNmcliTerse(line);
             if (parts.Length < 4) continue;
             var ssid = parts[0];
             if (string.IsNullOrEmpty(ssid)) continue; // hidden networks (--) — skip
+            if (CurrentMode == WifiMode.Hotspot
+                && ssid.Equals(HotspotSsid, StringComparison.OrdinalIgnoreCase)) {
+                continue;   // our own AP, beaconing at us
+            }
             int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var sig);
             var sec = parts[2];
             var inUse = parts[3] == "*";
