@@ -1338,7 +1338,9 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 14px;
+    /* Slim, like the toolbars under it: this row is a path plus two toggles,
+       and it sits above three more strips before the file list starts. */
+    padding: 5px 14px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
@@ -1349,6 +1351,11 @@
    max-width cap (dropdowns fill available space per house style). */
 .files-roots {
     min-width: 190px;
+    /* Overrides .input-sm's 38px touch height: this select sits in a slim
+       strip, not in a form. */
+    min-height: 28px;
+    height: 28px;
+    font-size: 12px;
     /* Coach Chromium/Windows to render the native option popup dark, else
        it falls back to a white list with washed-out light text (matches
        the app-wide select pattern, e.g. 06-modals-overlays.css). */

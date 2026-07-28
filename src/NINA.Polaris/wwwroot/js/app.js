@@ -1388,6 +1388,19 @@ function ninaApp() {
         // Same, for the activity bar's host-telemetry group.
         activityTrayOpen: false,
 
+        // Activity bar collapsed to a sliver. Persisted: the operator who
+        // wants that strip back for the sky map wants it every night.
+        activityBarHidden: (function () {
+            try { return localStorage.getItem('polaris-activity-bar-hidden') === '1'; }
+            catch (_) { return false; }
+        })(),
+        setActivityBarHidden(hidden) {
+            this.activityBarHidden = !!hidden;
+            try {
+                localStorage.setItem('polaris-activity-bar-hidden', hidden ? '1' : '0');
+            } catch (_) { /* private mode: the session still works */ }
+        },
+
         // KC-1: Keep Centered (mount) control loop state. Top-level
         // because the server broadcasts it as a sibling of cameraStream,
         // not nested under mount.* (which is rebuilt every tick from

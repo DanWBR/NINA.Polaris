@@ -8,13 +8,17 @@
     //        .gain-help / .indi-help-icon / [role="img"][title] / [data-tip] /
     //        .tip-tap        -> they do nothing on tap, so a tap reveals the tip.
     //
-    //   2. LONG-PRESS on a titled control inside a status bar (top + bottom) or
-    //      any .tip-longpress container. Those chips/icons are CLICKABLE
-    //      (navigate on tap), so we can't steal the tap — long-press reveals the
-    //      tip and cancels the click that would otherwise follow. Scoped to the
-    //      status bars on purpose: elements that own their own long-press
-    //      gesture (the shutter = loop, the mount jog) are NOT in scope, so we
-    //      never fight them.
+    //   2. LONG-PRESS on a titled control inside a status bar (top + bottom),
+    //      an icon toolbar, or any .tip-longpress container. Those chips/icons
+    //      are CLICKABLE (navigate on tap), so we can't steal the tap —
+    //      long-press reveals the tip and cancels the click that would
+    //      otherwise follow. The scope list is deliberate rather than global:
+    //      elements that own their own long-press gesture (the shutter = loop,
+    //      the mount jog) stay out of it, so we never fight them.
+    //
+    //      The icon toolbars matter most here. On a narrow screen the STUDIO
+    //      and SKY strips drop their captions and become bare glyphs, and a
+    //      glyph with no reachable tooltip is a guess.
     //
     // The bubble reads `title` live at reveal time, so it picks up the i18n
     // MutationObserver's translation.
@@ -24,7 +28,8 @@
 
     var TAP_SEL = '.gain-help, .indi-help-icon, [data-tip], .tip-tap, [role="img"][title]';
     var LP_SCOPE = '.status-bar, .stats-bar, .full-stats-panel, .phd2-statusbar, ' +
-                   '.guide-bottombar, .files-statusbar, .tip-longpress';
+                   '.guide-bottombar, .files-statusbar, .activity-bar, ' +
+                   '.files-actions, .files-addr, .sky-toolbar, .tip-longpress';
     var LONG_PRESS = 450, MOVE_SLOP = 12, AUTO_HIDE = 6000;
 
     var bubble = null, hideTimer = null;

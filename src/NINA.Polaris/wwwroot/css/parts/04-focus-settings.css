@@ -234,6 +234,10 @@
     margin: -16px -16px 0;
 }
 
+/* One row, scrolled sideways. Wrapping cost the map a whole second row of
+   chrome at any width that could not hold every button, and the map is the
+   thing the operator came here to look at. Same treatment as the STUDIO
+   toolbars. */
 .sky-toolbar {
     display: flex;
     gap: 8px;
@@ -241,7 +245,18 @@
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
     align-items: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;   /* momentum scroll on iOS */
+    scrollbar-width: thin;
+}
+/* Controls keep their natural width instead of being squashed to fit. */
+.sky-toolbar > * { flex: 0 0 auto; }
+.sky-toolbar::-webkit-scrollbar { height: 5px; }
+.sky-toolbar::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+    border-radius: 3px;
 }
 .sky-autocenter-toggle {
     display: inline-flex;
@@ -311,6 +326,14 @@
     min-height: 320px;
     width: 100%;
 }
+/* On a short window the 320px floor made the wrapper taller than the panel,
+   which clips at overflow:hidden. The map itself survives that, but the
+   Slew & Center row is absolutely positioned against the wrapper's BOTTOM
+   edge, so it went with it, under the activity bar and out of reach. Inside
+   this panel the map shrinks instead: a smaller map beats an unreachable
+   button row. */
+.tab-panel-sky > .sky-viewer-wrap { min-height: 200px; }
+.tab-panel-sky .sky-viewer { min-height: 0; }
 .sky-viewer-wrap > .sky-viewer-iframe {
     width: 100%;
     height: 100%;

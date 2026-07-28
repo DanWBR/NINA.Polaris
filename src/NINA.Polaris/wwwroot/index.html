@@ -44,14 +44,14 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260728-nightcaps">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260726-framefit">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260728-toolbarscroll">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260728-navscroll">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260728-slimaddr">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260728-skyscroll">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260712-fieldbugs1">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260728-acttray2">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260728-barcollapse">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260714-overlayfix">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260728-nowrapbadges">
-    <link rel="stylesheet" href="/css/parts/10-density.css?v=20260728-toolbarslim">
+    <link rel="stylesheet" href="/css/parts/10-density.css?v=20260728-slimaddr">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css?v=20260620-dl1">
@@ -15667,8 +15667,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
          per-frame transfer chips) and mostly numeric/dynamic — keep the i18n
          observer out of it. Activity-chip labels that need translating use $t
          at their source instead. -->
+    <!-- Collapsed, the bar shrinks to a few pixels with a small handle, and a
+         tap on that sliver brings it back. The choice sticks across reloads:
+         someone who wants those rows for the sky map wants them every night,
+         not once. -->
     <footer class="activity-bar" data-no-i18n
-            :class="{ 'has-activities': activityChips().length > 0 }">
+            :class="{ 'has-activities': activityChips().length > 0,
+                      'activity-bar-collapsed': activityBarHidden }"
+            @click="if (activityBarHidden) setActivityBarHidden(false)"
+            :title="activityBarHidden ? 'Show the status bar' : ''">
         <div class="activity-bar-ops">
             <template x-for="chip in activityChips()" :key="chip.id">
                 <span class="activity-chip"
@@ -15876,6 +15883,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
         </div>
         </div><!-- /.activity-bar-tray-items -->
         </div><!-- /.activity-tray -->
+        <!-- Collapse handle. Deliberately faint: it is housekeeping, not a
+             control anyone needs to find quickly. -->
+        <button class="activity-collapse" @click.stop="setActivityBarHidden(true)"
+                title="Hide the status bar" aria-label="Hide the status bar">
+            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+                <path d="M5 8l7 6 7-6M5 14l7 6 7-6" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
     </footer>
 
     <!-- Connection lost banner -->
@@ -19376,14 +19392,14 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260728-nightcaps"></script>
+    <script src="/js/app.js?v=20260728-barcollapse"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>
     <!-- Touch tooltips: tap-to-reveal the "?" help icons on touch devices,
          where hover `title` tooltips never show. Self-contained; coarse-pointer
          only, so desktop hover is untouched. -->
-    <script src="/js/touch-tooltips.js?v=20260713-touchtip2"></script>
+    <script src="/js/touch-tooltips.js?v=20260728-toolbartips"></script>
     <!-- CLST-2: WASM live-stack module bootstrap. The .NET runtime
          loads, hangs the [JSExport] surface off globalThis.NINA.Polaris.Wasm,
          then dispatches the 'nina-wasm-ready' event app.js listens for.

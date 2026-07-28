@@ -41,7 +41,7 @@
    density slider, so they stayed bulky. Scale their padding, gaps and the
    icon-button height. */
 .files-addr {
-    padding: calc(10px * var(--pad-scale)) calc(14px * var(--pad-scale));
+    padding: calc(5px * var(--pad-scale)) calc(14px * var(--pad-scale));
     gap: calc(10px * var(--pad-scale));
 }
 .files-actions {

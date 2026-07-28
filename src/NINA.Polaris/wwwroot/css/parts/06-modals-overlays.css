@@ -1363,6 +1363,54 @@
     user-select: none;
 }
 
+/* Collapse handle at the right end of the bar. Faint on purpose: it is
+   housekeeping, not something anyone needs to find in a hurry. */
+.activity-collapse {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 20px;
+    margin-left: 2px;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 4px;
+    color: var(--text-muted);
+    opacity: 0.55;
+    cursor: pointer;
+    transition: opacity 0.12s ease, color 0.12s ease;
+}
+.activity-collapse:hover { opacity: 1; color: var(--accent); }
+
+/* Collapsed: a few pixels of the bar remain, with a handle in the middle so
+   the strip reads as something to press rather than a stray border. The whole
+   sliver is the hit target (see the footer's @click). */
+.activity-bar.activity-bar-collapsed {
+    height: 7px;
+    min-height: 7px;
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+    cursor: pointer;
+    justify-content: center;
+}
+.activity-bar.activity-bar-collapsed > * { display: none; }
+.activity-bar.activity-bar-collapsed::after {
+    content: '';
+    width: 46px;
+    height: 3px;
+    margin: 2px auto;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+/* On mobile the bar is fixed, so the content's bottom cushion has to shrink
+   with it, otherwise collapsing buys a gap instead of screen. */
+@media (max-width: 768px) {
+    body:has(.activity-bar.activity-bar-collapsed) .content { margin-bottom: 63px; }
+}
+
 /* Telemetry tray wrappers. Inert on desktop: the items render as the same
    row they always were, and the toggle is hidden. Declared BEFORE the media
    query below, which is what lets that query win: a media block adds no
