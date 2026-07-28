@@ -1621,13 +1621,12 @@
     flex-direction: column;
     justify-content: center;
     gap: 1px;
-    margin-right: 10px;
+    margin-right: 6px;
     flex-shrink: 0;
     font-size: 10px;
     line-height: 1.1;
     font-variant-numeric: tabular-nums;
     color: var(--text-muted);
-    min-width: 78px;
 }
 /* Auto-push to network storage (SMB/SFTP) chip in the activity bar. */
 .activity-storage {
@@ -1679,7 +1678,16 @@
     filter: drop-shadow(0 0 4px currentColor) brightness(1.5);
     transform: scale(1.25);
 }
-.activity-net-rate { color: var(--text-primary); }
+/* Reserve just enough for the widest realistic rate ("1023 KB/s") so the
+   number can change every second without shoving the WiFi chip sideways.
+   The reservation used to sit on the whole block as a min-width, which also
+   padded the RIGHT of the readout and left an obvious hole before the WiFi
+   bars whenever the rate was short. */
+.activity-net-rate {
+    color: var(--text-primary);
+    display: inline-block;
+    min-width: 48px;
+}
 
 /* WiFi signal indicator, sits next to the net rx/tx block. */
 .activity-wifi {

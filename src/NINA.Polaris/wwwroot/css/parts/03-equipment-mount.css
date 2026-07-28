@@ -1426,7 +1426,9 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    padding: 8px 14px;
+    /* Tight vertical padding: three of these rows stack above the file list,
+       so every pixel here costs three from the listing. */
+    padding: 4px 14px;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
 }
@@ -1445,7 +1447,7 @@
        title/aria-label still carry the full description for tooltips
        and screen readers. */
     width: auto;
-    height: 32px;
+    height: 26px;
     padding: 0 9px 0 8px;
     display: inline-flex;
     align-items: center;
@@ -1491,8 +1493,8 @@
    toolbar. Visually distinct (subtle accent-tinted background + a leading
    label) so the in-browser ONNX/AI model tools read as their own group. */
 .files-ai-toolbar {
-    padding-top: 6px;
-    padding-bottom: 6px;
+    padding-top: 4px;
+    padding-bottom: 4px;
     background: color-mix(in srgb, var(--accent) 7%, var(--bg-secondary));
 }
 .files-ai-label {
@@ -1505,17 +1507,18 @@
     user-select: none;
 }
 
-/* SCRIPTS row inside the STUDIO image viewer. Every ported script adds a
-   labelled pill, so the row wrapped to 2-3 lines and stole that much height
-   from the image itself. The phone-width rules in 09-mobile.css can't fix it:
-   the viewer panel is routinely far NARROWER than the viewport (it sits beside
-   the file list), so the constraint is the CONTAINER, not the screen, and a
-   media query never fires. Scroll sideways at every width instead, so the bar
-   is always exactly one row. Same treatment 09-mobile.css gives the other
-   toolbars on a phone. Scoped with .files-actions so it outranks that rule's
-   flex-wrap: wrap regardless of file order, and kept off .files-ai-toolbar so
-   the FILES PROCESSING TOOLS row (the only other user of that class) keeps
-   wrapping as before. */
+/* The three STUDIO toolbars (FILE TOOLS, PROCESSING TOOLS, SIRIL SCRIPTS)
+   each stay exactly one row and scroll sideways instead of wrapping. Every
+   tool adds a labelled pill, so a wrapping row grows to 2-3 lines and steals
+   that height from the file list under it, and worse, the rows below it jump
+   whenever one of them gains or loses a line. The phone-width rules in
+   09-mobile.css cannot fix it: these panels are routinely far NARROWER than
+   the viewport (they sit beside other panes), so the constraint is the
+   CONTAINER, not the screen, and a media query never fires. Same treatment
+   09-mobile.css gives the toolbars on a phone, applied at every width.
+   Scoped with .files-actions so it outranks that rule's flex-wrap: wrap
+   regardless of file order. */
+.files-toolbars .files-actions,
 .files-actions.files-scripts-toolbar {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -1524,9 +1527,12 @@
     scrollbar-width: thin;
 }
 /* Pills keep their natural size instead of being squashed to fit. */
+.files-toolbars .files-actions > *,
 .files-actions.files-scripts-toolbar > * { flex: 0 0 auto; }
 /* Slim, unobtrusive scrollbar so the row reads as swipeable. */
+.files-toolbars .files-actions::-webkit-scrollbar,
 .files-actions.files-scripts-toolbar::-webkit-scrollbar { height: 5px; }
+.files-toolbars .files-actions::-webkit-scrollbar-thumb,
 .files-actions.files-scripts-toolbar::-webkit-scrollbar-thumb {
     background: color-mix(in srgb, var(--accent) 45%, transparent);
     border-radius: 3px;

@@ -933,17 +933,29 @@
 /* ---- Settings search bar ----
    Sits between the panel header and the card grid. The field takes the row
    and the clear button plus the result count ride on the right, matching the
-   other single-line control rows in the app. */
+   other single-line control rows in the app. Inset by the same 16px as the
+   panel header and the card grid, so it reads as a field in the panel rather
+   than a full-bleed band welded to its edges. */
 .settings-search {
     display: flex;
     align-items: center;
     gap: 8px;
+    padding: 8px 16px 0;
     margin: 0 0 12px;
 }
+/* Leading magnifier, drawn as a background SVG the same way select.input
+   draws its chevron: no extra markup, and it tints with the theme. */
 .settings-search .input {
     flex: 1;
     min-width: 0;
+    padding-left: 32px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'><circle cx='6' cy='6' r='4.25' fill='none' stroke='%23a8b3bf' stroke-width='1.5'/><path d='M9.2 9.2L12.5 12.5' fill='none' stroke='%23a8b3bf' stroke-width='1.5' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: left 10px center;
 }
+/* The native clear affordance duplicates our ✕ button and lands in the
+   middle of the row on WebKit. */
+.settings-search .input::-webkit-search-cancel-button { display: none; }
 .settings-search-count {
     font-size: 12px;
     white-space: nowrap;

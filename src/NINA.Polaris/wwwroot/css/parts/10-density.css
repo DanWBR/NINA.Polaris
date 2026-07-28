@@ -45,11 +45,11 @@
     gap: calc(10px * var(--pad-scale));
 }
 .files-actions {
-    padding: calc(8px * var(--pad-scale)) calc(14px * var(--pad-scale));
+    padding: calc(4px * var(--pad-scale)) calc(14px * var(--pad-scale));
     gap: calc(6px * var(--pad-scale));
 }
 .files-actions-icons { gap: calc(4px * var(--pad-scale)); }
 .files-actions-icons .btn.btn-icon {
-    height: calc(32px * var(--pad-scale));
+    height: calc(26px * var(--pad-scale));
     padding: 0 calc(9px * var(--pad-scale)) 0 calc(8px * var(--pad-scale));
 }

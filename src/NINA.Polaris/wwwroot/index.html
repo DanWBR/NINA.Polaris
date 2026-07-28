@@ -44,14 +44,14 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260723-badgecaps">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260726-framefit">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260724-scriptscroll">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260726-setsearch">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260728-toolbarscroll">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260728-setsearch2">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260712-fieldbugs1">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260713-touchtip">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260728-netwidth">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260714-overlayfix">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260712-rename1">
-    <link rel="stylesheet" href="/css/parts/10-density.css?v=20260707-density2">
+    <link rel="stylesheet" href="/css/parts/10-density.css?v=20260728-toolbarslim">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
     <link rel="stylesheet" href="/css/night-mode.css?v=20260620-dl1">
@@ -755,7 +755,7 @@
             </button>
             <button class="nav-btn" :class="{ active: tab === 'settings' }" @click="tab = 'settings'" title="Settings">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v3m0 16v3m-9-11h3m16 0h3m-3.3-7.7l-2.1 2.1M6.4 17.6l-2.1 2.1m0-15.4l2.1 2.1m11.2 11.2l2.1 2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                <span class="nav-label">Config</span>
+                <span class="nav-label">Settings</span>
             </button>
             <!-- HELP-1: in-app tutorials (capture-to-export stepper +
                  first-night checklist + workflow paths + troubleshoot
