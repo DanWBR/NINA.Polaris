@@ -11,7 +11,13 @@ const linkHref = (href: string, external?: boolean) =>
 // The switcher points at the SAME page in each language rather than the home
 // page: being thrown back to the top of the site is the classic annoyance here.
 const here = stripLangPrefix(Astro.url.pathname);
-const LANG_LABEL: Record<Lang, string> = {
+// Two-letter codes, not language names: five spelled-out names ate a third of
+// the nav row. The full name stays as the link title/aria-label so the choice
+// is still readable to anyone who needs it.
+const LANG_CODE: Record<Lang, string> = {
+  en: 'EN', 'pt-BR': 'PT', es: 'ES', fr: 'FR', de: 'DE',
+};
+const LANG_NAME: Record<Lang, string> = {
   en: 'English', 'pt-BR': 'Português', es: 'Español', fr: 'Français', de: 'Deutsch',
 };
 ---
@@ -37,17 +43,24 @@ const LANG_LABEL: Record<Lang, string> = {
       </a>
     ))}
 
-    <div class="lang-switch">
-      {LANGS.map((l) => (
-        <a
-          href={`${langPrefix(l)}${here}` || '/'}
-          hreflang={l}
-          lang={l}
-          class={l === lang ? 'is-current' : undefined}
-          aria-current={l === lang ? 'true' : undefined}
-        >{LANG_LABEL[l]}</a>
-      ))}
-    </div>
+    <details class="lang-switch">
+      <summary aria-label={LANG_NAME[lang]}>{LANG_CODE[lang]}</summary>
+      <div class="lang-menu">
+        {LANGS.map((l) => (
+          <a
+            href={`${langPrefix(l)}${here}` || '/'}
+            hreflang={l}
+            lang={l}
+            title={LANG_NAME[l]}
+            class={l === lang ? 'is-current' : undefined}
+            aria-current={l === lang ? 'true' : undefined}
+          >
+            <span class="lang-code">{LANG_CODE[l]}</span>
+            <span class="lang-name">{LANG_NAME[l]}</span>
+          </a>
+        ))}
+      </div>
+    </details>
   </div>
 </nav>
 
@@ -62,6 +75,17 @@ const LANG_LABEL: Record<Lang, string> = {
   document.querySelectorAll('.nav-links a').forEach((a) =>
     a.addEventListener('click', () => nav?.classList.remove('open'))
   );
+  // Dismiss the language dropdown on an outside click / Escape. Progressive
+  // enhancement only: with JS off, <details> still opens and closes on click.
+  const langSwitch = document.querySelector('.lang-switch');
+  document.addEventListener('click', (e) => {
+    if (langSwitch && !langSwitch.contains(e.target as Node)) {
+      langSwitch.removeAttribute('open');
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Escape') langSwitch?.removeAttribute('open');
+  });
 </script>
 
 <style>
@@ -141,10 +165,10 @@ const LANG_LABEL: Record<Lang, string> = {
   }
 
   /* Collapse to the hamburger while the full row of links would still fit as a
-     single line. The 10 links + wordmark need ~1100px before they crowd /
-     wrap (the "Astro Controller" + "AI Tools" two-line squeeze); below that we
-     hide the inline menu behind the toggle instead of letting it wrap. */
-  @media (max-width: 1100px) {
+     single line. The 8 links + the language dropdown + wordmark crowd below
+     ~1000px (the "Astro Controller" + "AI Tools" two-line squeeze); under that
+     we hide the inline menu behind the toggle instead of letting it wrap. */
+  @media (max-width: 1000px) {
     .nav { padding: 16px 20px; }
     .nav-toggle { display: flex; }
     .nav-links {
@@ -160,9 +184,8 @@ const LANG_LABEL: Record<Lang, string> = {
       overflow: hidden;
       transition: max-height 0.25s ease;
     }
-    /* Tall enough for all 10 links (the old 320px clipped everything past
-       Handbook), capped to the viewport with a scroll fallback on short
-       screens. */
+    /* Tall enough for the 8 links plus the language dropdown, capped to the
+       viewport with a scroll fallback on short screens. */
     .nav.open .nav-links {
       max-height: min(640px, calc(100vh - 64px));
       overflow-y: auto;
@@ -175,11 +198,65 @@ const LANG_LABEL: Record<Lang, string> = {
 </style>
 
 <style>
-  /* Language switcher. Plain links, not a dropdown: they are crawlable and
-     work without JavaScript, which matters because these are the URLs the
-     search engine follows to find the translations. */
-  .lang-switch { display: flex; gap: 10px; align-items: center; margin-left: 8px; }
-  .lang-switch a { font-size: 13px; opacity: 0.7; }
-  .lang-switch a:hover { opacity: 1; }
-  .lang-switch a.is-current { opacity: 1; font-weight: 600; text-decoration: underline; }
+  /* Language switcher: a <details> dropdown, NOT a JS widget. The entries stay
+     real <a href> links present in the served HTML, so they remain crawlable
+     and work with JavaScript off — the property the previous inline row had,
+     and the reason this is not a <select> with an onchange handler. The
+     reciprocal hreflang tags in <head> are the primary signal either way. */
+  .lang-switch { position: relative; margin-left: 8px; }
+  .lang-switch summary {
+    list-style: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    opacity: 0.85;
+    user-select: none;
+  }
+  .lang-switch summary::-webkit-details-marker { display: none; }
+  .lang-switch summary::after { content: ' ▾'; opacity: 0.7; }
+  .lang-switch summary:hover { opacity: 1; border-color: var(--accent); }
+  .lang-switch[open] summary { opacity: 1; border-color: var(--accent); }
+
+  .lang-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    min-width: 150px;
+    padding: 4px;
+    background: rgba(26, 26, 46, 0.98);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    z-index: 30;
+  }
+  .lang-menu a {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 5px;
+    font-size: 13px;
+    opacity: 0.8;
+  }
+  .lang-menu a:hover { opacity: 1; background: rgba(255, 255, 255, 0.06); text-decoration: none; }
+  .lang-menu a.is-current { opacity: 1; font-weight: 600; }
+  .lang-code { min-width: 22px; font-weight: 600; letter-spacing: 0.5px; }
+  .lang-name { opacity: 0.75; }
+
+  /* In the mobile drawer the nav is a vertical stack, so the dropdown becomes
+     an inline block instead of an overlay. */
+  @media (max-width: 1000px) {
+    .lang-switch { margin: 0; }
+    .lang-switch summary { margin: 10px 20px; display: inline-block; }
+    .lang-menu {
+      position: static;
+      min-width: 0;
+      margin: 0 20px 12px;
+      box-shadow: none;
+    }
+  }
 </style>
