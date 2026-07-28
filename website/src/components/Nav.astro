@@ -138,7 +138,10 @@ const LANG_NAME: Record<Lang, string> = {
     -webkit-text-fill-color: transparent;
     color: transparent;
   }
-  .nav-links { display: flex; gap: 28px; }
+  /* align-items: center, or the bordered language button (taller than a bare
+     text link) drops below the row: flex defaults to stretch and each item
+     lands on its own baseline. */
+  .nav-links { display: flex; gap: 28px; align-items: center; }
   .nav-links a {
     color: var(--text);
     font-size: 14px;
@@ -177,6 +180,9 @@ const LANG_NAME: Record<Lang, string> = {
       left: 0;
       right: 0;
       flex-direction: column;
+      /* Back to stretch in the drawer: centring would shrink each row to its
+         text width instead of spanning the panel. */
+      align-items: stretch;
       gap: 0;
       background: rgba(26, 26, 46, 0.98);
       border-bottom: 1px solid var(--border);
