@@ -6944,11 +6944,9 @@ function ninaApp() {
                 this._statusWsAttempt = 0;
                 this._setServerReachable(true);
                 // A WebSocket that opened proves the browser trusts this
-                // origin's certificate for upgrades too — clear the cert gate
-                // and the one-shot reload guard (see _startWsCertWatch).
+                // origin's certificate for upgrades too, so drop the gate.
                 this._wsEverOpened = true;
                 this.certGate.wsBlocked = false;
-                try { sessionStorage.removeItem('polaris-ws-cert-reload'); } catch (e) { }
             };
 
             ws.onmessage = (evt) => {
@@ -7060,12 +7058,20 @@ function ninaApp() {
         //
         // So: if the page is on HTTPS and no WebSocket has EVER opened, but a
         // plain fetch to the same origin works (server is up, cert accepted
-        // for documents), the browser is blocking the upgrade. Reload once —
-        // that is the manual workaround, automated — and if it survives the
-        // reload, stop guessing and put the certificate in front of the user.
+        // for documents), the browser is blocking the upgrade. Say so, and
+        // offer the certificate.
+        //
+        // This used to reload the page once first, automating the manual
+        // "load it twice" workaround. That was a bad trade. The reload fires
+        // seven seconds into the session, which is exactly when a cold sky
+        // engine is still compiling its 1.2 MB of WASM, or a first STUDIO
+        // scan is running: it truncated whatever was in flight, on a machine
+        // that was already having a bad time. And it rarely helped, because a
+        // second load only fixes this if the user accepted the certificate
+        // between the two, which they had no reason to do. The banner below
+        // has its own Reload button, so the user reloads knowing why.
         _startWsCertWatch() {
             if (location.protocol !== 'https:') return;   // no TLS, no gate
-            const RELOAD_KEY = 'polaris-ws-cert-reload';
             setTimeout(async () => {
                 if (this._wsEverOpened) return;
                 // Discriminate "browser blocks the upgrade" from "server is
@@ -7076,21 +7082,11 @@ function ninaApp() {
                     reachable = !!r;
                 } catch (e) { reachable = false; }
                 if (!reachable) return;   // the connection banner owns this case
-                // Never reload out from under a login / set-password form:
-                // it would wipe what the user is typing. Those screens show
-                // the certificate card instead and let the user decide.
-                if (this.auth?.needSetup || this.auth?.needLogin) {
-                    this.certGate.wsBlocked = true;
-                    return;
-                }
-                let alreadyReloaded = false;
-                try { alreadyReloaded = !!sessionStorage.getItem(RELOAD_KEY); } catch (e) { }
-                if (!alreadyReloaded) {
-                    try { sessionStorage.setItem(RELOAD_KEY, String(Date.now())); } catch (e) { }
-                    location.reload();
-                    return;
-                }
                 this.certGate.wsBlocked = true;
+                this._logFromClient('warn',
+                    'no WebSocket opened but HTTPS works: the browser is refusing'
+                    + ' the upgrade, most likely an untrusted certificate',
+                    { source: 'cert-gate' });
             }, 7000);
         },
         // Download the host's certificate so the operator can install it as a
@@ -7115,7 +7111,6 @@ function ninaApp() {
         },
         certGateClose() { this.certGate.open = false; },
         certGateReload() {
-            try { sessionStorage.removeItem('polaris-ws-cert-reload'); } catch (e) { }
             location.reload();
         },
         _certGuessOs() {
