@@ -12915,12 +12915,20 @@ function ninaApp() {
         folderScripts() {
             return (this.scripts.list || []).filter(s => s.scope === 'folder' || s.scope === 'any');
         },
-        // Run a frame-scope script on the file currently open in the image viewer.
-        runFrameScript(path) {
-            this.runScript(path, { activeFrame: this.imageViewerPath || null, cwd: null });
+        // What the STUDIO "SIRIL SCRIPTS" bar shows, chosen by the selection.
+        // All of them are ported Siril scripts; the split is arity. One file
+        // selected means the operator is working on THAT frame, so offer the
+        // single-frame scripts; with nothing selected, or several files, the
+        // subject is the set, so offer the ones that consume a set. Scripts
+        // declaring scope 'any' appear either way, which both filters honour.
+        studioScripts() {
+            const n = (this.files?.selectedPaths || []).length;
+            return n === 1 ? this.frameScripts() : this.folderScripts();
         },
-        // Run a script from the STUDIO Files toolbar, passing the open frame (a
-        // single selected file) and the current folder as context.
+        // Run a script from the STUDIO SIRIL SCRIPTS bar. Passes BOTH the
+        // single selected file (what a frame script consumes) and the current
+        // folder (what a set script consumes), so one entry point serves the
+        // whole bar whichever half it is showing.
         runStudioScript(path) {
             if (!path) return;
             const one = (this.files && (this.files.selectedPaths || []).length === 1)
@@ -31016,14 +31024,36 @@ function ninaApp() {
                   defaults: { format: 'png', quality: 92 } },
             ];
         },
+        // Ported Siril scripts as workflow steps, built from whatever is
+        // installed rather than hard-coded. Only FRAME-scope ones: the
+        // workflow chains file -> file, so a script that consumes a whole set
+        // has no place in that chain and would silently ignore the input.
+        // The op type is namespaced ("script:<path>") so a script can never
+        // collide with a built-in step type, and a saved workflow that
+        // references a script no longer installed fails with a clear
+        // "unknown step" instead of running the wrong thing.
+        _wfScriptOps() {
+            return this.frameScripts().map(s => ({
+                type: 'script:' + s.path,
+                label: (s.icon ? s.icon + ' ' : '') + s.displayName,
+                kind: 'script',
+                scriptPath: s.path,
+                group: 'Siril scripts',
+                suffix: '',
+                fields: [],
+                defaults: {},
+            }));
+        },
         // Group labels for the add-step dropdown (optgroups).
         _wfGroup(op) { return op.group || 'Tools'; },
         _wfOpsGrouped() {
             const g = {};
-            for (const op of this._wfOps()) { (g[this._wfGroup(op)] ||= []).push(op); }
+            for (const op of this._wfAllOps()) { (g[this._wfGroup(op)] ||= []).push(op); }
             return Object.entries(g).map(([label, ops]) => ({ label, ops }));
         },
-        _wfOp(type) { return this._wfOps().find(o => o.type === type) || null; },
+        // Built-ins plus whatever scripts are installed right now.
+        _wfAllOps() { return this._wfOps().concat(this._wfScriptOps()); },
+        _wfOp(type) { return this._wfAllOps().find(o => o.type === type) || null; },
         _wfBase(p) { return p ? (String(p).split(/[\\/]/).pop()) : ''; },
         _wfLog(kind, text) { this.workflow.log.push({ kind, text }); },
 
@@ -31329,6 +31359,7 @@ function ninaApp() {
             if (op.kind === 'rl')        return this._wfRl(params, inputPath);
             if (op.kind === 'post')      return this._wfPost(op, params, inputPath);
             if (op.kind === 'blend')     return this._wfBlend(params, inputPath, named);
+            if (op.kind === 'script')    return this._wfScript(op, inputPath);
             throw new Error('unsupported step kind: ' + op.kind);
         },
 
@@ -31411,6 +31442,67 @@ function ninaApp() {
             const out = j.results && j.results[0] && j.results[0].outputPath;
             if (!out) throw new Error((j.failures && j.failures[0] && j.failures[0].error) || 'crop failed');
             return out;
+        },
+
+        // Run a ported Siril script as a workflow step: start the job with this
+        // step's input as the active frame, wait for it, and hand whatever file
+        // it wrote to the next step.
+        //
+        // Two behaviours worth knowing. A script that writes no image (a pure
+        // analysis one, say a frame report) passes the frame through instead of
+        // breaking the chain: it did its job, it just is not a pixel operation.
+        // And a script that asks a question opens its normal dialog and the run
+        // waits for the answer. Scripts declare their own dialogs, so refusing
+        // them here would bar much of the library from workflows, and answering
+        // blind would be worse. It also reuses scripts.job/jobId so the STUDIO
+        // progress panel and the Cancel button work exactly as in a manual run.
+        async _wfScript(op, inputPath) {
+            const cwd = String(inputPath).replace(/[\\/][^\\/]*$/, '');
+            const resp = await this.apiPost('/api/script/run',
+                { path: op.scriptPath, activeFrame: inputPath, cwd });
+            const started = await resp.json().catch(() => ({}));
+            if (!resp.ok || !started.jobId) {
+                throw new Error(started.error || ('could not start ' + op.label));
+            }
+            const jobId = started.jobId;
+            // Publish the id so the shared dialog machinery submits to THIS job.
+            // DialogSeq is per-job and starts at 1, so reset the tracker or this
+            // run's first dialog would look like one already answered.
+            this.scripts.busy = true;
+            this.scripts.jobId = jobId;
+            this.scripts.dialog.seq = -1;
+            this.scripts.dialog.open = false;
+            let job = null;
+            try {
+                for (;;) {
+                    await new Promise(r => setTimeout(r, 800));
+                    if (this.workflow.abort) { try { await this.apiPost('/api/script/' + jobId + '/cancel', {}); } catch (_) {} }
+                    try { job = await this.apiGet('/api/script/' + jobId + '/status'); }
+                    catch (_) { continue; }   // transient: keep waiting
+                    this.scripts.job = job;
+                    if (job.dialog && job.dialog.seq !== this.scripts.dialog.seq) {
+                        this._openScriptDialog(job.dialog);
+                    } else if (!job.dialog && this.scripts.dialog.open) {
+                        this.scripts.dialog.open = false;
+                    }
+                    if (job.state !== 'running') break;
+                }
+            } finally {
+                this.scripts.busy = false;
+                this.scripts.dialog.open = false;
+                this.scripts.job = null;
+                this.scripts.jobId = null;
+            }
+            if (!job || job.state !== 'succeeded') {
+                throw new Error(op.label + ' ' + ((job && job.state) || 'failed')
+                    + (job && job.error ? ': ' + job.error : ''));
+            }
+            const outs = (job.outputs || []).filter(p => /\.fits?$/i.test(p));
+            if (!outs.length) {
+                this._wfLog('step', '  ' + op.label + ' wrote no image, passing the frame through');
+                return inputPath;
+            }
+            return outs[outs.length - 1];
         },
 
         // Generic path-in/path-out server filter (Siril ports: SCNR, ...).

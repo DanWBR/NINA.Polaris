@@ -189,7 +189,6 @@
     "Polaris and your LLM are on different machines, so the LLM server must allow this page's origin (CORS). For Ollama, run it with": "O Polaris e o seu LLM estão em máquinas diferentes, então o servidor do LLM precisa permitir a origem desta página (CORS). Para o Ollama, execute-o com",
     "Polaris frames every screen between two status bars. Let's go over what each item means, top bar first, then the bottom one.": "O Polaris enquadra cada tela entre duas barras de status. Vamos ver o que cada item significa, primeiro a barra superior e depois a inferior.",
     "Polaris reaches your LLM through the host, so no CORS setup is needed.": "O Polaris alcança o seu LLM através do host, então não é necessário configurar CORS.",
-    "Ported Siril Scripts…": "Scripts do Siril portados…",
     "PREVIEW: test frames & plate solve": "PREVIEW: frames de teste e plate solve",
     "Preview will appear here…": "A pré-visualização aparecerá aqui…",
     "Previous": "Anterior",
@@ -201,7 +200,6 @@
     "RIGS: your equipment": "RIGS: seu equipamento",
     "Run": "Executar",
     "Run a local LLM on this computer with": "Rode um LLM local neste computador com",
-    "Run a ported script on this folder or the selected files": "Executar um script portado nesta pasta ou nos arquivos selecionados",
     "Run AI models on the GPU (ncnn-Vulkan)": "Executar modelos de IA na GPU (ncnn-Vulkan)",
     "Run Python scripts against Polaris's processing engine (polarispy). Bundled examples plus your own in": "Execute scripts Python no motor de processamento do Polaris (polarispy). Exemplos inclusos, além dos seus próprios em",
     "runs a local model on this Polaris host.": "executa um modelo local neste host Polaris.",
@@ -212,7 +210,6 @@
     "Script finished.": "Script concluído.",
     "Scripting runtime installed (numpy + astropy + scipy + Pillow + OpenCV).": "Runtime de scripts instalado (numpy + astropy + scipy + Pillow + OpenCV).",
     "Scripts": "Scripts",
-    "SCRIPTS": "SCRIPTS",
     "Server URL": "URL do servidor",
     "Show script credits": "Mostrar os créditos do script",
     "SKY: find a target": "SKY: encontre um alvo",
@@ -282,7 +279,9 @@
     "Whether the INDI server is connected. Green = connected, grey = off. Click it to jump to the Equipment tab.": "Indica se o servidor INDI está conectado. Verde = conectado, cinza = desligado. Clique para ir à aba “Equipamento”.",
     "Your site latitude/longitude/altitude, used for the sky, twilight, altitude charts and GoTo.": "A latitude, a longitude e a altitude do seu local, usadas para o céu, o crepúsculo, os gráficos de altitude e o GoTo.",
     "Focus motor": "Motor de foco",
-    "Target identified:": "Alvo identificado:"
+    "Target identified:": "Alvo identificado:",
+    "SIRIL SCRIPTS": "SCRIPTS SIRIL",
+    "Siril scripts": "Scripts Siril"
   },
   "es": {
     "Start": "Iniciar",
@@ -438,7 +437,6 @@
     "Polaris and your LLM are on different machines, so the LLM server must allow this page's origin (CORS). For Ollama, run it with": "Polaris y tu LLM están en máquinas diferentes, así que el servidor del LLM debe permitir el origen de esta página (CORS). Para Ollama, ejecútalo con",
     "Polaris frames every screen between two status bars. Let's go over what each item means, top bar first, then the bottom one.": "Polaris enmarca cada pantalla entre dos barras de estado. Repasemos qué significa cada elemento: primero la barra superior y luego la inferior.",
     "Polaris reaches your LLM through the host, so no CORS setup is needed.": "Polaris llega a tu LLM a través del host, así que no hace falta configurar CORS.",
-    "Ported Siril Scripts…": "Scripts de Siril portados…",
     "PREVIEW: test frames & plate solve": "PREVIEW: frames de prueba y plate solve",
     "Preview will appear here…": "La vista previa aparecerá aquí…",
     "Previous": "Anterior",
@@ -450,7 +448,6 @@
     "RIGS: your equipment": "RIGS: tu equipamiento",
     "Run": "Ejecutar",
     "Run a local LLM on this computer with": "Ejecuta un LLM local en este ordenador con",
-    "Run a ported script on this folder or the selected files": "Ejecutar un script portado en esta carpeta o en los archivos seleccionados",
     "Run AI models on the GPU (ncnn-Vulkan)": "Ejecutar modelos de IA en la GPU (ncnn-Vulkan)",
     "Run Python scripts against Polaris's processing engine (polarispy). Bundled examples plus your own in": "Ejecuta scripts de Python en el motor de procesamiento de Polaris (polarispy). Ejemplos incluidos, además de los tuyos en",
     "runs a local model on this Polaris host.": "ejecuta un modelo local en este host de Polaris.",
@@ -461,7 +458,6 @@
     "Script finished.": "Script finalizado.",
     "Scripting runtime installed (numpy + astropy + scipy + Pillow + OpenCV).": "Entorno de ejecución de scripts instalado (numpy + astropy + scipy + Pillow + OpenCV).",
     "Scripts": "Scripts",
-    "SCRIPTS": "SCRIPTS",
     "Server URL": "URL del servidor",
     "Show script credits": "Mostrar los créditos del script",
     "SKY: find a target": "SKY: busca un objetivo",
@@ -531,7 +527,9 @@
     "Whether the INDI server is connected. Green = connected, grey = off. Click it to jump to the Equipment tab.": "Indica si el servidor INDI está conectado. Verde = conectado, gris = apagado. Haz clic para ir a la pestaña «Equipo».",
     "Your site latitude/longitude/altitude, used for the sky, twilight, altitude charts and GoTo.": "La latitud, la longitud y la altitud de tu ubicación, usadas para el cielo, el crepúsculo, los gráficos de altitud y el GoTo.",
     "Focus motor": "Motor de enfoque",
-    "Target identified:": "Objetivo identificado:"
+    "Target identified:": "Objetivo identificado:",
+    "SIRIL SCRIPTS": "SCRIPTS SIRIL",
+    "Siril scripts": "Scripts de Siril"
   },
   "fr": {
     "Start": "Démarrer",
@@ -687,7 +685,6 @@
     "Polaris and your LLM are on different machines, so the LLM server must allow this page's origin (CORS). For Ollama, run it with": "Polaris et votre LLM se trouvent sur des machines différentes, le serveur LLM doit donc autoriser l'origine de cette page (CORS). Pour Ollama, lancez-le avec",
     "Polaris frames every screen between two status bars. Let's go over what each item means, top bar first, then the bottom one.": "Polaris encadre chaque écran entre deux barres d'état. Voyons ce que signifie chaque élément, d'abord la barre supérieure, puis la barre inférieure.",
     "Polaris reaches your LLM through the host, so no CORS setup is needed.": "Polaris atteint votre LLM via l'hôte, aucune configuration CORS n'est donc nécessaire.",
-    "Ported Siril Scripts…": "Scripts Siril portés…",
     "PREVIEW: test frames & plate solve": "PREVIEW : images de test et plate solve",
     "Preview will appear here…": "L'aperçu s'affichera ici…",
     "Previous": "Précédent",
@@ -699,7 +696,6 @@
     "RIGS: your equipment": "RIGS : votre équipement",
     "Run": "Exécuter",
     "Run a local LLM on this computer with": "Exécutez un LLM local sur cet ordinateur avec",
-    "Run a ported script on this folder or the selected files": "Exécuter un script porté sur ce dossier ou sur les fichiers sélectionnés",
     "Run AI models on the GPU (ncnn-Vulkan)": "Exécuter les modèles d'IA sur le GPU (ncnn-Vulkan)",
     "Run Python scripts against Polaris's processing engine (polarispy). Bundled examples plus your own in": "Exécutez des scripts Python sur le moteur de traitement de Polaris (polarispy). Des exemples fournis, ainsi que les vôtres dans",
     "runs a local model on this Polaris host.": "exécute un modèle local sur cet hôte Polaris.",
@@ -710,7 +706,6 @@
     "Script finished.": "Script terminé.",
     "Scripting runtime installed (numpy + astropy + scipy + Pillow + OpenCV).": "Environnement d'exécution des scripts installé (numpy + astropy + scipy + Pillow + OpenCV).",
     "Scripts": "Scripts",
-    "SCRIPTS": "SCRIPTS",
     "Server URL": "URL du serveur",
     "Show script credits": "Afficher les crédits du script",
     "SKY: find a target": "SKY : trouver une cible",
@@ -780,7 +775,9 @@
     "Whether the INDI server is connected. Green = connected, grey = off. Click it to jump to the Equipment tab.": "Indique si le serveur INDI est connecté. Vert = connecté, gris = éteint. Cliquez pour accéder à l'onglet « Équipement ».",
     "Your site latitude/longitude/altitude, used for the sky, twilight, altitude charts and GoTo.": "La latitude, la longitude et l'altitude de votre site, utilisées pour le ciel, le crépuscule, les courbes de hauteur et le GoTo.",
     "Focus motor": "Moteur de mise au point",
-    "Target identified:": "Cible identifiée :"
+    "Target identified:": "Cible identifiée :",
+    "SIRIL SCRIPTS": "SCRIPTS SIRIL",
+    "Siril scripts": "Scripts Siril"
   },
   "de": {
     "Start": "Start",
@@ -936,7 +933,6 @@
     "Polaris and your LLM are on different machines, so the LLM server must allow this page's origin (CORS). For Ollama, run it with": "Polaris und Ihr LLM laufen auf unterschiedlichen Rechnern, daher muss der LLM-Server den Origin dieser Seite zulassen (CORS). Starten Sie Ollama dazu mit",
     "Polaris frames every screen between two status bars. Let's go over what each item means, top bar first, then the bottom one.": "Polaris rahmt jeden Bildschirm zwischen zwei Statusleisten ein. Sehen wir uns an, was die einzelnen Elemente bedeuten, zuerst die obere Leiste, dann die untere.",
     "Polaris reaches your LLM through the host, so no CORS setup is needed.": "Polaris erreicht Ihr LLM über den Host, eine CORS-Konfiguration ist daher nicht erforderlich.",
-    "Ported Siril Scripts…": "Portierte Siril-Skripte…",
     "PREVIEW: test frames & plate solve": "PREVIEW: Testframes und Plate solve",
     "Preview will appear here…": "Die Vorschau erscheint hier…",
     "Previous": "Zurück",
@@ -948,7 +944,6 @@
     "RIGS: your equipment": "RIGS: Ihre Ausrüstung",
     "Run": "Ausführen",
     "Run a local LLM on this computer with": "Betreiben Sie ein lokales LLM auf diesem Computer mit",
-    "Run a ported script on this folder or the selected files": "Ein portiertes Skript auf diesen Ordner oder die ausgewählten Dateien anwenden",
     "Run AI models on the GPU (ncnn-Vulkan)": "KI-Modelle auf der GPU ausführen (ncnn-Vulkan)",
     "Run Python scripts against Polaris's processing engine (polarispy). Bundled examples plus your own in": "Führen Sie Python-Skripte mit der Verarbeitungs-Engine von Polaris aus (polarispy). Mitgelieferte Beispiele sowie Ihre eigenen in",
     "runs a local model on this Polaris host.": "führt ein lokales Modell auf diesem Polaris-Host aus.",
@@ -959,7 +954,6 @@
     "Script finished.": "Skript abgeschlossen.",
     "Scripting runtime installed (numpy + astropy + scipy + Pillow + OpenCV).": "Skript-Laufzeitumgebung installiert (numpy + astropy + scipy + Pillow + OpenCV).",
     "Scripts": "Skripte",
-    "SCRIPTS": "SKRIPTE",
     "Server URL": "Server-URL",
     "Show script credits": "Skript-Credits anzeigen",
     "SKY: find a target": "SKY: ein Ziel finden",
@@ -1029,6 +1023,8 @@
     "Whether the INDI server is connected. Green = connected, grey = off. Click it to jump to the Equipment tab.": "Zeigt an, ob der INDI-Server verbunden ist. Grün = verbunden, grau = aus. Klicken Sie hier, um zur Registerkarte „Ausrüstung“ zu wechseln.",
     "Your site latitude/longitude/altitude, used for the sky, twilight, altitude charts and GoTo.": "Breitengrad, Längengrad und Höhe Ihres Standorts, verwendet für Himmel, Dämmerung, Höhendiagramme und GoTo.",
     "Focus motor": "Fokusmotor",
-    "Target identified:": "Ziel erkannt:"
+    "Target identified:": "Ziel erkannt:",
+    "SIRIL SCRIPTS": "SIRIL-SKRIPTE",
+    "Siril scripts": "Siril-Skripte"
   }
 }

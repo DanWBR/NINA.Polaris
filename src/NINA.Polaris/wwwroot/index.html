@@ -11072,24 +11072,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon">↔</span>
                         <span class="files-icon-label">Compare</span>
                     </button>
-                    <!-- Ported Siril / polarispy scripts that process the whole
-                         folder or a multi-file selection (frame-only scripts live
-                         in the image viewer's SCRIPTS row instead). Shown only when
-                         at least one folder-scope script exists. -->
-                    <template x-if="folderScripts().length">
-                        <span class="files-actions-sep" aria-hidden="true"></span>
-                    </template>
-                    <select class="input-sm" x-init="loadScripts()"
-                            x-show="folderScripts().length" x-cloak
-                            :disabled="scripts.busy"
-                            style="min-width:210px; max-width:340px"
-                            @change="runStudioScript($event.target.value); $event.target.value=''"
-                            title="Run a ported script on this folder or the selected files">
-                        <option value="" disabled selected>Ported Siril Scripts…</option>
-                        <template x-for="s in folderScripts()" :key="s.path">
-                            <option :value="s.path" x-text="(s.icon ? s.icon + ' ' : '') + s.displayName"></option>
-                        </template>
-                    </select>
                 </div>
 
                 <!-- AI Tools — dedicated second toolbar grouping every
@@ -11257,6 +11239,29 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon">📈</span>
                         <span class="files-icon-label">Upscale</span>
                     </button>
+                </div>
+
+                <!-- SIRIL SCRIPTS — one bar whose contents follow the
+                     selection. Every entry is a ported Siril script; what
+                     differs is how many files it consumes. Exactly one file
+                     selected shows the single-frame scripts; no selection or a
+                     multi-file selection shows the ones that work on a set,
+                     which is also what the folder itself offers. Replaces the
+                     old split, where the same feature lived both in a bar
+                     inside the image viewer and in a dropdown on the file
+                     toolbar, under two different names. -->
+                <div class="files-actions files-actions-icons files-ai-toolbar files-scripts-toolbar"
+                     x-init="loadScripts()"
+                     x-show="studioScripts().length" x-cloak>
+                    <span class="files-ai-label" aria-hidden="true">SIRIL SCRIPTS</span>
+                    <template x-for="s in studioScripts()" :key="s.path">
+                        <button class="btn btn-sm btn-icon" :disabled="scripts.busy"
+                                @click="runStudioScript(s.path)"
+                                :title="s.description || s.displayName" :aria-label="s.displayName">
+                            <span class="files-icon" x-text="s.icon"></span>
+                            <span class="files-icon-label" x-text="s.displayName"></span>
+                        </button>
+                    </template>
                 </div>
                 </div><!-- /.files-toolbars -->
                 <div class="files-main">
@@ -11621,8 +11626,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
                     </div>
                     <!-- Auto Workflow pane (planned). Placeholder for now;
-                         the automation pipeline UI lands here. -->
+                         the automation pipeline UI lands here.
+                         Loads the script list because the step menu offers the
+                         installed Siril scripts, and this pane can be the first
+                         thing opened in STUDIO. -->
                     <div class="files-right-pane auto-workflow-pane"
+                         x-init="if (!scripts.loaded) loadScripts()"
                          x-show="studioTab === 'autoworkflow'">
                         <div class="stack-header">
                             <h3 class="stack-title">Auto Workflow</h3>
@@ -17623,21 +17632,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         title="Discard (move to discarded/)">🗑</button>
                 <button class="btn btn-sm btn-danger" @click="closeImageViewer()">✕</button>
             </div>
-            <!-- Ported Siril / polarispy scripts that operate on this frame,
-                 styled like the STUDIO PROCESSING TOOLS row. -->
-            <div class="files-actions files-actions-icons files-ai-toolbar files-scripts-toolbar"
-                 x-init="loadScripts()"
-                 x-show="imageViewerPath && frameScripts().length" x-cloak>
-                <span class="files-ai-label" aria-hidden="true">SCRIPTS</span>
-                <template x-for="s in frameScripts()" :key="s.path">
-                    <button class="btn btn-sm btn-icon" :disabled="scripts.busy"
-                            @click="runFrameScript(s.path)"
-                            :title="s.description || s.displayName" :aria-label="s.displayName">
-                        <span class="files-icon" x-text="s.icon"></span>
-                        <span class="files-icon-label" x-text="s.displayName"></span>
-                    </button>
-                </template>
-            </div>
             <!-- Annotate plate-solve in-progress banner: elapsed time, live
                  solver console (shared filesSolveLog, streamed via /ws/status),
                  and a Cancel button — same UX as the FILES/SKY plate solve. -->
@@ -19331,7 +19325,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260728-nopolarbg"></script>
+    <script src="/js/app.js?v=20260728-wfscripts"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>
