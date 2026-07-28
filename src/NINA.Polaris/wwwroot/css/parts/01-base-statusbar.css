@@ -647,6 +647,9 @@ body.asst-dock-dragging {
 .status-tray-toggle { display: none; }
 /* Captions that only the tray shows: in the bar the badges are icon-only. */
 .tray-label { display: none; }
+/* Day / Night badge. Uppercased here so the i18n key stays the natural word
+   and every translation is shouted too. */
+.night-badge { text-transform: uppercase; }
 
 /* Global panic / abort button in the status bar. Red, pulsing so it reads
    as an emergency control, visible from every tab while a run is active. */
