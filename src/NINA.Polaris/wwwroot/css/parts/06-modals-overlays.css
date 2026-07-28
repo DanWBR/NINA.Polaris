@@ -1363,6 +1363,23 @@
     user-select: none;
 }
 
+/* Telemetry tray wrappers. Inert on desktop: the items render as the same
+   row they always were, and the toggle is hidden. Declared BEFORE the media
+   query below, which is what lets that query win: a media block adds no
+   specificity, so these rules would otherwise override it. */
+.activity-tray {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+.activity-bar-tray-items {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.activity-tray-toggle { display: none; }
+
 /* On mobile the sidebar reverts to a position:fixed bottom strip
    (56px tall). The activity bar would otherwise sit under it, so
    on small screens we float the bar just above the sidebar. */
@@ -1379,6 +1396,38 @@
        the floating activity bar (36px). */
     .content {
         margin-bottom: 92px;
+    }
+
+    /* Collapse the host telemetry behind the ••• button: on a phone those
+       readouts squeeze the activity chips to nothing and truncate anyway.
+       The panel opens UPWARD, since this bar lives at the bottom. */
+    .activity-tray-toggle { display: inline-flex; align-items: center; }
+    .activity-bar-tray-items {
+        display: none;
+        position: absolute;
+        bottom: calc(100% + 8px);
+        right: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 10px 12px;
+        min-width: 170px;
+        max-height: 60vh;
+        overflow-y: auto;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+        z-index: 200;
+    }
+    .activity-bar-tray-items.activity-tray-open { display: flex; }
+    /* Readouts are laid out for a row; in the panel they are list entries,
+       and the right margins that separated them there only add ragged edges
+       here. */
+    .activity-bar-tray-items > * {
+        margin-right: 0;
+        width: 100%;
+        justify-content: flex-start;
     }
 }
 

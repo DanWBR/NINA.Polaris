@@ -42,15 +42,15 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade) — keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260723-badgecaps">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260728-statustray">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260728-toolbarscroll">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260728-setsearch2">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260728-navscroll">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260712-fieldbugs1">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260728-netwidth">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260728-acttray">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260714-overlayfix">
-    <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260712-rename1">
+    <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260728-nowrapbadges">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260728-toolbarslim">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
          stellarium-web-engine iframe; no host-side CSS needed for it. -->
@@ -525,6 +525,27 @@
                     :title="'Update available: ' + (update.latestVersion || '')">
                 ⬆ UPDATE <span x-text="update.latestVersion"></span>
             </button>
+            <!-- Everything past this point collapses behind one button on a
+                 narrow viewport, where the badge row did not fit and wrapped
+                 onto a second line that overlapped the page. The panel reuses
+                 this exact markup, so every badge keeps its bindings and
+                 behaviour; only the layout changes. Abort and Update stay
+                 outside the tray on purpose: burying an emergency stop in a
+                 menu is exactly wrong. -->
+            <div class="status-tray" @click.outside="statusTrayOpen = false">
+                <button class="btn-icon status-tray-toggle"
+                        @click="statusTrayOpen = !statusTrayOpen"
+                        :class="{ 'status-tray-toggle-active': statusTrayOpen }"
+                        :aria-expanded="statusTrayOpen ? 'true' : 'false'"
+                        title="Status badges">
+                    <span aria-hidden="true">•••</span>
+                    <span class="status-tray-dot"
+                          x-show="logs.unreadErrors + logs.unreadWarnings > 0"
+                          :class="{ 'status-tray-dot-error': logs.unreadErrors > 0 }"></span>
+                </button>
+            <div class="status-bar-tray-items"
+                 :class="{ 'status-tray-open': statusTrayOpen }"
+                 @click="statusTrayOpen = false">
             <!-- Discovery / connection method badges. Click to jump to the
                  Equipment tab focused on that source. Each badge shows
                  ON / OFF / a count, and uses ok (green) / warn (amber) /
@@ -663,6 +684,8 @@
                           stroke-linecap="round"/>
                 </svg>
             </button>
+            </div><!-- /.status-bar-tray-items -->
+            </div><!-- /.status-tray -->
         </div>
     </header>
 
@@ -15701,6 +15724,22 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             </template>
         </div>
 
+        <!-- Telemetry tray. Same idea as the status-bar one: on a narrow
+             viewport the storage / throughput / WiFi / host readouts cannot
+             share the strip with the activity chips, so they collapse behind
+             one button and open as a stacked panel. The chips and the
+             transfer progress stay in the bar, because those are the ones the
+             operator is watching in real time. Inert at desktop widths. -->
+        <div class="activity-tray" @click.outside="activityTrayOpen = false">
+            <button class="btn-icon activity-tray-toggle"
+                    @click="activityTrayOpen = !activityTrayOpen"
+                    :class="{ 'status-tray-toggle-active': activityTrayOpen }"
+                    :aria-expanded="activityTrayOpen ? 'true' : 'false'"
+                    title="Host telemetry">
+                <span aria-hidden="true">•••</span>
+            </button>
+        <div class="activity-bar-tray-items"
+             :class="{ 'activity-tray-open': activityTrayOpen }">
         <!-- Auto-push to network storage (SMB / SFTP / mounted path). Shows the
              upload queue + last result so the operator sees files leaving the
              SBC without opening Settings. Only present when the feature is on.
@@ -15825,6 +15864,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                       x-text="(host.processCpuPercent || 0).toFixed(0) + '% · ' + (host.processMemoryMB || 0) + ' MB'"></span>
             </span>
         </div>
+        </div><!-- /.activity-bar-tray-items -->
+        </div><!-- /.activity-tray -->
     </footer>
 
     <!-- Connection lost banner -->
@@ -19325,7 +19366,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260728-iosfs"></script>
+    <script src="/js/app.js?v=20260728-trays"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

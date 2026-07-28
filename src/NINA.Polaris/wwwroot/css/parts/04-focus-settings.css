@@ -1179,15 +1179,28 @@
         gap: 0;
         z-index: 100;
         overflow-x: auto;
-        justify-content: space-around;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;   /* momentum scroll on iOS */
+        scrollbar-width: thin;
+        justify-content: flex-start;
+    }
+    /* Slim scrollbar so the strip reads as swipeable. */
+    .sidebar::-webkit-scrollbar { height: 4px; }
+    .sidebar::-webkit-scrollbar-thumb {
+        background: color-mix(in srgb, var(--accent) 45%, transparent);
+        border-radius: 3px;
     }
 
+    /* Natural width, never squeezed. Sharing a phone's width between fifteen
+       tabs left each one narrower than its own caption, so every label broke
+       onto two lines ("HOM E", "PREVIE W") and the strip turned into a wall of
+       fragments. The rail scrolls sideways instead. */
     .nav-btn {
-        flex: 1;
+        flex: 0 0 auto;
         border-left: none;
         border-top: 3px solid transparent;
-        padding: 6px 2px;
-        min-width: 0;
+        padding: 6px 8px;
+        min-width: 54px;
     }
 
     .nav-btn.active {
@@ -1195,8 +1208,13 @@
         border-top-color: var(--accent);
     }
 
+    /* width:auto undoes the desktop rule's width:100%, which would otherwise
+       hold the caption to the icon's column and let a nowrap label spill out
+       of its button instead of widening it. */
     .nav-label {
         font-size: 8px;
+        white-space: nowrap;
+        width: auto;
     }
 
     .app-layout {

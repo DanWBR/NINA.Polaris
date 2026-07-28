@@ -1379,6 +1379,15 @@ function ninaApp() {
         // in init().
         isFullscreen: false,
 
+        // Status-bar badge tray. Only consulted on narrow viewports, where
+        // the badges live in a dropdown instead of a row; the CSS ignores
+        // this flag at desktop widths, so a tray left open does not leak
+        // into the wide layout when the window is resized back.
+        statusTrayOpen: false,
+
+        // Same, for the activity bar's host-telemetry group.
+        activityTrayOpen: false,
+
         // KC-1: Keep Centered (mount) control loop state. Top-level
         // because the server broadcasts it as a sibling of cameraStream,
         // not nested under mount.* (which is rebuilt every tick from

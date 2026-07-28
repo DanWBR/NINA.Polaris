@@ -629,6 +629,23 @@ body.asst-dock-dragging {
     gap: 10px;
 }
 
+/* Badge tray. At desktop widths these two wrappers are inert: the items keep
+   rendering as the same single row they always were. They only earn their
+   keep on a narrow viewport (see the media query at the end of this file),
+   where the row is collapsed behind one button. */
+.status-tray {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.status-bar-tray-items {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.status-tray-toggle { display: none; }
+
 /* Global panic / abort button in the status bar. Red, pulsing so it reads
    as an emergency control, visible from every tab while a run is active. */
 .status-panic-btn {
@@ -762,10 +779,57 @@ body.asst-dock-dragging {
     gap: 5px;
     font-variant-numeric: tabular-nums;
 }
-@media (max-width: 720px) {
-    .status-clock { display: none; }
-    .status-battery { display: none; }
+/* Narrow viewport: collapse the badge row into a tray.
+   The row does not fit next to the brand, and wrapping it put a second line
+   of badges on top of the page content. One button opens the same badges as
+   a stacked panel instead. This also brings back the clock and the battery
+   chip, which used to be hidden outright below 720px for want of room: in a
+   column there is room. */
+@media (max-width: 768px) {
+    .status-tray-toggle {
+        display: inline-flex;
+        align-items: center;
+        position: relative;
+    }
+    .status-bar-tray-items {
+        display: none;
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        padding: 10px;
+        min-width: 160px;
+        max-height: 70vh;
+        overflow-y: auto;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+        z-index: 200;
+    }
+    .status-bar-tray-items.status-tray-open { display: flex; }
+    /* Badges are sized for a row; in the panel they read as list entries. */
+    .status-bar-tray-items > * {
+        justify-content: flex-start;
+        width: 100%;
+        text-align: left;
+    }
 }
+/* Unread-log dot on the collapsed toggle, so a warning or an error still
+   announces itself with the LOG badge tucked away. */
+.status-tray-dot {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #fcd34d;
+}
+.status-tray-dot.status-tray-dot-error { background: #fca5a5; }
+.status-tray-toggle-active { color: var(--accent); }
 
 /* App Layout */
 .app-layout {
