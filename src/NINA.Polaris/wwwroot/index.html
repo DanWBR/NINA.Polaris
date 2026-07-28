@@ -896,9 +896,9 @@
                                   x-text="(planStatus?.currentTarget ? ' · ' : '') + (planStatus?.totalCompleted || 0) + ' / ' + planStatus?.totalFrames + ' frames'"></span>
                         </span>
                     </div>
-                    <div class="home-status-card" :class="serverReachable ? 'ok' : 'error'">
+                    <div class="home-status-card" :class="connectionLost ? 'error' : 'ok'">
                         <span class="home-status-label">Server</span>
-                        <strong x-text="serverReachable ? 'Online' : 'Reconnecting…'"></strong>
+                        <strong x-text="connectionLost ? 'Reconnecting…' : 'Online'"></strong>
                         <span class="home-status-sub" x-show="activeRig" x-text="'Rig: ' + activeRig"></span>
                     </div>
                 </section>
@@ -15911,7 +15911,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
     </footer>
 
     <!-- Connection lost banner -->
-    <div class="connection-banner" x-show="!serverReachable" x-transition>
+    <div class="connection-banner" x-show="connectionLost" x-transition>
         <span>Connection to server lost. Reconnecting...</span>
     </div>
 
@@ -19408,7 +19408,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260728-topcollapse"></script>
+    <script src="/js/app.js?v=20260728-connquiet"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>

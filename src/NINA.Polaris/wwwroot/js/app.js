@@ -1021,6 +1021,16 @@ function ninaApp() {
         // Connection state
         indiConnected: false,
         serverReachable: true,
+        // What the UI actually reacts to. A single failed request flips
+        // serverReachable at once, but a WiFi hiccup or a busy SBC produces
+        // exactly that and recovers a second later, so announcing it
+        // immediately meant a scary banner that vanished on its own (field
+        // report). The alarm waits for the outage to still be there after the
+        // grace period, and an outage shorter than that is never mentioned at
+        // all, including the "reconnected" toast: nothing was claimed, so
+        // there is nothing to take back.
+        connectionLost: false,
+        _connLostTimer: null,
         devices: [],
         selectedCamera: null,
         selectedTelescope: null,
@@ -4476,10 +4486,7 @@ function ninaApp() {
                 clearTimeout(timer);
                 delete this._pending[key];
 
-                if (!this.serverReachable) {
-                    this.serverReachable = true;
-                    this.toast('Server reconnected', 'ok');
-                }
+                this._setServerReachable(true);
 
                 // DBGLOG-6: log the response. error level for 5xx, warn for
                 // 4xx (including 401 — useful for diagnosing auth churn),
@@ -4555,7 +4562,7 @@ function ninaApp() {
                     throw new Error('Request timed out');
                 }
                 if (err instanceof TypeError && err.message.includes('fetch')) {
-                    this.serverReachable = false;
+                    this._setServerReachable(false);
                 }
                 throw err;
             });
@@ -6861,7 +6868,7 @@ function ninaApp() {
 
             ws.onopen = () => {
                 this._statusWsAttempt = 0;
-                this.serverReachable = true;
+                this._setServerReachable(true);
                 // A WebSocket that opened proves the browser trusts this
                 // origin's certificate for upgrades too — clear the cert gate
                 // and the one-shot reload guard (see _startWsCertWatch).
@@ -7045,6 +7052,28 @@ function ninaApp() {
             if (/windows/.test(ua)) return 'windows';
             if (/linux/.test(ua)) return 'linux';
             return '';
+        },
+
+        // Single entry point for "can we reach the server". Debounces the
+        // alarm: see the comment on `connectionLost`. Recovery is instant,
+        // because a banner that outlives the outage is its own kind of lie.
+        _setServerReachable(ok) {
+            if (ok) {
+                clearTimeout(this._connLostTimer);
+                this._connLostTimer = null;
+                this.serverReachable = true;
+                if (this.connectionLost) {
+                    this.connectionLost = false;
+                    this.toast('Server reconnected', 'ok');
+                }
+                return;
+            }
+            this.serverReachable = false;
+            if (this.connectionLost || this._connLostTimer) return;
+            this._connLostTimer = setTimeout(() => {
+                this._connLostTimer = null;
+                if (!this.serverReachable) this.connectionLost = true;
+            }, 5000);
         },
 
         scheduleReconnect(type) {
