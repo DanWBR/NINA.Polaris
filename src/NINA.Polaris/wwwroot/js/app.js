@@ -1401,6 +1401,20 @@ function ninaApp() {
             } catch (_) { /* private mode: the session still works */ }
         },
 
+        // Same for the header. Kept as its own flag rather than one "chrome
+        // hidden" switch, because the two bars carry different things and an
+        // operator may well want the badges and not the telemetry.
+        statusBarHidden: (function () {
+            try { return localStorage.getItem('polaris-status-bar-hidden') === '1'; }
+            catch (_) { return false; }
+        })(),
+        setStatusBarHidden(hidden) {
+            this.statusBarHidden = !!hidden;
+            try {
+                localStorage.setItem('polaris-status-bar-hidden', hidden ? '1' : '0');
+            } catch (_) { /* private mode: the session still works */ }
+        },
+
         // KC-1: Keep Centered (mount) control loop state. Top-level
         // because the server broadcasts it as a sibling of cameraStream,
         // not nested under mount.* (which is rebuilt every tick from

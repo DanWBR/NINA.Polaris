@@ -521,6 +521,28 @@ body.asst-dock-dragging {
     z-index: 100;
 }
 
+/* Collapsed: a sliver of the bar stays, with a handle in the middle so it
+   reads as something to press rather than a stray border. The whole sliver is
+   the hit target (see the header's @click). Mirrors .activity-bar-collapsed;
+   the shared look lives on .activity-collapse in 06-modals-overlays.css. */
+.status-bar.status-bar-collapsed {
+    height: 7px;
+    min-height: 7px;
+    padding: 0;
+    overflow: hidden;
+    cursor: pointer;
+    justify-content: center;
+}
+.status-bar.status-bar-collapsed > * { display: none; }
+.status-bar.status-bar-collapsed::after {
+    content: '';
+    width: 46px;
+    height: 3px;
+    margin: 2px auto;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
 .status-bar-left {
     display: flex;
     align-items: center;

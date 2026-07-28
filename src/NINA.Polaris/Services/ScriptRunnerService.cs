@@ -128,10 +128,23 @@ public sealed class ScriptRunnerService {
             .Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
 
     // First non-empty line of the module docstring, for the UI subtitle.
+    //
+    // Skips the machinery every script carries above its docstring: the
+    // shebang, the encoding cookie and the "# polaris:" metadata directive.
+    // Those are not descriptions, and the directive in particular used to be
+    // handed to the UI verbatim, so a button's tooltip read
+    // "polaris: name=Narrowband to RGB; icon=...; scope=any".
     private static string FirstDocline(string path) {
         try {
             foreach (var raw in File.ReadLines(path).Take(20)) {
-                var line = raw.Trim().Trim('"', '\'', '#', ' ');
+                var trimmed = raw.Trim();
+                if (trimmed.StartsWith("#!")) continue;
+                if (trimmed.StartsWith('#')
+                    && (trimmed.Contains("polaris:", StringComparison.OrdinalIgnoreCase)
+                        || trimmed.Contains("coding:", StringComparison.OrdinalIgnoreCase))) {
+                    continue;
+                }
+                var line = trimmed.Trim('"', '\'', '#', ' ');
                 if (line.Length > 0) return line.Length > 140 ? line[..140] : line;
             }
         } catch { /* ignore */ }
