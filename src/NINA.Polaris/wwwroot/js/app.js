@@ -268,6 +268,10 @@ function ninaApp() {
             try { return localStorage.getItem('polaris.focusGroupOpen') === '1'; }
             catch { return false; }
         })(),
+        // The FOCUS tab's own copy. Deliberately NOT the shared preference and
+        // NOT persisted: that tab exists to drive the focuser, so it always
+        // opens expanded. Folding it is still allowed for the current session.
+        focusTabGroupOpen: true,
         // Which tab of the native guiding side-panel is shown: status | settings
         // | calibration. Groups the panel's controls by function instead of one
         // long scroll.

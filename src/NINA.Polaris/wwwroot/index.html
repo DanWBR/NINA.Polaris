@@ -2568,13 +2568,13 @@
                      (stepper + step config + info) which was eating
                      ~180px of vertical real estate before the user
                      even saw the focus preview. -->
-                <!-- Same collapsible group as the capture panels, sharing one
-                     preference: fold the motor controls once and they stay
-                     folded everywhere. The live position stays in the header,
-                     so the tab still tells you where the focuser is. -->
+                <!-- Same group as the capture panels, but on its OWN state,
+                     started open and never persisted: this tab exists to drive
+                     the focuser, so it always opens expanded. Folding it still
+                     works for the rest of the session. -->
                 <details class="focus-group" x-show="focusJogConnected"
-                         :open="focusGroupOpen"
-                         @toggle="setFocusGroupOpen($event.target.open)">
+                         :open="focusTabGroupOpen"
+                         @toggle="focusTabGroupOpen = $event.target.open">
                     <summary class="focus-group-head">
                         <span class="focus-group-title">Focus motor</span>
                         <span class="focus-group-pos" x-text="focusPosition">0</span>
@@ -3299,36 +3299,30 @@
                             <span class="focus-group-pos" x-text="focusPosition">0</span>
                             <span class="focus-readout-warn" x-show="focusMoving">MOVING</span>
                         </summary>
-                        <!-- Slider flanked by fast/slow nudge buttons on
-                             each side. The slider stays in sync with the
-                             live position (WS), but during a drag it tracks
-                             focusSliderTarget so the ~1Hz status push does
-                             not snap the thumb under your finger; the move
-                             commits on release (@change). -->
-                        <div class="control-row preview-focus-slider-row" style="display:flex; flex-direction:row; align-items:center; gap:4px; flex-wrap:nowrap">
-                            <button class="btn btn-sm" style="touch-action:none; flex:0 0 auto" :disabled="focusMoving"
+                        <!-- Four nudge buttons: fast/slow out, slow/fast in.
+                             A position slider used to sit between them, but in
+                             a sidebar this narrow it was a few dozen pixels
+                             wide -- one pixel of travel jumped hundreds of
+                             steps, so it could not be aimed. The buttons move
+                             by the configured slow/fast step and repeat while
+                             held, which is what the operator actually uses. -->
+                        <div class="control-row preview-focus-btn-row" style="display:flex; flex-direction:row; align-items:center; gap:4px; flex-wrap:nowrap">
+                            <button class="btn btn-sm" style="touch-action:none; flex:1 1 0" :disabled="focusMoving"
                                     @pointerdown.prevent="startFocusNudgeRepeat(-focusStepFast)"
                                     @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                     @pointercancel="stopFocusNudgeRepeat()"
                                     :title="'Out ' + focusStepFast + ' (fast, hold to repeat)'">&laquo;</button>
-                            <button class="btn btn-sm" style="touch-action:none; flex:0 0 auto" :disabled="focusMoving"
+                            <button class="btn btn-sm" style="touch-action:none; flex:1 1 0" :disabled="focusMoving"
                                     @pointerdown.prevent="startFocusNudgeRepeat(-focusStepSlow)"
                                     @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                     @pointercancel="stopFocusNudgeRepeat()"
                                     :title="'Out ' + focusStepSlow + ' (slow, hold to repeat)'">&lt;</button>
-                            <input type="range" class="focus-slider" style="flex:1 1 auto; min-width:40px"
-                                   min="0" :max="focusMaxPosition > 0 ? focusMaxPosition : 100000" step="1"
-                                   :value="focusSliderDirty ? focusSliderTarget : focusPosition"
-                                   :disabled="focusMoving || !(focusMaxPosition > 0)"
-                                   @input="focusSliderTarget = +$event.target.value; focusSliderDirty = true"
-                                   @change="focusMoveTo(focusSliderTarget); focusSliderDirty = false"
-                                   title="Drag to focus position">
-                            <button class="btn btn-sm" style="touch-action:none; flex:0 0 auto" :disabled="focusMoving"
+                            <button class="btn btn-sm" style="touch-action:none; flex:1 1 0" :disabled="focusMoving"
                                     @pointerdown.prevent="startFocusNudgeRepeat(focusStepSlow)"
                                     @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                     @pointercancel="stopFocusNudgeRepeat()"
                                     :title="'In ' + focusStepSlow + ' (slow, hold to repeat)'">&gt;</button>
-                            <button class="btn btn-sm" style="touch-action:none; flex:0 0 auto" :disabled="focusMoving"
+                            <button class="btn btn-sm" style="touch-action:none; flex:1 1 0" :disabled="focusMoving"
                                     @pointerdown.prevent="startFocusNudgeRepeat(focusStepFast)"
                                     @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                     @pointercancel="stopFocusNudgeRepeat()"
@@ -3690,54 +3684,36 @@
                                 <span class="focus-group-pos" x-text="focusPosition">0</span>
                                 <span class="focus-readout-warn" x-show="focusMoving">MOVING</span>
                             </summary>
-                            <div class="wheel-picker-group">
-                            <!-- Wrapped in template x-if (rather than
-             x-show) because the WheelPicker
-             constructor snapshots data-max ONCE
-             from the DOM at mount time. With
-             x-show the picker would mount while
-             focusMaxPosition is still 0 (its
-             default before the WS payload lands),
-             cache max=0, and clamp every later
-             setValue() back to 0 -- which was the
-             "FOCUS stays at 0 forever" bug. x-if
-             defers the mount until focusMaxPosition
-             is a real number, then Alpine resolves
-             :data-max BEFORE the MutationObserver
-             sees the new <div> and our
-             _mountWheelPickers() runs. -->
-                            <!-- ...and the group's open state joins that
-                                 condition, for the same reason one step
-                                 further: a wheel mounted inside a CLOSED
-                                 <details> measures clientHeight 0, so its
-                                 centre-band math is built on a zero-height
-                                 container and the drum renders off-centre
-                                 until you drag it. Gating the x-if on
-                                 focusGroupOpen defers the mount to the moment
-                                 the group is opened, when the container has a
-                                 real height. -->
-                            <template x-if="focusJogConnected && focusMaxPosition > 0 && focusGroupOpen">
-                                <div class="wheel-col">
-                                    <button class="btn btn-sm wheel-nudge" style="touch-action:none"
-                                            :disabled="focusMoving"
-                                            @pointerdown.prevent="startWheelRepeat('focus', -1)"
-                                            @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
-                                            @pointercancel="stopWheelRepeat()"
-                                            title="Focus -10 (hold to repeat)">&minus;</button>
-                                    <div data-wheel-picker
-                                         data-label="Focus"
-                                         data-min="0"
-                                         :data-max="focusMaxPosition"
-                                         data-step="10"
-                                         data-bind="focusSliderTarget" data-scale="1"
-                                         :data-disabled="focusMoving"
-                                         @pointerdown="focusSliderDirty = true"
-                                         @wheel-pick-end="focusMoveTo(focusSliderTarget); focusSliderDirty = false"></div>
-                                    <button class="btn btn-sm wheel-nudge"
-                                            :disabled="focusMoving"
-                                            @click="videoWheelNudge('focus', 1)" title="Focus +10">+</button>
-                                </div>
-                            </template>
+                            <!-- Same four nudge buttons as PREVIEW. The drum
+                                 picker that used to live here was a third
+                                 column in the exposure/gain row; the buttons
+                                 move by the configured step and need no
+                                 mount-time height, so the group can fold. -->
+                            <div class="control-row" style="display:flex; align-items:center; gap:4px; flex-wrap:nowrap">
+                            <button class="btn btn-sm" style="touch-action:none; flex:1 1 0"
+                                    :disabled="focusMoving"
+                                    @pointerdown.prevent="startFocusNudgeRepeat(-focusStepFast)"
+                                    @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
+                                    @pointercancel="stopFocusNudgeRepeat()"
+                                    :title="'Out ' + focusStepFast + ' (fast, hold to repeat)'">&laquo;</button>
+                            <button class="btn btn-sm" style="touch-action:none; flex:1 1 0"
+                                    :disabled="focusMoving"
+                                    @pointerdown.prevent="startFocusNudgeRepeat(-focusStepSlow)"
+                                    @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
+                                    @pointercancel="stopFocusNudgeRepeat()"
+                                    :title="'Out ' + focusStepSlow + ' (slow, hold to repeat)'">&lt;</button>
+                            <button class="btn btn-sm" style="touch-action:none; flex:1 1 0"
+                                    :disabled="focusMoving"
+                                    @pointerdown.prevent="startFocusNudgeRepeat(focusStepSlow)"
+                                    @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
+                                    @pointercancel="stopFocusNudgeRepeat()"
+                                    :title="'In ' + focusStepSlow + ' (slow, hold to repeat)'">&gt;</button>
+                            <button class="btn btn-sm" style="touch-action:none; flex:1 1 0"
+                                    :disabled="focusMoving"
+                                    @pointerdown.prevent="startFocusNudgeRepeat(focusStepFast)"
+                                    @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
+                                    @pointercancel="stopFocusNudgeRepeat()"
+                                    :title="'In ' + focusStepFast + ' (fast, hold to repeat)'">&raquo;</button>
                             </div>
                         </details>
 
@@ -19354,7 +19330,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260728-focusgroup2"></script>
+    <script src="/js/app.js?v=20260728-focusbtns"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260712-rename1"></script>
