@@ -454,6 +454,45 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .phd2-settle-banner { background:rgba(40,90,160,0.92); border-color:#64b5f6; }
 
 /* RA/Dec aggressiveness sliders in the GUIDE sidebar. */
+/* Collapsible focuser group in the capture side panels. Replaces a fieldset
+   + legend: the summary is the header, and it keeps the live position on
+   screen while the controls are folded away. */
+.focus-group {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 8px 0 0;
+    padding: 0 10px 2px;
+    min-width: 0;
+}
+.focus-group[open] { padding-bottom: 10px; }
+.focus-group-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 0;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.focus-group-head::-webkit-details-marker { display: none; }
+/* Caret on the left, rotating on open, so the header reads as a control. */
+.focus-group-head::before {
+    content: "B8";
+    color: var(--text-muted);
+    transition: transform 0.15s;
+    flex: 0 0 auto;
+}
+.focus-group[open] .focus-group-head::before { transform: rotate(90deg); }
+.focus-group-title { font-size: 12px; color: var(--text-muted); flex: 0 0 auto; }
+.focus-group-pos {
+    margin-left: auto;
+    font-size: 18px;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+.focus-group .focus-readout-warn { font-size: 11px; flex: 0 0 auto; }
+
 .guide-aggr { margin-bottom:10px; display:flex; flex-direction:column; gap:8px; }
 .guide-aggr-row { display:flex; flex-direction:column; gap:2px; }
 .guide-aggr-row label { font-size:11px; color:#bbb; display:flex; justify-content:space-between; }

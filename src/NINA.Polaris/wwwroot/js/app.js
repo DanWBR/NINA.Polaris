@@ -259,6 +259,15 @@ function ninaApp() {
             try { return localStorage.getItem('polaris.guideSideCollapsed') === '1'; }
             catch { return false; }
         })(),
+        // The focuser block inside a capture panel: position readout, slider,
+        // four nudge buttons and a go-to row. Useful, but it pushes the
+        // shutter and the capture settings down the sidebar on a small screen,
+        // and most of a session never touches it. Collapsed by default, and
+        // the choice sticks like the two above.
+        focusGroupOpen: (function() {
+            try { return localStorage.getItem('polaris.focusGroupOpen') === '1'; }
+            catch { return false; }
+        })(),
         // Which tab of the native guiding side-panel is shown: status | settings
         // | calibration. Groups the panel's controls by function instead of one
         // long scroll.
@@ -23632,6 +23641,15 @@ function ninaApp() {
             try {
                 localStorage.setItem('polaris.quickControlsCollapsed',
                     this.quickControlsCollapsed ? '1' : '0');
+            } catch { /* private-browsing / quota — silent */ }
+        },
+
+        // Focuser group in the capture panels. Driven by <details>, so the
+        // toggle event carries the new state; we only persist it.
+        setFocusGroupOpen(open) {
+            this.focusGroupOpen = !!open;
+            try {
+                localStorage.setItem('polaris.focusGroupOpen', this.focusGroupOpen ? '1' : '0');
             } catch { /* private-browsing / quota — silent */ }
         },
 
