@@ -1,0 +1,20 @@
+[Unit]
+# Grows the root partition + filesystem to fill the card on boot. Ships in
+# the .deb rather than only in the image-build script: that way a host
+# flashed from an image that never had it (the Orange Pi 4 Pro one did not)
+# picks it up on the next Polaris update and grows on the following boot.
+#
+# No ConditionPathExists here on purpose. The script owns the decision and
+# only records "done" once it has verified the filesystem covers the
+# partition, so a boot where growpart was missing gets another chance.
+Description=Grow the Polaris root filesystem to fill the disk
+After=local-fs.target
+Before=polaris.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/polaris/bin/polaris-growroot.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

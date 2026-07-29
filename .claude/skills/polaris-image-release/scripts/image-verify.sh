@@ -36,9 +36,18 @@ echo "   service links: $(ls "$MNT/etc/systemd/system/multi-user.target.wants/" 
 echo "== residue (every number should be 0)"
 echo "   machine-id bytes: $(stat -c %s "$MNT/etc/machine-id" 2>/dev/null)"
 echo "   TLS cert dirs:    $(find "$MNT" -maxdepth 7 -type d -path '*NINA.Polaris*' -name cert 2>/dev/null | wc -l)"
-echo "   growroot markers: $(find "$MNT/var/lib" -name 'polaris-growroot*' 2>/dev/null | wc -l)"
+echo "   growroot markers: $(find "$MNT/var/lib" -name 'polaris-growroot*' -o -path '*/polaris/growroot.done' 2>/dev/null | wc -l)"
 echo "   journal files:    $(find "$MNT/var/log/journal" -type f 2>/dev/null | wc -l)"
 echo "   leftover profile: $(find "$MNT" -maxdepth 7 -name active.json -path '*NINA.Polaris*' 2>/dev/null | wc -l)"
+
+# The thing that does the growing has to BE there. The Orange Pi 4 Pro image
+# shipped with no grow-root at all, so its root stayed at the image size on a
+# 64 GB card, and the marker check above reported a clean 0 the whole time.
+echo "== grow-root (a shipped image needs the unit, enabled)"
+echo "   unit present: $(ls "$MNT/lib/systemd/system/polaris-growroot.service" \
+                            "$MNT/etc/systemd/system/polaris-growroot.service" 2>/dev/null | wc -l) (want >= 1)"
+echo "   enabled:      $(ls "$MNT/etc/systemd/system/multi-user.target.wants/polaris-growroot.service" 2>/dev/null | wc -l) (want 1)"
+echo "   growpart:     $([ -x "$MNT/usr/bin/growpart" ] && echo present || echo 'MISSING (script falls back to sfdisk)')"
 
 echo "== kernel console (the LAST console= must be a screen: tty0 / tty1)"
 found=0

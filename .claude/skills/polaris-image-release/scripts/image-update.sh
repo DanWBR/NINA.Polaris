@@ -110,7 +110,11 @@ say "sanitize"
 : > "$MNT/etc/machine-id"
 rm -f "$MNT/var/lib/dbus/machine-id"
 find "$MNT" -maxdepth 7 -type d -path '*NINA.Polaris*' -name cert -exec rm -rf {} + 2>/dev/null || true
-rm -f "$MNT/var/lib/polaris-growroot.done" "$MNT/var/lib/misc/polaris-growroot.done" 2>/dev/null || true
+# Grow-root markers, all three spellings: the legacy one the image-build
+# script wrote, and the packaged one (/var/lib/polaris/growroot.done). Ship
+# either and the flashed card never grows past the image size.
+rm -f "$MNT/var/lib/polaris-growroot.done" "$MNT/var/lib/misc/polaris-growroot.done" \
+      "$MNT/var/lib/polaris/growroot.done" 2>/dev/null || true
 rm -rf "$MNT/var/log/journal/"* 2>/dev/null || true
 find "$MNT/var/log" -type f -name '*.log' -exec truncate -s 0 {} \; 2>/dev/null || true
 rm -f "$MNT/root/.bash_history" "$MNT/home/polaris/.bash_history" 2>/dev/null || true
@@ -118,7 +122,7 @@ rm -rf "$MNT/var/lib/apt/lists/"* "$MNT/var/cache/apt/archives/"*.deb 2>/dev/nul
 
 say "residue: machine-id=$(stat -c %s "$MNT/etc/machine-id")B" \
     "certs=$(find "$MNT" -maxdepth 7 -type d -path '*NINA.Polaris*' -name cert 2>/dev/null | wc -l)" \
-    "growroot=$(find "$MNT/var/lib" -name 'polaris-growroot*' 2>/dev/null | wc -l)" \
+    "growroot=$(find "$MNT/var/lib" -name 'polaris-growroot*' -o -path '*/polaris/growroot.done' 2>/dev/null | wc -l)" \
     "journal=$(find "$MNT/var/log/journal" -type f 2>/dev/null | wc -l)"
 
 # Free space full of old data compresses; zeroed free space disappears.

@@ -116,6 +116,21 @@ case "$1" in
         chmod 0755 /opt/polaris/bin/polaris-usb-mount.sh 2>/dev/null || true
         mkdir -p /media/polaris 2>/dev/null || true
         chmod 0755 /media/polaris 2>/dev/null || true
+        # First-boot root grow. Lives here (not only in the image-build
+        # script) so a host flashed from an image that shipped without it
+        # gets it on the next update and grows on the following boot.
+        chmod 0755 /opt/polaris/bin/polaris-growroot.sh 2>/dev/null || true
+        # Drop the pre-.deb copy. A unit in /etc/systemd/system SHADOWS the
+        # one we ship in /lib, so leaving it there would keep running the old
+        # script, which marked itself done even when the resize never
+        # happened. Its marker goes too, for the same reason.
+        if [ -e /etc/systemd/system/polaris-growroot.service ]; then
+            systemctl disable polaris-growroot.service >/dev/null 2>&1 || true
+            rm -f /etc/systemd/system/polaris-growroot.service
+            rm -f /usr/local/sbin/polaris-growroot.sh
+            rm -f /var/lib/polaris-growroot.done
+            echo "polaris: replaced the legacy grow-root unit with the packaged one"
+        fi
 
         # PolicyKit reload picks up the polaris rules that grant the polaris
         # user passwordless nmcli / power / clock / self-update access. Two
@@ -158,6 +173,14 @@ case "$1" in
                 # customised polaris-hotspot via the UI.
                 systemctl enable polaris-wifi-bootstrap.service >/dev/null 2>&1 || true
             fi
+
+            # Grow-root is enabled on UPGRADES too, unlike the two above.
+            # The hosts that need it most are the ones already running from
+            # an image that never had the unit, and they only ever see an
+            # upgrade. The script no-ops once the filesystem fills the disk,
+            # so enabling it on a machine that does not need it costs one
+            # check per boot.
+            systemctl enable polaris-growroot.service >/dev/null 2>&1 || true
 
             # Start (or restart if already running on upgrade)
             if systemctl is-active --quiet polaris.service; then

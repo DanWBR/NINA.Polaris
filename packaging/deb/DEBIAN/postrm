@@ -14,6 +14,7 @@ case "$1" in
         if [ -d /run/systemd/system ]; then
             systemctl disable polaris.service >/dev/null 2>&1 || true
             systemctl disable polaris-wifi-bootstrap.service >/dev/null 2>&1 || true
+            systemctl disable polaris-growroot.service >/dev/null 2>&1 || true
             systemctl daemon-reload >/dev/null 2>&1 || true
         fi
 
