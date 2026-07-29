@@ -12665,6 +12665,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         · failed <span x-text="storagePushStatus.failed || 0"></span>
                         <button class="btn btn-sm" style="margin-left:8px" x-show="(storagePushStatus.failed || 0) > 0"
                                 @click="retryStoragePush()">Retry failed</button>
+                        <!-- Recordings ride their own lane (see
+                             StoragePushService). Shown apart because a
+                             multi-GB .ser sits in the counters for a long
+                             time and folded into the image total that looks
+                             like a stuck queue. -->
+                        <div style="margin-top:4px" x-cloak
+                             x-show="storagePushStatus.videoCurrentFile || (storagePushStatus.videoQueued || 0) > 0">
+                            <span>Recording upload</span>:
+                            <span x-text="storagePushStatus.videoCurrentFile
+                                || ((storagePushStatus.videoQueued || 0) + ' queued')"></span>
+                        </div>
                         <div class="text-warn" style="margin-top:4px" x-show="storagePushStatus.lastError"
                              x-text="'Last error: ' + storagePushStatus.lastError"></div>
                     </div>
@@ -12775,11 +12786,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <input type="number" class="input-sm" min="0" max="120" step="2"
                                        x-model.number="navPad.bottom" @change="applyNavPad()">
                             </label>
-                            <label>&nbsp;
-                                <button class="btn btn-sm" @click="resetNavPad()"
-                                        title="Back to zero on all four sides">Reset</button>
-                            </label>
                         </div>
+                        <!-- Own line, not a fifth .af-params cell: those cells
+                             are label-above-control columns, and a button in
+                             one needed an empty caption to line up, which left
+                             a band of dead space above it. -->
+                        <button class="btn btn-sm" style="margin-top:10px"
+                                @click="resetNavPad()"
+                                title="Back to zero on all four sides">Reset</button>
                     </div>
                     <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
                         Pixels of empty space around the navigation rail, for when it

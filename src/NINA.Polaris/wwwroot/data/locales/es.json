@@ -2728,6 +2728,7 @@
   "Record failed:": "Error al guardar el registro:",
   "Recording (SER)": "Grabación (SER)",
   "Recording stopped": "Se ha detenido la grabación",
+  "Recording upload": "Subida de la grabación",
   "Redo (Ctrl+Shift+Z / Ctrl+Y)": "Rehacer (Ctrl+Mayús+Z / Ctrl+Y)",
   "Reduce halos": "Reducir los halos",
   "Reduce motion (disable UI animations)": "Reducir el movimiento (desactivar las animaciones de la interfaz de usuario)",

@@ -646,7 +646,14 @@ public static class StatusStreamHandler {
                             failed        = storagePush.Failed,
                             currentFile   = storagePush.CurrentFile,
                             lastError     = storagePush.LastError,
-                            lastUploadUtc = storagePush.LastUploadUtc?.ToString("o")
+                            lastUploadUtc = storagePush.LastUploadUtc?.ToString("o"),
+                            // Recordings upload on their own lane. Reported
+                            // separately because a multi-GB .ser keeps the
+                            // count at 1 for a long time, and folded into the
+                            // image total that reads like a stuck queue.
+                            videoQueued      = storagePush.VideoQueued,
+                            videoUploaded    = storagePush.VideoUploaded,
+                            videoCurrentFile = storagePush.VideoCurrentFile
                         },
                         // A removable USB drive plugged in at runtime, awaiting the
                         // user's yes/no to move the capture home onto it. null when
