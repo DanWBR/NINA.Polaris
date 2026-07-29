@@ -121,16 +121,58 @@ window.addEventListener('message', async (ev) => {
 // is enough (every tab is a Polaris instance), so no " - Polaris" suffix here.
 window.addEventListener('message', (ev) => {
   const d = ev.data;
-  if (!d || d.__polarisTitle !== true) return;
+  if (!d || typeof d !== 'object') return;
+  if (d.__polarisAuth === 'get' || d.__polarisAuth === 'set') {
+    handleAuthRelay(d, ev.source);
+    return;
+  }
+  if (d.__polarisTitle !== true) return;
   const name = (typeof d.name === 'string') ? d.name.trim() : '';
-  for (const inst of instances.values()) {
-    if (inst.frame && inst.frame.contentWindow === ev.source) {
-      inst.displayName = name || null;
-      renderTabs();
-      break;
-    }
+  const inst = instanceForSource(ev.source);
+  if (inst) {
+    inst.displayName = name || null;
+    renderTabs();
   }
 });
+
+function instanceForSource(source) {
+  for (const inst of instances.values()) {
+    if (inst.frame && inst.frame.contentWindow === source) return inst;
+  }
+  return null;
+}
+
+// ---------- auth token relay ----------
+// iOS gives a cross-origin iframe PARTITIONED, ephemeral localStorage and
+// blocks its cookies, so the Polaris UI lost its "remember this device"
+// token every time the app closed and asked for the password again on every
+// launch. (Android keeps both, which is why this only showed up on iPhone.)
+// The shell is first-party, so we hold the token for each instance in native
+// Preferences and hand it back when that instance asks for it.
+//
+// The token is scoped to the origin that issued it, we only ever answer a
+// window that is one of our own instance frames, and the reply is targeted at
+// that instance's origin — so no other page can ask us for it.
+const TOKEN_KEY = (origin) => 'polaris.token.' + origin;
+
+function handleAuthRelay(msg, source) {
+  const inst = instanceForSource(source);
+  if (!inst) return;
+  if (msg.__polarisAuth === 'set') {
+    const tok = (typeof msg.token === 'string' && msg.token) ? msg.token : null;
+    if (tok) prefSet(TOKEN_KEY(inst.origin), tok);
+    else prefRemove(TOKEN_KEY(inst.origin));
+    return;
+  }
+  // 'get' — always answer, even with null: the reply is how the UI learns
+  // there is a shell to push its token to after the next login.
+  prefGet(TOKEN_KEY(inst.origin)).then((token) => {
+    try {
+      source.postMessage({ __polarisAuthToken: true, token: token || null },
+                         inst.origin);
+    } catch { /* frame went away */ }
+  });
+}
 
 async function prefGet(key) {
   try {
@@ -142,6 +184,12 @@ async function prefSet(key, value) {
   try {
     if (Preferences) await Preferences.set({ key, value });
     else localStorage.setItem(key, value);
+  } catch { /* ignore */ }
+}
+async function prefRemove(key) {
+  try {
+    if (Preferences) await Preferences.remove({ key });
+    else localStorage.removeItem(key);
   } catch { /* ignore */ }
 }
 

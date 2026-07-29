@@ -2730,6 +2730,14 @@
                     <div class="preview-area manual-focus-preview-area">
                         <canvas id="manualFocusCanvas" class="preview-canvas"></canvas>
                         <canvas id="manualFocusOverlayCanvas" class="preview-overlay-canvas"></canvas>
+                        <!-- Pinch / wheel / double-tap work on the frame
+                             itself; these are the discoverable version. -->
+                        <div class="pz-toolbar pz-toolbar--compact"
+                             @pointerdown.stop @dblclick.stop @wheel.stop>
+                            <button @click="_pzFit('manualFocusCanvas')" title="Zoom to fit (whole frame)">⊡</button>
+                            <button @click="_pzZoomButton('manualFocusCanvas', 1.3)" title="Zoom in">＋</button>
+                            <button @click="_pzZoomButton('manualFocusCanvas', 1/1.3)" title="Zoom out">－</button>
+                        </div>
                         <div class="preview-overlay" x-show="!selectedCamera">
                             <p>Connect a camera in RIGS first to use the focus assist.</p>
                         </div>
@@ -3061,6 +3069,16 @@
                          was (live stream, snap, etc.). -->
                     <div class="af-preview-area">
                         <canvas id="focusCanvas" class="af-preview-canvas"></canvas>
+                        <!-- Same pan/zoom controls as the LIVE / PREVIEW /
+                             VIDEO frames: pinch, wheel and double-tap work
+                             on the frame itself, these are the discoverable
+                             version of them. -->
+                        <div class="pz-toolbar pz-toolbar--compact"
+                             @pointerdown.stop @dblclick.stop @wheel.stop>
+                            <button @click="_pzFit('focusCanvas')" title="Zoom to fit (whole frame)">⊡</button>
+                            <button @click="_pzZoomButton('focusCanvas', 1.3)" title="Zoom in">＋</button>
+                            <button @click="_pzZoomButton('focusCanvas', 1/1.3)" title="Zoom out">－</button>
+                        </div>
                         <div class="af-preview-overlay"
                              x-show="autoFocus.state !== 'running' && !(autoFocus.points || []).length">
                             <p>Frames will appear here as the AF sweep runs.</p>
@@ -12730,6 +12748,46 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         typeface. Persists per browser; no restart needed.
                     </p>
 
+
+                    <!-- NAVPAD: manual inset for the nav rail (HOME, RIGS…).
+                         A phone puts its notch / Dynamic Island on the left
+                         edge in landscape and its home indicator along the
+                         bottom in portrait, which is exactly where the rail
+                         sits, and the UI runs inside the app's iframe where
+                         safe-area-inset-* always reads 0. So the operator
+                         nudges it by hand, per device. -->
+                    <div style="margin-top:16px; max-width:560px">
+                        <span style="display:block; margin-bottom:6px">Side menu inset</span>
+                        <div class="af-params">
+                            <label title="Pushes the vertical rail away from the left screen edge (clear of a phone's notch in landscape).">Landscape left
+                                <input type="number" class="input-sm" min="0" max="120" step="2"
+                                       x-model.number="navPad.left" @change="applyNavPad()">
+                            </label>
+                            <label title="Gap between the vertical rail and the content next to it.">Landscape right
+                                <input type="number" class="input-sm" min="0" max="120" step="2"
+                                       x-model.number="navPad.right" @change="applyNavPad()">
+                            </label>
+                            <label title="Pushes the horizontal strip down, away from the content above it.">Portrait top
+                                <input type="number" class="input-sm" min="0" max="120" step="2"
+                                       x-model.number="navPad.top" @change="applyNavPad()">
+                            </label>
+                            <label title="Lifts the horizontal strip off the bottom screen edge (clear of the home indicator).">Portrait bottom
+                                <input type="number" class="input-sm" min="0" max="120" step="2"
+                                       x-model.number="navPad.bottom" @change="applyNavPad()">
+                            </label>
+                            <label>&nbsp;
+                                <button class="btn btn-sm" @click="resetNavPad()"
+                                        title="Back to zero on all four sides">Reset</button>
+                            </label>
+                        </div>
+                    </div>
+                    <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
+                        Pixels of empty space around the navigation rail, for when it
+                        lands under a notch, a rounded corner or the home indicator.
+                        The rail grows by what you set instead of squeezing its
+                        buttons. Left/right apply to the vertical rail, top/bottom to
+                        the portrait strip. Persists per browser.
+                    </p>
 
                     <!-- Reduce motion: kill UI animations (panel fade, modal
                          zoom, spinners) for weak client devices or motion

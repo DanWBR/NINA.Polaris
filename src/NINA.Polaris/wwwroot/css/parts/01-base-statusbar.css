@@ -181,6 +181,19 @@ html[data-font="system"] {
     --qc-width: 320px;
     --video-qc-width: 340px;
     --sidebar-width: 64px;
+    /* Operator-set inset for the nav rail, from Settings > Appearance.
+       A phone's notch / Dynamic Island / home indicator sits exactly
+       where the rail does (the left edge in landscape, the bottom strip
+       in portrait), and no CSS environment variable reaches us: the UI
+       runs in an iframe inside the app, where safe-area-inset-* is 0.
+       So the operator nudges it by hand. Zero on a desktop browser. */
+    --nav-pad-left: 0px;
+    --nav-pad-right: 0px;
+    --nav-pad-top: 0px;
+    --nav-pad-bottom: 0px;
+    /* Height of the mobile bottom strip. The activity bar and the content
+       margin both key off it, so it has to include the operator's inset. */
+    --nav-strip-h: calc(56px + var(--nav-pad-top) + var(--nav-pad-bottom));
     --statusbar-height: 36px;
     --activitybar-height: 36px;   /* bottom activity bar (.activity-bar) */
     --statsbar-height: 32px;
@@ -887,15 +900,18 @@ body.asst-dock-dragging {
 .sidebar {
     display: flex;
     flex-direction: column;
-    width: var(--sidebar-width);
-    min-width: var(--sidebar-width);
+    /* The operator's left/right inset GROWS the rail instead of eating
+       into it: at 64px wide there is no slack, and squeezing the column
+       would shrink the icons rather than move them clear of the notch. */
+    width: calc(var(--sidebar-width) + var(--nav-pad-left) + var(--nav-pad-right));
+    min-width: calc(var(--sidebar-width) + var(--nav-pad-left) + var(--nav-pad-right));
     background: var(--bg-secondary);
     border-right: 1px solid var(--border);
     /* 6 px top, 42 px bottom so the last nav button can scroll up
        above the 36 px fixed activity-bar at the viewport bottom.
        Without this the bottom couple of icons sit under the bar
        and are unclickable. */
-    padding: 6px 0 42px 0;
+    padding: 6px var(--nav-pad-right) 42px var(--nav-pad-left);
     gap: 2px;
     overflow-y: auto;
     /* Firefox: thin, semi-transparent scrollbar. */

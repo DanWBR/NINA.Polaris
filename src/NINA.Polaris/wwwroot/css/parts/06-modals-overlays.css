@@ -1436,14 +1436,14 @@
         position: fixed;
         left: 0;
         right: 0;
-        bottom: 56px;
+        bottom: var(--nav-strip-h);
         z-index: 50;
     }
     /* The bar is taken out of the flex column on mobile, so the
-       content needs to leave room for both the sidebar (56px) and
-       the floating activity bar (36px). */
+       content needs to leave room for both the sidebar (56px plus the
+       operator's inset) and the floating activity bar (36px). */
     .content {
-        margin-bottom: 92px;
+        margin-bottom: calc(var(--nav-strip-h) + 36px);
     }
 
     /* Collapse the host telemetry behind the ••• button: on a phone those

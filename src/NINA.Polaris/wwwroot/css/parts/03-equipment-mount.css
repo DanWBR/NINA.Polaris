@@ -91,6 +91,22 @@
     top: 8px;
     bottom: auto;
 }
+/* FOCUS (Auto V-curve + Manual Assist): the frames are short and the
+   bottom-left corner already carries the AF HUD chip, so dock a smaller
+   toolbar in the top-right instead. */
+.af-preview-area > .pz-toolbar,
+.manual-focus-preview-area > .pz-toolbar {
+    top: 6px;
+    right: 6px;
+    left: auto;
+    bottom: auto;
+}
+.pz-toolbar--compact button {
+    min-width: 26px;
+    height: 24px;
+    padding: 0 5px;
+    font-size: 12px;
+}
 .pz-toolbar button:hover { background: rgba(255, 255, 255, 0.16); }
 .pz-toolbar button.pz-active {
     background: rgba(99, 102, 241, 0.25);

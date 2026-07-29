@@ -44,6 +44,13 @@ const _polarisCharts = {
     guide: null, af: null, hfr: null, temp: null, hist: null, alt: null
 };
 
+// Containers that host a pan/zoomable image canvas. Everything the
+// PANZOOM block does (bind listeners, measure the letterboxed bitmap)
+// starts by walking up from the canvas to one of these. The FOCUS frames
+// use their own class, so they are listed alongside .preview-area rather
+// than being given a class whose layout rules they don't want.
+const PZ_AREA_SEL = '.preview-area, .af-preview-area';
+
 // Astrophoto exposure ladder (seconds). Roughly geometric, covers
 // the typical span: planetary lucky-imaging frame times (~50µs upwards
 // on modern CMOS), narrowband sub-exposures (300-600s), and the
@@ -783,6 +790,12 @@ function ninaApp() {
         // translation; this just drives the picker + persistence. Restored from
         // localStorage('nina-ui-lang') in init().
         uiLang: 'en',
+        // NAVPAD: per-device inset for the nav rail, in px (Settings →
+        // Appearance). left/right apply to the vertical rail, top/bottom to
+        // the horizontal strip portrait phones get. Restored from
+        // localStorage('polaris.navPad') in init(); zero everywhere means
+        // "unchanged", which is what every desktop browser wants.
+        navPad: { left: 0, right: 0, top: 0, bottom: 0 },
         padScale: 100,   // control density %, applied (Settings → Appearance)
         padScaleDraft: 100, // slider draft; only committed to padScale on Apply
         // STUDIO: the Stack panel is SHOWN by default; the user can hide it
@@ -3746,6 +3759,7 @@ function ninaApp() {
 
             // Restore all resizable side-panel / column widths.
             this._restorePanelWidths();
+            this._restoreNavPad();
 
             // Restore the guide-frame brightness/contrast slider prefs.
             try {
@@ -4914,6 +4928,19 @@ function ninaApp() {
                 if (saved) {
                     this.auth.token = saved;
                     this.auth.rememberMe = !!localStorage.getItem('polaris_token');
+                    // Not awaited: we already have a token, this is only to
+                    // learn the shell's origin so a later login can push to it.
+                    this._authAskWrapper();
+                } else {
+                    // Nothing local. In the mobile shell that is the NORMAL
+                    // state on iOS, where our localStorage is ephemeral, so
+                    // ask the shell before concluding the user must log in.
+                    const relayed = await this._authAskWrapper();
+                    if (relayed) {
+                        this.auth.token = relayed;
+                        this.auth.rememberMe = true;   // the shell only keeps remembered tokens
+                        try { localStorage.setItem('polaris_token', relayed); } catch (_) { }
+                    }
                 }
                 // Use bare fetch (not apiFetch) so a 401 here doesn't
                 // recurse through _handle401 before we've decided what
@@ -4939,10 +4966,13 @@ function ninaApp() {
                     return;
                 }
                 if (!this.auth.authenticated) {
-                    // Saved token was invalid or expired. Drop it.
+                    // Saved token was invalid or expired. Drop it, including
+                    // the shell's copy — otherwise it keeps handing back a
+                    // dead token on every launch.
                     this.auth.token = '';
                     sessionStorage.removeItem('polaris_token');
                     localStorage.removeItem('polaris_token');
+                    this._authPushToWrapper(null);
                     this.auth.needLogin = true;
                     this.auth.booting = false;
                     return;
@@ -5136,9 +5166,11 @@ function ninaApp() {
             if (this.auth.rememberMe) {
                 localStorage.setItem('polaris_token', token);
                 sessionStorage.removeItem('polaris_token');
+                this._authPushToWrapper(token);
             } else {
                 sessionStorage.setItem('polaris_token', token);
                 localStorage.removeItem('polaris_token');
+                this._authPushToWrapper(null);
             }
         },
 
@@ -5147,6 +5179,69 @@ function ninaApp() {
             this.auth.authenticated = false;
             sessionStorage.removeItem('polaris_token');
             localStorage.removeItem('polaris_token');
+            this._authPushToWrapper(null);
+        },
+
+        // ---- "remember this device" inside the mobile shell -------------
+        //
+        // The app runs this UI in a cross-origin iframe. iOS gives such a
+        // frame PARTITIONED, ephemeral localStorage and blocks its cookies,
+        // so both halves of "remember me" were gone by the next launch and
+        // the operator got the password prompt every single time (Android
+        // keeps both, which is why it only showed up on iPhone). The shell
+        // is first-party and stores the token natively; these two helpers
+        // are our end of that relay.
+        //
+        // Only the shell's own origins are trusted, and the token is only
+        // ever posted to the exact origin an allowed reply came from, never
+        // to '*': any page may embed us, and a bearer token handed to the
+        // embedder would be a real escalation.
+        _authWrapperOriginAllowed(origin) {
+            return origin === 'capacitor://localhost'
+                || origin === 'ionic://localhost'
+                || origin === 'https://localhost'
+                || origin === 'http://localhost';
+        },
+
+        // Ask the shell for this origin's saved token. Resolves null when
+        // there is no shell (a normal browser), when it does not answer, or
+        // when it has nothing saved. The reply also tells us where to push
+        // the token after the next login.
+        _authAskWrapper() {
+            if (window.parent === window) return Promise.resolve(null);
+            return new Promise((resolve) => {
+                let settled = false;
+                const finish = (tok) => {
+                    if (settled) return;
+                    settled = true;
+                    window.removeEventListener('message', onMsg);
+                    resolve(tok || null);
+                };
+                const onMsg = (ev) => {
+                    const d = ev.data;
+                    if (!d || typeof d !== 'object' || d.__polarisAuthToken !== true) return;
+                    if (!this._authWrapperOriginAllowed(ev.origin)) return;
+                    this._authWrapperOrigin = ev.origin;
+                    finish(typeof d.token === 'string' ? d.token : null);
+                };
+                window.addEventListener('message', onMsg);
+                try {
+                    // Carries no secret, so '*' is fine for the question.
+                    window.parent.postMessage({ __polarisAuth: 'get' }, '*');
+                } catch (_) { finish(null); }
+                // Bounded: a plain page embedding us never answers, and boot
+                // must not wait on it.
+                setTimeout(() => finish(null), 700);
+            });
+        },
+
+        _authPushToWrapper(token) {
+            if (!this._authWrapperOrigin) return;   // no shell answered at boot
+            try {
+                window.parent.postMessage(
+                    { __polarisAuth: 'set', token: token || null },
+                    this._authWrapperOrigin);
+            } catch (_) { /* shell went away */ }
         },
 
         // Called by apiFetch when a request returns 401. A 401 is often
@@ -6524,6 +6619,48 @@ function ninaApp() {
                     localStorage.setItem('nina-reduce-motion', '0');
                 }
             } catch (_) { /* private mode etc. */ }
+        },
+
+        // NAVPAD: push the nav rail clear of the hardware. Writes the four
+        // CSS variables the rail (and, in portrait, the activity bar and the
+        // content margin that sit above it) are built on, then persists.
+        // Clamped to 0..120 so a fat-fingered value can't push the rail off
+        // the screen with no way back except the Reset button.
+        applyNavPad() {
+            const px = (v) => Math.max(0, Math.min(120, Math.round(+v || 0)));
+            const p = this.navPad;
+            p.left = px(p.left); p.right = px(p.right);
+            p.top = px(p.top); p.bottom = px(p.bottom);
+            const root = document.documentElement.style;
+            root.setProperty('--nav-pad-left', p.left + 'px');
+            root.setProperty('--nav-pad-right', p.right + 'px');
+            root.setProperty('--nav-pad-top', p.top + 'px');
+            root.setProperty('--nav-pad-bottom', p.bottom + 'px');
+            try { localStorage.setItem('polaris.navPad', JSON.stringify(p)); }
+            catch (_) { /* private mode etc. */ }
+            // Canvases size themselves from their container, which just moved.
+            try { window.dispatchEvent(new Event('resize')); } catch (_) { }
+        },
+
+        resetNavPad() {
+            this.navPad = { left: 0, right: 0, top: 0, bottom: 0 };
+            this.applyNavPad();
+        },
+
+        _restoreNavPad() {
+            try {
+                const raw = localStorage.getItem('polaris.navPad');
+                if (raw) {
+                    const p = JSON.parse(raw);
+                    if (p && typeof p === 'object') {
+                        this.navPad = {
+                            left: +p.left || 0, right: +p.right || 0,
+                            top: +p.top || 0, bottom: +p.bottom || 0
+                        };
+                    }
+                }
+            } catch (_) { /* corrupt / blocked storage: keep the zeros */ }
+            this.applyNavPad();
         },
 
         // UI language (Settings → Appearance). Persist to localStorage (the
@@ -9964,6 +10101,7 @@ function ninaApp() {
             if (canvas) canvas.style.transform = style;
             const overlayId = canvasId === 'liveCanvas' ? 'overlayCanvas'
                 : canvasId === 'previewCanvas' ? 'previewOverlayCanvas'
+                : canvasId === 'manualFocusCanvas' ? 'manualFocusOverlayCanvas'
                 : null;
             if (overlayId) {
                 const ov = document.getElementById(overlayId);
@@ -10025,7 +10163,7 @@ function ninaApp() {
         _pzMetrics(canvasId) {
             const canvas = document.getElementById(canvasId);
             if (!canvas) return null;
-            const area = canvas.closest('.preview-area');
+            const area = canvas.closest(PZ_AREA_SEL);
             if (!area) return null;
             const rect = area.getBoundingClientRect();
             const W = rect.width, H = rect.height;
@@ -10317,20 +10455,23 @@ function ninaApp() {
         },
 
         _pzInitAll() {
-            // Bind pan/zoom on the three main preview areas. Each
-            // .preview-area is the overflow-hidden container that
-            // clips the zoomed canvas. We find them by canvas id's
-            // parentElement.
+            // Bind pan/zoom on every image area. Each container is the
+            // overflow-hidden box that clips the zoomed canvas; we find it
+            // from the canvas id (see PZ_AREA_SEL for which boxes qualify).
+            // The two FOCUS frames are in here because judging focus is
+            // exactly the job that needs a close look at a star.
             const pairs = [
                 ['liveCanvas'],
                 ['previewCanvas'],
                 ['videoCaptureCanvas'],
-                ['autorunCanvas']
+                ['autorunCanvas'],
+                ['focusCanvas'],          // FOCUS > Auto V-curve
+                ['manualFocusCanvas']     // FOCUS > Manual Assist
             ];
             for (const [cid] of pairs) {
                 const canvas = document.getElementById(cid);
                 if (!canvas) continue;
-                const area = canvas.closest('.preview-area');
+                const area = canvas.closest(PZ_AREA_SEL);
                 if (area) this._pzInitArea(area, cid);
             }
         },
