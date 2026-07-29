@@ -153,25 +153,39 @@ function instanceForSource(source) {
 // The token is scoped to the origin that issued it, we only ever answer a
 // window that is one of our own instance frames, and the reply is targeted at
 // that instance's origin — so no other page can ask us for it.
+// The same storage the token is lost from holds the UI's per-device
+// preferences (interface scale, font, the nav-rail inset that exists
+// precisely for this phone), so they ride along on the same relay.
 const TOKEN_KEY = (origin) => 'polaris.token.' + origin;
+const PREFS_KEY = (origin) => 'polaris.prefs.' + origin;
 
 function handleAuthRelay(msg, source) {
   const inst = instanceForSource(source);
   if (!inst) return;
   if (msg.__polarisAuth === 'set') {
-    const tok = (typeof msg.token === 'string' && msg.token) ? msg.token : null;
-    if (tok) prefSet(TOKEN_KEY(inst.origin), tok);
-    else prefRemove(TOKEN_KEY(inst.origin));
+    // 'token' absent means "prefs only, leave the token alone".
+    if ('token' in msg) {
+      const tok = (typeof msg.token === 'string' && msg.token) ? msg.token : null;
+      if (tok) prefSet(TOKEN_KEY(inst.origin), tok);
+      else prefRemove(TOKEN_KEY(inst.origin));
+    }
+    if (msg.prefs && typeof msg.prefs === 'object') {
+      prefSet(PREFS_KEY(inst.origin), JSON.stringify(msg.prefs));
+    }
     return;
   }
-  // 'get' — always answer, even with null: the reply is how the UI learns
-  // there is a shell to push its token to after the next login.
-  prefGet(TOKEN_KEY(inst.origin)).then((token) => {
-    try {
-      source.postMessage({ __polarisAuthToken: true, token: token || null },
-                         inst.origin);
-    } catch { /* frame went away */ }
-  });
+  // 'get' — always answer, even with nothing saved: the reply is how the UI
+  // learns there is a shell to push to after the next login.
+  Promise.all([prefGet(TOKEN_KEY(inst.origin)), prefGet(PREFS_KEY(inst.origin))])
+    .then(([token, prefsRaw]) => {
+      let prefs = null;
+      try { prefs = prefsRaw ? JSON.parse(prefsRaw) : null; } catch { prefs = null; }
+      try {
+        source.postMessage(
+          { __polarisAuthToken: true, token: token || null, prefs },
+          inst.origin);
+      } catch { /* frame went away */ }
+    });
 }
 
 async function prefGet(key) {

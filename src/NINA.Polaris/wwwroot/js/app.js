@@ -51,6 +51,24 @@ const _polarisCharts = {
 // than being given a class whose layout rules they don't want.
 const PZ_AREA_SEL = '.preview-area, .af-preview-area';
 
+// Per-device appearance preferences mirrored to the mobile shell. They live
+// in localStorage, which is exactly the storage iOS empties for a
+// cross-origin iframe between app launches — so without this the operator
+// would set the nav-rail inset (added for that phone) or the UI scale and
+// find them back at the default on the next launch. The shell keeps the bag
+// natively and hands it back at boot. Nothing here is a secret; it is a
+// short allowlist rather than the whole of localStorage so the relay stays
+// something you can read and reason about.
+const PREF_MIRROR_KEYS = [
+    'polaris.navPad',
+    'nina-ui-zoom',
+    'nina-ui-font',
+    'nina-ui-lang',
+    'nina-reduce-motion',
+    'nina-pad-scale',
+    'nina-night-mode'
+];
+
 // Astrophoto exposure ladder (seconds). Roughly geometric, covers
 // the typical span: planetary lucky-imaging frame times (~50µs upwards
 // on modern CMOS), narrowband sub-exposures (300-600s), and the
@@ -3938,6 +3956,17 @@ function ninaApp() {
                     () => setTimeout(resetRootScroll, 80));
                 window.addEventListener('orientationchange',
                     () => setTimeout(resetRootScroll, 300));
+                // Backgrounding the app is the last chance to hand the
+                // appearance prefs to the shell before iOS drops this
+                // frame's storage. pagehide covers the frame being torn
+                // down (tab closed, host switched).
+                {
+                    const push = () => this._prefsPushToWrapper();
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.visibilityState === 'hidden') push();
+                    });
+                    window.addEventListener('pagehide', push);
+                }
                 // Rotating the phone changes the sky frame's size; the
                 // document inside it only finds out if we tell it.
                 {
@@ -5222,6 +5251,9 @@ function ninaApp() {
                     if (!d || typeof d !== 'object' || d.__polarisAuthToken !== true) return;
                     if (!this._authWrapperOriginAllowed(ev.origin)) return;
                     this._authWrapperOrigin = ev.origin;
+                    // Same reply carries the mirrored appearance prefs, and
+                    // it lands before init() reads any of them.
+                    this._prefsRestoreFromWrapper(d.prefs);
                     finish(typeof d.token === 'string' ? d.token : null);
                 };
                 window.addEventListener('message', onMsg);
@@ -5241,6 +5273,38 @@ function ninaApp() {
                 window.parent.postMessage(
                     { __polarisAuth: 'set', token: token || null },
                     this._authWrapperOrigin);
+            } catch (_) { /* shell went away */ }
+        },
+
+        // Write back only the keys we do NOT already have: our own storage
+        // wins when it survived, so the shell's copy can never overwrite a
+        // change made in this session.
+        _prefsRestoreFromWrapper(prefs) {
+            if (!prefs || typeof prefs !== 'object') return;
+            for (const k of PREF_MIRROR_KEYS) {
+                const v = prefs[k];
+                if (typeof v !== 'string') continue;
+                try {
+                    if (localStorage.getItem(k) === null) localStorage.setItem(k, v);
+                } catch (_) { /* blocked storage: nothing to restore into */ }
+            }
+        },
+
+        // Hand the current appearance prefs to the shell. Cheap (seven short
+        // strings), so it runs whenever the app is backgrounded or a value
+        // changes rather than trying to hook every write.
+        _prefsPushToWrapper() {
+            if (!this._authWrapperOrigin) return;
+            const bag = {};
+            try {
+                for (const k of PREF_MIRROR_KEYS) {
+                    const v = localStorage.getItem(k);
+                    if (v !== null) bag[k] = v;
+                }
+            } catch (_) { return; }
+            try {
+                window.parent.postMessage(
+                    { __polarisAuth: 'set', prefs: bag }, this._authWrapperOrigin);
             } catch (_) { /* shell went away */ }
         },
 
@@ -6638,6 +6702,7 @@ function ninaApp() {
             root.setProperty('--nav-pad-bottom', p.bottom + 'px');
             try { localStorage.setItem('polaris.navPad', JSON.stringify(p)); }
             catch (_) { /* private mode etc. */ }
+            this._prefsPushToWrapper();
             // Canvases size themselves from their container, which just moved.
             try { window.dispatchEvent(new Event('resize')); } catch (_) { }
         },
