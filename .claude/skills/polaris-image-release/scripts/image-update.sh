@@ -99,6 +99,40 @@ chroot "$MNT" env DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/polaris-install.de
 rm -f "$MNT/tmp/polaris-install.deb" "$MNT/usr/sbin/policy-rc.d"
 
 say "after: $(chroot "$MNT" dpkg-query -W -f='${Version}' polaris)"
+
+# ---- enable the units the postinst could not ------------------------------
+# The postinst gates its whole systemd block on `[ -d /run/systemd/system ]`,
+# which is FALSE inside a chroot, so `systemctl enable` never runs and a unit
+# the package introduced arrives on the card DISABLED. The units that are
+# enabled in these images got that way during the original build on a live
+# system, which is why the gap went unnoticed: polaris.service worked, and
+# only a newly added unit was missing.
+#
+# Symptom if this is skipped: grow-root and ssh-keygen ship present but inert,
+# so the card never grows and sshd never gets host keys. image-verify.sh
+# checks "enabled", not just "present", for exactly this reason.
+say "enable packaged units"
+for name in polaris-growroot.service polaris-sshkeys.service; do
+    unit="$MNT/lib/systemd/system/$name"
+    [ -f "$unit" ] || { echo "   $name not in this package, skipping"; continue; }
+    want=$(sed -n 's/^WantedBy=//p' "$unit" | head -1 | awk '{print $1}')
+    [ -n "$want" ] || { echo "   $name has no WantedBy, skipping"; continue; }
+    mkdir -p "$MNT/etc/systemd/system/$want.wants"
+    # Target is the path as the BOOTED system sees it, not the chroot path.
+    ln -sf "/lib/systemd/system/$name" "$MNT/etc/systemd/system/$want.wants/$name"
+    echo "   enabled $name -> $want"
+done
+# A unit the image build hand-wrote into /etc SHADOWS the packaged one, so the
+# packaged fix would never take effect. The postinst removes these on a live
+# host; do the same here.
+for stale in polaris-growroot.service polaris-sshkeys.service; do
+    if [ -e "$MNT/etc/systemd/system/$stale" ] && [ ! -L "$MNT/etc/systemd/system/$stale" ]; then
+        rm -f "$MNT/etc/systemd/system/$stale"
+        echo "   removed the legacy /etc copy of $stale"
+    fi
+done
+rm -f "$MNT/usr/local/sbin/polaris-growroot.sh"
+
 say "service links: $(ls "$MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null | grep -c polaris)"
 
 umount -l "$MNT/dev/pts" "$MNT/dev" "$MNT/proc" "$MNT/sys"
