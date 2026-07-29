@@ -132,6 +132,15 @@ case "$1" in
             rm -f /var/lib/polaris-growroot.done
             echo "polaris: replaced the legacy grow-root unit with the packaged one"
         fi
+        # Same for the hand-written keygen unit one image build left behind
+        # (the Orange Pi Zero 3 one carries it). It does the same job, but from
+        # /etc it shadows the packaged unit, so there would be two sources of
+        # truth and only one of them gets fixed by an update.
+        if [ -e /etc/systemd/system/polaris-sshkeys.service ]; then
+            systemctl disable polaris-sshkeys.service >/dev/null 2>&1 || true
+            rm -f /etc/systemd/system/polaris-sshkeys.service
+            echo "polaris: replaced the legacy ssh-keygen unit with the packaged one"
+        fi
 
         # PolicyKit reload picks up the polaris rules that grant the polaris
         # user passwordless nmcli / power / clock / self-update access. Two
