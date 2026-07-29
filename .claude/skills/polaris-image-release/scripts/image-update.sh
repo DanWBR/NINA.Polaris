@@ -159,6 +159,17 @@ find "$MNT" -maxdepth 7 -type d -path '*NINA.Polaris*' -name cert -exec rm -rf {
 # either and the flashed card never grows past the image size.
 rm -f "$MNT/var/lib/polaris-growroot.done" "$MNT/var/lib/misc/polaris-growroot.done" \
       "$MNT/var/lib/polaris/growroot.done" 2>/dev/null || true
+# The capture root. A build board is a board someone used, and what it captured
+# is in here: the Q6A image shipped an 87 MB result.fit of the maintainer's.
+# Not a credential, but not ours to publish, and a first boot should find an
+# empty files/ anyway. The directory itself stays (the writer expects it).
+say "empty the capture root"
+if [ -d "$MNT/home/polaris/files" ]; then
+    n=$(find "$MNT/home/polaris/files" -mindepth 1 | wc -l)
+    find "$MNT/home/polaris/files" -mindepth 1 -delete 2>/dev/null || true
+    echo "   removed $n leftover item(s)"
+fi
+
 # WiFi credentials. The build board is connected to somebody's home network,
 # and NetworkManager writes that connection to disk: the .nmconnection carries
 # the PSK, and on Ubuntu NM also EXPORTS it to /etc/netplan/90-NM-*.yaml, where
