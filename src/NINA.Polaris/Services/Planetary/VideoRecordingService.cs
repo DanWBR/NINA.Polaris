@@ -64,6 +64,14 @@ public class VideoRecordingService : IDisposable {
     private readonly record struct QueueItem(ushort[] Pixels, int ByteLen,
         int Width, int Height, SerColorMode Color, DateTime Utc);
 
+    /// <summary>Raised with the full path once a recording is closed and the
+    /// SER header/trailer are final. The mirror of
+    /// <see cref="ImageWriterService.ImageSaved"/>: network-storage push hangs
+    /// off that one, and a .ser never passes through the image writer, so
+    /// without this event planetary captures were the one thing the share
+    /// never received.</summary>
+    public event Action<string>? RecordingSaved;
+
     public bool IsRecording { get; private set; }
     // The SER writer opens lazily on the first streamed frame, so right after
     // Start() the writer is still null — report the path Start() settled on
@@ -177,6 +185,16 @@ public class VideoRecordingService : IDisposable {
         _pendingPath = null;
         _logger.LogInformation("Recording stopped: {Path} ({N} frames, {Dropped} dropped)",
             path, frames, _droppedFrames);
+
+        // Announce only a finished file with content: Dispose is what patches
+        // the frame count into the header and appends the timestamp trailer,
+        // so anything raised earlier would ship a SER no tool can read. A
+        // zero-frame recording (stream died before the first frame) leaves a
+        // file nobody wants on the share.
+        if (!string.IsNullOrEmpty(path) && frames > 0 && File.Exists(path)) {
+            try { RecordingSaved?.Invoke(path); }
+            catch (Exception ex) { _logger.LogDebug(ex, "RecordingSaved handler threw"); }
+        }
     }
 
     /// <summary>Background drain: ushort->byte LE encode into a single

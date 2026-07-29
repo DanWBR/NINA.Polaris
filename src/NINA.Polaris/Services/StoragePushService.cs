@@ -14,6 +14,7 @@
 
 using System.Collections.Concurrent;
 using System.Threading.Channels;
+using NINA.Polaris.Services.Planetary;
 using NINA.Polaris.Services.Storage;
 
 namespace NINA.Polaris.Services;
@@ -31,6 +32,7 @@ public sealed class StoragePushService : BackgroundService {
     private const int MaxFailedTracked = 500;
 
     private readonly ImageWriterService _writer;
+    private readonly VideoRecordingService _video;
     private readonly ProfileService _profile;
     private readonly IStorageTargetFactory _factory;
     private readonly ILogger<StoragePushService> _logger;
@@ -75,9 +77,11 @@ public sealed class StoragePushService : BackgroundService {
 
     private sealed record QueueItem(string LocalPath, string RelPath, int Attempts);
 
-    public StoragePushService(ImageWriterService writer, ProfileService profile,
-                              IStorageTargetFactory factory, ILogger<StoragePushService> logger) {
+    public StoragePushService(ImageWriterService writer, VideoRecordingService video,
+                              ProfileService profile, IStorageTargetFactory factory,
+                              ILogger<StoragePushService> logger) {
         _writer = writer;
+        _video = video;
         _profile = profile;
         _factory = factory;
         _logger = logger;
@@ -119,6 +123,10 @@ public sealed class StoragePushService : BackgroundService {
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
         _writer.ImageSaved += Enqueue;
+        // Planetary recordings never go through the image writer, so they need
+        // their own subscription — otherwise the share got every FITS of the
+        // night and not one .ser.
+        _video.RecordingSaved += Enqueue;
         try {
             await foreach (var item in _queue.Reader.ReadAllAsync(stoppingToken)) {
                 // Decrement AFTER the upload finishes, not on dequeue. The
@@ -132,6 +140,7 @@ public sealed class StoragePushService : BackgroundService {
             // shutting down
         } finally {
             _writer.ImageSaved -= Enqueue;
+            _video.RecordingSaved -= Enqueue;
             DropConnection();
         }
     }
