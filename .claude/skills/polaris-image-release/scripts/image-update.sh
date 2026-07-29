@@ -133,6 +133,16 @@ for stale in polaris-growroot.service polaris-sshkeys.service; do
 done
 rm -f "$MNT/usr/local/sbin/polaris-growroot.sh"
 
+# The v0.97.5 package shipped polaris-sshkeys.service ordered Before=ssh.socket,
+# which forms an ordering cycle; systemd breaks it by DELETING the ssh.socket
+# job, so that unit turns SSH off instead of on. Patch it in place until a
+# release without it is out, then this block stops matching and can go.
+U="$MNT/lib/systemd/system/polaris-sshkeys.service"
+if grep -q '^Before=.*ssh\.socket' "$U" 2>/dev/null; then
+    sed -i 's/^\(Before=.*\)[[:space:]]ssh\.socket/\1/' "$U"
+    echo "   patched polaris-sshkeys.service (dropped the ssh.socket ordering cycle)"
+fi
+
 say "service links: $(ls "$MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null | grep -c polaris)"
 
 umount -l "$MNT/dev/pts" "$MNT/dev" "$MNT/proc" "$MNT/sys"

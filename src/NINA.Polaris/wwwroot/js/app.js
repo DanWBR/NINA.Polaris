@@ -7376,6 +7376,24 @@ function ninaApp() {
             }, 5000);
         },
 
+        // Retry an idempotent GET a few times before giving up. The boot fires
+        // ~25 requests at once and a phone browser drops some of them under
+        // that burst with the server perfectly up, so the reconnect path never
+        // fires and a one-shot loader was left broken for the whole session.
+        async _retryGet(fn, attempts = 3, delayMs = 600) {
+            let lastErr;
+            for (let i = 0; i < attempts; i++) {
+                try { return await fn(); }
+                catch (e) {
+                    lastErr = e;
+                    if (i < attempts - 1) {
+                        await new Promise(r => setTimeout(r, delayMs * (i + 1)));
+                    }
+                }
+            }
+            throw lastErr;
+        },
+
         // Re-fetch every per-card driver catalogue. Called after a reconnect;
         // each loader already owns its own error handling, so a still-shaky
         // server just leaves the previous state in place and the next
@@ -20307,26 +20325,38 @@ function ninaApp() {
         async loadOpticsCatalogue() {
             if (this.opticsCatalogue.loaded) return;
             try {
-                const [scopesResp, accResp, guideResp, dslrResp] = await Promise.all([
-                    fetch('/data/telescopes.json'),
-                    fetch('/data/optical-accessories.json'),
-                    fetch('/data/guidescopes.json'),
-                    fetch('/data/dslr-cameras.json')
-                ]);
-                const scopes = await scopesResp.json();
-                const acc = await accResp.json();
-                const guide = await guideResp.json();
-                const dslr = await dslrResp.json();
-                this.opticsCatalogue = {
-                    telescopes:  scopes.telescopes  || [],
-                    accessories: acc.accessories     || [],
-                    guidescopes: guide.guidescopes   || [],
-                    dslrCameras: dslr.cameras        || [],
-                    loaded: true
-                };
+                // Retried, because the failure mode here is a single dropped
+                // request, not an outage: init() fires ~25 fetches at once and
+                // iOS drops some of them under that burst while the server
+                // stays up, so there is no reconnect event to recover from.
+                this.opticsCatalogue = await this._retryGet(async () => {
+                    const urls = ['/data/telescopes.json', '/data/optical-accessories.json',
+                                  '/data/guidescopes.json', '/data/dslr-cameras.json'];
+                    const resps = await Promise.all(urls.map(u => fetch(u, { cache: 'force-cache' })));
+                    const bad = resps.find(r => !r.ok);
+                    // Without this the error body parsed fine and every list
+                    // came out empty, which looks identical to "no telescopes
+                    // in the catalogue".
+                    if (bad) throw new Error('HTTP ' + bad.status + ' for ' + bad.url);
+                    const [scopes, acc, guide, dslr] = await Promise.all(resps.map(r => r.json()));
+                    return {
+                        telescopes:  scopes.telescopes || [],
+                        accessories: acc.accessories   || [],
+                        guidescopes: guide.guidescopes || [],
+                        dslrCameras: dslr.cameras      || [],
+                        loaded: true
+                    };
+                });
             } catch (e) {
-                this.toast?.('Failed to load optics catalogue: ' + e.message, 'warn');
-                this.opticsCatalogue = { telescopes: [], accessories: [], guidescopes: [], dslrCameras: [], loaded: true };
+                // NOT loaded:true. Marking a failed load as done left the Main
+                // Telescope dropdowns empty for the rest of the session, and
+                // the early return above meant reopening RIGS never retried:
+                // the operator saw a card with nothing to pick and no way back
+                // short of reloading the page (field report). Leaving the flag
+                // false makes the next open try again.
+                this.toast?.('Could not load the telescope catalogue, reopen RIGS to retry: '
+                    + (e.message || e), 'warn');
+                this.opticsCatalogue = { telescopes: [], accessories: [], guidescopes: [], dslrCameras: [], loaded: false };
             }
             // Re-sync the Main Telescope / Guidescope dropdowns to the
             // active rig's saved brand + model now that the catalogue
@@ -27525,10 +27555,13 @@ function ninaApp() {
         async loadPlateSolveConfig() {
             this.psLoading = true;
             try {
-                const [solvers, cfg] = await Promise.all([
+                // Retried: same boot-burst dropped request as the optics
+                // catalogue, and this one toasted an error at the operator on
+                // the HOME screen before anything was even connected.
+                const [solvers, cfg] = await this._retryGet(() => Promise.all([
                     this.apiGet('/api/platesolve/solvers'),
                     this.apiGet('/api/platesolve/config')
-                ]);
+                ]));
                 this.psSolvers = solvers || [];
                 if (cfg) {
                     this.psConfig = {
