@@ -115,6 +115,13 @@ find "$MNT" -maxdepth 7 -type d -path '*NINA.Polaris*' -name cert -exec rm -rf {
 # either and the flashed card never grows past the image size.
 rm -f "$MNT/var/lib/polaris-growroot.done" "$MNT/var/lib/misc/polaris-growroot.done" \
       "$MNT/var/lib/polaris/growroot.done" 2>/dev/null || true
+# SSH host keys: every card flashed from this image would otherwise share one
+# identity, and anyone holding the image could impersonate all of them.
+# Removing them is only safe because polaris-sshkeys.service regenerates them
+# before sshd on first boot -- the two halves have to ship together. Without
+# that unit, deleting these means no SSH at all (sshd -t fails), which is
+# exactly how the Orange Pi 4 Pro image went out.
+rm -f "$MNT/etc/ssh/ssh_host_"* 2>/dev/null || true
 rm -rf "$MNT/var/log/journal/"* 2>/dev/null || true
 find "$MNT/var/log" -type f -name '*.log' -exec truncate -s 0 {} \; 2>/dev/null || true
 rm -f "$MNT/root/.bash_history" "$MNT/home/polaris/.bash_history" 2>/dev/null || true
@@ -123,7 +130,8 @@ rm -rf "$MNT/var/lib/apt/lists/"* "$MNT/var/cache/apt/archives/"*.deb 2>/dev/nul
 say "residue: machine-id=$(stat -c %s "$MNT/etc/machine-id")B" \
     "certs=$(find "$MNT" -maxdepth 7 -type d -path '*NINA.Polaris*' -name cert 2>/dev/null | wc -l)" \
     "growroot=$(find "$MNT/var/lib" -name 'polaris-growroot*' -o -path '*/polaris/growroot.done' 2>/dev/null | wc -l)" \
-    "journal=$(find "$MNT/var/log/journal" -type f 2>/dev/null | wc -l)"
+    "journal=$(find "$MNT/var/log/journal" -type f 2>/dev/null | wc -l)" \
+    "sshhostkeys=$(ls "$MNT/etc/ssh/ssh_host_"* 2>/dev/null | wc -l)"
 
 # Free space full of old data compresses; zeroed free space disappears.
 # The "No space left on device" at the end of the fill is the expected finish.

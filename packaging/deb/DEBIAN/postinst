@@ -120,6 +120,7 @@ case "$1" in
         # script) so a host flashed from an image that shipped without it
         # gets it on the next update and grows on the following boot.
         chmod 0755 /opt/polaris/bin/polaris-growroot.sh 2>/dev/null || true
+        chmod 0755 /opt/polaris/bin/polaris-sshkeys.sh 2>/dev/null || true
         # Drop the pre-.deb copy. A unit in /etc/systemd/system SHADOWS the
         # one we ship in /lib, so leaving it there would keep running the old
         # script, which marked itself done even when the resize never
@@ -172,6 +173,25 @@ case "$1" in
                 # install so we do not stomp on a user who already
                 # customised polaris-hotspot via the UI.
                 systemctl enable polaris-wifi-bootstrap.service >/dev/null 2>&1 || true
+            fi
+
+            # SSH host keys, same reasoning as grow-root below: enable on
+            # upgrades too, because the hosts that need it are the ones
+            # already flashed from an image that had no such unit.
+            systemctl enable polaris-sshkeys.service >/dev/null 2>&1 || true
+            # Run it NOW rather than waiting for a reboot. On a board whose
+            # sshd has been failing since first boot this is what actually
+            # brings SSH up, and a headless operator has no other way in.
+            if [ -x /opt/polaris/bin/polaris-sshkeys.sh ] && [ -x /usr/sbin/sshd ]; then
+                /opt/polaris/bin/polaris-sshkeys.sh || true
+                # sshd only failed for want of keys, so start it if it is
+                # enabled but not running. try-restart leaves a disabled or
+                # deliberately-stopped sshd alone.
+                if systemctl is-enabled --quiet ssh.service 2>/dev/null \
+                   && ! systemctl is-active --quiet ssh.service 2>/dev/null; then
+                    systemctl start ssh.service >/dev/null 2>&1 \
+                        && echo "polaris: started sshd (it had no host keys)"
+                fi
             fi
 
             # Grow-root is enabled on UPGRADES too, unlike the two above.

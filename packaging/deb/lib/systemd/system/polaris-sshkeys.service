@@ -1,0 +1,23 @@
+[Unit]
+# Creates the SSH host keys before sshd needs them. A shipped image carries
+# no host keys on purpose (they would be shared by every flashed card), and
+# nothing else on these images generates them, so sshd failed its
+# ExecStartPre=sshd -t on every boot and port 22 answered "connection
+# refused" on a headless board.
+#
+# Ordered before both the service and the socket unit, so it holds whichever
+# way sshd is activated. No ConditionPathExists on the keys: the script is
+# idempotent (ssh-keygen -A only creates what is missing) and reporting
+# "already present" in the journal is worth more than skipping the unit.
+Description=Generate SSH host keys when missing
+ConditionPathExists=/usr/sbin/sshd
+Before=ssh.service sshd.service ssh.socket
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/polaris/bin/polaris-sshkeys.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

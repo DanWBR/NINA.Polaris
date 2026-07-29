@@ -49,6 +49,16 @@ echo "   unit present: $(ls "$MNT/lib/systemd/system/polaris-growroot.service" \
 echo "   enabled:      $(ls "$MNT/etc/systemd/system/multi-user.target.wants/polaris-growroot.service" 2>/dev/null | wc -l) (want 1)"
 echo "   growpart:     $([ -x "$MNT/usr/bin/growpart" ] && echo present || echo 'MISSING (script falls back to sfdisk)')"
 
+# SSH must be BOTH keyless (shared keys across every flashed card would be a
+# real vulnerability) and able to make its own keys on first boot. Ship only
+# the first half and sshd fails ExecStartPre=sshd -t forever: port 22 answers
+# "connection refused" and a headless board is unreachable.
+echo "== ssh (want: 0 host keys AND the keygen unit enabled)"
+echo "   host keys:    $(ls "$MNT/etc/ssh/ssh_host_"* 2>/dev/null | wc -l) (want 0)"
+echo "   keygen unit:  $(ls "$MNT/lib/systemd/system/polaris-sshkeys.service" 2>/dev/null | wc -l) (want 1)"
+echo "   keygen on:    $(ls "$MNT/etc/systemd/system/multi-user.target.wants/polaris-sshkeys.service" 2>/dev/null | wc -l) (want 1)"
+echo "   sshd enabled: $(ls "$MNT/etc/systemd/system/multi-user.target.wants/ssh.service" 2>/dev/null | wc -l)"
+
 echo "== kernel console (the LAST console= must be a screen: tty0 / tty1)"
 found=0
 for f in "$MNT/boot/firmware/cmdline.txt" "$MNT/boot/cmdline.txt"; do

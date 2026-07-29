@@ -15,6 +15,7 @@ case "$1" in
             systemctl disable polaris.service >/dev/null 2>&1 || true
             systemctl disable polaris-wifi-bootstrap.service >/dev/null 2>&1 || true
             systemctl disable polaris-growroot.service >/dev/null 2>&1 || true
+            systemctl disable polaris-sshkeys.service >/dev/null 2>&1 || true
             systemctl daemon-reload >/dev/null 2>&1 || true
         fi
 
