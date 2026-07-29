@@ -458,7 +458,10 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .focus-group-head::-webkit-details-marker { display: none; }
 /* Caret on the left, rotating on open, so the header reads as a control. */
 .focus-group-head::before {
-    content: "B8";
+    /* The escape here was written through a shell that turned \25 into
+       a raw 0x15 byte, so the caret rendered as a tofu box next to the
+       "Focus motor" label instead of a triangle. */
+    content: "\25B8";
     color: var(--text-muted);
     transition: transform 0.15s;
     flex: 0 0 auto;

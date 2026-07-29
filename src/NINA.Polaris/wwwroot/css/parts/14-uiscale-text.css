@@ -34,3 +34,15 @@
 .advseq-props .muted {
     zoom: var(--text-rescale, 1);
 }
+
+/* Phones and small tablets: no rescale. There the zoom comes from
+   _defaultUiZoom() reacting to the viewport, not from an operator asking
+   for a denser UI, so there is nothing to compensate for. Scaling these
+   blocks up anyway made them the largest text on the screen: in the iPhone
+   app the "How TPPA works" blurb and the "not tested yet" banner dwarfed
+   the controls they were explaining. */
+@media (max-width: 960px) {
+    :root {
+        --text-rescale: 1;
+    }
+}

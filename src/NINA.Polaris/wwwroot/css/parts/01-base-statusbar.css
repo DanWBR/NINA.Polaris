@@ -199,6 +199,16 @@ html, body {
     -webkit-user-select: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
+    /* iOS / WKWebView inflate the font size of anything they judge to be a
+       "text block" (a paragraph with enough words in a wide enough box)
+       when the page renders smaller than its layout width. We shrink the
+       whole UI with `body { zoom }` on phones, which is exactly that
+       trigger: help paragraphs and empty-state blurbs came back at roughly
+       twice the size of the controls around them in the iPhone app while
+       every desktop browser rendered them correctly. 100% means "use the
+       size we asked for". */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 /* Body owns the vertical stack: header + app-layout + activity bar.

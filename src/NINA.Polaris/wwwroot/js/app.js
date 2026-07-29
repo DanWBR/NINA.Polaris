@@ -3739,7 +3739,9 @@ function ninaApp() {
             setInterval(() => this.updateClock(), 1000);
             this._initAssistant();
             this.initBattery();
-            this.loadDeviceName();
+            // loadDeviceName() runs post-auth in _initCore: the endpoint is
+            // gated, and calling it here logged a 401 as a red ERROR on every
+            // single boot.
             this.updateFov();
 
             // Restore all resizable side-panel / column widths.
@@ -3922,6 +3924,17 @@ function ninaApp() {
                     () => setTimeout(resetRootScroll, 80));
                 window.addEventListener('orientationchange',
                     () => setTimeout(resetRootScroll, 300));
+                // Rotating the phone changes the sky frame's size; the
+                // document inside it only finds out if we tell it.
+                {
+                    let skyT = null;
+                    const resync = () => {
+                        clearTimeout(skyT);
+                        skyT = setTimeout(() => this._skySyncViewport(), 300);
+                    };
+                    window.addEventListener('orientationchange', resync);
+                    window.addEventListener('resize', resync);
+                }
                 if (window.visualViewport) {
                     let vvT = null;
                     window.visualViewport.addEventListener('resize', () => {
@@ -4045,6 +4058,10 @@ function ninaApp() {
             this.apiGet('/api/system/status', { cache: 'no-store' })
                 .then(s => { if (s && s.version) this.appVersion = s.version; })
                 .catch(() => { /* badge stays as '…', non-fatal */ });
+
+            // Friendly device name, same reason: the endpoint is gated, so
+            // this belongs after login rather than in the pre-auth boot.
+            this.loadDeviceName();
 
             // Self-update: check now (post-auth — the endpoint is gated) then
             // hourly. Runs here rather than in the pre-auth boot init so the
@@ -5237,7 +5254,12 @@ function ninaApp() {
         _applyTabSideEffects(tabId) {
             try {
                 if (tabId === 'sky') {
-                    this.$nextTick(() => this.initSkyViewer && this.initSkyViewer());
+                    this.$nextTick(() => {
+                        this.initSkyViewer && this.initSkyViewer();
+                        // The frame has no measurable size while the tab is
+                        // hidden, so this is the first chance to send one.
+                        this._skySyncViewport();
+                    });
                     this._skyWatchdog();
                 } else if (tabId === 'files') {
                     this.filesInit && this.filesInit();
@@ -10766,6 +10788,25 @@ function ninaApp() {
             }
         },
 
+        // Tell the sky document how big its frame actually is.
+        //
+        // iOS resolves `width=device-width` inside an iframe against the
+        // DEVICE, not against the frame element. In the iPhone app the sky
+        // document therefore laid itself out narrower than the frame and the
+        // leftover strip on the right painted white (field report, landscape
+        // on an Orange Pi 5 Pro). Measuring here and sizing the document
+        // explicitly on the other side is independent of how the platform
+        // resolves the viewport meta. Harmless everywhere else: on desktop
+        // the numbers already match.
+        _skySyncViewport() {
+            const frame = document.getElementById('skyFrame');
+            if (!frame) return;
+            const w = Math.round(frame.clientWidth);
+            const h = Math.round(frame.clientHeight);
+            if (!w || !h) return;   // tab hidden, nothing to measure
+            this._skySendMessage({ type: 'set-viewport', width: w, height: h });
+        },
+
         // Bounded pre-ready queue. Unbounded before the mobile SKY
         // hard-suspend existed (not-ready only lasted through page
         // load); a suspended iframe can now stay down for hours while
@@ -12554,6 +12595,7 @@ function ninaApp() {
                     case 'ready':
                         this._skyBridgeReady = true;
                         clearTimeout(this._skyWatchdogTimer);   // it came up
+                        this._skySyncViewport();
                         this._skyBridgeVersion = msg.version || 'unknown';
                         this._skyEngineLoaded = !!msg.engineLoaded;
                         this._skyEngineMissing = !!msg.engineMissing;

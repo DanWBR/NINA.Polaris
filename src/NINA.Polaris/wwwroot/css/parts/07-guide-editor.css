@@ -327,10 +327,13 @@
     white-space: normal;
 }
 
-/* Mobile: fall back to the single-column stack so the canvas + the
-   controls each get full viewport width. The sidebar becomes a
-   bottom-docked block instead of a right-side column. */
-@media (max-width: 900px) {
+/* Phone PORTRAIT: fall back to the single-column stack so the canvas and
+   the controls each get the full viewport width. The sidebar becomes a
+   bottom-docked block instead of a right-side column. Same shape as the
+   LIVE / PREVIEW block in 02-imaging-panels.css, including putting the
+   panel back into the flow: floating it with no canvas reserve left the
+   frame behind it. */
+@media (max-width: 900px) and (orientation: portrait) {
     .video-pane {
         flex-direction: column;
     }
@@ -340,6 +343,28 @@
     .video-pane .quick-controls {
         flex: 0 0 auto;
         max-height: 50vh;
+        position: static;
+        width: auto;
+        padding-left: 12px;
+        transform: none;
+        background: var(--bg-secondary);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+    .video-pane .quick-controls.quick-controls--collapsed {
+        transform: none;
+    }
+    .video-pane .quick-controls > .quick-controls-toggle,
+    .video-pane .quick-controls > .quick-controls-resize {
+        display: none;
+    }
+}
+
+/* Phone / small-tablet LANDSCAPE keeps the side-by-side layout (a ~400px
+   tall viewport has no room to stack), with a narrower sidebar. */
+@media (orientation: landscape) and (max-width: 1100px) {
+    .video-pane {
+        --video-qc-width: min(300px, 36vw);
     }
 }
 
@@ -1019,13 +1044,36 @@
     line-height: 1.35;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 900px) and (orientation: portrait) {
     .manual-focus-pane {
         flex-direction: column;
     }
     .manual-focus-controls {
         flex: 0 0 auto;
         max-height: 50vh;
+    }
+}
+
+/* Phone / small-tablet LANDSCAPE. Stacking here put the exposure inputs,
+   the shutter and the HFR metrics below the fold on a viewport ~400px
+   tall, which is where the operator is actually turning the focuser. Keep
+   the two columns, narrow the sidebar, and let it use the full height it
+   has instead of 70vh of a short viewport. */
+@media (orientation: landscape) and (max-width: 1100px) {
+    .manual-focus-pane {
+        flex-direction: row;
+        /* Cap the row at the visible area: the sidebar is taller than a
+           landscape phone, and without this it stretched the row (and the
+           frame beside it) past the fold. The sidebar already scrolls
+           internally (overflow-y: auto). */
+        max-height: 78vh;
+    }
+    .manual-focus-controls {
+        flex: 0 0 min(320px, 40vw);
+        max-height: none;
+    }
+    .manual-focus-preview-area {
+        min-height: 160px;
     }
 }
 

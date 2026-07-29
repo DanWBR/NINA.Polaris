@@ -1323,6 +1323,28 @@
     // postMessage round-trip from the parent.
     var __lastTargetFov = null;
 
+    // Size the document to what the parent measured on the frame element.
+    //
+    // iOS resolves `width=device-width` inside an iframe against the DEVICE
+    // rather than the frame, so this document laid itself out narrower than
+    // the frame it lives in and the strip on the right stayed unpainted
+    // (white) in the iPhone app. The parent knows the real size; taking it
+    // from there works whatever the platform does with the viewport meta.
+    function skyApplyViewport(w, h) {
+        if (!(w > 0) || !(h > 0)) return;
+        var px = function (el) {
+            if (!el) return;
+            el.style.width = w + 'px';
+            el.style.height = h + 'px';
+        };
+        px(document.documentElement);
+        px(document.body);
+        px(document.getElementById('stel-canvas'));
+        // The engine reads the canvas box on resize; so does our own FOV
+        // box re-measure handler above.
+        try { window.dispatchEvent(new Event('resize')); } catch (e) { /* older WebKit */ }
+    }
+
     // -----------------------------------------------------------------
     // Incoming message router (parent → iframe).
     // -----------------------------------------------------------------
@@ -1330,6 +1352,12 @@
         var msg = ev.data;
         if (!msg || typeof msg !== 'object' || !msg.type) return;
         if (msg.__from === 'sky-bridge') return;  // our own echo
+        // Sizing is independent of the engine, so it must NOT wait in the
+        // pre-ready queue: the parent sends it as soon as the tab opens.
+        if (msg.type === 'set-viewport') {
+            skyApplyViewport(msg.width, msg.height);
+            return;
+        }
         // Hold messages that arrive before the engine is ready. SWE-4
         // callers like Polaris's 30s sky ticker fire immediately on
         // page load and would otherwise no-op against a null __stel.
