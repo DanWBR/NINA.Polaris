@@ -5,13 +5,21 @@
 # ExecStartPre=sshd -t on every boot and port 22 answered "connection
 # refused" on a headless board.
 #
-# Ordered before both the service and the socket unit, so it holds whichever
-# way sshd is activated. No ConditionPathExists on the keys: the script is
-# idempotent (ssh-keygen -A only creates what is missing) and reporting
-# "already present" in the journal is worth more than skipping the unit.
+# Ordered before ssh.service only, NOT ssh.socket. Adding ssh.socket formed an
+# ordering cycle: ssh.socket belongs to sockets.target, sockets.target precedes
+# basic.target, and this unit (WantedBy=multi-user.target) comes after
+# basic.target. systemd broke that cycle by DELETING the ssh.socket job, so the
+# unit meant to fix SSH is what disabled it -- verified in a QEMU boot, journal
+# said "Job ssh.socket/start deleted to break ordering cycle". A
+# socket-activated sshd is spawned on the first connection, long after
+# multi-user.target, so it already sees the keys without an ordering edge.
+#
+# No ConditionPathExists on the keys: the script is idempotent (ssh-keygen -A
+# only creates what is missing) and reporting "already present" in the journal
+# is worth more than skipping the unit.
 Description=Generate SSH host keys when missing
 ConditionPathExists=/usr/sbin/sshd
-Before=ssh.service sshd.service ssh.socket
+Before=ssh.service sshd.service
 After=local-fs.target
 
 [Service]

@@ -149,6 +149,42 @@ find "$MNT" -maxdepth 7 -type d -path '*NINA.Polaris*' -name cert -exec rm -rf {
 # either and the flashed card never grows past the image size.
 rm -f "$MNT/var/lib/polaris-growroot.done" "$MNT/var/lib/misc/polaris-growroot.done" \
       "$MNT/var/lib/polaris/growroot.done" 2>/dev/null || true
+# WiFi credentials. The build board is connected to somebody's home network,
+# and NetworkManager writes that connection to disk: the .nmconnection carries
+# the PSK, and on Ubuntu NM also EXPORTS it to /etc/netplan/90-NM-*.yaml, where
+# the 64-hex pre-shared key is enough to join the network without the
+# passphrase. Both shipped inside published archives (field report: "acho que
+# as imagens estao indo com a senha da minha rede wifi") -- anyone who
+# downloaded an image got the maintainer's WiFi key.
+#
+# polaris-hotspot is the exception: its password is documented (polaris1234)
+# and the whole point is that a headless board comes up reachable.
+say "strip WiFi credentials"
+for f in "$MNT"/etc/NetworkManager/system-connections/*.nmconnection; do
+    [ -f "$f" ] || continue
+    case "$(basename "$f")" in
+        polaris-hotspot.nmconnection) continue ;;
+    esac
+    echo "   removed $(basename "$f")"
+    rm -f "$f"
+done
+# NM's netplan exports: one file per connection, regenerated from the
+# connection at runtime, so removing them loses nothing.
+for f in "$MNT"/etc/netplan/*.yaml; do
+    [ -f "$f" ] || continue
+    if grep -qiE '^[[:space:]]*(password|psk)[[:space:]]*:|wifis:' "$f"; then
+        echo "   removed $(basename "$f") (carried a wifi key)"
+        rm -f "$f"
+    fi
+done
+rm -f "$MNT"/etc/wpa_supplicant/wpa_supplicant*.conf 2>/dev/null || true
+# Which networks this board has seen, and the key NM uses to derive per-device
+# secrets. Not credentials, but not ours to publish either.
+rm -f "$MNT"/var/lib/NetworkManager/seen-bssids \
+      "$MNT"/var/lib/NetworkManager/timestamps \
+      "$MNT"/var/lib/NetworkManager/secret_key \
+      "$MNT"/var/lib/NetworkManager/*.lease 2>/dev/null || true
+
 # SSH host keys: every card flashed from this image would otherwise share one
 # identity, and anyone holding the image could impersonate all of them.
 # Removing them is only safe because polaris-sshkeys.service regenerates them

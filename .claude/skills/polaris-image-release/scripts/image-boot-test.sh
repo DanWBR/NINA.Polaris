@@ -31,9 +31,10 @@ setsid nohup qemu-system-x86_64 \
     -device virtio-net-pci,netdev=n0 \
     -display none -serial file:"$LOG" \
     < /dev/null > /root/boottest-qemu.out 2>&1 &
+QEMU_PID=$!
 disown
 
-echo "== qemu started, waiting up to ${MINUTES}m for the guest"
+echo "== qemu started (pid $QEMU_PID), waiting up to ${MINUTES}m for the guest"
 
 # A port check is NOT enough: QEMU's hostfwd listens the moment QEMU starts, so
 # 127.0.0.1:2222 accepts connections while the guest is still in the firmware.
@@ -41,12 +42,27 @@ echo "== qemu started, waiting up to ${MINUTES}m for the guest"
 deadline=$(( $(date +%s) + MINUTES * 60 ))
 up=""
 while [ "$(date +%s)" -lt "$deadline" ]; do
+    # QEMU dying is a result, not something to keep waiting on.
+    if ! kill -0 "$QEMU_PID" 2>/dev/null; then
+        echo "== qemu exited before the guest answered"
+        echo "== qemu output:"; tail -20 /root/boottest-qemu.out 2>/dev/null
+        echo "== serial tail:"; tail -20 "$LOG" 2>/dev/null | tr -d '\r'
+        exit 1
+    fi
     banner=$(timeout 5 bash -c 'exec 3<>/dev/tcp/127.0.0.1/2222; head -c 20 <&3' 2>/dev/null || true)
     case "$banner" in
         SSH-*) up="ssh"; break ;;
     esac
-    code=$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' https://127.0.0.1:5555/ 2>/dev/null || echo 000)
-    [ "$code" != "000" ] && { up="https:$code"; break; }
+    # No `|| echo 000` here. curl already prints 000 for a failed request, so
+    # the fallback appended a SECOND one and the test compared "000000"
+    # against "000": every failure read as a real HTTP response, the loop
+    # broke on the first poll, and the script exited (taking QEMU with it)
+    # declaring a pass for a guest that had not booted at all.
+    code=$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' https://127.0.0.1:5555/ 2>/dev/null) || true
+    case "${code:-000}" in
+        ''|000) ;;
+        *) up="https:$code"; break ;;
+    esac
     sleep 15
 done
 

@@ -53,6 +53,25 @@ echo "   growpart:     $([ -x "$MNT/usr/bin/growpart" ] && echo present || echo 
 # real vulnerability) and able to make its own keys on first boot. Ship only
 # the first half and sshd fails ExecStartPre=sshd -t forever: port 22 answers
 # "connection refused" and a headless board is unreachable.
+# A published image must not carry the build board's WiFi key. NetworkManager
+# writes the PSK into the .nmconnection AND (on Ubuntu) exports it to
+# /etc/netplan/90-NM-*.yaml as a 64-hex pre-shared key, which is enough to join
+# the network on its own. Two shipped images had the maintainer's home network
+# in them. polaris-hotspot is deliberate: its password is public.
+echo "== wifi credentials (want 0 everywhere)"
+nm=$(ls "$MNT"/etc/NetworkManager/system-connections/*.nmconnection 2>/dev/null \
+     | grep -v 'polaris-hotspot' | wc -l)
+np=$(grep -rlisE '^[[:space:]]*(password|psk)[[:space:]]*:|wifis:' "$MNT"/etc/netplan/ 2>/dev/null | wc -l)
+ws=$(ls "$MNT"/etc/wpa_supplicant/wpa_supplicant*.conf 2>/dev/null | wc -l)
+echo "   foreign NM connections : $nm"
+echo "   netplan files with keys : $np"
+echo "   wpa_supplicant configs  : $ws"
+if [ "$nm" -ne 0 ] || [ "$np" -ne 0 ] || [ "$ws" -ne 0 ]; then
+    echo "   !! DO NOT PUBLISH: this image carries someone's WiFi credentials"
+    grep -rloisE 'psk|password' "$MNT"/etc/netplan/ "$MNT"/etc/NetworkManager/system-connections/ 2>/dev/null \
+        | grep -v 'polaris-hotspot' | sed "s|$MNT|      |"
+fi
+
 echo "== ssh (want: 0 host keys AND the keygen unit enabled)"
 echo "   host keys:    $(ls "$MNT/etc/ssh/ssh_host_"* 2>/dev/null | wc -l) (want 0)"
 echo "   keygen unit:  $(ls "$MNT/lib/systemd/system/polaris-sshkeys.service" 2>/dev/null | wc -l) (want 1)"
