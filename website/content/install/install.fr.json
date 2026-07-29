@@ -110,10 +110,10 @@
         "device": "Orange Pi Zero 3",
         "badge": "arm64",
         "color": "#ff7a18",
-        "url": "https://drive.google.com/uc?export=download&id=1T4ocFcn0oVLvbyEOApi6hKOjCZ6_pi9x",
+        "url": "https://drive.google.com/uc?export=download&id=1YwAEuVq24WqxmJI9eKTATcghzu5RNePr",
         "os": "Armbian 25.5.1 XFCE (Ubuntu 24.04, noyau 6.12.23)",
-        "polaris": "0.96.1 (2026-07-23)",
-        "size": "4.79 GB (.7z)",
+        "polaris": "0.97.2 (2026-07-29)",
+        "size": "4.15 GB (.7z)",
         "access": "https://orangepizero3.local:5000/",
         "note": "Carte d'entrée de gamme de 1,5 Go. Image HDD Raw Copy Tool (imgcv2) : décompressez le fichier .7z, puis copiez le fichier .img sur une carte SD à l'aide de HDD Raw Copy Tool (ou de balenaEtcher / Rufus). Mot de passe de connexion : polaris1234. L'accélération GPU reste désactivée ici (le Mali-G31 est un véritable frein sur ce pipeline)."
       },
