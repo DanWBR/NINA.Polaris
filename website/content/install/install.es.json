@@ -77,10 +77,10 @@
         "badge": "x86-64",
         "color": "#8b5cf6",
         "emoji": "🖥️",
-        "url": "https://drive.google.com/uc?export=download&id=1I0jhNRX6zxVfcTwyB2BGINhh-PVmWCBb",
+        "url": "https://drive.google.com/uc?export=download&id=17KcDlQPn8BCBmA38KGT2deTRf6KNFVrI",
         "os": "Ubuntu 24.04.4 LTS (x86-64)",
-        "polaris": "0.96.13 (2026-07-27)",
-        "size": "3.03 GB (.7z)",
+        "polaris": "0.97.2 (2026-07-29)",
+        "size": "2.93 GB (.7z)",
         "access": "https://polaris-linux.local:5000/",
         "note": "Para cualquier PC o mini PC de 64 bits. Archivo 7-Zip: extrae, escribe el .img en una memoria USB con balenaEtcher o Rufus y arranca desde ella. Para pasar Polaris al SSD interno de la máquina, arranca desde el USB y ejecuta sudo polaris-install-to-disk: clona el sistema en marcha al disco que elijas y lo deja arrancable, así que nunca tienes que escribir la imagen en un disco desde el que no puedes arrancar."
       },
