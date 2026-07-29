@@ -1845,6 +1845,7 @@
   "No guide cameras detected for": "",
   "No hardware on hand? Enable Simulator on Settings → Equipment simulator and you get a fake CCD + Telescope + Focuser + FilterWheel to drive the whole pipeline end-to-end.": "",
   "No high-quality observation windows tonight. Sky conditions look marginal, check per-day breakdown for individual slots.": "",
+  "No INDI devices, start drivers in the INDI panel": "",
   "No light frames selected": "",
   "No log entries to copy": "",
   "no match": "",

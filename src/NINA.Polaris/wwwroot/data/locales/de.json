@@ -2174,6 +2174,7 @@
   "No hardware on hand? Enable Simulator on Settings → Equipment simulator and you get a fake CCD + Telescope + Focuser + FilterWheel to drive the whole pipeline end-to-end.": "Keine Hardware zur Hand? Aktivieren Sie den Simulator unter Einstellungen → Equipment simulator und Sie bekommen ein Schein-CCD + Teleskop + Fokussierer + Filterrad, um die ganze Kette durchzuspielen.",
   "No high-quality observation windows tonight. Sky conditions look marginal,": "Heute Nacht gibt es keine guten Beobachtungsmöglichkeiten. Die Wetterbedingungen am Himmel scheinen eher mäßig zu sein,",
   "No high-quality observation windows tonight. Sky conditions look marginal, check per-day breakdown for individual slots.": "Heute Nacht gibt es keine guten Beobachtungsfenster. Die Wetterbedingungen am Himmel scheinen nur bedingt geeignet zu sein; bitte überprüfen Sie die tägliche Aufschlüsselung für die einzelnen Zeitfenster.",
+  "No INDI devices, start drivers in the INDI panel": "Keine INDI-Geräte, starten Sie die Treiber im INDI-Panel",
   "No light frames selected": "Es wurden keine Leuchtrahmen ausgewählt",
   "No log entries to copy": "Es sind keine Protokolleinträge zum Kopieren vorhanden",
   "no match": "keine Übereinstimmung",

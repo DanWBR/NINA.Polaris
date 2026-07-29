@@ -7358,6 +7358,13 @@ function ninaApp() {
                 if (this.connectionLost) {
                     this.connectionLost = false;
                     this.toast('Server reconnected', 'ok');
+                    // The driver catalogues are loaded ONCE per session, so a
+                    // request that died mid-outage left its dropdown empty for
+                    // good. Worse, loadMountDrivers falls back to a one-entry
+                    // INDI list, and the Driver row is hidden below 2 entries:
+                    // the operator saw a card with nothing to pick in it and no
+                    // way back short of reloading the page (field report).
+                    this._reloadDriverCatalogues();
                 }
                 return;
             }
@@ -7367,6 +7374,18 @@ function ninaApp() {
                 this._connLostTimer = null;
                 if (!this.serverReachable) this.connectionLost = true;
             }, 5000);
+        },
+
+        // Re-fetch every per-card driver catalogue. Called after a reconnect;
+        // each loader already owns its own error handling, so a still-shaky
+        // server just leaves the previous state in place and the next
+        // reconnect tries again.
+        _reloadDriverCatalogues() {
+            for (const fn of ['loadCameraDrivers', 'loadMountDrivers',
+                              'loadFocuserDrivers', 'loadFilterWheelDrivers',
+                              'loadPowerBoxDrivers']) {
+                try { this[fn] && this[fn](); } catch (_) { /* best effort */ }
+            }
         },
 
         scheduleReconnect(type) {

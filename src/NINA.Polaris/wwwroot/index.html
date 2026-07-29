@@ -5919,7 +5919,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <select class="equip-select"
                                         x-show="cameraDriver === 'indi'"
                                         @change="equipCameraChoice = $event.target.value">
-                                    <option value="">Select device</option>
+                                    <!-- Empty-state wording, see the mount card. -->
+                                    <option value=""
+                                            x-text="devices.length ? 'Select device'
+                                                : 'No INDI devices, start drivers in the INDI panel'"></option>
                                     <template x-for="dev in devices" :key="'cam-'+dev.name">
                                         <option :value="dev.name"
                                                 :selected="(equipCameraChoice ? equipCameraChoice : selectedCamera) === dev.name"
@@ -6252,7 +6255,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <select class="equip-select"
                                         x-show="mountDriver === 'indi'"
                                         @change="equipMountChoice = $event.target.value">
-                                    <option value="">Select device</option>
+                                    <!-- An empty list is the normal state before
+                                         any INDI driver is running, and "Select
+                                         device" with nothing under it reads like
+                                         a broken page (field report). Say which
+                                         it is. -->
+                                    <option value=""
+                                            x-text="devices.length ? 'Select device'
+                                                : 'No INDI devices, start drivers in the INDI panel'"></option>
                                     <template x-for="dev in devices" :key="'mnt-'+dev.name">
                                         <option :value="dev.name"
                                                 :selected="(equipMountChoice ? equipMountChoice : selectedTelescope) === dev.name"
@@ -6943,7 +6953,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <select class="equip-select"
                                         x-show="focuserDriver === 'indi'"
                                         @change="equipFocuserChoice = $event.target.value">
-                                    <option value="">Select device</option>
+                                    <!-- Empty-state wording, see the mount card. -->
+                                    <option value=""
+                                            x-text="devices.length ? 'Select device'
+                                                : 'No INDI devices, start drivers in the INDI panel'"></option>
                                     <template x-for="dev in devices" :key="'foc-'+dev.name">
                                         <option :value="dev.name"
                                                 :selected="(equipFocuserChoice ? equipFocuserChoice : selectedFocuser) === dev.name"
@@ -7123,7 +7136,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <select class="equip-select"
                                         x-show="filterWheelDriver === 'indi'"
                                         @change="equipFilterChoice = $event.target.value">
-                                    <option value="">Select device</option>
+                                    <!-- Empty-state wording, see the mount card. -->
+                                    <option value=""
+                                            x-text="devices.length ? 'Select device'
+                                                : 'No INDI devices, start drivers in the INDI panel'"></option>
                                     <template x-for="dev in devices" :key="'fw-'+dev.name">
                                         <option :value="dev.name"
                                                 :selected="(equipFilterChoice ? equipFilterChoice : selectedFilterWheel) === dev.name"
