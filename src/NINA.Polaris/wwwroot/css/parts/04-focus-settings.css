@@ -1272,7 +1272,9 @@
 
     .content {
         flex: 1;
-        margin-bottom: 56px;
+        /* Clears the fixed bottom strip, whatever inset it carries. The
+           rule in 06-modals-overlays.css adds the activity bar on top. */
+        margin-bottom: var(--nav-strip-h);
     }
 
     .mount-layout {

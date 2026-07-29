@@ -900,10 +900,17 @@ body.asst-dock-dragging {
 .sidebar {
     display: flex;
     flex-direction: column;
-    /* The operator's left/right inset GROWS the rail instead of eating
-       into it: at 64px wide there is no slack, and squeezing the column
-       would shrink the icons rather than move them clear of the notch. */
-    width: calc(var(--sidebar-width) + var(--nav-pad-left) + var(--nav-pad-right));
+    /* Width follows the widest caption. At a fixed 64px the longer ones
+       broke mid-word onto a second line ("AUTORU/N", "SETTING/S"), and
+       every translation is longer than the English source, so the fixed
+       number could only ever be wrong somewhere. --sidebar-width is the
+       floor now, not the width. Same fix the portrait strip already got.
+       flex:0 0 auto keeps the rail out of the row's shrink pass.
+       The operator's left/right inset GROWS the rail instead of eating
+       into it: squeezing the column would shrink the icons rather than
+       move them clear of the notch. */
+    flex: 0 0 auto;
+    width: auto;
     min-width: calc(var(--sidebar-width) + var(--nav-pad-left) + var(--nav-pad-right));
     background: var(--bg-secondary);
     border-right: 1px solid var(--border);
@@ -914,6 +921,10 @@ body.asst-dock-dragging {
     padding: 6px var(--nav-pad-right) 42px var(--nav-pad-left);
     gap: 2px;
     overflow-y: auto;
+    /* Reserve the scrollbar gutter so it is part of the rail's intrinsic
+       width. Without it the 4px bar eats into a caption that was measured
+       without it, and a nowrap label ends up a few pixels short. */
+    scrollbar-gutter: stable;
     /* Firefox: thin, semi-transparent scrollbar. */
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
@@ -978,11 +989,13 @@ body.asst-dock-dragging {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    /* i18n: some translated labels are longer than the English source
-       (e.g. "Configurações"); wrap + center instead of clipping. */
-    width: 100%;
+    /* Never break a caption. The rail is width:auto, so a long label (a
+       translation, or plain "AUTORUN") widens the column instead of
+       splitting itself across two lines. width:auto rather than 100% so
+       the label's own text drives that width. */
+    width: auto;
+    white-space: nowrap;
     text-align: center;
-    overflow-wrap: anywhere;
     line-height: 1.15;
 }
 
