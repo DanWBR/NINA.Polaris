@@ -45,15 +45,38 @@ public static class RigPatch {
     // the client sends and what ProfileService persists.
     private static readonly JsonSerializerOptions Opts = new(JsonSerializerDefaults.Web);
 
+    /// <summary>Node options for the objects this class walks.
+    ///
+    /// Case-SENSITIVE on purpose. A JsonObject built with case-insensitive
+    /// options backs itself with a case-insensitive dictionary, and that
+    /// dictionary is created lazily on the FIRST enumeration — so a body
+    /// carrying two spellings of one property ("phd2Host" and "PHD2Host")
+    /// did not fail at parse time, it threw ArgumentException the moment
+    /// Merge looked at it, and the rig save came back 500 (field report).
+    ///
+    /// Merge already reconciles spellings itself, a few lines below. It just
+    /// needs to be able to SEE both of them to do it.</summary>
+    private static readonly JsonNodeOptions NodeOpts = new() { PropertyNameCaseInsensitive = false };
+
+    /// <summary>Re-reads a node under case-sensitive options. The body arrives
+    /// from ReadFromJsonAsync with the web defaults baked in, and those options
+    /// travel with the node.</summary>
+    public static JsonObject? Normalise(JsonNode? node) =>
+        node is null ? null : JsonNode.Parse(node.ToJsonString(), NodeOpts)?.AsObject();
+
     /// <summary>Returns the rig the handler should treat as "the update":
     /// the stored rig with the body's properties laid over it. Absent ⇒ stored
     /// value, so an unconditional assignment in the handler is a no-op.</summary>
     public static EquipmentProfile Merge(EquipmentProfile stored, JsonObject? patch) {
         ArgumentNullException.ThrowIfNull(stored);
-        var merged = JsonSerializer.SerializeToNode(stored, Opts)?.AsObject()
+        var merged = Normalise(JsonSerializer.SerializeToNode(stored, Opts))
                      ?? new JsonObject();
+        patch = Normalise(patch);
         if (patch != null) {
-            foreach (var kv in patch) {
+            // Last spelling wins, and the order is the body's own order, so a
+            // client that sends both gets the value it wrote last — the same
+            // rule JavaScript object literals follow.
+            foreach (var kv in patch.ToList()) {
                 // Deserialization is case-insensitive, so a client sending
                 // "Name" alongside our "name" would leave two candidates for
                 // the same property. Drop the stored spelling first.

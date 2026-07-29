@@ -249,4 +249,37 @@ public class RigPartialPutTests {
             JsonNode.Parse("""{ "Name": "Backyard" }""")!.AsObject());
         Assert.That(merged.Name, Is.EqualTo("Backyard"));
     }
+
+    // The body that took the rig save down with a 500 (field report, iOS app
+    // on 0.97.2). The client spreads the rig it holds and then writes some
+    // fields explicitly; when the two spellings of one property both end up in
+    // the JSON, the case-insensitive JsonObject the body is read into builds
+    // its dictionary on FIRST ENUMERATION and throws
+    // "An item with the same key has already been added. Key: phd2Host"
+    // from inside Merge. Parsing case-sensitively lets Merge see both and
+    // reconcile them, which is what it was written to do.
+    [Test]
+    public void Merge_BodyWithTwoSpellingsOfOneProperty_DoesNotThrowAndTakesTheLast() {
+        var body = JsonNode.Parse("""{ "PHD2Host": "stale.local", "phd2Host": "10.0.0.7" }""")!.AsObject();
+
+        EquipmentProfile merged = null!;
+        Assert.DoesNotThrow(() => merged = RigPatch.Merge(StoredRig(), body));
+        Assert.Multiple(() => {
+            Assert.That(merged.PHD2Host, Is.EqualTo("10.0.0.7"),
+                "last spelling wins, as in a JavaScript object literal");
+            Assert.That(merged.Name, Is.EqualTo("SV503"), "the rest of the rig survives");
+        });
+    }
+
+    [Test]
+    public void Merge_BodyReadWithWebDefaults_DoesNotThrow() {
+        // The endpoint reads the body with ReadFromJsonAsync, whose web
+        // defaults mark the node case-insensitive. Reproduce that exactly:
+        // the options travel with the node, so Merge has to neutralise them.
+        var body = JsonSerializer.Deserialize<JsonObject>(
+            """{ "PHD2Host": "stale.local", "phd2Host": "10.0.0.7" }""",
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+
+        Assert.DoesNotThrow(() => RigPatch.Merge(StoredRig(), body));
+    }
 }
