@@ -59,17 +59,23 @@ echo "   growpart:     $([ -x "$MNT/usr/bin/growpart" ] && echo present || echo 
 # the network on its own. Two shipped images had the maintainer's home network
 # in them. polaris-hotspot is deliberate: its password is public.
 echo "== wifi credentials (want 0 everywhere)"
-nm=$(ls "$MNT"/etc/NetworkManager/system-connections/*.nmconnection 2>/dev/null \
-     | grep -v 'polaris-hotspot' | wc -l)
-np=$(grep -rlisE '^[[:space:]]*(password|psk)[[:space:]]*:|wifis:' "$MNT"/etc/netplan/ 2>/dev/null | wc -l)
-ws=$(ls "$MNT"/etc/wpa_supplicant/wpa_supplicant*.conf 2>/dev/null | wc -l)
+# find, not `ls | grep`: this script runs under `set -euo pipefail`, and a glob
+# that matches nothing makes ls exit non-zero, which killed the script HERE --
+# on a clean image, i.e. exactly the passing case. The report simply stopped
+# after the grow-root section and read like a pass. find exits 0 with no hits,
+# and the grep is wrapped so an empty result is not a pipeline failure.
+nm=$(find "$MNT/etc/NetworkManager/system-connections" -maxdepth 1 -name '*.nmconnection' \
+        ! -name 'polaris-hotspot.nmconnection' 2>/dev/null | wc -l)
+np=$( { grep -rlisE '^[[:space:]]*(password|psk)[[:space:]]*:|wifis:' "$MNT/etc/netplan/" 2>/dev/null || true; } | wc -l)
+ws=$(find "$MNT/etc/wpa_supplicant" -maxdepth 1 -name 'wpa_supplicant*.conf' 2>/dev/null | wc -l)
 echo "   foreign NM connections : $nm"
 echo "   netplan files with keys : $np"
 echo "   wpa_supplicant configs  : $ws"
 if [ "$nm" -ne 0 ] || [ "$np" -ne 0 ] || [ "$ws" -ne 0 ]; then
     echo "   !! DO NOT PUBLISH: this image carries someone's WiFi credentials"
-    grep -rloisE 'psk|password' "$MNT"/etc/netplan/ "$MNT"/etc/NetworkManager/system-connections/ 2>/dev/null \
-        | grep -v 'polaris-hotspot' | sed "s|$MNT|      |"
+    { grep -rlisE 'psk|password' "$MNT/etc/netplan/" \
+        "$MNT/etc/NetworkManager/system-connections/" 2>/dev/null || true; } \
+        | grep -v 'polaris-hotspot' | sed "s|$MNT|      |" || true
 fi
 
 echo "== ssh (want: 0 host keys AND the keygen unit enabled)"
