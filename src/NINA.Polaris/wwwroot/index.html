@@ -13696,7 +13696,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                     <div style="margin-top:12px; max-width:620px">
                         <template x-if="!scripts.list.length">
-                            <p class="text-muted" style="font-size:12px" x-text="scripts.loaded ? 'No scripts found.' : 'Loading…'"></p>
+                            <!-- Three states, not two: a failed load used to
+                                 claim "No scripts found", which says something
+                                 untrue about the host. -->
+                            <p class="text-muted" style="font-size:12px"
+                               x-text="scripts.error ? 'Could not read the script list, use Refresh list to retry.'
+                                   : (scripts.loaded ? 'No scripts found.' : 'Loading…')"></p>
                         </template>
                         <template x-for="s in scripts.list" :key="s.path">
                             <div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border)">

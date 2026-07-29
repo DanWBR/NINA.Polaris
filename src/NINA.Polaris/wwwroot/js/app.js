@@ -1977,7 +1977,7 @@ function ninaApp() {
         // Studio (post-processing), ST-1 frame browser + ST-2 viewer
         // polarispy script runner. dialog = the declarative form a script blocks on.
         scripts: {
-            list: [], loaded: false, jobId: null, job: null, busy: false,
+            list: [], loaded: false, error: '', jobId: null, job: null, busy: false,
             dialog: { open: false, seq: -1, title: '', fields: [], values: {}, okLabel: 'OK', cancelLabel: 'Cancel', preview: false, previewUrl: '', previewBusy: false, previewErr: '', dataKind: '', credits: '', showCredits: false, blink: null, blinkIdx: 0, blinkPlaying: false, blinkFps: 3 },
             // Pixel runtime (numpy + astropy), installed offline from a wheel pack.
             runtime: { ready: false, viaVenv: false, install: { running: false, phase: '', percent: 0, error: null, done: false } },
@@ -13319,10 +13319,19 @@ function ninaApp() {
 
         // ----- polarispy script runner (Phase 1) -----
         async loadScripts() {
+            // `loaded` used to be set even when the request failed, and the
+            // empty state reads `loaded ? 'No scripts found.' : 'Loading…'`,
+            // so a dropped request reported "No scripts found" -- a statement
+            // about the host that was not true. Keep the failure separate.
             try {
-                this.scripts.list = await this.apiGet('/api/script/list');
-            } catch (_) { this.scripts.list = []; }
-            this.scripts.loaded = true;
+                this.scripts.list = await this._retryGet(() => this.apiGet('/api/script/list'));
+                this.scripts.loaded = true;
+                this.scripts.error = '';
+            } catch (e) {
+                this.scripts.list = [];
+                this.scripts.loaded = false;
+                this.scripts.error = e.message || String(e);
+            }
             this.loadScriptRuntime();
         },
         async loadScriptRuntime() {
@@ -24451,10 +24460,17 @@ function ninaApp() {
         // type is a separate query; results feed the Dark/Flat/Bias selects.
         async loadCalibMasters(force) {
             if (this.calibMasters.loaded && !force) return;
+            // Same trap as the optics catalogue: a swallowed error returned []
+            // and `loaded: true` was set anyway, so one dropped request left
+            // the Dark / Flat / Bias selects empty for the session. They reload
+            // on @focus, which the guard above then turned into a no-op, so
+            // there was no way back short of a page reload. Track the failure
+            // and only claim "loaded" when all three actually arrived.
+            let failed = false;
             const fetchType = async (t) => {
                 try {
-                    const rows = await this.apiGet(
-                        '/api/studio/frames?type=' + encodeURIComponent(t) + '&limit=500');
+                    const rows = await this._retryGet(() => this.apiGet(
+                        '/api/studio/frames?type=' + encodeURIComponent(t) + '&limit=500'));
                     return (rows || []).map(r => ({
                         id: r.id,
                         fileName: r.fileName,
@@ -24462,12 +24478,12 @@ function ninaApp() {
                         gain: r.gain,
                         filter: r.filter
                     }));
-                } catch (e) { return []; }
+                } catch (e) { failed = true; return []; }
             };
             const [dark, flat, bias] = await Promise.all([
                 fetchType('MASTERDARK'), fetchType('MASTERFLAT'), fetchType('MASTERBIAS')
             ]);
-            this.calibMasters = { dark, flat, bias, loaded: true };
+            this.calibMasters = { dark, flat, bias, loaded: !failed };
         },
 
         // Short human label for a master row in the dropdown: filename plus the
