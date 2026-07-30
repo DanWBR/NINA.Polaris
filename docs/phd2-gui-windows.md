@@ -15,7 +15,7 @@ The backend differs by host OS:
 On Windows we don't have xpra. Instead, the TightVNC service captures
 the Windows desktop on `127.0.0.1:5900`, Polaris bridges that RFB
 stream over a WebSocket, and the browser renders it with the noVNC
-HTML5 client. PHD2 runs in its real Windows window — you maximize
+HTML5 client. PHD2 runs in its real Windows window: you maximize
 it once and the embedded view shows everything you'd see on the
 mini-PC's monitor.
 
@@ -29,7 +29,7 @@ mini-PC's monitor.
 2. Run the installer. When the **Service Configuration** dialog
    appears:
    - **Set a password** for "Password for Remote Access". You'll be
-     prompted for this once per browser session — Polaris does not
+     prompted for this once per browser session; Polaris does not
      store it (privacy posture).
    - Leave "Accept incoming connections" enabled (default).
 3. Finish the installer. TightVNC registers a Windows Service named
@@ -38,7 +38,7 @@ mini-PC's monitor.
 ### 2. (Optional but recommended) Restrict TightVNC to loopback
 
 By default TightVNC accepts connections on every network interface.
-Polaris doesn't need that — it only ever connects via
+Polaris doesn't need that; it only ever connects via
 `127.0.0.1:5900`. Restricting TightVNC to loopback removes a
 needlessly exposed surface:
 
@@ -65,7 +65,7 @@ TightVNC listening on a public interface.
    Enter it (this happens once per browser session).
 3. The Windows desktop appears inside the iframe. Maximize the PHD2
    window so it fills the view.
-4. Use PHD2 normally — Profile Wizard, Brain, GA, dark library, all
+4. Use PHD2 normally: Profile Wizard, Brain, GA, dark library, all
    work exactly as if you were sitting in front of the mini-PC.
 
 ## Troubleshooting
@@ -129,7 +129,7 @@ Browser ──── HTTPS GET /phd2-vnc/ ────→  Polaris   (serves sta
   vendored MPL 2.0 bundle and points it at the same-origin
   `/phd2-vnc-ws` URL.
 - All three paths (`/phd2-vnc/*` static, `/phd2-vnc-ws` WS, the
-  status REST endpoints) go through `AuthMiddleware` — only
+  status REST endpoints) go through `AuthMiddleware`, so only
   authenticated Polaris users can reach the bridge.
 
 ## Licenses

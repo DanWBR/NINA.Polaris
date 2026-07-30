@@ -1,4 +1,4 @@
-# Polaris Astro Controller — API & Configuration Reference
+# Polaris Astro Controller: API & Configuration Reference
 
 REST endpoints, WebSocket streams, `appsettings.json`, and environment
 variables. The Web UI is built entirely on these endpoints, so anything the UI

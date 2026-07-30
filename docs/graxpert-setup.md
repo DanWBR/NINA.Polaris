@@ -72,11 +72,11 @@ modal:
 
 | Field | Default | Range | Meaning |
 |---|---|---|---|
-| BGE smoothing | 1.0 | 0–1 | Higher = smoother background model. 1.0 is fine for most DSO targets. |
+| BGE smoothing | 1.0 | 0-1 | Higher = smoother background model. 1.0 is fine for most DSO targets. |
 | BGE correction | Subtraction | Subtraction / Division | Subtraction for linear data (default); Division for cases where the gradient is multiplicative (uncommon). |
-| Decon strength | 0.5 | 0–1 | How aggressively to sharpen. 0.3–0.6 is the sweet spot for most masters. |
-| Decon PSF size | 4.0 | 0.5–20 | Estimate of star FWHM in pixels. Eyeball with the FITS viewer's pixel readout. |
-| Denoise strength | 0.5 | 0–1 | 0.3 is gentle, 0.7+ is heavy. Watch for plastic-looking stars. |
+| Decon strength | 0.5 | 0-1 | How aggressively to sharpen. 0.3 to 0.6 is the sweet spot for most masters. |
+| Decon PSF size | 4.0 | 0.5-20 | Estimate of star FWHM in pixels. Eyeball with the FITS viewer's pixel readout. |
+| Denoise strength | 0.5 | 0-1 | 0.3 is gentle, 0.7+ is heavy. Watch for plastic-looking stars. |
 
 ## Running on selected files (FILES tab)
 
@@ -124,14 +124,14 @@ master under heavy light pollution.
 
 ## Performance notes
 
-- AI models eat **3–8 GB of RAM** per concurrent process.
+- AI models eat **3 to 8 GB of RAM** per concurrent process.
   Default concurrency is **1**. Power users on Windows mini-PCs
   can bump it up in the FILES batch modal if their machine has
   the headroom, Raspberry Pi 4 / 5 users should stay at 1.
 - A 24 MP frame takes ~10 s for BGE on a desktop GPU/CPU, ~30 s
   on a Pi 5. Decon and Denoise are slower (~30 s and ~60 s
   respectively on the same hardware).
-- The first run after install downloads the AI models (~150–500
+- The first run after install downloads the AI models (~150 to 500
   MB depending on op).
 
 ## Troubleshooting

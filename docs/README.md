@@ -1,4 +1,4 @@
-# Polaris Astro Controller — Documentation
+# Polaris Astro Controller Documentation
 
 Everything is organized here. New users want the **User Guide**; integrators
 want the **API & Configuration reference**; the rest are focused setup notes
@@ -6,36 +6,36 @@ and overviews.
 
 ## Start here
 
-- **[User Guide](user-guide/README.md)** — the main manual. Install → first
+- **[User Guide](user-guide/README.md)**: the main manual. Install → first
   night → end-to-end workflow, plus a reference page for every sidebar tab.
-- **[Feature overview](FEATURES.md)** — what each tab does, at a glance.
+- **[Feature overview](FEATURES.md)**: what each tab does, at a glance.
 
 ## Reference
 
-- **[API & Configuration](api-reference.md)** — REST endpoints, WebSocket
+- **[API & Configuration](api-reference.md)**: REST endpoints, WebSocket
   streams, `appsettings.json`, environment variables.
-- **[Requirements matrix](../REQUIREMENTS.md)** — required + optional
+- **[Requirements matrix](../REQUIREMENTS.md)**: required + optional
   dependencies per platform (Windows / Linux ARM / Linux x64).
 - **[Architecture](../ARCHITECTURE.md)** · **[Contributing](../CONTRIBUTING.md)**
-- **[NINA-Manual.pdf](NINA-Manual.pdf)** — the upstream N.I.N.A. desktop
+- **[NINA-Manual.pdf](NINA-Manual.pdf)**: the upstream N.I.N.A. desktop
   manual, kept as a FITS-header / terminology reference.
 
 ## Setup guides (hardware & external tools)
 
-- **[Raspberry Pi 4 / 5 setup](user-guide/raspberry-pi-setup.md)** — blank
+- **[Raspberry Pi 4 / 5 setup](user-guide/raspberry-pi-setup.md)**: blank
   SD card to auto-start systemd unit.
-- **DSLR / mirrorless cameras** —
+- **DSLR / mirrorless cameras**:
   [Canon (Windows)](dslr-windows-canon.md) ·
   [Nikon (Windows)](dslr-windows-nikon.md) ·
   [Sony (Windows)](dslr-windows-sony.md) ·
   [Linux (gphoto/INDI)](dslr-linux.md)
-- **[Mounts & WiFi accessories](mounts-wifi.md)** — direct-TCP mount drivers
+- **[Mounts & WiFi accessories](mounts-wifi.md)**: direct-TCP mount drivers
   and WiFi-only accessory notes.
-- **[GraXpert setup](graxpert-setup.md)** — AI background/denoise/decon models
+- **[GraXpert setup](graxpert-setup.md)**: AI background/denoise/decon models
   and the CLI fallback.
-- **[Siril setup](siril-setup.md)** — optional external pre-processing /
+- **[Siril setup](siril-setup.md)**: optional external pre-processing /
   stacking integration.
-- **PHD2 GUI embedding** — [Linux (xpra)](phd2-gui-embedding.md) ·
+- **PHD2 GUI embedding**: [Linux (xpra)](phd2-gui-embedding.md) ·
   [Windows (VNC)](phd2-gui-windows.md)
 
 ## User-guide pages by area

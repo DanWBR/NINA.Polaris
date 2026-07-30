@@ -88,7 +88,7 @@ Web Manager UI.
   (Debian/RaspiOS package `libraw23`, pulled in automatically by the
   Polaris `.deb` *Recommends*), Polaris decodes the camera RAW to the
   **true 16-bit linear sensor data** for the live preview and live
-  stack — full dynamic range, far better than the 8-bit embedded JPEG.
+  stack: full dynamic range, far better than the 8-bit embedded JPEG.
   If `libraw` is missing it falls back to the embedded full-res JPEG
   (`sudo apt install libraw23` to enable the real-RAW path). Either way
   the **untouched RAW file** is what gets saved to disk (`.cr2` / `.nef`

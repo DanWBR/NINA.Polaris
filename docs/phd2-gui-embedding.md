@@ -97,7 +97,7 @@ or `sudo apt install phd2`.
 2. In the web UI, click **GUIDE** in the sidebar.
 3. Click the **PHD2 GUI** tab.
 4. Click **▶ Start PHD2 GUI session**, Polaris spawns xpra + PHD2.
-5. After ~5–10 seconds the PHD2 native UI renders inside the tab.
+5. After ~5 to 10 seconds the PHD2 native UI renders inside the tab.
 
 From there you can run the Profile Wizard, Brain dialog, Guiding
 Assistant, etc. as if you were sitting at the Pi's monitor, except
