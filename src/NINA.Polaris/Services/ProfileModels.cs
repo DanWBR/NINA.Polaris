@@ -1089,6 +1089,22 @@ public class AutoFocusSettings {
     /// HFR by more than this factor. 0 disables.</summary>
     public double MaxHfrRatio { get; set; } = 1.15;
 
+    /// <summary>Second pass: after the coarse V-curve, sample a few points
+    /// around its vertex with a small step and refit on those alone. The coarse
+    /// sweep has to span far enough out for both arms to rise, which leaves its
+    /// step too big to resolve the flat bottom of the bowl. Costs RefinePoints
+    /// extra exposures per run.</summary>
+    public bool RefineNearVertex { get; set; } = true;
+
+    /// <summary>Points in the refinement pass. 3 is the minimum a parabola
+    /// needs; 4 leaves one degree of freedom to average noise.</summary>
+    public int RefinePoints { get; set; } = 4;
+
+    /// <summary>Step for the refinement pass. 0 derives it from StepSize (a
+    /// quarter), keeping the fine window inside one coarse interval either
+    /// side of the vertex.</summary>
+    public int RefineStepSize { get; set; }
+
     /// <summary>Centered crop ratio used for AF exposures/detection
     /// (1 = full frame). When the camera supports subframing the crop is a
     /// REAL sensor ROI (faster readout + transfer); otherwise the detection

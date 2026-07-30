@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Image.ImageAnalysis;
+using NINA.Image.ImageAnalysis.AutoFocus;
 using NINA.Polaris.Services;
 using NUnit.Framework;
 
@@ -185,5 +186,32 @@ public class AutoFocusDefocusMeasurementTests {
             "the far-out point reading 1.1 is unphysical and must be soft-rejected");
         Assert.That(pts.Single(p => p.Position == 5300).Rejected, Is.False,
             "real focus must never be flagged");
+    }
+
+    /// <summary>
+    /// The refinement pass fits ONLY its own points, so the coarse arms cannot
+    /// drag its vertex. This checks the property that makes the second pass
+    /// worth its frames: a fine cluster whose true minimum sits between two
+    /// coarse samples must resolve to that minimum, not to a coarse sample.
+    /// </summary>
+    [Test]
+    public void RefinementFit_FindsAMinimumBetweenCoarseSamples() {
+        // True focus at 5312, coarse step 50 so the sweep could only ever
+        // report 5300 or 5350. Fine step 12 around the coarse answer.
+        const double trueFocus = 5312;
+        var fine = new List<FocusPoint>();
+        foreach (var pos in new[] { 5282, 5294, 5306, 5318, 5330 }) {
+            double d = pos - trueFocus;
+            double hfr = 2.0 + 0.0006 * d * d;       // shallow bowl, as it is near focus
+            fine.Add(new FocusPoint(pos, hfr, 0.05));
+        }
+
+        var fit = new QuadraticFitting().Calculate(fine);
+
+        Assert.That(fit.HasFit, Is.True);
+        Assert.That(fit.A2, Is.GreaterThan(0), "a refinement fit has to be a bowl");
+        Assert.That(fit.Minimum.X, Is.EqualTo(trueFocus).Within(3),
+            $"fine fit put focus at {fit.Minimum.X:F0}, true focus was {trueFocus}: "
+            + "the coarse sweep could only have said 5300 or 5350");
     }
 }

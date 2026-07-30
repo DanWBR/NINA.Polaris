@@ -317,6 +317,18 @@ public class AutoFocusService {
                         $"Auto-focus curve unreliable ({reason}) after {o.Attempts} attempt(s)");
                 }
 
+                // ---- Second pass: refine around the vertex ----
+                // The coarse sweep must reach far enough out for both arms to
+                // rise, which leaves its step too coarse for the bottom of the
+                // bowl. Sample a few points there with a small step and refit
+                // on those alone: near the minimum the curve is almost flat, so
+                // this is where precision is won or lost.
+                if (o.RefineNearVertex && o.RefinePoints >= 3) {
+                    int refined = await RefineAroundVertexAsync(
+                        bestPosition, camera, focuser, source, o, tracker, backlash, ct);
+                    if (refined > 0) bestPosition = refined;
+                }
+
                 // ---- Move to the result + confirmation ----
                 await MoveWithBacklashAsync(focuser, bestPosition, o, backlash, ct);
                 int finalPosition = focuser.Focuser_ReadCurrentSafely();
@@ -408,6 +420,109 @@ public class AutoFocusService {
 
     /// <summary>Move to a sweep position (backlash-aware), measure a point
     /// (FramesPerPoint exposures) and append it to Progress with live fits.</summary>
+    /// <summary>
+    /// Second pass: sample <see cref="AutoFocusRunOptions.RefinePoints"/> points
+    /// centred on <paramref name="vertex"/> with a small step, fit a parabola to
+    /// those alone, and return the refined position (0 = keep the coarse one).
+    ///
+    /// Fitting ONLY the fine points is deliberate. Mixing them with the coarse
+    /// sweep would let the far arms, which are an order of magnitude larger in
+    /// HFR, dominate the least squares and drag the vertex right back to where
+    /// the coarse fit already put it, so the pass would cost frames and change
+    /// nothing.
+    ///
+    /// Every guard here is a refusal to make things worse: too few usable
+    /// points, a fit that is not a bowl, or a vertex outside the fine window
+    /// all return 0 and leave the coarse answer standing. A refinement that
+    /// cannot demonstrate a better minimum has no business overriding a fit
+    /// that already passed validation.
+    /// </summary>
+    private async Task<int> RefineAroundVertexAsync(
+            int vertex, ICamera camera, IFocuser focuser, string source,
+            AutoFocusRunOptions o, AfStarTracker tracker, BacklashState backlash,
+            CancellationToken ct) {
+
+        int step = o.RefineStepSize > 0 ? o.RefineStepSize : Math.Max(1, o.StepSize / 4);
+        int n = Math.Clamp(o.RefinePoints, 3, 8);
+
+        // Positions centred on the vertex: for n=4 and step=12 that is
+        // vertex-18, vertex-6, vertex+6, vertex+18 — the whole window sits
+        // inside one coarse interval either side.
+        var targets = new List<int>(n);
+        double half = (n - 1) / 2.0;
+        for (int i = 0; i < n; i++) {
+            targets.Add((int)Math.Round(vertex + (i - half) * step));
+        }
+
+        // Same travel clamp the coarse sweep uses. Distinct() matters: near a
+        // limit several fine targets clamp onto the same position, and sampling
+        // one position three times would fake a fit through a single point.
+        targets = targets.Select(t => ClampToTravel(focuser, t))
+                         .Distinct().OrderBy(t => t).ToList();
+        if (targets.Count < 3) {
+            _logger.LogDebug("AF refinement skipped: fine window collapsed at the travel limit");
+            return 0;
+        }
+
+        _logger.LogInformation(
+            "AF refinement: {N} points around {Vertex} with step {Step} (coarse step was {Coarse})",
+            targets.Count, vertex, step, o.StepSize);
+        Progress = Progress with { Phase = "refining" };
+
+        var fine = new List<FocusPoint>(targets.Count);
+        foreach (var t in targets) {
+            ct.ThrowIfCancellationRequested();
+            int logicalPos = await MoveWithBacklashAsync(focuser, t, o, backlash, ct);
+            Progress = Progress with { CurrentPosition = logicalPos };
+            var (measure, stdev, starCount) = await MeasurePointFramesAsync(camera, source, o, tracker, ct);
+
+            // Refinement points join Progress.Points so the chart shows them,
+            // flagged so the coarse curve the operator already saw is not
+            // redrawn through a cluster of near-identical positions.
+            var point = new AutoFocusPoint {
+                Position = logicalPos,
+                HFR = measure,
+                HfrError = stdev,
+                StarCount = starCount,
+                Refinement = true
+            };
+            Progress = Progress with {
+                Points = new List<AutoFocusPoint>(Progress.Points) { point },
+                LastHfr = point.HFR,
+                LastStarCount = point.StarCount
+            };
+            _logger.LogInformation("AF refine sample: pos={Pos} stars={Stars} HFR={HFR:F2}±{Err:F2}",
+                logicalPos, starCount, measure, stdev);
+
+            if (measure > 0) fine.Add(new FocusPoint(logicalPos, measure, Math.Max(0.001, stdev)));
+        }
+
+        if (fine.Count < 3) {
+            _logger.LogWarning("AF refinement inconclusive: only {N} usable point(s), keeping the coarse result",
+                fine.Count);
+            return 0;
+        }
+
+        var fit = new QuadraticFitting().Calculate(fine);
+        if (!fit.HasFit || fit.A2 <= 0) {
+            _logger.LogWarning("AF refinement inconclusive: fine points are not a bowl, keeping the coarse result");
+            return 0;
+        }
+
+        int refined = (int)Math.Round(fit.Minimum.X);
+        int lo = targets[0], hi = targets[^1];
+        if (refined < lo || refined > hi) {
+            _logger.LogWarning(
+                "AF refinement rejected: vertex {Refined} outside the fine window [{Lo}..{Hi}], keeping {Coarse}",
+                refined, lo, hi, vertex);
+            return 0;
+        }
+
+        _logger.LogInformation("AF refinement: {Coarse} -> {Refined} (R²={R2:F3})",
+            vertex, refined, fit.RSquared);
+        return refined;
+    }
+
     private async Task SamplePointAsync(int target, ICamera camera, IFocuser focuser, string source,
             AutoFocusRunOptions o, AfStarTracker tracker, BacklashState backlash, CancellationToken ct) {
         int logicalPos = await MoveWithBacklashAsync(focuser, target, o, backlash, ct);
@@ -569,6 +684,10 @@ public class AutoFocusService {
     /// rejected points which carry σ=1000 so their fit weight is ~1e-6.</summary>
     private static List<FocusPoint> BuildFitPoints(IReadOnlyList<AutoFocusPoint> points) {
         return points
+            // Fine-pass samples are not part of the coarse curve: they span a
+            // few units where the sweep spans hundreds, so they cannot inform
+            // the wide fit but their scatter can wobble it.
+            .Where(p => !p.Refinement)
             .OrderBy(p => p.Position)
             .Select(p => new FocusPoint(
                 p.Position,
@@ -830,6 +949,10 @@ public class AutoFocusRequest {
     /// BacklashIn when no explicit BacklashIn is given.</summary>
     public int? BacklashSteps { get; set; }
     public bool TakeConfirmationFrame { get; set; } = true;
+    /// <summary>Override the per-rig refinement pass for this run.</summary>
+    public bool? RefineNearVertex { get; set; }
+    public int? RefinePoints { get; set; }
+    public int? RefineStepSize { get; set; }
     /// <summary>Optical train to focus: "main" (imaging camera + focuser),
     /// "aux", or "guide". The camera is paired to the focuser since a V-curve
     /// needs the camera looking through the same optics.</summary>
@@ -891,6 +1014,21 @@ public sealed record AutoFocusRunOptions {
     public int MinStars { get; init; } = 5;
     public string FocuserSource { get; init; } = "main";
     public bool TakeConfirmationFrame { get; init; } = true;
+    /// <summary>Second pass: after the coarse sweep and its fit, sample a few
+    /// more points around the fitted vertex with a small step and refit on
+    /// those. The coarse sweep has to span far enough out to see both arms
+    /// rise, which makes its step too big to resolve the bottom of the bowl,
+    /// where the curve is flattest and a step of 50 units can hide the real
+    /// minimum. ASIAIR does the same in two phases ("Calculate V-Curve" then
+    /// "Find Focus Point").</summary>
+    public bool RefineNearVertex { get; init; } = true;
+    /// <summary>Points sampled in the refinement pass. Three is the minimum a
+    /// parabola needs; four gives it one degree of freedom to average noise.</summary>
+    public int RefinePoints { get; init; } = 4;
+    /// <summary>Step for the refinement pass. 0 derives it from the coarse
+    /// step (a quarter of it, at least 1), which keeps the fine window inside
+    /// one coarse interval either side of the vertex.</summary>
+    public int RefineStepSize { get; init; }
     /// <summary>Set by the run when a hardware ROI was applied, so the
     /// software crop in MeasureFrame doesn't crop twice.</summary>
     public bool HardwareRoiActive { get; set; }
@@ -923,6 +1061,9 @@ public sealed record AutoFocusRunOptions {
             MinStars = Math.Max(1, req?.MinStars ?? p.MinStars),
             FocuserSource = string.IsNullOrWhiteSpace(req?.FocuserSource) ? "main"
                 : req!.FocuserSource.Trim().ToLowerInvariant(),
+            RefineNearVertex = req?.RefineNearVertex ?? p.RefineNearVertex,
+            RefinePoints = Math.Clamp(req?.RefinePoints ?? p.RefinePoints, 3, 8),
+            RefineStepSize = Math.Max(0, req?.RefineStepSize ?? p.RefineStepSize),
             TakeConfirmationFrame = req?.TakeConfirmationFrame ?? true
         };
     }
@@ -944,6 +1085,11 @@ public record AutoFocusProgress {
     public string Mode { get; init; } = "vcurve";
     /// <summary>Active curve-fitting method name (e.g. "TrendHyperbolic").</summary>
     public string Method { get; init; } = "";
+    /// <summary>Which pass is running: "sweep" (the coarse V-curve) or
+    /// "refining" (the fine pass around its vertex). The UI needs the
+    /// distinction because the refinement points cluster within a few units of
+    /// each other, which looks like a stalled sweep otherwise.</summary>
+    public string Phase { get; init; } = "sweep";
     /// <summary>Live fit parameters recomputed after every sampled point so
     /// the chart can draw the hyperbola/trendlines as the sweep grows.</summary>
     public AutoFocusFitPayload? Fits { get; init; }
@@ -962,6 +1108,14 @@ public class AutoFocusPoint {
     /// still draw it (greyed) instead of silently dropping it.
     /// </summary>
     public bool Rejected { get; set; }
+    /// <summary>
+    /// True for samples from the fine second pass around the vertex. They are
+    /// EXCLUDED from the coarse curve's fit (see BuildFitPoints): a handful of
+    /// points a few units apart, mixed into a sweep spanning hundreds, adds
+    /// nothing to the wide fit and would let their noise wobble it. The chart
+    /// draws them as a separate cluster at the bottom of the V.
+    /// </summary>
+    public bool Refinement { get; set; }
 }
 
 /// <summary>Wire payload with every fitted curve's parameters so the client
