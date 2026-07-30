@@ -66,7 +66,12 @@ const PREF_MIRROR_KEYS = [
     'nina-ui-lang',
     'nina-reduce-motion',
     'nina-pad-scale',
-    'nina-night-mode'
+    'nina-night-mode',
+    // On-screen keyboard mode. It matters more now that the default is off:
+    // losing the pref used to leave a touch device with the keyboard still on
+    // ("auto"), whereas now it silently takes the keyboard away from someone
+    // who deliberately switched it on.
+    'polaris-vkbd-mode'
 ];
 
 // Astrophoto exposure ladder (seconds). Roughly geometric, covers
@@ -138,8 +143,8 @@ function ninaApp() {
         },
         // On-screen keyboard mode (Settings → Appearance). The actual
         // behaviour lives in /js/virtual-keyboard.js; this just mirrors the
-        // persisted choice for the <select>. 'auto' | 'on' | 'off'.
-        vkbdMode: 'auto',
+        // persisted choice for the <select>. 'off' (default) | 'auto' | 'on'.
+        vkbdMode: 'off',
 
         // Live View
         exposure: 30,
@@ -4352,7 +4357,7 @@ function ninaApp() {
             // this is display-only sync (no behaviour change here).
             this.vkbdMode = window.PolarisKeyboard
                 ? window.PolarisKeyboard.getMode()
-                : 'auto';
+                : 'off';
 
             // Preview render-quality prefs (client-side display only).
             try {
@@ -5321,9 +5326,9 @@ function ninaApp() {
             }
         },
 
-        // Hand the current appearance prefs to the shell. Cheap (seven short
-        // strings), so it runs whenever the app is backgrounded or a value
-        // changes rather than trying to hook every write.
+        // Hand the current appearance prefs to the shell. Cheap (a handful of
+        // short strings), so it runs whenever the app is backgrounded or a
+        // value changes rather than trying to hook every write.
         _prefsPushToWrapper() {
             if (!this._authWrapperOrigin) return;
             const bag = {};
@@ -6847,9 +6852,13 @@ function ninaApp() {
         // 'polaris-vkbd-mode' and the show/hide behaviour).
         setVkbdMode(mode) {
             const allowed = ['auto', 'on', 'off'];
-            const v = allowed.includes(mode) ? mode : 'auto';
+            const v = allowed.includes(mode) ? mode : 'off';
             this.vkbdMode = v;
             if (window.PolarisKeyboard) window.PolarisKeyboard.setMode(v);
+            // Mirror it to the mobile shell now rather than at the next
+            // backgrounding: on iOS the iframe's own copy does not survive
+            // the launch this choice was made for.
+            this._prefsPushToWrapper();
         },
 
         // Drop the user's explicit pick and fall back to whatever the

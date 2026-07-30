@@ -18,7 +18,11 @@
 (function () {
     'use strict';
 
-    var MODE_KEY = 'polaris-vkbd-mode'; // 'auto' | 'on' | 'off'
+    // 'off' (default) | 'auto' (touch devices only) | 'on'. Off by default: the
+    // device's own keyboard is the one the operator already knows, and this
+    // panel is the exception you turn on when the native one gets in the way.
+    var MODE_KEY = 'polaris-vkbd-mode';
+    var DEFAULT_MODE = 'off';
     var POS_KEY = 'polaris-vkbd-pos';   // {left, top} px once the user drags it
 
     // User-chosen panel position (null = default bottom-right corner).
@@ -50,11 +54,11 @@
     function getMode() {
         try {
             var m = localStorage.getItem(MODE_KEY);
-            return (m === 'on' || m === 'off' || m === 'auto') ? m : 'auto';
-        } catch (e) { return 'auto'; }
+            return (m === 'on' || m === 'off' || m === 'auto') ? m : DEFAULT_MODE;
+        } catch (e) { return DEFAULT_MODE; }
     }
     function setMode(m) {
-        if (m !== 'on' && m !== 'off' && m !== 'auto') m = 'auto';
+        if (m !== 'on' && m !== 'off' && m !== 'auto') m = DEFAULT_MODE;
         try { localStorage.setItem(MODE_KEY, m); } catch (e) { /* private mode */ }
         if (m === 'off') hide();
     }

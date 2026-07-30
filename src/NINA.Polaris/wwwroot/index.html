@@ -12888,14 +12888,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <!-- On-screen keyboard. Replaces the native Android/iOS
                          keyboard (which covers half the screen and fights
                          the Sky view) with a compact themed panel docked to
-                         the right edge. "Auto" turns it on only for touch
-                         devices, so desktop users keep their hardware keyboard. -->
+                         the right edge. Off by default: the device's own
+                         keyboard is the familiar one, so this is the exception
+                         you switch on when the native one gets in the way.
+                         "Auto" limits it to touch devices. -->
                     <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:18px">
                         <span style="min-width:90px">On-screen keyboard</span>
                         <select x-model="vkbdMode" @change="setVkbdMode($event.target.value)" style="flex:1">
-                            <option value="auto">Auto: only on touch devices (default)</option>
+                            <option value="off">Off: use the device keyboard (default)</option>
+                            <option value="auto">Auto: only on touch devices</option>
                             <option value="on">Always on</option>
-                            <option value="off">Off: use the device keyboard</option>
                         </select>
                     </label>
                     <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
