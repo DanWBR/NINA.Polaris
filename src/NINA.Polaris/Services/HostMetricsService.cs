@@ -292,75 +292,129 @@ public class HostMetricsService : BackgroundService {
                 capturePath = (!string.IsNullOrEmpty(home) && Directory.Exists(home))
                     ? home : Environment.CurrentDirectory;
             }
-            var full = Path.GetFullPath(capturePath);
+            var full = ResolveSymlinks(Path.GetFullPath(capturePath));
 
-            // Primary (Linux): resolve the containing mount from /proc/mounts —
-            // it lists EVERY mount, unlike DriveInfo.GetDrives() which can omit
-            // one like an NVMe at /mnt/nvme. That omission was the bug: the gauge
-            // kept reporting the SD card's "/" (128 GB) while images saved to the
-            // NVMe (256 GB). Pick the longest mountpoint that contains the path,
-            // then statvfs it for the real free/total.
-            var procMount = ResolveProcMount(full);
-            if (procMount != null) {
-                try {
-                    var di = new DriveInfo(procMount);
-                    if (di.TotalSize > 0)
-                        return (di.AvailableFreeSpace, di.TotalSize, procMount);
-                } catch { /* fall through */ }
-            }
-
-            // Cross-platform: statvfs the path directly. On Unix `new
-            // DriveInfo(path)` resolves the filesystem containing the path.
+            // THE NUMBERS COME FROM THE KERNEL, NOT FROM THE MOUNT TABLE.
+            // On Unix `new DriveInfo(path)` statvfs's that path, so it reports
+            // the filesystem the path actually lives on whatever the mount table
+            // looks like from here. Deciding the volume by prefix-matching
+            // /proc/mounts instead is what produced the field report: a capture
+            // root on a 256 GB NVMe showing the 128 GB SD card's numbers, because
+            // the match fell through to "/" whenever the NVMe's mountpoint was
+            // not visible in this process's mount table under the name the path
+            // was written with (a symlinked or bind-mounted path, or a mount that
+            // happened after a private-namespace unit started).
+            long free = 0, total = 0;
             try {
                 var di = new DriveInfo(full);
-                if (di.TotalSize > 0)
-                    return (di.AvailableFreeSpace, di.TotalSize, di.Name);
-            } catch { /* fall through to enumeration */ }
+                if (di.TotalSize > 0) { free = di.AvailableFreeSpace; total = di.TotalSize; }
+            } catch { /* probe below */ }
 
-            // Fallback: longest-prefix match over the enumerated drives.
-            DriveInfo? best = null;
-            foreach (var d in DriveInfo.GetDrives()) {
-                if (!d.IsReady) continue;
-                if (full.StartsWith(d.Name, StringComparison.OrdinalIgnoreCase)) {
-                    if (best == null || d.Name.Length > best.Name.Length) {
-                        best = d;
+            if (total <= 0) {
+                // Windows, or a statvfs that refused: longest-prefix match over
+                // the enumerated drives.
+                DriveInfo? best = null;
+                foreach (var d in DriveInfo.GetDrives()) {
+                    if (!d.IsReady) continue;
+                    if (full.StartsWith(d.Name, StringComparison.OrdinalIgnoreCase)) {
+                        if (best == null || d.Name.Length > best.Name.Length) best = d;
                     }
                 }
+                if (best == null) return (0, 0, string.Empty);
+                return (best.AvailableFreeSpace, best.TotalSize, best.Name);
             }
-            if (best == null) return (0, 0, string.Empty);
-            return (best.AvailableFreeSpace, best.TotalSize, best.Name);
+
+            // The mount table is now used only to NAME what was measured, and
+            // the name has to agree with the measurement to be shown: a
+            // mountpoint whose own size differs from the path's is not the
+            // volume the path is on, which is exactly the case that used to be
+            // reported as fact.
+            var (mount, device) = ResolveProcMount(full);
+            if (mount != null) {
+                try {
+                    var mi = new DriveInfo(mount);
+                    if (mi.TotalSize == total) {
+                        return (free, total, string.IsNullOrEmpty(device) ? mount : $"{mount} ({device})");
+                    }
+                } catch { /* fall through to the path itself */ }
+            }
+            return (free, total, full);
         } catch {
             return (0, 0, string.Empty);
         }
     }
 
     /// <summary>
-    /// Return the longest mountpoint in <c>/proc/mounts</c> that contains
-    /// <paramref name="fullPath"/> (Linux only). Reads the kernel mount table
-    /// directly because <see cref="DriveInfo.GetDrives"/> can omit real mounts
-    /// (e.g. an NVMe at /mnt/nvme), which made the disk gauge attribute the path
-    /// to "/" instead. Null when not on Linux / no match / read fails.
+    /// Best-effort realpath: walks the path from the root and follows every
+    /// symlinked component. The mount table records where a filesystem is
+    /// attached, so a capture root written through a symlink (a tidy
+    /// <c>/mnt/nvme</c> pointing at an automounted directory, say) never matches
+    /// it by string. Returns the input unchanged on any failure, since this only
+    /// improves the name of a volume that has already been measured.
     /// </summary>
-    private static string? ResolveProcMount(string fullPath) {
+    internal static string ResolveSymlinks(string path) {
         try {
-            if (!File.Exists("/proc/mounts")) return null;
-            string? best = null;
-            foreach (var line in File.ReadLines("/proc/mounts")) {
-                // Format: "<device> <mountpoint> <fstype> <opts> ...".
-                // Spaces in the mountpoint are octal-escaped as \040.
-                var parts = line.Split(' ');
-                if (parts.Length < 2) continue;
-                var mp = parts[1].Replace("\\040", " ");
-                if (mp.Length == 0) continue;
-                bool contains = mp == "/"
-                    ? true
-                    : (fullPath == mp || fullPath.StartsWith(mp + "/", StringComparison.Ordinal));
-                if (contains && (best == null || mp.Length > best.Length)) best = mp;
+            var root = Path.GetPathRoot(path);
+            if (string.IsNullOrEmpty(root)) return path;
+            var parts = path.Substring(root.Length)
+                            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var current = root;
+            foreach (var part in parts) {
+                if (part.Length == 0) continue;
+                current = Path.Combine(current, part);
+                for (int hops = 0; hops < 16; hops++) {
+                    var target = Directory.ResolveLinkTarget(current, returnFinalTarget: false)
+                                 ?? File.ResolveLinkTarget(current, returnFinalTarget: false);
+                    if (target == null) break;
+                    var t = target.FullName;
+                    current = Path.IsPathRooted(t)
+                        ? t
+                        : Path.GetFullPath(Path.Combine(Path.GetDirectoryName(current) ?? root, t));
+                }
             }
-            return best;
+            return Path.GetFullPath(current);
         } catch {
-            return null;
+            return path;
         }
+    }
+
+    /// <summary>
+    /// Return the longest mountpoint in <c>/proc/mounts</c> that contains
+    /// <paramref name="fullPath"/>, with the device backing it (Linux only).
+    /// Naming only: the caller measures the path itself and shows this name
+    /// solely when the two agree. Null when not on Linux / no match / read
+    /// fails.
+    /// </summary>
+    private static (string? mount, string? device) ResolveProcMount(string fullPath) {
+        try {
+            if (!File.Exists("/proc/mounts")) return (null, null);
+            return ResolveMountFrom(File.ReadLines("/proc/mounts"), fullPath);
+        } catch {
+            return (null, null);
+        }
+    }
+
+    /// <summary>Mount-table parsing, split out so it can be tested against a
+    /// literal table instead of the machine's own.</summary>
+    internal static (string? mount, string? device) ResolveMountFrom(
+            IEnumerable<string> mountTable, string fullPath) {
+        string? best = null, bestDev = null;
+        foreach (var line in mountTable) {
+            // Format: "<device> <mountpoint> <fstype> <opts> ...".
+            // Spaces in the mountpoint are octal-escaped as \040.
+            var parts = line.Split(' ');
+            if (parts.Length < 2) continue;
+            var mp = parts[1].Replace("\\040", " ");
+            if (mp.Length == 0) continue;
+            bool contains = mp == "/"
+                || fullPath == mp
+                || fullPath.StartsWith(mp + "/", StringComparison.Ordinal);
+            if (contains && (best == null || mp.Length > best.Length)) {
+                best = mp;
+                bestDev = parts[0];
+            }
+        }
+        return (best, bestDev);
     }
 
     /// <summary>

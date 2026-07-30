@@ -159,4 +159,68 @@ public class HostMetricsServiceTests {
         Assert.That(lastTime, Is.GreaterThan(DateTime.UtcNow.AddSeconds(-1)),
             "lastTime should be advanced to ~now");
     }
+
+    // The mount table from the field report: the capture root sits on an NVMe,
+    // and the gauge showed the SD card the system booted from.
+    private static readonly string[] PiMounts = {
+        "/dev/mmcblk0p2 / ext4 rw,relatime 0 0",
+        "/dev/mmcblk0p1 /boot/firmware vfat rw 0 0",
+        "/dev/nvme0n1p1 /mnt/nvme ext4 rw,relatime 0 0",
+        "tmpfs /run tmpfs rw,nosuid 0 0",
+    };
+
+    [Test]
+    public void ResolveMountFrom_PicksTheNvme_NotTheRootFilesystem() {
+        var (mount, device) = HostMetricsService.ResolveMountFrom(PiMounts, "/mnt/nvme/files");
+        Assert.That(mount, Is.EqualTo("/mnt/nvme"),
+            "the longest mountpoint containing the path is the NVMe, not \"/\"");
+        Assert.That(device, Is.EqualTo("/dev/nvme0n1p1"));
+    }
+
+    [Test]
+    public void ResolveMountFrom_FallsBackToRoot_WhenNothingElseContainsThePath() {
+        var (mount, device) = HostMetricsService.ResolveMountFrom(PiMounts, "/home/polaris/files");
+        Assert.That(mount, Is.EqualTo("/"));
+        Assert.That(device, Is.EqualTo("/dev/mmcblk0p2"));
+    }
+
+    [Test]
+    public void ResolveMountFrom_DoesNotMatchASiblingWithACommonPrefix() {
+        // "/mnt/nvme2" must not be attributed to "/mnt/nvme": the guard is the
+        // separator, not the string prefix.
+        var table = new[] { "/dev/sda1 / ext4 rw 0 0", "/dev/nvme0n1p1 /mnt/nvme ext4 rw 0 0" };
+        var (mount, _) = HostMetricsService.ResolveMountFrom(table, "/mnt/nvme2/files");
+        Assert.That(mount, Is.EqualTo("/"));
+    }
+
+    [Test]
+    public void ResolveMountFrom_UnescapesSpacesInTheMountpoint() {
+        var table = new[] { "/dev/sda1 / ext4 rw 0 0",
+                            "/dev/sdb1 /media/My\\040Disk ext4 rw 0 0" };
+        var (mount, device) = HostMetricsService.ResolveMountFrom(table, "/media/My Disk/files");
+        Assert.That(mount, Is.EqualTo("/media/My Disk"));
+        Assert.That(device, Is.EqualTo("/dev/sdb1"));
+    }
+
+    [Test]
+    public void TryGetDiskInfo_MeasuresTheVolumeHoldingThePath() {
+        // Whatever the mount table says, the numbers have to come from the
+        // filesystem the path is actually on. Measured against the test's own
+        // working directory, which is the only volume this test can be sure of.
+        var dir = TestContext.CurrentContext.WorkDirectory;
+        var (free, total, name) = HostMetricsService.TryGetDiskInfo(dir);
+        var expected = new DriveInfo(dir);
+
+        Assert.That(total, Is.EqualTo(expected.TotalSize),
+            "total must be the size of the filesystem containing the path");
+        Assert.That(free, Is.EqualTo(expected.AvailableFreeSpace).Within(expected.TotalSize / 100),
+            "free space is sampled twice, so allow a little drift");
+        Assert.That(name, Is.Not.Empty, "the operator needs to see which volume was measured");
+    }
+
+    [Test]
+    public void ResolveSymlinks_ReturnsTheInput_WhenThereIsNoLink() {
+        var dir = TestContext.CurrentContext.WorkDirectory;
+        Assert.That(HostMetricsService.ResolveSymlinks(dir), Is.EqualTo(Path.GetFullPath(dir)));
+    }
 }

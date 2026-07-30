@@ -268,11 +268,18 @@ public sealed class DiagnosticsService {
                 return (DiagSeverity.Fail, $"{dir} is not writable: {ex.Message}",
                     $"sudo chown -R polaris:polaris {dir}");
             }
-            var free = new DriveInfo(Path.GetPathRoot(dir) ?? "/").AvailableFreeSpace;
+            // Measure the volume the capture root is ON. Path.GetPathRoot
+            // returns "/" for every absolute Unix path, so this used to report
+            // the boot device's free space however far away the frames were
+            // being written: an NVMe capture root read as the SD card.
+            var (free, total, volume) = HostMetricsService.TryGetDiskInfo(dir);
+            if (total <= 0) return (DiagSeverity.Unknown, $"{dir}, free space probe failed", null);
             var gb = free / 1024.0 / 1024 / 1024;
+            var where = string.IsNullOrEmpty(volume) ? dir : volume;
             return gb < 2
-                ? (DiagSeverity.Warn, $"{dir}, {gb:F1} GB free", "Low space for a night of subs.")
-                : (DiagSeverity.Ok, $"{dir}, {gb:F1} GB free", null);
+                ? (DiagSeverity.Warn, $"{dir}, {gb:F1} GB free on {where}",
+                   "Low space for a night of subs.")
+                : (DiagSeverity.Ok, $"{dir}, {gb:F1} GB free on {where}", null);
         });
 
         // The check that would have caught the field report "it booted but the
