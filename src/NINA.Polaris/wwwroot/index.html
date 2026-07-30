@@ -15053,6 +15053,70 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </template>
                 </div>
 
+                <!-- DIAG: host self-check. Read-only: it reports and never
+                     repairs. Every check here exists because its absence bit
+                     somebody in the field, and the report is meant to be
+                     pasted into a bug report, so the server redacts keys and
+                     passwords before it ever reaches this page. -->
+                <div class="settings-section settings-section--wide" id="diagnostics-card">
+                    <h3 data-tour="set-diagnostics"><span class="settings-card-icon">🩺</span>Diagnostics</h3>
+                    <p class="hint" style="margin-top:0">
+                        Checks that everything Polaris needs is present, enabled and
+                        permitted: services, star catalogues, udev and PolicyKit rules,
+                        the capture folder, whether the card was ever expanded, and
+                        whether this device has an identity of its own. Nothing is
+                        changed. The same report is written to the boot partition on
+                        every boot, so a host that comes up wrong can be diagnosed by
+                        reading a text file from the card on any computer.
+                    </p>
+                    <div class="control-row" style="margin-top:10px">
+                        <button class="btn btn-sm btn-primary" @click="loadDiagnostics()"
+                                :disabled="diag.loading">
+                            <span x-show="!diag.loading">Run diagnostics</span>
+                            <span x-show="diag.loading" x-cloak>Checking…</span>
+                        </button>
+                        <button class="btn btn-sm" x-show="diag.report" x-cloak
+                                @click="copyDiagnostics()">Copy report</button>
+                    </div>
+                    <div class="text-warn" style="margin-top:8px" x-show="diag.error" x-cloak
+                         x-text="diag.error"></div>
+
+                    <template x-if="diag.report">
+                        <div style="margin-top:12px">
+                            <div class="diag-summary">
+                                <span class="diag-chip diag-fail" x-show="diag.report.fail"
+                                      x-text="diag.report.fail + ' fail'"></span>
+                                <span class="diag-chip diag-warn" x-show="diag.report.warn"
+                                      x-text="diag.report.warn + ' warn'"></span>
+                                <span class="diag-chip diag-unknown" x-show="diag.report.unknown"
+                                      x-text="diag.report.unknown + ' unknown'"></span>
+                                <span class="diag-chip diag-ok" x-text="diag.report.ok + ' ok'"></span>
+                                <span class="text-muted" style="font-size:11px"
+                                      x-text="diag.report.board + ' · ' + diag.report.generatedUtc"></span>
+                            </div>
+                            <template x-for="cat in diagCategories()" :key="cat">
+                                <div style="margin-top:10px">
+                                    <div class="diag-cat" x-text="cat"></div>
+                                    <template x-for="c in diagIn(cat)" :key="c.id">
+                                        <div class="diag-row" :class="'diag-row--' + c.severity">
+                                            <span class="diag-chip"
+                                                  :class="'diag-' + c.severity"
+                                                  x-text="c.severity"></span>
+                                            <div style="min-width:0">
+                                                <div x-text="c.title"></div>
+                                                <div class="text-muted" style="font-size:11px"
+                                                     x-text="c.detail"></div>
+                                                <div class="diag-fix" x-show="c.fix" x-cloak
+                                                     x-text="c.fix"></div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+
                 <div class="settings-section settings-section--wide danger-section">
                     <h3 data-tour="set-reset"><span class="settings-card-icon">⚠️</span>Reset everything to factory defaults</h3>
                     <p class="hint" style="margin-top:0">

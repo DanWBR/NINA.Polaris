@@ -186,6 +186,7 @@ chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-wifi-bootstrap.service" 2>/dev
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-self-update.service" 2>/dev/null || true
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-growroot.service" 2>/dev/null || true
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-sshkeys.service" 2>/dev/null || true
+chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-diagnostics.service" 2>/dev/null || true
 chmod 0644 "$BUILD_DIR/opt/polaris/appsettings.json"
 chmod 0644 "$BUILD_DIR/usr/share/doc/polaris/README" \
            "$BUILD_DIR/usr/share/doc/polaris/copyright" \
@@ -208,6 +209,10 @@ fi
 # SSH host key generation (polaris-sshkeys.service runs it before sshd).
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-sshkeys.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-sshkeys.sh"
+fi
+# Boot-time diagnostics dump (polaris-diagnostics.service runs it as root).
+if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-diagnostics-dump.sh" ]; then
+    chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-diagnostics-dump.sh"
 fi
 # USB auto-mount helper (udev runs it via systemd-run on a plugged-in drive).
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-usb-mount.sh" ]; then

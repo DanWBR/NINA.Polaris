@@ -1836,3 +1836,59 @@
 }
 .onnx-models-table tr:last-child td { border-bottom: none; }
 
+
+/* DIAG: Settings > Diagnostics. One row per check, severity as a chip on the
+   left so a wall of oks is scannable and a fail is impossible to miss.
+   'unknown' gets its own colour on purpose: it means the check could not run,
+   which is a different thing from a pass and must not look like one. */
+.diag-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.diag-chip {
+    display: inline-block;
+    min-width: 58px;
+    text-align: center;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    border: 1px solid var(--border);
+    flex: 0 0 auto;
+}
+.diag-ok      { background: rgba(34, 197, 94, 0.14);  color: rgb(74, 222, 128);  border-color: rgba(34, 197, 94, 0.45); }
+.diag-warn    { background: rgba(245, 158, 11, 0.14); color: rgb(251, 191, 36);  border-color: rgba(245, 158, 11, 0.45); }
+.diag-fail    { background: rgba(239, 68, 68, 0.16);  color: rgb(248, 113, 113); border-color: rgba(239, 68, 68, 0.5); }
+.diag-unknown { background: rgba(148, 163, 184, 0.16); color: rgb(203, 213, 225); border-color: rgba(148, 163, 184, 0.5); }
+.diag-skipped { background: transparent; color: var(--text-muted); }
+.diag-cat {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 3px;
+    margin-bottom: 6px;
+}
+.diag-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(var(--accent2-light-rgb), 0.08);
+}
+.diag-row--fail    { background: rgba(239, 68, 68, 0.05); }
+.diag-row--unknown { background: rgba(148, 163, 184, 0.05); }
+/* The fix line is the reason the report is useful, so it reads as an action
+   rather than as more detail. */
+.diag-fix {
+    font-size: 11px;
+    color: var(--accent2-light);
+    margin-top: 2px;
+    font-family: var(--font-mono);
+    word-break: break-word;
+}

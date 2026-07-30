@@ -814,6 +814,8 @@ function ninaApp() {
         // localStorage('polaris.navPad') in init(); zero everywhere means
         // "unchanged", which is what every desktop browser wants.
         navPad: { left: 0, right: 0, top: 0, bottom: 0 },
+        // DIAG: host self-check (Settings > Diagnostics). Read-only.
+        diag: { loading: false, report: null, error: '' },
         padScale: 100,   // control density %, applied (Settings → Appearance)
         padScaleDraft: 100, // slider draft; only committed to padScale on Apply
         // STUDIO: the Stack panel is SHOWN by default; the user can hide it
@@ -6705,6 +6707,57 @@ function ninaApp() {
             this._prefsPushToWrapper();
             // Canvases size themselves from their container, which just moved.
             try { window.dispatchEvent(new Event('resize')); } catch (_) { }
+        },
+
+        // ----- Settings > Diagnostics -------------------------------------
+        // Read-only host self-check. The severities come from the server and
+        // include 'unknown', which means the check itself could not run: that
+        // is deliberately NOT folded into ok, because a diagnostic that passes
+        // by omission is worse than none.
+        async loadDiagnostics() {
+            this.diag.loading = true;
+            this.diag.error = '';
+            try {
+                this.diag.report = await this.apiGet('/api/system/diagnostics');
+            } catch (e) {
+                this.diag.report = null;
+                this.diag.error = 'Could not run the diagnostics: ' + (e.message || e);
+            } finally {
+                this.diag.loading = false;
+            }
+        },
+
+        // Categories in the order the server emitted them, not alphabetical:
+        // the server groups from "does it run at all" outwards.
+        diagCategories() {
+            const seen = [];
+            for (const c of (this.diag.report?.checks || [])) {
+                if (!seen.includes(c.category)) seen.push(c.category);
+            }
+            return seen;
+        },
+
+        // Worst first inside each category, so a fail is never below ten oks.
+        diagIn(category) {
+            const rank = { fail: 0, unknown: 1, warn: 2, ok: 3, skipped: 4 };
+            return (this.diag.report?.checks || [])
+                .filter(c => c.category === category)
+                .slice()
+                .sort((a, b) => (rank[a.severity] ?? 9) - (rank[b.severity] ?? 9));
+        },
+
+        async copyDiagnostics() {
+            // Copy the SERVER's text rendering rather than re-formatting the
+            // JSON here: it is the same bytes that land on the boot partition,
+            // so what someone pastes matches what we would read off the card.
+            try {
+                const r = await this.apiFetch('/api/system/diagnostics?format=text');
+                const text = await r.text();
+                await navigator.clipboard.writeText(text);
+                this.toast('Diagnostics report copied', 'ok');
+            } catch (e) {
+                this.toast('Could not copy the report: ' + (e.message || e), 'error');
+            }
         },
 
         resetNavPad() {

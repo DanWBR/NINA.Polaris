@@ -241,6 +241,10 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Auth.AuthService>();
 // Linux only; on Windows the service refuses gracefully + the UI
 // banner explains.
 builder.Services.AddSingleton<ClockSyncService>();
+// Read-only host self-check behind GET /api/system/diagnostics. Composes the
+// per-feature services above and adds the OS-level checks nobody else makes
+// (units enabled, udev/polkit rules, root filesystem grown, device identity).
+builder.Services.AddSingleton<DiagnosticsService>();
 builder.Services.AddSingleton<PowerService>();
 builder.Services.AddSingleton<ImageWriterService>();
 // Auto-push saved images to network storage (SMB / SFTP / mounted path).

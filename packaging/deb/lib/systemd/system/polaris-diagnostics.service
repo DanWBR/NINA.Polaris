@@ -1,0 +1,20 @@
+[Unit]
+# Dumps the diagnostics report to the boot partition after every boot, so a
+# board that comes up wrong can still be diagnosed: pull the card, read a text
+# file on any laptop. No UI, no SSH, no serial console needed.
+#
+# Ordered After (not Before) polaris.service: the report is only worth writing
+# once the service is up enough to answer, and the script waits for it.
+Description=Write the Polaris diagnostics report to the boot partition
+After=polaris.service
+Wants=polaris.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/polaris/bin/polaris-diagnostics-dump.sh
+RemainAfterExit=yes
+# Root, because the boot partition is not writable by the polaris user.
+User=root
+
+[Install]
+WantedBy=multi-user.target

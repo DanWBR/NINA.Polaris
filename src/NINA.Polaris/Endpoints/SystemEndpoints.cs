@@ -103,6 +103,18 @@ public static class SystemEndpoints {
             return Results.Ok(new { status = "started", device = req.Device });
         });
 
+        // Host self-check. Read-only by design: it reports and never repairs.
+        // `format=text` is what the boot-time dump writes to the boot partition
+        // and what people paste into a bug report, so it has to be readable
+        // with no tooling at all.
+        group.MapGet("/diagnostics", async (DiagnosticsService diag, string? format,
+                                            CancellationToken ct) => {
+            var report = await diag.RunAsync(ct);
+            return string.Equals(format, "text", StringComparison.OrdinalIgnoreCase)
+                ? Results.Text(DiagnosticsService.ToText(report), "text/plain; charset=utf-8")
+                : Results.Ok(report);
+        });
+
         group.MapGet("/sbc-tools", () => {
             bool Has(params string[] paths) =>
                 OperatingSystem.IsLinux() && paths.Any(System.IO.File.Exists);
