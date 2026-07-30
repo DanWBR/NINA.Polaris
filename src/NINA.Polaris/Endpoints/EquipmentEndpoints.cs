@@ -221,20 +221,33 @@ public static class EquipmentEndpoints {
                     r.TelescopeBrand = update.TelescopeBrand;
                 if (!string.IsNullOrWhiteSpace(update.TelescopeModel))
                     r.TelescopeModel = update.TelescopeModel;
-                // Main-telescope optical accessory (reducer/flattener/barlow)
-                // brand+model: source-of-truth, like the scope brand/model. A
-                // blank here is a client glitch (a debounced optics save firing
-                // while settings.* hasn't re-hydrated after a rig load/reconnect
-                // — the exact "lost my reducer/accessory" report), NOT a
-                // deliberate clear, so never blank-overwrite. To actually remove
-                // an accessory, pick a different one. Factor only moves with a
-                // real value.
-                if (!string.IsNullOrWhiteSpace(update.AccessoryType))
-                    r.AccessoryType = update.AccessoryType;
-                if (!string.IsNullOrWhiteSpace(update.AccessoryModel)) {
-                    r.AccessoryModel = update.AccessoryModel;
-                    if (update.AccessoryFactor > 0)
-                        r.AccessoryFactor = update.AccessoryFactor;
+                // Main-telescope optical accessory (reducer / flattener / barlow,
+                // or "custom" with a multiplier the user typed): source-of-truth,
+                // like the scope brand/model. A blank here is a client glitch (a
+                // debounced optics save firing while settings.* hasn't
+                // re-hydrated after a rig load/reconnect, the exact "lost my
+                // reducer/accessory" report), NOT a deliberate clear, so never
+                // blank-overwrite. Factor only moves with a real value.
+                //
+                // Removing an accessory therefore needs a word rather than an
+                // absence: the type "none", which only the None option in the
+                // picker sends. Old clients never send it, so nothing changes
+                // for them.
+                if (string.Equals(update.AccessoryType, "none", StringComparison.OrdinalIgnoreCase)) {
+                    r.AccessoryType = "";
+                    r.AccessoryModel = "";
+                    r.AccessoryFactor = 1.0;
+                } else {
+                    if (!string.IsNullOrWhiteSpace(update.AccessoryType))
+                        r.AccessoryType = update.AccessoryType;
+                    if (!string.IsNullOrWhiteSpace(update.AccessoryModel)) {
+                        r.AccessoryModel = update.AccessoryModel;
+                        // A custom accessory is nothing BUT its multiplier, so an
+                        // out-of-range one is worth refusing rather than storing:
+                        // zero or negative would take the focal length with it.
+                        if (update.AccessoryFactor > 0)
+                            r.AccessoryFactor = Math.Clamp(update.AccessoryFactor, 0.05, 20.0);
+                    }
                 }
                 r.RequiredBackspacingMm = update.RequiredBackspacingMm;
                 if (update.GuiderFocalLengthMm > 0) r.GuiderFocalLengthMm = update.GuiderFocalLengthMm;

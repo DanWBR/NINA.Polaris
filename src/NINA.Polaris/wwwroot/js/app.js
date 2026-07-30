@@ -51,6 +51,11 @@ const _polarisCharts = {
 // than being given a class whose layout rules they don't want.
 const PZ_AREA_SEL = '.preview-area, .af-preview-area';
 
+// Sentinel option for "an accessory the catalogue does not have". Not a value
+// that is ever persisted: the rig records accessoryType 'custom' plus the name
+// and multiplier the user typed.
+const CUSTOM_ACCESSORY = '__custom__';
+
 // Per-device appearance preferences mirrored to the mobile shell. They live
 // in localStorage, which is exactly the storage iOS empties for a
 // cross-origin iframe between app launches — so without this the operator
@@ -1046,6 +1051,11 @@ function ninaApp() {
             accessoryType: '',
             accessoryModel: '',
             accessoryFactor: 1.0,
+            // What the accessory <select> is showing: '' (none), a catalogue
+            // "brand model" key, or CUSTOM_ACCESSORY. Kept apart from
+            // accessoryModel because in custom mode that field holds the name
+            // the user typed, which is not one of the options.
+            accessoryPick: '',
             requiredBackspacingMm: null,
             // Attached fixed filter code (no filter wheel). '' = None.
             attachedFilter: '',
@@ -20357,6 +20367,7 @@ function ninaApp() {
             this.settings.accessoryType = rig.accessoryType || '';
             this.settings.accessoryModel = rig.accessoryModel || '';
             this.settings.accessoryFactor = rig.accessoryFactor || 1.0;
+            this.settings.accessoryPick = this._accessoryPickFor(rig);
             this.settings.requiredBackspacingMm = rig.requiredBackspacingMm ?? null;
             this.settings.attachedFilter = rig.attachedFilter || '';
             // Guidescope card
@@ -20537,12 +20548,12 @@ function ninaApp() {
             // is set and its option list has rebuilt — otherwise the saved
             // accessory shows blank and the next save PUTs the blank back,
             // losing the reducer/flattener on the rig.
-            const ma = active.accessoryModel || '';
+            const ma = this._accessoryPickFor(active);
             this.settings.telescopeBrand = '';
             this.settings.telescopeModel = '';
             this.settings.guideTelescopeBrand = '';
             this.settings.guideTelescopeModel = '';
-            this.settings.accessoryModel = '';
+            this.settings.accessoryPick = '';
             await this.$nextTick();
             this.settings.telescopeBrand = bt;
             this.settings.guideTelescopeBrand = bg;
@@ -20550,7 +20561,7 @@ function ninaApp() {
             this.settings.telescopeModel = mt;
             this.settings.guideTelescopeModel = mg;
             await this.$nextTick();
-            this.settings.accessoryModel = ma;
+            this.settings.accessoryPick = ma;
             await this.$nextTick();
             this._resyncingOptics = false;
         },
@@ -20949,6 +20960,17 @@ function ninaApp() {
                 s.aperture = scope.apertureMm;
                 s.requiredBackspacingMm = scope.backspacingMm;
             }
+            // A custom accessory has no catalogue entry by definition: its type,
+            // name and factor are the user's, so the catalogue resolve below
+            // must not run and reset them. Only the focal length is recomputed.
+            if (s.accessoryType === 'custom') {
+                if (scope) {
+                    s.focalLength = Math.round(
+                        scope.focalLengthMm * (s.accessoryFactor || 1.0));
+                    this.updateFov();
+                }
+                return;
+            }
             const accessory = this.opticsCatalogue.accessories
                 .find(a => a.brand + ' ' + a.model === s.accessoryModel)
                 || this.opticsCatalogue.accessories
@@ -20985,8 +21007,70 @@ function ninaApp() {
             this._applyOpticsToSettings();
             this.saveOpticsDebounced();
         },
+        // Which option the accessory <select> should show for a rig: the
+        // sentinel for a custom accessory, otherwise its catalogue key.
+        _accessoryPickFor(rig) {
+            if (!rig) return '';
+            return rig.accessoryType === 'custom'
+                ? CUSTOM_ACCESSORY
+                : (rig.accessoryModel || '');
+        },
+
         onAccessoryPick() {
+            const s = this.settings;
+            if (s.accessoryPick === CUSTOM_ACCESSORY) {
+                // Coming from a catalogue accessory (or from none), the name
+                // field still holds that entry's name, so replace it with a
+                // default the user can overwrite. A default rather than a blank
+                // because the server ignores a blank accessory model and takes
+                // the multiplier down with it: someone who only sets the
+                // multiplier would find nothing saved.
+                if (s.accessoryType !== 'custom') {
+                    s.accessoryType = 'custom';
+                    s.accessoryModel = 'Custom accessory';
+                    if (!(s.accessoryFactor > 0)) s.accessoryFactor = 1.0;
+                }
+            } else {
+                s.accessoryModel = s.accessoryPick;
+                if (s.accessoryType === 'custom') s.accessoryType = '';
+                // Picking None is the one place an empty accessory is a
+                // decision rather than a form that has not filled in yet.
+                if (!s.accessoryPick) {
+                    this._accessoryCleared = true;
+                    s.accessoryType = '';
+                    s.accessoryFactor = 1.0;
+                }
+            }
             this._applyOpticsToSettings();
+            this.saveOpticsDebounced();
+        },
+
+        // Name of a custom accessory. It must not reach the server blank: a
+        // blank accessory model is treated there as a stale-form glitch and
+        // ignored, which would drop the factor with it.
+        onCustomAccessoryName() {
+            const s = this.settings;
+            if (!String(s.accessoryModel || '').trim()) s.accessoryModel = 'Custom accessory';
+            this.saveOpticsDebounced();
+        },
+
+        // Multiplier of a custom accessory. Handled with the raw input value
+        // rather than x-model so the PREVIOUS factor is still available: on an
+        // off-catalogue scope there is no native focal length to multiply, so
+        // the effective one is rescaled by how much the multiplier changed.
+        onCustomFactorChange(raw) {
+            const s = this.settings;
+            const prev = s.accessoryFactor > 0 ? s.accessoryFactor : 1.0;
+            const next = Math.min(20, Math.max(0.05, parseFloat(raw) || 1.0));
+            s.accessoryFactor = next;
+            const scope = this.opticsCatalogue.telescopes
+                .find(t => t.brand === s.telescopeBrand && t.model === s.telescopeModel);
+            if (scope) {
+                s.focalLength = Math.round(scope.focalLengthMm * next);
+            } else if (s.focalLength > 0 && prev > 0) {
+                s.focalLength = Math.round(s.focalLength / prev * next);
+            }
+            this.updateFov();
             this.saveOpticsDebounced();
         },
 
@@ -21098,7 +21182,12 @@ function ninaApp() {
                 cameraBitDepth: Number(this.settings.cameraBitDepth) || 0,
                 telescopeBrand: this.settings.telescopeBrand,
                 telescopeModel: this.settings.telescopeModel,
-                accessoryType: this.settings.accessoryType,
+                // "none" is a DELIBERATE clear, set only by picking None in the
+                // accessory select. The server ignores a blank type/model
+                // because a blank is what a half-hydrated form sends, so
+                // removing an accessory needs a word for it rather than an
+                // absence. Consumed here: the next save is an ordinary one.
+                accessoryType: this._accessoryCleared ? 'none' : this.settings.accessoryType,
                 accessoryModel: this.settings.accessoryModel,
                 accessoryFactor: this.settings.accessoryFactor,
                 requiredBackspacingMm: this.settings.requiredBackspacingMm,
@@ -21117,7 +21206,9 @@ function ninaApp() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(updated)
                 });
-                Object.assign(rig, updated);
+                this._accessoryCleared = false;
+                // The local copy keeps the cleared state, not the sentinel.
+                Object.assign(rig, updated, { accessoryType: this.settings.accessoryType });
                 this.toast(`Saved selections to "${rig.name}"`, 'ok');
             } catch (e) { this.toast('Save failed: ' + e.message, 'error'); }
         },

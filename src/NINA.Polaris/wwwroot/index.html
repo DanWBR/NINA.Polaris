@@ -5717,7 +5717,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </div>
                             <div class="equip-meta-row accessory-row">
                                 <label>Accessory (catalog)
-                                    <select x-model="settings.accessoryModel"
+                                    <select x-model="settings.accessoryPick"
                                             @change="onAccessoryPick()"
                                             class="input-sm">
                                         <option value="">None</option>
@@ -5726,8 +5726,34 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             <option :value="a.brand + ' ' + a.model"
                                                 x-text="'[' + a.type + '] ' + a.brand + ' ' + a.model + ' (' + a.factor + '×)'"></option>
                                         </template>
+                                        <!-- For anything the catalogue does not
+                                             list: an unusual reducer, a stack of
+                                             two elements, a home-made spacer that
+                                             changes the effective focal length. -->
+                                        <option value="__custom__">Custom (set the multiplier)</option>
                                     </select>
                                 </label>
+                            </div>
+                            <!-- Custom accessory: the user names it and gives the
+                                 multiplier, since there is no catalogue entry to
+                                 read either from. -->
+                            <div class="equip-meta-row accessory-row"
+                                 x-show="settings.accessoryType === 'custom'" x-cloak>
+                                <label style="flex:1; min-width:0">Accessory name
+                                    <input type="text" x-model="settings.accessoryModel"
+                                           @change="onCustomAccessoryName()"
+                                           placeholder="e.g. 0.63x reducer"
+                                           class="input-sm" style="width:100%">
+                                </label>
+                                <label>Multiplier
+                                    <input type="number" :value="settings.accessoryFactor"
+                                           @change="onCustomFactorChange($event.target.value)"
+                                           step="0.01" min="0.05" max="20"
+                                           class="input-sm" style="width:80px">
+                                </label>
+                                <span class="equip-meta-derived"
+                                      x-show="settings.focalLength > 0"
+                                      x-text="'= ' + settings.focalLength + ' mm'"></span>
                             </div>
 
                             <!-- Resolved / manual override values. The
@@ -5749,7 +5775,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                       x-show="settings.focalLength > 0 && settings.aperture > 0">
                                     f/<strong x-text="(settings.focalLength / settings.aperture).toFixed(1)"></strong>
                                 </span>
-                                <label x-show="settings.accessoryType">Factor
+                                <!-- Catalogue accessories only: a custom one has
+                                     its own multiplier field above, and two
+                                     inputs for one number would be a puzzle. -->
+                                <label x-show="settings.accessoryType && settings.accessoryType !== 'custom'">Factor
                                     <input type="number" x-model.number="settings.accessoryFactor"
                                            @change="saveOpticsDebounced()"
                                            step="0.05" min="0.1" max="5" class="input-sm" style="width:70px">
