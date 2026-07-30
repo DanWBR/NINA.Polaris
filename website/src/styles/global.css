@@ -67,7 +67,20 @@
   --maxw: 1200px;
 }
 
-html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 76px;
+  /* iOS and WKWebView inflate the font size of anything they judge to be a
+     "text block": a paragraph with enough words in a wide enough box. On a
+     phone the long note on the install page ("If the in-app update fails…")
+     came out visibly larger than the note right above it, which reads as a
+     styling mistake and is really the platform second-guessing us. Every
+     desktop browser renders both at the same size. 100% means "use the size we
+     asked for". The Polaris app itself needed the same line: same bug, two
+     codebases. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 
 body {
   font-family: var(--font-body);
