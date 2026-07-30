@@ -20655,87 +20655,6 @@ function ninaApp() {
             });
         },
 
-        /// Triggered when the user picks a telescope brand → reset
-        /// the model and clear computed fields so the next dropdown
-        /// hit re-populates them.
-        onTelescopeBrandChange(rig) {
-            rig.telescopeModel = '';
-            this._applyOpticsToRig(rig);
-            this.saveRig(rig);
-        },
-
-        /// Triggered when the user picks a telescope model. Auto-
-        /// fills aperture + native focal length, recomputes the
-        /// effective focal length using the current accessory, and
-        /// saves.
-        onTelescopeModelChange(rig) {
-            this._applyOpticsToRig(rig);
-            this.saveRig(rig);
-        },
-
-        /// Triggered when the user picks (or clears) an accessory.
-        /// Recomputes the effective focal length + backspacing.
-        onAccessoryChange(rig) {
-            this._applyOpticsToRig(rig);
-            this.saveRig(rig);
-        },
-
-        /// Compute the effective optics fields from the catalogue
-        /// picks. Called by every onXChange above.
-        _applyOpticsToRig(rig) {
-            const scope = this.opticsCatalogue.telescopes
-                .find(t => t.brand === rig.telescopeBrand
-                        && t.model === rig.telescopeModel);
-            if (scope) {
-                rig.apertureMm = scope.apertureMm;
-                // Base scope back-focus, overridden below if the
-                // accessory publishes its own value (most do).
-                rig.requiredBackspacingMm = scope.backspacingMm;
-            } else {
-                // Off-catalogue scope: leave aperture as the user
-                // entered it manually; same for backspacing.
-            }
-            const accessory = this.opticsCatalogue.accessories
-                .find(a => a.brand + ' ' + a.model === rig.accessoryModel)
-                || this.opticsCatalogue.accessories
-                    .find(a => a.model === rig.accessoryModel);
-            if (accessory) {
-                rig.accessoryType   = accessory.type;
-                rig.accessoryFactor = accessory.factor;
-                if (accessory.backspacingMm != null) {
-                    rig.requiredBackspacingMm = accessory.backspacingMm;
-                }
-            } else {
-                rig.accessoryType   = '';
-                rig.accessoryFactor = 1.0;
-            }
-            // Effective focal length = native × accessory factor.
-            // Only auto-recompute when a scope is picked from the
-            // catalogue; off-catalogue rigs keep the user's manual
-            // FocalLengthMm value untouched.
-            if (scope) {
-                rig.focalLengthMm = Math.round(
-                    scope.focalLengthMm * (rig.accessoryFactor || 1.0));
-            }
-        },
-
-        /// Native (no-accessory) focal length the picker is showing
-        /// for this rig. Used in the UI to display "Native fl /
-        /// Effective fl" side-by-side.
-        opticsNativeFocalLength(rig) {
-            const scope = this.opticsCatalogue.telescopes
-                .find(t => t.brand === rig.telescopeBrand
-                        && t.model === rig.telescopeModel);
-            return scope ? scope.focalLengthMm : null;
-        },
-
-        /// f-ratio = focal length / aperture. UI helper for the
-        /// readout below the picker.
-        opticsFocalRatio(rig) {
-            if (!rig.apertureMm || !rig.focalLengthMm) return null;
-            return rig.focalLengthMm / rig.apertureMm;
-        },
-
         // ---- Per-rig filter offsets ----
         setFilterOffset(rig, filterName, valueStr) {
             const v = parseInt(valueStr, 10);
@@ -20945,12 +20864,11 @@ function ninaApp() {
             } catch (e) { this.toast('Delete failed', 'error'); }
         },
 
-        // Settings-mirror version of _applyOpticsToRig, same lookup,
-        // writes to this.settings.* instead of a rig object. Used by
-        // the catalog picker dropdowns in the Main Telescope card on
-        // the RIGS tab (settings.* later flushes into the active rig
-        // via saveCurrentSelectionsToRig). Off-catalogue picks (brand
-        // cleared back to blank) leave the typed fields alone.
+        // Resolves the catalogue picks into this.settings.*. Used by the
+        // catalog picker dropdowns in the Main Telescope card on the RIGS tab
+        // (settings.* later flushes into the active rig via
+        // saveCurrentSelectionsToRig). Off-catalogue picks (brand cleared back
+        // to blank) leave the typed fields alone.
         _applyOpticsToSettings() {
             const s = this.settings;
             const scope = this.opticsCatalogue.telescopes
