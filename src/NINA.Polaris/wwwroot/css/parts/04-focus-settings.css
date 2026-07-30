@@ -1892,3 +1892,24 @@
     font-family: var(--font-mono);
     word-break: break-word;
 }
+
+/* Focus-motor nudge row (<< < > >>), shared by the PREVIEW, FOCUS and VIDEO
+   panels. It has to stay a ROW: the sidebar's own rule stacks every
+   .control-row into a column so each field spans the panel, which turned these
+   four buttons into four tall full-width blocks in VIDEO (field report). The
+   PREVIEW copy had been patched with inline styles and the VIDEO one had not,
+   so the rule lives here now and both markups just carry the class.
+   The selector is deliberately one class deeper than the sidebar rule it
+   overrides, rather than relying on file order. */
+.control-row.preview-focus-btn-row,
+.quick-controls .control-row.preview-focus-btn-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+}
+.control-row.preview-focus-btn-row > button {
+    flex: 1 1 0;
+    min-width: 0;
+}

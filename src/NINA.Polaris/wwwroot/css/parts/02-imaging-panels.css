@@ -614,6 +614,32 @@
         border-radius: 0;
         /* Stacked layout: panel docks below, no side reserve. */
         margin-right: 0;
+        /* Hold a real band for the frame. The docked panel is now a normal
+           flow item several hundred pixels tall, and in a column flex box a
+           flex:1 sibling loses to that: on a phone the frame collapsed to a
+           ~100px strip with the histogram overlay sitting across it, which is
+           what the field report showed. A viewport-relative floor keeps the
+           image the biggest thing on screen and lets the controls scroll. */
+        min-height: 46vh;
+    }
+    /* ...which only works if the column may exceed the viewport. */
+    .live-pane,
+    .preview-pane,
+    .flatwiz-pane {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    /* The shutter is sized for a 320px desktop sidebar; docked full width on a
+       phone it took a whole screenful on its own. */
+    .live-pane .polaris-shutter,
+    .preview-pane .polaris-shutter {
+        width: 132px;
+        height: 132px;
+    }
+    .live-pane .shutter-wrap,
+    .preview-pane .shutter-wrap {
+        flex: 0 0 auto;
+        padding: 4px 0;
     }
 }
 

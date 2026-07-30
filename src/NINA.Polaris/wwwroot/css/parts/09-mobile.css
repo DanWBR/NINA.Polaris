@@ -94,7 +94,12 @@
 
     /* Landscape is wide, but still apply the reflow niceties so nothing forces
        a horizontal scroll if a row is unusually long. */
-    .control-row, .control-row.actions, .af-params { flex-wrap: wrap !important; }
+    /* The focus nudge row is exempt: four arrows that mean "out fast, out,
+       in, in fast" only read as a group side by side, and wrapping them
+       breaks that reading before it saves any width. */
+    .control-row:not(.preview-focus-btn-row),
+    .control-row.actions,
+    .af-params { flex-wrap: wrap !important; }
     .input-sm { max-width: 100%; }
     .files-actions-icons {
         flex-wrap: nowrap;
