@@ -40,32 +40,32 @@ Browser (laptop / tablet / phone)        Raspberry Pi / Mini PC
 
 ## Features
 
-A single self-hosted backend that drives the whole night from any browser —
+A single self-hosted backend that drives the whole night from any browser:
 acquisition, guiding, focusing, planning, live stacking, and a full
 post-processing suite with in-browser AI. Highlights:
 
-- **Equipment** — INDI (400+ Linux drivers), ASCOM/Alpaca over the network,
+- **Equipment**: INDI (400+ Linux drivers), ASCOM/Alpaca over the network,
   direct ASCOM COM on Windows, and native ZWO / SVBony / Player One / ToupTek /
   Altair camera SDKs. DSLR/mirrorless (Canon, Nikon, Sony). Multi-rig profiles, an
   INDI property browser, and a one-click equipment simulator for hardware-free
   testing.
-- **Acquisition** — real-time image streaming (LZ4 raw or JPEG, adaptive),
+- **Acquisition**: real-time image streaming (LZ4 raw or JPEG, adaptive),
   plate-solve & center, PHD2 + a built-in native autoguider, manual focus
   assist + V-curve auto-focus, meridian-flip automation, dithering.
-- **Planning & automation** — tree-based Advanced Sequencer, ASIAIR-style
+- **Planning & automation**: tree-based Advanced Sequencer, ASIAIR-style
   multi-target night planner (PLAN), mosaic planner, simple sequences, a
   plugin system, and a sky catalog / atlas / map with weather and
   Tonight's-Best.
-- **EAA & video** — live stacking with calibration, SNR/HFR, and
+- **EAA & video**: live stacking with calibration, SNR/HFR, and
   client-side (WASM) compute offload for weak hosts; planetary / lucky-imaging
   video capture and stacking.
-- **Post-processing (STUDIO + EDITOR)** — calibrate, integrate, channel
+- **Post-processing (STUDIO + EDITOR)**: calibrate, integrate, channel
   combine (RGB/LRGB/PixelMath), color calibration (BG-neutralize / manual /
   photometric PCC), crop, and a non-destructive editor. In-browser AI via
   ONNX/WebGPU: GraXpert 🌃 BGE / ☄ Denoise / 🌌 Deconvolution, plus 🌠 star
   removal (nox / starrem2k13 / StarNet++) and 🎚️ Image Blend. Optional NPU
   acceleration on RK35xx boards.
-- **Access & ops** — responsive Web UI, in-app help/tutorials, authentication,
+- **Access & ops**: responsive Web UI, in-app help/tutorials, authentication,
   relay server for remote access without port-forwarding, WiFi hotspot↔station
   switch, mDNS (`nina.local`), remote terminal (SSH in the browser), debug
   logging, polar alignment (TPPA + rudimentary), and SBC self-update.
@@ -73,7 +73,7 @@ post-processing suite with in-browser AI. Highlights:
 ## Tested hardware
 
 Polaris supports a huge range of gear through INDI (400+ Linux drivers),
-ASCOM/Alpaca, and the native camera SDKs — far more than any one person can
+ASCOM/Alpaca, and the native camera SDKs, far more than any one person can
 own. The list below is the hardware that has actually been used with Polaris in
 the field, as a starting point; anything INDI/ASCOM/Alpaca-compatible should
 work even if it isn't listed. Reports of other working (or broken) gear are
@@ -93,15 +93,15 @@ welcome via an issue or PR.
 
 ## Documentation
 
-The full documentation lives in [`docs/`](docs/README.md) — that index
+The full documentation lives in [`docs/`](docs/README.md); that index
 organizes every page by area. The essentials:
 
-- **[User Guide](docs/user-guide/README.md)** — start here. Install →
+- **[User Guide](docs/user-guide/README.md)**: start here. Install →
   first night → end-to-end workflow, plus a reference page per sidebar tab.
-- **[Feature overview](docs/FEATURES.md)** — what every tab does, at a glance.
-- **[API & Configuration reference](docs/api-reference.md)** — REST endpoints,
+- **[Feature overview](docs/FEATURES.md)**: what every tab does, at a glance.
+- **[API & Configuration reference](docs/api-reference.md)**: REST endpoints,
   WebSocket streams, `appsettings.json`, environment variables.
-- **[Requirements matrix](REQUIREMENTS.md)** — dependencies per platform.
+- **[Requirements matrix](REQUIREMENTS.md)**: dependencies per platform.
 - **[Architecture](ARCHITECTURE.md)** · **[Contributing](CONTRIBUTING.md)**
 - Setup guides: [Raspberry Pi](docs/user-guide/raspberry-pi-setup.md),
   [GraXpert](docs/graxpert-setup.md), [Siril](docs/siril-setup.md),
