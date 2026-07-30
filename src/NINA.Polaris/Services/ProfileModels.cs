@@ -333,6 +333,30 @@ public class NativeCalibrationData {
     public double[][] DecPoints { get; set; } = Array.Empty<double[]>();
 }
 
+/// <summary>The periodic-error model the predictive guide algorithm learned, kept
+/// on the rig so a session starts knowing the mount instead of spending its first
+/// worm cycle rediscovering it.
+///
+/// <para>Amplitudes are stored in ARCSECONDS, not pixels. The algorithm works in
+/// pixels, but a pixel is only a fixed angle for one guide camera at one binning
+/// and one focal length; a model saved with the guide scope and reloaded after a
+/// binning change would otherwise feed forward corrections scaled by the ratio of
+/// the two pixel scales.</para></summary>
+public class NativePredictiveModelData {
+    /// <summary>Worm period in seconds.</summary>
+    public double PeriodSec { get; set; }
+    /// <summary>Harmonic pairs [a1, b1, a2, b2, ...] in arcseconds. Their absolute
+    /// phase is not meaningful in a later session; the guider re-phases the shape
+    /// against the first frames.</summary>
+    public double[] HarmonicsArcsec { get; set; } = Array.Empty<double>();
+    /// <summary>Adjusted R² of the fit this came from.</summary>
+    public double Quality { get; set; }
+    /// <summary>Pixel scale (arcsec/px) in force when it was measured. Kept for
+    /// the log line: the conversion above makes the model itself scale-free.</summary>
+    public double PixelScaleAtSave { get; set; }
+    public string SavedAtUtc { get; set; } = "";
+}
+
 /// <summary>
 /// A named equipment set (a "rig"). The user can save the device-name +
 /// per-rig preference pair for any combination of equipment, then switch
@@ -743,6 +767,11 @@ public class EquipmentProfile {
     /// <summary>Predictive algorithm: feed-forward weight (0..1) applied to the
     /// predicted per-frame change on top of the reactive baseline. Default 0.7.</summary>
     public double NativePredictiveBlend { get; set; } = 0.7;
+
+    /// <summary>Periodic-error model the predictive algorithm learned on this rig,
+    /// saved when guiding stops and reloaded at the next start. Null until a fit
+    /// has been confident enough to keep.</summary>
+    public NativePredictiveModelData? NativePredictiveModel { get; set; }
 
     /// <summary>ZFilter algorithm: exposure factor. The equivalent post-filter
     /// exposure time ≈ this × the guide exposure; higher = smoother/slower (sets the

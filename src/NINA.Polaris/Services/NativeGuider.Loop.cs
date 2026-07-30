@@ -47,6 +47,10 @@ public sealed partial class NativeGuider {
         }
         _loopCts = null;
         _loopTask = null;
+        // Keep what the predictive algorithm learned about this mount's worm
+        // before the run's state goes away. Here rather than per frame: one
+        // profile write per session instead of one per guide frame.
+        PersistPredictiveModel();
         IsSettling = false;
         IsDithering = false;
         _settleActive = false;

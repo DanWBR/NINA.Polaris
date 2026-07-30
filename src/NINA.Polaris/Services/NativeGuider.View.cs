@@ -38,13 +38,14 @@ public sealed partial class NativeGuider {
         double predBlend = Math.Clamp(Rig.NativePredictiveBlend, 0.0, 1.0);
         // ZFilter exposure factor: 0 = use the PHD2 default (2.0); else clamp [1,20].
         double zExp = Rig.NativeZFilterExpFactor >= 1.0 ? Math.Min(Rig.NativeZFilterExpFactor, 20.0) : 2.0;
+        var prior = RestorePredictiveModel();
         _raAlgo = GuideAlgorithmFactory.Create(
             string.IsNullOrWhiteSpace(Rig.NativeRaAlgorithm) ? "hysteresis" : Rig.NativeRaAlgorithm,
             minMove: Math.Max(0.0, Rig.NativeMinMoveRaPx),
             aggression: Math.Clamp(Rig.NativeRaAggression, 0.0, 2.0),
             hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99),
             wormPeriodSec: wormSec, predictiveWindow: predWin, predictiveBlend: predBlend,
-            zfilterExpFactor: zExp);
+            zfilterExpFactor: zExp, predictiveModel: prior);
         // Predictive models worm-gear periodic error, which only the RA axis
         // has, so Dec no longer offers it. A rig saved while it did falls back
         // to the default instead of feed-forwarding a phantom worm.
@@ -66,6 +67,62 @@ public sealed partial class NativeGuider {
         double measuredBacklash = Rig.NativeBacklashComp ? _calibration.BacklashMs : 0;
         _backlashComp = new BacklashComp(measuredBacklash, Rig.NativeBacklashMaxMs);
         _backlashComp.Reset();
+    }
+
+    /// <summary>The rig's saved periodic-error model, converted back into the
+    /// pixels the algorithm works in. Returns null when nothing was saved or the
+    /// current pixel scale is unknown, in which case the algorithm learns from
+    /// scratch exactly as before.</summary>
+    private PredictiveModel? RestorePredictiveModel() {
+        var d = Rig.NativePredictiveModel;
+        if (d == null || d.PeriodSec <= 0 || d.HarmonicsArcsec is not { Length: >= 2 }) return null;
+        double scale = PixelScale;
+        if (!(scale > 0)) return null;
+        var coef = new double[d.HarmonicsArcsec.Length];
+        for (int i = 0; i < coef.Length; i++) coef[i] = d.HarmonicsArcsec[i] / scale;
+        var model = new PredictiveModel(d.PeriodSec, coef, d.Quality);
+        if (!model.IsUsable) return null;
+        _logger.LogInformation(
+            "Predictive: restored the rig's PE model (period {Period:F0}s, {H} harmonic(s), "
+            + "R²adj {Q:F2}, saved {When}); it only needs re-phasing instead of a full worm cycle",
+            d.PeriodSec, coef.Length / 2, d.Quality, string.IsNullOrEmpty(d.SavedAtUtc) ? "?" : d.SavedAtUtc);
+        return model;
+    }
+
+    /// <summary>Save what the RA predictive algorithm learned this session. Called
+    /// when the loop stops, which is also when a dither or a settings change can
+    /// no longer disturb the fit. Silent when the RA axis is not predictive or no
+    /// fit ever cleared the confidence bar: there is nothing worth keeping, and
+    /// overwriting a good stored model with nothing would cost the next session
+    /// its head start.</summary>
+    private void PersistPredictiveModel() {
+        if (_raAlgo is not PredictiveAlgorithm pred) return;
+        var model = pred.ExportModel();
+        if (model is not { IsUsable: true }) return;
+        double scale = PixelScale;
+        if (!(scale > 0)) return;
+
+        var arcsec = new double[model.Coefficients.Length];
+        for (int i = 0; i < arcsec.Length; i++) arcsec[i] = model.Coefficients[i] * scale;
+        var data = new NativePredictiveModelData {
+            PeriodSec = model.PeriodSec,
+            HarmonicsArcsec = arcsec,
+            Quality = model.Quality,
+            PixelScaleAtSave = scale,
+            SavedAtUtc = DateTime.UtcNow.ToString("o")
+        };
+        try {
+            _profiles.UpdateEquipmentProfile(Rig.Id, r => r.NativePredictiveModel = data);
+            // Peak-to-peak of the fundamental is the number an operator recognises
+            // as "my mount's PE", so log that rather than the raw coefficients.
+            double a = arcsec[0], b = arcsec[1];
+            _logger.LogInformation(
+                "Predictive: saved the PE model (period {Period:F0}s, {H} harmonic(s), "
+                + "fundamental {Pp:F2}\" p-p, R²adj {Q:F2})",
+                model.PeriodSec, arcsec.Length / 2, 2.0 * Math.Sqrt(a * a + b * b), model.Quality);
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Failed to persist the predictive PE model");
+        }
     }
 
     /// <summary>Declination guide mode (PHD2's): "auto" pulses both ways;

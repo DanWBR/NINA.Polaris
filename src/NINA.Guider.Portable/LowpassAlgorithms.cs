@@ -166,14 +166,16 @@ public static class GuideAlgorithmFactory {
                                          double wormPeriodSec = 0.0,
                                          int predictiveWindow = 256,
                                          double predictiveBlend = 0.7,
-                                         double zfilterExpFactor = 2.0) {
+                                         double zfilterExpFactor = 2.0,
+                                         PredictiveModel? predictiveModel = null) {
         return (name ?? "").Trim().ToLowerInvariant() switch {
             "hysteresis"  => new HysteresisAlgorithm(hysteresis, aggression, minMove),
             "resistswitch" => new ResistSwitchAlgorithm(minMove, aggression),
             "lowpass"     => new LowpassAlgorithm(minMove),
             "lowpass2"    => new Lowpass2Algorithm(minMove, Math.Clamp(aggression * 100.0, 1.0, 100.0)),
             "predictive"  => new PredictiveAlgorithm(minMove, aggression, hysteresis,
-                                                     wormPeriodSec, predictiveWindow, predictiveBlend),
+                                                     wormPeriodSec, predictiveWindow, predictiveBlend,
+                                                     prior: predictiveModel),
             "zfilter"     => new ZFilterAlgorithm(zfilterExpFactor, minMove),
             "identity"    => new IdentityAlgorithm(),
             _             => new IdentityAlgorithm(),
