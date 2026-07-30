@@ -241,8 +241,12 @@ public class AutoFocusService {
                     await MoveWithBacklashAsync(focuser, startPosition, o, backlash, ct);
                     tracker.Reset();
                 }
+                // Phase resets with the points: a reattempt after a refined
+                // attempt starts a fresh coarse sweep, and leaving the phase at
+                // "refining" would label it as the fine pass in the UI.
                 Progress = Progress with {
-                    Points = new List<AutoFocusPoint>(), CurrentSampleIndex = -1, Attempt = attempt
+                    Points = new List<AutoFocusPoint>(), CurrentSampleIndex = -1, Attempt = attempt,
+                    Phase = "sweep"
                 };
 
                 // ---- Initial pass: move OUT, sweep IN through OffsetSteps+1 points ----

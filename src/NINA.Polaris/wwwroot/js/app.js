@@ -3568,6 +3568,8 @@ function ninaApp() {
             mode: 'vcurve',
             method: '',
             attempt: 1,
+            phase: 'sweep',
+            currentPosition: 0,
             fits: null
         },
         // PA-4: TPPA polar alignment state. Mirrors the WS payload's
@@ -3657,6 +3659,11 @@ function ninaApp() {
             backlashModel: 'OVERSHOOT',
             innerCropRatio: 1.0,
             useBrightestStars: 0,
+            // Second pass around the vertex. 0 for the step means "a quarter of
+            // the coarse step", which is what the server computes when unset.
+            refineNearVertex: true,
+            refinePoints: 4,
+            refineStepSize: 0,
             // Optical train to auto-focus: 'main' | 'aux' | 'guide'. Pairs the
             // camera + focuser of the same OTA (a V-curve needs the camera that
             // sees through the focuser being moved).
@@ -19846,7 +19853,15 @@ function ninaApp() {
                         { label: 'Left trend', data: [], showLine: true, borderColor: 'rgba(91,141,255,0.55)',
                           borderDash: [6, 4], backgroundColor: 'transparent', pointRadius: 0, borderWidth: 1 },
                         { label: 'Right trend', data: [], showLine: true, borderColor: 'rgba(255,82,82,0.55)',
-                          borderDash: [6, 4], backgroundColor: 'transparent', pointRadius: 0, borderWidth: 1 }
+                          borderDash: [6, 4], backgroundColor: 'transparent', pointRadius: 0, borderWidth: 1 },
+                        // Second-pass samples: a tight cluster at the bottom of
+                        // the V, taken with a quarter of the coarse step. Drawn
+                        // as small amber diamonds because they are NOT part of
+                        // the wide fit (the server excludes them) and a reader
+                        // who mistook them for sweep points would wonder why
+                        // the curve does not pass through them.
+                        { label: 'Refinement', data: [], pointBackgroundColor: '#ffb74d',
+                          pointBorderColor: '#ffb74d', pointRadius: 4, pointStyle: 'rectRot' }
                     ]
                 },
                 options: {
@@ -19878,19 +19893,33 @@ function ninaApp() {
             const finitePts = pts.filter(p => Number.isFinite(p.hfr) && p.hfr > 0);
             // Inliers (used by the fit) and spurious points the robust fit
             // ignored get separate datasets so the X markers stand out.
+            // Three kinds of point, three datasets: coarse sweep samples that
+            // the fit used, samples it ignored, and the fine second pass. The
+            // fine ones are kept out of dataset 0 for the same reason the
+            // server keeps them out of the fit: the V is not drawn through
+            // them, and showing them as sweep points would look like the curve
+            // missing its own data.
             c.data.datasets[0].data = finitePts
-                .filter(p => !p.rejected)
+                .filter(p => !p.rejected && !p.refinement)
                 .map(p => ({ x: p.position, y: p.hfr }));
             c.data.datasets[3].data = finitePts
-                .filter(p => p.rejected)
+                .filter(p => p.rejected && !p.refinement)
+                .map(p => ({ x: p.position, y: p.hfr }));
+            c.data.datasets[6].data = finitePts
+                .filter(p => p.refinement)
                 .map(p => ({ x: p.position, y: p.hfr }));
             // AFPORT: draw the SERVED fits — the hyperbola (or the weighted
             // parabola when the method is parabolic) plus both trendline arm
             // segments — instead of re-deriving a heuristic parabola.
             const fits = this.autoFocus.fits;
-            if (fits && finitePts.length >= 3) {
-                const minP = Math.min(...finitePts.map(p => p.position));
-                const maxP = Math.max(...finitePts.map(p => p.position));
+            // Span the fit line over the COARSE samples only. The fine cluster
+            // sits inside that span anyway, but taking the extremes from all
+            // points would let a clamped refinement target (one that landed on
+            // a travel limit) stretch the curve past the sweep it came from.
+            const sweepPts = finitePts.filter(p => !p.refinement);
+            if (fits && sweepPts.length >= 3) {
+                const minP = Math.min(...sweepPts.map(p => p.position));
+                const maxP = Math.max(...sweepPts.map(p => p.position));
                 const fit = [];
                 const N = 60;
                 if (fits.hasHyperbolic && fits.hyperbolicB) {
@@ -26473,6 +26502,9 @@ function ninaApp() {
             this.afParams.backlashModel = af.backlashModel || 'OVERSHOOT';
             this.afParams.innerCropRatio = af.innerCropRatio ?? 1.0;
             this.afParams.useBrightestStars = af.useBrightestStars ?? 0;
+            this.afParams.refineNearVertex = af.refineNearVertex ?? true;
+            this.afParams.refinePoints = af.refinePoints ?? 4;
+            this.afParams.refineStepSize = af.refineStepSize ?? 0;
         },
 
         _afParamsBlock() {
@@ -26487,7 +26519,16 @@ function ninaApp() {
                 backlashOut: parseInt(this.afParams.backlashOut) || 0,
                 backlashModel: this.afParams.backlashModel || 'OVERSHOOT',
                 innerCropRatio: parseFloat(this.afParams.innerCropRatio) || 1.0,
-                useBrightestStars: parseInt(this.afParams.useBrightestStars) || 0
+                useBrightestStars: parseInt(this.afParams.useBrightestStars) || 0,
+                // `|| 0` would turn "off" into "server default" for the step, so
+                // both refinement numbers go through Number() and a NaN guard
+                // instead: 0 is a meaningful value here (derive from the coarse
+                // step) and the server clamps the point count itself.
+                refineNearVertex: !!this.afParams.refineNearVertex,
+                refinePoints: Number.isFinite(+this.afParams.refinePoints)
+                    ? Math.max(3, Math.min(8, Math.round(+this.afParams.refinePoints))) : 4,
+                refineStepSize: Number.isFinite(+this.afParams.refineStepSize)
+                    ? Math.max(0, Math.round(+this.afParams.refineStepSize)) : 0
             };
         },
 
@@ -38539,6 +38580,12 @@ function ninaApp() {
                     // + attempt for the live chart overlay.
                     method: af.method || '',
                     attempt: af.attempt || 1,
+                    // Which pass is running: 'sweep' (coarse V-curve) or
+                    // 'refining' (fine pass around its vertex). Without this
+                    // the refinement looks like a stall, because its points
+                    // land within a few units of each other.
+                    phase: af.phase || 'sweep',
+                    currentPosition: af.currentPosition ?? 0,
                     fits: af.fits || null
                 };
             }

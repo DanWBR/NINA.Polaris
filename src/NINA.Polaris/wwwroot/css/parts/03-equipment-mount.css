@@ -225,6 +225,16 @@
     color: var(--text-muted);
 }
 
+/* Auto-focus phase chip. Amber to match the refinement points on the V-curve
+   chart, so the chip and the cluster it announces read as the same thing.
+   Uppercased here rather than in the markup: the label is translated, and the
+   English text is the translation key. */
+.status-indicator-sm.af-phase {
+    background: rgba(255, 183, 77, 0.15);
+    color: #ffb74d;
+    text-transform: uppercase;
+}
+
 /* Device Card (settings) */
 .device-card {
     display: flex;
@@ -2548,6 +2558,17 @@
    (Fit / Crop / Optical train) keep their intrinsic option width. */
 .af-params input.input-sm {
     width: 100px;
+}
+
+/* Checkbox rows read as one item: box then text, on the row's baseline. In the
+   default column direction the box lands under its own label, which at this
+   font size looks like a stray control belonging to the field beside it. */
+.af-params label.af-check {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-end;
+    padding-bottom: 4px;
 }
 
 .af-actions {

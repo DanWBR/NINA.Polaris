@@ -327,7 +327,14 @@ public static class StatusStreamHandler {
                         // while the sweep grows.
                         method = autoFocus.Progress.Method,
                         attempt = autoFocus.Progress.Attempt,
-                        fits = autoFocus.Progress.Fits
+                        fits = autoFocus.Progress.Fits,
+                        // Which pass is running ("sweep" / "refining") plus where
+                        // the focuser is. The refinement pass steps by a quarter
+                        // of the coarse step and does NOT advance the sample
+                        // counter, so with neither of these the panel looks
+                        // frozen while it works.
+                        phase = autoFocus.Progress.Phase,
+                        currentPosition = autoFocus.Progress.CurrentPosition
                     };
 
                     // Compact summaries for the activity bar. Full job

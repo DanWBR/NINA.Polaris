@@ -2961,6 +2961,12 @@
                         <!-- AFPORT: which fitting method + attempt is running. -->
                         <span x-show="autoFocus.state === 'running'" class="status-indicator-sm"
                               x-text="(autoFocus.method || 'V-CURVE').toUpperCase() + (autoFocus.attempt > 1 ? (' · TRY ' + autoFocus.attempt) : '')"></span>
+                        <!-- The second pass samples a few positions a few units
+                             apart at the bottom of the V. Without saying so, a
+                             panel whose progress bar has stopped and whose
+                             focuser barely moves reads as a stall. -->
+                        <span x-show="autoFocus.state === 'running' && autoFocus.phase === 'refining'"
+                              class="status-indicator-sm af-phase">Refining</span>
                     </div>
                     <div class="af-params">
                         <label title="Points required on EACH arm of the V-curve. The sweep starts OffsetSteps×StepSize out, samples inward, then keeps adding points to whichever arm is short, so the curve always gets built on BOTH sides of focus.">Points/side
@@ -3014,6 +3020,24 @@
                         </label>
                         <label title="Track only the N brightest stars across the whole sweep (same physical stars at every point). 0 = use all detected stars.">Top stars
                             <input type="number" x-model.number="afParams.useBrightestStars" min="0" max="50" step="1" class="input-sm"
+                                   :disabled="autoFocus.state === 'running'">
+                        </label>
+                        <!-- Second pass. The sweep has to reach far enough out
+                             for both arms to rise, which leaves its step too
+                             coarse for the nearly flat bottom of the bowl; these
+                             extra points are sampled there and fitted on their
+                             own. Costs a few frames, so it can be turned off. -->
+                        <label class="af-check" title="After the V-curve, sample a few positions close to its vertex with a small step and refit on those alone. The bottom of the curve is almost flat, so this is where focus precision is won. Costs a few extra frames.">
+                            <input type="checkbox" x-model="afParams.refineNearVertex"
+                                   :disabled="autoFocus.state === 'running'">
+                            Refine vertex
+                        </label>
+                        <label x-show="afParams.refineNearVertex" x-cloak title="How many fine points to sample around the vertex (3 to 8).">Refine pts
+                            <input type="number" x-model.number="afParams.refinePoints" min="3" max="8" step="1" class="input-sm"
+                                   :disabled="autoFocus.state === 'running'">
+                        </label>
+                        <label x-show="afParams.refineNearVertex" x-cloak title="Focuser steps between fine points. 0 uses a quarter of the sweep step size.">Refine step
+                            <input type="number" x-model.number="afParams.refineStepSize" min="0" step="1" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
                         <!-- Optical train: pairs the camera + focuser of the same
@@ -3098,6 +3122,9 @@
                         </div>
                         <div class="af-chart-legend">
                             <span><span class="legend-dot" style="background:#64b5f6;"></span>Sample</span>
+                            <!-- Only worth a legend slot once such points exist:
+                                 the fine pass is optional and can be skipped. -->
+                            <span x-show="(autoFocus.points || []).some(p => p.refinement)"><span class="legend-dot" style="background:#ffb74d;"></span>Refinement</span>
                             <span x-show="autoFocus.bestPosition"><span class="legend-dot" style="background:#4caf50;"></span>Best position: <strong x-text="autoFocus.bestPosition"></strong></span>
                             <span x-show="autoFocus.bestHfr"><strong x-text="'HFR ≈ ' + autoFocus.bestHfr?.toFixed(2)"></strong></span>
                         </div>
