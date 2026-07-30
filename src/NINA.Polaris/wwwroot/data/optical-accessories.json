@@ -182,6 +182,15 @@
       "notes": "ZWO's own 3-inch triplet reducer, part F107130RE: 524 mm at f/4.9 on the FF107. The FF107 and FF130 are the 107PHQ and 130PHQ under ZWO branding."
     },
     {
+      "brand": "Altair Astro",
+      "model": "0.8x PlanoStar Reducer (M92)",
+      "type": "reducer",
+      "factor": 0.8,
+      "backspacingMm": null,
+      "compatibleScopes": ["Wave Series 130"],
+      "notes": "M92 PlanoStar reducer/flattener: takes the Wave Series 130 from 905 mm f/7 to 724 mm f/5.6."
+    },
+    {
       "brand": "Takahashi",
       "model": "0.73x Reducer (FSQ)",
       "type": "reducer",

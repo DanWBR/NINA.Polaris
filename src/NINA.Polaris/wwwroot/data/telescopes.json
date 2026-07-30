@@ -4,7 +4,11 @@
     { "brand": "Altair Astro",    "model": "Starwave ASCENT 70ED",  "type": "Doublet ED",           "apertureMm": 70,    "focalLengthMm": 420,  "backspacingMm": null },
     { "brand": "Altair Astro",    "model": "Starwave ASCENT 80 ED Triplet","type": "Triplet APO",   "apertureMm": 80,    "focalLengthMm": 384,  "backspacingMm": null },
     { "brand": "Altair Astro",    "model": "Starwave 80ED-R",       "type": "Doublet ED",           "apertureMm": 80,    "focalLengthMm": 555,  "backspacingMm": null },
+    { "brand": "Altair Astro",    "model": "Wave Series 115",       "type": "Triplet APO",          "apertureMm": 115,   "focalLengthMm": 805,  "backspacingMm": null },
+    { "brand": "Altair Astro",    "model": "Wave Series 130",       "type": "Triplet APO",          "apertureMm": 130,   "focalLengthMm": 905,  "backspacingMm": null },
 
+    { "brand": "APM",             "model": "LZOS 105/650",          "type": "Triplet APO",          "apertureMm": 105,   "focalLengthMm": 650,  "backspacingMm": null },
+    { "brand": "APM",             "model": "LZOS 130/780",          "type": "Triplet APO",          "apertureMm": 130,   "focalLengthMm": 780,  "backspacingMm": null },
     { "brand": "APM",             "model": "LZOS 152/1200",         "type": "Triplet APO",          "apertureMm": 152,   "focalLengthMm": 1200, "backspacingMm": null },
 
     { "brand": "Askar",           "model": "SQA55",                 "type": "Quintuplet Petzval APO","apertureMm": 55,   "focalLengthMm": 264,  "backspacingMm": 55.0 },
@@ -48,6 +52,11 @@
     { "brand": "Astro-Physics",   "model": "130 GTX",               "type": "Triplet APO",          "apertureMm": 130,   "focalLengthMm": 819,  "backspacingMm": null },
     { "brand": "Astro-Physics",   "model": "Stowaway",              "type": "Triplet APO",          "apertureMm": 92,    "focalLengthMm": 506,  "backspacingMm": null },
 
+    { "brand": "Bresser",         "model": "Messier AR-102/1000",   "type": "Doublet Achromat",     "apertureMm": 102,   "focalLengthMm": 1000, "backspacingMm": null },
+    { "brand": "Bresser",         "model": "Messier AR-127L/1200",  "type": "Doublet Achromat",     "apertureMm": 127,   "focalLengthMm": 1200, "backspacingMm": null },
+    { "brand": "Bresser",         "model": "Messier AR-152L/1200",  "type": "Doublet Achromat",     "apertureMm": 152,   "focalLengthMm": 1200, "backspacingMm": null },
+    { "brand": "Bresser",         "model": "Messier NT-150L/1200",  "type": "Newtonian",            "apertureMm": 150,   "focalLengthMm": 1200, "backspacingMm": null },
+
     { "brand": "Celestron",       "model": "C6 SCT",                "type": "SCT",                  "apertureMm": 152,   "focalLengthMm": 1500, "backspacingMm": 105.0 },
     { "brand": "Celestron",       "model": "C8 SCT",                "type": "SCT",                  "apertureMm": 203.2, "focalLengthMm": 2032, "backspacingMm": 105.0 },
     { "brand": "Celestron",       "model": "C9.25 SCT",             "type": "SCT",                  "apertureMm": 235,   "focalLengthMm": 2350, "backspacingMm": 105.0 },
@@ -64,18 +73,29 @@
     { "brand": "Explore Scientific","model": "ED102",               "type": "Doublet APO",          "apertureMm": 102,   "focalLengthMm": 714,  "backspacingMm": 55.0 },
     { "brand": "Explore Scientific","model": "ED127",               "type": "Triplet APO",          "apertureMm": 127,   "focalLengthMm": 952,  "backspacingMm": 55.0 },
 
+    { "brand": "Founder Optics",  "model": "FOT86",                 "type": "Triplet APO",          "apertureMm": 86,    "focalLengthMm": 560,  "backspacingMm": null },
+
     { "brand": "GSO",             "model": "RC6",                   "type": "Ritchey-Chrétien",     "apertureMm": 152,   "focalLengthMm": 1370, "backspacingMm": 165.0 },
     { "brand": "GSO",             "model": "RC8",                   "type": "Ritchey-Chrétien",     "apertureMm": 203,   "focalLengthMm": 1624, "backspacingMm": 226.0 },
     { "brand": "GSO",             "model": "RC10",                  "type": "Ritchey-Chrétien",     "apertureMm": 254,   "focalLengthMm": 2032, "backspacingMm": 270.0 },
     { "brand": "GSO",             "model": "RC12",                  "type": "Ritchey-Chrétien",     "apertureMm": 305,   "focalLengthMm": 2432, "backspacingMm": 287.0 },
     { "brand": "GSO",             "model": "Newtonian 8",           "type": "Newtonian",            "apertureMm": 203,   "focalLengthMm": 800,  "backspacingMm": null },
 
+    { "brand": "Lacerta",         "model": "72/432 ED APO",         "type": "Doublet ED",           "apertureMm": 72,    "focalLengthMm": 432,  "backspacingMm": null },
+
     { "brand": "Meade",           "model": "LX200 8\"",             "type": "SCT",                  "apertureMm": 203.2, "focalLengthMm": 2000, "backspacingMm": 105.0 },
     { "brand": "Meade",           "model": "LX200 10\"",            "type": "SCT",                  "apertureMm": 254,   "focalLengthMm": 2500, "backspacingMm": 105.0 },
     { "brand": "Meade",           "model": "LX200 12\"",            "type": "SCT",                  "apertureMm": 304.8, "focalLengthMm": 3048, "backspacingMm": 105.0 },
 
+    { "brand": "Officina Stellare","model": "Veloce RH200",         "type": "Riccardi-Honders Astrograph","apertureMm": 200,"focalLengthMm": 600,"backspacingMm": null },
+    { "brand": "Officina Stellare","model": "RiFAST 400",           "type": "Riccardi Fast Astrograph","apertureMm": 400,"focalLengthMm": 1480, "backspacingMm": null },
+
     { "brand": "Omegon",          "model": "Pro APO 107/700",       "type": "Triplet APO",          "apertureMm": 107,   "focalLengthMm": 700,  "backspacingMm": null },
     { "brand": "Omegon",          "model": "Pro APO 152/1200",      "type": "Triplet APO",          "apertureMm": 152,   "focalLengthMm": 1200, "backspacingMm": null },
+
+    { "brand": "Orion Optics UK", "model": "ODK10",                 "type": "Dall-Kirkham",         "apertureMm": 250,   "focalLengthMm": 1700, "backspacingMm": null },
+    { "brand": "Orion Optics UK", "model": "ODK12",                 "type": "Dall-Kirkham",         "apertureMm": 300,   "focalLengthMm": 2040, "backspacingMm": null },
+    { "brand": "Orion Optics UK", "model": "ODK14",                 "type": "Dall-Kirkham",         "apertureMm": 350,   "focalLengthMm": 2380, "backspacingMm": null },
 
     { "brand": "Sharpstar",       "model": "76 EDPH II",            "type": "Triplet APO",          "apertureMm": 76,    "focalLengthMm": 418,  "backspacingMm": 55.0 },
     { "brand": "Sharpstar",       "model": "94 EDPH",               "type": "Triplet APO",          "apertureMm": 94,    "focalLengthMm": 517,  "backspacingMm": 55.0 },
@@ -98,6 +118,10 @@
     { "brand": "Skywatcher",      "model": "Skymax 150",            "type": "Maksutov-Cassegrain",  "apertureMm": 150,   "focalLengthMm": 1800, "backspacingMm": 35.0 },
     { "brand": "Skywatcher",      "model": "Skymax 180",            "type": "Maksutov-Cassegrain",  "apertureMm": 180,   "focalLengthMm": 2700, "backspacingMm": 35.0 },
 
+    { "brand": "Stellarvue",      "model": "SVX080T",               "type": "Triplet APO",          "apertureMm": 80,    "focalLengthMm": 480,  "backspacingMm": null },
+    { "brand": "Stellarvue",      "model": "SVX102T",               "type": "Triplet APO",          "apertureMm": 102,   "focalLengthMm": 714,  "backspacingMm": null },
+    { "brand": "Stellarvue",      "model": "SVX130T",               "type": "Triplet APO",          "apertureMm": 130,   "focalLengthMm": 910,  "backspacingMm": null },
+
     { "brand": "SVBony",          "model": "SV48P",                 "type": "Doublet Achromat",     "apertureMm": 80,    "focalLengthMm": 420,  "backspacingMm": 55.0 },
     { "brand": "SVBony",          "model": "SV503 70ED",            "type": "Doublet ED APO",       "apertureMm": 70,    "focalLengthMm": 420,  "backspacingMm": 55.0 },
     { "brand": "SVBony",          "model": "SV503 80ED",            "type": "Doublet ED APO",       "apertureMm": 80,    "focalLengthMm": 560,  "backspacingMm": 55.0 },
@@ -113,6 +137,8 @@
     { "brand": "Takahashi",       "model": "TOA-130",               "type": "Triplet APO",          "apertureMm": 130,   "focalLengthMm": 1000, "backspacingMm": 56.0 },
     { "brand": "Takahashi",       "model": "TOA-150",               "type": "Triplet APO",          "apertureMm": 150,   "focalLengthMm": 1100, "backspacingMm": 56.0 },
     { "brand": "Takahashi",       "model": "Epsilon-160ED",         "type": "Astrograph",           "apertureMm": 160,   "focalLengthMm": 530,  "backspacingMm": 56.2 },
+
+    { "brand": "Tecnosky",        "model": "OWL 80/480",            "type": "Triplet APO",          "apertureMm": 80,    "focalLengthMm": 480,  "backspacingMm": null },
 
     { "brand": "Tele Vue",        "model": "NP-101",                "type": "Petzval APO",          "apertureMm": 101,   "focalLengthMm": 540,  "backspacingMm": null },
     { "brand": "Tele Vue",        "model": "NP-127",                "type": "Petzval APO",          "apertureMm": 127,   "focalLengthMm": 660,  "backspacingMm": null },
