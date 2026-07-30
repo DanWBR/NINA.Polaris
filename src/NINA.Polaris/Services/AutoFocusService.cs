@@ -591,9 +591,20 @@ public class AutoFocusService {
         int n = sorted.Count;
         if (n < 5) return;   // too few to tell a wing from the bowl
 
-        int vertex = 0;
-        for (int i = 1; i < n; i++)
-            if (sorted[i].HFR < sorted[vertex].HFR) vertex = i;
+        // Where is focus? NOT at the global minimum HFR: that is precisely what
+        // the bug being guarded against corrupts. A far-out sample whose donut
+        // the detector lost reads a bogus SMALL HFR, becomes the "vertex", and
+        // the series then looks monotonic outward from there — so nothing is
+        // flagged and, worse, the real focus point ends up on the wrong side of
+        // scan and gets rejected instead (reproduced in
+        // AutoFocusDefocusMeasurementTests: with focus at 3.0 and a bogus 1.1
+        // on the wing, the old code flagged real focus and kept the bogus point).
+        //
+        // A weighted parabola over all valid points is robust to one bad
+        // sample: it has to satisfy every point at once, so a single low
+        // outlier shifts the vertex slightly instead of relocating it. This is
+        // also what ASIAIR does (fit the V-curve, then refine near its vertex).
+        int vertex = VertexIndexFromFit(sorted);
         double min = sorted.Min(p => p.HFR), max = sorted.Max(p => p.HFR);
         double range = max - min;
         if (range <= 0) return;
@@ -614,6 +625,36 @@ public class AutoFocusService {
         // Keep at least 3 measured points fittable; if over-zealous, bail.
         if (drop.Count == 0 || n - drop.Count < 3) return;
         foreach (var p in drop) p.Rejected = true;
+    }
+
+    /// <summary>
+    /// Index (into the position-sorted list) of the sample to treat as focus.
+    ///
+    /// The lowest HFR among the CENTRAL samples, with the outer quarter on each
+    /// side excluded. Two reasons, both learned from the failure this guard
+    /// exists for:
+    ///
+    /// 1. A bogus low reading lives at the ENDS of the sweep, where the star is
+    ///    most defocused and faintest. Excluding the ends makes it structurally
+    ///    impossible to mistake one for focus.
+    /// 2. A sweep is planned around the current focuser position, so the bowl
+    ///    is near the middle by construction. If focus were genuinely at the
+    ///    outermost sample the sweep itself missed and there is no V to fit.
+    ///
+    /// A weighted parabola over all samples was tried first and is NOT good
+    /// enough: with seven points and one outlier reading 1.1 where ~11 was
+    /// expected, the fitted vertex was dragged a full step off (to 5100 in
+    /// AutoFocusDefocusMeasurementTests), and the guard then flagged real focus.
+    /// The fit is the right tool once the outliers are gone, not before.
+    /// </summary>
+    private static int VertexIndexFromFit(IReadOnlyList<AutoFocusPoint> sorted) {
+        int n = sorted.Count;
+        int skip = n >= 5 ? Math.Max(1, n / 4) : 0;
+        int lo = skip, hi = n - 1 - skip;
+        if (lo > hi) { lo = 0; hi = n - 1; }
+        int v = lo;
+        for (int i = lo + 1; i <= hi; i++) if (sorted[i].HFR < sorted[v].HFR) v = i;
+        return v;
     }
 
     private void PublishFits(AutoFocusFitting fitting) {
