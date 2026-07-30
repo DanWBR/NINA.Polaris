@@ -1913,3 +1913,36 @@
     flex: 1 1 0;
     min-width: 0;
 }
+
+/* Magnified crop of the star the auto-focus sweep is following. Bottom-right
+   of the frame so it never covers the pos/HFR badge at the top, and pinned
+   over the canvas rather than beside it: the frame is the scarce space here. */
+.af-star-zoom {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: rgba(0, 0, 0, 0.55);
+    padding: 4px 4px 2px;
+    pointer-events: none;
+    z-index: 3;
+}
+.af-star-zoom > canvas {
+    display: block;
+    width: 132px;
+    height: 132px;
+    image-rendering: pixelated;
+}
+.af-star-zoom-label {
+    display: block;
+    text-align: center;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+    padding-top: 2px;
+}
+/* Half size on a phone, where 132px of a portrait frame is a third of it. */
+@media (max-width: 700px) {
+    .af-star-zoom > canvas { width: 84px; height: 84px; }
+}

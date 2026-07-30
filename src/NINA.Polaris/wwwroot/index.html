@@ -45,7 +45,7 @@
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260728-topcollapse">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260730-portraitframe">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260728-slimaddr2">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260730-nudgerow">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260730-afstar">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260712-fieldbugs1">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260728-barcollapse">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
@@ -3018,7 +3018,7 @@
                                 <option :value="0.3">30%</option>
                             </select>
                         </label>
-                        <label title="Track only the N brightest stars across the whole sweep (same physical stars at every point). 0 = use all detected stars.">Top stars
+                        <label title="How many stars the sweep measures, tracked across every point so they are the SAME physical stars. 1 (default) follows the single brightest one, which is what ASIAIR does: the whole-frame average moves with whichever stars the detector finds at each position, not with the focus. 0 = use all detected stars.">Top stars
                             <input type="number" x-model.number="afParams.useBrightestStars" min="0" max="50" step="1" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
@@ -3093,6 +3093,16 @@
                          was (live stream, snap, etc.). -->
                     <div class="af-preview-area">
                         <canvas id="focusCanvas" class="af-preview-canvas"></canvas>
+                        <!-- Marks the star the sweep is measuring. -->
+                        <canvas id="focusOverlayCanvas" class="preview-overlay-canvas"></canvas>
+                        <!-- Magnified crop of that same star, so the operator
+                             watches it swell and shrink through the V instead
+                             of squinting at a full-frame thumbnail. -->
+                        <div class="af-star-zoom" x-show="autoFocus.star && autoFocus.star.w > 0" x-cloak>
+                            <canvas id="afStarZoomCanvas" width="132" height="132"></canvas>
+                            <span class="af-star-zoom-label"
+                                  x-text="'HFR ' + (autoFocus.star.hfr || 0).toFixed(2)"></span>
+                        </div>
                         <!-- Same pan/zoom controls as the LIVE / PREVIEW /
                              VIDEO frames: pinch, wheel and double-tap work
                              on the frame itself, these are the discoverable

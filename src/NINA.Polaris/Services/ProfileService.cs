@@ -151,6 +151,10 @@ public class ProfileService {
         // (and below the new 0.5 s product minimum); re-seed them to 1 s.
         MigrateGuideExposureFloor();
 
+        // Rigs saved while the auto-focus default was "all stars" carry a 0
+        // that shadows the new single-star default forever. Re-seed once.
+        MigrateAutoFocusSingleStar();
+
         // Deployment-time override for the capture root. Useful for
         // distribution images (Pi systemd unit, Docker, etc.) that
         // want a sensible default like /home/polaris/files without
@@ -676,6 +680,29 @@ public class ProfileService {
             _logger.LogInformation(
                 "Guide exposure migration: re-seeded {N} rig(s) with sub-500ms guide exposure to 1s", fixedUp);
         }
+    }
+
+    /// <summary>One-time re-seed of the auto-focus star count. Every rig saved
+    /// before the single-star change holds a 0, "measure every detected star",
+    /// which is the behaviour the field report showed to be wrong: the mean
+    /// followed whichever stars the detector found at each position rather than
+    /// the defocus. Seeds 1 exactly once, so someone who deliberately sets 0 (or
+    /// any other count) afterwards keeps it.</summary>
+    private void MigrateAutoFocusSingleStar() {
+        const int SingleStarVersion = 2;
+        if (_activeProfile.SettingsMigration >= SingleStarVersion) return;
+        var seeded = 0;
+        foreach (var rig in _activeProfile.EquipmentProfiles ?? new()) {
+            if (rig.AutoFocus != null && rig.AutoFocus.UseBrightestStars <= 0) {
+                rig.AutoFocus.UseBrightestStars = 1;
+                seeded++;
+            }
+        }
+        _activeProfile.SettingsMigration = SingleStarVersion;
+        Save();
+        _logger.LogInformation(
+            "Settings migration v{V}: auto-focus set to track 1 star on {N} rig(s) (one-time)",
+            SingleStarVersion, seeded);
     }
 
     /// <summary>One-time re-seed of the logging defaults on profiles saved by

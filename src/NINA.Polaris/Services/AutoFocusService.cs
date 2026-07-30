@@ -198,7 +198,7 @@ public class AutoFocusService {
                 fullHeight = img0.Properties.Height;
                 try { await _relay.RelayImageAsync(img0, FrameKind.Focus, ct); } catch { }
                 var m0 = MeasureFrame(img0, o, tracker);
-                if (m0.measure > 0) initialHfr = m0.measure;
+                if (m0.Measure > 0) initialHfr = m0.Measure;
             } catch (OperationCanceledException) { throw; }
               catch (Exception ex) { _logger.LogDebug(ex, "AF initial-HFR frame failed (continuing)"); }
 
@@ -566,8 +566,9 @@ public class AutoFocusService {
     private async Task<(double measure, double stdev, int starCount)> MeasurePointFramesAsync(
             ICamera camera, string source, AutoFocusRunOptions o, AfStarTracker tracker,
             CancellationToken ct) {
-        double sumMeasure = 0, sumVariance = 0;
-        int goodFrames = 0, lastCount = 0;
+        var measures = new List<double>(o.FramesPerPoint);
+        double sumVariance = 0;
+        int lastCount = 0;
 
         for (int i = 0; i < o.FramesPerPoint; i++) {
             ct.ThrowIfCancellationRequested();
@@ -575,23 +576,45 @@ public class AutoFocusService {
             try { await _relay.RelayImageAsync(image, FrameKind.Focus, ct); }
             catch (Exception ex) { _logger.LogDebug(ex, "AF frame relay failed (non-fatal)"); }
 
-            var (measure, stdev, count) = MeasureFrame(image, o, tracker);
-            lastCount = count;
-            if (measure > 0) {
-                sumMeasure += measure;
-                sumVariance += stdev * stdev;
-                goodFrames++;
+            var m = MeasureFrame(image, o, tracker);
+            lastCount = m.StarCount;
+            if (m.Measure > 0) {
+                measures.Add(m.Measure);
+                sumVariance += m.Stdev * m.Stdev;
+                // Publish the tracked star with the frame it was found in, so
+                // the FOCUS panel can mark it and magnify it while the sweep
+                // runs. Done per frame, not per point, because the operator is
+                // watching the frames go by.
+                Progress = Progress with {
+                    StarX = m.StarX, StarY = m.StarY, StarHfr = m.Measure,
+                    FrameWidth = m.FrameWidth, FrameHeight = m.FrameHeight
+                };
             }
         }
 
-        if (goodFrames == 0) return (0, 1000, lastCount);
-        return (sumMeasure / goodFrames, Math.Sqrt(sumVariance / goodFrames), lastCount);
+        if (measures.Count == 0) return (0, 1000, lastCount);
+
+        double mean = measures.Average();
+        // Error bar. With several stars the scatter BETWEEN them is a fair
+        // uncertainty, but tracking one star it is identically zero, and a zero
+        // sigma is not "perfectly known": it would take the 1/sigma^2 weight to
+        // infinity and let one point dictate the whole fit. With repeat frames
+        // the honest measure is how much that same star's HFR moved between
+        // them (seeing), and with a single frame all that is left is a floor.
+        double stdev;
+        if (measures.Count > 1) {
+            double v = measures.Sum(x => (x - mean) * (x - mean)) / (measures.Count - 1);
+            stdev = Math.Sqrt(v);
+        } else {
+            stdev = Math.Sqrt(sumVariance / measures.Count);
+        }
+        return (mean, Math.Max(stdev, 0.02 * mean + 0.01), lastCount);
     }
 
     /// <summary>Detect stars on one frame and compute (mean HFR, stdev across
     /// stars, star count). Applies the software center-crop when a hardware
     /// ROI isn't active, and the brightest-N tracker.</summary>
-    private (double measure, double stdev, int starCount) MeasureFrame(
+    private FrameMeasurement MeasureFrame(
             IImageData image, AutoFocusRunOptions o, AfStarTracker tracker) {
         // FIELD2-1: tune the detector for autofocus, NOT the live-tracking
         // case the defaults target. A heavily-defocused star is a big faint
@@ -610,6 +633,10 @@ public class AutoFocusService {
         ushort[] data = image.Data;
         int width = image.Properties.Width;
         int height = image.Properties.Height;
+        // Where the detection grid sits inside the frame the browser receives.
+        // The relayed frame is the whole image, so a software crop shifts every
+        // detected coordinate and the star marker would be drawn off target.
+        int cropX = 0, cropY = 0;
 
         // Software center-crop when the camera couldn't give us a real ROI.
         // Detection cost scales with area, so this is still a big speed win
@@ -626,16 +653,33 @@ public class AutoFocusService {
             data = cropped;
             width = cw;
             height = chh;
+            cropX = cx;
+            cropY = cy;
         }
 
-        var stars = detector.Detect(data, width, height);
-        stars = tracker.Filter(stars);
+        int frameW = image.Properties.Width, frameH = image.Properties.Height;
+        var detected = detector.Detect(data, width, height);
 
-        if (stars.Count < o.MinStars) {
+        // The star-count gate asks "is this frame usable", so it counts what the
+        // DETECTOR found. Applying it after the tracker made single-star mode
+        // impossible: one tracked star can never clear a minimum of five, and
+        // every point would soft-reject.
+        if (detected.Count < o.MinStars) {
             _logger.LogDebug("Only {Count} stars detected (min={Min}), point soft-rejected",
-                stars.Count, o.MinStars);
-            return (0, 1000, stars.Count);
+                detected.Count, o.MinStars);
+            return new FrameMeasurement(0, 1000, detected.Count, 0, 0, frameW, frameH);
         }
+
+        var stars = tracker.Filter(detected);
+        if (stars.Count == 0) {
+            return new FrameMeasurement(0, 1000, detected.Count, 0, 0, frameW, frameH);
+        }
+
+        // The star the operator is watching: brightest of the tracked set, which
+        // in the default single-star mode is the only one. Reported in the
+        // relayed frame's own pixels.
+        var primary = stars.OrderByDescending(s => s.Flux).First();
+        double starX = primary.X + cropX, starY = primary.Y + cropY;
 
         // Robust central HFR across stars. At a fixed focuser position every
         // real star is defocused by the SAME amount, so their HFRs cluster
@@ -647,8 +691,15 @@ public class AutoFocusService {
         // ASIAIR's curve uniform. The survivor stdev still feeds the 1/σ² fit
         // weights.
         var (mean, stdev, _) = RobustMeanHfr(stars.Select(s => (double)s.HFR).ToList());
-        return (mean, stdev, stars.Count);
+        return new FrameMeasurement(mean, stdev, detected.Count, starX, starY, frameW, frameH);
     }
+
+    /// <summary>One frame's contribution to a sweep point: the measured HFR, its
+    /// scatter, how many stars the detector found, and where the tracked star
+    /// sits in the frame the browser is being shown.</summary>
+    private readonly record struct FrameMeasurement(
+        double Measure, double Stdev, int StarCount,
+        double StarX, double StarY, int FrameWidth, int FrameHeight);
 
     /// <summary>Robust per-frame central HFR: sigma-clip the per-star HFRs
     /// around their median (MAD-scaled, floored so a genuinely tight frame
@@ -1097,6 +1148,16 @@ public record AutoFocusProgress {
     /// <summary>Live fit parameters recomputed after every sampled point so
     /// the chart can draw the hyperbola/trendlines as the sweep grows.</summary>
     public AutoFocusFitPayload? Fits { get; init; }
+    /// <summary>Where the tracked star sits in the last measured frame, in that
+    /// frame's own pixels, with the frame's size so the client can scale into
+    /// its canvas. The panel marks it and shows a magnified crop, which is how
+    /// the operator sees WHICH star the run is following. Zero until the first
+    /// frame with stars.</summary>
+    public double StarX { get; init; }
+    public double StarY { get; init; }
+    public double StarHfr { get; init; }
+    public int FrameWidth { get; init; }
+    public int FrameHeight { get; init; }
 }
 
 public class AutoFocusPoint {

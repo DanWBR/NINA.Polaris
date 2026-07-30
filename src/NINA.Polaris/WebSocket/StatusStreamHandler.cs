@@ -334,7 +334,14 @@ public static class StatusStreamHandler {
                         // counter, so with neither of these the panel looks
                         // frozen while it works.
                         phase = autoFocus.Progress.Phase,
-                        currentPosition = autoFocus.Progress.CurrentPosition
+                        currentPosition = autoFocus.Progress.CurrentPosition,
+                        // The tracked star + the frame it was measured in, so
+                        // the FOCUS panel can mark it and magnify it.
+                        starX = autoFocus.Progress.StarX,
+                        starY = autoFocus.Progress.StarY,
+                        starHfr = autoFocus.Progress.StarHfr,
+                        frameWidth = autoFocus.Progress.FrameWidth,
+                        frameHeight = autoFocus.Progress.FrameHeight
                     };
 
                     // Compact summaries for the activity bar. Full job

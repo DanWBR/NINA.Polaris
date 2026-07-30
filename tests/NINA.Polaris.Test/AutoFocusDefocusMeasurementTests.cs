@@ -214,4 +214,40 @@ public class AutoFocusDefocusMeasurementTests {
             $"fine fit put focus at {fit.Minimum.X:F0}, true focus was {trueFocus}: "
             + "the coarse sweep could only have said 5300 or 5350");
     }
+
+    /// <summary>
+    /// Single-star mode, which is now the default: the tracker must keep
+    /// measuring the SAME star as the sweep defocuses, even though a
+    /// heavily defocused donut spreads and the brightest-by-flux ranking of the
+    /// field changes. Following the field average instead is what the operator
+    /// reported: the number moved with whatever the detector found, not with
+    /// the focus.
+    /// </summary>
+    [Test]
+    public void SingleStarTracker_KeepsTheSameStar_AsItDefocuses() {
+        var tracker = new AfStarTracker(1);
+
+        // Frame 1, near focus: star A is the brightest.
+        var near = new List<DetectedStar> {
+            new() { X = 100, Y = 100, HFR = 2.0, Flux = 9000 },   // A
+            new() { X = 400, Y = 300, HFR = 2.1, Flux = 8000 },   // B
+        };
+        var pickedNear = tracker.Filter(near);
+        Assert.That(pickedNear, Has.Count.EqualTo(1));
+        Assert.That(pickedNear[0].X, Is.EqualTo(100));
+
+        // Frame 2, defocused: A has spread and now reads FAINTER than B, and A
+        // has drifted a couple of pixels. Ranking by flux again would jump to
+        // B and put a step in the curve that is not defocus.
+        var far = new List<DetectedStar> {
+            new() { X = 102, Y =  99, HFR = 9.0, Flux = 5200 },   // A, spread out
+            new() { X = 400, Y = 300, HFR = 8.8, Flux = 7000 },   // B, still brighter
+        };
+        var pickedFar = tracker.Filter(far);
+        Assert.That(pickedFar, Has.Count.EqualTo(1));
+        Assert.That(pickedFar[0].X, Is.EqualTo(102),
+            "the anchor must follow star A by position, not re-rank by brightness");
+        Assert.That(pickedFar[0].HFR, Is.EqualTo(9.0).Within(1e-9),
+            "and the point's HFR is that star's, so the curve is one star's defocus");
+    }
 }

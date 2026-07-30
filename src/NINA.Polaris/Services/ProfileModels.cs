@@ -1141,8 +1141,14 @@ public class AutoFocusSettings {
     public double InnerCropRatio { get; set; } = 1.0;
 
     /// <summary>Track only the N brightest stars across the whole sweep
-    /// (desktop AutoFocusUseBrightestStars). 0 = use all detected stars.</summary>
-    public int UseBrightestStars { get; set; }
+    /// (desktop AutoFocusUseBrightestStars). 0 = use all detected stars.
+    ///
+    /// <para>Defaults to 1, one star, which is what ASIAIR does and what the
+    /// field report asked for: averaging the whole frame let the measurement
+    /// follow whichever stars the detector happened to find at each position,
+    /// so the curve moved for reasons that had nothing to do with focus. The
+    /// setting stays open for anyone who wants several, or 0 for all.</para></summary>
+    public int UseBrightestStars { get; set; } = 1;
 
     /// <summary>Backlash compensation when moving INWARD (position
     /// decreasing), in focuser steps.</summary>

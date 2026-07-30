@@ -3585,7 +3585,10 @@ function ninaApp() {
             attempt: 1,
             phase: 'sweep',
             currentPosition: 0,
-            fits: null
+            fits: null,
+            // The star the run is following, in the pixels of the frame it was
+            // measured in (w/h). Zero w means "no star published yet".
+            star: { x: 0, y: 0, hfr: 0, w: 0, h: 0 }
         },
         // PA-4: TPPA polar alignment state. Mirrors the WS payload's
         // polarAlignment sub-object. completedOk + isActive are
@@ -3673,7 +3676,8 @@ function ninaApp() {
             backlashOut: 0,
             backlashModel: 'OVERSHOOT',
             innerCropRatio: 1.0,
-            useBrightestStars: 0,
+            // 1 = follow a single star, ASIAIR-style; 0 = every detected star.
+            useBrightestStars: 1,
             // Second pass around the vertex. 0 for the step means "a quarter of
             // the coarse step", which is what the server computes when unset.
             refineNearVertex: true,
@@ -7967,6 +7971,7 @@ function ninaApp() {
             }
             if (drewAny) {
                 this.redrawOverlay();
+                this.redrawFocusStarOverlay();
                 this._drawCanvasHistogram(firstDrawn);
             }
             return drewAny;
@@ -18075,6 +18080,77 @@ function ninaApp() {
         // The PREVIEW tab has its own overlay canvas (previewOverlayCanvas).
         // redrawOverlay only manages the LIVE overlay, so paint annotations
         // onto the preview overlay separately, sized to previewCanvas.
+        // Mark the star the auto-focus run is following, and magnify it in the
+        // corner. Following ONE star is what the sweep now measures (the
+        // whole-frame mean moved with whatever the detector happened to find),
+        // so the operator has to be able to SEE which one, and to watch it
+        // swell and shrink through the V.
+        redrawFocusStarOverlay() {
+            const base = document.getElementById('focusCanvas');
+            const ovr = document.getElementById('focusOverlayCanvas');
+            if (!base || !ovr) return;
+            if (ovr.width !== base.width || ovr.height !== base.height) {
+                ovr.width = base.width || 1;
+                ovr.height = base.height || 1;
+            }
+            const ctx = ovr.getContext('2d');
+            ctx.clearRect(0, 0, ovr.width, ovr.height);
+
+            const s = this.autoFocus?.star;
+            if (!s || !(s.w > 0) || !(s.h > 0) || !(base.width > 1)) return;
+            // The canvas backing store is the frame scaled to fit the panel, so
+            // frame pixels map by the ratio of the two. Bail rather than guess
+            // if the numbers are inconsistent (a stale star from a previous run
+            // with a different ROI would otherwise be drawn on the wrong spot).
+            const sx = base.width / s.w, sy = base.height / s.h;
+            const x = s.x * sx, y = s.y * sy;
+            if (!isFinite(x) || !isFinite(y) || x < 0 || y < 0 || x > base.width || y > base.height) return;
+
+            // Radius follows the measured HFR so the ring grows with the
+            // defocus instead of sitting at a fixed size that says nothing.
+            const r = Math.max(10, Math.min(base.width / 6, (s.hfr || 3) * 3 * Math.max(sx, sy)));
+            ctx.save();
+            ctx.strokeStyle = '#4caf50';
+            ctx.lineWidth = Math.max(1.5, base.width / 700);
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.stroke();
+            const tick = r * 0.45;
+            ctx.beginPath();
+            ctx.moveTo(x - r - tick, y); ctx.lineTo(x - r, y);
+            ctx.moveTo(x + r, y);        ctx.lineTo(x + r + tick, y);
+            ctx.moveTo(x, y - r - tick); ctx.lineTo(x, y - r);
+            ctx.moveTo(x, y + r);        ctx.lineTo(x, y + r + tick);
+            ctx.stroke();
+            ctx.restore();
+
+            this._drawAfStarZoom(base, x, y, r);
+        },
+
+        // Magnified crop of the tracked star, drawn from the frame canvas into
+        // the inset. Source box follows the ring so a bloated donut still fits.
+        _drawAfStarZoom(base, x, y, r) {
+            const zoom = document.getElementById('afStarZoomCanvas');
+            if (!zoom) return;
+            const ctx = zoom.getContext('2d');
+            const box = Math.max(24, Math.round(r * 3));
+            const sx = Math.round(x - box / 2), sy = Math.round(y - box / 2);
+            ctx.clearRect(0, 0, zoom.width, zoom.height);
+            ctx.imageSmoothingEnabled = false;
+            try {
+                ctx.drawImage(base, sx, sy, box, box, 0, 0, zoom.width, zoom.height);
+            } catch (_) { return; }   // crop off the edge of the bitmap
+            // Centre reticle, so a star drifting off the middle of the inset is
+            // visible as drift rather than read as a badly centred crop.
+            ctx.strokeStyle = 'rgba(76,175,80,0.85)';
+            ctx.lineWidth = 1;
+            const c = zoom.width / 2, t = zoom.width * 0.12;
+            ctx.beginPath();
+            ctx.moveTo(c - t, c); ctx.lineTo(c + t, c);
+            ctx.moveTo(c, c - t); ctx.lineTo(c, c + t);
+            ctx.stroke();
+        },
+
         redrawPreviewOverlay() {
             const base = document.getElementById('previewCanvas');
             const ovr = document.getElementById('previewOverlayCanvas');
@@ -26519,7 +26595,7 @@ function ninaApp() {
             this.afParams.backlashOut = af.backlashOut ?? 0;
             this.afParams.backlashModel = af.backlashModel || 'OVERSHOOT';
             this.afParams.innerCropRatio = af.innerCropRatio ?? 1.0;
-            this.afParams.useBrightestStars = af.useBrightestStars ?? 0;
+            this.afParams.useBrightestStars = af.useBrightestStars ?? 1;
             this.afParams.refineNearVertex = af.refineNearVertex ?? true;
             this.afParams.refinePoints = af.refinePoints ?? 4;
             this.afParams.refineStepSize = af.refineStepSize ?? 0;
@@ -26537,7 +26613,10 @@ function ninaApp() {
                 backlashOut: parseInt(this.afParams.backlashOut) || 0,
                 backlashModel: this.afParams.backlashModel || 'OVERSHOOT',
                 innerCropRatio: parseFloat(this.afParams.innerCropRatio) || 1.0,
-                useBrightestStars: parseInt(this.afParams.useBrightestStars) || 0,
+                // No `|| 1` fallback: 0 is a real choice (all stars), so the
+                // default only covers a blank or NaN field.
+                useBrightestStars: Number.isFinite(+this.afParams.useBrightestStars)
+                    ? Math.max(0, Math.round(+this.afParams.useBrightestStars)) : 1,
                 // `|| 0` would turn "off" into "server default" for the step, so
                 // both refinement numbers go through Number() and a NaN guard
                 // instead: 0 is a meaningful value here (derive from the coarse
@@ -38604,8 +38683,13 @@ function ninaApp() {
                     // land within a few units of each other.
                     phase: af.phase || 'sweep',
                     currentPosition: af.currentPosition ?? 0,
-                    fits: af.fits || null
+                    fits: af.fits || null,
+                    star: {
+                        x: af.starX ?? 0, y: af.starY ?? 0, hfr: af.starHfr ?? 0,
+                        w: af.frameWidth ?? 0, h: af.frameHeight ?? 0
+                    }
                 };
+                this.redrawFocusStarOverlay();
             }
             if (msg.guider) {
                 const g = msg.guider;
