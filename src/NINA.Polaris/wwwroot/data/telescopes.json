@@ -124,6 +124,15 @@
     { "brand": "William Optics",  "model": "GT 102",                "type": "Triplet APO",          "apertureMm": 102,   "focalLengthMm": 703,  "backspacingMm": 55.0 },
     { "brand": "William Optics",  "model": "FLT 91",                "type": "Triplet APO",          "apertureMm": 91,    "focalLengthMm": 540,  "backspacingMm": 55.0 },
     { "brand": "William Optics",  "model": "FLT 132",               "type": "Triplet APO",          "apertureMm": 132,   "focalLengthMm": 925,  "backspacingMm": 55.0 },
-    { "brand": "William Optics",  "model": "FLT 156",               "type": "Triplet APO",          "apertureMm": 156,   "focalLengthMm": 1217, "backspacingMm": 55.0 }
+    { "brand": "William Optics",  "model": "FLT 156",               "type": "Triplet APO",          "apertureMm": 156,   "focalLengthMm": 1217, "backspacingMm": 55.0 },
+
+    { "brand": "ZWO",             "model": "FF65 APO",              "type": "Quintuplet Petzval APO","apertureMm": 65,   "focalLengthMm": 416,  "backspacingMm": 55.0 },
+    { "brand": "ZWO",             "model": "FF70 APO",              "type": "Quadruplet Petzval APO","apertureMm": 70,   "focalLengthMm": 490,  "backspacingMm": 55.0 },
+    { "brand": "ZWO",             "model": "FF80 APO",              "type": "Quadruplet Petzval APO","apertureMm": 80,   "focalLengthMm": 600,  "backspacingMm": 55.0 },
+    { "brand": "ZWO",             "model": "FF90 APO",              "type": "Quadruplet Petzval APO","apertureMm": 90,   "focalLengthMm": 609,  "backspacingMm": 55.0 },
+    { "brand": "ZWO",             "model": "FF107 APO",             "type": "Quadruplet Petzval APO","apertureMm": 107,  "focalLengthMm": 749,  "backspacingMm": 55.0 },
+    { "brand": "ZWO",             "model": "FF110 APO",             "type": "Quadruplet Petzval APO","apertureMm": 110,  "focalLengthMm": 766,  "backspacingMm": 55.0 },
+    { "brand": "ZWO",             "model": "FF130 APO",             "type": "Quintuplet Petzval APO","apertureMm": 130,  "focalLengthMm": 1000, "backspacingMm": 55.0 },
+    { "brand": "ZWO",             "model": "FF131 APO",             "type": "Quadruplet Petzval APO","apertureMm": 131,  "focalLengthMm": 983,  "backspacingMm": 55.0 }
   ]
 }

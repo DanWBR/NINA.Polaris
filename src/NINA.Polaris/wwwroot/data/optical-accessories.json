@@ -7,7 +7,7 @@
       "type": "reducer",
       "factor": 0.7,
       "backspacingMm": 105.0,
-      "compatibleScopes": ["EdgeHD 8", "EdgeHD 9.25", "EdgeHD 11"],
+      "compatibleScopes": ["EdgeHD 8", "EdgeHD 9.25", "EdgeHD 11", "EdgeHD 14"],
       "notes": "Optimised for f/7 on EdgeHD SCTs. Each EdgeHD aperture has its own dedicated reducer part number — confirm part matches your OTA."
     },
     {
@@ -23,19 +23,46 @@
       "brand": "Starizona",
       "model": "Hyperstar 8 v4",
       "type": "reducer",
-      "factor": 0.21,
+      "factor": 0.192,
       "backspacingMm": 55.0,
       "compatibleScopes": ["EdgeHD 8", "C8 SCT"],
-      "notes": "Replaces the SCT secondary. Drops f/10 to f/2.0 — extreme reducer for wide-field DSO imaging."
+      "notes": "Replaces the SCT secondary: 390 mm at f/1.9 on a C8 or EdgeHD 8. The EdgeHD adapter ring is included with v4."
     },
     {
       "brand": "Starizona",
       "model": "Hyperstar 11 v4",
       "type": "reducer",
-      "factor": 0.20,
+      "factor": 0.193,
       "backspacingMm": 55.0,
       "compatibleScopes": ["EdgeHD 11", "C11 SCT"],
-      "notes": "Replaces the SCT secondary. Drops f/10 to f/2.0."
+      "notes": "Replaces the SCT secondary: 540 mm at f/1.9 on a C11 or EdgeHD 11. The EdgeHD adapter ring is included with v4."
+    },
+    {
+      "brand": "Starizona",
+      "model": "Hyperstar 6 v4",
+      "type": "reducer",
+      "factor": 0.20,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["C6 SCT"],
+      "notes": "Replaces the SCT secondary: 300 mm at f/1.9 on a C6. Needs a Fastar-compatible secondary; there is no EdgeHD 6."
+    },
+    {
+      "brand": "Starizona",
+      "model": "Hyperstar 9.25 v4",
+      "type": "reducer",
+      "factor": 0.223,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["EdgeHD 9.25", "C9.25 SCT"],
+      "notes": "Replaces the SCT secondary: 525 mm at f/2.2 on a C9.25 or EdgeHD 9.25. Older non-Fastar C9.25 tubes cannot be converted."
+    },
+    {
+      "brand": "Starizona",
+      "model": "Hyperstar 14 v4",
+      "type": "reducer",
+      "factor": 0.183,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["EdgeHD 14", "C14 SCT"],
+      "notes": "Replaces the SCT secondary: 715 mm at f/2.0 on a C14 or EdgeHD 14. The EdgeHD adapter ring is included with v4."
     },
     {
       "brand": "Skywatcher",
@@ -48,12 +75,30 @@
     },
     {
       "brand": "Askar",
-      "model": "0.7x Reducer (PHQ)",
+      "model": "0.75x Full-Frame Reducer (65PHQ)",
+      "type": "reducer",
+      "factor": 0.75,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["65PHQ"],
+      "notes": "Quadruplet reducer dedicated to the 65PHQ: 312 mm at f/4.8, full-frame image circle."
+    },
+    {
+      "brand": "Askar",
+      "model": "0.76x Full-Frame Reducer (80PHQ)",
+      "type": "reducer",
+      "factor": 0.76,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["80PHQ"],
+      "notes": "Triplet reducer dedicated to the 80PHQ: 456 mm at f/5.7, full-frame image circle."
+    },
+    {
+      "brand": "Askar",
+      "model": "0.7x Full-Frame Reducer (107 / 130 / 151PHQ)",
       "type": "reducer",
       "factor": 0.7,
       "backspacingMm": 55.0,
-      "compatibleScopes": ["65PHQ", "80PHQ", "107PHQ", "130PHQ", "151PHQ"],
-      "notes": "Dedicated reducer for the PHQ quadruplet line. Drops the native f/7 - f/7.7 down to f/4.9 - f/5.4 with a 700 - 740 mm working focal length on the 130/151PHQ. Confirm exact part number matches your OTA."
+      "compatibleScopes": ["107PHQ", "130PHQ", "151PHQ"],
+      "notes": "3-inch triplet reducer shared by the three large PHQ tubes: f/4.9, so 524 mm on the 107PHQ and 700 mm on the 130PHQ. Full frame on the 107 and 130; APS-C is recommended on the 151PHQ."
     },
     {
       "brand": "Askar",
@@ -66,12 +111,21 @@
     },
     {
       "brand": "Askar",
-      "model": "0.7x Reducer (F-series)",
+      "model": "0.75x Reducer (71F / 91F)",
       "type": "reducer",
-      "factor": 0.7,
+      "factor": 0.75,
       "backspacingMm": 55.0,
-      "compatibleScopes": ["60F Flat-Field", "71F Flat-Field", "91F Flat-Field", "111F Flat-Field", "131F Flat-Field"],
-      "notes": "Optional reducer for the F-series quadruplets (they're self-flattening at native f, so the reducer is purely for speeding the system up)."
+      "compatibleScopes": ["71F Flat-Field", "91F Flat-Field", "FF70 APO", "FF90 APO"],
+      "notes": "The F-series is self-flattening at native f, so this is purely a speed-up: 368 mm at f/5.2 on the 71F, 457 mm at f/5.0 on the 91F. Same part fits the ZWO FF70 and FF90 rebrands."
+    },
+    {
+      "brand": "Askar",
+      "model": "0.74x Reducer (111F / 131F)",
+      "type": "reducer",
+      "factor": 0.74,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["111F Flat-Field", "131F Flat-Field", "FF110 APO", "FF131 APO"],
+      "notes": "Speed-up reducer for the two large flat-field quadruplets: 567 mm at f/5.1 on the 111F, 727 mm at f/5.6 on the 131F. Same part fits the ZWO FF110 and FF131 rebrands."
     },
     {
       "brand": "Askar",
@@ -117,6 +171,15 @@
       "backspacingMm": 55.0,
       "compatibleScopes": ["FRA300", "FRA400", "FRA500", "FRA600"],
       "notes": "Native 1.0x flattener for the FRA-series quintuplets -- keeps the native focal length while flattening the field across an APS-C sensor. Use when the reducer is too aggressive for the target framing."
+    },
+    {
+      "brand": "ZWO",
+      "model": "0.7x Full-Frame Reducer (FF107 / FF130)",
+      "type": "reducer",
+      "factor": 0.7,
+      "backspacingMm": 55.0,
+      "compatibleScopes": ["FF107 APO", "FF130 APO"],
+      "notes": "ZWO's own 3-inch triplet reducer, part F107130RE: 524 mm at f/4.9 on the FF107. The FF107 and FF130 are the 107PHQ and 130PHQ under ZWO branding."
     },
     {
       "brand": "Takahashi",
