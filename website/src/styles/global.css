@@ -111,6 +111,14 @@ code {
   padding: 1px 6px;
   border-radius: 4px;
   color: #90caf9;
+  /* Inline code here is mostly commands and URLs: long runs with no spaces,
+     which a phone viewport has nowhere to put. On a 390px screen the ssh
+     command and the GitHub URL in the "in-app update fails" note ran past the
+     right edge and were cut off, unreadable and unselectable. Break anywhere
+     instead of overflowing, because a wrapped command can still be read and
+     copied while a clipped one cannot. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 pre {

@@ -82,6 +82,18 @@ var certService = new NINA.Polaris.Services.SelfSignedCertService(
     Microsoft.Extensions.Logging.Abstractions.NullLogger<NINA.Polaris.Services.SelfSignedCertService>.Instance);
 builder.Services.AddSingleton(certService);
 
+// Drop any inherited URL list before configuring the endpoints below.
+// ASPNETCORE_URLS (and launchSettings' applicationUrl in dev) set addresses
+// that the explicit ListenAnyIP/ListenLocalhost calls then override, and
+// Kestrel logs a WARN about it on EVERY startup:
+//   "Overriding address(es) 'http://0.0.0.0:5000'. Binding to endpoints
+//    defined via IConfiguration and/or UseKestrel() instead."
+// Nothing is wrong when that appears, which is the problem: a warning that
+// fires on every boot and never means anything trains everyone to ignore the
+// warning level. Clearing the setting is safe precisely because those
+// addresses were being discarded anyway.
+builder.WebHost.UseSetting(WebHostDefaults.ServerUrlsKey, string.Empty);
+
 builder.WebHost.ConfigureKestrel(options =>
 {
     if (httpEnabled) {
