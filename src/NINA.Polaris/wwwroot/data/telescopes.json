@@ -1,6 +1,12 @@
 {
   "_doc": "Curated catalogue of popular amateur astrophotography telescopes. Used by the Equipment rig editor's telescope picker to auto-fill aperture / focal length / F-ratio / required backspacing. Add to this list by PR — keep entries sorted by brand then aperture. backspacingMm is the camera-side back-focus required by the OTA out of the box (no accessory) in millimetres; null if it varies by configuration.",
   "telescopes": [
+    { "brand": "Altair Astro",    "model": "Starwave ASCENT 70ED",  "type": "Doublet ED",           "apertureMm": 70,    "focalLengthMm": 420,  "backspacingMm": null },
+    { "brand": "Altair Astro",    "model": "Starwave ASCENT 80 ED Triplet","type": "Triplet APO",   "apertureMm": 80,    "focalLengthMm": 384,  "backspacingMm": null },
+    { "brand": "Altair Astro",    "model": "Starwave 80ED-R",       "type": "Doublet ED",           "apertureMm": 80,    "focalLengthMm": 555,  "backspacingMm": null },
+
+    { "brand": "APM",             "model": "LZOS 152/1200",         "type": "Triplet APO",          "apertureMm": 152,   "focalLengthMm": 1200, "backspacingMm": null },
+
     { "brand": "Askar",           "model": "SQA55",                 "type": "Quintuplet Petzval APO","apertureMm": 55,   "focalLengthMm": 264,  "backspacingMm": 55.0 },
     { "brand": "Askar",           "model": "SQA60 Pro",             "type": "Quintuplet Petzval APO","apertureMm": 60,   "focalLengthMm": 276,  "backspacingMm": 55.0 },
     { "brand": "Askar",           "model": "SQA70",                 "type": "Quintuplet Petzval APO","apertureMm": 70,   "focalLengthMm": 336,  "backspacingMm": 55.0 },
@@ -68,6 +74,9 @@
     { "brand": "Meade",           "model": "LX200 10\"",            "type": "SCT",                  "apertureMm": 254,   "focalLengthMm": 2500, "backspacingMm": 105.0 },
     { "brand": "Meade",           "model": "LX200 12\"",            "type": "SCT",                  "apertureMm": 304.8, "focalLengthMm": 3048, "backspacingMm": 105.0 },
 
+    { "brand": "Omegon",          "model": "Pro APO 107/700",       "type": "Triplet APO",          "apertureMm": 107,   "focalLengthMm": 700,  "backspacingMm": null },
+    { "brand": "Omegon",          "model": "Pro APO 152/1200",      "type": "Triplet APO",          "apertureMm": 152,   "focalLengthMm": 1200, "backspacingMm": null },
+
     { "brand": "Sharpstar",       "model": "76 EDPH II",            "type": "Triplet APO",          "apertureMm": 76,    "focalLengthMm": 418,  "backspacingMm": 55.0 },
     { "brand": "Sharpstar",       "model": "94 EDPH",               "type": "Triplet APO",          "apertureMm": 94,    "focalLengthMm": 517,  "backspacingMm": 55.0 },
     { "brand": "Sharpstar",       "model": "100 EDPH II",           "type": "Triplet APO",          "apertureMm": 100,   "focalLengthMm": 550,  "backspacingMm": 55.0 },
@@ -108,6 +117,12 @@
     { "brand": "Tele Vue",        "model": "NP-101",                "type": "Petzval APO",          "apertureMm": 101,   "focalLengthMm": 540,  "backspacingMm": null },
     { "brand": "Tele Vue",        "model": "NP-127",                "type": "Petzval APO",          "apertureMm": 127,   "focalLengthMm": 660,  "backspacingMm": null },
     { "brand": "Tele Vue",        "model": "TV-85",                 "type": "Doublet APO",          "apertureMm": 85,    "focalLengthMm": 600,  "backspacingMm": null },
+
+    { "brand": "TS Optics",       "model": "Photoline 72/432",      "type": "Triplet APO",          "apertureMm": 72,    "focalLengthMm": 432,  "backspacingMm": null },
+    { "brand": "TS Optics",       "model": "Photoline 80/480",      "type": "Triplet APO",          "apertureMm": 80,    "focalLengthMm": 480,  "backspacingMm": null },
+    { "brand": "TS Optics",       "model": "Photoline 102/714",     "type": "Triplet APO",          "apertureMm": 102,   "focalLengthMm": 714,  "backspacingMm": null },
+    { "brand": "TS Optics",       "model": "Photoline 115/800",     "type": "Triplet APO",          "apertureMm": 115,   "focalLengthMm": 800,  "backspacingMm": null },
+    { "brand": "TS Optics",       "model": "Photoline 130/910",     "type": "Triplet APO",          "apertureMm": 130,   "focalLengthMm": 910,  "backspacingMm": null },
 
     { "brand": "Vixen",           "model": "SD81S",                 "type": "Doublet APO",          "apertureMm": 81,    "focalLengthMm": 625,  "backspacingMm": null },
     { "brand": "Vixen",           "model": "SD103S",                "type": "Doublet APO",          "apertureMm": 103,   "focalLengthMm": 795,  "backspacingMm": null },

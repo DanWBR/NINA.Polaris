@@ -102,12 +102,12 @@
     },
     {
       "brand": "Askar",
-      "model": "0.7x Reducer (APO)",
+      "model": "0.8x Full-Frame Reducer (APO)",
       "type": "reducer",
-      "factor": 0.7,
+      "factor": 0.8,
       "backspacingMm": 55.0,
-      "compatibleScopes": ["103APO", "120APO", "140APO", "160APO", "185APO", "203APO"],
-      "notes": "Dedicated reducer for the APO triplet line. Drops native f/7 to ~f/5."
+      "compatibleScopes": ["103APO", "120APO", "140APO", "160APO", "185APO"],
+      "notes": "Triplet reducer/flattener for the APO line, one part per aperture: f/5.4 on the 103APO and f/5.6 on the 120, 140 and 160. Full-frame image circle, 55 mm back focus from M48."
     },
     {
       "brand": "Askar",
