@@ -44,15 +44,39 @@ public class RequestLoggingMiddleware {
 
         var sw = Stopwatch.StartNew();
         Exception? captured = null;
+        // Correlation id, on every response. The client logs it next to its own
+        // line, so a report of "it said HTTP 500" can be tied to the exact
+        // server entry instead of guessing from timestamps.
+        var requestId = ctx.TraceIdentifier;
+        if (!ctx.Response.HasStarted) ctx.Response.Headers["X-Polaris-Request-Id"] = requestId;
         try {
             await _next(ctx);
         } catch (Exception ex) {
-            // Re-throw after recording so the exception handler /
-            // ASP.NET default 500-response path still runs, but the
-            // entry includes the exception type even if we never get
-            // a status code back (uncaught -> 500 from Kestrel).
             captured = ex;
-            throw;
+            // An unhandled exception used to reach Kestrel, which answers 500
+            // with an EMPTY BODY. The client then showed the operator a toast
+            // reading exactly "HTTP 500:" with nothing after the colon, and the
+            // cause (a duplicate JSON key, in the field report) was visible
+            // only in the server log. Answer with something they can act on and
+            // quote back. The message is the exception's own text, which is a
+            // deliberate trade: this is a single-operator LAN appliance, and a
+            // diagnosis they can paste beats hiding the reason.
+            if (!ctx.Response.HasStarted) {
+                ctx.Response.Clear();
+                ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+                ctx.Response.ContentType = "application/json; charset=utf-8";
+                ctx.Response.Headers["X-Polaris-Request-Id"] = requestId;
+                var payload = System.Text.Json.JsonSerializer.Serialize(new {
+                    error = ex.Message,
+                    exceptionType = ex.GetType().FullName,
+                    requestId
+                });
+                try { await ctx.Response.WriteAsync(payload); } catch { /* client gone */ }
+            } else {
+                // Headers already flushed (a streaming response): nothing to
+                // write, so let it surface as a broken response and be logged.
+                throw;
+            }
         } finally {
             sw.Stop();
             var status = ctx.Response?.StatusCode ?? 0;
@@ -65,7 +89,11 @@ public class RequestLoggingMiddleware {
                     At: DateTime.UtcNow,
                     Level: level,
                     Source: "http",
-                    Message: $"{ctx.Request.Method} {pathOnly} {status} {sw.Elapsed.TotalMilliseconds:F1}ms",
+                    // The request id goes in the message, not only in a field,
+                    // so it survives a copy/paste of the log panel.
+                    Message: $"{ctx.Request.Method} {pathOnly} {status} "
+                           + $"{sw.Elapsed.TotalMilliseconds:F1}ms"
+                           + (captured != null || status >= 500 ? $" [{requestId}]" : ""),
                     Method: ctx.Request.Method,
                     Path: pathOnly,
                     Status: status,

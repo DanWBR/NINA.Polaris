@@ -4571,8 +4571,15 @@ function ninaApp() {
                               : resp.status >= 500 ? 'error'
                               : resp.status >= 400 ? 'warn'
                               : 'info';
-                    this._logFromClient(lvl, `${method} ${url} ${resp.status} ${dur.toFixed(0)}ms`, {
-                        source: 'apiFetch', method, path: url, status: resp.status, durationMs: dur
+                    // Carry the server's request id on anything that went wrong,
+                    // so the client line and the server line can be matched.
+                    const rid = resp.status >= 400
+                        ? (resp.headers.get('X-Polaris-Request-Id') || '') : '';
+                    this._logFromClient(lvl,
+                        `${method} ${url} ${resp.status} ${dur.toFixed(0)}ms`
+                        + (rid ? ` [${rid}]` : ''), {
+                        source: 'apiFetch', method, path: url, status: resp.status,
+                        durationMs: dur, requestId: rid || undefined
                     });
                 }
 
@@ -4587,7 +4594,8 @@ function ninaApp() {
                         let payload = null;
                         try { payload = JSON.parse(body); } catch {}
                         this._handle401(payload);
-                        throw new ApiError(401, body);
+                        throw new ApiError(401, body, `${method} ${url}`,
+                            resp.headers.get('X-Polaris-Request-Id'));
                     });
                 }
 
@@ -4597,7 +4605,8 @@ function ninaApp() {
                 // catch below.
                 if (!resp.ok && !expected) {
                     return resp.text().then(body => {
-                        throw new ApiError(resp.status, body);
+                        throw new ApiError(resp.status, body, `${method} ${url}`,
+                            resp.headers.get('X-Polaris-Request-Id'));
                     });
                 }
                 return resp;
@@ -4624,10 +4633,23 @@ function ninaApp() {
                     // spurious "Server reconnected" toast on every slow op.
                     // Genuine outages still surface via the TypeError branch
                     // below (connection refused) and the WebSocket watchdog.
-                    throw new Error('Request timed out');
+                    throw new Error(`Request timed out: ${method} ${url}`);
                 }
-                if (err instanceof TypeError && err.message.includes('fetch')) {
+                // A dropped request arrives as a bare TypeError whose message is
+                // the browser's own wording: Safari says "Load failed", Chrome
+                // "Failed to fetch". Neither names the request, so a toast built
+                // from err.message told the operator nothing and cost a full
+                // diagnosis cycle from a screenshot. Name the call here, once,
+                // and every caller's toast inherits it.
+                const netFail = err instanceof TypeError
+                    && /fetch|load failed|network|connection/i.test(err.message || '');
+                if (netFail) {
                     this._setServerReachable(false);
+                    const e = new Error(
+                        `Network error on ${method} ${url}: ${err.message || 'request did not complete'}`);
+                    e.name = 'NetworkError';
+                    e.cause = err;
+                    throw e;
                 }
                 throw err;
             });
@@ -7433,12 +7455,26 @@ function ninaApp() {
         // ~25 requests at once and a phone browser drops some of them under
         // that burst with the server perfectly up, so the reconnect path never
         // fires and a one-shot loader was left broken for the whole session.
-        async _retryGet(fn, attempts = 3, delayMs = 600) {
+        async _retryGet(fn, attempts = 3, delayMs = 600, label = '') {
             let lastErr;
             for (let i = 0; i < attempts; i++) {
-                try { return await fn(); }
-                catch (e) {
+                try {
+                    const v = await fn();
+                    // Say so when a retry saved it. Silent self-healing hides
+                    // that the link or the host is flaky, and the next person
+                    // debugging a "sometimes empty dropdown" has no trace of it.
+                    if (i > 0) {
+                        this._logFromClient('warn',
+                            `${label || 'request'} recovered on attempt ${i + 1} of ${attempts}`,
+                            { source: 'retry' });
+                    }
+                    return v;
+                } catch (e) {
                     lastErr = e;
+                    this._logFromClient(i < attempts - 1 ? 'warn' : 'error',
+                        `${label || 'request'} attempt ${i + 1} of ${attempts} failed: `
+                        + (e.message || e),
+                        { source: 'retry', exceptionType: e && e.name });
                     if (i < attempts - 1) {
                         await new Promise(r => setTimeout(r, delayMs * (i + 1)));
                     }
@@ -13377,7 +13413,8 @@ function ninaApp() {
             // so a dropped request reported "No scripts found" -- a statement
             // about the host that was not true. Keep the failure separate.
             try {
-                this.scripts.list = await this._retryGet(() => this.apiGet('/api/script/list'));
+                this.scripts.list = await this._retryGet(
+                    () => this.apiGet('/api/script/list'), 3, 600, 'script list');
                 this.scripts.loaded = true;
                 this.scripts.error = '';
             } catch (e) {
@@ -20408,7 +20445,7 @@ function ninaApp() {
                         dslrCameras: dslr.cameras      || [],
                         loaded: true
                     };
-                });
+                }, 3, 600, 'optics catalogue');
             } catch (e) {
                 // NOT loaded:true. Marking a failed load as done left the Main
                 // Telescope dropdowns empty for the rest of the session, and
@@ -24523,7 +24560,8 @@ function ninaApp() {
             const fetchType = async (t) => {
                 try {
                     const rows = await this._retryGet(() => this.apiGet(
-                        '/api/studio/frames?type=' + encodeURIComponent(t) + '&limit=500'));
+                        '/api/studio/frames?type=' + encodeURIComponent(t) + '&limit=500'),
+                        3, 600, 'calibration masters (' + t + ')');
                     return (rows || []).map(r => ({
                         id: r.id,
                         fileName: r.fileName,
@@ -27630,7 +27668,7 @@ function ninaApp() {
                 const [solvers, cfg] = await this._retryGet(() => Promise.all([
                     this.apiGet('/api/platesolve/solvers'),
                     this.apiGet('/api/platesolve/config')
-                ]));
+                ]), 3, 600, 'plate solve config');
                 this.psSolvers = solvers || [];
                 if (cfg) {
                     this.psConfig = {
@@ -39698,10 +39736,32 @@ document.addEventListener('alpine:initialized', () => {
 });
 
 class ApiError extends Error {
-    constructor(status, body) {
-        super(`HTTP ${status}: ${body.substring(0, 200)}`);
+    /**
+     * @param status  HTTP status
+     * @param body    raw response body
+     * @param context "METHOD /path" so a toast says WHICH call failed
+     * @param requestId value of X-Polaris-Request-Id, to grep the server log
+     *
+     * The message is what ends up in the operator's toast, so it has to stand
+     * on its own. It used to read `HTTP 500: ` with nothing after the colon:
+     * an unhandled server exception answers with an empty body, and the actual
+     * cause lived only in the server log. Now: the server's `error` field when
+     * there is one, the path always, and the request id when the server sent
+     * one, which is the string that ties the two logs together.
+     */
+    constructor(status, body, context, requestId) {
+        let reason = '';
+        try {
+            const j = JSON.parse(body);
+            reason = j.error || j.message || j.detail || '';
+        } catch { reason = (body || '').trim(); }
+        if (!reason) reason = status >= 500 ? 'the server did not say why' : 'no details';
+        super(`HTTP ${status} on ${context || 'request'}: ${reason.substring(0, 300)}`
+            + (requestId ? ` [ref ${requestId}]` : ''));
         this.status = status;
         this.body = body;
+        this.context = context;
+        this.requestId = requestId;
     }
 }
 
