@@ -91,7 +91,7 @@ click through the warning once, go to **Settings → 🔒 HTTPS
 endpoints**, and click **⬇ Download certificate**. The file
 `polaris-root.crt` saves to your Downloads folder.
 
-> **"The page loads but nothing is live"** — a browser that has not
+> **"The page loads but nothing is live"**: a browser that has not
 > been told to trust the certificate clicks through for the *page* and
 > then refuses the *WebSocket* upgrade that page opens, so the UI sits
 > there with no data and a reload appears to fix it. Firefox is the

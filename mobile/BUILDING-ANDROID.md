@@ -3,7 +3,7 @@
 The mobile app is a **Capacitor** project (web UI + a Gradle Android
 host). It is **not** a Visual Studio / .NET project, so the APK is built
 with **Android Studio** or the **Gradle CLI** -- not the C# Visual
-Studio. iOS (`.ipa`) needs macOS + Xcode — see
+Studio. iOS (`.ipa`) needs macOS + Xcode; see
 [`BUILDING-IOS.md`](BUILDING-IOS.md).
 
 Everything here happens inside `mobile/`. Nothing touches the rest of
@@ -185,13 +185,13 @@ Share `app-release.apk`. Installers must allow "unknown sources".
   hosts (e.g. the Relay over a real cert) are validated normally. For a
   hardened release, pin the fingerprint from `/api/system/server-cert` instead.
 - **App freezes / "isn't responding" (ANR) on tablets**: the Polaris UI is
-  a WebGL + WASM single-page app. **Every** host — even a single one — now
+  a WebGL + WASM single-page app. **Every** host (even a single one) now
   loads in a cross-origin `<iframe>` under the shell (`connect.js`,
   `addInstance`/`openHost`), which is what keeps the tab bar alive: each
   instance gets a Reload (⟳), a Close (×), the Add (＋)/back-to-picker
   affordance, and the hardware-back-to-picker gesture. (Earlier a single
-  host was loaded **top-level** via `window.location.href` — an
-  `openHostDirect` path — as an ANR workaround for weak Android System
+  host was loaded **top-level** via `window.location.href`, an
+  `openHostDirect` path, as an ANR workaround for weak Android System
   WebViews, e.g. Xiaomi Pad 7. That was **removed**: a top-level load tore
   down the shell, leaving no tab, no reload, and no way back to the home
   screen, which is the whole point of the wrapper.) So if a weak WebView
@@ -207,7 +207,7 @@ Share `app-release.apk`. Installers must allow "unknown sources".
     re-doing after a full `cap add android`.
   - Update **Android System WebView** (Play Store) and disable HyperOS /
     aggressive battery restriction for the app.
-  - Avoid leaving **multiple** host tabs open at once — each runs the full
+  - Avoid leaving **multiple** host tabs open at once: each runs the full
     live pipeline (WebGL + WASM), so a powerful tablet can still thrash GC.
   - If the freeze persists, capture the ANR trace: `adb pull
     /data/anr/traces.txt` (or `adb logcat | grep -i ANR`) and check which

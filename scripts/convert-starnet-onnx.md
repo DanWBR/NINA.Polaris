@@ -5,7 +5,7 @@ Polaris runs star removal as an **ONNX model** through the existing ONNX stack
 fork **https://github.com/DanWBR/starnet** (nekitmm StarNet v1), which ships a
 **TensorFlow 1** checkpoint, not ONNX. This is the one-time, offline recipe to
 produce `model.onnx`. It needs a TF1 environment (the checkpoint uses
-`tf.contrib`/`tf.layers`), so it is **not** part of the Polaris build — run it on
+`tf.contrib`/`tf.layers`), so it is **not** part of the Polaris build: run it on
 a model-prep box, then drop the result into the registry.
 
 ## Model facts (verified from the fork, 2026-06)
@@ -18,11 +18,11 @@ Source: `model.py` (`generator`), `export.py`, `transform.py`.
 | Net used            | **generator only** (discriminator is training-only) |
 | Input tensor        | `X:0`, shape `[None, 256, 256, 3]`, **RGB** |
 | Output tensor       | `generator/g_deconv7/Sub:0` (residual `input − ReLU(decoder)`) |
-| Tile (window)       | **256** (fixed; baked into the checkpoint — do not change) |
-| Input range         | **[0,1]** — NOTE: the TF1 `transform.py` feeds `[0,1]` directly, it does **NOT** do `×2−1`. (The `starnet_v1_TF2.py` reimpl uses `×2−1`; that does **not** apply to this checkpoint.) |
+| Tile (window)       | **256** (fixed; baked into the checkpoint, so do not change) |
+| Input range         | **[0,1]**. NOTE: the TF1 `transform.py` feeds `[0,1]` directly, it does **NOT** do `×2−1`. (The `starnet_v1_TF2.py` reimpl uses `×2−1`; that does **not** apply to this checkpoint.) |
 | Output range        | clamp to `[0,1]` |
 | Tiling at inference | stride `S` (≤256), `offset=(256−S)/2`; run each 256² tile, keep the centre `S×S` at `[offset:offset+S]`. Edge padding = reflect/wrap of image borders (see `transform.py`). |
-| License             | code MIT; **weights CC BY-NC-SA 4.0 (NonCommercial)** — attribute + NC notice. |
+| License             | code MIT; **weights CC BY-NC-SA 4.0 (NonCommercial)**, so attribute + NC notice. |
 
 ## Easiest: one command via Docker (no local Python 3.7 needed)
 
@@ -49,7 +49,7 @@ Run from inside the `DanWBR/starnet` checkout (has `model.ckpt.*`, `model.py`,
 2. **Freeze the generator subgraph (weights baked in).** Do **not** use the
    fork's `export.py` + `gen_sub.txt`: it relies on `extract_sub_graph`, which
    (a) does **not** bake the weights into the `.pb` (it leaves `Variable` nodes,
-   useless for standalone ONNX) and (b) lists stale node names — TF 1.15 emits
+   useless for standalone ONNX) and (b) lists stale node names: TF 1.15 emits
    `FusedBatchNormV3`, not the `FusedBatchNorm` in `gen_sub.txt`, so it asserts
    `... is not in graph`. Instead, restore the checkpoint and freeze from the
    output node with `convert_variables_to_constants`:
@@ -67,7 +67,7 @@ Run from inside the `DanWBR/starnet` checkout (has `model.ckpt.*`, `model.py`,
        tf.io.write_graph(gd, ".", "starnet_generator.pb", as_text=False)
    ```
    (The `.ps1` writes exactly this as `freeze_starnet.py` and runs it.) BN uses
-   `training=True` (per-tile batch stats) — that is how StarNet runs inference,
+   `training=True` (per-tile batch stats), which is how StarNet runs inference,
    and tf2onnx decomposes the training-mode `FusedBatchNormV3` accordingly.
 
 3. **GraphDef → ONNX** (fixed 256² input):

@@ -1,9 +1,9 @@
-# QNN GPU-backend spike — preparing an fp32 model and running it on the Adreno
+# QNN GPU-backend spike: preparing an fp32 model and running it on the Adreno
 
-Goal: prove the **Adreno 643 GPU** on the Radxa Dragon Q6A (QCS6490) can run the
-GraXpert models the **Hexagon HTP can't** — denoise **v3** (LayerNorm, needs
-V73+), deconvolution, star removal — and fringing-sensitive runs, **at fp32**
-(no quantization), via QAIRT's `libQnnGpu.so` backend.
+Goal: prove the **Adreno 643 GPU** on the Radxa Dragon Q6A (QCS6490) can run, **at
+fp32** (no quantization) via QAIRT's `libQnnGpu.so` backend, the GraXpert models
+the **Hexagon HTP can't**: denoise **v3** (LayerNorm, needs V73+), deconvolution,
+star removal, plus fringing-sensitive runs.
 
 Why this is cheap: we already bundle the QAIRT 2.45 runtime (`/opt/polaris/qairt`)
 and drive `qnn-net-run` in `Services/Qnn`. Using the GPU is just **(a)** swapping
@@ -20,7 +20,7 @@ this SoC means **CPU or GPU**, never the HTP.
 
 Use the same QAIRT x86 SDK + venv as the HTP path, but **stop at the DLC** and do
 **not** quantize. (DLC is version-portable across QAIRT builds; context binaries
-are not — so ship/copy the **DLC** and let the device load it.)
+are not, so ship/copy the **DLC** and let the device load it.)
 
 ```bash
 # venv with the QAIRT x86 tools on PATH (same as the HTP convert flow):
@@ -35,9 +35,9 @@ qairt-converter \
   #   --source_model_input_shape "input:1,256,256,3"   (use the model's real input name/shape)
 ```
 
-That's it — `denoise_v3_fp32.dlc` is the artifact. (Decon and star-removal models
+That's it: `denoise_v3_fp32.dlc` is the artifact. (Decon and star-removal models
 have different shapes/inputs; convert each the same way, pinning their own input
-shape. Decon is multi-input — sigma/strength — so list all inputs.)
+shape. Decon is multi-input (sigma/strength), so list all inputs.)
 
 > AI Hub alternative: submit a **compile** job to a QCS6490 target with **no
 > quantize job** and runtime = QNN/DLC (or LiteRT GPU). You'll get a float model
@@ -59,10 +59,10 @@ bash scripts/qnn-gpu-spike.sh ~/denoise_v3_fp32.dlc --tile 256 --ch 3 --cpu
 
 What it does:
 1. Confirms `libQnnGpu.so` is in the QAIRT bundle and `ldd`-resolves (flags any
-   missing **OpenCL / Adreno UMD** deps — the usual GPU-backend blocker).
+   missing **OpenCL / Adreno UMD** deps, the usual GPU-backend blocker).
 2. Runs **one** inference (warm + op-support check): if the GPU backend can't
    lower an op (e.g. **LayerNorm**), the run fails and the script says so.
-3. Times `(t_K − t_1)/(K−1)` ms/tile on the **GPU**, and — with `--cpu` — the
+3. Times `(t_K − t_1)/(K−1)` ms/tile on the **GPU**, and, with `--cpu`, the
    **same DLC on `libQnnCpu.so`** for an apples-to-apples same-runtime baseline.
 
 ## 4. Reading the result

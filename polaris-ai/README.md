@@ -1,18 +1,18 @@
-# polaris-ai — training our own deconvolution model
+# polaris-ai: training our own deconvolution model
 
 A from-scratch, quantization-first training pipeline for an astrophotography
 **deconvolution** model, designed so the **int8 / int16 / fp16** exports run with
 no compromises on the targets Polaris uses (Hexagon HTP, Rockchip NPU, Adreno
 GPU, CPU, and the browser via ORT-Web).
 
-This lives in the Polaris repo but is a **standalone Python project** — train it
+This lives in the Polaris repo but is a **standalone Python project**: train it
 on a desktop GPU (e.g. an RTX 5070), then drop the exported model into Polaris's
 existing ONNX → RKNN/QNN/ORT pipelines.
 
 ## Why this design
 
 Deconvolution needs **(sharp, blurred)** training pairs, but every real astro
-image is already blurred by seeing — there is no clean ground truth. So we use
+image is already blurred by seeing, so there is no clean ground truth. So we use
 **synthetic degradation**: take sharp targets, convolve with a *known* PSF, add
 realistic noise, and train the net to invert it. We control the PSF, so we get
 perfect pairs in unlimited quantity.
@@ -20,14 +20,14 @@ perfect pairs in unlimited quantity.
 The architecture is deliberately **NPU/quantization-friendly** (lessons from the
 GraXpert NPU work):
 
-- **No LayerNorm** (the Hexagon V68 rejects it — needs V73+). Uses BatchNorm,
+- **No LayerNorm** (the Hexagon V68 rejects it; LayerNorm needs V73+). Uses BatchNorm,
   which folds into the preceding conv at inference (zero runtime cost).
 - **No `Inverse` / `ReduceSumSquare`** or other ops that broke the QNN/RKNN
   converters on GraXpert v3 / StarNet.
 - **Nearest-upsample + conv** instead of `ConvTranspose` (no checkerboard, clean
   quantization).
 - **Single input tensor** (image + condition channel concatenated) instead of
-  GraXpert's multi-input (image + sigma + strength) — avoids the multi-input NPU
+  GraXpert's multi-input (image + sigma + strength), which avoids the multi-input NPU
   binding pain that kept GraXpert decon CLI-only.
 - Well-behaved activation ranges → int8 quantizes without artifacts.
 
@@ -108,10 +108,10 @@ Synthetic is the backbone (true sharp GT); real cutouts add realistic structure.
 
 ## The model input contract
 
-- **Input**: `[B, 2, H, W]` float32 — channel 0 = image (linear, ~[0,1]),
+- **Input**: `[B, 2, H, W]` float32; channel 0 = image (linear, ~[0,1]),
   channel 1 = a constant **sigma map** (the PSF FWHM the user wants to undo,
   normalized by `SIGMA_NORM` in `synth.py`).
-- **Output**: `[B, 1, H, W]` float32 — the deconvolved image (the net learns a
+- **Output**: `[B, 1, H, W]` float32, the deconvolved image (the net learns a
   residual added to the input image).
 
 Polaris builds channel 1 from the decon strength/sigma slider and tiles the frame
@@ -125,7 +125,7 @@ Polaris builds channel 1 from the decon strength/sigma slider and tiles the fram
 - **int8**: train it from scratch with in-house QAT (`train_task.py --qat`, STE
   fake-quant) so the 8-bit model keeps fp16-class quality, then ORT QDQ for
   ORT/CPU or the vendor toolchain's calibrated int8 on-device (RKNN/QNN). Plain
-  PTQ int8 (no QAT) can ring on residual-heavy decon — use `--qat` or int16
+  PTQ int8 (no QAT) can ring on residual-heavy decon; use `--qat` or int16
   there. (See the BGE/denoise/decon section below.)
 
 Always validate int8 vs int16 vs fp16 vs fp32 side by side: PSNR/SSIM, **stellar
@@ -137,7 +137,7 @@ FWHM** before/after, and a visual halo/ring check around bright stars.
 
 Beyond the synthetic decon pipeline above, we train **our own** background
 extraction, denoise and deconvolution models from the hand-curated linear RGB
-FITS in `data/own/raw/` — so Polaris ships models it fully owns. The originals
+FITS in `data/own/raw/`, so Polaris ships models it fully owns. The originals
 (`originals/`) plus the processed outputs (`bge/`, `decon/`, `denoised/`) are
 real ground-truth pairs; we degrade the *clean* output to synthesize many more.
 
@@ -147,7 +147,7 @@ real ground-truth pairs; we degrade the *clean* output to synthesize many more.
 |---------|--------|--------|--------|----------|
 | BGE     | NHWC `[1,256,256,3]` | 3→3 | per-channel MAD `(v−med)/mad×0.04`, clip ±1 | the **background plane** (whole frame, 256² downsample) |
 | Denoise | NHWC `[1,256,256,3]` | 3→3 | per-channel MAD, clip ±10 | the **clean** image (tiled 256², 64-px margin) |
-| Decon   | NCHW `[1,2,H,W]` | 2→1 | per-tile 1–99.9% linear + sigma channel | residual `out = img + delta` (unchanged) |
+| Decon   | NCHW `[1,2,H,W]` | 2→1 | per-tile 1 to 99.9% linear + sigma channel | residual `out = img + delta` (unchanged) |
 
 The same `ConditionedUNet` backs all three (`--out-ch`/`--in-ch`); BGE/denoise are
 exported through an NHWC permute wrapper so the existing JS/C# pipelines run them
@@ -189,13 +189,13 @@ done
 
 `fp16` is a near-lossless cast; `int16` PTQ already ≈ fp16. For **int8**, full-image
 models (BGE, denoise) tolerate PTQ well; the residual-learning **decon** is the one
-that can ring under int8 — prefer **int16 for decon** (lossless), and measure int8
+that can ring under int8, so prefer **int16 for decon** (lossless), and measure int8
 per task with `eval_models.py` before shipping it.
 
-### int8 from scratch — in-house QAT (`--qat`)
+### int8 from scratch: in-house QAT (`--qat`)
 
 We DO train int8/int16 "from scratch", via our own straight-through-estimator
-fake-quant (`quant_layers.py`) — not torch.ao FX QAT (whose graph doesn't export
+fake-quant (`quant_layers.py`), not torch.ao FX QAT (whose graph doesn't export
 to ONNX on this torch build: `fused_moving_avg_obs_fake_quant` / `quantized::conv2d`
 don't lower through the legacy or dynamo exporter).
 
@@ -203,7 +203,7 @@ How it works: `--qat` inserts per-channel symmetric weight fake-quant +
 per-tensor activation fake-quant on every conv (STE backward, so gradients pass
 through). The network learns weights that sit on the int grid. After training we
 **bake** the rounded weights into plain `Conv2d.weight`, drop the observers, and
-save a clean fp32 `best.pt` — so `export.py` is unchanged and `quantize.py int8`
+save a clean fp32 `best.pt`, so `export.py` is unchanged and `quantize.py int8`
 (ORT QDQ) reproduces those grid points near-losslessly.
 
 ```bash
@@ -217,16 +217,16 @@ python quantize.py int8 --onnx models/decon_fp32_256.onnx \
 python eval_models.py --task decon --models models --tiles-val data/own/decon_tiles_val
 ```
 
-`--qat-bits 16` does the same on the int16 grid (rarely needed — int16 PTQ is
+`--qat-bits 16` does the same on the int16 grid (rarely needed, since int16 PTQ is
 already ≈ fp16). On-device 8-bit is still produced by the **vendor toolchain**
 (RKNN `build(do_quantization=True, dataset=models/calib_*/list.txt)` or Qualcomm
-AI Hub `w8a16`) from the same fp32 — the QAT-baked weights make that lossless too.
+AI Hub `w8a16`) from the same fp32, and the QAT-baked weights make that lossless too.
 
 ---
 
 # Our own upscaler (`--task upscale`)
 
-A domain-correct super-resolution model — instead of a generic photo upscaler
+A domain-correct super-resolution model, instead of a generic photo upscaler
 (Real-ESRGAN/Upscayl), which is AGPL and hallucinates texture / mangles star PSFs
 on linear astro data. Approach: **pre-upsampling SR** (`UpscaleNet` = nearest
 upscale ×scale → ConditionedUNet residual), so it stays in the NPU-safe op set
@@ -251,7 +251,7 @@ python eval_models.py --task upscale --models models --val-pairs data/own/upscal
 ```
 
 Note: SR beyond the optical/sampling limit is interpolation, not new physical
-detail — for genuine sharpening use the **decon** model. This upscaler is for more
+detail; for genuine sharpening use the **decon** model. This upscaler is for more
 pixels (undersampled/planetary frames, export/print) without the artifacts a
 natural-image upscaler introduces.
 

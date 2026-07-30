@@ -1,4 +1,4 @@
-# Canopus Assistant — agent core (open)
+# Canopus Assistant: agent core (open)
 
 The open, AGPLv3 heart of the assistant: the provider-agnostic **agent loop**,
 the **LLM provider interface** with a keyless mock, the **knowledge base** (RAG),

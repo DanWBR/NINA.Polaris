@@ -110,7 +110,7 @@ heavy, long-lived process the OS is tempted to reap. What's in place:
 **iOS background execution:** `ios-postadd.sh` now declares the `location`
 `UIBackgroundModes` (plus the Always usage string), so iOS is *allowed* to keep the
 app running when it leaves the foreground. **This key only declares the
-capability** — to actually get background runtime iOS also needs an active
+capability**: to actually get background runtime, iOS also needs an active
 background location session at runtime (Always permission +
 `allowsBackgroundLocationUpdates` on a `CLLocationManager`), which is a further
 native step not wired yet. With just the key, keep-awake (screen on) is what holds

@@ -25,7 +25,7 @@ graxpert/models/
 ```
 
 Total: ~1.5 GB if you ship all five. You can ship a subset (e.g.
-BGE only) — the UI gates each operation by what's available in
+BGE only), since the UI gates each operation by what's available in
 the manifest.
 
 ## How to populate
@@ -40,7 +40,7 @@ Two options:
    ```
 
 2. **Download from upstream.** The models are mirrored on the
-   GraXpert release page (CC BY-NC-SA 4.0 — non-commercial use).
+   GraXpert release page (CC BY-NC-SA 4.0, non-commercial use).
    Use the GraXpert app itself to download them, then copy from
    `~/.local/share/GraXpert/models/` (Linux) or the equivalent
    Windows path into this directory.
@@ -54,7 +54,7 @@ round-trip via the Settings UI before any AI op works. With the
 bundled fallback, the operator drops the models alongside the
 binary and there's zero config.
 
-The profile setting still wins when both exist — handy if you
+The profile setting still wins when both exist, handy if you
 keep your models on an external SSD mounted somewhere else.
 
 ## Git

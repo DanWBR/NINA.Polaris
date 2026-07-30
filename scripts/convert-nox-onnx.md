@@ -1,15 +1,15 @@
 # Converting nox to ONNX for Polaris
 
 [nox](https://github.com/charvey2718/nox) is an **MIT-licensed** star-removal
-network — a StarNet-like encoder/decoder (LayerNorm, GAN + perceptual losses,
+network, a StarNet-like encoder/decoder (LayerNorm, GAN + perceptual losses,
 ~54M params) trained on a synthetic dataset. Both the code and the trained
 weights are MIT, so Polaris can bundle it **by default** with no commercial
 restriction. It's the recommended default star-removal model.
 
 It ships two trained Keras weight files:
 
-- `generator_color.h5` — native 3-channel RGB model
-- `generator_gray.h5` — single-channel model
+- `generator_color.h5`: native 3-channel RGB model
+- `generator_gray.h5`: single-channel model
 
 ## One-time install
 

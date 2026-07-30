@@ -29,8 +29,8 @@ recipe. The cloud loads `name`/`description`/`parameters` as tools; the FOSS hos
 
 ## Substitution tokens (resolved by the FOSS host executor)
 
-- `$args.X` — the tool argument `X` (from the LLM call).
-- `$ctx.X` — context the host knows locally: `lat`, `lon`, `elevation` (from Polaris
+- `$args.X`: the tool argument `X` (from the LLM call).
+- `$ctx.X`: context the host knows locally: `lat`, `lon`, `elevation` (from Polaris
   profile), `activeRigId`, and anything the host chooses to expose. Never secrets.
 - Literals pass through unchanged.
 - `null`/absent `query`/`body` are omitted.
@@ -45,7 +45,7 @@ Path templates (`/api/plan/{id}/start`) take `{id}` from `$args.id`.
 
 ## UI tools (client-side)
 
-A tool may carry a `ui` block instead of `polaris` — a client-side action that
+A tool may carry a `ui` block instead of `polaris`: a client-side action that
 steers the Polaris UI (no API call). The client emits `assistant:ui` (not
 `assistant:tool-call`); the host runs it from its fixed, safe vocabulary
 (see postmessage-protocol.md). Example:
@@ -63,7 +63,7 @@ steers the Polaris UI (no API call). The client emits `assistant:ui` (not
 ```
 
 UI tools are non-destructive (they only show panels), so `mutates:false` and no
-approval — the whole point is to guide the user by navigating.
+approval; the whole point is to guide the user by navigating.
 
 ### Local tools (cloud-side)
 

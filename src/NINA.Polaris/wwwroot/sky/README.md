@@ -59,7 +59,7 @@ parent's listener can ignore stray messages from other origins.
 ## Rebuilding the engine
 
 Roll the upstream submodule pin, then run the build script (Docker
-+ Emscripten — no host toolchain needed):
++ Emscripten, no host toolchain needed):
 
 ```
 git submodule update --remote external/stellarium-web-engine

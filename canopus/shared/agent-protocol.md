@@ -1,4 +1,4 @@
-# Agent protocol — client (iframe) ⇄ cloud
+# Agent protocol: client (iframe) ⇄ cloud
 
 This is between the closed client and the closed cloud (the FOSS host is not involved).
 Two surfaces: a small REST API for accounts/billing, and a WebSocket for the agent
@@ -9,12 +9,12 @@ entitlement (active subscription) is checked on the WS connect and per mutating 
 
 | method + path | body | returns |
 |---|---|---|
-| `POST /account/start` | `{ email }` | `{ pending: true }` — sends a magic link. |
-| `POST /account/verify` | `{ token }` | `{ session, email }` — exchanges the magic-link token for a session. |
-| `GET /account/session` | — (bearer) | `{ email, subscribed, plan, currentPeriodEnd }` |
-| `POST /billing/checkout` | — (bearer) | `{ url }` — Stripe Checkout session URL. |
-| `POST /billing/portal` | — (bearer) | `{ url }` — Stripe customer portal. |
-| `POST /stripe/webhook` | Stripe event | 200 — internal; updates entitlement. |
+| `POST /account/start` | `{ email }` | `{ pending: true }`. Sends a magic link. |
+| `POST /account/verify` | `{ token }` | `{ session, email }`. Exchanges the magic-link token for a session. |
+| `GET /account/session` | none (bearer) | `{ email, subscribed, plan, currentPeriodEnd }` |
+| `POST /billing/checkout` | none (bearer) | `{ url }`. Stripe Checkout session URL. |
+| `POST /billing/portal` | none (bearer) | `{ url }`. Stripe customer portal. |
+| `POST /stripe/webhook` | Stripe event | 200. Internal; updates entitlement. |
 
 Single flat plan (US$4.99/mo). No tiers. `subscribed=false` ⇒ the WS refuses agent turns
 (read-only greeting only) and the FOSS FAB stays hidden.
@@ -40,7 +40,7 @@ Messages are `{ v: 1, type, ...payload }`.
 | type | payload | meaning |
 |---|---|---|
 | `assistant` | `{ text, streaming?, done? }` | Assistant chat text (may stream in deltas). |
-| `notice` | `{ key, text, severity? }` | A proactive, rule-based session alert (guiding lost, RMS spike, meridian soon, focus drift, mount/camera dropout). Pushed unprompted by the real-time watcher — no LLM call — when a forwarded `status` snapshot crosses a threshold (edge-triggered, per-`key` cooldown). `severity` is `warn` (default) or `info`. The client renders it as a distinct heads-up bubble. |
+| `notice` | `{ key, text, severity? }` | A proactive, rule-based session alert (guiding lost, RMS spike, meridian soon, focus drift, mount/camera dropout). Pushed unprompted by the real-time watcher (no LLM call) when a forwarded `status` snapshot crosses a threshold (edge-triggered, per-`key` cooldown). `severity` is `warn` (default) or `info`. The client renders it as a distinct heads-up bubble. |
 | `plan` | `{ planId, title, steps: [{ n, summary, tool?, mutates }], rationale? }` | A proposed plan to approve/review/reject. |
 | `question` | `{ questionId, prompt, options: [{ id, label, description? }], multi }` | A single/multiple-choice question. |
 | `tool-call` | `{ id, tool, method, path, query?, body? }` | An intent to call a Polaris endpoint. The client relays it to the parent and returns a `tool-result`. |

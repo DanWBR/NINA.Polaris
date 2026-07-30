@@ -1,16 +1,16 @@
-# Canopus Assistant — Shared Contracts
+# Canopus Assistant: Shared Contracts
 
 These are the interface contracts that both sides build against:
 
-- **FOSS host** (`nina-polaris`, AGPL) — a generic, off-by-default "assistant module
+- **FOSS host** (`nina-polaris`, AGPL), a generic, off-by-default "assistant module
   host": a badge, an intro/subscribe modal, a floating button, an iframe host, and a
   postMessage bridge. It has **no product/commercial logic**; everything specific comes
   from the cloud **manifest**.
-- **Client** (`canopus/client`, AGPL) — the chat UI served from the cloud and
+- **Client** (`canopus/client`, AGPL): the chat UI served from the cloud and
   embedded as a cross-origin iframe.
-- **Agent core** (`canopus/server`, AGPL) — the provider-agnostic agent loop, the LLM
+- **Agent core** (`canopus/server`, AGPL): the provider-agnostic agent loop, the LLM
   provider interface + mock, the knowledge base, and the status monitor.
-- **Hosted backend** (private) — the concrete Azure OpenAI provider (endpoint + key), the
+- **Hosted backend** (private): the concrete Azure OpenAI provider (endpoint + key), the
   FastAPI app, magic-link identity, Stripe billing + entitlements, and the Azure infra.
   This is the only closed part; it plugs into the open agent core via
   `CANOPUS_PROVIDER_FACTORY`.

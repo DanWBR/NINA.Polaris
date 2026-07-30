@@ -2,11 +2,11 @@
 
 [starrem2k13](https://github.com/code2k13/starrem2k13) is an **MIT-licensed**
 star-removal model (U2NETP architecture). Because both the code and the
-trained weights are MIT, Polaris can bundle the converted model **by default**
-— unlike StarNet, whose weights are NonCommercial.
+trained weights are MIT, Polaris can bundle the converted model **by default**,
+unlike StarNet, whose weights are NonCommercial.
 
 It is offered as the **default, bundled** star-removal model. StarNet++ remains
-an opt-in alternative (higher quality, but NonCommercial weights — see
+an opt-in alternative (higher quality, but NonCommercial weights; see
 [`convert-starnet-onnx.md`](convert-starnet-onnx.md)). When both are installed
 the **Remove stars** dialog shows a **Model** dropdown.
 
@@ -17,7 +17,7 @@ prebuilt `weights/model.onnx` (~2.6 MB) removes stars **poorly** (rings around
 every star + washed-out nebula). **Do not use it.**
 
 Polaris uses the **larger pix2pix-style U-Net from the pinned commit
-`0398ce05`** (~31M params, ~124 MB ONNX) — the version that matches the
+`0398ce05`** (~31M params, ~124 MB ONNX), the version that matches the
 published trained weights (a 124 MB TensorFlow checkpoint). The script below
 builds *that* model.
 
@@ -50,8 +50,8 @@ These are baked into `StarRemovalPipeline` (`onnx-pipelines.js`, the
 | Property | Value |
 |---|---|
 | Architecture | pix2pix-style U-Net (~31M params), commit `0398ce05` |
-| Input | `args_0`, `float32 [1, 512, 512]` — **single channel, 3D (no channel axis)** |
-| Output | `conv2d_transpose_7`, `float32 [1, 512, 512, 1]` — **relu**, the starless image directly (not a mask) |
+| Input | `args_0`, `float32 [1, 512, 512]`: **single channel, 3D (no channel axis)** |
+| Output | `conv2d_transpose_7`, `float32 [1, 512, 512, 1]`: **relu**, the starless image directly (not a mask) |
 | RGB | run **per channel** (3 inferences per tile) |
 | Tile | 512, processed with 32-px overlap (stride 448) |
 | Normalization | net trained on 8-bit `/512`; Polaris feeds `stretched·(255/512)` and reads `output·(512/255)` |
@@ -70,4 +70,4 @@ optional mask-guided **halo reduction** post-process.
 starrem2k13 is **MIT** (code and weights), Copyright (c) code2k13
 (Ashish Patel). The full notice ships beside the model as
 `starrem2k13-ai-models/1.0.0/LICENSE.txt` and is listed in the in-app
-third-party licenses. MIT permits commercial use — no NonCommercial gate.
+third-party licenses. MIT permits commercial use, with no NonCommercial gate.
