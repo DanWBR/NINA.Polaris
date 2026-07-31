@@ -18098,13 +18098,15 @@ function ninaApp() {
 
             const s = this.autoFocus?.star;
             if (!s || !(s.w > 0) || !(s.h > 0) || !(base.width > 1)) return;
-            // The canvas backing store is the frame scaled to fit the panel, so
-            // frame pixels map by the ratio of the two. Bail rather than guess
-            // if the numbers are inconsistent (a stale star from a previous run
-            // with a different ROI would otherwise be drawn on the wrong spot).
-            const sx = base.width / s.w, sy = base.height / s.h;
-            const x = s.x * sx, y = s.y * sy;
+            // x and y arrive as FRACTIONS of the frame, so the canvas is the
+            // only size that enters here. That is deliberate: the frame is
+            // rescaled twice on its way to this canvas (the relay's JPEG, then
+            // the preview-quality cap), and dividing by a frame size the client
+            // merely assumes is what put the marker beside the star instead of
+            // on it.
+            const x = s.x * base.width, y = s.y * base.height;
             if (!isFinite(x) || !isFinite(y) || x < 0 || y < 0 || x > base.width || y > base.height) return;
+            const sx = base.width / s.w, sy = base.height / s.h;
 
             // Radius follows the measured HFR so the ring grows with the
             // defocus instead of sitting at a fixed size that says nothing.

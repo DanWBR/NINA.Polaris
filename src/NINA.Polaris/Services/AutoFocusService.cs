@@ -585,8 +585,17 @@ public class AutoFocusService {
                 // the FOCUS panel can mark it and magnify it while the sweep
                 // runs. Done per frame, not per point, because the operator is
                 // watching the frames go by.
+                // Published as a FRACTION of the frame, not in pixels. The
+                // browser is not looking at these pixels: the frame reaches it
+                // as a JPEG the relay may have scaled down, and the canvas
+                // backing store scales it again by the preview-quality
+                // setting. Every one of those steps is uniform, so a fraction
+                // survives all of them, while a pixel coordinate has to be
+                // divided by a frame size the client can only assume matches.
                 Progress = Progress with {
-                    StarX = m.StarX, StarY = m.StarY, StarHfr = m.Measure,
+                    StarX = m.FrameWidth > 0 ? m.StarX / m.FrameWidth : 0,
+                    StarY = m.FrameHeight > 0 ? m.StarY / m.FrameHeight : 0,
+                    StarHfr = m.Measure,
                     FrameWidth = m.FrameWidth, FrameHeight = m.FrameHeight
                 };
             }
