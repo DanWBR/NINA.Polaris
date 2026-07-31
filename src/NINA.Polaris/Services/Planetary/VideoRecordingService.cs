@@ -119,6 +119,20 @@ public class VideoRecordingService : IDisposable {
             var target = SanitizeFolder(string.IsNullOrWhiteSpace(cfg.TargetName) ? "planet" : cfg.TargetName);
             var baseDir = Path.Combine(_profiles.Active.ImageOutputDir, "planetary", target);
             var path = Path.Combine(baseDir, $"{DateTime.UtcNow:yyyy-MM-ddTHH-mm-ss}.ser");
+
+            // FIELD8-4: refuse before the camera starts feeding, not 40 seconds
+            // in. Planetary video is the fastest writer in the app and the
+            // captures usually share the root filesystem, so "start anyway and
+            // see" risks the whole host, not just the clip.
+            long freeAtStart = FreeBytesFor(path);
+            if (freeAtStart >= 0 && freeAtStart < MinFreeBytes) {
+                // Nothing has been mutated yet (IsRecording is still false, no
+                // writer thread, no subscription), so throwing here leaves the
+                // service exactly as it was.
+                throw new InvalidOperationException(
+                    $"Only {freeAtStart / (1024.0 * 1024 * 1024):F1} GB free on the capture disk. "
+                    + "Planetary video writes tens of megabytes per second; free up space first.");
+            }
             var instrument = cam.DeviceName;
             var telescope = _equip.Telescope?.DeviceName ?? "";
             _pendingPath = path;
@@ -204,6 +218,7 @@ public class VideoRecordingService : IDisposable {
                             BlockingCollection<QueueItem> queue) {
         SerFileWriter? writer = null;
         byte[]? scratch = null;
+        int sinceSpaceCheck = 0;
         try {
             foreach (var item in queue.GetConsumingEnumerable()) {
                 // Item has left the queue → release its bytes from the budget.
@@ -236,6 +251,33 @@ public class VideoRecordingService : IDisposable {
                     }
                     Buffer.BlockCopy(item.Pixels, 0, scratch, 0, item.ByteLen);
                     writer.WriteFrame(scratch, item.ByteLen, item.Utc);
+
+                    // FIELD8-4: stop while there is still room. Planetary video
+                    // writes FAST (640x640x16 at 130 fps is ~106 MB/s), so a
+                    // disk with a few GB free fills in well under a minute and
+                    // nothing here was watching. On 2026-07-31 a 4.10 GB clip
+                    // went onto a root filesystem with 4.2 GB free, the board
+                    // came back rebooted, and the clip was unusable.
+                    //
+                    // Stopping ourselves keeps the file INTACT (frame count
+                    // patched, timestamp trailer written) instead of leaving
+                    // whatever the OS happened to flush before it ran out, and
+                    // it keeps the ROOT filesystem from filling, which takes
+                    // the whole appliance down with it.
+                    if (++sinceSpaceCheck >= SpaceCheckFrames) {
+                        sinceSpaceCheck = 0;
+                        long free = FreeBytesFor(path);
+                        if (free >= 0 && free < MinFreeBytes) {
+                            LastError = $"Recording stopped: only "
+                                      + $"{free / (1024.0 * 1024 * 1024):F1} GB left on the capture disk.";
+                            _logger.LogWarning(
+                                "Recording stopped early: {Free:F2} GB free on the capture disk, "
+                                + "reserve is {Reserve:F2} GB", free / (1024.0 * 1024 * 1024),
+                                MinFreeBytes / (1024.0 * 1024 * 1024));
+                            _ = Task.Run(StopAsync);
+                            return;
+                        }
+                    }
                 } catch (Exception ex) {
                     _logger.LogDebug(ex, "Frame write failed, dropping");
                     LastError = ex.Message;
@@ -246,6 +288,33 @@ public class VideoRecordingService : IDisposable {
             _logger.LogWarning(ex, "Recording writer loop terminated unexpectedly");
             LastError = ex.Message;
         }
+    }
+
+    /// <summary>FIELD8-4: how much of the capture disk stays untouched. On an
+    /// appliance the captures share the ROOT filesystem, and a root at 100% is
+    /// not "no more recordings", it is a host that stops working: logs, the
+    /// profile, the SQLite database and systemd itself all need to write.</summary>
+    private const long MinFreeBytes = 2L * 1024 * 1024 * 1024;
+
+    /// <summary>Checked every N frames rather than per frame. At 130 fps this
+    /// is roughly twice a second, and at ~106 MB/s the disk cannot move more
+    /// than ~50 MB between checks: far inside the 2 GB reserve.</summary>
+    private const int SpaceCheckFrames = 64;
+
+    /// <summary>Free bytes on the volume holding <paramref name="path"/>, or
+    /// -1 when it cannot be determined (never block a recording over a
+    /// question we failed to ask).</summary>
+    internal static long FreeBytesFor(string path) {
+        try {
+            // The target folder is created lazily by the writer, so walk up to
+            // the nearest ancestor that exists: on Unix every path resolves to
+            // SOME mounted filesystem, and that is the one we care about.
+            var dir = Path.GetDirectoryName(Path.GetFullPath(path));
+            while (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                dir = Path.GetDirectoryName(dir);
+            if (string.IsNullOrEmpty(dir)) return -1;
+            return new DriveInfo(dir).AvailableFreeSpace;
+        } catch { return -1; }
     }
 
     private static SerColorMode MapBayerToSer(BayerPatternEnum p) => p switch {
