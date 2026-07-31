@@ -549,6 +549,14 @@ const statusClass = (s: string) => {
   }
   .img-boot-ico { font-size: 22px; line-height: 1.2; }
   .img-boot p { font-size: 14.5px; color: var(--text); line-height: 1.6; }
+  /* The longer tips are written as one short answer per line, each opening
+     with a bolded question. Give the line breaks real air, or the whole box
+     reads as one wall of text again, which is what made it hard to follow. */
+  .img-boot p br {
+    content: '';
+    display: block;
+    margin-top: 10px;
+  }
 
   /* Update-an-image block */
   .img-update {
