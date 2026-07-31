@@ -13487,6 +13487,91 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 :disabled="psSaving" x-text="psSaving ? 'Saving…' : 'Save'"></button>
                         <button class="btn btn-sm" @click="loadPlateSolveConfig()" :disabled="psLoading">↻ Refresh</button>
                     </div>
+
+                    <!-- Star databases / index files. A solver with no catalogue
+                         for the rig's field is the "it solved nothing all night"
+                         case; the ranges come from the publishers' own tables
+                         (wwwroot/data/platesolve-databases.json). -->
+                    <div style="margin-top:18px; border-top:1px solid var(--border); padding-top:12px"
+                         x-show="solverDbs.loaded" x-cloak>
+                        <h4 style="margin:0 0 6px; font-size:13px">Star databases</h4>
+
+                        <p class="text-muted" style="font-size:12px; max-width:600px"
+                           x-show="solverDbs.knownOptics">
+                            This rig images
+                            <strong x-text="solverDbs.fovDeg.toFixed(2) + '°'"></strong>
+                            across, at
+                            <strong x-text="solverDbs.pixelScale.toFixed(2)"></strong> arcsec per pixel.
+                        </p>
+                        <p class="text-muted" style="font-size:12px; max-width:600px"
+                           x-show="!solverDbs.knownOptics">
+                            Set the camera pixel size and the focal length on the rig to get a
+                            recommendation for your field of view.
+                        </p>
+
+                        <div style="margin-top:10px">
+                            <span style="font-size:12px; font-weight:600">ASTAP</span>
+                            <template x-for="db in solverDbs.astap.catalogue" :key="db.id">
+                                <div style="display:flex; align-items:center; gap:8px; padding:4px 0">
+                                    <span style="min-width:52px; font-family:var(--font-mono)" x-text="db.id"></span>
+                                    <span class="text-muted" style="font-size:11px; flex:1"
+                                          x-text="db.minFovDeg + '° to ' + db.maxFovDeg + '°, ' + Math.round(db.approxBytes/1e6) + ' MB'"></span>
+                                    <span class="status-indicator-sm ok"
+                                          x-show="solverDbs.astap.installed.includes(db.id)">installed</span>
+                                    <span class="status-indicator-sm af-phase"
+                                          x-show="solverDbs.astap.recommended === db.id">recommended</span>
+                                    <button class="btn btn-sm"
+                                            :disabled="solverDbBusy() || solverDbs.astap.installed.includes(db.id)"
+                                            @click="installSolverDb('astap', db.id)">Install</button>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div style="margin-top:10px">
+                            <span style="font-size:12px; font-weight:600">astrometry.net</span>
+                            <div style="display:flex; align-items:center; gap:8px; padding:4px 0">
+                                <span class="text-muted" style="font-size:11px; flex:1">
+                                    Index bands for this field:
+                                    <strong x-text="(solverDbs.astrometry.recommended || []).join(', ') || 'unknown'"></strong>
+                                    <span x-show="solverDbs.astrometry.installed.length">
+                                        &middot; installed: <span x-text="solverDbs.astrometry.installed.join(', ')"></span>
+                                    </span>
+                                </span>
+                                <button class="btn btn-sm"
+                                        :disabled="solverDbBusy() || !(solverDbs.astrometry.recommended || []).length"
+                                        @click="installSolverDb('astrometry')">Install recommended</button>
+                            </div>
+                        </div>
+
+                        <div style="margin-top:10px"
+                             x-show="solverDbBusy() || solverDbs.job.state === 'failed'" x-cloak>
+                            <div style="display:flex; align-items:center; gap:8px">
+                                <span style="font-size:12px"
+                                      x-text="(solverDbs.job.state === 'installing' ? 'Installing ' : 'Downloading ') + solverDbs.job.id"></span>
+                                <span class="text-muted" style="font-size:11px; flex:1"
+                                      x-show="solverDbs.job.totalBytes > 0"
+                                      x-text="Math.round(solverDbs.job.receivedBytes/1e6) + ' of ' + Math.round(solverDbs.job.totalBytes/1e6) + ' MB'"></span>
+                                <span class="text-muted" style="font-size:11px; flex:1"
+                                      x-show="!(solverDbs.job.totalBytes > 0) && solverDbs.job.receivedBytes > 0"
+                                      x-text="Math.round(solverDbs.job.receivedBytes/1e6) + ' MB'"></span>
+                                <button class="btn btn-sm btn-danger"
+                                        x-show="solverDbs.job.state === 'downloading'"
+                                        @click="cancelSolverDb()">Cancel</button>
+                            </div>
+                            <div class="af-progress-bar" style="margin-top:6px"
+                                 x-show="solverDbs.job.totalBytes > 0">
+                                <div class="af-progress-fill" :style="'width: ' + solverDbPercent() + '%'"></div>
+                            </div>
+                            <p class="text-muted" style="font-size:11px; margin:6px 0 0"
+                               x-show="solverDbs.job.state === 'installing'">
+                                Unpacking on the host. This part cannot be cancelled: a half-written
+                                database would load and then fail to solve.
+                            </p>
+                            <p class="text-err" style="font-size:11px; margin:6px 0 0"
+                               x-show="solverDbs.job.state === 'failed'" x-text="solverDbs.job.error"></p>
+                        </div>
+                    </div>
+
                 </div>
 
                 <!-- Colour-calibration reference data (PCC + SPCC). Status of the

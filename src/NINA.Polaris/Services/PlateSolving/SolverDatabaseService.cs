@@ -41,6 +41,7 @@ public sealed class SolverDatabaseService {
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<SolverDatabaseService> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private CancellationTokenSource? _cts;
 
     public SolverDatabaseService(IHttpClientFactory http, IWebHostEnvironment env,
                                  ILogger<SolverDatabaseService> logger) {
@@ -109,19 +110,44 @@ public sealed class SolverDatabaseService {
     /// false when another install is already running.</summary>
     public bool StartInstall(string id, string target, IReadOnlyList<string> urls, long approxBytes) {
         if (!_gate.Wait(0)) return false;
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
         State = new JobState(id, target, 0, approxBytes, "downloading", null);
         _ = Task.Run(async () => {
             try {
-                await RunInstallAsync(id, target, urls, ct: CancellationToken.None);
+                await RunInstallAsync(id, target, urls, token);
                 State = State with { State = "done" };
+            } catch (OperationCanceledException) {
+                // The operator pressed cancel: leave nothing half-written for
+                // the privileged unit to find on the next run.
+                TryClearStage();
+                State = State with { State = "cancelled", Error = null };
+                _logger.LogInformation("Solver database install cancelled: {Id}", id);
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "Solver database install failed: {Id}", id);
                 State = State with { State = "failed", Error = ex.Message };
             } finally {
+                _cts?.Dispose();
+                _cts = null;
                 _gate.Release();
             }
         });
         return true;
+    }
+
+    /// <summary>Stop the download in flight. Only the download is
+    /// interruptible: once the privileged unit has started unpacking, stopping
+    /// it halfway would leave a partial database that ASTAP would happily load
+    /// and then fail to solve with, which is worse than finishing.</summary>
+    public bool Cancel() {
+        var cts = _cts;
+        if (cts == null || State.State != "downloading") return false;
+        try { cts.Cancel(); } catch { }
+        return true;
+    }
+
+    private static void TryClearStage() {
+        try { if (Directory.Exists(StageDir)) Directory.Delete(StageDir, true); } catch { }
     }
 
     private async Task RunInstallAsync(string id, string target, IReadOnlyList<string> urls,
@@ -130,7 +156,7 @@ public sealed class SolverDatabaseService {
 
         // A previous failed attempt may have left a partial payload; the
         // installer refuses to guess which files belong together, so start clean.
-        try { if (Directory.Exists(StageDir)) Directory.Delete(StageDir, true); } catch { }
+        TryClearStage();
         Directory.CreateDirectory(StageDir);
 
         var client = _http.CreateClient();

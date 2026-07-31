@@ -177,6 +177,12 @@ public static class PlateSolveEndpoints {
         // Progress of the in-flight install, for the card's bar.
         group.MapGet("/databases/status", (SolverDatabaseService dbs) => Results.Ok(dbs.State));
 
+        // Stop a download in flight. Returns cancelled=false once the payload
+        // has been handed to the privileged unit: interrupting an unpack would
+        // leave a half-written database that the solver would load and fail on.
+        group.MapPost("/databases/cancel", (SolverDatabaseService dbs) =>
+            Results.Ok(new { cancelled = dbs.Cancel() }));
+
         // Abort the in-flight solve. The HTTP request that started the solve
         // stays open for its whole duration, so its abort token alone gave the
         // operator no way out: a doomed blind solve-field run had to be waited

@@ -27797,6 +27797,107 @@ function ninaApp() {
         get psSelectedSolver() {
             return this.psSolvers.find(s => s.id === this.psConfig.primary) || null;
         },
+        // ---- solver star databases / index files ----
+        // Which catalogue the rig's field of view needs, what is on the host,
+        // and the download in flight. Polled only while a job runs: the rest is
+        // static until the operator installs something.
+        solverDbs: {
+            loaded: false, fovDeg: 0, pixelScale: 0, knownOptics: false,
+            astap: { catalogue: [], installed: [], recommended: null },
+            astrometry: { scales: [], series: [], installed: [], recommended: [] },
+            job: { state: 'idle', id: '', target: '', receivedBytes: 0, totalBytes: 0, error: null }
+        },
+
+        async loadSolverDatabases() {
+            try {
+                const d = await this.apiGet('/api/platesolve/databases');
+                if (!d) return;
+                this.solverDbs = {
+                    loaded: true,
+                    fovDeg: d.fovDeg || 0,
+                    pixelScale: d.pixelScaleArcsecPerPixel || 0,
+                    knownOptics: !!d.knownOptics,
+                    astap: d.astap || { catalogue: [], installed: [], recommended: null },
+                    astrometry: d.astrometry || { scales: [], series: [], installed: [], recommended: [] },
+                    job: d.job || this.solverDbs.job
+                };
+                if (this.solverDbs.job.state === 'downloading'
+                    || this.solverDbs.job.state === 'installing') this._pollSolverDbJob();
+            } catch (e) {
+                // A missing catalogue is not worth a toast on the settings tab;
+                // the section simply stays hidden.
+                this.solverDbs.loaded = false;
+            }
+        },
+
+        async installSolverDb(target, id) {
+            const body = target === 'astap'
+                ? { target, id }
+                : { target, scales: this.solverDbs.astrometry.recommended || [] };
+            if (target === 'astrometry' && body.scales.length === 0) {
+                this.toast('No index bands recommended: set the rig optics first', 'warn');
+                return;
+            }
+            try {
+                const r = await this.apiPost('/api/platesolve/databases/install', body);
+                const j = await r.json();
+                if (j.started) {
+                    this.solverDbs.job = { state: 'downloading', id: j.id || id || '', target,
+                                           receivedBytes: 0, totalBytes: 0, error: null };
+                    this._pollSolverDbJob();
+                }
+            } catch (e) {
+                this.toast('Install failed to start: ' + (e.message || e), 'error');
+            }
+        },
+
+        async cancelSolverDb() {
+            try {
+                const r = await this.apiPost('/api/platesolve/databases/cancel', {});
+                const j = await r.json();
+                if (!j.cancelled) {
+                    // Unpacking is deliberately past the point of no return.
+                    this.toast('Already installing; cancel is only possible while downloading', 'warn');
+                }
+            } catch (e) { this.toast('Cancel failed: ' + (e.message || e), 'error'); }
+        },
+
+        // Poll while a job runs. Stops on any terminal state, and refreshes the
+        // installed lists once, so the row flips to "installed" by itself.
+        _pollSolverDbJob() {
+            if (this._solverDbTimer) return;
+            this._solverDbTimer = setInterval(async () => {
+                try {
+                    const s = await this.apiGet('/api/platesolve/databases/status');
+                    if (!s) return;
+                    this.solverDbs.job = {
+                        state: s.state, id: s.id, target: s.target,
+                        receivedBytes: s.receivedBytes || 0,
+                        totalBytes: s.totalBytes || 0,
+                        error: s.error || null
+                    };
+                    if (['done', 'failed', 'cancelled', 'idle'].includes(s.state)) {
+                        clearInterval(this._solverDbTimer);
+                        this._solverDbTimer = null;
+                        if (s.state === 'done') this.toast('Database installed', 'ok');
+                        if (s.state === 'failed') this.toast('Install failed: ' + (s.error || ''), 'error');
+                        this.loadSolverDatabases();
+                    }
+                } catch (_) { /* keep polling; a dropped tick is not a failure */ }
+            }, 1000);
+        },
+
+        solverDbPercent() {
+            const j = this.solverDbs.job;
+            if (!j || !(j.totalBytes > 0)) return 0;
+            return Math.min(100, Math.round(100 * j.receivedBytes / j.totalBytes));
+        },
+
+        solverDbBusy() {
+            const s = this.solverDbs.job?.state;
+            return s === 'downloading' || s === 'installing';
+        },
+
         async loadPlateSolveConfig() {
             this.psLoading = true;
             try {
@@ -27822,6 +27923,7 @@ function ninaApp() {
                         wslDistro: cfg.wslDistro || ''
                     };
                 }
+                this.loadSolverDatabases();
             } catch (e) {
                 this.toast('Failed to load plate solve settings: ' + (e.message || e), 'error');
             } finally {
