@@ -1,0 +1,104 @@
+{
+  "_doc": "Star databases / index files the plate solvers need, with the field-of-view range each one is meant for. Ranges are the publishers' own: ASTAP's are from hnsky.org/astap.htm and the project's SourceForge notes; the astrometry.net table is the index scale list from astrometry.net/doc/readme.html, where the rule is that a useful index has skymarks 10% to 100% of the image field. Sizes are approximate download sizes, for the disk-space warning. Add entries by PR; keep astapDatabases sorted from widest to narrowest field.",
+  "astapDatabases": [
+    {
+      "id": "W08",
+      "name": "W08 (wide field)",
+      "minFovDeg": 20.0,
+      "maxFovDeg": 180.0,
+      "approxBytes": 15000000,
+      "url": "https://sourceforge.net/projects/astap-program/files/star_databases/w08_star_database.zip/download",
+      "notes": "All-sky / very wide lenses. ASTAP picks it automatically above 20 degrees."
+    },
+    {
+      "id": "G05",
+      "name": "G05 (wide field)",
+      "minFovDeg": 3.0,
+      "maxFovDeg": 20.0,
+      "approxBytes": 100000000,
+      "url": "https://sourceforge.net/projects/astap-program/files/star_databases/g05_star_database.zip/download",
+      "notes": "Camera lenses and very short refractors."
+    },
+    {
+      "id": "D05",
+      "name": "D05 (500 stars/deg2)",
+      "minFovDeg": 0.6,
+      "maxFovDeg": 6.0,
+      "approxBytes": 130000000,
+      "url": "https://sourceforge.net/projects/astap-program/files/star_databases/d05_star_database.zip/download",
+      "notes": "Smallest of the D series. Enough for short focal lengths, and the cheapest on disk."
+    },
+    {
+      "id": "D20",
+      "name": "D20 (2000 stars/deg2)",
+      "minFovDeg": 0.3,
+      "maxFovDeg": 6.0,
+      "approxBytes": 400000000,
+      "url": "https://sourceforge.net/projects/astap-program/files/star_databases/d20_star_database.zip/download",
+      "notes": "Good default for typical astrograph fields."
+    },
+    {
+      "id": "D50",
+      "name": "D50 (5000 stars/deg2)",
+      "minFovDeg": 0.2,
+      "maxFovDeg": 6.0,
+      "approxBytes": 800000000,
+      "url": "https://sourceforge.net/projects/astap-program/files/star_databases/d50_star_database.zip/download",
+      "notes": "Denser, for longer focal lengths."
+    },
+    {
+      "id": "D80",
+      "name": "D80 (8000 stars/deg2)",
+      "minFovDeg": 0.15,
+      "maxFovDeg": 6.0,
+      "approxBytes": 1250000000,
+      "url": "https://sourceforge.net/projects/astap-program/files/star_databases/d80_star_database.zip/download",
+      "notes": "Deepest of the D series, for the narrowest fields. 1.25 GB."
+    }
+  ],
+  "_astrometryDoc": "index-41xx (2MASS) and index-42xx (Tycho-2) share this scale numbering: the last two digits pick the skymark size band. index-52xx (Gaia DR2) covers the same small bands split into healpix tiles, for narrow fields. Download the bands whose range falls between 10% and 100% of the field.",
+  "astrometryScales": [
+    { "scale": 0,  "minArcmin": 2.0,    "maxArcmin": 2.8 },
+    { "scale": 1,  "minArcmin": 2.8,    "maxArcmin": 4.0 },
+    { "scale": 2,  "minArcmin": 4.0,    "maxArcmin": 5.6 },
+    { "scale": 3,  "minArcmin": 5.6,    "maxArcmin": 8.0 },
+    { "scale": 4,  "minArcmin": 8.0,    "maxArcmin": 11.0 },
+    { "scale": 5,  "minArcmin": 11.0,   "maxArcmin": 16.0 },
+    { "scale": 6,  "minArcmin": 16.0,   "maxArcmin": 22.0 },
+    { "scale": 7,  "minArcmin": 22.0,   "maxArcmin": 30.0 },
+    { "scale": 8,  "minArcmin": 30.0,   "maxArcmin": 42.0 },
+    { "scale": 9,  "minArcmin": 42.0,   "maxArcmin": 60.0 },
+    { "scale": 10, "minArcmin": 60.0,   "maxArcmin": 85.0 },
+    { "scale": 11, "minArcmin": 85.0,   "maxArcmin": 120.0 },
+    { "scale": 12, "minArcmin": 120.0,  "maxArcmin": 170.0 },
+    { "scale": 13, "minArcmin": 170.0,  "maxArcmin": 240.0 },
+    { "scale": 14, "minArcmin": 240.0,  "maxArcmin": 340.0 },
+    { "scale": 15, "minArcmin": 340.0,  "maxArcmin": 480.0 },
+    { "scale": 16, "minArcmin": 480.0,  "maxArcmin": 680.0 },
+    { "scale": 17, "minArcmin": 680.0,  "maxArcmin": 1000.0 },
+    { "scale": 18, "minArcmin": 1000.0, "maxArcmin": 1400.0 },
+    { "scale": 19, "minArcmin": 1400.0, "maxArcmin": 2000.0 }
+  ],
+  "astrometrySeries": [
+    {
+      "id": "5200",
+      "name": "Gaia DR2 (5200 series)",
+      "minScale": 0,
+      "maxScale": 7,
+      "baseUrl": "http://data.astrometry.net/5200/",
+      "fileFormat": "index-52{scale:00}-{healpix:00}.fits",
+      "healpixTiles": 12,
+      "notes": "Narrow fields. Each band is split into 12 healpix tiles; only the tiles covering your sky are strictly needed."
+    },
+    {
+      "id": "4200",
+      "name": "Tycho-2 (4200 series)",
+      "minScale": 7,
+      "maxScale": 19,
+      "baseUrl": "http://data.astrometry.net/4200/",
+      "fileFormat": "index-42{scale:00}.fits",
+      "healpixTiles": 0,
+      "notes": "Wide fields; one file per band."
+    }
+  ]
+}
