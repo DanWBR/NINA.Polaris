@@ -1079,6 +1079,48 @@ function ninaApp() {
         // there is nothing to take back.
         connectionLost: false,
         _connLostTimer: null,
+
+        // NETUX-1: health of THIS browser's leg of the link.
+        //
+        // The WiFi bars in the activity bar are the host's radio, read by
+        // nmcli on the host and delivered inside the status frame. That is
+        // the wrong leg (the browser is usually the far end) and it arrives
+        // over the very socket that dies, so it freezes at its last good
+        // value exactly when it would matter. Field report: with the host
+        // showing 65-70% the session degraded, and because nothing said so,
+        // every timed-out command read as a camera or mount fault.
+        //
+        // Two independent measurements, because they fail differently:
+        //   ageMs  - the status stream is a 1 Hz heartbeat, so silence is
+        //            measurable without asking anything of the host.
+        //   rttMs  - an application-level ping/pong (the protocol-level one
+        //            is invisible to page JS), which sees a link that is
+        //            still delivering but slow, before frames start missing.
+        link: {
+            state: 'ok',          // 'ok' | 'slow' | 'offline'
+            wsUp: false,
+            lastFrameAt: 0,
+            ageMs: 0,
+            rttMs: null,
+            rttMedianMs: null,
+            lossPct: 0,
+            since: 0,             // when the current state began
+            // Raising the banner and dimming the page are loud, so they wait
+            // for the condition to still be there a few seconds later. The
+            // chip does not wait: it is the instrument, and an instrument
+            // that lags is useless for deciding whether to touch anything.
+            alarm: false,
+            incident: null        // { startedAt, worstRttMs, worstAgeMs, failed }
+        },
+        _linkTimer: null,
+        _linkPingTimer: null,
+        _linkPingSeq: 0,
+        _linkPending: {},         // ping id -> sent-at
+        _linkRtts: [],            // rolling window, newest last
+        _linkPingStats: [],       // { at, answered } for the loss rate
+        _linkOkSince: 0,
+        _lastIncidentSummary: 0,
+
         devices: [],
         selectedCamera: null,
         selectedTelescope: null,
@@ -2616,7 +2658,7 @@ function ninaApp() {
                     masterBiasPath: bPath
                 });
             } catch (e) {
-                this.toast('Calibrate submit failed: ' + e.message, 'error');
+                this.toastFail('Calibrate submit failed', e);
                 return;
             }
             const body = await resp.json();
@@ -2685,7 +2727,7 @@ function ninaApp() {
                     drizzlePixfrac: drizzleScale > 1 ? 0.9 : 1.0
                 });
             } catch (e) {
-                this.toast('Integrate submit failed: ' + e.message, 'error');
+                this.toastFail('Integrate submit failed', e);
                 return;
             }
             const body = await resp.json();
@@ -2776,7 +2818,7 @@ function ninaApp() {
                     lrgbAlgo
                 });
             } catch (e) {
-                this.toast('Combine submit failed: ' + e.message, 'error');
+                this.toastFail('Combine submit failed', e);
                 return;
             }
             const body = await resp.json();
@@ -2928,7 +2970,7 @@ function ninaApp() {
                     bgSample: 'auto'
                 });
             } catch (e) {
-                this.toast('ColorCal submit failed: ' + e.message, 'error');
+                this.toastFail('ColorCal submit failed', e);
                 return;
             }
             const body = await resp.json();
@@ -4429,6 +4471,7 @@ function ninaApp() {
             this.connectStatusWs();
             this.connectImageWs();
             this._startWsCertWatch();
+            this._linkStart();
             this.loadSettingsFromServer();
             this.loadDitherSettings();
             this.loadMfSettings();
@@ -4659,7 +4702,14 @@ function ninaApp() {
                     // spurious "Server reconnected" toast on every slow op.
                     // Genuine outages still surface via the TypeError branch
                     // below (connection refused) and the WebSocket watchdog.
-                    throw new Error(`Request timed out: ${method} ${url}`);
+                    const e = new Error(`Request timed out: ${method} ${url}`);
+                    // NETUX-3: the CAUSE, carried so the toast layer can stop
+                    // guessing. A timeout says the answer did not arrive; it
+                    // says nothing about whether the host acted on the
+                    // request, and every caller used to print it under the
+                    // name of a device ("Capture failed: Request timed out").
+                    e.kind = 'timeout';
+                    throw e;
                 }
                 // A dropped request arrives as a bare TypeError whose message is
                 // the browser's own wording: Safari says "Load failed", Chrome
@@ -4674,6 +4724,7 @@ function ninaApp() {
                     const e = new Error(
                         `Network error on ${method} ${url}: ${err.message || 'request did not complete'}`);
                     e.name = 'NetworkError';
+                    e.kind = 'network';
                     e.cause = err;
                     throw e;
                 }
@@ -6233,7 +6284,7 @@ function ninaApp() {
             const v = Number(iso);
             this.auxIso = v;
             try { await this.apiPost('/api/aux/camera/iso', { iso: v }); }
-            catch (e) { this.toast('Aux ISO set failed: ' + (e.message || e), 'warn'); }
+            catch (e) { this.toastFail('Aux ISO set failed', e, 'warn'); }
         },
         // Cooler on/off (+ optional target °C) for a cooled aux astro cam.
         async setAuxCooler(enabled, target) {
@@ -6243,7 +6294,7 @@ function ninaApp() {
                     enabled: !!enabled,
                     targetTemperature: (target === undefined || target === null) ? null : Number(target)
                 });
-            } catch (e) { this.toast('Aux cooler failed: ' + (e.message || e), 'warn'); }
+            } catch (e) { this.toastFail('Aux cooler failed', e, 'warn'); }
         },
         // ----- Per-camera PREVIEW settings memory -----
         // Called from the camera-source <select> @change: load the picked
@@ -6313,7 +6364,7 @@ function ninaApp() {
             const v = Number(iso);
             this.cameraIso.selected = v;
             try { await this.apiPost('/api/camera/iso', { iso: v }); }
-            catch (e) { this.toast('ISO set failed: ' + (e.message || e), 'error'); }
+            catch (e) { this.toastFail('ISO set failed', e); }
         },
         // Plain-language explainer relating analogue gain to the ISO most
         // people know from regular cameras. Shown as the Gain "?" tooltip on
@@ -6422,7 +6473,7 @@ function ninaApp() {
                 this.term.serverEnabled = true;
                 this.toast('Remote terminal enabled', 'ok');
             } catch (e) {
-                this.toast('Failed to enable terminal: ' + (e.message || e), 'error');
+                this.toastFail('Failed to enable terminal', e);
             } finally {
                 this.term.enabling = false;
             }
@@ -6442,7 +6493,7 @@ function ninaApp() {
                 this.term.serverEnabled = false;
                 this.toast('Remote terminal disabled', 'ok');
             } catch (e) {
-                this.toast('Failed to disable terminal: ' + (e.message || e), 'error');
+                this.toastFail('Failed to disable terminal', e);
             } finally {
                 this.term.enabling = false;
             }
@@ -6696,7 +6747,7 @@ function ninaApp() {
                 this._applyDeviceTitle();
                 this.toast('Host name saved', 'ok');
             } catch (e) {
-                this.toast('Could not save host name: ' + e.message, 'error');
+                this.toastFail('Could not save host name', e);
             }
         },
 
@@ -6804,7 +6855,7 @@ function ninaApp() {
                 await navigator.clipboard.writeText(text);
                 this.toast('Diagnostics report copied', 'ok');
             } catch (e) {
-                this.toast('Could not copy the report: ' + (e.message || e), 'error');
+                this.toastFail('Could not copy the report', e);
             }
         },
 
@@ -7139,7 +7190,7 @@ function ninaApp() {
                 this.logs.entries = [];
                 this.toast('Server log cleared', 'ok');
             } catch (e) {
-                this.toast('Failed to clear log: ' + (e.message || ''), 'error');
+                this.toastFail('Failed to clear log', e);
             }
         },
 
@@ -7158,6 +7209,34 @@ function ninaApp() {
                         : type === 'warn'  ? 'warn'
                         : 'info';
             this._logFromClient(level, message, { source: 'toast' });
+        },
+
+        // NETUX-3: report a failed command by its CAUSE.
+        //
+        // Every device action used to end in `toast(label + ': ' + e.message)`.
+        // When the link is the problem, e.message is "Request timed out: POST
+        // /api/camera/capture" and the operator reads "Capture failed" as the
+        // camera failing. Worse, it asserts something the browser cannot know:
+        // a request that got no answer may well have been executed by the
+        // host, which keeps running the session either way.
+        //
+        // So: link failures get the link's own message and feed the incident
+        // counter; a real HTTP answer keeps the old device-flavoured text,
+        // because there the device (or the host) genuinely did refuse.
+        toastFail(label, e, level = 'error') {
+            const kind = e && e.kind;
+            if (kind === 'timeout' || kind === 'network') {
+                this._noteLinkFailure();
+                this.toast(
+                    this._t('No reply from the host. This looks like the network, '
+                            + 'not the equipment: the command may still have run.'),
+                    'warn', 6500);
+                // The detail still belongs somewhere greppable.
+                this._logFromClient('warn', `${label}: ${(e && e.message) || ''}`,
+                                    { source: 'toastFail', kind });
+                return;
+            }
+            this.toast(label + ': ' + ((e && e.message) || e || ''), level);
         },
 
         dismissToast(id) {
@@ -7190,7 +7269,7 @@ function ninaApp() {
                     else { this.toast(this._noFullscreenHint(), 'warn', 9000); return; }
                 }
             } catch (e) {
-                this.toast('Fullscreen toggle failed: ' + (e?.message || e), 'error');
+                this.toastFail('Fullscreen toggle failed', e);
             }
         },
 
@@ -7276,6 +7355,12 @@ function ninaApp() {
                 // origin's certificate for upgrades too, so drop the gate.
                 this._wsEverOpened = true;
                 this.certGate.wsBlocked = false;
+                // NETUX-1: the socket being open is not yet proof that frames
+                // flow, so the age clock is only restarted here to stop a
+                // reconnect from inheriting the outage it just ended.
+                this.link.wsUp = true;
+                this.link.lastFrameAt = this.link.lastFrameAt || Date.now();
+                this._linkPing();
             };
 
             ws.onmessage = (evt) => {
@@ -7288,10 +7373,16 @@ function ninaApp() {
             };
 
             ws.onclose = () => {
+                this.link.wsUp = false;
                 this.scheduleReconnect('status');
             };
 
-            ws.onerror = () => { };
+            ws.onerror = () => {
+                // Not user-facing on its own (a close always follows), but the
+                // debug log is where a flaky night gets reconstructed later.
+                this._logFromClient('debug', 'status WebSocket error',
+                                    { source: 'link' });
+            };
 
             this.statusWs = ws;
         },
@@ -7479,6 +7570,237 @@ function ninaApp() {
                 this._connLostTimer = null;
                 if (!this.serverReachable) this.connectionLost = true;
             }, 5000);
+        },
+
+        // ---- NETUX-1: link health ------------------------------------
+        //
+        // Thresholds, and why these numbers: the status stream ticks at 1 Hz,
+        // so 3.5 s of silence is already three missed frames and never a
+        // normal scheduling wobble. 12 s is four times that, which on a link
+        // that is merely congested is long past the point where the operator
+        // has decided something is broken. The RTT limits are generous
+        // because an SBC serving a 20 MP preview does add hundreds of
+        // milliseconds of its own, and calling that "bad network" would be
+        // the same kind of misattribution this whole feature exists to fix.
+        _LINK_SLOW_AGE_MS: 3500,
+        _LINK_OFFLINE_AGE_MS: 12000,
+        _LINK_SLOW_RTT_MS: 1200,
+        _LINK_SLOW_LOSS_PCT: 25,
+
+        _linkStart() {
+            if (this._linkTimer) return;
+            this._linkTimer = setInterval(() => this._linkTick(), 1000);
+            // Pinging faster than this buys nothing: the 1 Hz frame already
+            // covers liveness, and the ping exists for latency, which does
+            // not turn over in a second.
+            this._linkPingTimer = setInterval(() => this._linkPing(), 3000);
+        },
+
+        _linkPing() {
+            const ws = this.statusWs;
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            const id = ++this._linkPingSeq;
+            const rec = { at: Date.now(), answered: false };
+            this._linkPending[id] = rec;
+            this._linkPingStats.push(rec);
+            if (this._linkPingStats.length > 10) this._linkPingStats.shift();
+            try {
+                ws.send(JSON.stringify({ type: 'ping', id, t: rec.at }));
+            } catch (_) {
+                delete this._linkPending[id];
+            }
+            // A ping that is never answered has to expire on its own, or a
+            // dead link would just accumulate silent pending entries and the
+            // loss rate would stay at a comfortable zero forever.
+            setTimeout(() => {
+                if (this._linkPending[id]) delete this._linkPending[id];
+            }, 8000);
+        },
+
+        // The echo carries the client's own send timestamp back, so the round
+        // trip is computed from one clock. Host/client skew is routinely tens
+        // of seconds here (there is a whole chip for it), and a naive
+        // now-minus-server-time would have reported that skew as latency.
+        _linkPong(msg) {
+            const rec = msg && msg.id != null ? this._linkPending[msg.id] : null;
+            const sentAt = rec ? rec.at : (typeof msg.t === 'number' ? msg.t : null);
+            if (sentAt == null) return;
+            if (rec) { rec.answered = true; delete this._linkPending[msg.id]; }
+            const rtt = Math.max(0, Date.now() - sentAt);
+            this.link.rttMs = rtt;
+            this._linkRtts.push(rtt);
+            if (this._linkRtts.length > 8) this._linkRtts.shift();
+            const sorted = [...this._linkRtts].sort((a, b) => a - b);
+            this.link.rttMedianMs = sorted[Math.floor(sorted.length / 2)];
+        },
+
+        _noteStatusFrame() {
+            this.link.lastFrameAt = Date.now();
+            this.link.ageMs = 0;
+            this.link.wsUp = true;
+        },
+
+        _linkTick() {
+            const now = Date.now();
+            const age = this.link.lastFrameAt ? now - this.link.lastFrameAt : 0;
+            this.link.ageMs = age;
+
+            const stats = this._linkPingStats.filter(s => now - s.at > 8000);
+            this.link.lossPct = stats.length
+                ? Math.round(100 * stats.filter(s => !s.answered).length / stats.length)
+                : 0;
+
+            // Before the first frame ever arrives there is nothing to judge:
+            // during boot the socket is legitimately not up yet, and an
+            // "offline" chip on every page load would train the operator to
+            // ignore the one indicator this feature depends on.
+            if (!this.link.lastFrameAt) return;
+
+            // A closed socket is not reported as offline on its own. Frames
+            // stop arriving when it closes, so the age is already the honest
+            // measurement, and it doubles as the debounce: a reconnect that
+            // lands inside 3.5 s never raises anything at all.
+            let state = 'ok';
+            if (age > this._LINK_OFFLINE_AGE_MS
+                || (!this.link.wsUp && age > this._LINK_SLOW_AGE_MS * 2)) {
+                state = 'offline';
+            } else if (age > this._LINK_SLOW_AGE_MS
+                       || (this.link.rttMedianMs != null
+                           && this.link.rttMedianMs > this._LINK_SLOW_RTT_MS)
+                       || this.link.lossPct >= this._LINK_SLOW_LOSS_PCT) {
+                state = 'slow';
+            }
+
+            this._linkSetState(state);
+
+            // A busy SBC can push the round trip over the line for a couple of
+            // seconds at a time (a 20 MP frame is being encoded on the same
+            // cores). Alarming on that would train the operator to ignore the
+            // banner, so only a condition that survives 6 s gets one.
+            this.link.alarm = this.link.state === 'offline'
+                || (this.link.state === 'slow' && Date.now() - this.link.since >= 6000);
+        },
+
+        _linkSetState(state) {
+            if (state === this.link.state) {
+                if (state !== 'ok' && this.link.incident) {
+                    this.link.incident.worstAgeMs =
+                        Math.max(this.link.incident.worstAgeMs, this.link.ageMs);
+                    if (this.link.rttMs != null) {
+                        this.link.incident.worstRttMs =
+                            Math.max(this.link.incident.worstRttMs, this.link.rttMs);
+                    }
+                }
+                return;
+            }
+
+            const prev = this.link.state;
+            this.link.state = state;
+            this.link.since = Date.now();
+
+            if (state !== 'ok') {
+                this._linkOkSince = 0;
+                if (!this.link.incident) {
+                    this.link.incident = {
+                        startedAt: Date.now(), worstAgeMs: this.link.ageMs,
+                        worstRttMs: this.link.rttMs || 0, failed: 0
+                    };
+                }
+                this._logFromClient('warn',
+                    `link ${prev} -> ${state} (age ${Math.round(this.link.ageMs)}ms, `
+                    + `rtt ${this.link.rttMedianMs != null ? this.link.rttMedianMs : '?'}ms, `
+                    + `loss ${this.link.lossPct}%)`, { source: 'link' });
+                return;
+            }
+
+            // Back to ok. Hold it briefly before declaring the incident over:
+            // a link that flaps every few seconds is still a bad link, and a
+            // summary toast per flap would be its own kind of noise.
+            this._linkOkSince = Date.now();
+            setTimeout(() => this._linkCloseIncident(), 4000);
+        },
+
+        _linkCloseIncident() {
+            if (this.link.state !== 'ok' || !this.link.incident) return;
+            if (!this._linkOkSince || Date.now() - this._linkOkSince < 3500) return;
+            const inc = this.link.incident;
+            this.link.incident = null;
+            const seconds = Math.round((this._linkOkSince - inc.startedAt) / 1000);
+            this._logFromClient('info',
+                `link incident over: ${seconds}s, ${inc.failed} command(s) unanswered, `
+                + `worst gap ${Math.round(inc.worstAgeMs)}ms`, { source: 'link' });
+
+            // NETUX-5: name the culprit once, in the past tense. Anything
+            // shorter than a few seconds was not worth the operator's
+            // attention and the banner already stayed quiet for it.
+            if (seconds < 5 && inc.failed === 0) return;
+            if (Date.now() - this._lastIncidentSummary < 30000) return;
+            this._lastIncidentSummary = Date.now();
+            const msg = inc.failed > 0
+                ? this._t('Unstable network for {s}s. {n} command(s) got no reply. '
+                          + 'The host kept running and reported no equipment error.',
+                          { s: seconds, n: inc.failed })
+                : this._t('Unstable network for {s}s. The host kept running the session.',
+                          { s: seconds });
+            this.toast(msg, 'info', 7000);
+        },
+
+        // A command that died on the link is evidence about the link, not
+        // about the device it was addressed to.
+        _noteLinkFailure() {
+            if (!this.link.incident) {
+                this.link.incident = {
+                    startedAt: Date.now(), worstAgeMs: this.link.ageMs,
+                    worstRttMs: this.link.rttMs || 0, failed: 0
+                };
+            }
+            this.link.incident.failed++;
+        },
+
+        // Translate a JS-built string. The DOM observer in js/i18n.js only
+        // sees whole text nodes, so anything assembled with a number in it
+        // has to go through the catalog here instead.
+        _t(src, vars) {
+            try {
+                return (window.I18N && window.I18N.t) ? window.I18N.t(src, vars) : src;
+            } catch (_) { return src; }
+        },
+
+        // ---- link, UI helpers ----
+
+        // 'Offline' / 'Slow' reuse catalog keys the app already ships rather
+        // than adding lowercase twins of the same two words.
+        linkLabel() {
+            if (this.link.state === 'offline') return this._t('Offline');
+            const r = this.link.rttMedianMs;
+            if (r == null) return this.link.state === 'slow' ? this._t('Slow') : '';
+            return r >= 1000 ? (r / 1000).toFixed(1) + 's' : Math.round(r) + 'ms';
+        },
+
+        linkTone() {
+            return this.link.state === 'offline' ? 'link-bad'
+                 : this.link.state === 'slow' ? 'link-warn' : 'link-ok';
+        },
+
+        linkTooltip() {
+            const L = [];
+            L.push(this.link.state === 'offline'
+                ? this._t('No status from the host right now.')
+                : this.link.state === 'slow'
+                    ? this._t('This browser link to the host is slow.')
+                    : this._t('Link to the host is healthy.'));
+            if (this.link.rttMedianMs != null) {
+                L.push(this._t('Round trip: {ms} ms (median of the last 8)',
+                               { ms: Math.round(this.link.rttMedianMs) }));
+            }
+            L.push(this._t('Last status frame: {s}s ago',
+                           { s: (this.link.ageMs / 1000).toFixed(1) }));
+            if (this.link.lossPct > 0) {
+                L.push(this._t('Unanswered pings: {p}%', { p: this.link.lossPct }));
+            }
+            L.push(this._t('This is the leg between this device and the host. '
+                           + 'The WiFi bars are the host radio.'));
+            return L.join('\n');
         },
 
         // Retry an idempotent GET a few times before giving up. The boot fires
@@ -9425,7 +9747,7 @@ function ninaApp() {
                 rig.liveStackComputeMode = this.liveStackComputeMode;
                 this.toast(`Live-stack compute: ${this.liveStackComputeMode}`, 'ok');
             } catch (e) {
-                this.toast('Save failed: ' + (e.message || e), 'error');
+                this.toastFail('Save failed', e);
             }
         },
 
@@ -9455,7 +9777,7 @@ function ninaApp() {
                 rig.slewFloorDeg = body.slewFloorDeg;
                 this.toast('Slew safety thresholds saved', 'ok');
             } catch (e) {
-                this.toast('Save failed: ' + (e.message || e), 'error');
+                this.toastFail('Save failed', e);
             }
         },
 
@@ -9482,7 +9804,7 @@ function ninaApp() {
                 // Revert the checkbox if the server rejected it so the
                 // UI doesn't lie about the actual state.
                 this.liveStackSaveFrames = !this.liveStackSaveFrames;
-                this.toast('Save failed: ' + (e.message || e), 'error');
+                this.toastFail('Save failed', e);
             }
         },
 
@@ -9509,7 +9831,7 @@ function ninaApp() {
                     : 'Outlier rejection off: Reset the stack to apply', 'ok');
             } catch (e) {
                 this.liveStackSigmaRejection = !this.liveStackSigmaRejection;
-                this.toast('Save failed: ' + (e.message || e), 'error');
+                this.toastFail('Save failed', e);
             }
         },
 
@@ -9532,7 +9854,7 @@ function ninaApp() {
                     : 'Colour stacking off: Reset the stack to apply', 'ok');
             } catch (e) {
                 this.liveStackColor = !this.liveStackColor;
-                this.toast('Save failed: ' + (e.message || e), 'error');
+                this.toastFail('Save failed', e);
             }
         },
 
@@ -9555,7 +9877,7 @@ function ninaApp() {
                     ? 'Live stacking will run until you reset it'
                     : `Live stack will auto-pause after ${mins} min`, 'ok');
             } catch (e) {
-                this.toast('Save failed: ' + (e.message || e), 'error');
+                this.toastFail('Save failed', e);
             }
         },
 
@@ -9634,7 +9956,7 @@ function ninaApp() {
                 this.toast(`Stack saved: ${data.savedPath}`, 'success');
             } catch (e) {
                 console.error('saveClientStack failed', e);
-                this.toast('Save failed: ' + (e.message || e), 'error');
+                this.toastFail('Save failed', e);
             }
         },
 
@@ -13519,7 +13841,7 @@ function ninaApp() {
                 this._pollScript(r.jobId);
             } catch (e) {
                 this.scripts.busy = false;
-                this.toast('Script error: ' + ((e && e.message) || e), 'error');
+                this.toastFail('Script error', e);
             }
         },
         _pollScript(jobId) {
@@ -15059,7 +15381,7 @@ function ninaApp() {
                 }
                 this.toast('Auto adjustments applied', 'success');
             } catch (e) {
-                this.toast('Auto failed: ' + (e?.message || e), 'error');
+                this.toastFail('Auto failed', e);
             } finally {
                 this.editorState.autoBusy = false;
             }
@@ -15276,7 +15598,7 @@ function ninaApp() {
                 this.editorState.dirty = false;
                 this.toast('Edits saved → ' + j.sidecarPath, 'ok');
             } catch (e) {
-                this.toast('Save failed: ' + (e.message || ''), 'error');
+                this.toastFail('Save failed', e);
             }
         },
 
@@ -15337,7 +15659,7 @@ function ninaApp() {
                 this.editorState.exportModal = false;
                 this.toast('Exported → ' + j.path, 'ok');
             } catch (e) {
-                this.toast('Export failed: ' + (e.message || ''), 'error');
+                this.toastFail('Export failed', e);
             } finally {
                 this.editorState.exporting = false;
             }
@@ -16550,7 +16872,7 @@ function ninaApp() {
                 this.toast(`Deleted ${n} item(s)`, 'ok');
                 await this.filesReload();
             } catch (e) {
-                this.toast('Delete failed: ' + (e.message || ''), 'error');
+                this.toastFail('Delete failed', e);
             }
         },
 
@@ -16571,7 +16893,7 @@ function ninaApp() {
                 this.toast(`Created ${name}`, 'ok');
                 await this.filesReload();
             } catch (e) {
-                this.toast('mkdir failed: ' + (e.message || ''), 'error');
+                this.toastFail('mkdir failed', e);
             }
         },
 
@@ -16595,7 +16917,7 @@ function ninaApp() {
                 this.toast(`Renamed to ${newName}`, 'ok');
                 await this.filesReload();
             } catch (e) {
-                this.toast('Rename failed: ' + (e.message || ''), 'error');
+                this.toastFail('Rename failed', e);
             }
         },
 
@@ -16657,7 +16979,7 @@ function ninaApp() {
                 URL.revokeObjectURL(url);
                 this.toast(`Downloaded ${paths.length} item(s) as ${fileName}`, 'ok');
             } catch (e) {
-                this.toast('ZIP download failed: ' + (e.message || ''), 'error');
+                this.toastFail('ZIP download failed', e);
             }
         },
 
@@ -16717,7 +17039,7 @@ function ninaApp() {
                 if (nextEntry) this.filesOpenPreview(nextEntry); else this.closeImageViewer();
                 if (typeof this.filesReload === 'function') this.filesReload();
             } catch (e) {
-                this.toast('Could not discard: ' + (e.message || e), 'error');
+                this.toastFail('Could not discard', e);
             } finally {
                 this.filesViewerBusy = false;
             }
@@ -16768,7 +17090,7 @@ function ninaApp() {
                         kind: 'text', textContent: txt
                     };
                 } catch (e) {
-                    this.toast('Preview failed: ' + (e.message || ''), 'error');
+                    this.toastFail('Preview failed', e);
                 }
                 return;
             }
@@ -16832,7 +17154,7 @@ function ninaApp() {
                 this.settings.imageOutputDir = r.imageOutputDir || dir.fullPath;
                 this.toast('Studio root set to ' + this.settings.imageOutputDir, 'ok');
             } catch (e) {
-                this.toast('Could not set Studio root: ' + (e.message || ''), 'error');
+                this.toastFail('Could not set Studio root', e);
             }
         },
 
@@ -17758,7 +18080,7 @@ function ninaApp() {
                 try {
                     this.lastStars = await this.apiGet('/api/image/latest/stars?maxStars=300');
                 } catch (e) {
-                    this.toast('Star detection failed: ' + e.message, 'error');
+                    this.toastFail('Star detection failed', e);
                     this.showStarOverlay = false;
                     return;
                 }
@@ -17844,7 +18166,7 @@ function ninaApp() {
                     ? `Annotated ${this.annotate.items.length} object(s)`
                     : 'Solved, but no catalog objects in frame') + diag, 'ok', 9000);
             } catch (e) {
-                this.toast('Annotate failed: ' + (e.message || e), 'error');
+                this.toastFail('Annotate failed', e);
             } finally {
                 this._transferEnd(tid, true);
                 this.annotate.busy = false;
@@ -18008,7 +18330,7 @@ function ninaApp() {
                 if (e && (e.name === 'AbortError' || /abort/i.test(e.message || ''))) {
                     this.toast('Annotate cancelled', 'warn');
                 } else {
-                    this.toast('Annotate failed: ' + (e.message || e), 'error');
+                    this.toastFail('Annotate failed', e);
                 }
             } finally {
                 this._transferEnd(tid);
@@ -18285,7 +18607,7 @@ function ninaApp() {
                 this.histogramData = hist;
                 this.$nextTick(() => this.updateHistChart());
             } catch (e) {
-                this.toast('Failed to load image stats: ' + e.message, 'error');
+                this.toastFail('Failed to load image stats', e);
             }
         },
 
@@ -18533,7 +18855,7 @@ function ninaApp() {
                 // visible (e.g. BAYERPAT, BZERO).
                 this.reloadImageViewer();
             } catch (e) {
-                this.toast('Save failed: ' + (e.message || ''), 'error');
+                this.toastFail('Save failed', e);
             } finally {
                 this.fitsHeaders.saving = false;
             }
@@ -18678,7 +19000,7 @@ function ninaApp() {
                 this.toast(`Cache cleared (${n} file${n === 1 ? '' : 's'})`, 'success');
                 await this.loadCacheStats();
             } catch (e) {
-                this.toast('Failed to clear cache: ' + (e.message || ''), 'error');
+                this.toastFail('Failed to clear cache', e);
             } finally {
                 this.cacheClearing = false;
             }
@@ -18695,7 +19017,7 @@ function ninaApp() {
                 this.toast(enabled ? 'GPU acceleration on' : 'GPU acceleration off (CPU)', 'ok');
                 await this.loadGpuInfo();
             } catch (e) {
-                this.toast('Failed to change GPU setting: ' + (e.message || ''), 'error');
+                this.toastFail('Failed to change GPU setting', e);
                 await this.loadGpuInfo();
             }
         },
@@ -18707,7 +19029,7 @@ function ninaApp() {
                 this.toast(this.gpuSelftestResult?.allOk ? 'GPU self-test passed' : 'GPU self-test: a kernel diverged',
                     this.gpuSelftestResult?.allOk ? 'ok' : 'warn');
             } catch (e) {
-                this.toast('GPU self-test failed: ' + (e.message || ''), 'error');
+                this.toastFail('GPU self-test failed', e);
             } finally { this.gpuSelftest = 'idle'; }
         },
 
@@ -18749,7 +19071,7 @@ function ninaApp() {
                 this._benchWasRunning = true;
                 this.toast('Benchmark started', 'info');
             } catch (e) {
-                this.toast('Benchmark error: ' + (e.message || ''), 'error');
+                this.toastFail('Benchmark error', e);
             }
         },
 
@@ -18771,7 +19093,7 @@ function ninaApp() {
                 a.remove();
                 URL.revokeObjectURL(url);
             } catch (e) {
-                this.toast('Export failed: ' + (e.message || ''), 'error');
+                this.toastFail('Export failed', e);
             }
         },
 
@@ -18788,7 +19110,7 @@ function ninaApp() {
                     this.toast('Benchmark history cleared', 'success');
                 }
             } catch (e) {
-                this.toast('Failed to clear history: ' + (e.message || ''), 'error');
+                this.toastFail('Failed to clear history', e);
             }
         },
 
@@ -18844,7 +19166,7 @@ function ninaApp() {
                 a.href = url; a.download = 'polaris-sensor-analysis.json';
                 document.body.appendChild(a); a.click(); a.remove();
                 URL.revokeObjectURL(url);
-            } catch (e) { this.toast('Export failed: ' + (e.message || ''), 'error'); }
+            } catch (e) { this.toastFail('Export failed', e); }
         },
 
         async clearSensorAnalysisHistory() {
@@ -18856,7 +19178,7 @@ function ninaApp() {
             try {
                 const r = await this.apiFetch('/api/sensor-analysis/history', { method: 'DELETE' });
                 if (r && r.ok) { this.sensorAnalysis.history = []; this.toast('History cleared', 'success'); }
-            } catch (e) { this.toast('Failed to clear history: ' + (e.message || ''), 'error'); }
+            } catch (e) { this.toastFail('Failed to clear history', e); }
         },
 
         async runSensorAnalysis() {
@@ -18884,7 +19206,7 @@ function ninaApp() {
                 this._saWasRunning = true;
                 this.toast('Sensor analysis started (this can take a few minutes)', 'info');
             } catch (e) {
-                this.toast('Sensor analysis error: ' + (e.message || ''), 'error');
+                this.toastFail('Sensor analysis error', e);
             }
         },
 
@@ -18964,7 +19286,7 @@ function ninaApp() {
                         ((data && data.error) || 'see logs'), 'error');
                 }
             } catch (e) {
-                this.toast('Flip failed: ' + (e.message || ''), 'error');
+                this.toastFail('Flip failed', e);
             }
         },
 
@@ -19863,7 +20185,7 @@ function ninaApp() {
             try {
                 await this.apiPost('/api/guider/select-star', { x: fx, y: fy });
             } catch (e) {
-                this.toast('Select star failed: ' + (e.message || e), 'error');
+                this.toastFail('Select star failed', e);
             }
         },
 
@@ -19877,7 +20199,7 @@ function ninaApp() {
                     recalibrate: true
                 });
                 this.toast('Recalibrating…', 'ok');
-            } catch (e) { this.toast('Recalibrate failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Recalibrate failed', e); }
         },
 
         async guiderClearCalibration() {
@@ -19886,7 +20208,7 @@ function ninaApp() {
                 this.guider.calDetails = null;
                 this.showCalReview = false;
                 this.toast('Calibration cleared (saved copy removed)', 'ok');
-            } catch (e) { this.toast('Clear failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Clear failed', e); }
         },
 
         // ASIAIR-style session guide logs: list + download the files saved
@@ -19907,7 +20229,7 @@ function ninaApp() {
                 a.href = url; a.download = name;
                 document.body.appendChild(a); a.click(); a.remove();
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
-            } catch (e) { this.toast('Download failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Download failed', e); }
         },
 
         // Manually mirror the native calibration for a meridian flip (RA +180°)
@@ -19924,7 +20246,7 @@ function ninaApp() {
                 const redraw = () => { if (this.showCalReview) this.drawCalReviewPlot(); };
                 setTimeout(redraw, 1500);
                 setTimeout(redraw, 3000);
-            } catch (e) { this.toast('Flip failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Flip failed', e); }
         },
 
         // Auto-Focus V-curve: HFR vs Position, scatter + fit overlay
@@ -20195,7 +20517,7 @@ function ninaApp() {
                         targetSnr: (v == null || v === '' || v <= 0) ? null : v
                     }, { method: 'PUT' });
                 } catch (e) {
-                    this.toast('Could not save target SNR: ' + e.message, 'error');
+                    this.toastFail('Could not save target SNR', e);
                 }
             }, 400);
         },
@@ -20489,7 +20811,7 @@ function ninaApp() {
                     this.toast(`Switched to rig: ${r.name}`, 'ok');
                 }
             } catch (e) {
-                this.toast('Switch rig failed: ' + e.message, 'error');
+                this.toastFail('Switch rig failed', e);
             }
         },
 
@@ -20546,7 +20868,7 @@ function ninaApp() {
                         this.updateFov();
                     }
                 } catch (e) {
-                    this.toast('Failed to save rig: ' + e.message, 'error');
+                    this.toastFail('Failed to save rig', e);
                 }
             }, 400);
         },
@@ -21213,7 +21535,7 @@ function ninaApp() {
                 // The local copy keeps the cleared state, not the sentinel.
                 Object.assign(rig, updated, { accessoryType: this.settings.accessoryType });
                 this.toast(`Saved selections to "${rig.name}"`, 'ok');
-            } catch (e) { this.toast('Save failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Save failed', e); }
         },
 
         async loadDitherSettings() {
@@ -21273,7 +21595,7 @@ function ninaApp() {
                 } else {
                     this.plan = null; this.planSelectedId = '';
                 }
-            } catch (e) { this.toast('Could not load plans: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Could not load plans', e); }
         },
 
         selectPlan(id) {
@@ -21294,7 +21616,7 @@ function ninaApp() {
                 this.selectPlan(created.id);
                 this.planSettingsOpen = true;
                 this.toast('Plan created', 'ok');
-            } catch (e) { this.toast('Create failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Create failed', e); }
         },
 
         async duplicatePlan() {
@@ -21308,7 +21630,7 @@ function ninaApp() {
                 this.plans.push(created);
                 this.selectPlan(created.id);
                 this.toast('Plan duplicated', 'ok');
-            } catch (e) { this.toast('Duplicate failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Duplicate failed', e); }
         },
 
         // Export the selected plan as a shareable JSON file (download).
@@ -21328,7 +21650,7 @@ function ninaApp() {
                 document.body.appendChild(a); a.click(); a.remove();
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
                 this.toast('Plan exported', 'ok');
-            } catch (e) { this.toast('Export failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Export failed', e); }
         },
 
         // Open the file picker for importing a plan JSON.
@@ -21358,7 +21680,7 @@ function ninaApp() {
                 this.plans.push(created);
                 this.selectPlan(created.id);
                 this.toast('Plan imported: ' + (created.name || ''), 'ok');
-            } catch (e) { this.toast('Import failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Import failed', e); }
         },
 
         // Open the styled delete-plan confirmation (replaces the native confirm).
@@ -21377,7 +21699,7 @@ function ninaApp() {
                 if (this.plans.length) this.selectPlan(this.plans[0].id);
                 else { this.plan = null; this.planSelectedId = ''; }
                 this.toast('Plan deleted', 'ok');
-            } catch (e) { this.toast('Delete failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Delete failed', e); }
         },
 
         // Debounced persist of the whole plan object (PUT replaces it).
@@ -21390,7 +21712,7 @@ function ninaApp() {
                     await this.apiPost('/api/plan/plans/' + encodeURIComponent(this.plan.id), this.plan, { method: 'PUT' });
                     const i = this.plans.findIndex(p => p.id === this.plan.id);
                     if (i >= 0) this.plans[i] = this.plan;
-                } catch (e) { this.toast('Save failed: ' + (e.message || e), 'error'); }
+                } catch (e) { this.toastFail('Save failed', e); }
             }, 500);
         },
 
@@ -21474,7 +21796,7 @@ function ninaApp() {
                 this.tab = 'plan';
                 this._planPushTarget(t);
                 this.toast('Framed target added to plan', 'ok');
-            } catch (e) { this.toast('Framing failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Framing failed', e); }
         },
 
         planToggleTargetDetail(t) {
@@ -21547,14 +21869,14 @@ function ninaApp() {
                 }
                 this.planStatus = await r.json();
                 this.toast('Plan started', 'ok');
-            } catch (e) { this.toast('Start failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Start failed', e); }
         },
         async stopPlan() {
             try {
                 const r = await this.apiPost('/api/plan/stop', {});
                 this.planStatus = await r.json();
                 this.toast('Plan stopped', 'ok');
-            } catch (e) { this.toast('Stop failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Stop failed', e); }
         },
         // Resume the last prematurely-ended plan (stop / end-time reached)
         // from its retained progress: completed targets skip, the
@@ -21571,7 +21893,7 @@ function ninaApp() {
                 }
                 this.planStatus = await r.json();
                 this.toast('Plan resumed', 'ok');
-            } catch (e) { this.toast('Resume failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Resume failed', e); }
         },
 
         planIsRunning() { return !!(this.planStatus && this.planStatus.active); },
@@ -22269,7 +22591,7 @@ function ninaApp() {
                 this.selectedCamera = name;
                 this.toast('Camera connected: ' + name, 'ok');
             } catch (e) {
-                this.toast('Camera connection failed: ' + e.message, 'error');
+                this.toastFail('Camera connection failed', e);
             }
         },
 
@@ -22341,7 +22663,7 @@ function ninaApp() {
                 } else if (this.looping) {
                     this.toast('Capture error, retrying...', 'warn');
                 } else {
-                    this.toast('Capture failed: ' + e.message, 'error');
+                    this.toastFail('Capture failed', e);
                 }
             } finally {
                 this._liveCaptureAbort = null;
@@ -22405,7 +22727,7 @@ function ninaApp() {
                 });
             } catch (e) {
                 this.looping = false;
-                this.toast('Could not start LIVE loop: ' + (e?.message || e), 'error');
+                this.toastFail('Could not start LIVE loop', e);
             }
         },
 
@@ -23101,7 +23423,7 @@ function ninaApp() {
                         body: JSON.stringify({ brightness: this.flatWizard.panelBrightness })
                     });
                 } catch (e) {
-                    this.toast('Set panel brightness failed: ' + e.message, 'warn');
+                    this.toastFail('Set panel brightness failed', e, 'warn');
                     // keep going — user may want to proceed without panel
                 }
             }
@@ -23122,14 +23444,14 @@ function ninaApp() {
                 });
                 this._startShutterTick();
             } catch (e) {
-                this.toast('Start flat wizard failed: ' + e.message, 'error');
+                this.toastFail('Start flat wizard failed', e);
             }
         },
         async flatWizardAbort() {
             try {
                 await this.apiPost('/api/flatwizard/abort');
             } catch (e) {
-                this.toast('Abort failed: ' + e.message, 'warn');
+                this.toastFail('Abort failed', e, 'warn');
             }
         },
 
@@ -23294,7 +23616,7 @@ function ninaApp() {
                 // Deliberate abort (previewAbort) cancels the request — that's
                 // not an error, just stop quietly.
                 const aborted = e && (e.name === 'AbortError' || /abort/i.test(e.message || ''));
-                if (!aborted) this.toast('Snap failed: ' + (e.message || ''), 'error');
+                if (!aborted) this.toastFail('Snap failed', e);
                 // Break the loop on error/abort, don't hammer the camera
                 // with a guaranteed-to-fail sequence of requests.
                 this.preview.looping = false;
@@ -23407,7 +23729,7 @@ function ninaApp() {
                 });
                 this.toast('Mount synced to solved coordinates', 'ok');
             } catch (e) {
-                this.toast('Mount sync failed: ' + (e.message || ''), 'error');
+                this.toastFail('Mount sync failed', e);
             }
         },
 
@@ -23678,7 +24000,7 @@ function ninaApp() {
                 await this.apiPost('/api/camera/abort');
                 this.toast('Snap aborted', 'warn');
             } catch (e) {
-                this.toast('Abort failed: ' + (e.message || ''), 'error');
+                this.toastFail('Abort failed', e);
             }
         },
 
@@ -23692,7 +24014,7 @@ function ninaApp() {
                 try {
                     await this.apiPost('/api/camera/stream/stop');
                     this.toast('Stream stopped', 'info');
-                } catch (e) { this.toast('Stop failed: ' + e.message, 'error'); }
+                } catch (e) { this.toastFail('Stop failed', e); }
                 return;
             }
             try {
@@ -23716,7 +24038,7 @@ function ninaApp() {
         async videoToggleStream() {
             if (this.cameraStream.running) {
                 try { await this.apiPost('/api/camera/stream/stop'); }
-                catch (e) { this.toast('Stop failed: ' + e.message, 'error'); }
+                catch (e) { this.toastFail('Stop failed', e); }
                 return;
             }
             try {
@@ -23773,7 +24095,7 @@ function ninaApp() {
                     'Detected ' + r.name + ' (' + r.angularSepDeg.toFixed(2) + '° from centre)',
                     'success');
             } catch (e) {
-                this.toast('Auto-detect failed: ' + (e?.message || ''), 'error');
+                this.toastFail('Auto-detect failed', e);
             }
         },
 
@@ -23971,7 +24293,7 @@ function ninaApp() {
                 if (!silent) this.toast('No catalogued object at this pointing', 'warn');
                 return null;
             } catch (e) {
-                if (!silent) this.toast('Identify failed: ' + (e?.message || ''), 'error');
+                if (!silent) this.toastFail('Identify failed', e);
                 return null;
             } finally {
                 this.identifyBusy = false;
@@ -23983,7 +24305,7 @@ function ninaApp() {
                 try {
                     await this.apiPost('/api/video/record/stop');
                     this.toast('Recording stopped', 'info');
-                } catch (e) { this.toast('Stop failed: ' + e.message, 'error'); }
+                } catch (e) { this.toastFail('Stop failed', e); }
                 return;
             }
             try {
@@ -24207,12 +24529,12 @@ function ninaApp() {
                     outputName: this.video.outputName
                 });
                 this.toast(`Stack started (job ${r.jobId?.slice?.(0, 8) || ''}…)`, 'info');
-            } catch (e) { this.toast('Stack failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Stack failed', e); }
         },
         async videoAbortStack() {
             if (!this.videoStack?.id) return;
             try { await this.apiPost(`/api/video/stack/${this.videoStack.id}/abort`); }
-            catch (e) { this.toast('Abort failed: ' + e.message, 'warn'); }
+            catch (e) { this.toastFail('Abort failed', e, 'warn'); }
         },
         // Fetch the per-frame quality scores once per job, as soon as the
         // analysis phase has produced them (phase past Analyzing). The scores
@@ -24254,7 +24576,7 @@ function ninaApp() {
             this.setFilesSubTab('edit');
             await this.$nextTick();
             try { await this.editorLoad(j.outputPath); }
-            catch (e) { this.toast('Could not open in Studio: ' + e.message, 'error'); }
+            catch (e) { this.toastFail('Could not open in Studio', e); }
         },
         // Lucky-imaging quality graph: one bar per recorded frame in capture
         // order, height = Laplacian-variance quality. Bars at/above the
@@ -24350,7 +24672,7 @@ function ninaApp() {
                     ? `Cooling ramp set to ${rate}°C/min`
                     : 'Cooling ramp off: setpoint jumps straight to target', 'info');
             } catch (e) {
-                this.toast('Could not save cooling ramp: ' + e.message, 'warn');
+                this.toastFail('Could not save cooling ramp', e, 'warn');
             }
         },
 
@@ -24589,7 +24911,7 @@ function ninaApp() {
                 }
             } catch (e) {
                 this.liveStackEnabled = false;
-                this.toast('Could not start live stacking: ' + (e?.message || ''), 'warn');
+                this.toastFail('Could not start live stacking', e, 'warn');
             }
         },
 
@@ -24617,7 +24939,7 @@ function ninaApp() {
                         const n = this.liveStackFrames || 0;
                         this.toast('LIVE stopped: stack kept (' + n + ' frame' + (n === 1 ? '' : 's') + ')', 'warn');
                     } catch (e) {
-                        this.toast('Live stack stop failed: ' + (e?.message || ''), 'error');
+                        this.toastFail('Live stack stop failed', e);
                     }
                 }
                 // Now stop the capture loop (may block on a non-abortable
@@ -24657,7 +24979,7 @@ function ninaApp() {
                         body: JSON.stringify(this.liveStackTriggers)
                     });
                 } catch (e) {
-                    this.toast('Save triggers failed: ' + e.message, 'error');
+                    this.toastFail('Save triggers failed', e);
                 }
             }, 500);
         },
@@ -24665,7 +24987,7 @@ function ninaApp() {
             try {
                 await this.apiPost('/api/livestack/triggers/refocus-now');
                 this.toast('Refocus fired', 'info');
-            } catch (e) { this.toast('Refocus failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Refocus failed', e); }
         },
         // LSPP-6: hydrate the per-frame pre-processing settings from
         // the active rig + debounced save. Mirrors the triggers
@@ -24730,7 +25052,7 @@ function ninaApp() {
                         body: JSON.stringify(this.liveStackPreProc)
                     });
                 } catch (e) {
-                    this.toast('Save pre-processing failed: ' + e.message, 'error');
+                    this.toastFail('Save pre-processing failed', e);
                 }
             }, 500);
         },
@@ -24738,7 +25060,7 @@ function ninaApp() {
             try {
                 await this.apiPost('/api/livestack/triggers/recenter-now');
                 this.toast('Recenter fired', 'info');
-            } catch (e) { this.toast('Recenter failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Recenter failed', e); }
         },
 
         // REFSUG-2: dismiss the refocus-suggestion chip / callout.
@@ -24757,7 +25079,7 @@ function ninaApp() {
                     });
                 this.toast('Baseline reset', 'ok');
             } catch (e) {
-                this.toast('Dismiss failed: ' + e.message, 'error');
+                this.toastFail('Dismiss failed', e);
             }
         },
         async refocusSuggestionDismiss() {
@@ -24769,7 +25091,7 @@ function ninaApp() {
                         body: JSON.stringify({ resetBaseline: false })
                     });
             } catch (e) {
-                this.toast('Dismiss failed: ' + e.message, 'error');
+                this.toastFail('Dismiss failed', e);
             }
         },
         // Format helpers used by the trigger status lines.
@@ -24802,7 +25124,7 @@ function ninaApp() {
                 this.mount.connected = true;
                 this.toast('Mount connected: ' + name, 'ok');
             } catch (e) {
-                this.toast('Mount connection failed: ' + e.message, 'error');
+                this.toastFail('Mount connection failed', e);
             }
         },
 
@@ -24999,7 +25321,7 @@ function ninaApp() {
                 await this.apiPost('/api/telescope/slew', { ra, dec });
                 this.toast('Slewing...', 'info');
             } catch (e) {
-                this.toast('Slew failed: ' + e.message, 'error');
+                this.toastFail('Slew failed', e);
             }
         },
 
@@ -25075,7 +25397,7 @@ function ninaApp() {
                     this.toast((r && r.error) || 'Save failed', 'warn');
                 }
             } catch (e) {
-                this.toast('Save failed: ' + (e.message || e), 'warn');
+                this.toastFail('Save failed', e, 'warn');
             }
         },
         async testStorageConnection() {
@@ -25099,7 +25421,7 @@ function ninaApp() {
                 const r = await (await this.apiPost('/api/storage/retry', {})).json();
                 this.toast(`Re-queued ${r.requeued || 0} file(s)`, 'ok');
             } catch (e) {
-                this.toast('Retry failed: ' + (e.message || e), 'warn');
+                this.toastFail('Retry failed', e, 'warn');
             }
         },
 
@@ -25216,7 +25538,7 @@ function ninaApp() {
                     await this.apiPost('/api/usb/dismiss', { path: drive.path });
                 }
             } catch (e) {
-                this.toast('USB drive: ' + ((e && e.message) || e), 'error');
+                this.toastFail('USB drive', e);
             } finally {
                 this._usbPromptBusy = false;
             }
@@ -25248,7 +25570,7 @@ function ninaApp() {
                     await this.apiPost('/api/usb/revert-dismiss', {});
                 }
             } catch (e) {
-                this.toast('USB revert: ' + ((e && e.message) || e), 'error');
+                this.toastFail('USB revert', e);
             } finally {
                 this._usbPromptBusy = false;
             }
@@ -25615,7 +25937,7 @@ function ninaApp() {
                 this.focusConnected = true;
                 this.toast('Focuser connected: ' + name, 'ok');
             } catch (e) {
-                this.toast('Focuser connection failed: ' + e.message, 'error');
+                this.toastFail('Focuser connection failed', e);
             }
         },
 
@@ -26655,7 +26977,7 @@ function ninaApp() {
                 rig.autoFocus = block;
                 this.toast('Auto-focus defaults saved to rig', 'ok');
             } catch (e) {
-                this.toast('AF settings save failed: ' + (e.message || ''), 'error');
+                this.toastFail('AF settings save failed', e);
             }
         },
 
@@ -26668,7 +26990,7 @@ function ninaApp() {
                 });
                 this.toast('Auto-focus started', 'ok');
             } catch (e) {
-                this.toast('AF start failed: ' + e.message, 'error');
+                this.toastFail('AF start failed', e);
             }
         },
         async abortAutoFocus() {
@@ -26691,7 +27013,7 @@ function ninaApp() {
                 this.polarTargets.lastFetchUtc = new Date().toISOString();
             } catch (e) {
                 this.polarTargets.items = [];
-                this.toast('Could not load TPPA targets: ' + (e.message || ''), 'warn');
+                this.toastFail('Could not load TPPA targets', e, 'warn');
             } finally {
                 this.polarTargets.loading = false;
             }
@@ -26723,7 +27045,7 @@ function ninaApp() {
                 this.toast('Slewing to ' + t.name + ', click Start TPPA when ready',
                     'info');
             } catch (e) {
-                this.toast('Slew failed: ' + (e.message || ''), 'error');
+                this.toastFail('Slew failed', e);
             }
         },
 
@@ -26740,7 +27062,7 @@ function ninaApp() {
                 });
                 this.toast('Polar alignment started', 'info');
             } catch (e) {
-                this.toast('Polar start failed: ' + (e.message || ''), 'error');
+                this.toastFail('Polar start failed', e);
             }
         },
 
@@ -26756,7 +27078,7 @@ function ninaApp() {
                 await this.apiPost('/api/polar/refine/start');
                 this.toast('Polar refine loop started', 'info');
             } catch (e) {
-                this.toast('Refine start failed: ' + (e.message || ''), 'error');
+                this.toastFail('Refine start failed', e);
             }
         },
 
@@ -26780,7 +27102,7 @@ function ninaApp() {
                     this.toast('Refresh failed: ' + (r.error || 'solve failed'), 'error');
                 }
             } catch (e) {
-                this.toast('Refresh failed: ' + (e.message || ''), 'error');
+                this.toastFail('Refresh failed', e);
             } finally {
                 this.polar.refreshBusy = false;
             }
@@ -26852,7 +27174,7 @@ function ninaApp() {
                 if (r.ok) this.toast('Solved · total error ' + this.formatArcsec(r.totalErrorArcsec), 'success');
                 else if (r.error) this.toast(r.error, 'error');
             } catch (e) {
-                this.toast('Start failed: ' + (e?.message || ''), 'error');
+                this.toastFail('Start failed', e);
             } finally {
                 this.rudimentary.busy = false;
             }
@@ -26867,7 +27189,7 @@ function ninaApp() {
                 if (r.ok) this.toast('Re-solved · total error ' + this.formatArcsec(r.totalErrorArcsec), 'success');
                 else if (r.error) this.toast(r.error, 'error');
             } catch (e) {
-                this.toast('Re-solve failed: ' + (e?.message || ''), 'error');
+                this.toastFail('Re-solve failed', e);
             } finally {
                 this.rudimentary.busy = false;
             }
@@ -26973,7 +27295,7 @@ function ninaApp() {
                     })
                 });
             } catch (e) {
-                this.toast('Polar settings save failed: ' + (e.message || ''), 'error');
+                this.toastFail('Polar settings save failed', e);
             }
         },
 
@@ -27010,7 +27332,7 @@ function ninaApp() {
                     })
                 });
             } catch (e) {
-                this.toast('Slew & Center settings save failed: ' + (e.message || ''), 'error');
+                this.toastFail('Slew & Center settings save failed', e);
             }
         },
 
@@ -27237,7 +27559,7 @@ function ninaApp() {
                 this.filterWheel.connected = true;
                 this.toast('Filter wheel connected: ' + name, 'ok');
             } catch (e) {
-                this.toast('Filter wheel connection failed: ' + e.message, 'error');
+                this.toastFail('Filter wheel connection failed', e);
             }
         },
 
@@ -27260,7 +27582,7 @@ function ninaApp() {
                         'warn');
                 }
             } catch (e) {
-                this.toast('Filter change failed: ' + (e?.message || e), 'error');
+                this.toastFail('Filter change failed', e);
             }
         },
 
@@ -27279,7 +27601,7 @@ function ninaApp() {
                         'warn');
                 }
             } catch (e) {
-                this.toast('Filter change failed: ' + (e?.message || e), 'error');
+                this.toastFail('Filter change failed', e);
             }
         },
 
@@ -27304,7 +27626,7 @@ function ninaApp() {
                 await this.apiPost('/api/telescope/find-home');
                 this.toast('Mount moving to home', 'info');
             } catch (e) {
-                this.toast('Find Home failed: ' + (e?.message || e), 'error');
+                this.toastFail('Find Home failed', e);
             }
         },
 
@@ -27351,7 +27673,7 @@ function ninaApp() {
                     if (proceed) return this._slewZenith(true);
                     return;
                 }
-                this.toast('Point up failed: ' + (e?.message || e), 'error');
+                this.toastFail('Point up failed', e);
             }
         },
 
@@ -27397,7 +27719,7 @@ function ninaApp() {
                     this.toast('Reset & Home: ' + body.error, 'warn');
                 }
             } catch (e) {
-                this.toast('Reset & Home failed: ' + (e?.message || e), 'error');
+                this.toastFail('Reset & Home failed', e);
             }
         },
 
@@ -27418,7 +27740,7 @@ function ninaApp() {
                     this.toast('Mount position refreshed from driver', 'ok');
                 }
             } catch (e) {
-                this.toast('Refresh position failed: ' + (e?.message || e), 'error');
+                this.toastFail('Refresh position failed', e);
             }
         },
 
@@ -27521,7 +27843,7 @@ function ninaApp() {
                     this.toast('Time sync responded with no confirmation', 'warn');
                 }
             } catch (e) {
-                this.toast('Time sync failed: ' + (e?.message || e), 'error');
+                this.toastFail('Time sync failed', e);
             }
         },
 
@@ -27610,7 +27932,7 @@ function ninaApp() {
                 // populate for the capture tabs, not just after a VIDEO open.
                 this.loadCameraCapabilities();
             } catch (e) {
-                this.toast('Camera connection failed: ' + e.message, 'error');
+                this.toastFail('Camera connection failed', e);
             }
         },
 
@@ -27665,7 +27987,7 @@ function ninaApp() {
                     this.toast(hint, 'warn');
                 }
             } catch (e) {
-                this.toast('Mount detect failed: ' + (e.message || ''), 'error');
+                this.toastFail('Mount detect failed', e);
             } finally {
                 this.mountDiscovering = false;
             }
@@ -27719,7 +28041,7 @@ function ninaApp() {
                     this.toast('No cameras detected for ' + this.cameraDriver, 'warn');
                 }
             } catch (e) {
-                this.toast('Discovery failed: ' + e.message, 'error');
+                this.toastFail('Discovery failed', e);
                 this.cameraVendorDevices = [];
             } finally {
                 this.cameraDiscovering = false;
@@ -27856,7 +28178,7 @@ function ninaApp() {
                     this._pollSolverDbJob();
                 }
             } catch (e) {
-                this.toast('Install failed to start: ' + (e.message || e), 'error');
+                this.toastFail('Install failed to start', e);
             }
         },
 
@@ -27868,7 +28190,7 @@ function ninaApp() {
                     // Unpacking is deliberately past the point of no return.
                     this.toast('Already installing; cancel is only possible while downloading', 'warn');
                 }
-            } catch (e) { this.toast('Cancel failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Cancel failed', e); }
         },
 
         // Poll while a job runs. Stops on any terminal state, and refreshes the
@@ -27934,7 +28256,7 @@ function ninaApp() {
                 }
                 this.loadSolverDatabases();
             } catch (e) {
-                this.toast('Failed to load plate solve settings: ' + (e.message || e), 'error');
+                this.toastFail('Failed to load plate solve settings', e);
             } finally {
                 this.psLoading = false;
             }
@@ -27958,7 +28280,7 @@ function ninaApp() {
                 this.toast('Plate solve settings saved', 'ok');
                 await this.loadPlateSolveConfig();
             } catch (e) {
-                this.toast('Save failed: ' + (e.message || e), 'error');
+                this.toastFail('Save failed', e);
             } finally {
                 this.psSaving = false;
             }
@@ -28247,7 +28569,7 @@ function ninaApp() {
                 await this.apiPost(`/api/guider/exposure/${v}`);
                 this.toast('Guide exposure: ' + (v / 1000).toFixed(1) + ' s', 'ok');
             } catch (e) {
-                this.toast('Set guide exposure failed: ' + (e.message || e), 'error');
+                this.toastFail('Set guide exposure failed', e);
             }
         },
 
@@ -28420,7 +28742,7 @@ function ninaApp() {
                 });
                 this.toast('Guide camera connected: ' + this.guideCamera, 'ok');
             } catch (e) {
-                this.toast('Guide camera connection failed: ' + (e.message || e), 'error');
+                this.toastFail('Guide camera connection failed', e);
             }
         },
         async equipDisconnectGuideCamera() {
@@ -28429,7 +28751,7 @@ function ninaApp() {
                 this.guider.guideCameraConnected = false;
                 this.toast('Guide camera disconnected', 'ok');
             } catch (e) {
-                this.toast('Guide camera disconnect failed: ' + (e.message || e), 'error');
+                this.toastFail('Guide camera disconnect failed', e);
             }
         },
 
@@ -28445,7 +28767,7 @@ function ninaApp() {
                     this.toast('No guide cameras detected for ' + this.guideCameraDriver, 'warn');
                 }
             } catch (e) {
-                this.toast('Guide camera discovery failed: ' + e.message, 'error');
+                this.toastFail('Guide camera discovery failed', e);
                 this.guideCameraVendorDevices = [];
             } finally {
                 this.guideCameraDiscovering = false;
@@ -28473,7 +28795,7 @@ function ninaApp() {
                 if (this.auxCameraVendorDevices.length === 0)
                     this.toast('No aux cameras detected for ' + this.auxCameraDriver, 'warn');
             } catch (e) {
-                this.toast('Aux camera discovery failed: ' + e.message, 'error');
+                this.toastFail('Aux camera discovery failed', e);
                 this.auxCameraVendorDevices = [];
             } finally { this.auxCameraDiscovering = false; }
         },
@@ -28491,7 +28813,7 @@ function ninaApp() {
                 });
                 this.toast('Aux camera connected: ' + this.auxCamera, 'ok');
             } catch (e) {
-                this.toast('Aux camera connection failed: ' + (e.message || e), 'error');
+                this.toastFail('Aux camera connection failed', e);
             }
         },
         async equipDisconnectAuxCamera() {
@@ -28500,7 +28822,7 @@ function ninaApp() {
                 this.auxCameraConnected = false;
                 this.toast('Aux camera disconnected', 'ok');
             } catch (e) {
-                this.toast('Aux camera disconnect failed: ' + (e.message || e), 'error');
+                this.toastFail('Aux camera disconnect failed', e);
             }
         },
         setAuxFocuserDriver(driver) {
@@ -28535,7 +28857,7 @@ function ninaApp() {
                 });
                 this.toast('Aux focuser connected', 'ok');
             } catch (e) {
-                this.toast('Aux focuser connection failed: ' + (e.message || e), 'error');
+                this.toastFail('Aux focuser connection failed', e);
             }
         },
         async equipDisconnectAuxFocuser() {
@@ -28544,7 +28866,7 @@ function ninaApp() {
                 this.auxFocuserConnected = false;
                 this.toast('Aux focuser disconnected', 'ok');
             } catch (e) {
-                this.toast('Aux focuser disconnect failed: ' + (e.message || e), 'error');
+                this.toastFail('Aux focuser disconnect failed', e);
             }
         },
         // ----- Guide-scope focuser (motorised guide scope) -----
@@ -28580,7 +28902,7 @@ function ninaApp() {
                 });
                 this.toast('Guide focuser connected', 'ok');
             } catch (e) {
-                this.toast('Guide focuser connection failed: ' + (e.message || e), 'error');
+                this.toastFail('Guide focuser connection failed', e);
             }
         },
         async equipDisconnectGuideFocuser() {
@@ -28589,12 +28911,12 @@ function ninaApp() {
                 this.guideFocuserConnected = false;
                 this.toast('Guide focuser disconnected', 'ok');
             } catch (e) {
-                this.toast('Guide focuser disconnect failed: ' + (e.message || e), 'error');
+                this.toastFail('Guide focuser disconnect failed', e);
             }
         },
         async toggleAuxEnabled() {
             try { await this.apiPost('/api/aux/enabled', { enabled: !!this.aux.enabled }); }
-            catch (e) { this.toast('Aux toggle failed: ' + (e.message || e), 'error'); }
+            catch (e) { this.toastFail('Aux toggle failed', e); }
             this.saveAux();
         },
         // Persist aux optics/capture settings onto the rig (debounced).
@@ -28656,7 +28978,7 @@ function ninaApp() {
                 this.equipCameraInfo = { coolerOn: false, binX: 0, binY: 0, bitDepth: 0 };
                 this.toast('Camera disconnected', 'warn');
             } catch (e) {
-                this.toast('Camera disconnect failed: ' + e.message, 'error');
+                this.toastFail('Camera disconnect failed', e);
             }
         },
 
@@ -28682,7 +29004,7 @@ function ninaApp() {
                 });
                 this.toast('Mount connected: ' + this.equipMountChoice, 'ok');
             } catch (e) {
-                this.toast('Mount connection failed: ' + e.message, 'error');
+                this.toastFail('Mount connection failed', e);
             }
         },
 
@@ -28753,7 +29075,7 @@ function ninaApp() {
                     ? 'Siril detected: v' + (r.version || '?')
                     : 'Siril not found, check the path override', r.available ? 'ok' : 'warn');
             } catch (e) {
-                this.toast('Siril detection failed: ' + (e.message || ''), 'error');
+                this.toastFail('Siril detection failed', e);
             }
         },
 
@@ -28898,7 +29220,7 @@ function ninaApp() {
                     }
                     this.toast('BGE complete (' + lightsForSiril.length + ' frames clean), starting Siril', 'ok');
                 } catch (e) {
-                    this.toast('GraXpert pre-pass failed: ' + (e.message || ''), 'error');
+                    this.toastFail('GraXpert pre-pass failed', e);
                     this.siril.modalBgePhase = null;
                     return;
                 }
@@ -28927,7 +29249,7 @@ function ninaApp() {
                 this.toast('Siril job started: ' + r.jobId, 'ok');
                 this._sirilStartPolling();
             } catch (e) {
-                this.toast('Siril start failed: ' + (e.message || ''), 'error');
+                this.toastFail('Siril start failed', e);
             }
         },
 
@@ -29023,7 +29345,7 @@ function ninaApp() {
                     + encodeURIComponent(this.siril.currentJobId) + '/cancel');
                 this.toast('Cancellation requested', 'info');
             } catch (e) {
-                this.toast('Cancel failed: ' + (e.message || ''), 'error');
+                this.toastFail('Cancel failed', e);
             }
         },
 
@@ -29049,7 +29371,7 @@ function ninaApp() {
                     ? 'GraXpert detected: v' + (r.version || '?')
                     : 'GraXpert not found, check the path override', r.available ? 'ok' : 'warn');
             } catch (e) {
-                this.toast('GraXpert detection failed: ' + (e.message || ''), 'error');
+                this.toastFail('GraXpert detection failed', e);
             }
         },
 
@@ -29093,7 +29415,7 @@ function ninaApp() {
                 await this.apiPost('/api/onnx/rescan');
                 await this.loadOnnxManifest();
             } catch (e) {
-                this.toast('ONNX rescan failed: ' + (e.message || ''), 'error');
+                this.toastFail('ONNX rescan failed', e);
             } finally {
                 this.onnx.scanning = false;
             }
@@ -29233,7 +29555,7 @@ function ninaApp() {
                 this.power.autoStartEnabled = !!j.enabled;
                 this.toast(j.message || 'Auto-start updated', 'ok', 5000);
             } catch (e) {
-                this.toast('Auto-start change failed: ' + (e?.message || e), 'error');
+                this.toastFail('Auto-start change failed', e);
             } finally {
                 this.power.autoStartBusy = false;
             }
@@ -29291,7 +29613,7 @@ function ninaApp() {
                 this.toast('Factory reset complete. Reloading…', 'ok');
                 setTimeout(() => { window.location.reload(); }, 800);
             } catch (e) {
-                this.toast('Factory reset failed: ' + (e?.message || e), 'error');
+                this.toastFail('Factory reset failed', e);
                 this.factoryResetting = false;
             }
         },
@@ -29986,7 +30308,7 @@ function ninaApp() {
                 this.modelDl.status = { dir, version, receivedBytes: 0, totalBytes: 0, state: 'downloading' };
                 this._modelDlPoll();
             } catch (e) {
-                this.toast('Download failed to start: ' + (e.message || ''), 'error');
+                this.toastFail('Download failed to start', e);
             }
         },
         _modelDlPoll() {
@@ -31362,7 +31684,7 @@ function ninaApp() {
                 this.toast('GraXpert batch started: ' + r.jobId, 'ok');
                 this._graxpertStartPolling();
             } catch (e) {
-                this.toast('GraXpert start failed: ' + (e.message || ''), 'error');
+                this.toastFail('GraXpert start failed', e);
             }
         },
 
@@ -31983,7 +32305,7 @@ function ninaApp() {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 this.toast('Saved workflow "' + name + '"', 'success');
                 await this.workflowLoadList();
-            } catch (e) { this.toast('Save failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Save failed', e); }
         },
         async workflowLoad(name) {
             if (!name) return;
@@ -32001,7 +32323,7 @@ function ninaApp() {
                     ? { mode: doc.combine.mode, roles: { ...(doc.combine.roles || {}) } }
                     : { mode: 'none', roles: {} };
                 this.toast('Loaded "' + this.workflow.name + '"', 'success');
-            } catch (e) { this.toast('Load failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Load failed', e); }
         },
         async workflowDelete(name) {
             const n = name || this.workflow.name;
@@ -32012,7 +32334,7 @@ function ninaApp() {
                 await this.apiFetch('/api/workflow/defs/' + encodeURIComponent(n), { method: 'DELETE' });
                 this.toast('Deleted "' + n + '"', 'ok');
                 await this.workflowLoadList();
-            } catch (e) { this.toast('Delete failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Delete failed', e); }
         },
 
         // --- runner ---
@@ -33310,7 +33632,7 @@ function ninaApp() {
                 this.mount.parked = false;
                 this.toast('Mount disconnected', 'warn');
             } catch (e) {
-                this.toast('Mount disconnect failed: ' + e.message, 'error');
+                this.toastFail('Mount disconnect failed', e);
             }
         },
 
@@ -33334,7 +33656,7 @@ function ninaApp() {
                 });
                 this.toast('Focuser connected: ' + this.equipFocuserChoice, 'ok');
             } catch (e) {
-                this.toast('Focuser connection failed: ' + e.message, 'error');
+                this.toastFail('Focuser connection failed', e);
             }
         },
 
@@ -33348,7 +33670,7 @@ function ninaApp() {
                 this.focusTemp = null;
                 this.toast('Focuser disconnected', 'warn');
             } catch (e) {
-                this.toast('Focuser disconnect failed: ' + e.message, 'error');
+                this.toastFail('Focuser disconnect failed', e);
             }
         },
 
@@ -33368,7 +33690,7 @@ function ninaApp() {
                 });
                 this.toast('Filter wheel connected: ' + this.equipFilterChoice, 'ok');
             } catch (e) {
-                this.toast('Filter wheel connection failed: ' + e.message, 'error');
+                this.toastFail('Filter wheel connection failed', e);
             }
         },
 
@@ -33408,7 +33730,7 @@ function ninaApp() {
                     this.toast('No focusers detected for ' + this.focuserDriver, 'warn');
                 }
             } catch (e) {
-                this.toast('Detect failed: ' + (e.message || ''), 'error');
+                this.toastFail('Detect failed', e);
                 this.focuserVendorDevices = [];
             } finally {
                 this.focuserDiscovering = false;
@@ -33424,7 +33746,7 @@ function ninaApp() {
                     this.toast('No filter wheels detected for ' + this.filterWheelDriver, 'warn');
                 }
             } catch (e) {
-                this.toast('Detect failed: ' + (e.message || ''), 'error');
+                this.toastFail('Detect failed', e);
                 this.filterWheelVendorDevices = [];
             } finally {
                 this.filterWheelDiscovering = false;
@@ -33446,7 +33768,7 @@ function ninaApp() {
                 this.filterWheel.currentFilter = '';
                 this.toast('Filter wheel disconnected', 'warn');
             } catch (e) {
-                this.toast('Filter wheel disconnect failed: ' + e.message, 'error');
+                this.toastFail('Filter wheel disconnect failed', e);
             }
         },
 
@@ -33460,7 +33782,7 @@ function ninaApp() {
                 this.rotator.name = this.equipRotatorChoice;
                 this.toast('Rotator connected: ' + this.equipRotatorChoice, 'ok');
             } catch (e) {
-                this.toast('Rotator connection failed: ' + e.message, 'error');
+                this.toastFail('Rotator connection failed', e);
             }
         },
         async equipDisconnectRotator() {
@@ -33469,7 +33791,7 @@ function ninaApp() {
                 this.rotator = { connected: false, name: '', position: null, moving: false, reversed: false };
                 this.toast('Rotator disconnected', 'warn');
             } catch (e) {
-                this.toast('Rotator disconnect failed: ' + e.message, 'error');
+                this.toastFail('Rotator disconnect failed', e);
             }
         },
         async rotatorMoveTo() {
@@ -33477,7 +33799,7 @@ function ninaApp() {
                 await this.apiPost('/api/rotator/move', { angle: this.equipRotatorTarget });
                 this.toast(`Rotator moving to ${this.equipRotatorTarget}°`, 'ok');
             } catch (e) {
-                this.toast('Rotator move failed: ' + e.message, 'error');
+                this.toastFail('Rotator move failed', e);
             }
         },
         async rotatorAbort() {
@@ -33504,7 +33826,7 @@ function ninaApp() {
                 this.flatDevice.name = this.equipFlatChoice;
                 this.toast('Flat panel connected: ' + this.equipFlatChoice, 'ok');
             } catch (e) {
-                this.toast('Flat panel connection failed: ' + e.message, 'error');
+                this.toastFail('Flat panel connection failed', e);
             }
         },
         async equipDisconnectFlat() {
@@ -33513,7 +33835,7 @@ function ninaApp() {
                 this.flatDevice = { connected: false, name: '', lightOn: false, brightness: 0, coverOpen: false, coverMoving: false };
                 this.toast('Flat panel disconnected', 'warn');
             } catch (e) {
-                this.toast('Flat panel disconnect failed: ' + e.message, 'error');
+                this.toastFail('Flat panel disconnect failed', e);
             }
         },
         async flatToggleLight() {
@@ -33552,7 +33874,7 @@ function ninaApp() {
                 this.dome.name = this.equipDomeChoice;
                 this.toast('Dome connected: ' + this.equipDomeChoice, 'ok');
             } catch (e) {
-                this.toast('Dome connection failed: ' + e.message, 'error');
+                this.toastFail('Dome connection failed', e);
             }
         },
         async equipDisconnectDome() {
@@ -33561,7 +33883,7 @@ function ninaApp() {
                 this.dome = { connected: false, name: '', azimuth: null, moving: false, parked: false, slaved: false, shutter: 'Unknown' };
                 this.toast('Dome disconnected', 'warn');
             } catch (e) {
-                this.toast('Dome disconnect failed: ' + e.message, 'error');
+                this.toastFail('Dome disconnect failed', e);
             }
         },
         async domeSlew() {
@@ -33601,7 +33923,7 @@ function ninaApp() {
                 this.weather.name = this.equipWeatherChoice;
                 this.toast('Weather connected: ' + this.equipWeatherChoice, 'ok');
             } catch (e) {
-                this.toast('Weather connection failed: ' + e.message, 'error');
+                this.toastFail('Weather connection failed', e);
             }
         },
         async equipDisconnectWeather() {
@@ -33615,7 +33937,7 @@ function ninaApp() {
                 };
                 this.toast('Weather disconnected', 'warn');
             } catch (e) {
-                this.toast('Weather disconnect failed: ' + e.message, 'error');
+                this.toastFail('Weather disconnect failed', e);
             }
         },
         async weatherRefresh() {
@@ -33641,7 +33963,7 @@ function ninaApp() {
                     this.toast('No power boxes detected for ' + this.equipSwitchDriver, 'warn');
                 }
             } catch (e) {
-                this.toast('Detect failed: ' + (e.message || ''), 'error');
+                this.toastFail('Detect failed', e);
                 this.powerBoxVendorDevices = [];
             } finally {
                 this.powerBoxDiscovering = false;
@@ -33656,7 +33978,7 @@ function ninaApp() {
                 this.powerBox.name = this.equipSwitchChoice;
                 this.toast('Power box connected: ' + this.equipSwitchChoice, 'ok');
             } catch (e) {
-                this.toast('Power box connection failed: ' + e.message, 'error');
+                this.toastFail('Power box connection failed', e);
             }
         },
         async equipDisconnectSwitch() {
@@ -33665,14 +33987,14 @@ function ninaApp() {
                 this.powerBox = { connected: false, name: '', driver: '', channels: [] };
                 this.toast('Power box disconnected', 'warn');
             } catch (e) {
-                this.toast('Power box disconnect failed: ' + e.message, 'error');
+                this.toastFail('Power box disconnect failed', e);
             }
         },
         async powerBoxToggle(ch) {
             try {
                 await this.apiPost('/api/switch/set-bool', { id: ch.id, on: !ch.value });
             } catch (e) {
-                this.toast('Power box toggle failed: ' + e.message, 'error');
+                this.toastFail('Power box toggle failed', e);
             }
         },
         async powerBoxSetValue(ch) {
@@ -33682,7 +34004,7 @@ function ninaApp() {
                 await this.apiPost('/api/switch/set-value', { id: ch.id, value: v });
                 this.toast(`${ch.name} = ${v}`, 'ok');
             } catch (e) {
-                this.toast('Power box set failed: ' + e.message, 'error');
+                this.toastFail('Power box set failed', e);
             }
         },
         async powerBoxRefresh() {
@@ -33733,7 +34055,7 @@ function ninaApp() {
                 this.toast('Channel names saved', 'ok');
                 await this.powerBoxRefresh();
             } catch (e) {
-                this.toast('Could not save the channel names: ' + (e.message || e), 'error');
+                this.toastFail('Could not save the channel names', e);
             }
         },
 
@@ -33815,7 +34137,7 @@ function ninaApp() {
                 await this.apiPost('/api/guider/auto-start/' + (enabled ? 'true' : 'false'));
                 this.toast(enabled ? 'PHD2 will auto-start on next boot' : 'PHD2 auto-start disabled', 'ok');
             } catch (e) {
-                this.toast('Could not save auto-start preference: ' + e.message, 'error');
+                this.toastFail('Could not save auto-start preference', e);
                 this.phd2AutoStart = !enabled; // revert
             }
         },
@@ -33831,7 +34153,7 @@ function ninaApp() {
                 } else {
                     this.toast('PHD2 launched but event server did not come up', 'warn');
                 }
-            } catch (e) { this.toast('Launch failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Launch failed', e); }
         },
 
         async shutdownPhd2() {
@@ -33842,7 +34164,7 @@ function ninaApp() {
                 this.guider.connected = false;
                 this.phd2EquipmentConnected = false;
                 this.toast('PHD2 shut down', 'warn');
-            } catch (e) { this.toast('Shutdown failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Shutdown failed', e); }
         },
 
         async fetchPhd2Profiles() {
@@ -33868,7 +34190,7 @@ function ninaApp() {
                     this.loadPhd2AlgoPresets(),
                     this.loadPhd2AlgoParams()
                 ]);
-            } catch (e) { this.toast('Profile switch failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Profile switch failed', e); }
         },
 
         async fetchPhd2Exposure() {
@@ -33919,7 +34241,7 @@ function ninaApp() {
                 this.phd2EquipmentConnected = true;
                 this.toast('PHD2 equipment connected', 'ok');
                 this.fetchGuiderEquipment();
-            } catch (e) { this.toast('Connect equipment failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Connect equipment failed', e); }
         },
 
         async disconnectPhd2Equipment() {
@@ -33927,7 +34249,7 @@ function ninaApp() {
                 await this.apiPost('/api/guider/equipment/disconnect');
                 this.phd2EquipmentConnected = false;
                 this.toast('PHD2 equipment disconnected', 'warn');
-            } catch (e) { this.toast('Disconnect failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Disconnect failed', e); }
         },
         // (guiderDisconnect removed: the GUIDE tab's Disconnect button was
         // dropped — guider connection is managed via RIGS/equipment, and a
@@ -33941,7 +34263,7 @@ function ninaApp() {
                     timeoutSeconds: 240
                 });
                 this.toast(`Smart calibrate kicked off (job ${r.jobId?.slice(0, 8)}…)`, 'info');
-            } catch (e) { this.toast('Smart calibrate failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Smart calibrate failed', e); }
         },
 
         // ----- PH2X-5: Algorithm presets + advanced knobs -----
@@ -33957,7 +34279,7 @@ function ninaApp() {
                 this.phd2ActivePreset = name;
                 this.toast(`Applied preset: ${name}`, 'ok');
                 this.loadPhd2AlgoParams();  // refresh live values
-            } catch (e) { this.toast('Apply preset failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Apply preset failed', e); }
         },
         async loadPhd2AlgoParams() {
             try {
@@ -33984,7 +34306,7 @@ function ninaApp() {
                 });
                 this.phd2ActivePreset = 'Custom';
                 this.toast(`${axis}/${name} = ${value}`, 'ok');
-            } catch (e) { this.toast('Set algo param failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Set algo param failed', e); }
         },
 
         // ----- PH2X-6/8: xpra GUI session lifecycle -----
@@ -34081,7 +34403,7 @@ function ninaApp() {
             try {
                 await this.apiPost('/api/guider/gui-session/stop');
                 this.toast('PHD2 GUI session stopped', 'warn');
-            } catch (e) { this.toast('Stop failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Stop failed', e); }
             finally {
                 this.phd2GuiBusy = false;
                 await this.loadPhd2GuiStatus();
@@ -34095,7 +34417,7 @@ function ninaApp() {
                 // Re-run the readiness orchestration so the iframe only
                 // reloads once xpra is serving again (avoids the 404 flash).
                 await this.phd2GuiEnsureReady();
-            } catch (e) { this.toast('Restart failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Restart failed', e); }
             finally {
                 this.phd2GuiBusy = false;
                 await this.loadPhd2GuiStatus();
@@ -34122,7 +34444,7 @@ function ninaApp() {
                     }
                 });
             } catch (e) {
-                this.toast('Relaunch failed: ' + e.message, 'error');
+                this.toastFail('Relaunch failed', e);
             } finally {
                 this.phd2GuiBusy = false;
                 await this.loadPhd2GuiStatus();
@@ -34176,7 +34498,7 @@ function ninaApp() {
                     this.toast('TightVNC still not detected', 'warn');
                 }
             } catch (e) {
-                this.toast('Re-detect failed: ' + e.message, 'error');
+                this.toastFail('Re-detect failed', e);
             } finally {
                 this.phd2VncBusy = false;
             }
@@ -34193,7 +34515,7 @@ function ninaApp() {
                     this.toast(r.error || 'Failed to start TightVNC service', 'error');
                 }
             } catch (e) {
-                this.toast('Start failed: ' + e.message, 'error');
+                this.toastFail('Start failed', e);
             } finally {
                 this.phd2VncBusy = false;
                 await this.loadPhd2VncStatus();
@@ -34209,7 +34531,7 @@ function ninaApp() {
                     this.toast(r.error || 'Failed to stop TightVNC service', 'error');
                 }
             } catch (e) {
-                this.toast('Stop failed: ' + e.message, 'error');
+                this.toastFail('Stop failed', e);
             } finally {
                 this.phd2VncBusy = false;
                 await this.loadPhd2VncStatus();
@@ -34224,7 +34546,7 @@ function ninaApp() {
                     recalibrate: false
                 });
                 this.toast('Starting guider…', 'ok');
-            } catch (e) { this.toast('Start guide failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Start guide failed', e); }
         },
         async guiderStop() {
             try { await this.apiPost('/api/guider/stop'); this.toast('Guiding stopped', 'warn'); }
@@ -34252,7 +34574,7 @@ function ninaApp() {
                     settleTimeout: this.guiderSettleTimeout
                 });
                 this.toast(`Dither ${this.guiderDitherPx}px requested`, 'ok');
-            } catch (e) { this.toast('Dither failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Dither failed', e); }
         },
         async guiderFindStar() {
             try { await this.apiPost('/api/guider/find-star'); this.toast('Auto-selecting star', 'ok'); }
@@ -34274,7 +34596,7 @@ function ninaApp() {
                         dec: this.guider.decAggression
                     })
                 });
-            } catch (e) { this.toast('Aggression update failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Aggression update failed', e); }
         },
         // Per-axis minimum move (px). Same contract as setGuideAggression: pass
         // null for the axis you are not changing. Errors under the deadband are
@@ -34291,7 +34613,7 @@ function ninaApp() {
                         dec: this.guider.minMoveDecPx ?? 0.15
                     })
                 });
-            } catch (e) { this.toast('Min move update failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Min move update failed', e); }
         },
         // Declination guide mode: auto | north | south | off.
         async setNativeDecGuideMode(mode) {
@@ -34303,7 +34625,7 @@ function ninaApp() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ mode })
                 });
-            } catch (e) { this.toast('Dec guide mode failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Dec guide mode failed', e); }
         },
         async guiderClearHistory() {
             try {
@@ -34318,7 +34640,7 @@ function ninaApp() {
             try {
                 await this.apiPost('/api/guider/calibration/mode', { mode });
                 this.toast('Guide calibration mode: ' + mode, 'ok');
-            } catch (e) { this.toast('Mode change failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Mode change failed', e); }
             finally { setTimeout(() => { this._guideCalEditing = false; }, 500); }
         },
         async setGuideCalFrames(frames) {
@@ -34331,7 +34653,7 @@ function ninaApp() {
             try {
                 await this.apiPost('/api/guider/calibration/build');
                 this.toast('Building guide dark library: cover the scope', 'ok');
-            } catch (e) { this.toast('Build failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Build failed', e); }
         },
         async cancelGuideCal() {
             try { await this.apiPost('/api/guider/calibration/cancel'); } catch (e) { }
@@ -34340,7 +34662,7 @@ function ninaApp() {
             try {
                 await this.apiPost('/api/guider/calibration/clear');
                 this.toast('Guide dark library cleared', 'ok');
-            } catch (e) { this.toast('Clear failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Clear failed', e); }
         },
 
         // Compute SVG polyline points string for the guider chart.
@@ -34475,7 +34797,7 @@ function ninaApp() {
                 const data = await this.apiGet('/api/sky/catalog/filter?' + params.toString());
                 this.atlasResults = data.results || [];
             } catch (e) {
-                this.toast('Atlas search failed: ' + e.message, 'error');
+                this.toastFail('Atlas search failed', e);
             }
         },
 
@@ -34494,7 +34816,7 @@ function ninaApp() {
                     `/api/sky/altitude?ra=${this.skyTarget.ra}&dec=${this.skyTarget.dec}&stepMinutes=15`);
                 this.$nextTick(() => this.updateAltChart());
             } catch (e) {
-                this.toast('Altitude calc failed: ' + e.message, 'error');
+                this.toastFail('Altitude calc failed', e);
             }
         },
 
@@ -34566,7 +34888,7 @@ function ninaApp() {
                 });
                 this.toast('Loaded from Stellarium: ' + t.name, 'ok');
             } catch (e) {
-                this.toast('Stellarium fetch failed: ' + e.message, 'error');
+                this.toastFail('Stellarium fetch failed', e);
             }
         },
 
@@ -34958,7 +35280,7 @@ function ninaApp() {
                 this.toast('Slew & center started', 'ok');
                 this.startSlewCenterPolling();
             } catch (e) {
-                this.toast('Slew & center failed: ' + e.message, 'error');
+                this.toastFail('Slew & center failed', e);
             }
         },
 
@@ -35114,7 +35436,7 @@ function ninaApp() {
                 await this.apiPost('/api/telescope/sync', { ra: target.ra, dec: target.dec });
                 this.toast('Mount synced to map centre (no movement)', 'ok');
             } catch (e) {
-                this.toast('Mount sync failed: ' + (e?.message || e), 'error');
+                this.toastFail('Mount sync failed', e);
             }
         },
 
@@ -35168,7 +35490,7 @@ function ninaApp() {
                 if (signal.aborted || e?.name === 'AbortError') {
                     this.toast('Solve & Sync aborted', 'info');
                 } else {
-                    this.toast('Solve & Sync failed: ' + (e?.message || e), 'error');
+                    this.toastFail('Solve & Sync failed', e);
                 }
             } finally {
                 this.solveSyncBusy = false;
@@ -35363,7 +35685,7 @@ function ninaApp() {
                 catch (e) { /* fall through to telescope abort below */ }
             }
             try { await this.apiPost('/api/telescope/abort'); }
-            catch (e) { this.toast('Mount abort failed: ' + (e.message || ''), 'error'); }
+            catch (e) { this.toastFail('Mount abort failed', e); }
         },
 
         async cancelSlewCenter() {
@@ -35640,7 +35962,7 @@ function ninaApp() {
                 this.startSeqPolling();
                 this.toast(resume ? 'Sequence resumed' : 'Sequence started', 'ok');
             } catch (e) {
-                this.toast('Start failed: ' + (e.message || e), 'error');
+                this.toastFail('Start failed', e);
             }
         },
 
@@ -35660,7 +35982,7 @@ function ninaApp() {
                 this.toast('Saved set "' + name + '"', 'ok');
                 this.seqSetName = '';
                 await this.loadSeqSets();
-            } catch (e) { this.toast('Save failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Save failed', e); }
         },
         async loadSeqSet(name) {
             if (!name) return;
@@ -35672,7 +35994,7 @@ function ninaApp() {
                 // Push to the server so a subsequent Start uses it.
                 await this.apiPost('/api/sequence', this.sequence);
                 this.toast('Loaded set "' + name + '"', 'ok');
-            } catch (e) { this.toast('Load failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Load failed', e); }
         },
         async deleteSeqSet(name) {
             if (!name) return;
@@ -35682,7 +36004,7 @@ function ninaApp() {
                 await this.apiFetch('/api/sequence/sets/' + encodeURIComponent(name), { method: 'DELETE' });
                 this.toast('Deleted set "' + name + '"', 'ok');
                 await this.loadSeqSets();
-            } catch (e) { this.toast('Delete failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Delete failed', e); }
         },
 
         async pauseSequence() {
@@ -35724,7 +36046,7 @@ function ninaApp() {
                 this.seqState = 'idle';
                 this.toast('Sequence aborted', 'warn');
             } catch (e) {
-                this.toast('Abort failed: ' + (e.message || e), 'error');
+                this.toastFail('Abort failed', e);
             }
         },
 
@@ -36143,7 +36465,7 @@ function ninaApp() {
                     body: JSON.stringify(this.simulatorSettings)
                 });
             } catch (e) {
-                this.toast('Simulator settings save failed: ' + (e.message || e), 'error');
+                this.toastFail('Simulator settings save failed', e);
             }
         },
 
@@ -36152,7 +36474,7 @@ function ninaApp() {
                 await this.apiPost('/api/simulator/detect');
                 this.toast('Simulator re-detected', 'ok');
             } catch (e) {
-                this.toast('Re-detect failed: ' + (e.message || e), 'error');
+                this.toastFail('Re-detect failed', e);
             }
         },
 
@@ -36168,7 +36490,7 @@ function ninaApp() {
                 });
                 this.toast('Simulator launched: ' + (resp.devices || []).join(', '), 'ok');
             } catch (e) {
-                this.toast('Launch failed: ' + (e.message || e), 'error');
+                this.toastFail('Launch failed', e);
             }
         },
 
@@ -36177,7 +36499,7 @@ function ninaApp() {
                 await this.apiPost('/api/simulator/shutdown');
                 this.toast('Simulator stopped', 'ok');
             } catch (e) {
-                this.toast('Shutdown failed: ' + (e.message || e), 'error');
+                this.toastFail('Shutdown failed', e);
             }
         },
 
@@ -36379,7 +36701,7 @@ function ninaApp() {
             try {
                 this.indiWeb.watchdog = await this.apiPost('/api/indi/web/watchdog/enable?value=' + (value ? 'true' : 'false'));
                 this.toast('Driver watchdog ' + (value ? 'enabled' : 'disabled'), 'ok');
-            } catch (e) { this.toast('Watchdog toggle failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Watchdog toggle failed', e); }
         },
         // Credentialed readiness probe + cache-busting iframe (re)load for the
         // embedded indi-web panel. Mirrors phd2GuiProbeReady / _reloadPhd2GuiIframe.
@@ -36571,7 +36893,7 @@ function ninaApp() {
                     this.toast('Start failed: ' + (r?.error || 'unknown'), 'error');
                 }
             } catch (e) {
-                this.toast('Start failed: ' + (e.message || e), 'error');
+                this.toastFail('Start failed', e);
             } finally {
                 this.indiWeb.busy = false;
                 await this.indiWebStatusRefresh();
@@ -36588,7 +36910,7 @@ function ninaApp() {
                 this.toast('indi-web stopped', 'ok');
                 this.indiWeb.iframeSrc = 'about:blank';
             } catch (e) {
-                this.toast('Stop failed: ' + (e.message || e), 'error');
+                this.toastFail('Stop failed', e);
             } finally {
                 this.indiWeb.busy = false;
                 await this.indiWebStatusRefresh();
@@ -36647,7 +36969,7 @@ function ninaApp() {
                     this.toast('Launch failed: ' + (r?.error || 'unknown'), 'error');
                 }
             } catch (e) {
-                this.toast('Launch failed: ' + (e.message || e), 'error');
+                this.toastFail('Launch failed', e);
             } finally {
                 this.indiCp.busy = false;
                 await this.indiCpStatusRefresh();
@@ -36857,7 +37179,7 @@ function ninaApp() {
                 this.toast(text ? 'Note saved' : 'Note cleared', 'ok');
                 ed.open = false;
             } catch (e) {
-                this.toast('Could not save note: ' + (e?.message || e), 'error');
+                this.toastFail('Could not save note', e);
             } finally {
                 ed.saving = false;
             }
@@ -36888,7 +37210,7 @@ function ninaApp() {
                 setTimeout(() => this.indiPropsLoad(), 200);
             } catch (e) {
                 this.indiProps.lastError = 'resync failed: ' + (e.message || e);
-                this.toast('Resync failed: ' + (e?.message || e), 'error');
+                this.toastFail('Resync failed', e);
             } finally {
                 this.indiProps.busy = false;
             }
@@ -38230,7 +38552,12 @@ function ninaApp() {
             const n = this.network || {};
             const mode = n.mode === 'hotspot' ? 'Hotspot' : 'Station';
             const ssid = n.ssid ? (' · ' + n.ssid) : '';
-            return 'WiFi ' + mode + ssid + ' · ' + (n.signal != null ? n.signal : 0) + '% signal';
+            // NETUX-4: say WHOSE radio this is. Read as "my signal", a healthy
+            // reading here talks the operator out of suspecting the network
+            // while the browser's own leg is the thing starving.
+            return 'WiFi ' + mode + ssid + ' · ' + (n.signal != null ? n.signal : 0) + '% signal'
+                + '\n' + this._t('This is the host radio, not this device. '
+                                 + 'The link chip shows the leg from here to the host.');
         },
 
         // Wrap ws.send so it goes through _netTx. Returns the bytes
@@ -38262,7 +38589,15 @@ function ninaApp() {
         // --- Status WebSocket handler ---
 
         handleStatusMessage(msg) {
+            // NETUX-1: the ping echo shares this socket. It is answered
+            // straight from the host's receive loop, so it must be taken
+            // before the `status` gate below drops everything else.
+            if (msg && msg.type === 'pong') { this._linkPong(msg); return; }
             if (msg.type !== 'status') return;
+
+            // Any status frame is proof the link delivered, which is the
+            // measurement the whole link indicator is built on.
+            this._noteStatusFrame();
 
             // DBGLOG-6: absorb the debug log sub-object before anything
             // else. Cheap, side-effect-only, and the badge needs to
@@ -39312,7 +39647,7 @@ function ninaApp() {
                 this._advSeqPoll = setInterval(() => this._advSeqRefresh(), 2000);
                 // Init Sortable.js after the tree DOM lands (next tick)
                 setTimeout(() => this._advSeqInitSortable(), 100);
-            } catch (e) { this.toast('Adv seq load failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Adv seq load failed', e); }
         },
 
         _advSeqInitSortable() {
@@ -39681,7 +40016,7 @@ function ninaApp() {
                 } catch (_) { /* best-effort; the next tab open will repopulate */ }
             } catch (e) {
                 if (!silent) {
-                    this.toast('Alpaca discovery failed: ' + e.message, 'error');
+                    this.toastFail('Alpaca discovery failed', e);
                 } else {
                     console.warn('[Polaris] auto Alpaca discovery failed:', e.message);
                 }
@@ -39944,7 +40279,7 @@ function ninaApp() {
                     this.tab = 'seqadv';
                     await this.loadAdvSeq();
                 }
-            } catch (e) { this.toast('Mosaic export failed: ' + e.message, 'error'); }
+            } catch (e) { this.toastFail('Mosaic export failed', e); }
         },
 
         // Export the mosaic panels as a NEW imaging Plan (PLAN tab) — one target
@@ -39984,7 +40319,7 @@ function ninaApp() {
                 this.mosaicOpen = false;
                 this.tab = 'plan';
                 this.toast(`Exported ${p.targets.length} panels to a new plan`, 'ok');
-            } catch (e) { this.toast('Plan export failed: ' + (e.message || e), 'error'); }
+            } catch (e) { this.toastFail('Plan export failed', e); }
         }
     };
 }
@@ -40023,6 +40358,13 @@ class ApiError extends Error {
         this.body = body;
         this.context = context;
         this.requestId = requestId;
+        // NETUX-3: an answer arrived, so the link did its job. Whatever went
+        // wrong is the host's or the device's, and the toast should say so
+        // with the server's own words. Only 502/503/504 are ambiguous: they
+        // come from a proxy in front of the host (the relay), which is a
+        // transport failure wearing an HTTP status.
+        this.kind = (status === 502 || status === 503 || status === 504)
+            ? 'network' : 'http';
     }
 }
 

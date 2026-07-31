@@ -295,6 +295,37 @@ WebGL2 isn't initialized. Browser console (F12) shows shader compile
 errors. Workaround: Settings → "Force JPEG mode" → server encodes
 JPEGs instead. Slightly more CPU on the host but works in any browser.
 
+## Everything fails at once and the equipment looks broken
+
+A weak WiFi link between the **browser** and the host produces a very
+convincing impression of failing hardware: commands time out, the mount
+coordinates stop moving, the cooler temperature sits still, the preview
+freezes on the last frame that made it through. Nothing is wrong with the
+rig. The session runs **on the host**, and it keeps running while your
+browser is starving.
+
+Polaris measures that leg and says so:
+
+- The **⇅ chip** in the activity bar is the round trip from *this device* to
+  the host. Amber means slow, red means no status is arriving. The tooltip
+  carries the round trip, the age of the last status frame, and the share of
+  unanswered pings.
+- The **WiFi bars beside it are the host's radio**, reported by the host. They
+  can read a healthy 70% while your own leg is the problem, which is exactly
+  how a bad link gets mistaken for bad equipment.
+- When the link stays bad, the page **dims the panels that carry live numbers**
+  and the banner says the host keeps running the session on its own. Frozen
+  numbers that still look live are the whole illusion.
+- A command that gets no reply now says so as a **network** message instead of
+  a device one, and warns that the host may have executed it anyway. Re-press
+  a command only after the link recovers and you can see the real state again.
+- When the link recovers, one toast summarises how long it was bad and how
+  many commands went unanswered.
+
+If the chip is red while the host's WiFi bars are full, move the *client*
+closer to the access point, or reach the host over Ethernet. If both are bad,
+the problem is at the host end or at the access point.
+
 ## See also
 
 - [FAQ](faq.md), quick-answer questions

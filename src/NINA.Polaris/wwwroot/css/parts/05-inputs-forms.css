@@ -84,10 +84,87 @@
     animation: pulse-banner 2s ease-in-out infinite;
 }
 
+/* NETUX-5: the second line carries the part the operator cannot deduce, that
+   the host is still running the session. Smaller, and it does not pulse: the
+   alarm is the first line's job, this one is the explanation. */
+.connection-banner-why {
+    display: block;
+    font-weight: 400;
+    font-size: 12px;
+    opacity: 0.92;
+    margin-top: 2px;
+}
+
+/* NETUX-2/5: a degraded link is amber, not red. Red is for "gone", and using
+   it for "slow" is how a network wobble gets read as equipment failure. */
+.connection-banner.is-slow {
+    background: var(--warn, #d98c00);
+    animation: none;
+}
+
 @keyframes pulse-banner {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
 }
+
+/* ---- NETUX-2: stale telemetry ----------------------------------------
+   When the status stream stops, every live number on screen freezes while
+   still looking authoritative: the mount coordinates stop moving, the cooler
+   sits at one temperature, the guiding trace flatlines. That reads as broken
+   equipment. Fading the surfaces that carry host-owned numbers says "this
+   view is old" without hiding anything the operator may still want to read.
+   Deliberately not applied to controls: buttons stay at full contrast,
+   because the operator can still press them and the host will still obey. */
+body.link-slow .activity-bar,
+body.link-slow .status-bar-tray-items .status-indicator,
+body.link-offline .activity-bar,
+body.link-offline .status-bar-tray-items .status-indicator {
+    transition: opacity 0.4s ease;
+}
+body.link-slow .activity-bar,
+body.link-slow .status-bar-tray-items .status-indicator { opacity: 0.72; }
+body.link-offline .activity-bar,
+body.link-offline .status-bar-tray-items .status-indicator { opacity: 0.5; }
+
+/* The link chip is the one thing in the activity bar that must NOT fade:
+   it is the explanation for everything else fading. */
+body.link-slow .activity-bar .activity-link,
+body.link-offline .activity-bar .activity-link { opacity: 1; }
+
+/* The preview is the strongest "everything is fine" signal on the page, so
+   it gets an explicit label rather than only a fade. */
+body.link-offline .preview-pane { position: relative; }
+body.link-offline .preview-pane::after {
+    content: attr(data-stale-label);
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.62);
+    border: 1px solid var(--warn, #d98c00);
+    pointer-events: none;
+}
+
+/* ---- NETUX-4: link chip in the activity bar -------------------------- */
+.activity-link {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 4px;
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+}
+.activity-link-icon { opacity: 0.75; }
+.activity-link.link-ok   { color: var(--text-muted); }
+.activity-link.link-warn { color: var(--warn, #d98c00); font-weight: 600; }
+.activity-link.link-bad  { color: var(--danger); font-weight: 600; }
 
 /* Toast notifications */
 .toast-container {

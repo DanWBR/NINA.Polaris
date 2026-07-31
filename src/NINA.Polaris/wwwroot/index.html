@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260730-portraitframe">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260728-slimaddr2">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260731-videonudge">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260712-fieldbugs1">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260731-netux">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260728-barcollapse">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260714-overlayfix">
@@ -110,8 +110,14 @@
     <!-- FOUC gate for non-English UIs (see head IIFE + js/i18n.js). -->
     <style>html.i18n-loading body { visibility: hidden; }</style>
 </head>
+<!-- NETUX-2: link state is published on <body> so any panel showing live
+     device telemetry can be marked stale from CSS alone. Frozen numbers that
+     still look live are what made a weak WiFi leg read as a stopped mount and
+     a dead camera (field report). -->
 <body x-data="ninaApp()" x-init="init()" :style="_assistantDockPush()"
-      :class="{ 'asst-dock-dragging': asst.panelDragging }">
+      :class="{ 'asst-dock-dragging': asst.panelDragging,
+                'link-slow': link.alarm && link.state === 'slow',
+                'link-offline': link.state === 'offline' }">
 
     <!-- AUTH-3: full-screen overlay that intercepts EVERY interaction
          until auth resolves. Three states:
@@ -3170,7 +3176,13 @@
                      canvas left grows into all available width + height,
                      control sidebar 320px on the right. Mobile (≤900px)
                      collapses back to a single-column stack. -->
+                <!-- NETUX-2: data-stale-label feeds the ::after ribbon that
+                     only renders while the link is offline. A preview that
+                     simply stops updating is the most convincing "the camera
+                     died" evidence the UI can produce, so it says otherwise
+                     in its own corner. -->
                 <div class="preview-pane"
+                     :data-stale-label="_t('Frozen view: no data from the host')"
                      :class="{ 'controls-collapsed': quickControlsCollapsed,
                                'frame-controls-hidden': frameControlsHidden }">
                 <div class="preview-area">
@@ -16143,6 +16155,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <span class="activity-net-rate" x-text="formatBytesPerSec(net.txRate)"></span>
             </span>
         </div>
+        <!-- NETUX-4: health of THIS browser's link to the host, which is a
+             different measurement from the WiFi bars beside it: those are the
+             host's own radio, reported by the host, and they stay green while
+             the browser's leg starves. Shown as soon as one round trip has
+             been measured, so the operator learns what "normal" looks like
+             here before the night it stops being normal. -->
+        <div class="activity-link" :class="linkTone()" :title="linkTooltip()"
+             x-show="link.state !== 'ok' || link.rttMedianMs != null" x-cloak>
+            <span class="activity-link-icon" aria-hidden="true">⇅</span>
+            <span class="activity-link-val" x-text="linkLabel()"></span>
+        </div>
         <!-- WiFi signal. Sits next to the net rx/tx block. Data is
              host-owned (NetworkManagerService `network` block over WS):
              only shown when the host reports a WiFi link (station or
@@ -16240,9 +16263,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
         </button>
     </footer>
 
-    <!-- Connection lost banner -->
-    <div class="connection-banner" x-show="connectionLost" x-transition>
-        <span>Connection to server lost. Reconnecting...</span>
+    <!-- Connection lost banner.
+         NETUX-5: it now also covers a link that is merely bad (amber, no
+         pulse), and it carries the sentence the operator cannot deduce from
+         the screen: the session is host-owned and keeps running. Without it,
+         a browser that stops receiving looks exactly like a rig that stopped
+         working, which is what happened in the field. -->
+    <div class="connection-banner"
+         :class="{ 'is-slow': !connectionLost && link.state !== 'offline' }"
+         x-show="connectionLost || link.alarm" x-transition x-cloak>
+        <span x-show="connectionLost || link.state === 'offline'">
+            Connection to server lost. Reconnecting...
+        </span>
+        <span x-show="!connectionLost && link.state === 'slow'">
+            The network to the host is slow right now.
+        </span>
+        <span class="connection-banner-why">
+            The host keeps running the session on its own. This is the link
+            between this browser and the host, not your equipment.
+        </span>
     </div>
 
     <!-- Mosaic planner — floating panel (not a blocking modal) so the SKY map
@@ -19738,7 +19777,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260728-certbanner"></script>
+    <script src="/js/app.js?v=20260731-netux"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

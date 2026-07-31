@@ -22,7 +22,16 @@ namespace NINA.Polaris.WebSocket;
 public static class StatusStreamHandler {
     private static readonly TimeSpan StatusInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan PingInterval = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(5);
+
+    // NETUX-1: a send deadline is a disconnect, so it must not be a
+    // throughput budget. A full status frame is tens of kilobytes; on a
+    // weak WiFi leg (the field report: 65-70% signal at the far end of the
+    // garden) draining one frame can take several seconds, and at the old
+    // 5 s the host itself closed the socket on the very users whose link
+    // was merely slow. That turned "slow" into "disconnected", which is
+    // exactly the confusion the link-health work is meant to remove. 30 s
+    // still kills a genuinely dead peer, one KeepAliveInterval later.
+    private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(30);
     private static readonly JsonSerializerOptions JsonOpts = new() {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
@@ -100,8 +109,13 @@ public static class StatusStreamHandler {
 
         using var cts = new CancellationTokenSource();
 
+        // NETUX-1: the 1 Hz tick is no longer the only writer on this socket
+        // (the pong answers from the receive loop share it), and a WebSocket
+        // allows exactly one outstanding send. This gate serialises them.
+        using var sendGate = new SemaphoreSlim(1, 1);
+
         try {
-            await SendJsonAsync(ws, new { type = "connected", stream = "status" }, cts.Token);
+            await SendJsonAsync(ws, new { type = "connected", stream = "status" }, sendGate, cts.Token);
         } catch {
             return;
         }
@@ -780,7 +794,7 @@ public static class StatusStreamHandler {
                     }
                     }
 
-                    await SendBytesAsync(ws, payload!, cts.Token);
+                    await SendBytesAsync(ws, payload!, sendGate, cts.Token);
                     await Task.Delay(StatusInterval, cts.Token);
                 } catch (OperationCanceledException) {
                     break;
@@ -803,6 +817,16 @@ public static class StatusStreamHandler {
                 var result = await ws.ReceiveAsync(buffer, cts.Token);
                 if (result.MessageType == WebSocketMessageType.Close)
                     break;
+
+                // NETUX-1: application-level ping/pong. The browser needs to
+                // measure ITS OWN leg of the link, and the WebSocket protocol
+                // ping is invisible to page JavaScript. The echo carries the
+                // client's own clock value back untouched, so the round trip
+                // is computed from a single clock and host/client skew (which
+                // is routinely tens of seconds here) cannot poison it.
+                if (result.MessageType != WebSocketMessageType.Text || !result.EndOfMessage)
+                    continue;
+                await TryAnswerPingAsync(ws, buffer.AsMemory(0, result.Count), sendGate, cts.Token);
             }
         } catch (OperationCanceledException) {
             logger.LogDebug("Status WebSocket receive timed out (client likely disconnected)");
@@ -924,19 +948,58 @@ public static class StatusStreamHandler {
         }
     }
 
-    private static async Task SendJsonAsync(System.Net.WebSockets.WebSocket ws, object data, CancellationToken ct) {
+    /// <summary>NETUX-1: answer <c>{"type":"ping","id":N,"t":clientClockMs}</c>
+    /// with <c>{"type":"pong","id":N,"t":clientClockMs}</c>. Anything else the
+    /// client sends on this socket is ignored, as before.
+    ///
+    /// <para>The reply is deliberately tiny and skips the status cache: it has
+    /// to measure the link, not the payload, so it must not be able to queue
+    /// behind a fat frame it is meant to be timing.</para></summary>
+    private static async Task TryAnswerPingAsync(System.Net.WebSockets.WebSocket ws,
+                                                 ReadOnlyMemory<byte> frame,
+                                                 SemaphoreSlim gate, CancellationToken ct) {
+        try {
+            using var doc = JsonDocument.Parse(frame);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return;
+            if (!root.TryGetProperty("type", out var type)
+                || type.ValueKind != JsonValueKind.String
+                || type.GetString() != "ping") return;
+
+            long id = root.TryGetProperty("id", out var idEl)
+                      && idEl.TryGetInt64(out var idVal) ? idVal : 0;
+            long t = root.TryGetProperty("t", out var tEl)
+                     && tEl.TryGetInt64(out var tVal) ? tVal : 0;
+
+            await SendJsonAsync(ws, new { type = "pong", id, t }, gate, ct);
+        } catch (JsonException) {
+            // Not JSON, or not ours. Silence is the documented behaviour for
+            // every other message on this socket.
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (WebSocketException) {
+            // The send task's own failure path already tears the socket down.
+        }
+    }
+
+    private static async Task SendJsonAsync(System.Net.WebSockets.WebSocket ws, object data,
+                                            SemaphoreSlim gate, CancellationToken ct) {
         var json = JsonSerializer.Serialize(data, JsonOpts);
-        using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        sendCts.CancelAfter(SendTimeout);
-        await ws.SendAsync(Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text, true, sendCts.Token);
+        await SendBytesAsync(ws, Encoding.UTF8.GetBytes(json), gate, ct);
     }
 
     /// <summary>PERF #365: send already-serialized UTF-8 JSON bytes (the
     /// per-tick shared status payload) without re-serializing per client.</summary>
-    private static async Task SendBytesAsync(System.Net.WebSockets.WebSocket ws, byte[] utf8Json, CancellationToken ct) {
-        using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        sendCts.CancelAfter(SendTimeout);
-        await ws.SendAsync(utf8Json, WebSocketMessageType.Text, true, sendCts.Token);
+    private static async Task SendBytesAsync(System.Net.WebSockets.WebSocket ws, byte[] utf8Json,
+                                             SemaphoreSlim gate, CancellationToken ct) {
+        await gate.WaitAsync(ct);
+        try {
+            using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            sendCts.CancelAfter(SendTimeout);
+            await ws.SendAsync(utf8Json, WebSocketMessageType.Text, true, sendCts.Token);
+        } finally {
+            gate.Release();
+        }
     }
 
     private static async Task CloseGracefully(System.Net.WebSockets.WebSocket ws) {
