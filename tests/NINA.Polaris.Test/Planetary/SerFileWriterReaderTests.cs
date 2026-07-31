@@ -118,6 +118,87 @@ public class SerFileWriterReaderTests {
         Assert.That(reader.ColorMode, Is.EqualTo(SerColorMode.BayerRGGB));
     }
 
+    /// <summary>FIELD8-3. A recording that never reaches Dispose keeps a header
+    /// frame count of 0 while the frames themselves sit on disk. In the field
+    /// (2026-07-31) two clips came out that way, 4.1 GB and 175 MB, and every
+    /// reader called them empty. The bytes are the truth: recover the count
+    /// from the file length.</summary>
+    [Test]
+    public void Reader_HeaderCountZeroButFramesPresent_RecoversFromFileLength() {
+        var path = Path.Combine(_tempDir, "interrupted.ser");
+        const int w = 8, h = 6;
+
+        // Simulate the crash: write the header + frames by hand and never
+        // patch the count, which is exactly the on-disk shape of the field
+        // files (no trailer either).
+        using (var writer = new SerFileWriter(path, w, h, 16, SerColorMode.Mono)) {
+            for (int i = 0; i < 5; i++) writer.WriteFrame(new ushort[w * h]);
+            // Dispose will patch the header, so undo that below.
+        }
+        WriteHeaderFrameCount(path, 0);
+        // Drop the trailer Dispose wrote, so the file is header + frames only.
+        using (var fs = new FileStream(path, FileMode.Open, FileAccess.Write)) {
+            fs.SetLength(SerFileWriter.HeaderSize + 5L * w * h * 2);
+        }
+
+        Assert.That(ReadHeaderFrameCount(path), Is.EqualTo(0),
+            "precondition: the header must still claim zero frames");
+
+        using var reader = new SerFileReader(path);
+        Assert.That(reader.FrameCount, Is.EqualTo(5), "frames on disk must be readable");
+        Assert.That(reader.RecoveredFrameCount, Is.True, "the recovery should be reported");
+        Assert.That(() => reader.ReadFrameAsUshort(4), Throws.Nothing);
+    }
+
+    /// <summary>The other direction: a file cut off mid-recording claims more
+    /// frames than it holds, and reading the phantom ones throws deep in the
+    /// decoder. The count has to come down to what is actually there.</summary>
+    [Test]
+    public void Reader_HeaderCountHigherThanFile_ClampsToWhatIsThere() {
+        var path = Path.Combine(_tempDir, "truncated.ser");
+        const int w = 8, h = 6;
+        using (var writer = new SerFileWriter(path, w, h, 16, SerColorMode.Mono)) {
+            for (int i = 0; i < 6; i++) writer.WriteFrame(new ushort[w * h]);
+        }
+        using (var fs = new FileStream(path, FileMode.Open, FileAccess.Write)) {
+            fs.SetLength(SerFileWriter.HeaderSize + 3L * w * h * 2);
+        }
+
+        using var reader = new SerFileReader(path);
+        Assert.That(reader.FrameCount, Is.EqualTo(3));
+        Assert.That(reader.TruncatedFrameCount, Is.EqualTo(6),
+            "the header's claim is worth reporting");
+        Assert.That(() => reader.ReadFrameAsUshort(2), Throws.Nothing);
+    }
+
+    /// <summary>The header count is refreshed while recording, so an
+    /// interrupted clip is readable even by a reader that does not recover
+    /// (other astro tools read these files too).</summary>
+    [Test]
+    public void Writer_RefreshesHeaderCountDuringRecording() {
+        var path = Path.Combine(_tempDir, "live.ser");
+        const int w = 4, h = 4;
+        var writer = new SerFileWriter(path, w, h, 16, SerColorMode.Mono);
+        try {
+            for (int i = 0; i < 100; i++) writer.WriteFrame(new ushort[w * h]);
+            Assert.That(ReadHeaderFrameCount(path), Is.EqualTo(100),
+                "the header should carry the count without waiting for Dispose");
+        } finally { writer.Dispose(); }
+    }
+
+    private static int ReadHeaderFrameCount(string path) {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var buf = new byte[42];
+        fs.ReadExactly(buf, 0, buf.Length);
+        return (int)BitConverter.ToUInt32(buf, 38);
+    }
+
+    private static void WriteHeaderFrameCount(string path, uint count) {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Write);
+        fs.Seek(38, SeekOrigin.Begin);
+        fs.Write(BitConverter.GetBytes(count), 0, 4);
+    }
+
     [Test]
     public void Writer_CreatesDirectoryIfMissing() {
         // Sub-path that doesn't exist yet, writer should mkdir -p.

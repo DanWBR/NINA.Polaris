@@ -117,7 +117,25 @@ public sealed class SerFileWriter : IDisposable {
                 $"Frame size mismatch: expected {_bytesPerFrame} bytes, got {count}");
         _fs.Write(frameBytes, 0, count);
         _frameTimestamps.Add(utc ?? DateTime.UtcNow);
+
+        // FIELD8-3: keep the header's frame count roughly current instead of
+        // writing it only on Dispose. A recording that never reaches Dispose
+        // (process killed, power cut, an abort path that skips it) otherwise
+        // leaves a file FULL of frames whose header still says zero, and every
+        // reader treats it as empty. Two of the operator's clips did exactly
+        // that on 2026-07-31: 4.1 GB and 175 MB on disk, header count 0, and
+        // the stacker refused them.
+        //
+        // Every 100 frames, so the cost is a seek plus a 178-byte rewrite
+        // about once a second even at 130 fps. The count can lag by up to 99
+        // frames after a crash; the reader's own recovery covers the rest.
+        if (_frameTimestamps.Count % HeaderRefreshFrames == 0) {
+            try { WriteHeader(_frameTimestamps.Count); } catch { /* keep recording */ }
+        }
     }
+
+    /// <summary>How often WriteFrame refreshes the header's frame count.</summary>
+    private const int HeaderRefreshFrames = 100;
 
     /// <summary>Expected size of one frame in bytes
     /// (Width × Height × planes × BitDepth/8).</summary>

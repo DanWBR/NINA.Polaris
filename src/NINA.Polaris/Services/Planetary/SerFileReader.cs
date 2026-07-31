@@ -33,7 +33,19 @@ public sealed class SerFileReader : IDisposable {
     public int Height { get; }
     public int BitDepth { get; }
     public SerColorMode ColorMode { get; }
-    public int FrameCount { get; }
+    public int FrameCount { get; private set; }
+
+    /// <summary>True when the header said zero frames and the count was
+    /// rebuilt from the file length: an interrupted recording, readable
+    /// anyway. Callers may want to say so rather than pretend it was
+    /// normal.</summary>
+    public bool RecoveredFrameCount { get; }
+
+    /// <summary>Set to the header's claim when the file is SHORTER than that
+    /// (truncated recording); FrameCount then holds what is actually
+    /// present.</summary>
+    public int TruncatedFrameCount { get; }
+
     public string Observer { get; }
     public string Instrument { get; }
     public string Telescope { get; }
@@ -63,6 +75,28 @@ public sealed class SerFileReader : IDisposable {
         _frameDataStart = SerFileWriter.HeaderSize;
         int planes = ColorMode is SerColorMode.Rgb or SerColorMode.Bgr ? 3 : 1;
         _bytesPerFrame = (long)Width * Height * planes * (BitDepth / 8);
+
+        // FIELD8-3: trust the file, not just the header.
+        //
+        // The count is stamped when the recording closes, so a clip that was
+        // interrupted carries a header count of 0 (or a stale, lower one)
+        // while holding every frame it recorded. The operator hit this with a
+        // 4.1 GB file the stacker called empty. The bytes on disk are the
+        // ground truth: whatever fits between the header and the end of the
+        // file is a frame that was written.
+        //
+        // The other direction matters too: a file cut off mid-frame (killed
+        // recorder, full disk) claims more frames than it holds, and reading
+        // the last one throws deep in the decoder. Clamp both ways.
+        long capacity = _bytesPerFrame > 0
+            ? Math.Max(0, (_fs.Length - _frameDataStart) / _bytesPerFrame) : 0;
+        if (FrameCount <= 0 && capacity > 0) {
+            RecoveredFrameCount = true;
+            FrameCount = (int)Math.Min(int.MaxValue, capacity);
+        } else if (FrameCount > capacity) {
+            TruncatedFrameCount = FrameCount;
+            FrameCount = (int)Math.Min(int.MaxValue, capacity);
+        }
 
         // Optional timestamp trailer, present when the file size
         // exceeds header + frame data by FrameCount * 8 bytes.

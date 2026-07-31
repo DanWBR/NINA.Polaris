@@ -80,6 +80,26 @@ public class PlanetaryStackerService {
                 Fail(job, $"Color mode {reader.ColorMode} not yet supported (mono / Bayer only)");
                 return;
             }
+            // FIELD8-3: a recording with nothing in it used to reach
+            // `centroids[0]` with an empty array and die on an
+            // IndexOutOfRangeException, which tells the operator nothing about
+            // what is wrong with their file.
+            if (reader.FrameCount <= 0) {
+                Fail(job, "This recording holds no frames (the file has only a header). "
+                        + "Record again; if it kept happening, check free disk space.");
+                return;
+            }
+            if (reader.RecoveredFrameCount) {
+                _logger.LogWarning(
+                    "SER {Path} had no frame count in its header; recovered {N} frames from the "
+                    + "file length (the recording was interrupted before it was closed)",
+                    job.Config.SerPath, reader.FrameCount);
+            } else if (reader.TruncatedFrameCount > 0) {
+                _logger.LogWarning(
+                    "SER {Path} claims {Claimed} frames but only {Actual} are present; "
+                    + "stacking what is there", job.Config.SerPath,
+                    reader.TruncatedFrameCount, reader.FrameCount);
+            }
             job.TotalFrames = reader.FrameCount;
             job.Width = reader.Width;
             job.Height = reader.Height;
