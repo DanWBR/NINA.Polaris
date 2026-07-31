@@ -188,6 +188,22 @@ public sealed class SerFileWriter : IDisposable {
         if (_disposed) return;
         _disposed = true;
         try {
+            // FIELD8-3: the frame count goes FIRST, before the trailer.
+            //
+            // The order used to be trailer then header, and on a full disk the
+            // trailer write throws, so the header patch never ran: the file
+            // ended up with gigabytes of frames and a count of zero. That is
+            // exactly what the operator's 4.10 GB clip looked like on
+            // 2026-07-31, after the recording filled the root filesystem.
+            //
+            // The count is what makes the file READABLE; the timestamp trailer
+            // is a nicety. Write the thing that matters while there may still
+            // be room for it, and let the trailer fail on its own.
+            try { WriteHeader(_frameTimestamps.Count); } catch (Exception ex) {
+                // Nothing left to do here but leave a trace; the reader
+                // recovers the count from the file length.
+                System.Diagnostics.Debug.WriteLine("SER header patch failed: " + ex.Message);
+            }
             // Trailer: frame timestamps as int64 little-endian, per spec.
             // Position cursor at end-of-data (cursor may already be there
             // after the last WriteFrame, but be safe).
@@ -195,9 +211,11 @@ public sealed class SerFileWriter : IDisposable {
             using (var w = new BinaryWriter(_fs, Encoding.ASCII, leaveOpen: true)) {
                 foreach (var t in _frameTimestamps) w.Write(t.Ticks);
             }
-            // Patch frame count in header.
-            WriteHeader(_frameTimestamps.Count);
             _fs.Flush();
+        } catch (IOException ex) {
+            // Out of space while finishing: the frames and the count are on
+            // disk, which is what a reader needs.
+            System.Diagnostics.Debug.WriteLine("SER trailer write failed: " + ex.Message);
         } finally { _fs.Dispose(); }
     }
 }
