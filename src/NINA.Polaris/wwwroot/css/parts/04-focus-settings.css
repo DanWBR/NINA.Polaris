@@ -1946,3 +1946,20 @@
 @media (max-width: 700px) {
     .af-star-zoom > canvas { width: 84px; height: 84px; }
 }
+
+/* The auto-focus panel asks for two things: exposure and how many stars to
+   follow. Everything else has a working default and would otherwise be a
+   dozen fields to read past before pressing Start, so it folds away here. */
+.af-advanced {
+    margin-top: 8px;
+    border-top: 1px solid var(--border);
+    padding-top: 6px;
+}
+.af-advanced > summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+.af-advanced .af-params {
+    margin-top: 8px;
+}
