@@ -155,10 +155,10 @@
         "device": "Radxa Dragon Q6A (QCS6490)",
         "url": "https://radxa.com/products/dragon/q6a/",
         "cores": "8 cores",
-        "score": "296",
-        "stacking": "63.8 Mpx/s",
-        "capture": "38.5 Mpx/s",
-        "memory": "13.8 GB/s",
+        "score": "317",
+        "stacking": "55.8 Mpx/s",
+        "capture": "n/d",
+        "memory": "18.8 GB/s",
         "price": "$120-140",
         "highlight": false
       },
@@ -174,7 +174,7 @@
         "highlight": false
       }
     ],
-    "note": "La puntuación Polaris es la cifra más destacada; las columnas de Mpx/s corresponden al rendimiento de la pila en tiempo real y de la captura. La Orange Pi 5 Pro se muestra con el backend de GPU OpenCL activado (274; 227 solo con CPU) y la Pi 5 en su mejor rendimiento, con refrigeración activa. La Orange Pi 4 Pro ofrece la mejor relación calidad-precio de este comparativo y es la placa que Polaris recomienda: ocho núcleos y LPDDR5 por aproximadamente el precio de una Raspberry Pi 4. La Radxa Dragon Q6A es la SBC más rápida y funciona solo con la CPU (su GPU Adreno supone una pérdida neta de rendimiento). Los precios son estimaciones aproximadas del mercado solo para la placa (sin tarjeta SD, fuente de alimentación ni carcasa); la fila del Core i9 corresponde a un equipo de sobremesa completo a modo de referencia, no a una SBC. La Orange Pi Zero 3 es el punto de partida: demuestra que Polaris funciona en una placa de 1,5 GB (su GPU Mali-G31 también supone una pérdida neta, por lo que funciona solo con la CPU). Las tablas completas por dispositivo y la metodología se encuentran en la documentación de las pruebas de rendimiento.",
+    "note": "La puntuación Polaris es la cifra más destacada; las columnas de Mpx/s corresponden al rendimiento de la pila en tiempo real y de la captura. La Orange Pi 5 Pro se muestra con el backend de GPU OpenCL activado (274; 227 solo con CPU) y la Pi 5 en su mejor rendimiento, con refrigeración activa. La Orange Pi 4 Pro ofrece la mejor relación calidad-precio de este comparativo y es la placa que Polaris recomienda: ocho núcleos y LPDDR5 por aproximadamente el precio de una Raspberry Pi 4. La Radxa Dragon Q6A es la SBC más rápida y funciona solo con la CPU (su GPU Adreno supone una pérdida neta de rendimiento). Las cifras de la Q6A corresponden a su mejor prueba (317, tras montarle una fuente de alimentación mejor y un ventilador); su rendimiento de captura no se volvió a medir en esa prueba. Los precios son estimaciones aproximadas del mercado solo para la placa (sin tarjeta SD, fuente de alimentación ni carcasa); la fila del Core i9 corresponde a un equipo de sobremesa completo a modo de referencia, no a una SBC. La Orange Pi Zero 3 es el punto de partida: demuestra que Polaris funciona en una placa de 1,5 GB (su GPU Mali-G31 también supone una pérdida neta, por lo que funciona solo con la CPU). Las tablas completas por dispositivo y la metodología se encuentran en la documentación de las pruebas de rendimiento.",
     "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"
   },
   "comparison": {

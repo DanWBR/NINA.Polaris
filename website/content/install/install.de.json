@@ -5,7 +5,7 @@
     "title": "Systemanforderungen",
     "sub": "Der größte Engpass ist der Arbeitsspeicher. Alles andere läuft auf einem modernen SBC problemlos, und einige Boards bieten zudem GPU- und NPU-Beschleunigung für die KI-Tools.",
     "ramNote": "Polaris passt den Live-Stack an das Board an, auf dem er läuft: Er wählt eine Stacking-Auflösung von 1:1, 1:2 oder 1:4, damit das Working Set in ein Viertel des verfügbaren Speichers passt. Eine 12-MP-Farbkamera kostet rund 900 MB bei 1:1 und 450 MB bei 1:2, über einem festen Sockel von etwa 370 MB. 2 GB sind bequem, Boards mit 1,5 GB laufen mit reduzierter Stacking-Auflösung, und WASM auf der Clientseite kann die gesamte Stacking-Rechnung in den Browser verlagern.",
-    "recommendedNote": "Empfohlenes Board: der Orange Pi 4 Pro mit 4 GB. Er bietet das beste Verhältnis von Preis und Leistungsfähigkeit aller bisher getesteten SBCs: ein Polaris-Wert von 180 für rund 50 bis 70 Dollar, mit acht Kernen, LPDDR5-Speicher, einer GPU und einer 3-TOPS-NPU. Wenn Sie den höchsten Wert ohne Rücksicht auf den Preis wollen, führt das Radxa Dragon Q6A mit 296. Wenn Sie vor allem auf KI-Tools setzen, ist der Orange Pi 5 Pro die bewährte Alternative, die zusätzlich OpenCL auf der GPU und GraXpert AI auf der NPU bietet.",
+    "recommendedNote": "Empfohlenes Board: der Orange Pi 4 Pro mit 4 GB. Er bietet das beste Verhältnis von Preis und Leistungsfähigkeit aller bisher getesteten SBCs: ein Polaris-Wert von 180 für rund 50 bis 70 Dollar, mit acht Kernen, LPDDR5-Speicher, einer GPU und einer 3-TOPS-NPU. Wenn Sie den höchsten Wert ohne Rücksicht auf den Preis wollen, führt das Radxa Dragon Q6A mit 317. Wenn Sie vor allem auf KI-Tools setzen, ist der Orange Pi 5 Pro die bewährte Alternative, die zusätzlich OpenCL auf der GPU und GraXpert AI auf der NPU bietet.",
     "rows": [
       {
         "host": "Raspberry Pi 3",
@@ -47,7 +47,7 @@
         "status": "Am schnellsten",
         "highlight": true,
         "tag": "Höchstpunktzahl",
-        "notes": "Der bislang schnellste getestete SBC (Polaris-Ergebnis 296), was vor allem auf seine CPU zurückzuführen ist. Qualcomm QCS6490 (Octa-Core-Kryo: 1x 2,7 GHz + 3x 2,4 GHz + 4x 1,9 GHz), LPDDR5. Polaris lässt hier nur die CPU laufen: Die Adreno 643-GPU ist ein Nettoverlust und die Hexagon-NPU wird nicht genutzt (der KI-Pfad ist Rockchip-spezifisch), daher laufen die KI-Tools auf der CPU."
+        "notes": "Der bislang schnellste getestete SBC (Polaris-Ergebnis 317), was vor allem auf seine CPU zurückzuführen ist. Qualcomm QCS6490 (Octa-Core-Kryo: 1x 2,7 GHz + 3x 2,4 GHz + 4x 1,9 GHz), LPDDR5. Polaris rechnet die Bildverarbeitung hier nur auf der CPU: Die Adreno-GPU ist ein Nettoverlust, der OpenCL-Schalter bleibt also aus. Die Hexagon-NPU wird dagegen über QAIRT für die KI-Tools genutzt."
       },
       {
         "host": "Windows-Mini-PC / Desktop-PC / Laptop",

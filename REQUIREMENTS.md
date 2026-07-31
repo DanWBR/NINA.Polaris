@@ -268,7 +268,7 @@ All have graceful offline fallbacks. The home page works at the airlock of a Mar
 | Host | Works? | Notes |
 | --- | --- | --- |
 | **Orange Pi 4 Pro (4 GB)** | ✅ Recommended | Best balance of cost and capability (Polaris score 180 for roughly $50 to $70). 8 cores, LPDDR5, GPU + 3 TOPS NPU. |
-| **Radxa Dragon Q6A (4+ GB)** | ✅ Fastest | Highest score measured (296), CPU-only: the Adreno GPU is a net loss and the AI path is Rockchip-only. |
+| **Radxa Dragon Q6A (4+ GB)** | ✅ Fastest | Highest score measured (317). The image pipeline runs CPU-only (the Adreno GPU is a net loss); the Hexagon NPU runs the AI models through QAIRT. |
 | **Raspberry Pi 5 (8 GB)** | ✅ Great | Lossless. Live stacking + simultaneous Studio jobs OK. |
 | **Raspberry Pi 4 (4 GB / 8 GB)** | ✅ Workhorse | Default target. PHD2 GUI embed works; client-side WASM live-stack offloads the heavy math. |
 | **Raspberry Pi 3 (1 GB)** | ⚠ Limited | App runs but PHD2 GUI embed is auto-disabled (32-bit ARM gate). Stacking on the Pi side gets tight; use client-side WASM offload. |

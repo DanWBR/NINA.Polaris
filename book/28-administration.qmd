@@ -348,7 +348,7 @@ these):
 | Orange Pi 4 Pro (8 cores, Allwinner A733) | 180 |
 | Raspberry Pi 5 Model B (4 cores) | 245 (211 on an earlier build, 172 when thermally throttled) |
 | Orange Pi 5 Pro (8 cores, RK3588S) | 274 with GPU offload, 227 CPU only |
-| Radxa Dragon Q6A (8 cores, Qualcomm QCS6490) | 296 |
+| Radxa Dragon Q6A (8 cores, Qualcomm QCS6490) | 317 (296 before a better power supply and a fan) |
 | Desktop Core i9-13900KF (32 threads) | 936 |
 
 The recommended board is the **Orange Pi 4 Pro** with 4 GB: at
@@ -361,9 +361,10 @@ NPU acceleration path.
 
 Two practical lessons from those runs. Cooling matters: the Pi 5
 loses nearly 20 percent when passively cooled and thermally
-limited, and the Orange Pi 4 Pro gains about 6 percent with a fan,
-so keep small boards actively cooled for sustained live-stacking
-loads. And the optional GPU offload (via OpenCL, a standard for
+limited, the Orange Pi 4 Pro gains about 6 percent with a fan, and
+the Radxa Dragon Q6A gained about 7 percent once it had a better
+power supply and a fan, so keep small boards actively cooled and
+properly fed for sustained live-stacking loads. And the optional GPU offload (via OpenCL, a standard for
 running computation on graphics chips) helps only where the board's
 memory design makes it cheap: it lifts the Orange Pi 5 Pro from 227
 to 274, while on the Radxa and on desktops with discrete graphics

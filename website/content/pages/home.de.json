@@ -155,10 +155,10 @@
         "device": "Radxa Dragon Q6A (QCS6490)",
         "url": "https://radxa.com/products/dragon/q6a/",
         "cores": "8 cores",
-        "score": "296",
-        "stacking": "63.8 Mpx/s",
-        "capture": "38.5 Mpx/s",
-        "memory": "13.8 GB/s",
+        "score": "317",
+        "stacking": "55.8 Mpx/s",
+        "capture": "k. A.",
+        "memory": "18.8 GB/s",
         "price": "$120-140",
         "highlight": false
       },
@@ -174,7 +174,7 @@
         "highlight": false
       }
     ],
-    "note": "Der Polaris-Wert ist die Kennzahl; die Spalten „Mpx/s“ geben den Live-Stack- und den Aufnahmedurchsatz an. Der Orange Pi 5 Pro wird mit aktiviertem OpenCL-GPU-Backend dargestellt (274; 227 nur CPU) und der Pi 5 in seiner besten Leistung bei aktiver Kühlung. Der Orange Pi 4 Pro bietet hier das beste Preis-Leistungs-Verhältnis und ist das von Polaris empfohlene Board: acht Kerne und LPDDR5 ungefähr zum Preis eines Raspberry Pi 4. Der Radxa Dragon Q6A ist der schnellste SBC hier und läuft rein mit der CPU (seine Adreno-GPU ist ein Nettoverlust). Die Preise sind grobe Schätzungen für das Board allein (ohne SD-Karte, Netzteil oder Gehäuse); die Core-i9-Zeile zeigt als Referenz einen kompletten Desktop-PC, keinen SBC. Der Orange Pi Zero 3 ist das Einstiegsmodell: Er zeigt, dass Polaris auf einem Board mit 1,5 GB läuft (seine Mali-G31-GPU ist ebenfalls ein Nettoverlust, daher läuft er nur mit der CPU). Vollständige Tabellen pro Gerät und Methodik finden Sie in den Benchmark-Dokumenten.",
+    "note": "Der Polaris-Wert ist die Kennzahl; die Spalten „Mpx/s“ geben den Live-Stack- und den Aufnahmedurchsatz an. Der Orange Pi 5 Pro wird mit aktiviertem OpenCL-GPU-Backend dargestellt (274; 227 nur CPU) und der Pi 5 in seiner besten Leistung bei aktiver Kühlung. Der Orange Pi 4 Pro bietet hier das beste Preis-Leistungs-Verhältnis und ist das von Polaris empfohlene Board: acht Kerne und LPDDR5 ungefähr zum Preis eines Raspberry Pi 4. Der Radxa Dragon Q6A ist der schnellste SBC hier und läuft rein mit der CPU (seine Adreno-GPU ist ein Nettoverlust). Die Werte des Q6A stammen aus seinem besten Lauf (317, nach einem besseren Netzteil und einem Lüfter auf dem Board); der Aufnahmedurchsatz wurde in diesem Lauf nicht erneut gemessen. Die Preise sind grobe Schätzungen für das Board allein (ohne SD-Karte, Netzteil oder Gehäuse); die Core-i9-Zeile zeigt als Referenz einen kompletten Desktop-PC, keinen SBC. Der Orange Pi Zero 3 ist das Einstiegsmodell: Er zeigt, dass Polaris auf einem Board mit 1,5 GB läuft (seine Mali-G31-GPU ist ebenfalls ein Nettoverlust, daher läuft er nur mit der CPU). Vollständige Tabellen pro Gerät und Methodik finden Sie in den Benchmark-Dokumenten.",
     "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"
   },
   "comparison": {

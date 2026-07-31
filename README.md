@@ -90,7 +90,7 @@ welcome via an issue or PR.
 
 > **Recommended board:** the Orange Pi 4 Pro (4 GB). It is the best balance of cost
 > and capability measured so far, scoring 180 for roughly $50 to $70. The Radxa
-> Dragon Q6A is the fastest (296); the Orange Pi 5 Pro (274) is the one with the
+> Dragon Q6A is the fastest (317); the Orange Pi 5 Pro (274) is the one with the
 > proven GPU and NPU acceleration path.
 >
 > Windows and x86 Linux mini-PCs also run the backend (see [Deployment](#deployment)).

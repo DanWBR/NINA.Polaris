@@ -86,7 +86,7 @@ score is better. (More boards added as they arrive: x86 PC stick.)
 recommendation: it scores **180** for roughly $50 to $70, the best balance
 of cost and capability of everything measured here. Eight cores, LPDDR5, a
 GPU and a 3 TOPS NPU at Raspberry Pi 4 money, and it lands well clear of
-the Pi 4 (110). Buy the **Radxa Dragon Q6A** (296) instead if you want the
+the Pi 4 (110). Buy the **Radxa Dragon Q6A** (317) instead if you want the
 highest score whatever it costs, or the **Orange Pi 5 Pro** (274) if you
 lean on the AI tools, since it is the board with the proven GPU and NPU
 acceleration path.
@@ -195,13 +195,29 @@ session.
 
 ### Radxa Dragon Q6A (8 cores, Qualcomm QCS6490)
 
-Run: 2026-06-26 (best 296, CPU only - the production score; runs vary ~271-296
-on the noisy little A55 cores). Ubuntu 24.04 (noble) arm64. Kryo cores
-(Cortex-A78 + A55) with an Adreno 643 GPU.
+Run: 2026-07-22 (best **317**, CPU only; 323 recorded two days earlier). Ubuntu
+24.04 (noble) arm64. Kryo cores (Cortex-A78 + A55) with an Adreno GPU (the probe
+reports Adreno 635 on these runs, 643 on the June ones).
 
 | Metric | Value |
 |---|---|
-| **Polaris score** | **296** |
+| **Polaris score** | **317** |
+| Stacking throughput | 3.32 fps · 55.8 Mpx/s (16.78 MP frames) |
+| CPU single / multi-thread | 3305 / 12666 MFLOPS (3.83× scaling) |
+| Memory bandwidth | 18.8 GB/s |
+| NPU (Hexagon, QAIRT) | GraXpert denoise 2.0.0 int16, 106.16 ms/tile (9.4 tiles/s) |
+
+The score climbed through July: ~289 in late June, 296 as the old production
+figure, then 317 and 323 on 20 and 22 July, after a better power supply and a
+cooling fan went on the board. The workload is fixed, so a higher score means
+higher sustained clocks; memory bandwidth moved with it (13.8 to 18.8 GB/s).
+
+The per-phase detail below is the earlier June run. Capture/encode, the stacking
+phase breakdown and the GPU probe were not re-measured on the 317 runs, so they
+are kept separate rather than mixed into the table above.
+
+| Metric | Value (2026-06-26, score 296) |
+|---|---|
 | Stacking throughput | 3.81 fps · 63.8 Mpx/s (16.78 MP frames) |
 | Stacking detect / align / resample / stats | 61.27 / 1.67 / 67.7 / 132.15 ms |
 | Capture/video throughput | 2.29 fps · 38.5 Mpx/s |
@@ -210,12 +226,10 @@ on the noisy little A55 cores). Ubuntu 24.04 (noble) arm64. Kryo cores
 | Memory bandwidth | 13.8 GB/s |
 | GPU vs CPU (Adreno 643, OpenCL) | warp 0.69× · debayer 0.34× · blur 2.56× · **overall 0.84×** (geo-mean) |
 
-The fastest SBC here - ~2.7× the Raspberry Pi 4, ~30% ahead of the Orange Pi
-5 Pro CPU-only (227) and ~8% ahead of its GPU-on best (274). It leads on
-raw per-core throughput: the strongest single-thread score of the SBCs (3296
-MFLOPS) and the lowest stacking detect/resample times, which is what drives the
-58.8 Mpx/s stacking throughput. Memory bandwidth (13.2 GB/s) sits between the
-RK3588S boards and the Pi 5.
+The fastest SBC here - ~2.9× the Raspberry Pi 4, ~40% ahead of the Orange Pi
+5 Pro CPU-only (227) and ~16% ahead of its GPU-on best (274). It leads on
+raw per-core throughput: the strongest single-thread score of the SBCs (~3300
+MFLOPS) and the lowest stacking detect/resample times.
 
 **The GPU is a net loss on this board, unlike the Mali SBCs.** The Adreno 643
 OpenCL stack copies host↔device for ordinary buffers, so the light memory-bound
@@ -225,10 +239,12 @@ kernels measure *slower* than this strong CPU - warp 0.69×, debayer 0.34×
 both tried; neither flips warp/debayer above 1× here (the texture path is worse
 still, 0.66× overall, because the input copy + tiling costs more than the cache
 saves). So Polaris's per-op probe correctly offloads **only blur** on the
-Adreno and keeps warp/debayer on the CPU; the score with the GPU enabled (~294)
-matches CPU-only (~296) within run-to-run noise. Recommendation: leave the GPU
-toggle off here - **~296 is the board's real score.** The **RKNN/NPU path does
-not apply** on this SoC (Rockchip-only); the Hexagon NPU would need QNN.
+Adreno and keeps warp/debayer on the CPU; in that June comparison the score with
+the GPU enabled (~294) matched CPU-only (~296) within run-to-run noise.
+Recommendation: leave the GPU toggle off here, **the scores quoted for this board
+are CPU-only.** The **RKNN/NPU path does not apply** on this SoC
+(Rockchip-only); the Hexagon NPU is driven through QAIRT instead, and it is the
+one accelerator that does pay off here (see the NPU row above).
 
 ### x86 desktop - Core i9-13900KF (32 threads)
 

@@ -476,7 +476,7 @@
         },
         {
           "label": "Tested on:",
-          "text": "Radxa Dragon Q6A (QCS6490, Hexagon V68); CPU benchmark score 296, best-value board in our benchmark table"
+          "text": "Radxa Dragon Q6A (QCS6490, Hexagon V68); CPU benchmark score 317, the fastest board in our benchmark table"
         }
       ]
     },

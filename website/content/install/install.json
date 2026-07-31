@@ -5,7 +5,7 @@
     "title": "System requirements",
     "sub": "The main limiting factor is RAM. Everything else is comfortable on a modern SBC, and several boards add GPU and NPU acceleration for the AI tools.",
     "ramNote": "Polaris sizes the live stack to the board it runs on: it picks a 1:1, 1:2 or 1:4 stacking resolution so the working set stays inside a quarter of the memory available to it. A 12 MP colour camera costs roughly 900 MB at 1:1 and 450 MB at 1:2, over a fixed floor of about 370 MB. 2 GB is comfortable, 1.5 GB boards work at a reduced stacking resolution, and client-side WASM can move the stacking maths into the browser entirely.",
-    "recommendedNote": "Recommended board: the Orange Pi 4 Pro with 4 GB. It is the best balance of cost and capability of every SBC tested so far: a Polaris score of 180 for around $50 to $70, with eight cores, LPDDR5 memory, a GPU and a 3 TOPS NPU. If you want the highest score whatever the price, the Radxa Dragon Q6A leads at 296. If you lean on the AI tools, the Orange Pi 5 Pro is the proven accelerated option, adding OpenCL on the GPU and GraXpert AI on the NPU.",
+    "recommendedNote": "Recommended board: the Orange Pi 4 Pro with 4 GB. It is the best balance of cost and capability of every SBC tested so far: a Polaris score of 180 for around $50 to $70, with eight cores, LPDDR5 memory, a GPU and a 3 TOPS NPU. If you want the highest score whatever the price, the Radxa Dragon Q6A leads at 317. If you lean on the AI tools, the Orange Pi 5 Pro is the proven accelerated option, adding OpenCL on the GPU and GraXpert AI on the NPU.",
     "rows": [
       {
         "host": "Raspberry Pi 3",
@@ -47,7 +47,7 @@
         "status": "Fastest",
         "highlight": true,
         "tag": "Top score",
-        "notes": "The fastest SBC tested so far (Polaris score 296), on the strength of its CPU. Qualcomm QCS6490 (octa-core Kryo: 1x 2.7 GHz + 3x 2.4 GHz + 4x 1.9 GHz), LPDDR5. Polaris runs it CPU-only here: the Adreno 643 GPU is a net loss and the Hexagon NPU is not used (the AI path is Rockchip-only), so the AI tools run on the CPU."
+        "notes": "The fastest SBC tested so far (Polaris score 317), on the strength of its CPU. Qualcomm QCS6490 (octa-core Kryo: 1x 2.7 GHz + 3x 2.4 GHz + 4x 1.9 GHz), LPDDR5. Polaris runs the image pipeline CPU-only here: the Adreno GPU is a net loss, so the OpenCL toggle stays off. The Hexagon NPU is used, through QAIRT, for the AI tools."
       },
       {
         "host": "Windows mini PC / desktop / laptop",

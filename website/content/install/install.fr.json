@@ -5,7 +5,7 @@
     "title": "Configuration requise",
     "sub": "Le principal facteur limitant est la mémoire vive (RAM). Tout le reste fonctionne sans problème sur un SBC moderne, et plusieurs cartes intègrent une accélération par GPU et NPU pour les outils d'IA.",
     "ramNote": "Polaris dimensionne le live stack selon la carte sur laquelle il tourne : il choisit une résolution de stacking 1:1, 1:2 ou 1:4 pour que l'empreinte mémoire tienne dans un quart de la mémoire disponible. Une caméra couleur de 12 MP coûte environ 900 Mo en 1:1 et 450 Mo en 1:2, au-dessus d'un plancher fixe d'environ 370 Mo. 2 Go est confortable, les cartes de 1,5 Go fonctionnent avec une résolution de stacking réduite, et le WASM côté client peut déporter tout le calcul du stacking dans le navigateur.",
-    "recommendedNote": "Carte recommandée : l'Orange Pi 4 Pro avec 4 Go. C'est le meilleur équilibre entre prix et capacités de tous les SBC testés à ce jour : un score Polaris de 180 pour environ 50 à 70 dollars, avec huit cœurs, de la mémoire LPDDR5, un GPU et un NPU de 3 TOPS. Si vous voulez le meilleur score quel qu'en soit le prix, le Radxa Dragon Q6A domine avec 296. Si vous comptez beaucoup sur les outils d'IA, l'Orange Pi 5 Pro constitue une alternative éprouvée, grâce à l'ajout d'OpenCL sur le GPU et de GraXpert AI sur le NPU.",
+    "recommendedNote": "Carte recommandée : l'Orange Pi 4 Pro avec 4 Go. C'est le meilleur équilibre entre prix et capacités de tous les SBC testés à ce jour : un score Polaris de 180 pour environ 50 à 70 dollars, avec huit cœurs, de la mémoire LPDDR5, un GPU et un NPU de 3 TOPS. Si vous voulez le meilleur score quel qu'en soit le prix, le Radxa Dragon Q6A domine avec 317. Si vous comptez beaucoup sur les outils d'IA, l'Orange Pi 5 Pro constitue une alternative éprouvée, grâce à l'ajout d'OpenCL sur le GPU et de GraXpert AI sur le NPU.",
     "rows": [
       {
         "host": "Raspberry Pi 3",
@@ -47,7 +47,7 @@
         "status": "Le plus rapide",
         "highlight": true,
         "tag": "Meilleur score",
-        "notes": "Le SBC le plus rapide testé à ce jour (score Polaris de 296), grâce à la puissance de son processeur. Qualcomm QCS6490 (octa-core Kryo : 1x 2,7 GHz + 3x 2,4 GHz + 4x 1,9 GHz), LPDDR5. Polaris utilise ici uniquement son processeur : le GPU Adreno 643 est un frein et le NPU Hexagon n'est pas utilisé (le parcours IA est réservé à Rockchip), les outils d'IA s'exécutent donc sur le processeur."
+        "notes": "Le SBC le plus rapide testé à ce jour (score Polaris de 317), grâce à la puissance de son processeur. Qualcomm QCS6490 (octa-core Kryo : 1x 2,7 GHz + 3x 2,4 GHz + 4x 1,9 GHz), LPDDR5. Polaris exécute ici le traitement d'image uniquement sur le CPU : le GPU Adreno est un frein, l'option OpenCL reste donc désactivée. Le NPU Hexagon, lui, est utilisé par les outils d'IA via QAIRT."
       },
       {
         "host": "Mini-PC / ordinateur de bureau / ordinateur portable sous Windows",
