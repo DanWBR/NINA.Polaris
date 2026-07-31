@@ -122,6 +122,7 @@ case "$1" in
         chmod 0755 /opt/polaris/bin/polaris-growroot.sh 2>/dev/null || true
         chmod 0755 /opt/polaris/bin/polaris-sshkeys.sh 2>/dev/null || true
         chmod 0755 /opt/polaris/bin/polaris-diagnostics-dump.sh 2>/dev/null || true
+        chmod 0755 /opt/polaris/bin/polaris-solverdb-install.sh 2>/dev/null || true
         # Drop the pre-.deb copy. A unit in /etc/systemd/system SHADOWS the
         # one we ship in /lib, so leaving it there would keep running the old
         # script, which marked itself done even when the resize never

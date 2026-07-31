@@ -16,6 +16,7 @@ using NINA.Image.FileFormat.FITS;
 using NINA.Image.Interfaces;
 using NINA.Polaris.Services;
 using NINA.Polaris.Services.PlateSolving;
+using System.Text.Json;
 
 namespace NINA.Polaris.Endpoints;
 
@@ -53,6 +54,128 @@ public static class PlateSolveEndpoints {
                 path = s.SolverPath
             }));
         });
+
+        // What the rig's field of view needs, what is already installed, and
+        // what a download would cost. The recommendation is computed from the
+        // publishers' own FOV tables (see SolverDatabaseAdvisor).
+        group.MapGet("/databases", async (SolverDatabaseService dbs, ProfileService profiles,
+                                          CancellationToken ct) => {
+            using var cat = await dbs.LoadCatalogueAsync(ct);
+            var root = cat.RootElement;
+
+            var astap = root.GetProperty("astapDatabases").EnumerateArray().Select(e =>
+                new SolverDatabaseAdvisor.AstapDatabase(
+                    e.GetProperty("id").GetString() ?? "",
+                    e.GetProperty("name").GetString() ?? "",
+                    e.GetProperty("minFovDeg").GetDouble(),
+                    e.GetProperty("maxFovDeg").GetDouble(),
+                    e.GetProperty("approxBytes").GetInt64(),
+                    e.TryGetProperty("url", out var u) ? u.GetString() : null,
+                    e.TryGetProperty("notes", out var n) ? n.GetString() : null)).ToList();
+
+            var scales = root.GetProperty("astrometryScales").EnumerateArray().Select(e =>
+                new SolverDatabaseAdvisor.AstrometryScale(
+                    e.GetProperty("scale").GetInt32(),
+                    e.GetProperty("minArcmin").GetDouble(),
+                    e.GetProperty("maxArcmin").GetDouble())).ToList();
+
+            // FOV from the active rig's optics. Pixel size 0 means the camera
+            // reports it and we have no value here, so the card asks for it
+            // rather than recommending from a made-up scale.
+            var rig = profiles.ActiveEquipmentProfile;
+            var pixelScale = SolverDatabaseAdvisor.PixelScale(rig.CameraPixelSizeUm, rig.FocalLengthMm);
+            var fov = SolverDatabaseAdvisor.FovDegrees(pixelScale, rig.CameraMaxX, rig.CameraMaxY);
+
+            var recAstap = SolverDatabaseAdvisor.RecommendAstap(astap, fov);
+            var recScales = SolverDatabaseAdvisor.RecommendAstrometryScales(scales, fov);
+
+            return Results.Ok(new {
+                fovDeg = Math.Round(fov, 3),
+                pixelScaleArcsecPerPixel = Math.Round(pixelScale, 3),
+                knownOptics = fov > 0,
+                astap = new {
+                    catalogue = astap,
+                    installed = dbs.InstalledAstapDatabases(),
+                    recommended = recAstap?.Id
+                },
+                astrometry = new {
+                    scales,
+                    series = root.GetProperty("astrometrySeries").EnumerateArray()
+                        .Select(e => new {
+                            id = e.GetProperty("id").GetString(),
+                            name = e.GetProperty("name").GetString(),
+                            minScale = e.GetProperty("minScale").GetInt32(),
+                            maxScale = e.GetProperty("maxScale").GetInt32(),
+                            baseUrl = e.GetProperty("baseUrl").GetString(),
+                            healpixTiles = e.GetProperty("healpixTiles").GetInt32()
+                        }).ToList(),
+                    installed = dbs.InstalledAstrometryScales(),
+                    recommended = recScales.Select(s => s.Scale).ToList()
+                },
+                job = dbs.State
+            });
+        });
+
+        // Download + install. ASTAP takes one database id; astrometry.net takes
+        // the scale bands to fetch (the recommendation, or the operator's pick).
+        group.MapPost("/databases/install", async (SolverDbInstallRequest req,
+                                                   SolverDatabaseService dbs,
+                                                   CancellationToken ct) => {
+            using var cat = await dbs.LoadCatalogueAsync(ct);
+            var root = cat.RootElement;
+            var target = (req.Target ?? "").Trim().ToLowerInvariant();
+            var urls = new List<string>();
+            string id;
+
+            if (target == "astap") {
+                var entry = root.GetProperty("astapDatabases").EnumerateArray()
+                    .FirstOrDefault(e => string.Equals(e.GetProperty("id").GetString(),
+                        req.Id, StringComparison.OrdinalIgnoreCase));
+                if (entry.ValueKind == JsonValueKind.Undefined)
+                    return Results.BadRequest(new { error = $"Unknown ASTAP database '{req.Id}'." });
+                var url = entry.TryGetProperty("url", out var u) ? u.GetString() : null;
+                if (string.IsNullOrWhiteSpace(url))
+                    return Results.BadRequest(new { error = "That database has no download URL." });
+                urls.Add(url!);
+                id = entry.GetProperty("id").GetString() ?? req.Id ?? "";
+                var bytes = entry.GetProperty("approxBytes").GetInt64();
+                return dbs.StartInstall(id, target, urls, bytes)
+                    ? Results.Ok(new { started = true, id, target })
+                    : Results.Conflict(new { error = "Another database install is already running." });
+            }
+
+            if (target == "astrometry") {
+                var wanted = (req.Scales ?? new List<int>()).Distinct().OrderBy(x => x).ToList();
+                if (wanted.Count == 0)
+                    return Results.BadRequest(new { error = "No index scales requested." });
+                foreach (var series in root.GetProperty("astrometrySeries").EnumerateArray()) {
+                    int lo = series.GetProperty("minScale").GetInt32();
+                    int hi = series.GetProperty("maxScale").GetInt32();
+                    var baseUrl = series.GetProperty("baseUrl").GetString() ?? "";
+                    var seriesId = series.GetProperty("id").GetString() ?? "";
+                    int tiles = series.GetProperty("healpixTiles").GetInt32();
+                    foreach (var s in wanted.Where(s => s >= lo && s <= hi)) {
+                        if (tiles > 0) {
+                            for (int h = 0; h < tiles; h++)
+                                urls.Add($"{baseUrl}index-{seriesId[..2]}{s:00}-{h:00}.fits");
+                        } else {
+                            urls.Add($"{baseUrl}index-{seriesId[..2]}{s:00}.fits");
+                        }
+                    }
+                }
+                if (urls.Count == 0)
+                    return Results.BadRequest(new { error = "No published index files for those scales." });
+                id = "scales " + string.Join(",", wanted);
+                return dbs.StartInstall(id, target, urls, 0)
+                    ? Results.Ok(new { started = true, id, target, files = urls.Count })
+                    : Results.Conflict(new { error = "Another database install is already running." });
+            }
+
+            return Results.BadRequest(new { error = "target must be 'astap' or 'astrometry'." });
+        });
+
+        // Progress of the in-flight install, for the card's bar.
+        group.MapGet("/databases/status", (SolverDatabaseService dbs) => Results.Ok(dbs.State));
 
         // Abort the in-flight solve. The HTTP request that started the solve
         // stays open for its whole duration, so its abort token alone gave the
@@ -828,6 +951,11 @@ public static class PlateSolveEndpoints {
         string? SolveFieldPath = null,
         bool? UseWsl = null,
         string? WslDistro = null);
+
+    /// <summary>POST body for <c>/api/platesolve/databases/install</c>.
+    /// <c>Target</c> is "astap" (then <c>Id</c> names the database) or
+    /// "astrometry" (then <c>Scales</c> lists the index bands).</summary>
+    public record SolverDbInstallRequest(string? Target, string? Id = null, List<int>? Scales = null);
 
     /// <summary>Marker type for the ILogger&lt;T&gt; category --
     /// the static endpoint class itself can't be used as a generic

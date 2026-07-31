@@ -187,6 +187,7 @@ chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-self-update.service" 2>/dev/nu
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-growroot.service" 2>/dev/null || true
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-sshkeys.service" 2>/dev/null || true
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-diagnostics.service" 2>/dev/null || true
+chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-solverdb.service" 2>/dev/null || true
 chmod 0644 "$BUILD_DIR/opt/polaris/appsettings.json"
 chmod 0644 "$BUILD_DIR/usr/share/doc/polaris/README" \
            "$BUILD_DIR/usr/share/doc/polaris/copyright" \
@@ -207,6 +208,9 @@ if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-growroot.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-growroot.sh"
 fi
 # SSH host key generation (polaris-sshkeys.service runs it before sshd).
+if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-solverdb-install.sh" ]; then
+    chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-solverdb-install.sh"
+fi
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-sshkeys.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-sshkeys.sh"
 fi

@@ -1,0 +1,20 @@
+[Unit]
+# On-demand unit that installs plate-solver star databases / index files that
+# NINA.Polaris already downloaded into the polaris cache. Not enabled and not
+# WantedBy anything: SolverDatabaseService starts it explicitly with
+# `systemctl start polaris-solverdb.service`, which the polaris user may do
+# without a password through the same manage-units PolicyKit rule the
+# self-update uses (50-polaris-update.rules / .pkla).
+#
+# Only the move into /opt/astap or the astrometry index directory needs root;
+# the download itself runs unprivileged inside the app.
+Description=N.I.N.A. Polaris plate-solver database install
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/polaris/bin/polaris-solverdb-install.sh
+RemainAfterExit=no
+# Unpacking 1.25 GB of D80 on an SD card is not fast; the default 90 s
+# start timeout would kill it half-written.
+TimeoutStartSec=1800

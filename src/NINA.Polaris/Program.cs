@@ -390,6 +390,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Editor.ImageBlendService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Editor.EditSidecarStore>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.OnnxModelRegistry>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Onnx.ModelDownloadService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.SolverDatabaseService>();
 // THUMBPACK-4: on-demand downloader for the converted ncnn GPU-Vulkan models
 // (excluded from the package). Extracts into the writable models root's ncnn/
 // subtree, where the existing NcnnInferenceService resolver already looks.
