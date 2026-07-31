@@ -34,7 +34,10 @@ public static class VideoEndpoints {
                     MaxFrames: req.MaxFrames,
                     MaxDuration: req.MaxDurationSeconds is double s && s > 0
                         ? TimeSpan.FromSeconds(s) : null,
-                    ColorMode: req.ColorMode));
+                    ColorMode: req.ColorMode,
+                    // PLAN8: anything but an explicit 8 means 16, so a client
+                    // that does not send the field keeps today's behaviour.
+                    BitDepth: req.BitDepth == 8 ? 8 : 16));
                 return Results.Ok(new {
                     recording = true,
                     path = rec.OutputPath
@@ -143,7 +146,9 @@ public static class VideoEndpoints {
         string? TargetName = null,
         int? MaxFrames = null,
         double? MaxDurationSeconds = null,
-        SerColorMode? ColorMode = null);
+        SerColorMode? ColorMode = null,
+        /// <summary>PLAN8: 8 or 16 bits per sample on disk. Omitted = 16.</summary>
+        int? BitDepth = null);
 
     public record StackStartRequest(
         string SerPath,

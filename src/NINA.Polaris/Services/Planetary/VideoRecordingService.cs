@@ -219,6 +219,7 @@ public class VideoRecordingService : IDisposable {
         SerFileWriter? writer = null;
         byte[]? scratch = null;
         int sinceSpaceCheck = 0;
+        int outBits = 16;
         try {
             foreach (var item in queue.GetConsumingEnumerable()) {
                 // Item has left the queue → release its bytes from the budget.
@@ -236,21 +237,35 @@ public class VideoRecordingService : IDisposable {
                             continue;
                         }
                         var colorMode = _activeConfig?.ColorMode ?? item.Color;
-                        writer = new SerFileWriter(path, item.Width, item.Height, 16, colorMode,
+                        outBits = _activeConfig?.BitDepth == 8 ? 8 : 16;
+                        writer = new SerFileWriter(path, item.Width, item.Height, outBits, colorMode,
                             observer: "Polaris", instrument: instrument, telescope: telescope);
                         scratch = new byte[writer.BytesPerFrame];
                         lock (_lock) { _writer = writer; }
-                        _logger.LogInformation("Recording geometry locked → {W}×{H}×16 ({Color})",
-                            item.Width, item.Height, colorMode);
+                        _logger.LogInformation("Recording geometry locked → {W}×{H}×{Bits} ({Color})",
+                            item.Width, item.Height, outBits, colorMode);
                     }
                     // Header geometry is now fixed; a frame whose size changed
-                    // mid-recording (e.g. ROI edit) can't be appended.
-                    if (item.ByteLen != scratch!.Length) {
+                    // mid-recording (e.g. ROI edit) can't be appended. The
+                    // comparison is against the SOURCE size: at 8 bits the
+                    // scratch buffer is half the incoming frame.
+                    int srcBytes = item.Width * item.Height * 2;
+                    if (item.ByteLen != srcBytes || srcBytes != scratch!.Length * (16 / outBits)) {
                         Interlocked.Increment(ref _droppedFrames);
                         continue;
                     }
-                    Buffer.BlockCopy(item.Pixels, 0, scratch, 0, item.ByteLen);
-                    writer.WriteFrame(scratch, item.ByteLen, item.Utc);
+                    if (outBits == 8) {
+                        // PLAN8: take the top byte. Every backend widens a RAW8
+                        // readout with `px << 8`, so this is that exact
+                        // operation inverted, not a lossy rescale of 16-bit
+                        // data that was never there.
+                        var src = item.Pixels;
+                        for (int i = 0; i < scratch.Length; i++) scratch[i] = (byte)(src[i] >> 8);
+                        writer.WriteFrame(scratch, scratch.Length, item.Utc);
+                    } else {
+                        Buffer.BlockCopy(item.Pixels, 0, scratch, 0, item.ByteLen);
+                        writer.WriteFrame(scratch, item.ByteLen, item.Utc);
+                    }
 
                     // FIELD8-4: stop while there is still room. Planetary video
                     // writes FAST (640x640x16 at 130 fps is ~106 MB/s), so a
@@ -391,4 +406,17 @@ public record RecordingConfig(
     string TargetName,
     int? MaxFrames = null,
     TimeSpan? MaxDuration = null,
-    SerColorMode? ColorMode = null);
+    SerColorMode? ColorMode = null,
+    /// <summary>PLAN8: bits per sample WRITTEN TO DISK, 8 or 16 (default 16).
+    ///
+    /// The camera stream always hands us 16-bit samples, left-aligned the way
+    /// every backend widens a RAW8 readout (<c>px &lt;&lt; 8</c>). Writing 8
+    /// takes the top byte back off, which is what planetary capture wants:
+    /// the target is bright, lucky-imaging recovers the depth by averaging
+    /// hundreds of frames, and the file (and the byte rate that fills a disk
+    /// in 40 seconds) is halved.
+    ///
+    /// This is a DISK format choice, not a sensor mode: the USB traffic and
+    /// the frame rate ceiling are unchanged, since those are set when the
+    /// camera's readout format is chosen at connect.</summary>
+    int BitDepth = 16);

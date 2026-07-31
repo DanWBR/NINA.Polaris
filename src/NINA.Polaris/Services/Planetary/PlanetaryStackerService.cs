@@ -68,8 +68,11 @@ public class PlanetaryStackerService {
                 return;
             }
             using var reader = new SerFileReader(job.Config.SerPath);
-            if (reader.BitDepth != 16) {
-                Fail(job, $"Only 16-bit SER supported for now (file is {reader.BitDepth}-bit)");
+            // PLAN8: 8-bit is the norm in planetary capture, and the reader
+            // hands both depths back on the same 16-bit scale, so the rest of
+            // this method does not care which it got.
+            if (reader.BitDepth is not (8 or 16)) {
+                Fail(job, $"Only 8-bit and 16-bit SER are supported (file is {reader.BitDepth}-bit)");
                 return;
             }
             if (reader.ColorMode is not (SerColorMode.Mono or SerColorMode.BayerRGGB

@@ -536,6 +536,12 @@ public static class StatusStreamHandler {
                             fps = cameraStream.Fps,
                             captureFps = cameraStream.Fps,
                             transmitFps = cameraStream.TransmitFps,
+                            // PLAN8: the streamed frame geometry, so the VIDEO
+                            // panel can work out the byte rate a recording
+                            // would produce (width*height*bytes*fps) and say it
+                            // BEFORE the disk finds out.
+                            width = cameraStream.LastFrameWidth,
+                            height = cameraStream.LastFrameHeight,
                             lastError = cameraStream.LastError,
                             supportsNative = equip.Camera?.Capabilities.SupportsVideoStream ?? false
                         },

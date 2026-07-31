@@ -135,12 +135,23 @@ public sealed class SerFileReader : IDisposable {
         return buf;
     }
 
-    /// <summary>Reads a 16-bit mono frame as a ushort[]. Throws for any
-    /// other format, use ReadFrameBytes for 8-bit / RGB / Bayer.</summary>
+    /// <summary>Reads a single-plane frame as a ushort[]. 16-bit samples come
+    /// through untouched; PLAN8: 8-bit samples are widened by
+    /// <c>px &lt;&lt; 8</c>, the same left-alignment every camera backend
+    /// applies to a RAW8 readout, so everything downstream (quality metric,
+    /// centroid, stacking accumulator, FITS output) keeps working on one
+    /// scale and cannot tell where the frame came from.
+    ///
+    /// Use ReadFrameBytes for RGB/BGR files, which have three planes.</summary>
     public ushort[] ReadFrameAsUshort(int index) {
-        if (BitDepth != 16) throw new InvalidOperationException(
-            $"ReadFrameAsUshort requires BitDepth=16, file has {BitDepth}");
+        if (BitDepth is not (8 or 16)) throw new InvalidOperationException(
+            $"ReadFrameAsUshort requires BitDepth 8 or 16, file has {BitDepth}");
         var bytes = ReadFrameBytes(index);
+        if (BitDepth == 8) {
+            var wide = new ushort[bytes.Length];
+            for (int i = 0; i < bytes.Length; i++) wide[i] = (ushort)(bytes[i] << 8);
+            return wide;
+        }
         var pixels = new ushort[bytes.Length / 2];
         Buffer.BlockCopy(bytes, 0, pixels, 0, bytes.Length);
         return pixels;

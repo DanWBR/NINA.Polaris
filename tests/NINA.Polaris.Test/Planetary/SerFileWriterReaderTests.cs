@@ -186,6 +186,55 @@ public class SerFileWriterReaderTests {
         } finally { writer.Dispose(); }
     }
 
+    /// <summary>PLAN8. An 8-bit SER is the planetary norm and has to come back
+    /// on the SAME scale as a 16-bit one, or every consumer downstream (quality
+    /// metric, centroid, stacking accumulator) would need to know which kind of
+    /// file it was handed. The convention is the camera backends': a RAW8
+    /// sample is the TOP byte, widened with px &lt;&lt; 8.</summary>
+    [Test]
+    public void EightBit_RoundTrips_AndReadsBackOnTheSixteenBitScale() {
+        var path = Path.Combine(_tempDir, "planet8.ser");
+        const int w = 6, h = 4;
+        var frame = new byte[w * h];
+        for (int i = 0; i < frame.Length; i++) frame[i] = (byte)(i * 10);
+
+        using (var writer = new SerFileWriter(path, w, h, bitDepth: 8, SerColorMode.Mono)) {
+            writer.WriteFrame(frame, frame.Length, DateTime.UtcNow);
+            writer.WriteFrame(frame, frame.Length, DateTime.UtcNow);
+        }
+
+        using var reader = new SerFileReader(path);
+        Assert.That(reader.BitDepth, Is.EqualTo(8));
+        Assert.That(reader.FrameCount, Is.EqualTo(2));
+
+        var wide = reader.ReadFrameAsUshort(0);
+        Assert.That(wide.Length, Is.EqualTo(w * h));
+        for (int i = 0; i < wide.Length; i++) {
+            Assert.That(wide[i], Is.EqualTo((ushort)(frame[i] << 8)),
+                $"sample {i} must be left-aligned, not raw 0..255");
+        }
+    }
+
+    /// <summary>Half the samples means half the file: the whole point of
+    /// recording planetary video at 8 bits. Pinned because a regression here
+    /// is silent, it just costs disk.</summary>
+    [Test]
+    public void EightBit_FileIsHalfTheSizeOfSixteenBit() {
+        const int w = 32, h = 32, frames = 5;
+        var eight = Path.Combine(_tempDir, "d8.ser");
+        var sixteen = Path.Combine(_tempDir, "d16.ser");
+
+        using (var a = new SerFileWriter(eight, w, h, 8, SerColorMode.Mono)) {
+            for (int i = 0; i < frames; i++) a.WriteFrame(new byte[w * h], w * h, DateTime.UtcNow);
+        }
+        using (var b = new SerFileWriter(sixteen, w, h, 16, SerColorMode.Mono)) {
+            for (int i = 0; i < frames; i++) b.WriteFrame(new ushort[w * h]);
+        }
+
+        long dataOnly(string p) => new FileInfo(p).Length - SerFileWriter.HeaderSize - frames * 8L;
+        Assert.That(dataOnly(eight) * 2, Is.EqualTo(dataOnly(sixteen)));
+    }
+
     private static int ReadHeaderFrameCount(string path) {
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         var buf = new byte[42];

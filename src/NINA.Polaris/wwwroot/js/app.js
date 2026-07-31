@@ -1538,6 +1538,12 @@ function ninaApp() {
             binning: 1,
             targetName: 'planet',
             maxDurationSec: 60,
+            // PLAN8: bits per sample written to the SER. 8 is the planetary
+            // default for a reason (half the file, half the write rate, and
+            // stacking hundreds of frames rebuilds the depth anyway), but the
+            // default here stays 16 so nobody's existing workflow changes
+            // depth without being asked.
+            bitDepth: 16,
             wbR: 50,
             wbB: 50,
             // Hardware WB slider range, refreshed from the camera's
@@ -24357,6 +24363,24 @@ function ninaApp() {
             }
         },
 
+        // PLAN8: what a recording would cost, in the two units that decide
+        // whether it survives: megabytes per second and gigabytes per minute.
+        // The operator's 4.10 GB clip filled a disk in 39 seconds with nothing
+        // on screen hinting at the rate, so this line exists to be read BEFORE
+        // pressing record.
+        videoRateHint() {
+            const w = this.cameraStream.width | 0, h = this.cameraStream.height | 0;
+            const fps = this.cameraStream.captureFps || this.cameraStream.fps || 0;
+            if (w <= 0 || h <= 0 || fps <= 0) return '';
+            const bytes = this.video.bitDepth === 8 ? 1 : 2;
+            const mbps = w * h * bytes * fps / 1e6;
+            const gbPerMin = mbps * 60 / 1000;
+            return this._t('{w}x{h} at {bits}-bit, {fps} fps: {mb} MB/s, about {gb} GB per minute', {
+                w, h, bits: this.video.bitDepth === 8 ? 8 : 16,
+                fps: fps.toFixed(0), mb: mbps.toFixed(0), gb: gbPerMin.toFixed(1)
+            });
+        },
+
         async videoToggleRecord() {
             if (this.videoRecording.recording) {
                 try {
@@ -24368,7 +24392,8 @@ function ninaApp() {
             try {
                 const resp = await this.apiPost('/api/video/record/start', {
                     targetName: this.video.targetName || 'planet',
-                    maxDurationSeconds: this.video.maxDurationSec > 0 ? this.video.maxDurationSec : null
+                    maxDurationSeconds: this.video.maxDurationSec > 0 ? this.video.maxDurationSec : null,
+                    bitDepth: this.video.bitDepth === 8 ? 8 : 16
                 });
                 // apiPost returns the Response — parse it. Previously `r.path`
                 // was read off the Response object, always toasting
