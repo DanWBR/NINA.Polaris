@@ -12,8 +12,12 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
+using NINA.Polaris.Services;
 using NINA.Polaris.Services.PlateSolving;
+using System.Collections.Generic;
 
 namespace NINA.Polaris.Test;
 
@@ -27,6 +31,17 @@ namespace NINA.Polaris.Test;
 /// </summary>
 [TestFixture]
 public class AstapDownsampleEscalationTests {
+    /// <summary>Solver wired to a profile carrying a downsample setting, which
+    /// is the value the escalation has to beat.</summary>
+    private static AstapSolver MakeSolver(int profileDownsample) {
+        var cfg = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>())
+            .Build();
+        var profiles = new ProfileService(cfg, NullLogger<ProfileService>.Instance);
+        profiles.Active.PlateSolveDownsample = profileDownsample;
+        return new AstapSolver(cfg, NullLogger<AstapSolver>.Instance, profiles);
+    }
+
     /// <summary>The default (-z 2) escalates to at least 4 — the factor that
     /// recovered the marginal M8 frame.</summary>
     [Test]
@@ -47,5 +62,29 @@ public class AstapDownsampleEscalationTests {
     public void Escalate_FromCoarse_StepsUpFurther() {
         Assert.That(AstapSolver.EscalatedDownsample(4), Is.EqualTo(6));
         Assert.That(AstapSolver.EscalatedDownsample(3), Is.EqualTo(5));
+    }
+
+    /// <summary>
+    /// The escalated retry has to reach the command line. Field log from the
+    /// Q6A: three solves in a row carried "-z 1", the last of them under a line
+    /// announcing "retrying hinted at -z 4", because the profile's downsample
+    /// setting outranked the per-call value and the ladder's last rung re-ran
+    /// the solve that had just failed.
+    /// </summary>
+    [Test]
+    public void ExplicitDownsample_ReachesTheCommandLine() {
+        var solver = MakeSolver(profileDownsample: 1);
+
+        var normal = solver.BuildArgs("/tmp/f.fits", new PlateSolveOptions { Downsample = 2 });
+        Assert.That(normal, Does.Contain("-z 1"),
+            "without an explicit value the operator's setting still rules");
+
+        var escalated = solver.BuildArgs("/tmp/f.fits", new PlateSolveOptions {
+            Downsample = AstapSolver.EscalatedDownsample(1),
+            DownsampleIsExplicit = true
+        });
+        Assert.That(escalated, Does.Contain("-z 4"),
+            "the retry ladder's coarser factor must win over the profile default");
+        Assert.That(escalated, Does.Not.Contain("-z 1"));
     }
 }

@@ -96,13 +96,20 @@ public class AstapSolver : IPlateSolver {
         // only escalate when we're already at a finer factor, and skip it if a
         // successful blind pass would have returned above. Keeps the good hint —
         // the marginal frames need coarser detection, not a wider search.
-        var escalatedZ = EscalatedDownsample(options.Downsample);
-        if (escalatedZ > options.Downsample && options.Downsample >= 0) {
+        // Escalate from the factor actually in force, not from the per-call
+        // default: with a profile setting of 1 the old code compared 4 against
+        // that default, built the command from the profile again, and re-ran
+        // the failing solve verbatim (field log: three identical -z 1 commands
+        // under a line announcing -z 4).
+        var currentZ = EffectiveDownsample(options);
+        var escalatedZ = EscalatedDownsample(currentZ);
+        if (escalatedZ > currentZ && currentZ >= 0) {
             var coarse = new PlateSolveOptions {
                 HintRa = options.HintRa, HintDec = options.HintDec,
                 SearchRadiusDeg = options.SearchRadiusDeg, FovDeg = options.FovDeg,
                 ScaleArcsecPerPixel = options.ScaleArcsecPerPixel,
-                Downsample = escalatedZ
+                Downsample = escalatedZ,
+                DownsampleIsExplicit = true
             };
             _logger.LogInformation("ASTAP blind solve failed too; retrying hinted at -z {Z} (coarser detection)", escalatedZ);
             try { onLog?.Invoke($"== retrying ASTAP hinted at downsample {escalatedZ} (marginal frame) =="); } catch { }
@@ -223,9 +230,7 @@ public class AstapSolver : IPlateSolver {
         // big sensor far faster by binning the frame before star detection.
         // 0 = ASTAP auto-downsample (scales with image size); 1 = none;
         // 2/3/4 = fixed. Default keeps the previous behaviour (2).
-        var downsample = _profiles?.Active.PlateSolveDownsample
-                         ?? _config.GetValue<int?>("PlateSolve:Downsample")
-                         ?? options.Downsample;
+        var downsample = EffectiveDownsample(options);
         if (downsample > 0)
             args += $" -z {downsample}";
         else if (downsample == 0)
@@ -448,6 +453,19 @@ public class AstapSolver : IPlateSolver {
     /// as "not coarse enough" and escalated to 4.</summary>
     internal static int EscalatedDownsample(int current)
         => Math.Max(4, current <= 0 ? 4 : current + 2);
+
+    /// <summary>The downsample this call will actually run with: the profile
+    /// setting, then appsettings, then the per-call value, EXCEPT when the
+    /// caller marked its value explicit (the retry ladder). Shared by BuildArgs
+    /// and the escalation so the two can never disagree about what -z is in
+    /// force, which is how the "retrying at -z 4" line came to print above a
+    /// command carrying -z 1.</summary>
+    private int EffectiveDownsample(PlateSolveOptions options) {
+        if (options.DownsampleIsExplicit) return options.Downsample;
+        return _profiles?.Active.PlateSolveDownsample
+               ?? _config.GetValue<int?>("PlateSolve:Downsample")
+               ?? options.Downsample;
+    }
 
     private static bool NeedsProxyForSolve(string fitsPath, out int channels) {
         channels = 1;

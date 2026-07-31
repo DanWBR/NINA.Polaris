@@ -141,6 +141,12 @@ public class PlateSolveOptions {
     public double SearchRadiusDeg { get; set; } = 30;
     public double FovDeg { get; set; }
     public int Downsample { get; set; } = 2;
+    /// <summary>True when <see cref="Downsample"/> is a deliberate decision for
+    /// this one call and must beat the profile/config default. Only the retry
+    /// ladder sets it: the escalation exists precisely to use a factor the
+    /// operator's setting does not, and without this the profile value silently
+    /// won and the "coarser" retry re-ran the command that had just failed.</summary>
+    public bool DownsampleIsExplicit { get; set; }
     /// <summary>Approximate pixel scale in arcsec/pixel, required by PlateSolve3, optional hint for others.</summary>
     public double ScaleArcsecPerPixel { get; set; }
 }
