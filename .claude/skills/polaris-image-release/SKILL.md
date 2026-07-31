@@ -166,6 +166,37 @@ folder syncs in the background and a partial copy looks like a file.
 Name the archive for the version it contains: `polaris-linux-x64-v0.97.2.7z`,
 `rpi4-polaris-v0.97.2.7z`. The name is what the user sees in the download.
 
+### Delete the .img as soon as its .7z is verified
+
+Do this per board, inside the loop, not at the end of the batch:
+
+```powershell
+NanaZipC.exe t <out>.7z          # must pass first
+Remove-Item <img>                # only then
+```
+
+The seven uncompressed images are ~120 GB and the archives that replace them
+are ~36 GB. Holding all seven until the batch finished cost 120 GB of the
+operator's system disk, and the images are reproducible from the .7z by
+extraction, so keeping both is paying for the same bytes twice.
+
+Order matters and is not negotiable: the archive has to TEST clean before the
+source goes. A 0-byte archive has overwritten a good one here before, and with
+the .img already deleted that would have been the only copy.
+
+Note the second half of the bill, which is invisible: the loop mount, the
+chroot and the copy all happen inside WSL, and its ext4.vhdx GROWS but never
+shrinks on its own. After a batch, `df -h /` inside WSL can show tens of GB
+free while the vhdx still holds all of it on the Windows side. Compacting it
+needs an elevated shell, so hand the user the command rather than trying:
+
+```powershell
+wsl --shutdown; Optimize-VHD -Path '<...>\LocalState\ext4.vhdx' -Mode Full
+```
+
+`wsl --manage <distro> --set-sparse true` is the non-elevated alternative and
+is currently refused by WSL as unsafe. Do not force it with `--allow-unsafe`.
+
 ## 7. Hand off
 
 Creating the share link needs the Drive UI, which is not reachable from here.
