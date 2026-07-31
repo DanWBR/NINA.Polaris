@@ -1,10 +1,10 @@
 {
   "title": "Download & Install",
-  "lede": "Flash a ready-made image, or download the release for your platform and run the install steps. Then add only the optional components for the features you want; Polaris detects what is installed at runtime and hides the UI for anything missing.",
+  "lede": "Two ways in: write a ready-made image to a card, or download the build for your machine and run a couple of commands. After that, add only the extras you actually want. Polaris looks around at startup and simply hides what is not there, so nothing nags you to install something you do not need.",
   "requirements": {
     "title": "System requirements",
-    "sub": "The main limiting factor is RAM. Everything else is comfortable on a modern SBC, and several boards add GPU and NPU acceleration for the AI tools.",
-    "ramNote": "Polaris sizes the live stack to the board it runs on: it picks a 1:1, 1:2 or 1:4 stacking resolution so the working set stays inside a quarter of the memory available to it. A 12 MP colour camera costs roughly 900 MB at 1:1 and 450 MB at 1:2, over a fixed floor of about 370 MB. 2 GB is comfortable, 1.5 GB boards work at a reduced stacking resolution, and client-side WASM can move the stacking maths into the browser entirely.",
+    "sub": "RAM is what really decides. Everything else is comfortable on any modern little board, and a few of them even lend a GPU or an NPU to the AI tools.",
+    "ramNote": "Polaris sizes the live stack to the board it is running on, picking full, half or quarter resolution so the work fits in a quarter of the memory. In round numbers: a 12 MP colour camera needs about 900 MB at full resolution and 450 MB at half, on top of a fixed 370 MB for everything else. 2 GB is comfortable, a 1.5 GB board works at reduced resolution, and if you would rather not spend the memory at all, the browser can do the stacking instead.",
     "recommendedNote": "Recommended board: the Orange Pi 4 Pro with 4 GB. It is the best balance of cost and capability of every SBC tested so far: a Polaris score of 180 for around $50 to $70, with eight cores, LPDDR5 memory, a GPU and a 3 TOPS NPU. If you want the highest score whatever the price, the Radxa Dragon Q6A leads at 317. If you lean on the AI tools, the Orange Pi 5 Pro is the proven accelerated option, adding OpenCL on the GPU and GraXpert AI on the NPU.",
     "rows": [
       {
@@ -160,13 +160,13 @@
       "title": "Keeping Polaris up to date",
       "selfTitle": "One-click in-app update",
       "selfBadge": "Recommended",
-      "selfBody": "Every .deb install (including the ready-to-flash images above) can update itself. Polaris checks GitHub for new releases on startup and once an hour; when a newer build exists for your board's architecture, a green Update badge appears in the top status bar with the new version. Click it for the release notes, then Download & install: Polaris fetches the matching .deb, installs it, and reloads on the new version. No SSH, no apt, and no sudo password (authorized by a tightly-scoped PolicyKit rule). Leave the page open while it refreshes itself. Your profiles and data are kept.",
+      "selfBody": "Every .deb install, including the ready-to-flash images above, can update itself. Polaris checks GitHub for new releases when it starts and once an hour after that. When there is a newer build for your board, a green Update badge shows up in the top bar with the version number. Click it to read what changed, then Download and install: Polaris fetches the right file, installs it and comes back on the new version. No SSH, no apt, no sudo password. Just leave the page open while it reloads itself. Your profiles and your photos stay exactly where they are.",
       "selfImage": "/assets/screenshots/self-update.jpg"
     }
   },
   "download": {
     "title": "Download",
-    "sub": "Grab the server build for the machine that runs your rig, then follow the install steps below. Prefer zero setup? Use a ready-to-flash image above.",
+    "sub": "Pick the server build for the machine that will sit next to the telescope, then follow the steps below. Want zero setup? Take a ready-to-flash image above instead.",
     "groups": [
       {
         "name": "Server (runs on the rig)",
@@ -224,7 +224,7 @@
   },
   "tldr": {
     "title": "Bare minimum to boot",
-    "note": "That is all the home page needs. Every other feature has its own dependency, listed under optional components below.",
+    "note": "That is everything the home page needs. Each of the other features brings its own tool, listed under optional components below, and you add them only when you want that feature.",
     "rows": [
       {
         "label": "Runtime",
@@ -245,7 +245,7 @@
   },
   "platformsSection": {
     "title": "Install",
-    "sub": "Step by step for each platform once you have the files. The published builds are self-contained, so there is no separate runtime to install."
+    "sub": "Once you have the files, here is the step by step for each platform. The published builds carry everything they need, so there is no runtime to chase."
   },
   "platforms": [
     {
@@ -314,14 +314,14 @@
   ],
   "firewall": {
     "title": "Open the firewall",
-    "sub": "Polaris listens on TCP 5000 (HTTP) and UDP 5353 (mDNS, so <hostname>.local resolves). Both are blocked by default.",
+    "sub": "Polaris listens on TCP 5000 (the interface) and UDP 5353 (mDNS, which is what makes the <hostname>.local address work). Most systems block both until you say otherwise.",
     "windows": "New-NetFirewallRule -DisplayName \"Polaris Astro Controller\" -Direction Inbound -Protocol TCP -LocalPort 5000 -Action Allow -Profile Private,Domain\nNew-NetFirewallRule -DisplayName \"mDNS (Polaris)\" -Direction Inbound -Protocol UDP -LocalPort 5353 -Action Allow -Profile Private,Domain",
     "linux": "sudo ufw allow 5000/tcp\nsudo ufw allow 5353/udp",
     "note": "On Linux without ufw: iptables -A INPUT -p tcp --dport 5000 -j ACCEPT. The .deb install handles this for you."
   },
   "optionalSection": {
     "title": "Optional components",
-    "sub": "Add only what you need. Polaris lights up each feature when its tool is present and degrades gracefully when it is not."
+    "sub": "Add only what you need. Each feature lights up when its tool is there, and stays quietly out of the way when it is not."
   },
   "optionalGroups": [
     {

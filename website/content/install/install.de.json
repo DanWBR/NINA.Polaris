@@ -1,10 +1,10 @@
 {
   "title": "Herunterladen & Installieren",
-  "lede": "Flashen Sie ein vorgefertigtes Image oder laden Sie die Version für Ihre Plattform herunter und führen Sie die Installationsschritte durch. Fügen Sie anschließend nur die optionalen Komponenten für die gewünschten Funktionen hinzu; Polaris erkennt zur Laufzeit, was installiert ist, und blendet die Benutzeroberfläche für fehlende Komponenten aus.",
+  "lede": "Zwei Wege: ein fertiges Image auf eine Karte schreiben, oder den Build für Ihren Rechner laden und zwei Befehle ausführen. Danach installieren Sie nur die Extras, die Sie wirklich wollen. Polaris schaut beim Start nach, was da ist, und blendet den Rest einfach aus, niemand drängt Sie zu etwas, das Sie nicht brauchen.",
   "requirements": {
     "title": "Systemanforderungen",
-    "sub": "Der größte Engpass ist der Arbeitsspeicher. Alles andere läuft auf einem modernen SBC problemlos, und einige Boards bieten zudem GPU- und NPU-Beschleunigung für die KI-Tools.",
-    "ramNote": "Polaris passt den Live-Stack an das Board an, auf dem er läuft: Er wählt eine Stacking-Auflösung von 1:1, 1:2 oder 1:4, damit das Working Set in ein Viertel des verfügbaren Speichers passt. Eine 12-MP-Farbkamera kostet rund 900 MB bei 1:1 und 450 MB bei 1:2, über einem festen Sockel von etwa 370 MB. 2 GB sind bequem, Boards mit 1,5 GB laufen mit reduzierter Stacking-Auflösung, und WASM auf der Clientseite kann die gesamte Stacking-Rechnung in den Browser verlagern.",
+    "sub": "Entscheidend ist der Arbeitsspeicher. Alles andere läuft auf jedem modernen kleinen Board bequem, und einige leihen den KI-Werkzeugen sogar eine GPU oder eine NPU.",
+    "ramNote": "Polaris passt das Live-Stacking an das Board an und wählt volle, halbe oder viertel Auflösung, damit die Arbeit in ein Viertel des Speichers passt. Grob gerechnet: Eine 12-MP-Farbkamera braucht rund 900 MB bei voller und 450 MB bei halber Auflösung, dazu feste 370 MB für alles Übrige. 2 GB sind bequem, ein Board mit 1,5 GB arbeitet mit reduzierter Auflösung, und wenn Sie den Speicher lieber sparen, übernimmt der Browser das Stacking.",
     "recommendedNote": "Empfohlenes Board: der Orange Pi 4 Pro mit 4 GB. Er bietet das beste Verhältnis von Preis und Leistungsfähigkeit aller bisher getesteten SBCs: ein Polaris-Wert von 180 für rund 50 bis 70 Dollar, mit acht Kernen, LPDDR5-Speicher, einer GPU und einer 3-TOPS-NPU. Wenn Sie den höchsten Wert ohne Rücksicht auf den Preis wollen, führt das Radxa Dragon Q6A mit 317. Wenn Sie vor allem auf KI-Tools setzen, ist der Orange Pi 5 Pro die bewährte Alternative, die zusätzlich OpenCL auf der GPU und GraXpert AI auf der NPU bietet.",
     "rows": [
       {
@@ -160,13 +160,13 @@
       "title": "Polaris auf dem neuesten Stand halten",
       "selfTitle": "In-App-Update mit einem Klick",
       "selfBadge": "Empfohlen",
-      "selfBody": "Jede .deb-Installation (einschließlich der oben genannten, sofort flashenbaren Images) kann sich selbst aktualisieren. Polaris überprüft beim Start und einmal pro Stunde GitHub auf neue Releases; sobald ein neuerer Build für die Architektur Ihres Boards vorliegt, erscheint in der oberen Statusleiste ein grünes „Update“-Symbol mit der neuen Version. Klicken Sie darauf, um die Versionshinweise anzuzeigen, und wählen Sie anschließend „Herunterladen & installieren“: Polaris ruft das passende .deb-Paket ab, installiert es und startet mit der neuen Version neu. Kein SSH, kein apt und kein sudo-Passwort (autorisiert durch eine streng begrenzte PolicyKit-Regel). Lassen Sie die Seite geöffnet, während sie sich selbst aktualisiert. Ihre Profile und Daten bleiben erhalten.",
+      "selfBody": "Jede .deb-Installation, auch die fertigen Images oben, aktualisiert sich selbst. Polaris fragt beim Start und danach stündlich bei GitHub nach. Gibt es einen neueren Build für Ihr Board, erscheint oben ein grünes Update-Abzeichen mit der Versionsnummer. Ein Klick zeigt, was sich geändert hat, dann herunterladen und installieren: Polaris holt die passende Datei, installiert sie und meldet sich in der neuen Version zurück. Kein SSH, kein apt, kein sudo-Passwort. Lassen Sie die Seite einfach offen, während sie neu lädt. Ihre Profile und Ihre Fotos bleiben genau da, wo sie sind.",
       "selfImage": "/assets/screenshots/self-update.jpg"
     }
   },
   "download": {
     "title": "Herunterladen",
-    "sub": "Laden Sie die Server-Version für den Rechner herunter, auf dem Ihr System läuft, und befolgen Sie anschließend die unten aufgeführten Installationsschritte. Möchten Sie ganz auf die Einrichtung verzichten? Verwenden Sie dann eines der oben aufgeführten, sofort flashen-fertigen Images.",
+    "sub": "Nehmen Sie den Server-Build für den Rechner, der neben dem Teleskop stehen wird, und folgen Sie den Schritten unten. Lieber ohne jede Einrichtung? Dann nehmen Sie oben ein fertiges Image.",
     "groups": [
       {
         "name": "Server (läuft auf dem Rechner)",
@@ -224,7 +224,7 @@
   },
   "tldr": {
     "title": "Das absolute Minimum zum Hochfahren",
-    "note": "Das ist alles, was die Startseite benötigt. Jede weitere Funktion hat ihre eigenen Abhängigkeiten, die weiter unten unter „Optionale Komponenten“ aufgeführt sind.",
+    "note": "Mehr braucht die Startseite nicht. Jede weitere Funktion bringt ihr eigenes Werkzeug mit, aufgelistet unter den optionalen Komponenten weiter unten, und Sie installieren es nur, wenn Sie diese Funktion wollen.",
     "rows": [
       {
         "label": "Laufzeit",
@@ -245,7 +245,7 @@
   },
   "platformsSection": {
     "title": "Installieren",
-    "sub": "Sobald Sie die Dateien haben, gehen Sie für jede Plattform Schritt für Schritt vor. Die veröffentlichten Builds sind in sich geschlossen, sodass keine separate Laufzeitumgebung installiert werden muss."
+    "sub": "Wenn Sie die Dateien haben, kommt hier der Schritt für Schritt je Plattform. Die veröffentlichten Builds bringen alles Nötige mit, es gibt keine Runtime zu jagen."
   },
   "platforms": [
     {
@@ -314,14 +314,14 @@
   ],
   "firewall": {
     "title": "Firewall öffnen",
-    "sub": "Polaris lauscht auf TCP 5000 (HTTP) und UDP 5353 (mDNS, damit <hostname>.local aufgelöst wird). Beide werden standardmäßig blockiert.",
+    "sub": "Polaris lauscht auf TCP 5000 (die Oberfläche) und UDP 5353 (mDNS, damit die Adresse <hostname>.local funktioniert). Die meisten Systeme blockieren beides, bis Sie es freigeben.",
     "windows": "New-NetFirewallRule -DisplayName „Polaris Astro Controller“ -Direction Inbound -Protocol TCP -LocalPort 5000 -Action Allow -Profile Private,Domain\nNew-NetFirewallRule -DisplayName „mDNS (Polaris)“ -Direction Inbound -Protocol UDP -LocalPort 5353 -Action Allow -Profile Private,Domain",
     "linux": "sudo ufw allow 5000/tcp\nsudo ufw allow 5353/udp",
     "note": "Unter Linux ohne ufw: iptables -A INPUT -p tcp --dport 5000 -j ACCEPT. Die .deb-Installation übernimmt dies für Sie."
   },
   "optionalSection": {
     "title": "Optionale Komponenten",
-    "sub": "Fügen Sie nur das hinzu, was Sie benötigen. Polaris hebt jede Funktion hervor, wenn das entsprechende Werkzeug vorhanden ist, und blendet sie nahtlos aus, wenn dies nicht der Fall ist."
+    "sub": "Installieren Sie nur, was Sie brauchen. Jede Funktion geht an, sobald ihr Werkzeug da ist, und hält sich still im Hintergrund, wenn nicht."
   },
   "optionalGroups": [
     {

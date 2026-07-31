@@ -1,4 +1,4 @@
 {
   "tagline": "Astrophotographie pilotée par navigateur, compatible avec tous les appareils",
-  "description": "Système de contrôle d'astrophotographie léger, piloté par navigateur, basé sur ASP.NET Core. Fonctionne sur Raspberry Pi, mini-PC et Windows. Prise en charge des protocoles INDI + ASCOM/Alpaca, guidage PHD2, plate solving, empilement en direct, séquenceur avancé et serveur relais pour l'accès à distance."
+  "description": "Astrophotographie pilotée par navigateur, hébergée par vous. Tourne sur Raspberry Pi, mini PC ou Windows, et gère le matériel INDI et ASCOM/Alpaca, le guidage PHD2, l'astrométrie, l'empilement en direct, un séquenceur avancé et l'accès distant via votre propre relais."
 }

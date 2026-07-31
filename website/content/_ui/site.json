@@ -1,4 +1,4 @@
 {
   "tagline": "Browser-controlled astrophotography for any device",
-  "description": "A lightweight, browser-controlled astrophotography control system on ASP.NET Core. Runs on Raspberry Pi, mini PCs, and Windows. INDI + ASCOM/Alpaca, PHD2 guiding, plate solving, live stacking, advanced sequencer, and a relay server for remote access."
+  "description": "Browser-controlled astrophotography you host yourself. Runs on a Raspberry Pi, a mini PC or Windows, and handles INDI and ASCOM/Alpaca gear, PHD2 guiding, plate solving, live stacking, an advanced sequencer, and remote access through your own relay."
 }

@@ -1,6 +1,6 @@
 {
   "title": "Recursos",
-  "lede": "O Polaris Astro Controller é uma plataforma de astrofotografia controlada por navegador que roda em um Raspberry Pi, mini-PC ou qualquer outro host pequeno com Linux ou Windows na sua rede. Basta conectar qualquer dispositivo - laptop, tablet ou celular - ao host para ter acesso a todo o fluxo de trabalho de equipamento, captura e processamento, sem precisar instalar nenhum aplicativo no computador. Tudo o que está descrito a seguir é executado a partir de uma única interface de usuário web, organizada por painéis na barra lateral.",
+  "lede": "O Polaris roda num Raspberry Pi, num mini PC ou em qualquer máquina pequena com Linux ou Windows na sua rede, e você comanda tudo pelo navegador. Aponte um notebook, um tablet ou o celular para ele e tem o fluxo inteiro na mão, equipamento, captura e processamento, sem instalar programa de desktop em lugar nenhum. Tudo o que vem abaixo faz parte dessa mesma interface web, organizado como a barra lateral.",
   "glanceTitle": "Em resumo",
   "glance": [
     {

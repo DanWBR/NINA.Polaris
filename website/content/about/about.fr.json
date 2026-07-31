@@ -1,7 +1,7 @@
 {
   "title": "À propos du Polaris Astro Controller",
   "logo": "/favicon-192.png",
-  "lede": "Polaris Astro Controller est une suite logicielle autonome, accessible via un navigateur, dédiée au contrôle, à la capture et au traitement des images d’astrophotographie. Elle fonctionne entièrement sur votre propre appareil (un Raspberry Pi, un mini-PC ou un ordinateur) et est accessible depuis n’importe quel navigateur de votre réseau, sans qu’il soit nécessaire d’installer d’application sur l’appareil d’observation. Elle contrôle votre équipement (INDI, ASCOM, Alpaca et SDK natifs des appareils photo), gère le live stacking, le guiding, la mise au point, le plate solving et la séquence de prises de vue, et comprend un éditeur complet avec extraction d'arrière-plan par IA, débruitage et déconvolution.",
+  "lede": "Polaris Astro Controller est un logiciel d'astrophotographie que vous faites tourner sur votre propre machine et que vous ouvrez dans un navigateur. Il vit sur un Raspberry Pi, un mini PC ou l'ordinateur posé à côté du télescope, et vous l'atteignez depuis n'importe quel appareil du réseau, sans rien installer sur l'appareil que vous regardez. Il pilote le matériel (INDI, ASCOM, Alpaca et SDK natifs), assure l'empilement en direct, le guidage, la mise au point, l'astrométrie et le séquençage, et embarque un éditeur complet, avec extraction de fond, débruitage et déconvolution par IA.",
   "author": {
     "title": "Auteur et coordonnées",
     "intro": "Créé et mis à jour par",
@@ -31,19 +31,19 @@
   },
   "version": {
     "title": "Version et code source",
-    "body": "Polaris publie des versions fréquentes. Le code actuel, la dernière build et les notes de version se trouvent tous sur la page du projet sur GitHub. Sur une installation .deb, Polaris se met à jour d'un clic depuis la barre d'état."
+    "body": "De nouvelles versions sortent souvent. Le code actuel, la dernière build et les notes de version vivent sur la page du projet sur GitHub, et si vous avez installé via le .deb, Polaris se met à jour d'un clic depuis la barre d'état."
   },
   "report": {
     "title": "Signaler un problème",
-    "body": "Vous avez repéré un bug ou vous souhaitez proposer une nouvelle fonctionnalité ? Créez un ticket ou lancez une discussion sur GitHub. L'outil de signalement intégré à l'application remplit automatiquement vos informations client et serveur afin de faciliter le diagnostic."
+    "body": "Vous avez trouvé un bug, ou une idée de ce que Polaris devrait faire ? Ouvrez un ticket ou lancez une discussion sur GitHub. Le rapporteur intégré à l'application remplit pour vous les détails du client et du serveur, ce qui épargne en général un aller-retour de questions."
   },
   "support": {
     "title": "Soutenez le projet",
-    "body": "Polaris reste un logiciel libre et open source. S'il vous a évité une soirée de tâtonnements et que vous souhaitez apporter votre contribution, votre soutien est le bienvenu, mais reste entièrement facultatif. Vous pouvez également suivre l'actualité du développement et rejoindre la communauté."
+    "body": "Polaris reste libre et open source, point. S'il vous a épargné une soirée de bricolage et que vous avez envie de contribuer, c'est bienvenu, et totalement facultatif. Suivre les nouvelles du développement et traîner dans la communauté, c'est très bien aussi."
   },
   "credits": {
     "title": "Crédits et remerciements",
-    "intro": "Polaris Astro Controller s'appuie sur une vaste communauté de projets consacrés à l'astronomie et à l'open source. Certains nous ont fourni du code, d'autres nous ont servi de référence, et bon nombre d'entre eux sont intégrés à la pile de capture et de traitement. Merci à tous les auteurs cités ci-dessous. Les textes complets des licences sont fournis avec l'application et disponibles dans le dépôt de sources.",
+    "intro": "Polaris se tient sur les épaules de nombreux projets d'astronomie et de logiciel libre. À certains nous empruntons du code, d'autres nous ont servi de référence, et beaucoup tournent chaque nuit au cœur de la capture et du traitement. Merci à toutes celles et ceux listés ci-dessous. Les textes de licence complets accompagnent l'application et vivent dans le dépôt.",
     "groups": [
       {
         "title": "Développé sur la plateforme N.I.N.A.",

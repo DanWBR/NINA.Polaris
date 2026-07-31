@@ -1,6 +1,6 @@
 {
   "title": "KI-Tools",
-  "lede": "Der Polaris Astro Controller enthält eine umfassende Suite KI-gestützter Bildverarbeitungswerkzeuge, die vollständig auf Ihrer lokalen Hardware ausgeführt werden. Keine Cloud, keine Abonnements, keine Daten, die Ihr Gerät verlassen. Neben den GraXpert-Modellen und vier Netzwerken zur Sternentfernung trainiert und liefert Polaris eigene Modelle aus, die unter der AGPL veröffentlicht und so konzipiert sind, dass sie auf den NPUs der tatsächlich verwendeten Platinen laufen.",
+  "lede": "Polaris bringt einen kompletten Satz KI-Bildwerkzeuge mit, und alle laufen auf Ihrer eigenen Hardware. Keine Cloud, kein Abo, nichts verlässt Ihr Gerät. Neben den GraXpert-Modellen und vier Netzen zur Sternentfernung trainiert und veröffentlicht Polaris eigene Modelle, unter der AGPL und dafür gebaut, auf den NPUs der Boards zu laufen, die Leute tatsächlich kaufen.",
   "glanceTitle": "Auf einen Blick",
   "glance": [
     {

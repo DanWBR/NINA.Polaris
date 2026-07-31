@@ -1,6 +1,6 @@
 {
   "title": "Outils d'IA",
-  "lede": "Polaris Astro Controller intègre une suite complète d’outils de traitement d’images basés sur l’IA qui s’exécutent entièrement sur votre matériel local. Pas de cloud, pas d'abonnement, aucune donnée ne quitte votre appareil. Outre les modèles GraXpert et les quatre réseaux de suppression des étoiles, Polaris entraîne et fournit ses propres modèles, publiés sous licence AGPL et conçus pour fonctionner sur les NPU des cartes que les utilisateurs utilisent réellement.",
+  "lede": "Polaris embarque une panoplie complète d'outils d'IA pour l'image, et tous tournent sur votre propre matériel. Pas de cloud, pas d'abonnement, rien qui quitte votre appareil. Outre les modèles GraXpert et quatre réseaux de retrait d'étoiles, Polaris entraîne et publie ses propres modèles, sous licence AGPL et conçus pour tourner sur les NPU des cartes que les gens achètent vraiment.",
   "glanceTitle": "En bref",
   "glance": [
     {

@@ -1,6 +1,6 @@
 {
   "title": "Ferramentas de IA",
-  "lede": "O Polaris Astro Controller vem com um conjunto completo de ferramentas de processamento de imagem baseadas em IA que são executadas inteiramente no seu hardware local. Sem nuvem, sem assinaturas, sem que os dados saiam do seu dispositivo. Além dos modelos GraXpert e das quatro redes de remoção de estrelas, o Polaris treina e fornece seus próprios modelos, lançados sob a licença AGPL e desenvolvidos para rodarem nas NPUs das placas que as pessoas realmente utilizam.",
+  "lede": "O Polaris vem com um conjunto completo de ferramentas de IA para imagem, e todas rodam no seu próprio hardware. Sem nuvem, sem assinatura, sem nada saindo do seu aparelho. Além dos modelos do GraXpert e de quatro redes de remoção de estrelas, o Polaris treina e distribui modelos próprios, sob licença AGPL e feitos para rodar nas NPUs das placas que as pessoas realmente compram.",
   "glanceTitle": "Em resumo",
   "glance": [
     {

@@ -1,10 +1,10 @@
 {
   "title": "Descargar e instalar",
-  "lede": "Instala una imagen ya preparada o descarga la versión correspondiente a tu plataforma y sigue los pasos de instalación. A continuación, añade únicamente los componentes opcionales para las funciones que desees; Polaris detecta lo que está instalado en tiempo de ejecución y oculta la interfaz de usuario de cualquier elemento que falte.",
+  "lede": "Dos caminos: grabar una imagen ya preparada en una tarjeta, o descargar la versión para tu máquina y ejecutar un par de comandos. Después, instala solo los extras que de verdad quieras. Polaris mira lo que hay al arrancar y oculta lo que falta, así que nada te insiste para que instales algo que no necesitas.",
   "requirements": {
     "title": "Requisitos del sistema",
-    "sub": "El principal factor limitante es la memoria RAM. El resto funciona sin problemas en un SBC moderno, y varias placas incorporan aceleración por GPU y NPU para las herramientas de IA.",
-    "ramNote": "Polaris dimensiona el live stack según la placa en la que se ejecuta: elige una resolución de stacking 1:1, 1:2 o 1:4 para que el working set quepa en una cuarta parte de la memoria disponible. Una cámara en color de 12 MP cuesta unos 900 MB en 1:1 y 450 MB en 1:2, sobre un piso fijo de unos 370 MB. 2 GB va holgado, las placas de 1,5 GB funcionan con una resolución de stacking reducida, y el WASM en el cliente puede llevar todo el cálculo del stacking al navegador.",
+    "sub": "Lo que de verdad decide es la RAM. Todo lo demás va cómodo en cualquier placa moderna, y algunas incluso prestan una GPU o una NPU a las herramientas de IA.",
+    "ramNote": "Polaris ajusta el apilado en vivo a la placa en la que corre, eligiendo resolución completa, media o un cuarto para que el trabajo quepa en una cuarta parte de la memoria. En números redondos: una cámara en color de 12 MP pide unos 900 MB a resolución completa y 450 MB a la mitad, más 370 MB fijos para todo lo demás. 2 GB va cómodo, una placa de 1,5 GB funciona a resolución reducida y, si prefieres no gastar esa memoria, el navegador puede encargarse del apilado.",
     "recommendedNote": "Placa recomendada: la Orange Pi 4 Pro con 4 GB. Es el mejor equilibrio entre coste y prestaciones de todas las SBC probadas hasta la fecha: puntuación Polaris de 180 por entre 50 y 70 dólares, con ocho núcleos, memoria LPDDR5, GPU y NPU de 3 TOPS. Si buscas la puntuación más alta cueste lo que cueste, la Radxa Dragon Q6A encabeza la lista con 317. Si vas a utilizar herramientas de IA, la Orange Pi 5 Pro es la alternativa de probada eficacia, ya que incorpora OpenCL en la GPU y GraXpert AI en la NPU.",
     "rows": [
       {
@@ -160,13 +160,13 @@
       "title": "Mantener Polaris actualizado",
       "selfTitle": "Actualización dentro de la aplicación con un solo clic",
       "selfBadge": "Recomendado",
-      "selfBody": "Todas las instalaciones .deb (incluidas las imágenes listas para flashear mencionadas anteriormente) pueden actualizarse automáticamente. Polaris comprueba si hay nuevas versiones en GitHub al iniciarse y una vez cada hora; cuando existe una compilación más reciente para la arquitectura de tu placa, aparece una insignia verde de «Actualizar» en la barra de estado superior con la nueva versión. Haz clic en ella para ver las notas de la versión y, a continuación, selecciona «Descargar e instalar»: Polaris descarga el archivo .deb correspondiente, lo instala y se reinicia con la nueva versión. Sin SSH, sin apt y sin contraseña de sudo (autorizado por una regla de PolicyKit de alcance muy limitado). Deja la página abierta mientras se actualiza. Tus perfiles y datos se conservan.",
+      "selfBody": "Toda instalación por .deb, incluidas las imágenes ya preparadas de arriba, se actualiza sola. Polaris consulta GitHub al arrancar y una vez por hora a partir de ahí. Cuando hay una versión más nueva para tu placa, aparece una insignia verde de Update en la barra superior con el número de versión. Haz clic para leer qué ha cambiado y luego en descargar e instalar: Polaris coge el archivo correcto, lo instala y vuelve ya en la versión nueva. Sin SSH, sin apt, sin contraseña de sudo. Solo deja la página abierta mientras se recarga. Tus perfiles y tus fotos se quedan donde están.",
       "selfImage": "/assets/screenshots/self-update.jpg"
     }
   },
   "download": {
     "title": "Descargar",
-    "sub": "Descarga la versión del servidor para el equipo en el que se ejecuta tu sistema y, a continuación, sigue los pasos de instalación que se indican a continuación. ¿Prefieres no tener que configurar nada? Utiliza una de las imágenes listas para flashear que aparecen más arriba.",
+    "sub": "Elige la versión de servidor para la máquina que estará junto al telescopio y sigue los pasos de abajo. ¿Prefieres cero configuración? Coge una imagen ya preparada de más arriba.",
     "groups": [
       {
         "name": "Servidor (se ejecuta en el equipo)",
@@ -224,7 +224,7 @@
   },
   "tldr": {
     "title": "Lo mínimo imprescindible para arrancar",
-    "note": "Eso es todo lo que necesita la página de inicio. El resto de funciones tienen sus propias dependencias, que se enumeran a continuación en la sección de componentes opcionales.",
+    "note": "Eso es todo lo que necesita la página de inicio. Cada una de las demás funciones trae su propia herramienta, listada en los componentes opcionales de abajo, y la instalas solo cuando quieras esa función.",
     "rows": [
       {
         "label": "Duración",
@@ -245,7 +245,7 @@
   },
   "platformsSection": {
     "title": "Instalar",
-    "sub": "Una vez que tengas los archivos, sigue las instrucciones paso a paso para cada plataforma. Las versiones publicadas son autónomas, por lo que no es necesario instalar ningún entorno de ejecución adicional."
+    "sub": "Con los archivos ya descargados, aquí tienes el paso a paso de cada plataforma. Las versiones publicadas llevan todo lo que necesitan, así que no hay ningún runtime que perseguir."
   },
   "platforms": [
     {
@@ -314,14 +314,14 @@
   ],
   "firewall": {
     "title": "Activa el cortafuegos",
-    "sub": "Polaris escucha en el puerto TCP 5000 (HTTP) y en el puerto UDP 5353 (mDNS, para que se resuelva <nombre de host>.local). Ambos están bloqueados por defecto.",
+    "sub": "Polaris escucha en TCP 5000 (la interfaz) y en UDP 5353 (mDNS, que es lo que hace funcionar la dirección <hostname>.local). La mayoría de los sistemas bloquea las dos hasta que las abras.",
     "windows": "New-NetFirewallRule -DisplayName \"Polaris Astro Controller\" -Direction Inbound -Protocol TCP -LocalPort 5000 -Action Allow -Profile Private,Domain\nNew-NetFirewallRule -DisplayName \"mDNS (Polaris)\" -Direction Entrante -Protocol UDP -LocalPort 5353 -Action Permitir -Profile Privado,Dominio",
     "linux": "sudo ufw allow 5000/tcp\nsudo ufw allow 5353/udp",
     "note": "En Linux sin ufw: iptables -A INPUT -p tcp --dport 5000 -j ACCEPT. El paquete .deb se encarga de esto por ti."
   },
   "optionalSection": {
     "title": "Componentes opcionales",
-    "sub": "Añade solo lo que necesites. Polaris resalta cada función cuando su herramienta está presente y la desactiva de forma elegante cuando no lo está."
+    "sub": "Instala solo lo que necesites. Cada función se enciende cuando su herramienta está presente, y se queda tranquila a un lado cuando no lo está."
   },
   "optionalGroups": [
     {

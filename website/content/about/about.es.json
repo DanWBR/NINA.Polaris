@@ -1,7 +1,7 @@
 {
   "title": "Acerca del Polaris Astro Controller",
   "logo": "/favicon-192.png",
-  "lede": "Polaris Astro Controller es un paquete de control, captura y procesamiento de astrofotografía autohospedado y basado en navegador. Se ejecuta íntegramente en tu propio dispositivo (una Raspberry Pi, un mini PC o un ordenador) y se puede acceder a él desde cualquier navegador de tu red, sin necesidad de instalar ninguna aplicación en el dispositivo de visualización. Controla tu equipo (INDI, ASCOM, Alpaca y SDK nativos de cámaras), realiza apilado en directo, guiado, enfoque, resolución de placas y secuenciación, e incluye un editor completo con extracción de fondo mediante IA, eliminación de ruido y deconvolución.",
+  "lede": "Polaris Astro Controller es software de astrofotografía que ejecutas en tu propia máquina y abres en el navegador. Vive en una Raspberry Pi, un mini PC o el ordenador que esté junto al telescopio, y llegas a él desde cualquier dispositivo de tu red, sin instalar nada en el dispositivo desde el que miras. Maneja el equipo (INDI, ASCOM, Alpaca y SDK nativos de cámara), hace el apilado en vivo, el guiado, el enfoque, el plate solving y la secuenciación, y trae un editor completo, con extracción de fondo, reducción de ruido y deconvolución por IA.",
   "author": {
     "title": "Autor y datos de contacto",
     "intro": "Creado y mantenido por",
@@ -31,19 +31,19 @@
   },
   "version": {
     "title": "Versión y código fuente",
-    "body": "Polaris publica releases con frecuencia. El código actual, la última compilación y las notas de la versión están todos en la página del proyecto en GitHub. En una instalación por .deb, Polaris se actualiza con un clic desde la barra de estado."
+    "body": "Salen versiones nuevas a menudo. El código actual, la última compilación y las notas de versión están en la página del proyecto en GitHub y, si instalaste por .deb, Polaris se actualiza solo con un clic desde la barra de estado."
   },
   "report": {
     "title": "Informar de un problema",
-    "body": "¿Has encontrado un error o quieres sugerir una nueva función? Abre una incidencia o inicia un debate en GitHub. La herramienta de notificación integrada en la aplicación rellena automáticamente los datos de tu cliente y servidor para facilitar el diagnóstico."
+    "body": "¿Has encontrado un fallo, o se te ha ocurrido algo que Polaris debería hacer? Abre una issue o empieza una discusión en GitHub. El reporte integrado en la app rellena por ti los datos de tu cliente y del servidor, lo que suele ahorrar una ronda de preguntas."
   },
   "support": {
     "title": "Apoya el proyecto",
-    "body": "Polaris sigue siendo gratuito y de código abierto. Si te ha ahorrado una tarde de trasteos y te apetece colaborar, tu apoyo es bienvenido, aunque totalmente opcional. También puedes seguir las novedades sobre el desarrollo y unirte a la comunidad."
+    "body": "Polaris seguirá siendo libre y de código abierto, punto. Si te ha ahorrado una noche de pelearte con el equipo y te apetece aportar algo, es bienvenido, y es del todo opcional. También está muy bien que solo sigas las novedades y te quedes por la comunidad."
   },
   "credits": {
     "title": "Agradecimientos y menciones especiales",
-    "intro": "Polaris Astro Controller se apoya en una amplia comunidad de proyectos de astronomía y de código abierto. De algunos hemos extraído código, otros los hemos estudiado como referencia y muchos se incluyen en la pila de captura y procesamiento. Gracias a todos los autores que figuran a continuación. Los textos completos de las licencias se incluyen con la aplicación y en el repositorio de código fuente.",
+    "intro": "Polaris se apoya en los hombros de un montón de proyectos de astronomía y de código abierto. De algunos tomamos código, otros los estudiamos como referencia, y muchos se ejecutan dentro de la captura y el procesado cada noche. Gracias a todos los que aparecen abajo. Los textos completos de las licencias viajan con la app y están en el repositorio.",
     "groups": [
       {
         "title": "Desarrollado con N.I.N.A.",

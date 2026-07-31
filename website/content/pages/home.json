@@ -4,19 +4,19 @@
     "titleLine1": "Your rig,",
     "titleLine2": "",
     "titleAccent": "Any device.",
-    "lede": "A complete imaging session, covering equipment, guiding, plate-solving and the sequencer, running on a Raspberry Pi, Orange Pi, a Windows mini PC, or anywhere else, controlled from the browser of your phone, laptop, or warm-room tablet.",
-    "disclaimer": "Polaris Astro Controller is a community-driven fork of N.I.N.A. It is not affiliated with or supported by the official N.I.N.A. team. For anything Polaris, open an issue on this repository; please do not contact the N.I.N.A. developers about it.",
+    "lede": "Your whole night in one place: the gear, the guiding, the plate solving and the sequencer. It runs on a Raspberry Pi, an Orange Pi, a Windows mini PC or whatever else you have around, and you drive it from the browser on your phone, your laptop or the tablet in the warm room.",
+    "disclaimer": "Polaris Astro Controller is a community fork of N.I.N.A. It is not affiliated with, or supported by, the official N.I.N.A. team, so if something here misbehaves, open an issue on this repository instead of writing to the N.I.N.A. developers.",
     "image": "/assets/screenshots/hero.jpg"
   },
   "featuresSection": {
     "title": "Everything your session needs",
-    "sub": "From connecting the hardware to a finished image: capture, guiding, framing, live stacking, sequencing, and AI post-processing, all driven from the browser."
+    "sub": "From plugging the gear in to a finished picture: capture, guiding, framing, live stacking, sequencing and AI post-processing, all of it from the browser."
   },
   "features": [
     {
       "icon": "🔭",
       "title": "Connect any rig: INDI, ASCOM, Alpaca + native drivers",
-      "body": "Talk to your gear over INDI (400+ Linux drivers), over ASCOM and Alpaca across the LAN, or through native camera SDKs for ZWO, Player One, SVBONY, Altair, and Canon, Nikon and Sony DSLR/mirrorless. Auto-discovery finds devices on the network.",
+      "body": "Talk to your gear over INDI (400+ Linux drivers), over ASCOM and Alpaca across the network, or straight through the native SDKs for ZWO, Player One, SVBONY and Altair, plus Canon, Nikon and Sony bodies. Auto-discovery finds what is plugged in, so you rarely go hunting for a driver.",
       "image": "/assets/screenshots/devices.jpg"
     },
     {
@@ -40,7 +40,7 @@
     {
       "icon": "📅",
       "title": "Plan your whole night",
-      "body": "Queue several targets and let the planner schedule them by visibility. Each one gets an elevation curve and a capture window you drag to set start and end, with per-target re-center, re-focus, and dither cadence. Polaris sequences the targets across the night and reports the total run time up front.",
+      "body": "Line up several targets and let the planner sort out the order by visibility. Each one gets its elevation curve and a capture window you drag to set the start and the end, with its own re-center, re-focus and dither cadence. Polaris runs them through the night and tells you up front how long the whole thing takes.",
       "image": "/assets/screenshots/plan.jpg"
     },
     {
@@ -70,7 +70,7 @@
     {
       "icon": "🎨",
       "title": "STUDIO: stacking + AI post-processing",
-      "body": "A complete STUDIO for stacking and full post-processing, including AI background extraction, denoise, and deconvolution via GraXpert, accelerated on the client GPU through the browser or on the SBC's NPU.",
+      "body": "A full STUDIO for stacking and post-processing, AI background extraction, denoise and deconvolution included, running on your own computer's GPU through the browser or on the board's NPU.",
       "image": "/assets/screenshots/studio.jpg"
     },
     {
@@ -82,7 +82,7 @@
     {
       "icon": "🌟",
       "title": "Repair star colour",
-      "body": "Fix the one-sided colour fringe, a blue or magenta cast with a dark notch, that some one-shot-colour cameras leave on bright stars. Sub-pixel channel alignment and radial colour and luminance symmetry repair clean it up, neighbour-aware for crowded fields, with a before/after montage of the brightest stars.",
+      "body": "Some one-shot-colour cameras leave a one-sided blue or magenta fringe on bright stars, with a dark notch on the other side. Polaris lines the channels up to sub-pixel precision and rebuilds the colour and brightness symmetry around each star, carefully in crowded fields, and shows you a before and after of the brightest ones.",
       "image": "/assets/screenshots/star-color.jpg"
     },
     {
@@ -94,7 +94,7 @@
   ],
   "benchmarks": {
     "title": "Benchmarked on real hardware",
-    "sub": "The built-in benchmark reports a single Polaris score so you can pick a board. Higher is better. Figures below are Release builds.",
+    "sub": "Polaris has a benchmark built in: run it and you get a single number, so you can compare boards before you buy one. Higher is better. Everything below is a Release build.",
     "rows": [
       {
         "device": "Orange Pi Zero 3 (Allwinner H618)",
@@ -179,11 +179,11 @@
   },
   "comparison": {
     "title": "How Polaris compares",
-    "sub": "Side by side with the popular dedicated boxes and desktop suites. ★ marks capabilities no other option on this list offers. Cells reflect each product's advertised features and are open to correction.",
+    "sub": "Side by side with the popular boxes and desktop suites. A star marks something nothing else on this list does. The cells follow what each product advertises, and we are happy to be corrected.",
     "products": ["Polaris", "ASIAIR", "StellaVita 2.0", "StellarMate", "KStars/Ekos", "N.I.N.A.", "PINS"],
     "highlightProduct": "Polaris",
     "legend": "✓ yes · ~ partial or limited · ✗ no",
-    "note": "Polaris is free and open source: the only spend is an inexpensive single-board computer (4 GB recommended, and it runs on as little as 1.5 GB) plus an optional (recommended) inexpensive power box such as the SVBony SV241 or the Gemini Power Box, both frequently on sale. There is no proprietary controller to buy and no paid app, OS, or subscription.",
+    "note": "Polaris is free and open source. The only money you spend is on an inexpensive single-board computer (4 GB is comfortable, and it runs on as little as 1.5 GB), plus a power box like the SVBony SV241 or the Gemini Power Box if you want one, both often on sale. No proprietary controller to buy, no paid app, no OS licence, no subscription.",
     "rows": [
       { "feature": "Hardware options", "cells": ["RPi · Orange Pi · x86 · Windows", "own box", "own box", "RPi (OS or box)", "Linux · Win · Mac · RPi", "Windows", "Raspberry Pi"] },
       { "feature": "Full web UI (any browser / device)", "star": true, "cells": ["yes", "no:app", "no:app", "partial:EkosLive / VNC", "partial:EkosLive", "no:desktop", "no:VNC"] },
@@ -214,11 +214,11 @@
   },
   "closing": {
     "title": "Free, open-source, and ready to image.",
-    "sub": "Licensed under the GNU AGPL v3, built on the N.I.N.A. project. Bring your own scope."
+    "sub": "GNU AGPL v3, built on the N.I.N.A. project. Bring your own scope."
   },
   "gallery": {
     "title": "More screenshots",
-    "sub": "A few more corners of the interface, all running in the browser. Click any shot to enlarge.",
+    "sub": "A few more corners of the interface, all of it running in a browser. Click any shot to see it bigger.",
     "shots": [
       { "image": "/assets/screenshots/gs-rigs.jpg", "caption": "Rig manager: telescope, camera, mount, focuser, and filter wheel in one place" },
       { "image": "/assets/screenshots/gs-connect.jpg", "caption": "Equipment hub with INDI, ASCOM/Alpaca, and native driver selection" },

@@ -1,7 +1,7 @@
 {
   "title": "About Polaris Astro Controller",
   "logo": "/favicon-192.png",
-  "lede": "Polaris Astro Controller is a self-hosted, browser-based astrophotography control, capture and processing suite. It runs entirely on your own device (a Raspberry Pi, mini PC, or computer) and is reached from any browser on your network, with no app to install on the viewing device. It controls your equipment (INDI, ASCOM, Alpaca, and native camera SDKs), runs live stacking, guiding, focusing, plate solving, and sequencing, and includes a full editor with AI background extraction, denoise, and deconvolution.",
+  "lede": "Polaris Astro Controller is astrophotography software you run on your own machine and open in a browser. It lives on a Raspberry Pi, a mini PC or whatever computer sits next to the telescope, and you reach it from any device on your network, with nothing to install on the device you are looking at. It drives the gear (INDI, ASCOM, Alpaca and native camera SDKs), does the live stacking, guiding, focusing, plate solving and sequencing, and comes with a full editor, AI background extraction, denoise and deconvolution included.",
   "author": {
     "title": "Author & contact",
     "intro": "Created and maintained by",
@@ -31,19 +31,19 @@
   },
   "version": {
     "title": "Version & source",
-    "body": "Polaris ships frequent releases. The current code, the latest build, and the release notes all live on the project page on GitHub. On a .deb install, Polaris can update itself with one click from the status bar."
+    "body": "New versions come out often. The current code, the latest build and the release notes all live on the project page on GitHub, and if you installed from a .deb, Polaris updates itself with one click from the status bar."
   },
   "report": {
     "title": "Report a problem",
-    "body": "Found a bug, or have a feature request? Open an issue or start a discussion on GitHub. The in-app reporter pre-fills your client and server details to make diagnosis easier."
+    "body": "Found a bug, or thought of something Polaris should do? Open an issue or start a discussion on GitHub. The reporter built into the app fills in your client and server details for you, which usually saves a round of questions."
   },
   "support": {
     "title": "Support the project",
-    "body": "Polaris stays free and open-source. If it has saved you an evening of fiddling and you would like to chip in, support is welcome but entirely optional. You can also follow development news and join the community."
+    "body": "Polaris stays free and open source, full stop. If it has saved you an evening of fiddling and you feel like chipping in, that is welcome, and it is entirely optional. You are just as welcome to follow the development news and hang around the community."
   },
   "credits": {
     "title": "Credits & acknowledgements",
-    "intro": "Polaris Astro Controller stands on the shoulders of a large community of astronomy and open-source projects. Some we derive code from, some we studied as a reference, and many ship inside the capture and processing stack. Thank you to every author below. Full license texts are bundled with the app and in the source repository.",
+    "intro": "Polaris stands on the shoulders of a lot of astronomy and open-source projects. Some we take code from, some we studied as a reference, and many of them run inside the capture and processing stack every night. Thank you to everyone listed below. The full licence texts ship with the app and live in the source repository.",
     "groups": [
       {
         "title": "Built on N.I.N.A.",

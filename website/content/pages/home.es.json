@@ -4,19 +4,19 @@
     "titleLine1": "Tu equipo,",
     "titleLine2": "",
     "titleAccent": "Cualquier dispositivo.",
-    "lede": "Una sesión completa de capturas astronómicas, que abarca el equipo, el guiding, el plate-solving y el sequencer, ejecutándose en una Raspberry Pi, una Orange Pi, un miniordenador con Windows o cualquier otro dispositivo, y controlada desde el navegador de tu móvil, ordenador portátil o tableta de la sala climatizada.",
-    "disclaimer": "Polaris Astro Controller es una bifurcación de N.I.N.A. impulsada por la comunidad. No está afiliada al equipo oficial de N.I.N.A. ni cuenta con su apoyo. Para cualquier cuestión relacionada con Polaris, abre una incidencia en este repositorio; por favor, no te pongas en contacto con los desarrolladores de N.I.N.A. al respecto.",
+    "lede": "Toda tu noche en un solo sitio: el equipo, el guiado, el plate solving y el secuenciador. Funciona en una Raspberry Pi, una Orange Pi, un mini PC con Windows o lo que tengas a mano, y lo manejas desde el navegador del móvil, del portátil o de la tablet.",
+    "disclaimer": "Polaris Astro Controller es un fork comunitario de N.I.N.A. No está afiliado al equipo oficial de N.I.N.A. ni cuenta con su soporte, así que, si algo falla aquí, abre una issue en este repositorio en lugar de escribir a los desarrolladores de N.I.N.A.",
     "image": "/assets/screenshots/hero.jpg"
   },
   "featuresSection": {
     "title": "Todo lo que necesitas para tu sesión",
-    "sub": "Desde la conexión del hardware hasta la imagen final: captura, guiding, framing, live stacking, secuenciación y posprocesamiento con IA, todo ello desde el navegador."
+    "sub": "Desde enchufar el equipo hasta la imagen terminada: captura, guiado, encuadre, apilado en vivo, secuenciación y posprocesado con IA, todo desde el navegador."
   },
   "features": [
     {
       "icon": "🔭",
       "title": "Conecta cualquier equipo: INDI, ASCOM, Alpaca + controladores nativos",
-      "body": "Conéctate a tus dispositivos a través de INDI (más de 400 controladores para Linux), ASCOM y Alpaca por la red LAN, o mediante los SDK nativos de las cámaras ZWO, Player One, SVBONY, Altair, así como las cámaras DSLR y sin espejo de Canon, Nikon y Sony. La función de detección automática localiza los dispositivos en la red.",
+      "body": "Habla con tu equipo por INDI (más de 400 drivers en Linux), por ASCOM y Alpaca a través de la red, o directamente por los SDK nativos de ZWO, Player One, SVBONY y Altair, además de cuerpos Canon, Nikon y Sony. La detección automática encuentra lo que está conectado, así que casi nunca tienes que buscar un driver.",
       "image": "/assets/screenshots/devices.jpg"
     },
     {
@@ -40,7 +40,7 @@
     {
       "icon": "📅",
       "title": "Planifica toda la noche",
-      "body": "Añade varios objetivos a la cola y deja que el planificador los programe según su visibilidad. A cada uno se le asigna una curva de elevación y una ventana de captura que puedes arrastrar para establecer el inicio y el final, con opciones de recentrado, reenfoque y cadencia de dither específicas para cada objetivo. Polaris organiza los objetivos a lo largo de la noche e indica de antemano la duración total de la sesión.",
+      "body": "Pon varios objetivos en cola y deja que el planificador ordene la noche por visibilidad. Cada uno tiene su curva de elevación y una ventana de captura que arrastras para fijar inicio y fin, con su propia cadencia de recentrado, reenfoque y dither. Polaris los encadena durante la noche y te dice de antemano cuánto durará todo.",
       "image": "/assets/screenshots/plan.jpg"
     },
     {
@@ -70,7 +70,7 @@
     {
       "icon": "🎨",
       "title": "ESTUDIO: stacking + posprocesamiento con IA",
-      "body": "Un STUDIO completo para el stacking y el posprocesamiento integral, que incluye la extracción de fondos mediante IA, la eliminación de ruido y la deconvolución a través de GraXpert, acelerado en la GPU del cliente a través del navegador o en la NPU del SBC.",
+      "body": "Un STUDIO completo para apilar y posprocesar, con extracción de fondo, reducción de ruido y deconvolución por IA, ejecutándose en la GPU de tu propio ordenador desde el navegador o en la NPU de la placa.",
       "image": "/assets/screenshots/studio.jpg"
     },
     {
@@ -82,7 +82,7 @@
     {
       "icon": "🌟",
       "title": "Reparar el color de la estrella",
-      "body": "Corrige el halo de color unilateral - un matiz azul o magenta con una muesca oscura - que algunas cámaras de color de exposición única dejan en las estrellas brillantes. La alineación de canales a nivel de subpíxeles y la reparación de la simetría radial del color y la luminancia lo eliminan, teniendo en cuenta los píxeles vecinos en campos con gran densidad de estrellas, con un montaje que muestra el antes y el después de las estrellas más brillantes.",
+      "body": "Algunas cámaras en color dejan una franja azul o magenta en un solo lado de las estrellas brillantes, con una muesca oscura en el otro. Polaris alinea los canales con precisión subpíxel y reconstruye la simetría de color y brillo alrededor de cada estrella, con cuidado en campos poblados, y te enseña un antes y después de las más brillantes.",
       "image": "/assets/screenshots/star-color.jpg"
     },
     {
@@ -94,7 +94,7 @@
   ],
   "benchmarks": {
     "title": "Pruebas de rendimiento realizadas en hardware real",
-    "sub": "La prueba de rendimiento integrada muestra una única puntuación de Polaris para que puedas elegir una placa. Cuanto más alta, mejor. Las cifras que aparecen a continuación corresponden a versiones de lanzamiento.",
+    "sub": "Polaris trae un benchmark integrado: lo ejecutas y sale un solo número, para comparar placas antes de comprar. Cuanto más alto, mejor. Todo lo de abajo son builds Release.",
     "rows": [
       {
         "device": "Orange Pi Zero 3 (Allwinner H618)",
@@ -179,7 +179,7 @@
   },
   "comparison": {
     "title": "Cómo se sitúa Polaris en comparación con otros",
-    "sub": "Junto a los populares dispositivos dedicados y paquetes de escritorio. El símbolo ★ indica funciones que ninguna otra opción de esta lista ofrece. Las celdas reflejan las características anunciadas de cada producto y están sujetas a correcciones.",
+    "sub": "Lado a lado con las cajas populares y las suites de escritorio. La estrella marca algo que no hace ninguna otra opción de la lista. Las celdas siguen lo que anuncia cada producto, y agradecemos las correcciones.",
     "products": [
       "Polaris",
       "ASIAIR",
@@ -191,7 +191,7 @@
     ],
     "highlightProduct": "Polaris",
     "legend": "✓ sí · ~ parcial o limitado · ✗ no",
-    "note": "Polaris es gratuito y de código abierto: el único gasto es un ordenador de placa única económico (se recomiendan 4 GB, aunque funciona con tan solo 1,5 GB), además de una fuente de alimentación opcional (recomendada) y económica, como la SVBony SV241 o la Gemini Power Box, ambas a menudo en oferta. No hay que comprar ningún controlador propietario ni ninguna aplicación, sistema operativo o suscripción de pago.",
+    "note": "Polaris es libre y de código abierto. El único gasto es un ordenador de placa única barato (4 GB va holgado, y funciona con solo 1,5 GB), más una power box como la SVBony SV241 o la Gemini Power Box si la quieres, las dos suelen estar de oferta. Sin controlador propietario, sin app de pago, sin licencia de sistema, sin suscripción.",
     "rows": [
       {
         "feature": "Opciones de hardware",
@@ -512,11 +512,11 @@
   },
   "closing": {
     "title": "Gratuito, de código abierto y listo para crear una imagen.",
-    "sub": "Bajo licencia GNU AGPL v3, desarrollado a partir del proyecto N.I.N.A. Trae tu propio osciloscopio."
+    "sub": "GNU AGPL v3, construido sobre el proyecto N.I.N.A. El telescopio lo pones tú."
   },
   "gallery": {
     "title": "Más capturas de pantalla",
-    "sub": "Algunas vistas más de la interfaz, todo ello ejecutándose en el navegador. Haz clic en cualquier imagen para ampliarla.",
+    "sub": "Algunos rincones más de la interfaz, todo funcionando en el navegador. Haz clic en cualquier captura para verla más grande.",
     "shots": [
       {
         "image": "/assets/screenshots/gs-rigs.jpg",

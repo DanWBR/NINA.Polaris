@@ -1,6 +1,6 @@
 {
   "title": "AI Tools",
-  "lede": "Polaris Astro Controller ships a full suite of AI-powered image processing tools that run entirely on your local hardware. No cloud, no subscriptions, no data leaving your device. Alongside the GraXpert models and four star-removal networks, Polaris trains and ships its own models, released under the AGPL and built so they run on the NPUs in the boards people actually use.",
+  "lede": "Polaris comes with a full set of AI image-processing tools, and all of them run on your own hardware. No cloud, no subscription, nothing leaving your device. Besides the GraXpert models and four star-removal networks, Polaris trains and ships models of its own, released under the AGPL and built to run on the NPUs of the boards people actually buy.",
   "glanceTitle": "At a glance",
   "glance": [
     {

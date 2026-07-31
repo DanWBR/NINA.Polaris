@@ -1,4 +1,4 @@
 {
   "tagline": "Astrofotografia controlada pelo navegador para qualquer dispositivo",
-  "description": "Um sistema leve de controle de astrofotografia, controlado por navegador, desenvolvido em ASP.NET Core. Funciona em Raspberry Pi, mini-PCs e Windows. Compatível com INDI + ASCOM/Alpaca, guiding PHD2, plate solve, live stacking, sequencer avançado e um servidor de retransmissão para acesso remoto."
+  "description": "Astrofotografia controlada pelo navegador, hospedada por você. Roda em Raspberry Pi, mini PC ou Windows, e dá conta de equipamento INDI e ASCOM/Alpaca, guiding com PHD2, plate solving, live stacking, sequenciador avançado e acesso remoto pelo seu próprio relay."
 }

@@ -1,7 +1,7 @@
 {
   "title": "Über den Polaris Astro Controller",
   "logo": "/favicon-192.png",
-  "lede": "Polaris Astro Controller ist eine selbst gehostete, browserbasierte Suite zur Steuerung, Aufnahme und Bearbeitung von Astrofotografie. Sie läuft vollständig auf Ihrem eigenen Gerät (einem Raspberry Pi, Mini-PC oder Computer) und ist über jeden Browser in Ihrem Netzwerk erreichbar, ohne dass eine App auf dem Anzeigegerät installiert werden muss. Sie steuert Ihre Ausrüstung (INDI, ASCOM, Alpaca und native Kamera-SDKs), führt Live-Stacking, Guiding, Fokussierung, Plate-Solving und Sequenzierung durch und enthält einen umfassenden Editor mit KI-gestützter Hintergrundextraktion, Rauschunterdrückung und Dekonvolution.",
+  "lede": "Polaris Astro Controller ist Astrofotografie-Software, die auf Ihrem eigenen Rechner läuft und im Browser aufgeht. Sie wohnt auf einem Raspberry Pi, einem Mini-PC oder dem Rechner neben dem Teleskop, und Sie erreichen sie von jedem Gerät im Netzwerk, ohne dort etwas zu installieren. Sie steuert die Technik (INDI, ASCOM, Alpaca und native Kamera-SDKs), erledigt Live-Stacking, Guiding, Fokus, Plate Solving und Sequenzen und bringt einen vollständigen Editor mit, samt KI-Hintergrundextraktion, Entrauschen und Dekonvolution.",
   "author": {
     "title": "Autor & Kontakt",
     "intro": "Erstellt und gepflegt von",
@@ -31,19 +31,19 @@
   },
   "version": {
     "title": "Version und Quellcode",
-    "body": "Polaris erscheint in kurzen Abständen. Der aktuelle Code, der neueste Build und die Release Notes liegen alle auf der Projektseite auf GitHub. Bei einer .deb-Installation aktualisiert sich Polaris mit einem Klick über die Statusleiste."
+    "body": "Neue Versionen erscheinen häufig. Der aktuelle Code, der neueste Build und die Release-Notes liegen auf der Projektseite bei GitHub, und wenn Sie per .deb installiert haben, aktualisiert sich Polaris mit einem Klick aus der Statusleiste."
   },
   "report": {
     "title": "Ein Problem melden",
-    "body": "Hast du einen Fehler gefunden oder möchtest du eine neue Funktion vorschlagen? Eröffne ein Issue oder starte eine Diskussion auf GitHub. Der integrierte Fehlermelder füllt deine Client- und Serverdaten automatisch aus, um die Fehlerdiagnose zu vereinfachen."
+    "body": "Einen Fehler gefunden oder eine Idee, was Polaris können sollte? Öffnen Sie ein Issue oder starten Sie eine Diskussion auf GitHub. Der eingebaute Melder trägt die Angaben zu Client und Server für Sie ein, das spart meist eine Runde Rückfragen."
   },
   "support": {
     "title": "Unterstützen Sie das Projekt",
-    "body": "Polaris bleibt kostenlos und Open Source. Wenn es Ihnen einen Abend voller Herumprobieren erspart hat und Sie einen kleinen Beitrag leisten möchten, ist eine Unterstützung willkommen, aber völlig freiwillig. Sie können auch Neuigkeiten zur Entwicklung verfolgen und der Community beitreten."
+    "body": "Polaris bleibt frei und quelloffen, Punkt. Wenn es Ihnen einen Abend Gefummel erspart hat und Sie etwas beisteuern möchten, ist das willkommen und völlig freiwillig. Genauso gern gesehen: einfach die Entwicklung verfolgen und in der Community mitlesen."
   },
   "credits": {
     "title": "Danksagungen und Quellenangaben",
-    "intro": "Polaris Astro Controller baut auf einer großen Gemeinschaft von Astronomie- und Open-Source-Projekten auf. Von einigen haben wir Code übernommen, andere haben wir als Referenz herangezogen, und viele sind Bestandteil des Erfassungs- und Verarbeitungsstacks. Vielen Dank an alle unten aufgeführten Autoren. Die vollständigen Lizenztexte sind im Lieferumfang der App enthalten und im Quellcode-Repository zu finden.",
+    "intro": "Polaris steht auf den Schultern vieler Astronomie- und Open-Source-Projekte. Von einigen übernehmen wir Code, andere haben uns als Referenz gedient, und viele laufen jede Nacht mitten in Aufnahme und Verarbeitung mit. Danke an alle unten Genannten. Die vollständigen Lizenztexte liegen der App bei und stehen im Repository.",
     "groups": [
       {
         "title": "Auf Basis von N.I.N.A. entwickelt",

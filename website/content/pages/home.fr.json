@@ -4,19 +4,19 @@
     "titleLine1": "Votre installation,",
     "titleLine2": "",
     "titleAccent": "N'importe quel appareil.",
-    "lede": "Une session d'imagerie complète, couvrant le matériel, le guiding, le plate solving et le sequencer, fonctionnant sur un Raspberry Pi, un Orange Pi, un mini-PC Windows ou tout autre support, contrôlée depuis le navigateur de votre téléphone, de votre ordinateur portable ou de votre tablette dans la salle chauffée.",
-    "disclaimer": "Polaris Astro Controller est un fork de N.I.N.A. développé par la communauté. Il n'est ni affilié à l'équipe officielle de N.I.N.A., ni soutenu par celle-ci. Pour toute question concernant Polaris, veuillez ouvrir un ticket sur ce dépôt ; merci de ne pas contacter les développeurs de N.I.N.A. à ce sujet.",
+    "lede": "Toute votre nuit au même endroit : le matériel, le guidage, l'astrométrie et le séquenceur. Ça tourne sur un Raspberry Pi, un Orange Pi, un mini PC Windows ou ce que vous avez sous la main, et vous pilotez depuis le navigateur du téléphone, du portable ou de la tablette.",
+    "disclaimer": "Polaris Astro Controller est un fork communautaire de N.I.N.A. Il n'est ni affilié à l'équipe officielle de N.I.N.A. ni soutenu par elle : si quelque chose cloche ici, ouvrez un ticket sur ce dépôt plutôt que d'écrire aux développeurs de N.I.N.A.",
     "image": "/assets/screenshots/hero.jpg"
   },
   "featuresSection": {
     "title": "Tout ce dont vous avez besoin pour votre séance",
-    "sub": "De la connexion du matériel à l'image finale : prise de vue, guiding, framing, live stacking, sequencing et post-traitement par IA, le tout depuis le navigateur."
+    "sub": "Du branchement du matériel à l'image finie : capture, guidage, cadrage, empilement en direct, séquençage et post-traitement par IA, le tout depuis le navigateur."
   },
   "features": [
     {
       "icon": "🔭",
       "title": "Connectez n'importe quel équipement : INDI, ASCOM, Alpaca + pilotes natifs",
-      "body": "Communiquez avec votre équipement via INDI (plus de 400 pilotes Linux), via ASCOM et Alpaca sur le réseau local, ou via les SDK natifs des appareils photo ZWO, Player One, SVBONY, Altair, ainsi que des reflex numériques et appareils photo hybrides Canon, Nikon et Sony. La fonction de détection automatique identifie les périphériques présents sur le réseau.",
+      "body": "Parlez à votre matériel via INDI (plus de 400 pilotes sous Linux), via ASCOM et Alpaca sur le réseau, ou directement par les SDK natifs ZWO, Player One, SVBONY et Altair, sans oublier les boîtiers Canon, Nikon et Sony. La détection automatique trouve ce qui est branché, vous partez rarement à la chasse au pilote.",
       "image": "/assets/screenshots/devices.jpg"
     },
     {
@@ -40,7 +40,7 @@
     {
       "icon": "📅",
       "title": "Organisez votre soirée de A à Z",
-      "body": "Ajoutez plusieurs cibles à la file d'attente et laissez le planificateur les programmer en fonction de leur visibilité. Chacune d'entre elles est associée à une courbe d'élévation et à une fenêtre de capture que vous pouvez faire glisser pour définir le début et la fin, avec pour chaque cible des paramètres de recentrage, de refocalisation et de cadence de dithering. Polaris sequence les cibles tout au long de la nuit et indique d'emblée la durée totale de la session.",
+      "body": "Mettez plusieurs cibles à la queue et laissez le planificateur trier la nuit par visibilité. Chacune reçoit sa courbe de hauteur et une fenêtre de capture que vous faites glisser pour fixer le début et la fin, avec sa propre cadence de recentrage, de remise au point et de dither. Polaris enchaîne les cibles dans la nuit et annonce d'avance la durée totale.",
       "image": "/assets/screenshots/plan.jpg"
     },
     {
@@ -70,7 +70,7 @@
     {
       "icon": "🎨",
       "title": "STUDIO : stacking + post-traitement par IA",
-      "body": "Un STUDIO complet pour le stacking et le post-traitement complet, comprenant l'extraction d'arrière-plan par IA, le débruitage et la déconvolution via GraXpert, accélérés sur le GPU du client via le navigateur ou sur la NPU du SBC.",
+      "body": "Un STUDIO complet pour empiler et post-traiter, avec extraction de fond, débruitage et déconvolution par IA, qui tourne sur le GPU de votre propre ordinateur via le navigateur ou sur le NPU de la carte.",
       "image": "/assets/screenshots/studio.jpg"
     },
     {
@@ -82,7 +82,7 @@
     {
       "icon": "🌟",
       "title": "Restaurer la couleur de l'étoile",
-      "body": "Corrige la frange de couleur unilatérale (une dominante bleue ou magenta accompagnée d'une encoche sombre) que certains appareils photo à couleur en une seule prise laissent sur les étoiles brillantes. L'alignement des canaux au niveau des sous-pixels et la correction de la symétrie radiale des couleurs et de la luminance permettent de l'éliminer, en tenant compte des pixels voisins pour les champs très denses, grâce à un montage avant/après des étoiles les plus brillantes.",
+      "body": "Certaines caméras couleur laissent une frange bleue ou magenta d'un seul côté des étoiles brillantes, avec une encoche sombre de l'autre. Polaris aligne les canaux au sous-pixel et reconstruit la symétrie de couleur et de luminosité autour de chaque étoile, prudemment dans les champs chargés, et vous montre un avant/après des plus brillantes.",
       "image": "/assets/screenshots/star-color.jpg"
     },
     {
@@ -94,7 +94,7 @@
   ],
   "benchmarks": {
     "title": "Tests de performance effectués sur du matériel réel",
-    "sub": "Le benchmark intégré affiche un score Polaris unique qui vous permet de choisir une carte. Plus le score est élevé, mieux c'est. Les chiffres ci-dessous correspondent à des versions de release.",
+    "sub": "Polaris embarque un benchmark : vous le lancez et vous obtenez un seul chiffre, de quoi comparer les cartes avant d'en acheter une. Plus c'est haut, mieux c'est. Tout ce qui suit vient de builds Release.",
     "rows": [
       {
         "device": "Orange Pi Zero 3 (Allwinner H618)",
@@ -179,7 +179,7 @@
   },
   "comparison": {
     "title": "Comparaison de Polaris",
-    "sub": "Aux côtés des boîtiers dédiés et des suites bureautiques les plus populaires. Le symbole ★ indique les fonctionnalités qu'aucune autre option de cette liste ne propose. Les cellules reflètent les fonctionnalités annoncées pour chaque produit et sont susceptibles d'être modifiées.",
+    "sub": "Côte à côte avec les boîtiers connus et les logiciels de bureau. L'étoile signale ce que personne d'autre dans la liste ne fait. Les cases reflètent ce que chaque produit annonce, et nous acceptons volontiers les corrections.",
     "products": [
       "Polaris",
       "ASIAIR",
@@ -191,7 +191,7 @@
     ],
     "highlightProduct": "Polaris",
     "legend": "✓ oui · ~ partiel ou limité · ✗ non",
-    "note": "Polaris est gratuit et open source : la seule dépense consiste en l'achat d'un ordinateur monocarte peu coûteux (4 Go recommandés, mais il fonctionne dès 1,5 Go) ainsi qu'un bloc d'alimentation optionnel (recommandé) et peu coûteux, tel que le SVBony SV241 ou le Gemini Power Box, tous deux souvent en promotion. Il n'y a pas de contrôleur propriétaire à acheter, ni d'application, de système d'exploitation ou d'abonnement payant.",
+    "note": "Polaris est libre et open source. La seule dépense, c'est un petit ordinateur monocarte pas cher (4 Go, c'est confortable, et ça tourne dès 1,5 Go), plus éventuellement un boîtier d'alimentation comme le SVBony SV241 ou le Gemini Power Box, souvent en promotion. Aucun boîtier propriétaire à acheter, aucune application payante, aucune licence système, aucun abonnement.",
     "rows": [
       {
         "feature": "Options matérielles",
@@ -512,11 +512,11 @@
   },
   "closing": {
     "title": "Gratuit, open source et prêt à être cloné.",
-    "sub": "Sous licence GNU AGPL v3, développé à partir du projet N.I.N.A. Apportez votre propre oscilloscope."
+    "sub": "GNU AGPL v3, construit sur le projet N.I.N.A. Le télescope, c'est vous qui l'apportez."
   },
   "gallery": {
     "title": "Plus de captures d'écran",
-    "sub": "Quelques autres aperçus de l'interface, le tout fonctionnant dans le navigateur. Cliquez sur n'importe quelle image pour l'agrandir.",
+    "sub": "Quelques recoins de plus de l'interface, le tout dans un navigateur. Cliquez sur une image pour l'agrandir.",
     "shots": [
       {
         "image": "/assets/screenshots/gs-rigs.jpg",

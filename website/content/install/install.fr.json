@@ -1,10 +1,10 @@
 {
   "title": "Télécharger et installer",
-  "lede": "Installez une image prête à l'emploi, ou téléchargez la version adaptée à votre plateforme et suivez les étapes d'installation. Ajoutez ensuite uniquement les composants optionnels correspondant aux fonctionnalités souhaitées ; Polaris détecte les composants installés lors de l'exécution et masque l'interface utilisateur pour ceux qui manquent.",
+  "lede": "Deux chemins : écrire une image toute prête sur une carte, ou télécharger la version pour votre machine et lancer deux commandes. Ensuite, n'ajoutez que les extras qui vous intéressent. Polaris regarde ce qui est présent au démarrage et masque simplement le reste : rien ne vous harcèle pour installer ce dont vous n'avez pas besoin.",
   "requirements": {
     "title": "Configuration requise",
-    "sub": "Le principal facteur limitant est la mémoire vive (RAM). Tout le reste fonctionne sans problème sur un SBC moderne, et plusieurs cartes intègrent une accélération par GPU et NPU pour les outils d'IA.",
-    "ramNote": "Polaris dimensionne le live stack selon la carte sur laquelle il tourne : il choisit une résolution de stacking 1:1, 1:2 ou 1:4 pour que l'empreinte mémoire tienne dans un quart de la mémoire disponible. Une caméra couleur de 12 MP coûte environ 900 Mo en 1:1 et 450 Mo en 1:2, au-dessus d'un plancher fixe d'environ 370 Mo. 2 Go est confortable, les cartes de 1,5 Go fonctionnent avec une résolution de stacking réduite, et le WASM côté client peut déporter tout le calcul du stacking dans le navigateur.",
+    "sub": "C'est la mémoire vive qui décide. Tout le reste passe tranquillement sur n'importe quelle petite carte récente, et certaines prêtent même un GPU ou un NPU aux outils d'IA.",
+    "ramNote": "Polaris adapte l'empilement en direct à la carte sur laquelle il tourne, en choisissant la pleine résolution, la moitié ou le quart pour que le travail tienne dans un quart de la mémoire. En gros : une caméra couleur de 12 MP demande environ 900 Mo en pleine résolution et 450 Mo en demi, plus 370 Mo fixes pour le reste. 2 Go, c'est confortable, une carte de 1,5 Go fonctionne en résolution réduite, et si vous préférez ne pas y consacrer cette mémoire, le navigateur peut faire l'empilement à sa place.",
     "recommendedNote": "Carte recommandée : l'Orange Pi 4 Pro avec 4 Go. C'est le meilleur équilibre entre prix et capacités de tous les SBC testés à ce jour : un score Polaris de 180 pour environ 50 à 70 dollars, avec huit cœurs, de la mémoire LPDDR5, un GPU et un NPU de 3 TOPS. Si vous voulez le meilleur score quel qu'en soit le prix, le Radxa Dragon Q6A domine avec 317. Si vous comptez beaucoup sur les outils d'IA, l'Orange Pi 5 Pro constitue une alternative éprouvée, grâce à l'ajout d'OpenCL sur le GPU et de GraXpert AI sur le NPU.",
     "rows": [
       {
@@ -160,13 +160,13 @@
       "title": "Maintenir Polaris à jour",
       "selfTitle": "Mise à jour dans l'application en un clic",
       "selfBadge": "Recommandé",
-      "selfBody": "Chaque installation .deb (y compris les images prêtes à être flashées ci-dessus) peut se mettre à jour automatiquement. Polaris vérifie la présence de nouvelles versions sur GitHub au démarrage et toutes les heures ; lorsqu’une version plus récente existe pour l’architecture de votre carte, un badge vert « Mise à jour » apparaît dans la barre d’état supérieure, indiquant la nouvelle version. Cliquez dessus pour consulter les notes de mise à jour, puis sélectionnez « Télécharger et installer » : Polaris récupère le fichier .deb correspondant, l'installe et redémarre sur la nouvelle version. Pas besoin de SSH, d'apt ni de mot de passe sudo (autorisé par une règle PolicyKit au champ d'application strictement défini). Laissez la page ouverte pendant qu'elle se rafraîchit. Vos profils et vos données sont conservés.",
+      "selfBody": "Toute installation par .deb, y compris les images toutes prêtes ci-dessus, se met à jour toute seule. Polaris interroge GitHub au démarrage puis une fois par heure. Quand une version plus récente existe pour votre carte, un badge vert Update apparaît dans la barre du haut avec le numéro. Cliquez pour lire les nouveautés, puis sur télécharger et installer : Polaris récupère le bon fichier, l'installe et revient dans la nouvelle version. Pas de SSH, pas d'apt, pas de mot de passe sudo. Laissez simplement la page ouverte le temps qu'elle se recharge. Vos profils et vos photos restent exactement où ils sont.",
       "selfImage": "/assets/screenshots/self-update.jpg"
     }
   },
   "download": {
     "title": "Télécharger",
-    "sub": "Téléchargez la version serveur adaptée à la machine sur laquelle tourne votre système, puis suivez les étapes d'installation ci-dessous. Vous préférez ne pas avoir à configurer quoi que ce soit ? Utilisez l'une des images prêtes à être flashées proposées ci-dessus.",
+    "sub": "Choisissez la version serveur pour la machine qui sera à côté du télescope, puis suivez les étapes ci-dessous. Vous préférez zéro réglage ? Prenez plutôt une image toute prête plus haut.",
     "groups": [
       {
         "name": "Serveur (fonctionnant sur la plate-forme)",
@@ -224,7 +224,7 @@
   },
   "tldr": {
     "title": "Le strict minimum pour démarrer",
-    "note": "C'est tout ce dont la page d'accueil a besoin. Toutes les autres fonctionnalités ont leurs propres dépendances, répertoriées ci-dessous dans la section « Composants optionnels ».",
+    "note": "C'est tout ce dont la page d'accueil a besoin. Chacune des autres fonctions apporte son propre outil, listé dans les composants optionnels ci-dessous, et vous ne l'ajoutez que quand vous voulez cette fonction.",
     "rows": [
       {
         "label": "Durée",
@@ -245,7 +245,7 @@
   },
   "platformsSection": {
     "title": "Installer",
-    "sub": "Une fois que vous disposez des fichiers, suivez les instructions étape par étape pour chaque plateforme. Les versions publiées sont autonomes ; il n'y a donc pas d'environnement d'exécution distinct à installer."
+    "sub": "Une fois les fichiers récupérés, voici le pas à pas pour chaque plateforme. Les versions publiées embarquent tout le nécessaire, aucun runtime à courir après."
   },
   "platforms": [
     {
@@ -314,14 +314,14 @@
   ],
   "firewall": {
     "title": "Activer le pare-feu",
-    "sub": "Polaris écoute sur le port TCP 5000 (HTTP) et le port UDP 5353 (mDNS, ce qui permet la résolution de <HOSTNAME>.local). Ces deux ports sont bloqués par défaut.",
+    "sub": "Polaris écoute sur TCP 5000 (l'interface) et UDP 5353 (mDNS, ce qui fait fonctionner l'adresse <hostname>.local). La plupart des systèmes bloquent les deux tant que vous ne les ouvrez pas.",
     "windows": "New-NetFirewallRule -DisplayName « Polaris Astro Controller » -Direction Entrant -Protocol TCP -LocalPort 5000 -Action Autoriser -Profile Privé,Domaine\nNew-NetFirewallRule -DisplayName « mDNS (Polaris) » -Direction Entrant -Protocol UDP -LocalPort 5353 -Action Autoriser -Profile Privé,Domaine",
     "linux": "sudo ufw allow 5000/tcp\nsudo ufw allow 5353/udp",
     "note": "Sous Linux sans ufw : iptables -A INPUT -p tcp --dport 5000 -j ACCEPT. Le paquet .deb s'en charge pour vous."
   },
   "optionalSection": {
     "title": "Composants en option",
-    "sub": "N'ajoutez que ce dont vous avez besoin. Polaris met en évidence chaque fonctionnalité lorsque l'outil correspondant est présent et s'affiche de manière discrète lorsqu'il ne l'est pas."
+    "sub": "N'ajoutez que ce dont vous avez besoin. Chaque fonction s'allume quand son outil est là, et reste sagement de côté quand il n'y est pas."
   },
   "optionalGroups": [
     {

@@ -1,6 +1,6 @@
 {
   "title": "Features",
-  "lede": "Polaris Astro Controller is a browser-controlled astrophotography platform that runs on a Raspberry Pi, mini-PC, or any small Linux or Windows host on your network. Point any device, laptop, tablet, or phone, at the host and you get the full equipment, capture, and processing workflow with no desktop application to install. Everything below runs from a single web UI, organized by sidebar panel.",
+  "lede": "Polaris runs on a Raspberry Pi, a mini PC or any small Linux or Windows machine on your network, and you drive the whole thing from a browser. Point a laptop, a tablet or your phone at it and you get the full workflow, gear, capture and processing, with no desktop application to install anywhere. Everything below is part of that one web interface, organised the way the sidebar is.",
   "glanceTitle": "At a glance",
   "glance": [
     { "label": "Runs anywhere small", "text": "Raspberry Pi 4/5, Orange Pi, x86 mini-PCs and sticks, or a Windows box. ARM64, ARMHF, and x86-64 are all supported." },

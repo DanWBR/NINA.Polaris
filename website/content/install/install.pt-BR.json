@@ -1,10 +1,10 @@
 {
   "title": "Baixar e instalar",
-  "lede": "Execute uma imagem pronta ou baixe a versão para sua plataforma e siga as etapas de instalação. Em seguida, adicione apenas os componentes opcionais para os recursos que você deseja; Polaris detecta o que está instalado durante a execução e oculta a interface do usuário para os itens que estiverem faltando.",
+  "lede": "Dois caminhos: gravar uma imagem pronta num cartão, ou baixar o build da sua máquina e rodar dois comandos. Depois disso, instale só os extras que você realmente quer. O Polaris olha o que existe ao iniciar e esconde o que não está lá, então nada fica cobrando instalação do que você não precisa.",
   "requirements": {
     "title": "Requisitos do sistema",
-    "sub": "O principal fator limitante é a memória RAM. Todo o resto funciona bem em um SBC moderno, e várias placas oferecem aceleração por GPU e NPU para as ferramentas de IA.",
-    "ramNote": "O Polaris dimensiona o live stack para a placa em que está rodando: escolhe resolução de stacking 1:1, 1:2 ou 1:4 para que o working set caiba em um quarto da memória disponível. Uma câmera colorida de 12 MP custa cerca de 900 MB em 1:1 e 450 MB em 1:2, sobre um piso fixo de aproximadamente 370 MB. 2 GB é confortável, placas de 1,5 GB funcionam com resolução de stacking reduzida, e o WASM no cliente pode mover a conta do stacking inteira para o navegador.",
+    "sub": "Quem decide mesmo é a memória RAM. O resto roda tranquilo em qualquer placinha moderna, e algumas ainda emprestam GPU ou NPU para as ferramentas de IA.",
+    "ramNote": "O Polaris dimensiona o live stack para a placa em que está rodando, escolhendo resolução inteira, metade ou um quarto para o trabalho caber em um quarto da memória. Em números redondos: uma câmera colorida de 12 MP pede uns 900 MB em resolução inteira e 450 MB na metade, além de 370 MB fixos para o resto. 2 GB fica confortável, uma placa de 1,5 GB funciona em resolução reduzida e, se você preferir não gastar essa memória, o navegador pode fazer o empilhamento no lugar dela.",
     "recommendedNote": "Placa recomendada: o Orange Pi 4 Pro com 4 GB. É o melhor equilíbrio entre custo e capacidade de todos os SBCs testados até agora: pontuação Polaris de 180 por algo entre US$ 50 e US$ 70, com oito núcleos, memória LPDDR5, GPU e NPU de 3 TOPS. Se você quer a maior pontuação a qualquer preço, o Radxa Dragon Q6A lidera com 317. Se você pretende utilizar ferramentas de IA, o Orange Pi 5 Pro é a alternativa comprovada, oferecendo OpenCL na GPU e o GraXpert AI na NPU.",
     "rows": [
       {
@@ -160,13 +160,13 @@
       "title": "Manter Polaris atualizado",
       "selfTitle": "Atualização no aplicativo com um clique",
       "selfBadge": "Recomendado",
-      "selfBody": "Toda instalação .deb (incluindo as imagens prontas para gravação mencionadas acima) pode se atualizar automaticamente. O Polaris verifica o GitHub em busca de novas versões ao iniciar e a cada hora; quando existe uma compilação mais recente para a arquitetura da sua placa, um ícone verde de “Atualizar” aparece na barra de status superior com a nova versão. Clique nele para ver as notas de lançamento e, em seguida, selecione “Baixar e instalar”: o Polaris busca o arquivo .deb correspondente, instala-o e reinicia com a nova versão. Sem SSH, sem apt e sem senha do sudo (autorizado por uma regra do PolicyKit com escopo restrito). Deixe a página aberta enquanto ela é atualizada automaticamente. Seus perfis e dados são mantidos.",
+      "selfBody": "Toda instalação por .deb, inclusive as imagens prontas lá de cima, se atualiza sozinha. O Polaris consulta o GitHub ao iniciar e uma vez por hora depois disso. Quando existe um build mais novo para a sua placa, aparece um selo verde de Update na barra de cima com o número da versão. Clique para ler o que mudou e depois em baixar e instalar: o Polaris pega o arquivo certo, instala e volta já na versão nova. Sem SSH, sem apt, sem senha de sudo. É só deixar a página aberta enquanto ele se recarrega. Seus perfis e suas fotos ficam exatamente onde estão.",
       "selfImage": "/assets/screenshots/self-update.jpg"
     }
   },
   "download": {
     "title": "Baixar",
-    "sub": "Baixe a versão do servidor para a máquina em que seu equipamento está instalado e siga as etapas de instalação abaixo. Prefere não precisar de nenhuma configuração? Use uma imagem pronta para gravação disponível acima.",
+    "sub": "Escolha o build de servidor para a máquina que vai ficar do lado do telescópio e siga os passos abaixo. Quer zero configuração? Pegue uma imagem pronta lá em cima.",
     "groups": [
       {
         "name": "Servidor (rodando no equipamento)",
@@ -224,7 +224,7 @@
   },
   "tldr": {
     "title": "O mínimo indispensável para inicializar",
-    "note": "Isso é tudo o que a página inicial precisa. Todos os demais recursos têm suas próprias dependências, listadas na seção de componentes opcionais abaixo.",
+    "note": "Isso é tudo o que a página inicial precisa. Cada um dos outros recursos traz a própria ferramenta, listada nos componentes opcionais abaixo, e você instala só quando quiser aquele recurso.",
     "rows": [
       {
         "label": "Tempo de execução",
@@ -245,7 +245,7 @@
   },
   "platformsSection": {
     "title": "Instalar",
-    "sub": "Passo a passo para cada plataforma, assim que você tiver os arquivos. As compilações publicadas são autônomas, portanto, não é necessário instalar nenhum ambiente de execução separado."
+    "sub": "Com os arquivos em mãos, aqui vai o passo a passo de cada plataforma. Os builds publicados já levam tudo o que precisam, então não tem runtime para caçar."
   },
   "platforms": [
     {
@@ -314,14 +314,14 @@
   ],
   "firewall": {
     "title": "Abra o firewall",
-    "sub": "Polaris escuta nas portas TCP 5000 (HTTP) e UDP 5353 (mDNS, para que <HOSTNAME>.local seja resolvido). Ambas estão bloqueadas por padrão.",
+    "sub": "O Polaris escuta na TCP 5000 (a interface) e na UDP 5353 (mDNS, o que faz o endereço <hostname>.local funcionar). A maioria dos sistemas bloqueia as duas até você liberar.",
     "windows": "New-NetFirewallRule -DisplayName \"Polaris Astro Controller\" -Direction Inbound -Protocol TCP -LocalPort 5000 -Action Allow -Profile Private,Domain\nNew-NetFirewallRule -DisplayName \"mDNS (Polaris)\" -Direction Inbound -Protocol UDP -LocalPort 5353 -Action Allow -Profile Private,Domain",
     "linux": "sudo ufw allow 5000/tcp\nsudo ufw allow 5353/udp",
     "note": "No Linux sem o ufw: iptables -A INPUT -p tcp --dport 5000 -j ACCEPT. A instalação via .deb cuida disso para você."
   },
   "optionalSection": {
     "title": "Componentes opcionais",
-    "sub": "Adicione apenas o que for necessário. O Polaris destaca cada recurso quando a ferramenta correspondente está presente e o oculta de maneira elegante quando não está."
+    "sub": "Instale só o que você precisa. Cada recurso acende quando a ferramenta dele existe, e fica quieto no canto quando não existe."
   },
   "optionalGroups": [
     {
