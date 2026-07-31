@@ -61,4 +61,57 @@ public class CentroidAlignerTests {
         Assert.That(c.X, Is.EqualTo(1));
         Assert.That(c.Y, Is.EqualTo(1));
     }
+
+    /// <summary>Extended bright disc (the Moon) with two near-equal hot spots
+    /// far apart, which is what a real lunar frame looks like to a peak
+    /// finder: thousands of pixels within noise of the maximum.</summary>
+    private static ushort[] MoonFrame(int w, int h, int cx, int cy, int radius,
+                                      int hotX, int hotY, ushort hotValue) {
+        var px = new ushort[w * h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int dx = x - cx, dy = y - cy;
+                px[y * w + x] = (ushort)(dx * dx + dy * dy <= radius * radius ? 3900 : 40);
+            }
+        }
+        px[hotY * w + hotX] = hotValue;
+        return px;
+    }
+
+    [Test]
+    public void Find_ExtendedDisc_IgnoresWhichHotSpotHappensToWin() {
+        // The field failure, in miniature: two frames of the same disc, and the
+        // brightest single pixel is on opposite sides of it. A peak tracker
+        // reported centres ~200 px apart and the stacker shifted every frame by
+        // that difference, which is how a 652-frame lunar SER stacked into two
+        // Moons with a hard seam. The disc has not moved, so the centroid must
+        // not either.
+        const int w = 300, h = 300;
+        var a = MoonFrame(w, h, 150, 150, 90, hotX: 90,  hotY: 110, hotValue: 4006);
+        var b = MoonFrame(w, h, 150, 150, 90, hotX: 210, hotY: 190, hotValue: 4235);
+
+        var ca = CentroidAligner.Find(a, w, h);
+        var cb = CentroidAligner.Find(b, w, h);
+
+        Assert.That(ca.X, Is.EqualTo(150).Within(2), "centroid of the disc, not of a hot pixel");
+        Assert.That(ca.Y, Is.EqualTo(150).Within(2));
+        var drift = Math.Sqrt(Math.Pow(ca.X - cb.X, 2) + Math.Pow(ca.Y - cb.Y, 2));
+        Assert.That(drift, Is.LessThan(2.0),
+            $"the two frames hold the same disc, so the alignment reference must not move ({drift:F1} px)");
+    }
+
+    [Test]
+    public void Find_ExtendedDisc_TracksTheDiscWhenItActuallyMoves() {
+        // The other half of the contract: real drift has to be reported, or the
+        // stack smears instead of aligning.
+        const int w = 300, h = 300;
+        var a = MoonFrame(w, h, 150, 150, 90, 90, 110, 4006);
+        var b = MoonFrame(w, h, 170, 140, 90, 90, 110, 4006);
+
+        var ca = CentroidAligner.Find(a, w, h);
+        var cb = CentroidAligner.Find(b, w, h);
+
+        Assert.That(cb.X - ca.X, Is.EqualTo(20).Within(2));
+        Assert.That(cb.Y - ca.Y, Is.EqualTo(-10).Within(2));
+    }
 }
