@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Collections.Concurrent;
+using NINA.Core.Enum;
 using NINA.Image.Editor;
 using NINA.Image.FileFormat.FITS;
 using NINA.Image.ImageAnalysis;
@@ -180,6 +181,30 @@ public class ImageEditService : IDisposable {
                     // buffer per the current StretchParams, so the histogram
                     // handles can re-stretch the linear image at any time.
                     linear = img.Data;
+
+                    // A single-plane FITS that carries a Bayer pattern is a
+                    // COLOUR frame that has not been debayered yet, which is
+                    // what the planetary stacker writes (the stack is the raw
+                    // CFA mosaic, with BAYERPAT carried over). The viewer
+                    // debayers it and showed colour; the editor did not and
+                    // showed the mosaic itself, grid and all (field report).
+                    // Same call the viewer makes, so the two agree.
+                    var pattern = img.Properties.BayerPattern;
+                    if (channels == 1
+                            && pattern != BayerPatternEnum.None
+                            && pattern != BayerPatternEnum.Auto) {
+                        var ch = BayerDebayer.Bilinear(img.Data, width, height, pattern);
+                        int plane = width * height;
+                        var rgb = new ushort[plane * 3];
+                        Array.Copy(ch.R, 0, rgb, 0,         plane);
+                        Array.Copy(ch.G, 0, rgb, plane,     plane);
+                        Array.Copy(ch.B, 0, rgb, plane * 2, plane);
+                        linear = rgb;
+                        channels = 3;
+                        _logger.LogInformation(
+                            "Editor load: debayered a {Pattern} mosaic into RGB planes ({W}x{H})",
+                            pattern, width, height);
+                    }
                     bitDepth = img.Properties.BitDepth;
                     break;
                 }

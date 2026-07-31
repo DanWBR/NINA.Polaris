@@ -1901,15 +1901,25 @@
    so the rule lives here now and both markups just carry the class.
    The selector is deliberately one class deeper than the sidebar rule it
    overrides, rather than relying on file order. */
+/* The pane-scoped selectors are listed one by one on purpose: each sidebar
+   stacks its rows with a three-class rule of its own, and .video-pane's lives
+   in a LATER file than this one, so a matching three-class rule here lost the
+   tie on source order and VIDEO kept its four arrows in a column while PREVIEW
+   looked right (field report, twice). Four classes beats all of them wherever
+   they are declared. */
 .control-row.preview-focus-btn-row,
-.quick-controls .control-row.preview-focus-btn-row {
+.quick-controls .control-row.preview-focus-btn-row,
+.video-pane .quick-controls .control-row.preview-focus-btn-row,
+.live-pane > .quick-controls .control-row.preview-focus-btn-row,
+.preview-pane > .quick-controls .control-row.preview-focus-btn-row {
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
     align-items: center;
     gap: 4px;
 }
-.control-row.preview-focus-btn-row > button {
+.control-row.preview-focus-btn-row > button,
+.video-pane .quick-controls .control-row.preview-focus-btn-row > button {
     flex: 1 1 0;
     min-width: 0;
 }
