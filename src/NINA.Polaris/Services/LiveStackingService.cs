@@ -1042,7 +1042,29 @@ public class LiveStackingService {
             AffineTransform? usedTransform = null;
 
             lock (_lock) {
-                if (_frameCount == 0) {
+                // "First frame" means the first frame THIS BRANCH sees, not the
+                // first of the session. MetricsOnly counts frames without ever
+                // allocating an accumulator (the client is doing the stacking),
+                // so a mid-session switch to Full arrives here with a non-zero
+                // count and null buffers, and integration dereferenced them:
+                // NullReferenceException on every frame from then on, the frame
+                // counter frozen, and nothing new to show when the operator
+                // came back. Field log (Q6A, 30 Jul): the tablet stopped
+                // reporting, the watchdog flipped the mode to Full at 23:55,
+                // and every frame after that threw.
+                bool needsInit = _frameCount == 0
+                    || _countBuffer == null
+                    || (_colorActive ? _stackR == null : _stackBuffer == null);
+                if (needsInit && _frameCount > 0) {
+                    _logger.LogInformation(
+                        "Live stack: taking over the accumulation on the server after {N} client-side frame(s); "
+                        + "this frame becomes the reference", _frameCount);
+                    // Those frames were counted, never accumulated here, so the
+                    // stack starts now: keeping the count would report an
+                    // integration time the pixels do not have.
+                    _frameCount = 0;
+                }
+                if (needsInit) {
                     // Resolve the effective Bayer pattern for the whole
                     // session from the most reliable source: the frame's own
                     // CFA, else the per-rig override (dropout-proof — the user

@@ -363,4 +363,38 @@ public class LiveStackingServiceTests {
 
         Assert.That(svc.FrameCount, Is.EqualTo(3));
     }
+
+    /// <summary>
+    /// The exact field sequence from the Q6A on 30 Jul: the tablet was stacking
+    /// in the browser (MetricsOnly), it stopped reporting, the watchdog flipped
+    /// the stacker to Full mid-session, and every frame after that threw a
+    /// NullReferenceException inside AddFrameAsync. MetricsOnly counts frames
+    /// without allocating an accumulator, so Full arrived with a non-zero frame
+    /// count and null buffers and skipped its own init.
+    /// </summary>
+    [Test]
+    public async Task SwitchingToFullMidSession_StartsAccumulatingInsteadOfThrowing() {
+        var svc = MakeService();
+        svc.Start();
+
+        svc.Mode = StackMode.MetricsOnly;
+        await svc.AddFrameAsync(MakeFrame());
+        await svc.AddFrameAsync(MakeFrame());
+        Assert.That(svc.FrameCount, Is.EqualTo(2),
+            "MetricsOnly counts the frames the client is stacking");
+
+        // The client goes away.
+        svc.Mode = StackMode.Full;
+        Assert.DoesNotThrowAsync(async () => await svc.AddFrameAsync(MakeFrame()),
+            "the server has to take over the accumulation, not dereference buffers "
+            + "that the client-side mode never allocated");
+
+        Assert.That(svc.FrameCount, Is.EqualTo(1),
+            "the stack starts here: the counted frames were never accumulated on the server, "
+            + "so keeping them would report an integration time the pixels do not have");
+
+        // A second frame cannot be asserted here: these synthetic frames carry
+        // no stars, so alignment against the reference rejects them, which is
+        // the fixture's limit rather than the behaviour under test.
+    }
 }
