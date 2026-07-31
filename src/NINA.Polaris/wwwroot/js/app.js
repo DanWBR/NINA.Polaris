@@ -20035,11 +20035,18 @@ function ninaApp() {
                     { x: lo, y: slope * lo + intercept },
                     { x: hi, y: slope * hi + intercept }
                 ] : []);
-                const vx = fits.intersectionX || (minP + maxP) / 2;
+                // Clamp where the two arms meet INTO the sampled range. A bad
+                // fit (the failed run logged R2 = -2.35) puts that intersection
+                // hundreds of thousands of steps away, and drawing to it
+                // stretched the x axis to -300000 with the real samples squeezed
+                // into a pixel at the edge, which is exactly when the operator
+                // needs to read the curve.
+                const vxRaw = fits.intersectionX || (minP + maxP) / 2;
+                const vx = Math.max(minP, Math.min(maxP, vxRaw));
                 if (c.data.datasets[4]) c.data.datasets[4].data = fits.leftPoints >= 2
-                    ? seg(fits.leftSlope, fits.leftIntercept, minP, Math.min(vx, maxP)) : [];
+                    ? seg(fits.leftSlope, fits.leftIntercept, minP, vx) : [];
                 if (c.data.datasets[5]) c.data.datasets[5].data = fits.rightPoints >= 2
-                    ? seg(fits.rightSlope, fits.rightIntercept, Math.max(vx, minP), maxP) : [];
+                    ? seg(fits.rightSlope, fits.rightIntercept, vx, maxP) : [];
                 // Best/final marker: the accepted result when idle, the live
                 // fit's derived focus point while the sweep runs.
                 const bx = this.autoFocus.bestPosition ?? fits.finalX;

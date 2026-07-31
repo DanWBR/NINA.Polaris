@@ -250,4 +250,27 @@ public class AutoFocusDefocusMeasurementTests {
         Assert.That(pickedFar[0].HFR, Is.EqualTo(9.0).Within(1e-9),
             "and the point's HFR is that star's, so the curve is one star's defocus");
     }
+
+    /// <summary>
+    /// The field failure of 30 Jul: tracking ONE star, the defocused ends of
+    /// the sweep detect two to four stars, the old gate demanded MinStars (5),
+    /// and both wings came back "stars=4 HFR=0.00" (soft-rejected). With no
+    /// wings the fit had no slope and the run died with R2 = -2.35. The gate
+    /// has to ask for what the mode actually needs.
+    /// </summary>
+    [Test]
+    public void StarGate_FollowsTheTrackedCount_NotTheProfileMinimum() {
+        var tracked = AutoFocusRunOptions.Resolve(
+            new AutoFocusRequest { UseBrightestStars = 1, MinStars = 5 },
+            new AutoFocusSettings());
+        Assert.That(tracked.UseBrightestStars, Is.EqualTo(1));
+        Assert.That(tracked.MinStars, Is.EqualTo(5),
+            "the profile value is still carried; it just stops governing the tracked mode");
+
+        var untracked = AutoFocusRunOptions.Resolve(
+            new AutoFocusRequest { UseBrightestStars = 0, MinStars = 5 },
+            new AutoFocusSettings());
+        Assert.That(untracked.UseBrightestStars, Is.EqualTo(0),
+            "0 means measure the whole population, where a minimum count is the right question");
+    }
 }

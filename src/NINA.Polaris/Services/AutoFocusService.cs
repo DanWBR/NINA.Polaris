@@ -664,9 +664,21 @@ public class AutoFocusService {
         // DETECTOR found. Applying it after the tracker made single-star mode
         // impossible: one tracked star can never clear a minimum of five, and
         // every point would soft-reject.
-        if (detected.Count < o.MinStars) {
-            _logger.LogDebug("Only {Count} stars detected (min={Min}), point soft-rejected",
-                detected.Count, o.MinStars);
+        // How many stars this frame needs to be usable. When the sweep TRACKS a
+        // fixed set (the default: one star), that count is the requirement, and
+        // the profile's MinStars must not override it: the wings of a V-curve
+        // are defocused by design, so the detector legitimately finds two or
+        // three stars there. Field log (Q6A, 30 Jul): samples reading
+        // "stars=4 HFR=0.00" and "stars=2 HFR=0.00" while tracking ONE star,
+        // both ends of the curve soft-rejected, the fit left with no slope, and
+        // the run failing with R²=-2.35. MinStars still governs the untracked
+        // mode, where the measurement really is an average over the population.
+        int needStars = o.UseBrightestStars > 0
+            ? Math.Max(1, o.UseBrightestStars)
+            : o.MinStars;
+        if (detected.Count < needStars) {
+            _logger.LogDebug("Only {Count} stars detected (need {Min}), point soft-rejected",
+                detected.Count, needStars);
             return new FrameMeasurement(0, 1000, detected.Count, 0, 0, frameW, frameH);
         }
 
