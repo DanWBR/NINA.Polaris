@@ -136,6 +136,14 @@ public static class LiveStackEndpoints {
         });
 
         group.MapGet("/preview", (LiveStackingService stack, ImageRelayService relay, int? quality) => {
+            // FIELD8-1: in MetricsOnly the STACK LIVES IN THE BROWSER. The
+            // server holds only the last raw sub, so answering with it here
+            // replaced an N-frame client stack with a single frame in the
+            // middle of a session (field report, 2026-07-31). 404 is the
+            // honest answer, and the client's restore treats it as
+            // "unavailable": a normal outcome it does not retry.
+            if (stack.Mode == StackMode.MetricsOnly)
+                return Results.NotFound(new { error = "Stack is client-side (compute mode)" });
             var jpeg = relay.GetLatestJpeg(quality ?? 85);
             if (jpeg == null)
                 return Results.NotFound(new { error = "No stacked image available" });

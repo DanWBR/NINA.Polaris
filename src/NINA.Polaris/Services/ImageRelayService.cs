@@ -615,7 +615,49 @@ public class ImageRelayService : IDisposable {
         // endpoint return 404 instead of crashing the request.
         if (img == null || img.Width <= 0 || img.Height <= 0) return null;
         try {
-            return _latestJpeg ??= img.ToJpeg(quality);
+            if (_latestJpeg != null) return _latestJpeg;
+
+            // FIELD8-1: an OSC frame has to be DEBAYERED here, not handed to
+            // ImageBuffer.ToJpeg().
+            //
+            // ToJpeg is greyscale by construction (one plane in, one plane
+            // out), which is correct for the WS path: there the raw CFA
+            // buffer travels with its pattern in the header and the browser
+            // debayers it. These one-shot JPEG endpoints have no such second
+            // half. Serving the mosaic through a grey encoder bakes the
+            // checkerboard into the picture: on the tablet the LIVE canvas
+            // showed a grey mesh with almost no stars, which reads as a
+            // broken camera (field report, 2026-07-31, ASI585MC on the Q6A).
+            // Measured on that frame: neighbouring pixels differed 2.15x more
+            // than pixels two columns apart, the signature of an
+            // un-demosaiced CFA, and the histogram carried one hump per
+            // colour instead of one.
+            var pattern = img.BayerPattern;
+            if (pattern != BayerPatternEnum.None && pattern != BayerPatternEnum.Auto) {
+                // The buffer is array-backed (ImageBuffer wraps a ushort[]),
+                // so this is a view, not a 16 MB copy of an 8 MP frame. The
+                // ToArray fallback is only there to keep a future
+                // non-array-backed buffer working.
+                var cfa = System.Runtime.InteropServices.MemoryMarshal
+                              .TryGetArray(img.PixelData, out var seg) && seg.Array != null
+                              && seg.Offset == 0 && seg.Count == seg.Array.Length
+                          ? seg.Array
+                          : img.PixelData.ToArray();
+                var ch = NINA.Image.ImageAnalysis.BayerDebayer.Bilinear(
+                    cfa, img.Width, img.Height, pattern);
+                var planes = new ushort[img.Width * img.Height * 3];
+                ch.R.CopyTo(planes, 0);
+                ch.G.CopyTo(planes, img.Width * img.Height);
+                ch.B.CopyTo(planes, img.Width * img.Height * 2);
+                // Native size, matching what the greyscale path served: this
+                // is the LIVE canvas image, not a gallery thumbnail. maxDim is
+                // a bound, not a target, and it is NOT optional: 0 makes the
+                // renderer scale by 0/longest and hand back a 1x1 pixel.
+                return _latestJpeg = FitsThumbnailer.RenderJpegFromRgbPlanes(
+                    planes, img.Width, img.Height, img.BitDepth,
+                    Math.Max(img.Width, img.Height), quality);
+            }
+            return _latestJpeg = img.ToJpeg(quality);
         } catch (Exception ex) {
             _logger.LogWarning(ex, "JPEG encode of {W}x{H} frame failed", img.Width, img.Height);
             return null;

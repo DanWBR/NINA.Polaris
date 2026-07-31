@@ -171,4 +171,79 @@ public class ImageRelayColourPreviewTests {
         Assert.That(JpegComponents(relay.GetLatestJpeg(85)!), Is.EqualTo(1),
             "stale colour JPEG must not survive a later mono frame");
     }
+
+    /// <summary>Raw one-shot-colour frame: red pixels bright, blue pixels dim,
+    /// green in between, in an RGGB mosaic. Nothing else about it matters.</summary>
+    private static IImageData CfaFrame(int w = 32, int h = 32) {
+        var px = new ushort[w * h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                bool evenRow = (y & 1) == 0, evenCol = (x & 1) == 0;
+                px[y * w + x] = evenRow
+                    ? (evenCol ? (ushort)55000 : (ushort)20000)      // R G
+                    : (evenCol ? (ushort)20000 : (ushort)2000);      // G B
+            }
+        }
+        var props = new ImageProperties {
+            Width = w, Height = h, BitDepth = 16, Channels = 1,
+            IsBayered = true, BayerPattern = BayerPatternEnum.RGGB
+        };
+        return new BaseImageData(px, props, new ImageMetaData());
+    }
+
+    /// <summary>FIELD8-1. The raw OSC path is the one the WS handles by shipping
+    /// the mosaic plus its pattern and letting the browser debayer. The one-shot
+    /// JPEG endpoints have no browser on the other end, so the SAME buffer served
+    /// through them has to be demosaiced here.
+    ///
+    /// Before the fix this returned a 1-component JPEG of the bare CFA: on the
+    /// tablet the LIVE canvas turned into a grey mesh with almost no stars in the
+    /// middle of a session, which reads as a dead camera rather than as a
+    /// rendering bug (field report, 2026-07-31, ASI585MC on the Q6A).</summary>
+    [Test]
+    public async Task AfterRawOscRelay_PreviewJpegIsDebayered_NotAGreyMosaic() {
+        var relay = NewRelayWithClient();
+        await relay.RelayImageAsync(CfaFrame());
+
+        var preview = relay.GetLatestJpeg(90);
+        Assert.That(preview, Is.Not.Null);
+        Assert.That(JpegComponents(preview!), Is.EqualTo(3),
+            "a CFA frame served as 1 component is the raw mosaic, painted grey");
+
+        using var bmp = SkiaSharp.SKBitmap.Decode(preview!);
+        Assert.That(bmp, Is.Not.Null);
+        Assert.That(bmp.Width, Is.EqualTo(32), "the preview must keep the frame's size");
+
+        // Deliberately NOT asserting "red dominates blue": the colour renderer
+        // stretches each channel on its own, which is the right thing for a
+        // sky (it neutralises the background) and which normalises away any
+        // flat colour cast a synthetic frame has. The spatial signature below
+        // is what actually separates a debayered frame from a mosaic.
+    }
+
+    /// <summary>The mosaic tell, measured the way it was measured on the wire:
+    /// in a CFA buffer neighbouring pixels alternate hard, so |x - x+1| runs far
+    /// above |x - x+2|. After demosaicing the two are close. The field frame
+    /// measured 2.15; anything near that means the checkerboard is still there.
+    /// </summary>
+    [Test]
+    public async Task AfterRawOscRelay_PreviewHasNoCheckerboardSignature() {
+        var relay = NewRelayWithClient();
+        await relay.RelayImageAsync(CfaFrame(64, 64));
+
+        using var bmp = SkiaSharp.SKBitmap.Decode(relay.GetLatestJpeg(95)!);
+        double d1 = 0, d2 = 0;
+        int n = 0;
+        for (int y = 8; y < bmp.Height - 8; y++) {
+            for (int x = 8; x < bmp.Width - 10; x++) {
+                int p0 = bmp.GetPixel(x, y).Green;
+                d1 += Math.Abs(p0 - bmp.GetPixel(x + 1, y).Green);
+                d2 += Math.Abs(p0 - bmp.GetPixel(x + 2, y).Green);
+                n++;
+            }
+        }
+        double ratio = (d1 / n) / Math.Max(1e-6, d2 / n);
+        Assert.That(ratio, Is.LessThan(1.6),
+            $"neighbour/second-neighbour difference ratio {ratio:F2} still looks like a CFA mosaic");
+    }
 }
