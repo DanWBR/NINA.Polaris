@@ -364,7 +364,24 @@ public class LiveStackTriggersService : IDisposable {
             $"nina_livestack_ref_{Guid.NewGuid():N}.fits");
         try {
             FITSWriter.Write(firstFrame, tempFits);
+            // FIELD8-2: hand ASTAP the mount's pointing. A SearchRadiusDeg with
+            // no RA/Dec beside it is not a narrow search, it is no search
+            // constraint at all: the solver omits -ra/-spd and scans the whole
+            // sky (field log, 2026-07-31: "Search radius: 180 degrees" on a
+            // 0.50 degree field). Worse, the solver's own retry ladder is gated
+            // on the call having had hints, so this one also skipped the blind
+            // retry AND the coarse-downsample retry that rescue marginal
+            // frames, and gave up after a single attempt. The mount knows
+            // where it is pointing; the reference solve should use it.
+            var scope = _equip.Telescope;
+            double? hintRa = null, hintDec = null;
+            if (scope != null && scope.IsConnected
+                    && !double.IsNaN(scope.RightAscension) && !double.IsNaN(scope.Declination)) {
+                hintRa = scope.RightAscension;
+                hintDec = scope.Declination;
+            }
             var result = await _solver.SolveAsync(tempFits, new PlateSolveOptions {
+                HintRa = hintRa, HintDec = hintDec,
                 SearchRadiusDeg = 30, Downsample = 2
             });
             if (result.Success) {

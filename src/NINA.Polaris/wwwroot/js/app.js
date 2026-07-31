@@ -15796,23 +15796,80 @@ function ninaApp() {
             this._editorZoomBy(factor, cx, cy);
         },
 
+        // EDPAN. Pointer-based so one code path serves mouse, pen and a
+        // single finger. Two subtleties that the old mouse-only version did
+        // not need and that break the gesture if left out:
+        //   - the histogram overlay lives INSIDE this container, so a press
+        //     on its handles must not also grab the image underneath (the
+        //     shared canvas viewer guards the same way);
+        //   - capture the pointer, or a fast drag that leaves the container
+        //     leaves the view stuck mid-pan with no pointerup to end it.
         editorOnPanStart(ev) {
             if (this.editorState.zoom <= 1) return;
+            if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+            if (this._editorPinching) return;
+            if (ev.target && ev.target.closest &&
+                ev.target.closest('button, input, select, label, .histo-panel')) return;
             this.editorState.panning = true;
             this.editorState._panStartX = ev.clientX;
             this.editorState._panStartY = ev.clientY;
             this.editorState._panOriginX = this.editorState.panX;
             this.editorState._panOriginY = this.editorState.panY;
+            try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch (_) { }
         },
         editorOnPanMove(ev) {
-            if (!this.editorState.panning) return;
+            if (!this.editorState.panning || this._editorPinching) return;
             this.editorState.panX = this.editorState._panOriginX
                                     + (ev.clientX - this.editorState._panStartX);
             this.editorState.panY = this.editorState._panOriginY
                                     + (ev.clientY - this.editorState._panStartY);
         },
-        editorOnPanEnd() {
+        editorOnPanEnd(ev) {
             this.editorState.panning = false;
+            if (ev && ev.pointerId != null) {
+                try { ev.currentTarget.releasePointerCapture(ev.pointerId); } catch (_) { }
+            }
+        },
+
+        // Two-finger pinch, anchored at the midpoint so the gesture zooms
+        // where the fingers are and pans with them at the same time. Mirrors
+        // the math the LIVE/PREVIEW viewer uses; the editor keeps its own
+        // state because its transform lives on a CSS stage, not a canvas.
+        editorOnPinchStart(ev) {
+            if (!ev.touches || ev.touches.length !== 2) return;
+            this._editorPinching = true;
+            this.editorState.panning = false;
+            const [a, b] = [ev.touches[0], ev.touches[1]];
+            const rect = ev.currentTarget.getBoundingClientRect();
+            this._editorPinch = {
+                dist: Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY) || 1,
+                zoom: this.editorState.zoom,
+                panX: this.editorState.panX,
+                panY: this.editorState.panY,
+                // Anchor in the same frame the pan offsets use: distance from
+                // the container centre, because the stage is centred first
+                // and only then translated.
+                mx: (a.clientX + b.clientX) / 2 - rect.left - rect.width / 2,
+                my: (a.clientY + b.clientY) / 2 - rect.top - rect.height / 2
+            };
+        },
+        editorOnPinchMove(ev) {
+            if (!this._editorPinching || !ev.touches || ev.touches.length !== 2) return;
+            const p = this._editorPinch;
+            const [a, b] = [ev.touches[0], ev.touches[1]];
+            const rect = ev.currentTarget.getBoundingClientRect();
+            const dist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+            const mx = (a.clientX + b.clientX) / 2 - rect.left - rect.width / 2;
+            const my = (a.clientY + b.clientY) / 2 - rect.top - rect.height / 2;
+            const next = Math.max(0.1, Math.min(16, p.zoom * (dist / p.dist)));
+            const r = next / p.zoom;
+            this.editorState.zoom = next;
+            this.editorState.panX = p.mx - (p.mx - p.panX) * r + (mx - p.mx);
+            this.editorState.panY = p.my - (p.my - p.panY) * r + (my - p.my);
+        },
+        editorOnPinchEnd(ev) {
+            if (ev && ev.touches && ev.touches.length > 0) return;
+            this._editorPinching = false;
         },
 
         // Slider drag detection. While a range input has the

@@ -1848,6 +1848,10 @@ body.link-offline .preview-pane::after {
        selection on the surrounding panel. */
     user-select: none;
     -webkit-user-select: none;
+    /* EDPAN: without this the browser claims a finger drag for scrolling
+       and page zoom, and the pointermove events for the pan never arrive.
+       Pointer handlers alone are not enough on a touchscreen. */
+    touch-action: none;
 }
 /* Inner layer the CSS transform applies to. Sized 100%×100% so the
    contained <img>/<canvas> fills it at zoom=1; transform-origin centre
