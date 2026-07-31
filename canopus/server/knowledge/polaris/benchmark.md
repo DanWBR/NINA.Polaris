@@ -82,6 +82,15 @@ scores and the Mpx/s figures.
 Scores collected on real hardware, for picking a board. Higher Polaris
 score is better. (More boards added as they arrive: x86 PC stick.)
 
+**Which board to buy.** The **Orange Pi 4 Pro (4 GB)** is the
+recommendation: it scores **180** for roughly $50 to $70, the best balance
+of cost and capability of everything measured here. Eight cores, LPDDR5, a
+GPU and a 3 TOPS NPU at Raspberry Pi 4 money, and it lands well clear of
+the Pi 4 (110). Buy the **Radxa Dragon Q6A** (296) instead if you want the
+highest score whatever it costs, or the **Orange Pi 5 Pro** (274) if you
+lean on the AI tools, since it is the board with the proven GPU and NPU
+acceleration path.
+
 ### Raspberry Pi 4 Model B (4 cores)
 
 Run: 2026-06-08 (2 consecutive runs, both scored 110).
@@ -133,8 +142,10 @@ Run: 2026-07-24 on Polaris 0.96.3, score 180, no thermal throttling
 | CPU single / multi-thread | 2405 / 7950 MFLOPS (3.31× scaling) |
 | Memory bandwidth | 8.6 GB/s |
 
-Sits between the Raspberry Pi 4 (110) and Pi 5 (211) - a solid mid-range SBC.
-Note: on the stock Orange Pi image the board self-reports only its SoC codename
+Sits between the Raspberry Pi 4 (110) and Pi 5 (245), and it is the
+recommended board: at street prices it costs about what a Pi 4 costs while
+scoring 64 percent higher, with LPDDR5 memory and a GPU plus NPU the Pi does
+not have. Note: on the stock Orange Pi image the board self-reports only its SoC codename
 (`sun60iw2`) in `/proc/device-tree/model`; Polaris now resolves the friendly
 "Orange Pi 4 Pro" name from the device-tree `compatible` string instead.
 

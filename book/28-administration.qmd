@@ -343,12 +343,21 @@ these):
 
 | Machine | Polaris score |
 | --- | --- |
+| Orange Pi Zero 3 (4 cores, Allwinner H618) | 45 |
 | Raspberry Pi 4 Model B (4 cores) | 110 |
-| Orange Pi 4 Pro (8 cores, Allwinner A733) | 156 |
-| Raspberry Pi 5 Model B (4 cores) | 211 (172 when thermally throttled) |
-| Orange Pi 5 Pro (8 cores, RK3588S) | 242 with GPU offload, 227 CPU only |
+| Orange Pi 4 Pro (8 cores, Allwinner A733) | 180 |
+| Raspberry Pi 5 Model B (4 cores) | 245 (211 on an earlier build, 172 when thermally throttled) |
+| Orange Pi 5 Pro (8 cores, RK3588S) | 274 with GPU offload, 227 CPU only |
 | Radxa Dragon Q6A (8 cores, Qualcomm QCS6490) | 296 |
 | Desktop Core i9-13900KF (32 threads) | 936 |
+
+The recommended board is the **Orange Pi 4 Pro** with 4 GB: at
+roughly 50 to 70 US dollars it is the best balance of cost and
+capability in that table, scoring well above a Raspberry Pi 4 that
+costs about the same. Take the Radxa Dragon Q6A if you want the
+highest score whatever it costs, or the Orange Pi 5 Pro if you lean
+on the AI tools, since that is the board with the proven GPU and
+NPU acceleration path.
 
 Two practical lessons from those runs. Cooling matters: the Pi 5
 loses nearly 20 percent when passively cooled and thermally
@@ -357,7 +366,7 @@ so keep small boards actively cooled for sustained live-stacking
 loads. And the optional GPU offload (via OpenCL, a standard for
 running computation on graphics chips) helps only where the board's
 memory design makes it cheap: it lifts the Orange Pi 5 Pro from 227
-to 242, while on the Radxa and on desktops with discrete graphics
+to 274, while on the Radxa and on desktops with discrete graphics
 cards Polaris automatically measures each operation once and
 offloads only the ones that actually win, so leaving the toggle on
 never makes things slower.

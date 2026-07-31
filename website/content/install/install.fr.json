@@ -5,7 +5,7 @@
     "title": "Configuration requise",
     "sub": "Le principal facteur limitant est la mémoire vive (RAM). Tout le reste fonctionne sans problème sur un SBC moderne, et plusieurs cartes intègrent une accélération par GPU et NPU pour les outils d'IA.",
     "ramNote": "Polaris dimensionne le live stack selon la carte sur laquelle il tourne : il choisit une résolution de stacking 1:1, 1:2 ou 1:4 pour que l'empreinte mémoire tienne dans un quart de la mémoire disponible. Une caméra couleur de 12 MP coûte environ 900 Mo en 1:1 et 450 Mo en 1:2, au-dessus d'un plancher fixe d'environ 370 Mo. 2 Go est confortable, les cartes de 1,5 Go fonctionnent avec une résolution de stacking réduite, et le WASM côté client peut déporter tout le calcul du stacking dans le navigateur.",
-    "recommendedNote": "Carte recommandée : la Radxa Dragon Q6A avec 4 Go ou plus. Son puissant processeur Qualcomm affiche le meilleur score Polaris parmi tous les SBC testés à ce jour. Si vous comptez beaucoup sur les outils d’IA, l’Orange Pi 5 Pro constitue une alternative éprouvée, grâce à l’ajout d’OpenCL sur le GPU et de GraXpert AI sur le NPU. L'Orange Pi 4 Pro (4 Go) constitue également une option de milieu de gamme fiable (score Polaris de 156 avec dissipateur thermique et ventilateur, 147 en refroidissement passif).",
+    "recommendedNote": "Carte recommandée : l'Orange Pi 4 Pro avec 4 Go. C'est le meilleur équilibre entre prix et capacités de tous les SBC testés à ce jour : un score Polaris de 180 pour environ 50 à 70 dollars, avec huit cœurs, de la mémoire LPDDR5, un GPU et un NPU de 3 TOPS. Si vous voulez le meilleur score quel qu'en soit le prix, le Radxa Dragon Q6A domine avec 296. Si vous comptez beaucoup sur les outils d'IA, l'Orange Pi 5 Pro constitue une alternative éprouvée, grâce à l'ajout d'OpenCL sur le GPU et de GraXpert AI sur le NPU.",
     "rows": [
       {
         "host": "Raspberry Pi 3",
@@ -28,10 +28,10 @@
       {
         "host": "Orange Pi 4 Pro",
         "ram": "2+ GB",
-        "status": "Bien",
+        "status": "Recommandé",
         "highlight": true,
         "tag": "GPU + NPU",
-        "notes": "Le Polaris affiche un score de 156 avec un dissipateur thermique et un ventilateur (147 en refroidissement passif) ; c’est un SBC de milieu de gamme solide qui se situe entre le Raspberry Pi 4 et le Pi 5. Le refroidissement actif en vaut la peine : il permet de maintenir les fréquences du processeur sous une charge soutenue. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, jusqu’à 2,0 GHz), GPU Imagination BXM-4-64, NPU de 3 TOPS, LPDDR5. Même configuration GPU + NPU que le 5 Pro (OpenCL sur le GPU, GraXpert sur le NPU), en attente de validation."
+        "notes": "Le meilleur équilibre entre prix et capacités de ce tableau : un score Polaris de 180, pour le prix d'un Raspberry Pi 4. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, jusqu'à 2,0 GHz), GPU Imagination BXM-4-64, NPU de 3 TOPS, LPDDR5. Le refroidissement actif en vaut la peine : il permet de maintenir les fréquences du processeur sous une charge soutenue. Même configuration GPU + NPU que le 5 Pro (OpenCL sur le GPU, GraXpert sur le NPU), en attente de validation."
       },
       {
         "host": "Orange Pi 5 Pro",
@@ -44,7 +44,7 @@
       {
         "host": "Radxa Dragon Q6A",
         "ram": "4+ GB",
-        "status": "Recommandé",
+        "status": "Le plus rapide",
         "highlight": true,
         "tag": "Meilleur score",
         "notes": "Le SBC le plus rapide testé à ce jour (score Polaris de 296), grâce à la puissance de son processeur. Qualcomm QCS6490 (octa-core Kryo : 1x 2,7 GHz + 3x 2,4 GHz + 4x 1,9 GHz), LPDDR5. Polaris utilise ici uniquement son processeur : le GPU Adreno 643 est un frein et le NPU Hexagon n'est pas utilisé (le parcours IA est réservé à Rockchip), les outils d'IA s'exécutent donc sur le processeur."
@@ -126,7 +126,7 @@
         "polaris": "0.97.5 (2026-07-30)",
         "size": "2.49 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
-        "note": "Image raw réduite (shrink). Archive 7-Zip : extrayez le .7z, puis écrivez le .img sur le stockage interne avec HDD Raw Copy Tool (ou balenaEtcher / Rufus). Mot de passe de connexion : polaris1234."
+        "note": "Carte recommandée : le meilleur équilibre entre prix et capacités. Image raw réduite (shrink). Archive 7-Zip : extrayez le .7z, puis écrivez le .img sur le stockage interne avec HDD Raw Copy Tool (ou balenaEtcher / Rufus). Mot de passe de connexion : polaris1234."
       },
       {
         "device": "Orange Pi 5 Pro",

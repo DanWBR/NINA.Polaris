@@ -127,7 +127,7 @@
         "capture": "30.9 Mpx/s",
         "memory": "8.6 GB/s",
         "price": "$50-70",
-        "highlight": false
+        "highlight": true
       },
       {
         "device": "Raspberry Pi 5 Model B",
@@ -160,7 +160,7 @@
         "capture": "38.5 Mpx/s",
         "memory": "13.8 GB/s",
         "price": "$120-140",
-        "highlight": true
+        "highlight": false
       },
       {
         "device": "Core i9-13900KF + RTX 5070",
@@ -174,7 +174,7 @@
         "highlight": false
       }
     ],
-    "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. The Orange Pi 5 Pro is shown with the OpenCL GPU backend on (274; 227 CPU only) and the Pi 5 at its best, actively cooled run. The Radxa Dragon Q6A is the fastest SBC here and the best value, and runs CPU-only (its Adreno GPU is a net loss). Prices are rough street estimates for the board alone (no SD card, power, or case); the Core i9 row is a full desktop build for reference, not an SBC. The Orange Pi Zero 3 is the entry point: it shows Polaris runs on a 1.5 GB board (its Mali-G31 GPU is a net loss too, so it runs CPU-only). Full per-device tables and methodology in the benchmark docs.",
+    "note": "Polaris score is the headline figure; Mpx/s columns are live-stack and capture throughput. The Orange Pi 5 Pro is shown with the OpenCL GPU backend on (274; 227 CPU only) and the Pi 5 at its best, actively cooled run. The Orange Pi 4 Pro is the best value here and the board Polaris recommends: eight cores and LPDDR5 for about the price of a Raspberry Pi 4. The Radxa Dragon Q6A is the fastest SBC here and runs CPU-only (its Adreno GPU is a net loss). Prices are rough street estimates for the board alone (no SD card, power, or case); the Core i9 row is a full desktop build for reference, not an SBC. The Orange Pi Zero 3 is the entry point: it shows Polaris runs on a 1.5 GB board (its Mali-G31 GPU is a net loss too, so it runs CPU-only). Full per-device tables and methodology in the benchmark docs.",
     "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"
   },
   "comparison": {

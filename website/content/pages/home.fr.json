@@ -127,7 +127,7 @@
         "capture": "30.9 Mpx/s",
         "memory": "8.6 GB/s",
         "price": "$50-70",
-        "highlight": false
+        "highlight": true
       },
       {
         "device": "Raspberry Pi 5 Model B",
@@ -160,7 +160,7 @@
         "capture": "38.5 Mpx/s",
         "memory": "13.8 GB/s",
         "price": "$120-140",
-        "highlight": true
+        "highlight": false
       },
       {
         "device": "Core i9-13900KF + RTX 5070",
@@ -174,7 +174,7 @@
         "highlight": false
       }
     ],
-    "note": "Le score Polaris est la valeur principale ; les colonnes « Mpx/s » correspondent au débit en temps réel et au débit de capture. L'Orange Pi 5 Pro est présenté avec le backend GPU OpenCL activé (274 ; 227 en mode CPU seul) et le Pi 5 dans ses meilleures conditions, avec un refroidissement actif. Le Radxa Dragon Q6A est le SBC le plus rapide de cette sélection et offre le meilleur rapport qualité-prix ; il fonctionne uniquement avec le CPU (son GPU Adreno constitue une perte nette de performances). Les prix indiqués sont des estimations approximatives du prix public de la carte seule (sans carte SD, alimentation ni boîtier) ; la ligne « Core i9 » correspond à une configuration de PC de bureau complète à titre de référence, et non à un SBC. L’Orange Pi Zero 3 constitue le modèle d’entrée de gamme : il montre que Polaris fonctionne sur une carte de 1,5 Go (son GPU Mali-G31 est lui aussi un frein, il fonctionne donc uniquement avec le processeur). Les tableaux complets par appareil et la méthodologie sont disponibles dans la documentation des tests de performance.",
+    "note": "Le score Polaris est la valeur principale ; les colonnes « Mpx/s » correspondent au débit en temps réel et au débit de capture. L'Orange Pi 5 Pro est présenté avec le backend GPU OpenCL activé (274 ; 227 en mode CPU seul) et le Pi 5 dans ses meilleures conditions, avec un refroidissement actif. L'Orange Pi 4 Pro offre le meilleur rapport qualité-prix de cette sélection et c'est la carte que Polaris recommande : huit cœurs et de la LPDDR5 pour environ le prix d'un Raspberry Pi 4. Le Radxa Dragon Q6A est le SBC le plus rapide et fonctionne uniquement avec le CPU (son GPU Adreno constitue une perte nette de performances). Les prix indiqués sont des estimations approximatives du prix public de la carte seule (sans carte SD, alimentation ni boîtier) ; la ligne « Core i9 » correspond à une configuration de PC de bureau complète à titre de référence, et non à un SBC. L’Orange Pi Zero 3 constitue le modèle d’entrée de gamme : il montre que Polaris fonctionne sur une carte de 1,5 Go (son GPU Mali-G31 est lui aussi un frein, il fonctionne donc uniquement avec le processeur). Les tableaux complets par appareil et la méthodologie sont disponibles dans la documentation des tests de performance.",
     "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"
   },
   "comparison": {

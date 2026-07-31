@@ -5,7 +5,7 @@
     "title": "Systemanforderungen",
     "sub": "Der größte Engpass ist der Arbeitsspeicher. Alles andere läuft auf einem modernen SBC problemlos, und einige Boards bieten zudem GPU- und NPU-Beschleunigung für die KI-Tools.",
     "ramNote": "Polaris passt den Live-Stack an das Board an, auf dem er läuft: Er wählt eine Stacking-Auflösung von 1:1, 1:2 oder 1:4, damit das Working Set in ein Viertel des verfügbaren Speichers passt. Eine 12-MP-Farbkamera kostet rund 900 MB bei 1:1 und 450 MB bei 1:2, über einem festen Sockel von etwa 370 MB. 2 GB sind bequem, Boards mit 1,5 GB laufen mit reduzierter Stacking-Auflösung, und WASM auf der Clientseite kann die gesamte Stacking-Rechnung in den Browser verlagern.",
-    "recommendedNote": "Empfohlenes Board: das Radxa Dragon Q6A mit 4 GB oder mehr. Seine leistungsstarke Qualcomm-CPU erzielt den höchsten Polaris-Wert aller bisher getesteten SBCs. Wenn Sie vor allem auf KI-Tools setzen, ist der Orange Pi 5 Pro die bewährte Alternative, die zusätzlich OpenCL auf der GPU und GraXpert AI auf der NPU bietet. Auch der Orange Pi 4 Pro (4 GB) ist eine solide Option im mittleren Leistungsbereich (Polaris-Wert 156 mit Kühlkörper und Lüfter, 147 bei passiver Kühlung).",
+    "recommendedNote": "Empfohlenes Board: der Orange Pi 4 Pro mit 4 GB. Er bietet das beste Verhältnis von Preis und Leistungsfähigkeit aller bisher getesteten SBCs: ein Polaris-Wert von 180 für rund 50 bis 70 Dollar, mit acht Kernen, LPDDR5-Speicher, einer GPU und einer 3-TOPS-NPU. Wenn Sie den höchsten Wert ohne Rücksicht auf den Preis wollen, führt das Radxa Dragon Q6A mit 296. Wenn Sie vor allem auf KI-Tools setzen, ist der Orange Pi 5 Pro die bewährte Alternative, die zusätzlich OpenCL auf der GPU und GraXpert AI auf der NPU bietet.",
     "rows": [
       {
         "host": "Raspberry Pi 3",
@@ -28,10 +28,10 @@
       {
         "host": "Orange Pi 4 Pro",
         "ram": "2+ GB",
-        "status": "Gut",
+        "status": "Empfohlen",
         "highlight": true,
         "tag": "GPU + NPU",
-        "notes": "Polaris erreicht 156 Punkte mit Kühlkörper und Lüfter (147 bei passiver Kühlung) - ein solider SBC der Mittelklasse, der zwischen dem Raspberry Pi 4 und dem Pi 5 angesiedelt ist. Die aktive Kühlung lohnt sich: Sie hält die CPU-Taktfrequenzen auch unter Dauerlast aufrecht. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, bis zu 2,0 GHz), Imagination BXM-4-64-GPU, 3 TOPS NPU, LPDDR5. Gleiche GPU-plus-NPU-Konfiguration wie beim 5 Pro (OpenCL auf der GPU, GraXpert auf der NPU), Validierung steht noch aus."
+        "notes": "Das beste Verhältnis von Preis und Leistungsfähigkeit in dieser Tabelle: Polaris-Wert 180, zum Preis eines Raspberry Pi 4. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, bis zu 2,0 GHz), Imagination BXM-4-64-GPU, 3 TOPS NPU, LPDDR5. Die aktive Kühlung lohnt sich: Sie hält die CPU-Taktfrequenzen auch unter Dauerlast aufrecht. Gleiche GPU-plus-NPU-Konfiguration wie beim 5 Pro (OpenCL auf der GPU, GraXpert auf der NPU), Validierung steht noch aus."
       },
       {
         "host": "Orange Pi 5 Pro",
@@ -44,7 +44,7 @@
       {
         "host": "Radxa Dragon Q6A",
         "ram": "4+ GB",
-        "status": "Empfohlen",
+        "status": "Am schnellsten",
         "highlight": true,
         "tag": "Höchstpunktzahl",
         "notes": "Der bislang schnellste getestete SBC (Polaris-Ergebnis 296), was vor allem auf seine CPU zurückzuführen ist. Qualcomm QCS6490 (Octa-Core-Kryo: 1x 2,7 GHz + 3x 2,4 GHz + 4x 1,9 GHz), LPDDR5. Polaris lässt hier nur die CPU laufen: Die Adreno 643-GPU ist ein Nettoverlust und die Hexagon-NPU wird nicht genutzt (der KI-Pfad ist Rockchip-spezifisch), daher laufen die KI-Tools auf der CPU."
@@ -126,7 +126,7 @@
         "polaris": "0.97.5 (2026-07-30)",
         "size": "2.49 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
-        "note": "Verkleinertes Raw-Image (shrink). 7-Zip-Archiv: Entpacken Sie die .7z und schreiben Sie die .img mit HDD Raw Copy Tool (oder balenaEtcher / Rufus) auf den internen Speicher. Login-Passwort: polaris1234."
+        "note": "Empfohlenes Board: das beste Verhältnis von Preis und Leistungsfähigkeit. Verkleinertes Raw-Image (shrink). 7-Zip-Archiv: Entpacken Sie die .7z und schreiben Sie die .img mit HDD Raw Copy Tool (oder balenaEtcher / Rufus) auf den internen Speicher. Login-Passwort: polaris1234."
       },
       {
         "device": "Orange Pi 5 Pro",

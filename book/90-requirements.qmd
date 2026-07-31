@@ -317,7 +317,9 @@ airlock of a Mars colony.
 
 | Host | Verdict | Notes |
 | --- | --- | --- |
-| **Raspberry Pi 5 (8 GB)** | Recommended | No compromises. Live stacking plus simultaneous STUDIO jobs are fine. |
+| **Orange Pi 4 Pro (4 GB)** | Recommended | The best balance of cost and capability measured so far: a Polaris score of 180 for roughly 50 to 70 US dollars, with eight cores, LPDDR5 memory, a GPU and a 3 TOPS NPU. |
+| **Radxa Dragon Q6A (4 GB or more)** | Fastest | The highest score measured (296), on the strength of its CPU. It runs CPU-only: the Adreno GPU is a net loss and the NPU path is Rockchip-only. |
+| **Raspberry Pi 5 (8 GB)** | Great | No compromises. Live stacking plus simultaneous STUDIO jobs are fine. |
 | **Raspberry Pi 4 (4 GB / 8 GB)** | Workhorse | The default target. The PHD2 GUI embed works; client-side WebAssembly live-stack offload takes the heavy math off the Pi. |
 | **Raspberry Pi 3 (1 GB)** | Limited | The app runs, but the PHD2 GUI embed is auto-disabled (32-bit ARM gate). Host-side stacking is tight: the fixed floor alone takes about a third of the RAM, so expect Auto to choose 1:2 or 1:4, or use the client-side offload. |
 | **Raspberry Pi 2 (512 MB)** | Bare minimum | Sequencing works. Host-side live stacking is doubtful rather than confirmed: the fixed floor measured on a larger board is around 370 MB, which leaves very little for the stack itself, so use the client-side offload. STUDIO batch jobs are not realistic on the host. |

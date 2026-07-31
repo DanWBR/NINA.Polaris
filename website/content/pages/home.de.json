@@ -127,7 +127,7 @@
         "capture": "30.9 Mpx/s",
         "memory": "8.6 GB/s",
         "price": "$50-70",
-        "highlight": false
+        "highlight": true
       },
       {
         "device": "Raspberry Pi 5 Model B",
@@ -160,7 +160,7 @@
         "capture": "38.5 Mpx/s",
         "memory": "13.8 GB/s",
         "price": "$120-140",
-        "highlight": true
+        "highlight": false
       },
       {
         "device": "Core i9-13900KF + RTX 5070",
@@ -174,7 +174,7 @@
         "highlight": false
       }
     ],
-    "note": "Der Polaris-Wert ist die Kennzahl; die Spalten „Mpx/s“ geben den Live-Stack- und den Aufnahmedurchsatz an. Der Orange Pi 5 Pro wird mit aktiviertem OpenCL-GPU-Backend dargestellt (274; 227 nur CPU) und der Pi 5 in seiner besten Leistung bei aktiver Kühlung. Der Radxa Dragon Q6A ist hier der schnellste SBC und bietet das beste Preis-Leistungs-Verhältnis; er läuft rein mit der CPU (seine Adreno-GPU ist ein Nettoverlust). Die Preise sind grobe Schätzungen für das Board allein (ohne SD-Karte, Netzteil oder Gehäuse); die Core-i9-Zeile zeigt als Referenz einen kompletten Desktop-PC, keinen SBC. Der Orange Pi Zero 3 ist das Einstiegsmodell: Er zeigt, dass Polaris auf einem Board mit 1,5 GB läuft (seine Mali-G31-GPU ist ebenfalls ein Nettoverlust, daher läuft er nur mit der CPU). Vollständige Tabellen pro Gerät und Methodik finden Sie in den Benchmark-Dokumenten.",
+    "note": "Der Polaris-Wert ist die Kennzahl; die Spalten „Mpx/s“ geben den Live-Stack- und den Aufnahmedurchsatz an. Der Orange Pi 5 Pro wird mit aktiviertem OpenCL-GPU-Backend dargestellt (274; 227 nur CPU) und der Pi 5 in seiner besten Leistung bei aktiver Kühlung. Der Orange Pi 4 Pro bietet hier das beste Preis-Leistungs-Verhältnis und ist das von Polaris empfohlene Board: acht Kerne und LPDDR5 ungefähr zum Preis eines Raspberry Pi 4. Der Radxa Dragon Q6A ist der schnellste SBC hier und läuft rein mit der CPU (seine Adreno-GPU ist ein Nettoverlust). Die Preise sind grobe Schätzungen für das Board allein (ohne SD-Karte, Netzteil oder Gehäuse); die Core-i9-Zeile zeigt als Referenz einen kompletten Desktop-PC, keinen SBC. Der Orange Pi Zero 3 ist das Einstiegsmodell: Er zeigt, dass Polaris auf einem Board mit 1,5 GB läuft (seine Mali-G31-GPU ist ebenfalls ein Nettoverlust, daher läuft er nur mit der CPU). Vollständige Tabellen pro Gerät und Methodik finden Sie in den Benchmark-Dokumenten.",
     "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/benchmark.md"
   },
   "comparison": {

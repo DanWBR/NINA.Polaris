@@ -33,10 +33,13 @@ const emojiFor = (name: string): string | null => {
   return null;
 };
 
-// Map a free-text status to a colour class for the requirements table.
+// Map a free-text status to a colour class for the requirements table. The
+// status text is translated, so match the stem in every locale we ship or the
+// recommended board loses its badge everywhere except English.
+const RECOMMENDED = ['recommend', 'recomend', 'recommand', 'empfohlen'];
 const statusClass = (s: string) => {
   const t = (s || '').toLowerCase();
-  if (t.includes('recommend') || t.includes('full') || t === 'good') return 'ok';
+  if (RECOMMENDED.some((r) => t.includes(r)) || t.includes('full') || t === 'good') return 'ok';
   if (t.includes('testing') || t.includes('tbd')) return 'pending';
   if (t.includes('below') || t.includes('limit')) return 'warn';
   return '';
