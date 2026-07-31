@@ -334,12 +334,21 @@ public class AutoFocusService {
                 }
 
                 // ---- Move to the result + confirmation ----
+                // AFPHASE: these last two steps are seconds of real work with
+                // nothing to show for them, and until they were named the panel
+                // sat on "Refining 10/10" while the focuser drove back to the
+                // vertex (a backlash move is TWO moves) and the camera took the
+                // confirmation frame. A progress bar that stops moving is read
+                // as a hang, so say what is happening instead.
+                Progress = Progress with { Phase = "moving", CurrentPosition = bestPosition };
                 await MoveWithBacklashAsync(focuser, bestPosition, o, backlash, ct);
                 int finalPosition = focuser.Focuser_ReadCurrentSafely();
+                Progress = Progress with { CurrentPosition = finalPosition };
 
                 double? finalHfr = null;
                 int? finalStars = null;
                 if (o.TakeConfirmationFrame) {
+                    Progress = Progress with { Phase = "confirming" };
                     var (m, s, stars) = await MeasurePointFramesAsync(camera, source, o, tracker, ct);
                     finalHfr = m;
                     finalStars = stars;

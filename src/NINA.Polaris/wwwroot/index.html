@@ -2973,6 +2973,15 @@
                              focuser barely moves reads as a stall. -->
                         <span x-show="autoFocus.state === 'running' && autoFocus.phase === 'refining'"
                               class="status-indicator-sm af-phase">Refining</span>
+                        <!-- AFPHASE: the tail of a run. The focuser drives back to
+                             the vertex (a backlash move is TWO moves) and the camera
+                             takes the confirmation frame: several seconds in which
+                             the samples counter and the curve both stand still, so
+                             the panel looked hung right at the finish line. -->
+                        <span x-show="autoFocus.state === 'running' && autoFocus.phase === 'moving'"
+                              class="status-indicator-sm af-phase">Moving to best focus</span>
+                        <span x-show="autoFocus.state === 'running' && autoFocus.phase === 'confirming'"
+                              class="status-indicator-sm af-phase">Confirming</span>
                     </div>
                     <div class="af-params">
                         <!-- What a night actually needs: how long to expose, and how
@@ -19787,7 +19796,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260731-edpan"></script>
+    <script src="/js/app.js?v=20260731-afphase"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
