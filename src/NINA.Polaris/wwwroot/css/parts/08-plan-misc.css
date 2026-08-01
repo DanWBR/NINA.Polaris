@@ -1093,3 +1093,32 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     .mosaic-summary { flex-direction: column; align-items: stretch; }
     .mosaic-grid-preview { width: 100%; height: 96px; }
 }
+
+/* ---- STORAGE-1: capture-disk suggestion (HOME) ---------------------
+   Sits between the status cards and Get Started: visible on arrival, easy to
+   dismiss, and never in the way of anything. Amber rather than red, because
+   this is advice about a future problem, not a fault. */
+.home-storage { margin: 12px 0 4px; }
+.storage-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: rgba(217, 140, 0, 0.08);
+    border: 1px solid rgba(217, 140, 0, 0.35);
+    border-left: 3px solid var(--warn, #d98c00);
+    border-radius: 10px;
+    flex-wrap: wrap;
+}
+.storage-icon { font-size: 22px; line-height: 1; }
+.storage-text { flex: 1 1 260px; min-width: 220px; }
+.storage-text strong { display: block; font-size: 14px; }
+.storage-text p { margin: 2px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+.storage-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.storage-move { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+.storage-err { margin: 6px 2px 0; font-size: 12px; color: var(--danger, #e66); }

@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260731-edpan">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260731-wave">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260714-overlayfix">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260731-storage">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260730-nudgerow">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260728-slimaddr">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -907,6 +907,40 @@
                         <strong x-text="connectionLost ? 'Reconnecting…' : 'Online'"></strong>
                         <span class="home-status-sub" x-show="activeRig" x-text="'Rig: ' + activeRig"></span>
                     </div>
+                </section>
+
+                <!-- STORAGE-1: a data disk is plugged in and the captures are
+                     still going to the card the system boots from. That is the
+                     arrangement that filled a 57 GB root in 40 seconds of
+                     planetary video, so it earns one dismissible card, and
+                     deliberately NOT a dialog on connect: nobody wants a disk
+                     prompt when they open the tablet mid-session. -->
+                <section class="home-storage" x-show="storage.suggest" x-cloak>
+                    <div class="storage-card">
+                        <span class="storage-icon" aria-hidden="true">💽</span>
+                        <div class="storage-text">
+                            <strong>Put your captures on the SSD</strong>
+                            <p x-text="storageSuggestText()"></p>
+                        </div>
+                        <div class="storage-actions">
+                            <select x-model="storage.pick" class="input-sm">
+                                <template x-for="c in storage.candidates" :key="c.uuid">
+                                    <option :value="c.uuid" x-text="storageLabel(c)"></option>
+                                </template>
+                            </select>
+                            <label class="storage-move"
+                                   title="Copies what is already in the current capture folder. The originals are kept.">
+                                <input type="checkbox" x-model="storage.moveExisting"> Copy existing
+                            </label>
+                            <button class="btn btn-sm btn-primary" :disabled="storage.busy || !storage.pick"
+                                    @click="storageUse()">
+                                <span x-text="storage.busy ? 'Setting up…' : 'Use this disk'"></span>
+                            </button>
+                            <button class="btn btn-sm" :disabled="storage.busy"
+                                    @click="storageDismiss()">Not now</button>
+                        </div>
+                    </div>
+                    <p class="storage-err" x-show="storage.error" x-text="storage.error"></p>
                 </section>
 
                 <!-- Quick actions -->
@@ -19920,7 +19954,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260731-wave"></script>
+    <script src="/js/app.js?v=20260731-storage"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

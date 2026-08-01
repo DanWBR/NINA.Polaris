@@ -1,0 +1,22 @@
+[Unit]
+# On-demand unit that mounts a data disk for Polaris captures and adds the
+# fstab entry so the mount survives a reboot. Not enabled and not WantedBy
+# anything: StorageSetupService starts it explicitly with
+# `systemctl start polaris-storage-prep.service`, which the polaris user may do
+# without a password through the same manage-units PolicyKit rule the
+# self-update and the solver-database install already use.
+#
+# The script is NON-DESTRUCTIVE: it mounts an existing filesystem and never
+# partitions, formats or erases. Only the mount, the fstab write and the
+# ownership of the capture directory need root.
+Description=N.I.N.A. Polaris capture storage setup
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/polaris/bin/polaris-storage-prep.sh
+RemainAfterExit=no
+# Mounting is quick, but a spun-down or slow-to-enumerate USB enclosure can
+# take a while to appear; the default 90 s is enough and the script's own
+# device-timeout keeps boot from hanging later.
+TimeoutStartSec=120

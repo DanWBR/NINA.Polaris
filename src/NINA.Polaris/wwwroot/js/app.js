@@ -3376,6 +3376,14 @@ function ninaApp() {
             exclusionRadius: 9, stage: '', error: '',
         },
 
+        // STORAGE-1: capture-disk suggestion. `suggest` is only true when a
+        // usable data disk exists AND the captures are still on the boot disk,
+        // and the operator can silence it per disk.
+        storage: {
+            suggest: false, busy: false, error: '',
+            candidates: [], pick: '', moveExisting: false, captureRoot: ''
+        },
+
         // WAVE-3: per-layer wavelets. Five layers is what planetary work uses
         // in practice (the sixth is already the disc, not detail), and every
         // gain starts neutral so opening the panel changes nothing until the
@@ -4491,6 +4499,8 @@ function ninaApp() {
             this.connectImageWs();
             this._startWsCertWatch();
             this._linkStart();
+            // STORAGE-1: one survey per session, after the profile is known.
+            setTimeout(() => this.storageSurvey(), 2500);
             this.loadSettingsFromServer();
             this.loadDitherSettings();
             this.loadMfSettings();
@@ -33005,6 +33015,90 @@ function ninaApp() {
         // pairs: [{ src, out, label }]; index picks which pair to show.
 
         // ── Star colour repair (SVBony debayer fringe) ──────────────────
+        // ---- STORAGE-1: capture disk ----
+
+        // Asked once per session, at boot, and only acted on when BOTH halves
+        // are true: a data disk is present and the captures are still on the
+        // disk the system boots from. Anything less and the card would be
+        // noise on a host that is already set up correctly.
+        async storageSurvey() {
+            try {
+                const s = await this.apiGet('/api/storage/survey');
+                if (!s || !s.supported) return;
+                this.storage.captureRoot = s.captureRoot || '';
+                const usable = (s.candidates || []).filter(c => c.uuid);
+                this.storage.candidates = usable;
+                const dismissed = this._storageDismissed();
+                const fresh = usable.filter(c => !dismissed.includes(c.uuid));
+                this.storage.pick = fresh.length ? fresh[0].uuid : '';
+                this.storage.suggest = s.captureRootOnBootDisk && fresh.length > 0;
+            } catch (e) { /* a host that cannot answer simply gets no card */ }
+        },
+
+        _storageDismissed() {
+            try { return JSON.parse(localStorage.getItem('polaris.storage.dismissed') || '[]'); }
+            catch (e) { return []; }
+        },
+
+        // Silence per DISK, not globally: plugging in a different SSD next
+        // month is a new question, and answering "not now" today should not
+        // hide it forever.
+        storageDismiss() {
+            try {
+                const d = this._storageDismissed();
+                for (const c of this.storage.candidates) if (!d.includes(c.uuid)) d.push(c.uuid);
+                localStorage.setItem('polaris.storage.dismissed', JSON.stringify(d));
+            } catch (e) {}
+            this.storage.suggest = false;
+        },
+
+        storageLabel(c) {
+            const gb = c.sizeBytes > 0 ? (c.sizeBytes / 1e9).toFixed(0) + ' GB' : '';
+            const bits = [c.model || c.device, gb, c.fsType].filter(Boolean);
+            if (c.label) bits.push('"' + c.label + '"');
+            return bits.join(' · ');
+        },
+
+        storageSuggestText() {
+            return this._t('Captures are going to {root}, which is on the disk the system boots '
+                         + 'from. Filling it takes the whole host down, not just the recording.',
+                         { root: this.storage.captureRoot || 'the system disk' });
+        },
+
+        async storageUse() {
+            if (!this.storage.pick || this.storage.busy) return;
+            const c = this.storage.candidates.find(x => x.uuid === this.storage.pick);
+            const ok = await this._confirmAsync(
+                this._t('Polaris will mount {disk} and save new captures there. Nothing is '
+                        + 'formatted and nothing already on the disk is touched.',
+                        { disk: c ? this.storageLabel(c) : this.storage.pick }),
+                { title: this._t('Use this disk for captures?'), okLabel: this._t('Set it up') });
+            if (!ok) return;
+
+            this.storage.busy = true;
+            this.storage.error = '';
+            try {
+                const r = await this.apiFetch('/api/storage/prepare', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        uuid: this.storage.pick,
+                        moveExisting: !!this.storage.moveExisting
+                    }),
+                    timeout: 180000
+                });
+                const j = await r.json();
+                if (!r.ok) { this.storage.error = j.error || 'Setup failed.'; return; }
+                this.storage.suggest = false;
+                this.toast(this._t('Captures now go to {dir}', { dir: j.captureDir }), 'ok', 6000);
+                try { await this.loadSettingsFromServer?.(); } catch (e) {}
+            } catch (e) {
+                this.toastFail('Disk setup failed', e);
+            } finally {
+                this.storage.busy = false;
+            }
+        },
+
         // ---- WAVE-3: wavelet layers modal ----
 
         waveOpenModal(framePath) {

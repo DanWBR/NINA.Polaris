@@ -345,6 +345,8 @@ builder.Services.AddSingleton<AutoFocusService>();
 // UPDGATE: one place that knows whether the host is mid-session, so an
 // action that restarts the process can refuse instead of finding out.
 builder.Services.AddSingleton<HostActivityService>();
+// STORAGE-1: find a data disk and move the captures onto it.
+builder.Services.AddSingleton<StorageSetupService>();
 builder.Services.AddSingleton<MeridianFlipService>();
 // Auto meridian flip during LIVE stacking (polls HA, flips when due).
 builder.Services.AddHostedService<MeridianFlipAutoLiveService>();
@@ -1339,6 +1341,8 @@ app.MapDsoThumbPackEndpoints();
 app.MapNcnnModelPackEndpoints();
 app.MapGraXpertEndpoints();
 app.MapUpdateEndpoints();
+// STORAGE-1: capture-disk survey + non-destructive mount.
+app.MapStorageEndpoints();
 app.MapCropEndpoints();
 app.MapPostProcessEndpoints();
 app.MapDeconEndpoints();
