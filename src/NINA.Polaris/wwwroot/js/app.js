@@ -4307,6 +4307,9 @@ function ninaApp() {
             });
             rangeObs.observe(document.body, { childList: true, subtree: true });
 
+            // Let a plain mouse wheel scroll the horizontal toolbars.
+            this._hscrollBind();
+
             // SWE-1: stand up the postMessage bridge to the Sky
             // sub-application iframe (/sky/index.html). The iframe
             // posts back { type: "ready" } once it's loaded; until
@@ -39141,6 +39144,29 @@ function ninaApp() {
                 o = o[p];
             }
             o[last] = value;
+        },
+
+        // The FILE TOOLS / PROCESSING TOOLS / SIRIL SCRIPTS rows scroll
+        // sideways, but a mouse wheel only produces vertical deltas, so on a
+        // desktop the only way to reach the far end was to grab the scrollbar
+        // itself. Translate a vertical wheel over one of those rows into a
+        // horizontal scroll.
+        //
+        // Only when the row can actually move: otherwise the page would stop
+        // scrolling whenever the pointer happened to pass over a toolbar. And
+        // only for a wheel that is mostly vertical, because a trackpad already
+        // sends deltaX for a sideways swipe and doubling that would overshoot.
+        _hscrollBind() {
+            document.addEventListener('wheel', (ev) => {
+                const row = ev.target?.closest?.('.files-actions-icons');
+                if (!row || row.scrollWidth <= row.clientWidth) return;
+                if (Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) return;
+                const before = row.scrollLeft;
+                row.scrollLeft += ev.deltaY;
+                // Swallow the event only if the row moved, so reaching either
+                // end hands the wheel back to the page instead of trapping it.
+                if (row.scrollLeft !== before) ev.preventDefault();
+            }, { passive: false });
         },
 
         _augmentRangeInputs() {

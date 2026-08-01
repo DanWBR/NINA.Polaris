@@ -1564,33 +1564,33 @@
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;   /* momentum scroll on iOS */
-    /* No native scrollbar, and this one is not cosmetics.
-       A horizontal scrollbar is laid out INSIDE the element but ADDS to its
-       height when the height is content-driven, as it is here. The SIRIL
-       SCRIPTS bar swaps its contents with the selection (studioScripts() ->
-       frameScripts with one file selected, folderScripts otherwise), so
-       clicking a row in the tree changes the bar's scroll width, which makes
-       the scrollbar appear or disappear, which moves everything below it by
-       the scrollbar's height.
-       That is what broke double-click and double-tap on the file tree: the
-       first click changed the selection, the list shifted a few pixels under
-       the pointer, and the second click landed on a different row. The bar
-       also gained a hit target sitting right above the first tree row.
-       Hiding it keeps the row scrollable by drag, wheel and trackpad, and its
-       height now never depends on what is selected. The affordance is not
-       lost: an overflowing row is already clipped mid-button at the edge,
-       which is the same signal every horizontally scrolling toolbar uses. */
-    scrollbar-width: none;               /* Firefox */
-    -ms-overflow-style: none;            /* old Edge */
-}
-.files-toolbars .files-actions::-webkit-scrollbar,
-.files-actions.files-scripts-toolbar::-webkit-scrollbar {
-    width: 0;
-    height: 0;
+    scrollbar-width: thin;
 }
 /* Pills keep their natural size instead of being squashed to fit. */
 .files-toolbars .files-actions > *,
 .files-actions.files-scripts-toolbar > * { flex: 0 0 auto; }
+/* Slim, unobtrusive scrollbar so the row reads as swipeable.
+   This bar was briefly hidden to stop the file list jumping between the two
+   clicks of a double-click: a horizontal scrollbar ADDS to the height of a
+   content-sized row, and the SIRIL SCRIPTS row used to swap its contents with
+   the selection, so it appeared and disappeared on every click. Hiding it
+   traded one bug for a worse one, because a vertical wheel does not scroll a
+   horizontal row on its own and the toolbars became unreachable.
+   The cause is fixed where it belongs: the scripts row now always carries the
+   same buttons, so its width no longer depends on what is selected. The bar
+   can stay, and _hscrollBind() in app.js makes a plain wheel scroll it so
+   nobody has to aim at 5 px of scrollbar. */
+.files-toolbars .files-actions::-webkit-scrollbar,
+.files-actions.files-scripts-toolbar::-webkit-scrollbar { height: 8px; }
+.files-toolbars .files-actions::-webkit-scrollbar-thumb,
+.files-actions.files-scripts-toolbar::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+    border-radius: 4px;
+}
+.files-toolbars .files-actions::-webkit-scrollbar-thumb:hover,
+.files-actions.files-scripts-toolbar::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
 
 /* files-body / files-toolbars / files-main are pure grouping wrappers:
    display:contents makes them invisible to layout on normal screens, so
