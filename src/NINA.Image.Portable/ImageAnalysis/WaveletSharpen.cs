@@ -36,12 +36,55 @@ public static class WaveletSharpen {
     /// </summary>
     public static void Apply(ushort[] data, int width, int height, int channels,
                              double detail = 0.5, double denoise = 0.0, int scales = 5) {
+        // WAVE-1: the one-knob entry point is now a preset over the per-layer
+        // engine, so the single Detail slider and a saved workflow keep
+        // behaving exactly as before while both go through one code path.
+        scales = Math.Clamp(scales, 1, 8);
+        double d0 = Math.Clamp(detail, 0.0, 1.0);
+        double dn0 = Math.Clamp(denoise, 0.0, 1.0);
+        var gains = new double[scales];
+        var denoises = new double[scales];
+        for (int j = 0; j < scales; j++) {
+            // Historical curve: finer scales get more boost, and only the two
+            // finest are denoised. Reproduced exactly, not approximated.
+            gains[j] = d0 > 0.0 ? 1.0 + d0 * Math.Exp(-j / 2.0) : 1.0;
+            denoises[j] = dn0 > 0.0 && j < 2 ? dn0 * (j == 0 ? 1.0 : 0.5) : 0.0;
+        }
+        ApplyLayers(data, width, height, channels, gains, denoises);
+    }
+
+    /// <summary>
+    /// WAVE-1: per-layer control, the way RegiStax and AstroSurface present
+    /// wavelets and the way planetary images are actually tuned.
+    ///
+    /// <para><paramref name="gains"/>[j] multiplies detail scale j, finest
+    /// first: 1.0 leaves the layer alone, above 1 sharpens, below 1 softens.
+    /// <paramref name="denoise"/>[j] soft-thresholds that layer at
+    /// <c>3 * value * sigma(layer)</c>, where sigma is the layer's own noise
+    /// estimate, so the same number means the same thing on a bright Jupiter
+    /// and a faint Saturn.</para>
+    ///
+    /// <para>Both arrays may be shorter than the decomposition (missing
+    /// entries mean "leave it alone"), which keeps the wire format forgiving
+    /// when a client sends four sliders for a six-scale transform.</para>
+    /// </summary>
+    public static void ApplyLayers(ushort[] data, int width, int height, int channels,
+                                   IReadOnlyList<double> gains,
+                                   IReadOnlyList<double>? denoise = null) {
         int ch = channels == 3 ? 3 : 1;
         long plane = (long)width * height;
-        double d = Math.Clamp(detail, 0.0, 1.0);
-        double dn = Math.Clamp(denoise, 0.0, 1.0);
-        scales = Math.Clamp(scales, 1, 8);
-        if (d <= 0.0 && dn <= 0.0) return; // identity
+        int scales = Math.Clamp(gains?.Count ?? 0, 1, 8);
+        if (gains == null || gains.Count == 0) return;
+
+        // Identity check up front: an all-1.0 gain set with no denoising must
+        // not touch a single pixel, or "reset the sliders" would still degrade
+        // the image through two float round trips.
+        bool identity = true;
+        for (int j = 0; j < scales && identity; j++) {
+            if (Math.Abs(GainAt(gains, j) - 1.0) > 1e-9) identity = false;
+            if (DenoiseAt(denoise, j) > 0) identity = false;
+        }
+        if (identity) return;
 
         const double inv = 1.0 / 65535.0;
         // Luminance plane (mono = the plane itself).
@@ -58,9 +101,12 @@ public static class WaveletSharpen {
 
         for (int j = 0; j < dec.Scales; j++) {
             var w = dec.Detail[j];
-            // Denoise: soft-threshold the two finest scales (where noise lives).
-            if (dn > 0.0 && j < 2) {
-                double t = dn * 3.0 * AtrousWavelet.NoiseSigma(w) * (j == 0 ? 1.0 : 0.5);
+            // Denoise first, then gain: thresholding after a boost would
+            // amplify the noise and only then cut it, which leaves the
+            // amplified residue behind.
+            double dn = DenoiseAt(denoise, j);
+            if (dn > 0.0) {
+                double t = 3.0 * dn * AtrousWavelet.NoiseSigma(w);
                 if (t > 0) {
                     for (int i = 0; i < w.Length; i++) {
                         double v = w[i];
@@ -69,9 +115,8 @@ public static class WaveletSharpen {
                     }
                 }
             }
-            // Sharpen: boost finer scales more (exponential emphasis).
-            if (d > 0.0) {
-                double g = 1.0 + d * Math.Exp(-j / 2.0);
+            double g = GainAt(gains, j);
+            if (Math.Abs(g - 1.0) > 1e-9) {
                 for (int i = 0; i < w.Length; i++) w[i] = (float)(w[i] * g);
             }
         }
@@ -95,4 +140,14 @@ public static class WaveletSharpen {
     }
 
     private static ushort Scale(double v) => (ushort)Math.Clamp(Math.Round(v), 0, 65535);
+
+    /// <summary>Gain for scale j; scales past the end of the array are left
+    /// alone rather than clamped to the last value, so a short array cannot
+    /// silently apply the finest layer's boost to the coarse background.
+    /// </summary>
+    private static double GainAt(IReadOnlyList<double> gains, int j) =>
+        j < gains.Count ? Math.Clamp(gains[j], 0.0, 8.0) : 1.0;
+
+    private static double DenoiseAt(IReadOnlyList<double>? denoise, int j) =>
+        denoise != null && j < denoise.Count ? Math.Clamp(denoise[j], 0.0, 1.0) : 0.0;
 }
