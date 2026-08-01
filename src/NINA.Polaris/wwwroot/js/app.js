@@ -3381,7 +3381,7 @@ function ninaApp() {
         // and the operator can silence it per disk.
         storage: {
             suggest: false, busy: false, error: '',
-            candidates: [], pick: '', moveExisting: false, captureRoot: ''
+            candidates: [], formattable: [], pick: '', moveExisting: false, captureRoot: ''
         },
 
         // WAVE-3: per-layer wavelets. Five layers is what planetary work uses
@@ -33026,13 +33026,57 @@ function ninaApp() {
                 const s = await this.apiGet('/api/storage/survey');
                 if (!s || !s.supported) return;
                 this.storage.captureRoot = s.captureRoot || '';
-                const usable = (s.candidates || []).filter(c => c.uuid);
-                this.storage.candidates = usable;
+                this.storage.candidates = (s.candidates || []).filter(c => c.uuid);
+                // STORAGE-2: a disk with nothing on it and nothing mounted. An
+                // NVMe out of its bag looks exactly like this, and the v1 had
+                // no answer for it beyond "go format it yourself".
+                this.storage.formattable = (s.formattable || []).filter(d => d.device && !d.inUse);
                 const dismissed = this._storageDismissed();
-                const fresh = usable.filter(c => !dismissed.includes(c.uuid));
-                this.storage.pick = fresh.length ? fresh[0].uuid : '';
+                const fresh = this.storageOptions().filter(o => !dismissed.includes(o.key));
+                this.storage.pick = fresh.length ? fresh[0].key : '';
                 this.storage.suggest = s.captureRootOnBootDisk && fresh.length > 0;
             } catch (e) { /* a host that cannot answer simply gets no card */ }
+        },
+
+        // One list, two kinds. A disk that already carries a filesystem is
+        // mounted as-is; a blank one has to be erased first, and the two must
+        // never be confusable in the picker, hence the prefix in the key and
+        // the wording difference in the label.
+        //
+        // A disk that already holds SOMEONE ELSE'S data is deliberately absent:
+        // it is not blank, so it is not offered here, and wiping it is not
+        // something to reach by picking the wrong line in a dropdown.
+        storageOptions() {
+            const out = [];
+            for (const c of this.storage.candidates)
+                out.push({ key: 'mount:' + c.uuid, kind: 'mount', uuid: c.uuid,
+                           text: this.storageLabel(c) });
+            for (const d of this.storage.formattable) {
+                if (!d.blank) continue;
+                out.push({
+                    key: 'format:' + d.device, kind: 'format', device: d.device,
+                    identity: d.identity, disk: d,
+                    text: this._t('{disk} (new disk, needs setting up)',
+                                  { disk: this.storageDiskLabel(d) })
+                });
+            }
+            return out;
+        },
+
+        storageDiskLabel(d) {
+            const gb = d.sizeBytes > 0 ? (d.sizeBytes / 1e9).toFixed(0) + ' GB' : '';
+            return [d.model || d.device, gb].filter(Boolean).join(' · ');
+        },
+
+        storagePicked() {
+            return this.storageOptions().find(o => o.key === this.storage.pick) || null;
+        },
+
+        storageActionLabel() {
+            const o = this.storagePicked();
+            if (this.storage.busy) return this._t('Setting up…');
+            return o && o.kind === 'format'
+                ? this._t('Set up this disk') : this._t('Use this disk');
         },
 
         _storageDismissed() {
@@ -33046,7 +33090,7 @@ function ninaApp() {
         storageDismiss() {
             try {
                 const d = this._storageDismissed();
-                for (const c of this.storage.candidates) if (!d.includes(c.uuid)) d.push(c.uuid);
+                for (const o of this.storageOptions()) if (!d.includes(o.key)) d.push(o.key);
                 localStorage.setItem('polaris.storage.dismissed', JSON.stringify(d));
             } catch (e) {}
             this.storage.suggest = false;
@@ -33067,25 +33111,42 @@ function ninaApp() {
 
         async storageUse() {
             if (!this.storage.pick || this.storage.busy) return;
-            const c = this.storage.candidates.find(x => x.uuid === this.storage.pick);
-            const ok = await this._confirmAsync(
-                this._t('Polaris will mount {disk} and save new captures there. Nothing is '
-                        + 'formatted and nothing already on the disk is touched.',
-                        { disk: c ? this.storageLabel(c) : this.storage.pick }),
-                { title: this._t('Use this disk for captures?'), okLabel: this._t('Set it up') });
-            if (!ok) return;
+            const o = this.storagePicked();
+            if (!o) return;
+
+            let url, body;
+            if (o.kind === 'format') {
+                if (!await this._storageConfirmErase(o)) return;
+                url = '/api/storage/format';
+                // The identity the survey reported for this disk goes back with
+                // the request; the host re-reads it and refuses if the disk at
+                // this slot is no longer the one that was confirmed.
+                body = { device: o.device, identity: o.identity, confirm: 'ERASE',
+                         moveExisting: !!this.storage.moveExisting };
+            } else {
+                const ok = await this._confirmAsync(
+                    this._t('Polaris will mount {disk} and save new captures there. Nothing is '
+                            + 'formatted and nothing already on the disk is touched.',
+                            { disk: o.text }),
+                    { title: this._t('Use this disk for captures?'), okLabel: this._t('Set it up') });
+                if (!ok) return;
+                url = '/api/storage/prepare';
+                body = { uuid: o.uuid, moveExisting: !!this.storage.moveExisting };
+            }
 
             this.storage.busy = true;
             this.storage.error = '';
             try {
-                const r = await this.apiFetch('/api/storage/prepare', {
+                const r = await this.apiFetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        uuid: this.storage.pick,
-                        moveExisting: !!this.storage.moveExisting
-                    }),
-                    timeout: 180000
+                    body: JSON.stringify(body),
+                    // Formatting a large disk partitions, makes a filesystem
+                    // and mounts it. lazy_itable_init keeps that in seconds
+                    // rather than minutes, but the budget is generous because
+                    // the alternative is a client timeout on top of a disk
+                    // that is halfway through being set up.
+                    timeout: o.kind === 'format' ? 600000 : 180000
                 });
                 const j = await r.json();
                 if (!r.ok) { this.storage.error = j.error || 'Setup failed.'; return; }
@@ -33097,6 +33158,31 @@ function ninaApp() {
             } finally {
                 this.storage.busy = false;
             }
+        },
+
+        // Erasing a disk gets its own confirmation, and it says the disk's name,
+        // its size and what is on it rather than asking for trust. A disk the
+        // survey found empty needs one question; anything else needs a second
+        // one that names what disappears, because "it looked blank" is exactly
+        // the mistake this is here to prevent.
+        async _storageConfirmErase(o) {
+            const d = o.disk || {};
+            const ok = await this._confirmAsync(
+                this._t('Polaris will erase {disk} completely, put a fresh filesystem on it and '
+                        + 'save new captures there. This cannot be undone.',
+                        { disk: this.storageDiskLabel(d) }),
+                { title: this._t('Erase and set up this disk?'),
+                  okLabel: this._t('Erase the disk'), danger: true });
+            if (!ok) return false;
+
+            if (d.contents) {
+                return await this._confirmAsync(
+                    this._t('{disk} currently holds: {contents}. All of it will be lost.',
+                            { disk: this.storageDiskLabel(d), contents: d.contents }),
+                    { title: this._t('This disk is not empty'),
+                      okLabel: this._t('Erase it anyway'), danger: true });
+            }
+            return true;
         },
 
         // ---- WAVE-3: wavelet layers modal ----

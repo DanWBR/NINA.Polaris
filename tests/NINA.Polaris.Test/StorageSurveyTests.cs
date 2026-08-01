@@ -84,4 +84,50 @@ public class StorageSurveyTests {
         Assert.That(StorageSetupService.ParseSize("931,5G"),
             Is.EqualTo(StorageSetupService.ParseSize("931.5G")));
     }
+
+    /// <summary>lsblk -b reports plain byte counts. The format guard compares
+    /// against this number, so the digit path has to stay exact.</summary>
+    [Test]
+    public void ParseSize_PassesPlainByteCountsThrough() {
+        Assert.That(StorageSetupService.ParseSize("1000204886016"),
+            Is.EqualTo(1000204886016L));
+    }
+
+    // ---- STORAGE-2: the guard in front of the erase ----
+
+    /// <summary>Whole disks only. A partition means the caller wants to format
+    /// something inside a partition table this tool is about to replace, and
+    /// anything else means the device string was built from something other
+    /// than the survey.</summary>
+    [TestCase("/dev/nvme0n1")]
+    [TestCase("/dev/nvme1n2")]
+    [TestCase("/dev/sda")]
+    [TestCase("/dev/sdab")]
+    [TestCase("/dev/mmcblk0")]
+    public void IsWholeDiskNode_AcceptsWholeDisks(string dev) {
+        Assert.That(StorageSetupService.IsWholeDiskNode(dev), Is.True, dev);
+    }
+
+    [TestCase("/dev/nvme0n1p1")]     // a partition
+    [TestCase("/dev/sda1")]
+    [TestCase("/dev/mmcblk0p3")]
+    [TestCase("/dev/dm-0")]          // device mapper: not ours to repartition
+    [TestCase("/dev/../dev/sda")]    // traversal
+    [TestCase("/dev/sda;rm -rf /")]  // metacharacters
+    [TestCase("/dev/sda ")]          // trailing space would split an argv
+    [TestCase("sda")]
+    [TestCase("")]
+    [TestCase("/dev/")]
+    public void IsWholeDiskNode_RefusesEverythingElse(string dev) {
+        Assert.That(StorageSetupService.IsWholeDiskNode(dev), Is.False, dev);
+    }
+
+    /// <summary>The regex is anchored at both ends. A newline would otherwise
+    /// let "$" match mid-string and smuggle a second line past the guard.
+    /// </summary>
+    [Test]
+    public void IsWholeDiskNode_RefusesAnEmbeddedNewline() {
+        Assert.That(StorageSetupService.IsWholeDiskNode("/dev/sda\n/dev/sdb"), Is.False);
+        Assert.That(StorageSetupService.IsWholeDiskNode("/dev/sda\n"), Is.False);
+    }
 }

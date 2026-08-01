@@ -347,6 +347,41 @@ builder.Services.AddSingleton<AutoFocusService>();
 builder.Services.AddSingleton<HostActivityService>();
 // STORAGE-1: find a data disk and move the captures onto it.
 builder.Services.AddSingleton<StorageSetupService>();
+// WIRE-1: a cold load is 33 HTML/CSS/JS assets, 5.18 MB uncompressed. Measured
+// on a Q6A over its onboard USB wifi, that is 10.3 s of transfer; gzip takes
+// the same bytes to 1.26 MB. Kestrel ships no compression by default, and
+// EnableForHttps defaults to FALSE, so the browser's "Accept-Encoding: br,
+// gzip" was being answered with 2.1 MB of plain text.
+//
+// Enabling it for HTTPS is what re-opens the BREACH question. It applies to a
+// response that mixes a secret with attacker-chosen input; the token here is
+// issued once by /api/auth and travels in a request header afterwards, and
+// that one path is excluded from compression below. Everything else we
+// compress is either a static asset or telemetry the caller already has.
+//
+// Optimal, not Fastest. Brotli's Fastest is quality 1 and left app.js at
+// 737 KB; Optimal is quality 4 and gets it to 538 KB for about 30 ms of CPU
+// per request here, so call it ~120 ms on the SBC. That cost is only paid on a
+// cold load: afterwards the browser revalidates with the ETag and gets a 304
+// with no body. Measured over the whole 33-asset page: 5.18 MB -> 1.24 MB.
+builder.Services.AddResponseCompression(o => {
+    o.EnableForHttps = true;
+    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+    o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+    // The default list omits application/javascript and image/svg+xml, which
+    // between them are most of the payload. Images, video, FITS and the
+    // already-Brotli'd wasm assets are deliberately absent: re-compressing
+    // them burns CPU to make them slightly bigger.
+    o.MimeTypes = new[] {
+        "text/html", "text/css", "text/plain", "text/javascript",
+        "application/javascript", "application/json", "application/manifest+json",
+        "application/xml", "text/xml", "image/svg+xml", "application/wasm"
+    };
+});
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(
+    o => o.Level = System.IO.Compression.CompressionLevel.Optimal);
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(
+    o => o.Level = System.IO.Compression.CompressionLevel.Optimal);
 builder.Services.AddSingleton<MeridianFlipService>();
 // Auto meridian flip during LIVE stacking (polls HA, flips when due).
 builder.Services.AddHostedService<MeridianFlipAutoLiveService>();
@@ -537,6 +572,17 @@ if (httpRedirect) {
         await next();
     });
 }
+
+// WIRE-1: compress before anything that writes a body, so the static handlers,
+// the reverse proxies and the API all inherit it. /api/auth is carved out: it
+// is the one response that carries a freshly minted token, and keeping it
+// uncompressed costs nothing (a few hundred bytes, once per login) while
+// leaving no BREACH argument to have. The middleware skips a response that
+// already declares a Content-Encoding, so the proxied /sky and /phd2-gui
+// bodies are not compressed twice.
+app.UseWhen(
+    ctx => !ctx.Request.Path.StartsWithSegments("/api/auth", StringComparison.OrdinalIgnoreCase),
+    b => b.UseResponseCompression());
 
 // Eagerly resolve PHD2ProfileSyncService so its constructor wires the
 // ProfileService.EquipmentProfileActivated event subscription. Without
@@ -1341,8 +1387,11 @@ app.MapDsoThumbPackEndpoints();
 app.MapNcnnModelPackEndpoints();
 app.MapGraXpertEndpoints();
 app.MapUpdateEndpoints();
-// STORAGE-1: capture-disk survey + non-destructive mount.
-app.MapStorageEndpoints();
+// STORAGE-1/2: capture-disk survey, format and mount. A SEPARATE map from
+// MapStorageEndpoints (the network-push settings, already mapped above) --
+// calling that one twice made every /api/storage/config request throw
+// AmbiguousMatchException and 500 the storage settings page.
+app.MapDataDiskEndpoints();
 app.MapCropEndpoints();
 app.MapPostProcessEndpoints();
 app.MapDeconEndpoints();

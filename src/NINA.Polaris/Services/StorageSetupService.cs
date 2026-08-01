@@ -25,17 +25,27 @@ namespace NINA.Polaris.Services;
 /// leads somewhere: an operator who has to learn fstab first will keep
 /// recording onto the system card.</para>
 ///
-/// <para>NON-DESTRUCTIVE. This service reports what is already there and can
-/// mount a filesystem that ALREADY EXISTS. It never partitions and never
-/// formats; a disk with no filesystem is reported as such and left alone. The
-/// privileged half runs in polaris-storage-prep.service, started through the
-/// same PolicyKit manage-units rule the self-update uses.</para>
+/// <para>Two paths. Mounting a filesystem that ALREADY EXISTS is
+/// non-destructive and is what a disk arriving pre-formatted gets. STORAGE-2
+/// adds the other one: partitioning and formatting a blank disk, because the
+/// v1 quietly assumed the operator could run sfdisk and mkfs from a Linux
+/// shell, and most cannot. That path ERASES A DISK, so it is gated on an
+/// explicit confirmation plus an identity check (the disk's serial, re-read at
+/// the moment of the format) and re-verified independently by the privileged
+/// script.</para>
+///
+/// <para>The privileged half runs in polaris-storage-prep.service, started
+/// through the same PolicyKit manage-units rule the self-update uses.</para>
 /// </summary>
 public class StorageSetupService {
     private const string StageDir = "/home/polaris/.cache/polaris-storage";
     private const string Unit = "polaris-storage-prep.service";
     private const string LogPath = "/tmp/polaris-storage.log";
     private const string MountPrefix = "/mnt/polaris-";
+    /// <summary>Mirrors MIN_FORMAT_BYTES in polaris-storage-prep.sh. A blank
+    /// disk below this is far likelier to be a card reader than a data disk.
+    /// </summary>
+    private const long MinFormatBytes = 8L * 1024 * 1024 * 1024;
 
     private readonly ProfileService _profiles;
     private readonly ILogger<StorageSetupService> _logger;
@@ -54,41 +64,62 @@ public class StorageSetupService {
                             long SizeBytes, string Model, string MountPoint,
                             bool Removable, bool OnBootDisk);
 
+    /// <summary>A whole disk that could be erased and set up. STORAGE-2.</summary>
+    /// <param name="Serial">the disk's own identity, and what the format
+    /// request is checked against. A device node is a position, not a disk:
+    /// /dev/sdb is a different disk after a reboot with two enclosures
+    /// plugged in.</param>
+    /// <param name="InUse">something on this disk is mounted right now</param>
+    /// <param name="Contents">what would be destroyed, in words, so the
+    /// confirmation can say it out loud instead of asking for trust</param>
+    /// <param name="Blank">no partitions and no filesystem: the ordinary case
+    /// of a brand-new SSD, and the only one we suggest unprompted</param>
+    public record FormattableDisk(string Device, string Model, string Serial,
+                                  long SizeBytes, bool Removable, bool InUse,
+                                  bool Blank, string Contents);
+
     public record Survey(bool Supported, string? Reason, string CaptureRoot,
-                         bool CaptureRootOnBootDisk, IReadOnlyList<Candidate> Candidates);
+                         bool CaptureRootOnBootDisk, IReadOnlyList<Candidate> Candidates,
+                         IReadOnlyList<FormattableDisk> Formattable);
 
     /// <summary>What is plugged in, and whether the captures are still on the
     /// system disk. The second half is what decides if there is anything worth
     /// suggesting: a host already writing to an SSD needs no card.</summary>
     public Survey Look() {
         if (!OperatingSystem.IsLinux())
-            return new(false, "Capture-disk setup is Linux only.", CaptureRoot(), false, Array.Empty<Candidate>());
+            return new(false, "Capture-disk setup is Linux only.", CaptureRoot(), false,
+                       Array.Empty<Candidate>(), Array.Empty<FormattableDisk>());
 
         var rootSrc = Run("findmnt", "-no SOURCE /").Trim();
         var bootDisk = string.IsNullOrEmpty(rootSrc) ? "" : Run("lsblk", $"-no PKNAME {rootSrc}").Trim();
         if (string.IsNullOrWhiteSpace(bootDisk))
             return new(false, "Cannot tell which disk the system runs from.", CaptureRoot(), false,
-                       Array.Empty<Candidate>());
+                       Array.Empty<Candidate>(), Array.Empty<FormattableDisk>());
+
+        // -P gives KEY="value" pairs, which survive spaces in a model name;
+        // parsing columns by position does not. -b gives SIZE in bytes, so the
+        // number that gates a format is exact rather than re-parsed from "931.5G".
+        var rows = new List<Dictionary<string, string>>();
+        foreach (var line in Run("lsblk",
+                     "-P -b -o NAME,PKNAME,TYPE,SIZE,FSTYPE,UUID,LABEL,MOUNTPOINT,RM,MODEL,SERIAL")
+                     .Split('\n')) {
+            var kv = ParsePairs(line);
+            if (kv.Count > 0) rows.Add(kv);
+        }
 
         var list = new List<Candidate>();
-        // -P gives KEY="value" pairs, which survive spaces in a model name;
-        // parsing columns by position does not.
-        foreach (var line in Run("lsblk",
-                     "-P -o NAME,PKNAME,TYPE,SIZE,FSTYPE,UUID,LABEL,MOUNTPOINT,RM,MODEL").Split('\n')) {
-            var kv = ParsePairs(line);
-            if (kv.Count == 0) continue;
+        foreach (var kv in rows) {
             if (Get(kv, "TYPE") is not ("part" or "disk")) continue;
             var fstype = Get(kv, "FSTYPE");
             var uuid = Get(kv, "UUID");
-            // No filesystem, no UUID, nothing to mount. Reported nowhere on
-            // purpose: offering to "set up" a blank disk would imply this tool
-            // can format it, and it deliberately cannot.
+            // No filesystem, no UUID, nothing to MOUNT. Such a disk is not
+            // dropped any more: it comes back below as something to format.
             if (string.IsNullOrEmpty(fstype) || string.IsNullOrEmpty(uuid)) continue;
             // Skip the system's own filesystems and anything already in use by
             // the OS: swap, EFI, and the root itself.
             if (fstype is "swap" or "vfat" && Get(kv, "MOUNTPOINT").StartsWith("/boot")) continue;
             var name = Get(kv, "NAME");
-            if (name.StartsWith("loop") || name.StartsWith("zram") || name.StartsWith("sr")) continue;
+            if (IsPseudo(name)) continue;
 
             var parent = Get(kv, "PKNAME");
             bool onBoot = parent == bootDisk || name == bootDisk;
@@ -109,8 +140,62 @@ public class StorageSetupService {
 
         var root = CaptureRoot();
         return new(true, null, root, IsOnBootDisk(root, bootDisk),
-                   list.Where(c => !c.OnBootDisk).ToList());
+                   list.Where(c => !c.OnBootDisk).ToList(),
+                   Formattable(rows, bootDisk));
     }
+
+    /// <summary>Whole disks that could be erased and set up. STORAGE-2.</summary>
+    private static List<FormattableDisk> Formattable(
+            List<Dictionary<string, string>> rows, string bootDisk) {
+        var disks = new List<FormattableDisk>();
+        foreach (var kv in rows) {
+            if (Get(kv, "TYPE") != "disk") continue;
+            var name = Get(kv, "NAME");
+            if (IsPseudo(name) || name == bootDisk) continue;
+
+            var size = ParseSize(Get(kv, "SIZE"));
+            if (size < MinFormatBytes) continue;
+
+            // Everything the kernel says lives on this disk: the disk row
+            // itself plus every partition whose PKNAME points back at it.
+            var children = rows.Where(r => Get(r, "PKNAME") == name).ToList();
+            var inUse = !string.IsNullOrEmpty(Get(kv, "MOUNTPOINT"))
+                        || children.Any(r => !string.IsNullOrEmpty(Get(r, "MOUNTPOINT")));
+            var blank = children.Count == 0 && string.IsNullOrEmpty(Get(kv, "FSTYPE"));
+
+            var parts = new List<string>();
+            if (!string.IsNullOrEmpty(Get(kv, "FSTYPE")))
+                parts.Add(Describe(Get(kv, "FSTYPE"), Get(kv, "LABEL"), ParseSize(Get(kv, "SIZE"))));
+            foreach (var ch in children)
+                parts.Add(Describe(Get(ch, "FSTYPE"), Get(ch, "LABEL"), ParseSize(Get(ch, "SIZE"))));
+
+            disks.Add(new FormattableDisk(
+                Device: "/dev/" + name,
+                Model: Get(kv, "MODEL"),
+                Serial: Get(kv, "SERIAL"),
+                SizeBytes: size,
+                Removable: Get(kv, "RM") == "1",
+                InUse: inUse,
+                Blank: blank,
+                Contents: parts.Count == 0 ? "" : string.Join(", ", parts)));
+        }
+        return disks;
+    }
+
+    private static string Describe(string fstype, string label, long size) {
+        var what = string.IsNullOrEmpty(fstype) ? "unformatted" : fstype;
+        if (!string.IsNullOrEmpty(label)) what += $" \"{label}\"";
+        return size > 0 ? $"{what} ({Human(size)})" : what;
+    }
+
+    private static string Human(long bytes) =>
+        bytes >= 1L << 40 ? $"{bytes / (double)(1L << 40):0.#} TB"
+        : bytes >= 1 << 30 ? $"{bytes / (double)(1 << 30):0.#} GB"
+        : $"{bytes / (double)(1 << 20):0.#} MB";
+
+    private static bool IsPseudo(string name) =>
+        name.StartsWith("loop") || name.StartsWith("zram") || name.StartsWith("sr")
+        || name.StartsWith("ram") || name.StartsWith("dm-");
 
     /// <summary>True when the capture root lives on the same disk the system
     /// boots from, which is the condition that makes a data disk worth
@@ -147,16 +232,73 @@ public class StorageSetupService {
         if (target.OnBootDisk) return new(false, "That filesystem is on the boot disk.", null, null, "");
 
         var mount = MountPrefix + ShortId(uuid);
+        return await StageAndRunAsync($"UUID={uuid} MOUNT={mount}", mount, moveExisting,
+            $"mounting {target.Device} (UUID={uuid}) at {mount}", ct);
+    }
+
+    /// <summary>STORAGE-2: erase a whole disk, put one ext4 filesystem on it,
+    /// and mount that as the capture disk.
+    ///
+    /// <para>The v1 could only mount a filesystem that already existed, which
+    /// assumed the operator could partition and mkfs an NVMe from a Linux
+    /// shell. That is a fair thing to expect of nobody.</para>
+    ///
+    /// <para><paramref name="serial"/> is the guard that matters. The client
+    /// echoes back the identity it was shown, and the disk at that device node
+    /// has to still be that disk. A device node is a position, not a disk: if
+    /// something was replugged between the survey and the confirmation,
+    /// /dev/sdb is now somebody else and this refuses instead of erasing
+    /// it.</para></summary>
+    public async Task<PrepareResult> FormatAsync(string device, string serial, string confirm,
+                                                 bool moveExisting, CancellationToken ct) {
+        // A sentinel, not a boolean: a truncated or replayed body cannot spell
+        // it by accident, and it reads unmistakably at the call site.
+        if (confirm != "ERASE")
+            return new(false, "This erases the disk and needs an explicit confirmation.", null, null, "");
+        if (string.IsNullOrWhiteSpace(device) || !IsWholeDiskNode(device))
+            return new(false, "That is not a whole-disk device.", null, null, "");
+
+        var survey = Look();
+        if (!survey.Supported) return new(false, survey.Reason, null, null, "");
+
+        var disk = survey.Formattable.FirstOrDefault(d => d.Device == device);
+        if (disk == null)
+            return new(false, "That disk is no longer present.", null, null, "");
+        if (disk.InUse)
+            return new(false, "Something on that disk is mounted; unmount it first.", null, null, "");
+        // Serial when the disk has one; size is the fallback for the USB
+        // bridges that report none, and is far weaker (two identical disks
+        // match), which is why it is only the fallback.
+        var expected = string.IsNullOrEmpty(disk.Serial)
+            ? disk.SizeBytes.ToString() : disk.Serial;
+        if (serial != expected)
+            return new(false, "The disk at that slot is not the one you confirmed; nothing was erased.",
+                       null, null, "");
+
+        var mount = MountPrefix + ShortId(Guid.NewGuid().ToString("N"));
+        _logger.LogWarning("Storage setup: ERASING {Dev} ({Model}, {Size} bytes, contents: {Contents})",
+            disk.Device, disk.Model, disk.SizeBytes,
+            string.IsNullOrEmpty(disk.Contents) ? "empty" : disk.Contents);
+        return await StageAndRunAsync(
+            $"ACTION=format DEV={device} MOUNT={mount} CONFIRM=ERASE", mount, moveExisting,
+            $"formatting {device} and mounting it at {mount}", ct);
+    }
+
+    /// <summary>Stage the request, run the privileged unit, and only point the
+    /// capture root at the result once the kernel confirms the mount. Shared by
+    /// both actions because the half that can go quietly wrong is the same.
+    /// </summary>
+    private async Task<PrepareResult> StageAndRunAsync(string request, string mount,
+                                                       bool moveExisting, string what,
+                                                       CancellationToken ct) {
         try {
             Directory.CreateDirectory(StageDir);
-            await File.WriteAllTextAsync(Path.Combine(StageDir, "request"),
-                $"UUID={uuid} MOUNT={mount}\n", ct);
+            await File.WriteAllTextAsync(Path.Combine(StageDir, "request"), request + "\n", ct);
         } catch (Exception ex) {
             return new(false, "Could not stage the request: " + ex.Message, null, null, "");
         }
 
-        _logger.LogWarning("Storage setup: mounting {Dev} (UUID={Uuid}) at {Mount}",
-            target.Device, uuid, mount);
+        _logger.LogWarning("Storage setup: {What}", what);
         var (started, startErr) = await StartUnitAsync(ct);
         var log = ReadLog();
         if (!started) return new(false, startErr, null, null, log);
@@ -232,6 +374,18 @@ public class StorageSetupService {
             _logger.LogWarning(ex, "Copying the existing captures failed; the originals are untouched");
         }
     }
+
+    /// <summary>A whole disk, spelled exactly: /dev/nvme0n1, /dev/sda,
+    /// /dev/mmcblk0. Not a partition (formatting a disk repartitions it), not a
+    /// path with any traversal or shell metacharacters in it. Mirrors the case
+    /// statement in polaris-storage-prep.sh; both exist because the script is
+    /// what actually holds the erase and must not trust this side.</summary>
+    /// <remarks>\A and \z, not ^ and $: in .NET "$" also matches immediately
+    /// BEFORE a trailing newline, so "/dev/sda\n" satisfies ^...$ and would
+    /// have been let through. \z is the true end of the string.</remarks>
+    internal static bool IsWholeDiskNode(string dev) =>
+        System.Text.RegularExpressions.Regex.IsMatch(
+            dev, @"\A/dev/(nvme\d+n\d+|sd[a-z]{1,2}|mmcblk\d+)\z");
 
     private static string ShortId(string uuid) =>
         new string(uuid.Where(char.IsLetterOrDigit).Take(8).ToArray()).ToLowerInvariant();
