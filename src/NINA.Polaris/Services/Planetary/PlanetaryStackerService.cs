@@ -205,23 +205,54 @@ public class PlanetaryStackerService {
             Directory.CreateDirectory(job.Config.OutputDir);
             var outName = $"{job.Config.OutputName}_{DateTime.UtcNow:yyyy-MM-ddTHH-mm-ss}.fits";
             var outPath = Path.Combine(job.Config.OutputDir, outName);
-            // Carry the SER's Bayer mosaic into the stacked FITS. The stack is
-            // still a raw CFA frame (we mean-combine the mosaic, no debayer), so
-            // downstream tools must know the pattern to debayer it — otherwise it
-            // opens as mono. The FITS writer stamps BAYERPAT from
-            // MetaData.Camera.BayerPattern, so set BOTH that and props.
+            // A colour camera has to produce a colour stack.
+            //
+            // This used to write the mean-combined MOSAIC and stamp BAYERPAT so
+            // "downstream tools can debayer it". They mostly do not: PixInsight
+            // needs an explicit Debayer process, and every tool in this app that
+            // renders or sharpens the result treated it as one grey plane. A
+            // planetary stack that opens grey out of an ASI585MC is wrong, and
+            // worse, sharpening it is wrong ARITHMETIC -- a wavelet transform
+            // over a mosaic mixes red and green samples as if they were
+            // neighbouring values of one signal.
+            //
+            // Stacking the mosaic first and debayering once at the end is the
+            // right order, and is exactly what the even-pixel shift above
+            // exists to make valid: the CFA phase is preserved through the
+            // whole stack, so a single debayer at the end sees a clean mosaic
+            // with the noise already averaged down.
             var bayer = SerColorToBayer(reader.ColorMode);
-            var imageData = new BaseImageData(stacked16,
+            ushort[] pixels = stacked16;
+            int channels = 1;
+            if (bayer != BayerPatternEnum.None) {
+                var ch = NINA.Image.ImageAnalysis.BayerDebayer.Bilinear(
+                    stacked16, reader.Width, reader.Height, bayer);
+                // FITS colour is PLANAR: the whole R plane, then G, then B.
+                int n = reader.Width * reader.Height;
+                pixels = new ushort[n * 3];
+                Array.Copy(ch.R, 0, pixels, 0, n);
+                Array.Copy(ch.G, 0, pixels, n, n);
+                Array.Copy(ch.B, 0, pixels, n * 2, n);
+                channels = 3;
+            }
+
+            var imageData = new BaseImageData(pixels,
                 new ImageProperties {
                     Width = reader.Width,
                     Height = reader.Height,
                     BitDepth = 16,
-                    IsBayered = bayer != BayerPatternEnum.None,
-                    BayerPattern = bayer
+                    Channels = channels,
+                    // The result is debayered, so it is NOT a mosaic any more.
+                    // Leaving these set would tell the next tool to debayer an
+                    // image that already is, which is how one bug becomes two.
+                    IsBayered = false,
+                    BayerPattern = BayerPatternEnum.None
                 },
                 new ImageMetaData());
             imageData.MetaData.Camera.Name = reader.Instrument;
-            imageData.MetaData.Camera.BayerPattern = bayer;
+            // Deliberately NOT MetaData.Camera.BayerPattern: FITSWriter stamps
+            // BAYERPAT from it, and a BAYERPAT on an RGB cube would make
+            // PixInsight and Siril offer to debayer it a second time.
             imageData.MetaData.Telescope.Name = reader.Telescope;
             // FITSWriter is sync; offload to thread pool so the cancellation
             // token still flows through the surrounding loop.

@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Core.Enum;
 using NINA.Image.FileFormat.FITS;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
@@ -105,6 +106,17 @@ public class WaveletService {
         return new WaveletResult(outPath, w, h, ch);
     }
 
+    /// <summary>Read the FITS, and DEBAYER it first when it is still a mosaic.
+    ///
+    /// <para>This is not only about the preview coming out grey. A wavelet
+    /// transform over a CFA mosaic treats a red sample and the green sample
+    /// beside it as neighbouring values of one signal, so "sharpen the finest
+    /// scale" sharpens the Bayer pattern itself. The result is wrong even where
+    /// it looks plausible.</para>
+    ///
+    /// <para>The planetary stacker now writes RGB directly, so this path is for
+    /// the mosaics already sitting on disk from before that, and for any CFA
+    /// frame the operator points the tool at.</para></summary>
     private static (BaseImageData src, int w, int h, int ch, ushort[] pixels) Load(string sourcePath) {
         if (string.IsNullOrWhiteSpace(sourcePath))
             throw new ArgumentException("sourcePath is required", nameof(sourcePath));
@@ -112,8 +124,32 @@ public class WaveletService {
             throw new FileNotFoundException("Source FITS not found", sourcePath);
         BaseImageData src;
         using (var fs = File.OpenRead(sourcePath)) src = FITSReader.Read(fs);
+
+        int w = src.Properties.Width, h = src.Properties.Height;
         int ch = src.Properties.Channels == 3 ? 3 : 1;
-        return (src, src.Properties.Width, src.Properties.Height, ch, (ushort[])src.Data.Clone());
+
+        var bayer = src.Properties.BayerPattern != BayerPatternEnum.None
+            ? src.Properties.BayerPattern
+            : src.MetaData.Camera.BayerPattern;
+        if (ch == 1 && bayer != BayerPatternEnum.None && bayer != BayerPatternEnum.Auto) {
+            var c = BayerDebayer.Bilinear(src.Data, w, h, bayer);
+            int n = w * h;
+            var planar = new ushort[n * 3];
+            Array.Copy(c.R, 0, planar, 0, n);
+            Array.Copy(c.G, 0, planar, n, n);
+            Array.Copy(c.B, 0, planar, n * 2, n);
+            // The properties the RESULT is written with: three channels, and no
+            // mosaic left to declare.
+            var props = new ImageProperties {
+                Width = w, Height = h, BitDepth = src.Properties.BitDepth,
+                Channels = 3, IsBayered = false, BayerPattern = BayerPatternEnum.None
+            };
+            var meta = src.MetaData;
+            meta.Camera.BayerPattern = BayerPatternEnum.None;
+            return (new BaseImageData(planar, props, meta), w, h, 3, planar);
+        }
+
+        return (src, w, h, ch, (ushort[])src.Data.Clone());
     }
 
     private static string Write(BaseImageData src, string sourcePath, ushort[] pixels,
