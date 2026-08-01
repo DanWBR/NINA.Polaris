@@ -116,8 +116,13 @@ public class VideoRecordingService : IDisposable {
             // both the native SVBony and INDI drivers). The writer is opened
             // lazily in WriterLoopAsync from the real frame size; here we only
             // settle the output path + config.
-            var target = SanitizeFolder(string.IsNullOrWhiteSpace(cfg.TargetName) ? "planet" : cfg.TargetName);
-            var baseDir = Path.Combine(_profiles.Active.ImageOutputDir, "planetary", target);
+            // PLANPATH: under the ACTIVE RIG, like every other capture output.
+            // These landed in planetary/ at the capture root, outside the
+            // per-rig tree, so two rigs dropped their clips into one folder.
+            var target = string.IsNullOrWhiteSpace(cfg.TargetName) ? "planet" : cfg.TargetName;
+            var rigName = _profiles.ActiveEquipmentProfile?.Name ?? "Default";
+            var baseDir = Path.Combine(_profiles.Active.ImageOutputDir,
+                ImageWriterService.BuildPlanetarySubDir(rigName, target));
             var path = Path.Combine(baseDir, $"{DateTime.UtcNow:yyyy-MM-ddTHH-mm-ss}.ser");
 
             // FIELD8-4: refuse before the camera starts feeding, not 40 seconds

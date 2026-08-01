@@ -580,6 +580,25 @@ public class ImageWriterService {
         return Path.Combine(rig, subPath);
     }
 
+    /// <summary>Subdirectory for planetary recordings and their stacks:
+    /// <c>{rig}/planetary/{target}</c>.
+    ///
+    /// <para>These used to be written to <c>planetary/</c> at the capture root,
+    /// outside the per-rig tree every other output uses. With two rigs the
+    /// clips from both piled into one folder, and the reason the rig is the top
+    /// level applies here as much as anywhere: a SER from a 2600MC on a
+    /// refractor has nothing to do with one from a 585MC on a Newtonian.</para>
+    ///
+    /// <para>Stacks follow for free: the stacker writes into
+    /// <c>{folder of the SER}/stacked</c>, so moving the recordings moves their
+    /// results with them.</para></summary>
+    public static string BuildPlanetarySubDir(string rigName, string? target = null) {
+        var rig = SanitizeFolder(string.IsNullOrEmpty(rigName) ? "Default" : rigName);
+        return string.IsNullOrWhiteSpace(target)
+            ? Path.Combine(rig, "planetary")
+            : Path.Combine(rig, "planetary", SanitizeFolder(target));
+    }
+
     /// <summary>Subdirectory for a user-requested stacked master:
     /// {rig}/stacked/{target}/{filter}/{session}. Kept separate from the
     /// lights/calibration trees so the integrated result is easy to find and

@@ -614,7 +614,12 @@ public class BenchmarkService {
                     if (!Monitor.TryEnter(recLock, 5)) { Interlocked.Increment(ref dropped); return; }
                     try {
                         if (recWriter == null) {
-                            var dir = Path.Combine(_profiles.Active.ImageOutputDir, "planetary");
+                            // PLANPATH: the probe measures write throughput on
+                            // the disk the real recordings go to, so it has to
+                            // sit where they now sit -- under the active rig.
+                            var dir = Path.Combine(_profiles.Active.ImageOutputDir,
+                                ImageWriterService.BuildPlanetarySubDir(
+                                    _profiles.ActiveEquipmentProfile?.Name ?? "Default"));
                             Directory.CreateDirectory(dir);
                             recPath = Path.Combine(dir, $".benchmark-probe-{Guid.NewGuid():N}.ser.tmp");
                             recWriter = new Planetary.SerFileWriter(recPath,

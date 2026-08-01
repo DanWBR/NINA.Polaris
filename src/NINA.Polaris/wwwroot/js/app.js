@@ -24755,14 +24755,19 @@ function ninaApp() {
         // via the FileBrowserService API and offers them in the dropdown.
         async loadVideoSerList() {
             try {
-                // Authoritative server-side recursive listing of *.ser under
-                // {ImageOutputDir}/planetary. The old path used the generic
-                // /api/files/list (non-recursive + different field names), so it
-                // never saw the recordings nested in planetary/<target>/.
+                // Authoritative server-side recursive listing of *.ser. The old
+                // path used the generic /api/files/list (non-recursive +
+                // different field names), so it never saw the recordings nested
+                // under <target>/.
                 const r = await this.apiGet('/api/video/recordings');
                 this.video.serList = (r.recordings || []).map(e => ({
                     path: e.path,
-                    label: (e.target ? e.target + '/' : '') + e.name
+                    // PLANPATH: recordings now live per rig, and the list spans
+                    // every rig plus the legacy flat folder. Naming the rig is
+                    // what stops two clips of "Jupiter" from different scopes
+                    // reading as the same entry.
+                    label: (e.rig ? e.rig + ' · ' : '')
+                         + (e.target ? e.target + '/' : '') + e.name
                          + ' (' + ((e.sizeBytes / 1048576) | 0) + ' MB)'
                 }));
             } catch (e) {

@@ -64,23 +64,51 @@ public static class VideoEndpoints {
 
         // ----- Recorded files (process picker) -----
 
-        // List every *.ser recording under {ImageOutputDir}/planetary, newest
-        // first. Authoritative + recursive: the generic /api/files/list is
-        // non-recursive and the recordings live one level down in
-        // planetary/<target>/, so the old client-side walk found nothing.
+        // List every *.ser recording, newest first. Authoritative + recursive:
+        // the generic /api/files/list is non-recursive and the recordings live
+        // a couple of levels down, so a client-side walk finds nothing.
+        //
+        // PLANPATH: two kinds of root. New clips go to
+        // {ImageOutputDir}/{rig}/planetary; before that they all went to
+        // {ImageOutputDir}/planetary, flat across every rig. The legacy root is
+        // still scanned, so a season of existing recordings does not vanish
+        // from the picker the moment the host updates. Nothing is moved --
+        // that is the operator's data, and tens of gigabytes of it.
         group.MapGet("/recordings", (ProfileService profiles) => {
-            var root = Path.Combine(profiles.Active.ImageOutputDir ?? "", "planetary");
-            if (string.IsNullOrWhiteSpace(profiles.Active.ImageOutputDir) || !Directory.Exists(root))
+            var outDir = profiles.Active.ImageOutputDir;
+            if (string.IsNullOrWhiteSpace(outDir) || !Directory.Exists(outDir))
                 return Results.Ok(new { recordings = Array.Empty<object>() });
+
+            var roots = new List<string>();
             try {
-                var recordings = Directory
-                    .EnumerateFiles(root, "*.ser", SearchOption.AllDirectories)
+                // Every rig, not only the active one: switching rigs must not
+                // hide the clips recorded last night.
+                foreach (var rigDir in Directory.EnumerateDirectories(outDir)) {
+                    var p = Path.Combine(rigDir, "planetary");
+                    if (Directory.Exists(p)) roots.Add(p);
+                }
+            } catch { /* an unreadable capture root simply yields the legacy one */ }
+            var legacy = Path.Combine(outDir, "planetary");
+            if (Directory.Exists(legacy)) roots.Add(legacy);
+            if (roots.Count == 0)
+                return Results.Ok(new { recordings = Array.Empty<object>() });
+
+            try {
+                var recordings = roots
+                    .SelectMany(r => Directory.EnumerateFiles(r, "*.ser", SearchOption.AllDirectories))
+                    // A rig folder literally named "planetary" would otherwise
+                    // be walked twice, as a rig root and as the legacy one.
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Select(p => new FileInfo(p))
                     .OrderByDescending(fi => fi.LastWriteTimeUtc)
                     .Select(fi => new {
                         path = fi.FullName,
                         name = fi.Name,
                         target = fi.Directory?.Name ?? "",
+                        // Which rig a clip belongs to, so the picker can tell
+                        // two identically named targets apart. Empty for the
+                        // legacy tree, which predates the distinction.
+                        rig = RigOfRecording(outDir, fi.FullName),
                         sizeBytes = fi.Length,
                         modifiedUtc = fi.LastWriteTimeUtc
                     })
@@ -140,6 +168,27 @@ public static class VideoEndpoints {
             stacker.Abort(jobId);
             return Results.Ok(new { aborted = true });
         });
+    }
+
+    /// <summary>The rig a recording sits under, read back from its path:
+    /// {ImageOutputDir}/{rig}/planetary/... . Returns "" for a clip in the
+    /// legacy {ImageOutputDir}/planetary tree, which predates per-rig folders
+    /// and genuinely does not know which rig shot it.</summary>
+    private static string RigOfRecording(string outDir, string filePath) {
+        try {
+            var rel = Path.GetRelativePath(outDir, filePath);
+            var parts = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            // The SECOND segment is what tells the two layouts apart, and it is
+            // the only thing that does. New: {rig}/planetary/{target}/x.ser.
+            // Legacy: planetary/{target}/x.ser, where segment 1 is the target.
+            // Testing segment 0 instead would misread a rig that happens to be
+            // named "planetary" as a legacy clip.
+            if (parts.Length >= 3
+                && parts[1].Equals("planetary", StringComparison.OrdinalIgnoreCase)) {
+                return parts[0];
+            }
+        } catch { /* a path outside the capture root has no rig to report */ }
+        return "";
     }
 
     public record RecordStartRequest(
