@@ -37879,8 +37879,29 @@ function ninaApp() {
         _updProgStop() {
             if (this._updProgTimer) { clearInterval(this._updProgTimer); this._updProgTimer = null; }
         },
-        async installUpdate() {
+        // UPDGATE: ask what a restart would interrupt BEFORE committing.
+        // Installing restarts the service, and on 2026-07-31 that happened
+        // mid-session: a minute of imaging gone, and from the tablet it looked
+        // like the board had rebooted. The server refuses with 409 either way;
+        // asking first turns a failed press into an informed decision.
+        async installUpdate(force = false) {
             if (this.update.installing) return;
+            if (!force) {
+                let busy = null;
+                try {
+                    const act = await this.apiGet('/api/update/activity');
+                    if (act && act.busy) busy = act.description || 'a running session';
+                } catch (e) { /* if we cannot ask, fall through to the server gate */ }
+                if (busy) {
+                    const go = await this._confirmAsync(
+                        this._t('Installing restarts Polaris, which stops {what}. '
+                                + 'Frames already written to disk are safe.', { what: busy }),
+                        { title: this._t('Update now and interrupt the session?'),
+                          okLabel: this._t('Update anyway'), danger: true });
+                    if (!go) return;
+                    return this.installUpdate(true);
+                }
+            }
             this.update.error = '';
             this.update.installing = true;
             this.update.progress = 'Downloading and installing the new package…';
@@ -37891,7 +37912,9 @@ function ninaApp() {
                 // timeout — that abort was cancelling the install mid-download
                 // ("signal is aborted without reason" / server TaskCanceled).
                 // Allow up to 10 min, matching the server's download timeout.
-                const r = await this.apiFetch('/api/update/install',
+                // force: the confirm above already asked. Without it the server
+                // gate would reject the very install the operator just approved.
+                const r = await this.apiFetch('/api/update/install?force=true',
                     { method: 'POST', timeout: 600000 });
                 if (!r.ok) {
                     let msg = 'Install failed.';

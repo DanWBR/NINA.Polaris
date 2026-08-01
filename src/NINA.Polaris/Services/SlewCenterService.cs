@@ -419,6 +419,30 @@ public class SlewCenterService {
                         i + 1, solveResult.Error);
                     job.Error = "Solve failed: " + solveResult.Error;
 
+                    // SOLVEXP: a solve that found too few stars is not a solver
+                    // problem, it is an exposure problem, and the operator has
+                    // no way to know that from here. The field case (2026-07-31,
+                    // SV503 + ASI585MC, a 0.50 degree field): Slew and Center
+                    // captured at the rig's 5 s while the PREVIEW tab solved a
+                    // 60 s LIVE sub of the SAME sky and succeeded. Same solver,
+                    // same field, twelve times the signal.
+                    //
+                    // So: before spending another iteration on an identical
+                    // frame, double the exposure. Doubling is the right step
+                    // because star COUNT grows roughly with the limiting
+                    // magnitude, not linearly with time, so 5 -> 10 -> 20 s
+                    // walks a long way in three tries.
+                    if (LooksStarStarved(solveResult.Error) && solveExposure < MaxSolveExposureSec) {
+                        double next = Math.Min(MaxSolveExposureSec, solveExposure * 2);
+                        _logger.LogInformation(
+                            "Solve found too few stars at {Old}s; retrying at {New}s",
+                            solveExposure, next);
+                        _progress?.Append(
+                            $"-- too few stars at {solveExposure:0.#}s, retrying at {next:0.#}s --");
+                        solveExposure = next;
+                        job.Error = null;   // not a failure yet, an adjustment
+                    }
+
                     if (i == maxIterations - 1) {
                         job.State = SlewCenterState.Failed;
                         return;
@@ -603,6 +627,27 @@ public class SlewCenterService {
             rig.Name, previous, derived, pixelSizeUm, scaleArcsecPerPx);
     }
 
+
+    /// <summary>SOLVEXP: ceiling for the auto-grown solve exposure. Past half a
+    /// minute an unguided mount's drift starts trailing the stars, which costs
+    /// more detections than the extra photons buy, and the operator is
+    /// waiting.</summary>
+    private const double MaxSolveExposureSec = 30.0;
+
+    /// <summary>Did the solver fail for want of STARS rather than for want of a
+    /// solution? ASTAP says so in words ("Only 0 stars found in image", "not
+    /// enough stars"). Matching on the text is unlovely, but it is the only
+    /// channel the solvers give us, and being wrong here costs one retry at a
+    /// longer exposure, never a wrong answer.</summary>
+    private static bool LooksStarStarved(string? error) {
+        if (string.IsNullOrWhiteSpace(error)) return false;
+        var e = error.ToLowerInvariant();
+        return e.Contains("stars found")
+            || e.Contains("not enough stars")
+            || e.Contains("too few stars")
+            || e.Contains("no stars")
+            || e.Contains("insufficient stars");
+    }
 
     private static double AngularSeparationArcsec(double ra1Hours, double dec1Deg,
         double ra2Hours, double dec2Deg) {

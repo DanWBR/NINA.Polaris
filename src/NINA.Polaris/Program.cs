@@ -342,6 +342,9 @@ builder.Services.AddHostedService(sp =>
 // the pixel stream and indi-web can use for live driver state.
 builder.Services.AddHttpForwarder();
 builder.Services.AddSingleton<AutoFocusService>();
+// UPDGATE: one place that knows whether the host is mid-session, so an
+// action that restarts the process can refuse instead of finding out.
+builder.Services.AddSingleton<HostActivityService>();
 builder.Services.AddSingleton<MeridianFlipService>();
 // Auto meridian flip during LIVE stacking (polls HA, flips when due).
 builder.Services.AddHostedService<MeridianFlipAutoLiveService>();

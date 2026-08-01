@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Polaris.Services;
 using NINA.Polaris.Services.External;
 
 namespace NINA.Polaris.Endpoints;
@@ -32,7 +33,21 @@ public static class UpdateEndpoints {
         // is authorized to start passwordless (PolicyKit). Returns 200 once the
         // install has been launched (the service then restarts and the client
         // polls /api/system/status for the new version), 400 on a setup problem.
-        group.MapPost("/install", async (UpdateService svc, CancellationToken ct) => {
+        // UPDGATE: installing RESTARTS the service. On 2026-07-31 that happened
+        // mid-session (journal: "install unit started" 20:38:38, service down
+        // until 20:39:46) and the operator read the gap as the board having
+        // rebooted. Refuse while something is running, say what, and let a
+        // deliberate force=true through for the operator who means it.
+        group.MapPost("/install", async (UpdateService svc, HostActivityService activity,
+                                         bool? force, CancellationToken ct) => {
+            var busy = activity.Current();
+            if (busy.Count > 0 && force != true) {
+                return Results.Conflict(new {
+                    error = "Updating restarts Polaris and would interrupt " + activity.Describe() + ".",
+                    running = busy,
+                    hint = "Stop it first, or repeat with force=true to update anyway."
+                });
+            }
             var (ok, error) = await svc.InstallAsync(ct);
             return ok
                 ? Results.Ok(new { started = true })
@@ -48,7 +63,19 @@ public static class UpdateEndpoints {
         // Install (or roll back to) a SPECIFIC release by tag. The asset URL is
         // resolved server-side from the releases list, never taken from the
         // caller. No "must be newer" gate — apt runs with --allow-downgrades.
-        group.MapPost("/install-version", async (UpdateService svc, InstallVersionRequest req, CancellationToken ct) => {
+        group.MapPost("/install-version", async (UpdateService svc, HostActivityService activity,
+                                                InstallVersionRequest req, bool? force,
+                                                CancellationToken ct) => {
+            // Same restart, same gate: a rollback mid-session costs exactly as
+            // much as an upgrade mid-session.
+            var busyNow = activity.Current();
+            if (busyNow.Count > 0 && force != true) {
+                return Results.Conflict(new {
+                    error = "Installing restarts Polaris and would interrupt " + activity.Describe() + ".",
+                    running = busyNow,
+                    hint = "Stop it first, or repeat with force=true to install anyway."
+                });
+            }
             var (ok, error) = await svc.InstallVersionAsync(req?.Tag ?? "", ct);
             return ok
                 ? Results.Ok(new { started = true })
