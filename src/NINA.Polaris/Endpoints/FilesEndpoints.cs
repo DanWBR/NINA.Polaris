@@ -14,6 +14,7 @@
 
 using System.Text;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using NINA.Core.Enum;
 using NINA.Polaris.Services;
 using NINA.Polaris.Services.Studio;
@@ -197,6 +198,25 @@ public static class FilesEndpoints {
                 var fileName = (req.FileName ?? "polaris-files.zip");
                 ctx.Response.ContentType = "application/zip";
                 ctx.Response.Headers.ContentDisposition = $"attachment; filename=\"{fileName}\"";
+
+                // ZipArchive writes the per-entry data descriptors and the
+                // central directory SYNCHRONOUSLY, from Dispose, and the type
+                // offers no async path for either. Kestrel refuses sync writes
+                // by default, so the archive's own structure could never reach
+                // the client: the browser got HTTP 200, a body that stopped
+                // after the last entry's data, and "network error", while the
+                // server logged InvalidOperationException out of
+                // ZipArchive.Dispose. Every zip download was a broken file.
+                //
+                // Allowing it for THIS request is the narrow fix. File contents
+                // still stream through CopyToAsync; what turns synchronous is a
+                // few hundred bytes of bookkeeping per entry, so the
+                // thread-pool argument against sync IO hardly applies here. The
+                // alternative -- buffer the archive, then send it -- would put a
+                // multi-GB FITS selection in RAM on an SBC.
+                var bodyControl = ctx.Features.Get<IHttpBodyControlFeature>();
+                if (bodyControl != null) bodyControl.AllowSynchronousIO = true;
+
                 await svc.WriteZipAsync(req.Paths, ctx.Response.Body, req.RootForNames, ct);
                 return Results.Empty;
             } catch (UnauthorizedAccessException ex) {

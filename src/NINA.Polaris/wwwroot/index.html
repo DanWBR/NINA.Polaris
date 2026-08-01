@@ -47,9 +47,9 @@
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260728-slimaddr2">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260731-videonudge">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260731-edpan">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260731-wave">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260801-viewfilt">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260801-indiauto">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260801-viewfilt">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260730-nudgerow">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260728-slimaddr">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -12345,6 +12345,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     style="min-width:52px"></button>
                             <button class="btn btn-sm" @click="editorZoomIn()"
                                     title="Zoom in">+</button>
+                            <!-- VIEWFILT: how a magnified image is resampled on
+                                 screen. Display only: it never changes a pixel
+                                 that gets saved or exported. -->
+                            <select class="input-sm view-filter-select"
+                                    :value="viewFilter"
+                                    @change="setViewFilter($event.target.value)"
+                                    title="How the image is resampled when zoomed in. Affects the view only, never the saved file.">
+                                <option value="nearest">Nearest (real pixels)</option>
+                                <option value="smooth">Smooth</option>
+                                <option value="lanczos">Lanczos (sharpest)</option>
+                            </select>
                             <button class="btn btn-sm"
                                     @mousedown="editorState.showOriginal = true"
                                     @mouseup="editorState.showOriginal = false"
@@ -12390,9 +12401,21 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                  identically for <img> and <canvas>. -->
                             <div class="editor-preview-stage"
                                  :style="'transform: translate(' + editorState.panX + 'px,' + editorState.panY + 'px) scale(' + editorState.zoom + ')'">
+                                <!-- VIEWFILT: the Lanczos layer. Sits on top of
+                                     whichever layer below is current, with a
+                                     backing store already resampled to zoom x
+                                     the source, so the stage transform is
+                                     scaling pixels that were filtered properly
+                                     instead of magnifying the source. Only up
+                                     while lanczosActive: during a zoom or pan
+                                     the fast layers show through. -->
+                                <canvas id="editorLanczosCanvas" class="editor-preview-img"
+                                        :style="'image-rendering:' + viewFilterCss()"
+                                        x-show="editorState.lanczosActive"></canvas>
                                 <!-- Server-mode: <img> bound to a JPEG blob URL. -->
                                 <img class="editor-preview-img" :src="editorState.previewUrl"
-                                     x-show="editorState.computeMode !== 'wasm' && editorState.previewUrl && !editorState.showOriginal"
+                                     :style="'image-rendering:' + viewFilterCss()"
+                                     x-show="editorState.computeMode !== 'wasm' && editorState.previewUrl && !editorState.showOriginal && !editorState.lanczosActive"
                                      alt="preview" draggable="false">
                                 <!-- WASM-mode: canvas, raw bytes from
                                      Interop.EditorApplyEdit drawn via
@@ -12400,9 +12423,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                      WASM (no Skia there) + skips lossy
                                      compression. -->
                                 <canvas id="editorWasmCanvas" class="editor-preview-img"
-                                        x-show="editorState.computeMode === 'wasm' && !editorState.showOriginal"></canvas>
+                                        :style="'image-rendering:' + viewFilterCss()"
+                                        x-show="editorState.computeMode === 'wasm' && !editorState.showOriginal && !editorState.lanczosActive"></canvas>
                                 <img class="editor-preview-img" :src="editorState.originalUrl"
-                                     x-show="editorState.showOriginal && editorState.originalUrl"
+                                     :style="'image-rendering:' + viewFilterCss()"
+                                     x-show="editorState.showOriginal && editorState.originalUrl && !editorState.lanczosActive"
                                      alt="original" draggable="false">
                             </div>
                             <div class="editor-preview-spinner" x-show="editorState.rendering">⌛</div>
@@ -18199,6 +18224,18 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <span x-show="studioAnnotate.busy" x-cloak>Solving…</span>
                 </button>
                 <button class="btn btn-sm" @click="reloadImageViewer()" title="Reload">↻</button>
+                <!-- VIEWFILT: display-only resampling. Two entries here, not
+                     three: OpenSeadragon can do nearest or smooth, and Lanczos
+                     would need a custom tiled drawer, so the viewer offers what
+                     it can actually deliver. The editor, which resamples into
+                     its own canvas, offers all three. -->
+                <select class="input-sm view-filter-select"
+                        :value="viewFilter === 'lanczos' ? 'smooth' : viewFilter"
+                        @change="setViewFilter($event.target.value)"
+                        title="How the image is resampled when zoomed in. Affects the view only, never the file.">
+                    <option value="nearest">Nearest (real pixels)</option>
+                    <option value="smooth">Smooth</option>
+                </select>
                 <!-- Discard: move this file to a `discarded/` folder at the studio
                      root (recoverable), then advance to the next file. -->
                 <button class="btn btn-sm" x-show="imageViewerPath"
@@ -19967,7 +20004,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260801-indiauto"></script>
+    <!-- VIEWFILT: the Lanczos resampler behind the editor's view filter.
+         Display only, never touches saved pixels. ~4 KB. -->
+    <script src="/js/resample.js?v=20260801-viewfilt"></script>
+    <script src="/js/app.js?v=20260801-viewfilt"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
