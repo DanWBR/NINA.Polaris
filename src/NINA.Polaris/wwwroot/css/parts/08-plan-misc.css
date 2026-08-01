@@ -1122,3 +1122,16 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 }
 .storage-move { display: flex; align-items: center; gap: 5px; font-size: 12px; }
 .storage-err { margin: 6px 2px 0; font-size: 12px; color: var(--danger, #e66); }
+
+/* INDIAUTO: the note shown only when the equipment dialog opened by itself.
+   Informational blue, not the amber the storage card uses: nothing is wrong
+   here, the host is simply offering to do the setup. */
+.indi-auto-note {
+    font-size: 13px;
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    background: rgba(56, 139, 253, 0.10);
+    border: 1px solid rgba(56, 139, 253, 0.30);
+    border-left: 3px solid var(--accent, #388bfd);
+    border-radius: 8px;
+}

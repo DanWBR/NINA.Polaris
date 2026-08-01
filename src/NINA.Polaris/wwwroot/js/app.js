@@ -1794,10 +1794,14 @@ function ninaApp() {
         // their sysfs path, serial ports by 'serial:/dev/ttyUSB0', so the two
         // lists can never collide. Empty string means Skip, which is why the
         // Create button counts truthy values rather than object keys.
+        // INDIAUTO adds autoOffered / offeredFingerprint: a modal the host
+        // opened by itself remembers a "not now" against the hardware that was
+        // plugged in at the time; one the operator opened on purpose does not.
         indiDetect: { busy: false, applying: false, modalOpen: false, error: '',
                       devices: [], serialPorts: [], installedDrivers: [],
                       existingProfiles: [], showUnknown: false,
-                      choice: {}, profileName: 'Polaris' },
+                      choice: {}, profileName: 'Polaris',
+                      autoOffered: false, offeredFingerprint: '' },
         // INDI Control Panel sub-tab in RIGS. The launch button posts
         // /api/indi/cp/launch which uses `xpra control :100 start-child
         // indi_control_panel` to spawn the binary inside the same xpra
@@ -4501,6 +4505,11 @@ function ninaApp() {
             this._linkStart();
             // STORAGE-1: one survey per session, after the profile is known.
             setTimeout(() => this.storageSurvey(), 2500);
+            // INDIAUTO: a host nobody has set up yet should not make the
+            // operator go looking for the equipment assistant. Later than the
+            // disk survey so the two never open over each other, and late
+            // enough that indi-web has had time to come up.
+            setTimeout(() => this.indiDetectMaybeOffer(), 6000);
             this.loadSettingsFromServer();
             this.loadDitherSettings();
             this.loadMfSettings();
@@ -37183,6 +37192,55 @@ function ninaApp() {
         },
 
         // ---- INDI profile assistant ------------------------------------
+
+        // INDIAUTO: open the assistant by itself on a host nobody has set up.
+        //
+        // The gate lives on the host (/api/indi/detect/needed) because the only
+        // honest answer needs indi-web: a profile EXISTS out of the box, so
+        // "are there profiles?" is the wrong question. The right one is whether
+        // any profile carries a driver that is not a simulator. The probe is
+        // cheap; the full scan only runs once the answer is yes.
+        //
+        // Three ways this stays quiet: a configured host, a host with nothing
+        // recognisable plugged in, and a "not now" the operator already gave
+        // for this same set of hardware.
+        async indiDetectMaybeOffer() {
+            if (this.indiDetect.modalOpen || this.indiDetect.busy) return;
+            try {
+                const r = await this.apiGet('/api/indi/detect/needed');
+                if (!r || !r.suggest) return;
+                if (this._indiDetectDismissed(r.fingerprint)) return;
+                this.indiDetect.offeredFingerprint = r.fingerprint || '';
+                this.indiDetect.autoOffered = true;
+                await this.indiDetectScan();
+            } catch (e) { /* a host that cannot answer simply gets no modal */ }
+        },
+
+        _indiDetectDismissed(fingerprint) {
+            if (!fingerprint) return false;
+            try {
+                const d = JSON.parse(localStorage.getItem('polaris.indidetect.dismissed') || '[]');
+                return d.includes(fingerprint);
+            } catch (e) { return false; }
+        },
+
+        // Silence per SET OF HARDWARE, not globally, and only for a modal that
+        // opened on its own: closing one the operator opened deliberately is
+        // not an answer to a question nobody asked.
+        indiDetectDismiss() {
+            const fp = this.indiDetect.offeredFingerprint;
+            if (this.indiDetect.autoOffered && fp) {
+                try {
+                    const d = JSON.parse(
+                        localStorage.getItem('polaris.indidetect.dismissed') || '[]');
+                    if (!d.includes(fp)) d.push(fp);
+                    localStorage.setItem('polaris.indidetect.dismissed', JSON.stringify(d));
+                } catch (e) {}
+            }
+            this.indiDetect.autoOffered = false;
+            this.indiDetect.modalOpen = false;
+        },
+
         // Scan USB, pre-select whatever came back unambiguous, and open the
         // review modal. Read-only: nothing is written to the INDI setup until
         // indiDetectApply().

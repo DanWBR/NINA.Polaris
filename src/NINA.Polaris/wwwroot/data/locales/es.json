@@ -3667,6 +3667,7 @@
   "This disk is not empty": "Este disco no está vacío",
   "This drives every astronomy calculation in the app: altitude charts, twilight times on the Sky map, sun/moon positions on the Tonight tab, and the polar alignment math. Bad coords = wrong sky.": "Esto alimenta cada cálculo astronómico de la aplicación: gráficos de altitud, horarios del crepúsculo en el mapa del cielo, posiciones del Sol y la Luna en la pestaña Tonight y la matemática del alineamiento polar. Coordenadas equivocadas = cielo equivocado.",
   "This filter wheel driver does not support renaming slots": "Este controlador de rueda de filtros no admite el cambio de nombre de las ranuras",
+  "This host has no INDI profile yet, only the stock simulators, so Polaris had a look at what is plugged in. Set it up now or close this and do it later from RIGS.": "Este equipo todavía no tiene perfil INDI, solo los simuladores de fábrica, así que Polaris ha echado un vistazo a lo que hay conectado. Configúralo ahora o cierra esto y hazlo después desde RIGS.",
   "This host has no internet. Download": "Este host no tiene conexión a Internet. Descargar",
   "This is the host radio, not this device. The link chip shows the leg from here to the host.": "Esta es la radio del host, no la de este dispositivo. El indicador de conexión muestra el tramo desde aquí hasta el host.",
   "This is the leg between this device and the host. The WiFi bars are the host radio.": "Este es el tramo entre este dispositivo y el host. Las barras de WiFi son la radio del host.",

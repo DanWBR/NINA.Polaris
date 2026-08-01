@@ -103,6 +103,7 @@
   "The network to the host is slow right now.": "",
   "This browser link to the host is slow.": "",
   "This disk is not empty": "This disk is not empty",
+  "This host has no INDI profile yet, only the stock simulators, so Polaris had a look at what is plugged in. Set it up now or close this and do it later from RIGS.": "This host has no INDI profile yet, only the stock simulators, so Polaris had a look at what is plugged in. Set it up now or close this and do it later from RIGS.",
   "This is the host radio, not this device. The link chip shows the leg from here to the host.": "",
   "This is the leg between this device and the host. The WiFi bars are the host radio.": "",
   "Unanswered pings: {p}%": "",

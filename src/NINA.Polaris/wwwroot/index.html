@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260731-edpan">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260731-wave">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260801-fmt">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260801-indiauto">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260730-nudgerow">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260728-slimaddr">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -18889,8 +18889,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          ambiguous rows here and the Create button stays disabled until every
          device either has a driver or is explicitly skipped. -->
     <div class="modal-overlay" x-show="indiDetect.modalOpen" x-cloak
-         @click.self="if(!indiDetect.applying) indiDetect.modalOpen=false"
-         @keydown.escape.window="if(!indiDetect.applying) indiDetect.modalOpen=false">
+         @click.self="if(!indiDetect.applying) indiDetectDismiss()"
+         @keydown.escape.window="if(!indiDetect.applying) indiDetectDismiss()">
         <!-- Height-constrained: this is the tallest dialog in the app (one row
              per device, plus serial ports, plus the profile field and notes)
              and .modal-card is `overflow:hidden` with no max-height, so on a
@@ -18908,6 +18908,14 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <h3>Detected equipment</h3>
             </div>
             <div style="flex:1 1 auto;min-height:0;overflow-y:auto;margin:0 -4px;padding:0 4px;">
+            <!-- INDIAUTO: when the host opened this by itself, say why. A dialog
+                 that appears unbidden and does not explain itself reads as an
+                 error, and the operator's first instinct is to close it. -->
+            <p class="indi-auto-note" x-show="indiDetect.autoOffered" x-cloak>
+                This host has no INDI profile yet, only the stock simulators, so Polaris
+                had a look at what is plugged in. Set it up now or close this and do it
+                later from RIGS.
+            </p>
             <p style="font-size:13px;" x-show="indiDetect.devices.length || indiDetect.serialPorts.length">
                 Review what Polaris found, then create the INDI profile. Anything left as
                 Skip is not added, and you can still add it by hand in the indi-web panel.
@@ -19030,7 +19038,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
             <div class="modal-actions" style="flex:0 0 auto;padding-top:14px;">
                 <button class="btn btn-sm" :disabled="indiDetect.applying"
-                        @click="indiDetect.modalOpen=false">Cancel</button>
+                        @click="indiDetectDismiss()">Cancel</button>
                 <button class="btn btn-sm btn-primary"
                         :disabled="indiDetect.applying || !indiDetectSelectedCount()"
                         @click="indiDetectApply()">
@@ -19959,7 +19967,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260801-fmt"></script>
+    <script src="/js/app.js?v=20260801-indiauto"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

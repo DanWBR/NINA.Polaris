@@ -339,6 +339,28 @@ public class IndiWebManagerService : BackgroundService {
         }
     }
 
+    /// <summary>The driver labels a given profile carries
+    /// (<c>GET /api/profiles/{name}/labels</c>, verified against a live
+    /// indi-web: it answers <c>[{"label": "ZWO CCD"}, ...]</c>).
+    ///
+    /// <para>INDIAUTO uses this to tell a configured host from a fresh one. The
+    /// profile NAMES alone cannot: indi-web ships a profile out of the box, so
+    /// "a profile exists" is true on a machine nobody has set up yet.</para>
+    /// </summary>
+    public async Task<List<string>> GetProfileDriverLabelsAsync(string name,
+                                                                CancellationToken ct = default) {
+        if (!IsSupportedOs || string.IsNullOrWhiteSpace(name)) return [];
+        try {
+            var drivers = await Http.GetFromJsonAsync<List<IndiWebDriver>>(
+                $"/api/profiles/{Uri.EscapeDataString(name)}/labels", ct);
+            return drivers?.Where(d => !string.IsNullOrWhiteSpace(d.Label))
+                          .Select(d => d.Label!).ToList() ?? [];
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "indi-web GET /api/profiles/{Name}/labels failed", name);
+            return [];
+        }
+    }
+
     /// <summary>Create an indi-web profile and set its driver list, in the two
     /// calls indi-web requires. The body shape for the driver list
     /// (<c>[{"label": "..."}]</c>) was verified against a live indi-web rather

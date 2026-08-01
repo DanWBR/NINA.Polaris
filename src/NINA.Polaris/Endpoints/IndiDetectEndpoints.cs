@@ -101,6 +101,57 @@ public static class IndiDetectEndpoints {
             });
         });
 
+        // INDIAUTO: should the assistant open on its own? Cheap on purpose --
+        // a sysfs read plus one small indi-web call per profile. The scan above
+        // pulls the ~420-entry installed-driver list, which is far too much to
+        // run on every client boot just to find out the answer is usually no.
+        group.MapGet("/needed", async (UsbScanService usb, IndiWebManagerService web,
+                                       CancellationToken ct) => {
+            var scan = usb.Scan();
+            if (!scan.Supported)
+                return Results.Ok(new { suggest = false, reason = scan.UnsupportedReason });
+            // A host whose indi-web is down has a different problem, and the
+            // assistant could not create a profile anyway. Say nothing.
+            if (!web.Running)
+                return Results.Ok(new { suggest = false, reason = "indi-web is not running" });
+
+            var names = await web.GetProfileNamesAsync(ct);
+            var profiles = new List<object>();
+            bool configured = false;
+            foreach (var name in names) {
+                var labels = await web.GetProfileDriverLabelsAsync(name, ct);
+                // A profile of nothing but simulators is what a host that has
+                // never been set up looks like: indi-web ships one, so the mere
+                // EXISTENCE of a profile proves nothing. One real driver
+                // anywhere means somebody has been here already, and the
+                // assistant should stay out of the way.
+                var real = labels.Where(l => !IsSimulator(l)).ToList();
+                if (real.Count > 0) configured = true;
+                profiles.Add(new { name, drivers = labels, simulatorOnly = real.Count == 0 });
+            }
+
+            // Nothing plugged in means the assistant would open on an empty
+            // list, which is worse than not opening. Serial ports do not count:
+            // they are unidentifiable on their own and every host has some.
+            var identifiable = scan.Devices
+                .Count(d => IndiDeviceCatalog.Identify(d).Confidence != "unknown");
+
+            return Results.Ok(new {
+                suggest = !configured && identifiable > 0,
+                configured,
+                profiles,
+                deviceCount = scan.Devices.Count,
+                identifiableCount = identifiable,
+                // Identifies THIS set of hardware, so a dismissal can be scoped
+                // to it: plugging in a different camera next month is a new
+                // question, and "not now" today should not answer it forever.
+                fingerprint = Fingerprint(scan),
+                reason = configured ? "an INDI profile with real drivers already exists"
+                       : identifiable == 0 ? "no recognisable equipment is plugged in"
+                       : null,
+            });
+        });
+
         // Apply. Creates/overwrites an indi-web profile with the driver labels
         // the operator confirmed. Never called by the detect path itself.
         group.MapPost("/profile", async (CreateIndiProfileRequest req,
@@ -150,6 +201,31 @@ public static class IndiDetectEndpoints {
                 startError = started ? null : web.LastError,
             });
         });
+    }
+
+    /// <summary>INDI's simulator drivers all carry "Simulator" in their label,
+    /// which is exactly how a person tells them apart in the driver list.
+    ///
+    /// <para>The profile indi-web seeds into a fresh database is
+    /// <c>Simulators</c> with <c>Telescope Simulator</c>, <c>CCD Simulator</c>
+    /// and <c>Focuser Simulator</c> (read from its own database.py, not
+    /// assumed), so this rule is what separates a host nobody has touched from
+    /// one that is already set up.</para></summary>
+    internal static bool IsSimulator(string label) =>
+        label.Contains("Simulator", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A stable id for the hardware currently plugged in, so a "not
+    /// now" can be remembered against THIS set of gear rather than for good.
+    /// Sorted, because enumeration order is not stable across reboots.</summary>
+    private static string Fingerprint(UsbScanResult scan) {
+        var ids = scan.Devices
+            .Select(d => $"{d.VendorId}:{d.ProductId}")
+            .OrderBy(s => s, StringComparer.Ordinal);
+        var joined = string.Join(",", ids);
+        if (joined.Length == 0) return "";
+        var hash = System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(joined));
+        return Convert.ToHexString(hash)[..12].ToLowerInvariant();
     }
 
     /// <param name="Name">indi-web profile to create or update.</param>
