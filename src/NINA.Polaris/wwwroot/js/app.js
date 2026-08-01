@@ -33210,9 +33210,9 @@ function ninaApp() {
         },
 
         storageSuggestText() {
-            return this._t('Captures are going to {root}, which is on the disk the system boots '
-                         + 'from. Filling it takes the whole host down, not just the recording.',
-                         { root: this.storage.captureRoot || 'the system disk' });
+            return this._t('Polaris can format and set it up for you, no Linux needed. Videos and '
+                         + 'photos write a lot faster there, and your captures stop filling up the '
+                         + 'disk the system runs on.');
         },
 
         async storageUse() {
