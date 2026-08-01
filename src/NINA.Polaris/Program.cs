@@ -1400,11 +1400,21 @@ app.MapWorkflowEndpoints();
 
 // GX-1: kick off an initial walk of the configured Onnx:ModelsPath
 // so /api/onnx/manifest is populated before the first browser request.
-// Hash compute stays lazy (RescanAsync only stat-walks; SHA-256 runs
-// on first /manifest GET).
+// RescanAsync only stat-walks; the SHA-256 of each model comes from the
+// persisted cache when the file is unchanged.
+//
+// ONNXHASH: warm whatever the cache does not cover, here, in the background.
+// The hashes used to be computed inside the first /api/onnx/manifest request
+// after every restart -- 24 models and 3.86 GB off the system card on the Q6A,
+// measured at 48.07 s, with every other read queued behind it. The browser
+// fetches that manifest at startup, so the cost landed on the operator as "the
+// app takes forever to load". Doing it here means a request never pays for it.
 _ = Task.Run(async () => {
-    try { await app.Services.GetRequiredService<NINA.Polaris.Services.Onnx.OnnxModelRegistry>().RescanAsync(); }
+    var reg = app.Services.GetRequiredService<NINA.Polaris.Services.Onnx.OnnxModelRegistry>();
+    try { await reg.RescanAsync(); }
     catch (Exception ex) { app.Logger.LogWarning(ex, "OnnxModelRegistry initial scan failed"); }
+    try { await reg.WarmHashesAsync(); }
+    catch (Exception ex) { app.Logger.LogWarning(ex, "OnnxModelRegistry hash warm-up failed"); }
 });
 
 // Live stacking + INDI

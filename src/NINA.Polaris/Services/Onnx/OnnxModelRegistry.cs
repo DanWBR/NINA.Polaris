@@ -280,8 +280,13 @@ public class OnnxModelRegistry {
                             continue;
                         }
 
+                        // ONNXHASH: a hash remembered from a previous RUN, not
+                        // merely a previous scan. Keyed on path + size + mtime,
+                        // so a model that was replaced gets re-hashed and one
+                        // that was not costs nothing.
                         _models[key] = new OnnxModelEntry(
-                            family, version, file, size, null, DateTime.UtcNow);
+                            family, version, file, size,
+                            LookupCachedHash(file, size), DateTime.UtcNow);
                     }
                 } catch (Exception ex) {
                     _logger.LogError(ex, "Onnx rescan failed at root {Root}", root);
@@ -323,7 +328,105 @@ public class OnnxModelRegistry {
         // write under the dict; if another thread raced us the hash is
         // identical anyway (file bytes didn't change).
         _models[Key(family, version)] = entry with { Hash = hash };
+        StoreCachedHash(entry.Path, entry.SizeBytes, hash);
         return hash;
+    }
+
+    // ─── ONNXHASH: hashes that survive a restart ────────────────────
+    //
+    // /api/onnx/manifest returns a hash per model, and the browser uses it as
+    // the IndexedDB key for the model bytes it caches. Hashes were computed
+    // lazily and kept in memory only, so the FIRST manifest request after every
+    // restart read and SHA-256'd every model on disk. On the Q6A that is 24
+    // files and 3.86 GB off the system card: a measured 48.07 s during which
+    // the card is saturated and every other read -- including serving the UI's
+    // own JavaScript -- queues behind it. The client fetches the manifest at
+    // startup, so this landed squarely on "the app is slow to load".
+    //
+    // The bytes of a model file do not change unless the file changes, so the
+    // hash is worth remembering across runs. Keyed on path + size + mtime: a
+    // model swapped in by an update or a download is re-hashed, an untouched
+    // one is free forever after.
+
+    private sealed record CachedHash(long SizeBytes, long MtimeUnix, string Hash);
+
+    private readonly ConcurrentDictionary<string, CachedHash> _hashCache =
+        new(StringComparer.Ordinal);
+    private readonly object _hashCacheIo = new();
+    private bool _hashCacheLoaded;
+
+    private string HashCachePath => Path.Combine(_profile.DataDir, "onnx-hashes.json");
+
+    private static long MtimeUnix(string path) {
+        try { return new DateTimeOffset(File.GetLastWriteTimeUtc(path)).ToUnixTimeSeconds(); }
+        catch { return 0; }
+    }
+
+    private void LoadHashCache() {
+        lock (_hashCacheIo) {
+            if (_hashCacheLoaded) return;
+            _hashCacheLoaded = true;
+            try {
+                if (!File.Exists(HashCachePath)) return;
+                var json = File.ReadAllText(HashCachePath);
+                var map = System.Text.Json.JsonSerializer
+                    .Deserialize<Dictionary<string, CachedHash>>(json);
+                if (map == null) return;
+                foreach (var (k, v) in map) _hashCache[k] = v;
+                _logger.LogInformation("Onnx hash cache: {Count} entr(ies) loaded from {Path}",
+                    _hashCache.Count, HashCachePath);
+            } catch (Exception ex) {
+                // A corrupt cache costs one slow manifest, not a failure.
+                _logger.LogWarning(ex, "Onnx hash cache unreadable, ignoring it");
+            }
+        }
+    }
+
+    private string? LookupCachedHash(string path, long size) {
+        LoadHashCache();
+        if (!_hashCache.TryGetValue(path, out var c)) return null;
+        return c.SizeBytes == size && c.MtimeUnix == MtimeUnix(path) ? c.Hash : null;
+    }
+
+    private void StoreCachedHash(string path, long size, string hash) {
+        _hashCache[path] = new CachedHash(size, MtimeUnix(path), hash);
+        lock (_hashCacheIo) {
+            try {
+                Directory.CreateDirectory(Path.GetDirectoryName(HashCachePath)!);
+                var json = System.Text.Json.JsonSerializer.Serialize(
+                    new Dictionary<string, CachedHash>(_hashCache),
+                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                // Write-then-move so a crash mid-write cannot leave a truncated
+                // cache behind, which would be read back as garbage next boot.
+                var tmp = HashCachePath + ".tmp";
+                File.WriteAllText(tmp, json);
+                File.Move(tmp, HashCachePath, overwrite: true);
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Could not persist the Onnx hash cache");
+            }
+        }
+    }
+
+    /// <summary>Hash whatever is still unhashed, off the request path.
+    ///
+    /// <para>Called once after the startup scan. On a host whose cache is
+    /// already warm this finds nothing to do and returns immediately; on a
+    /// fresh install, or after models are downloaded, it pays the cost in the
+    /// background instead of inside whichever request happens to arrive
+    /// first.</para></summary>
+    public async Task WarmHashesAsync(CancellationToken ct = default) {
+        var pending = _models.Values.Where(m => m.Hash == null).ToList();
+        if (pending.Count == 0) return;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long bytes = 0;
+        foreach (var m in pending) {
+            if (ct.IsCancellationRequested) return;
+            await GetHashAsync(m.Family, m.Version, ct);
+            bytes += m.SizeBytes;
+        }
+        _logger.LogInformation(
+            "Onnx hash warm-up: {Count} model(s), {MB:F0} MB in {Sec:F1} s",
+            pending.Count, bytes / 1048576.0, sw.Elapsed.TotalSeconds);
     }
 
     /// <summary>Diagnostic, used by the Settings page.</summary>
