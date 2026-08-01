@@ -56,6 +56,7 @@ namespace NINA.Polaris.Services;
 /// </summary>
 public class SelfSignedCertService {
     private readonly ILogger<SelfSignedCertService> _logger;
+    private readonly IConfiguration _config;
     private readonly string _certDir;
     private readonly string _certPath;
     private readonly string _sanHashPath;
@@ -63,6 +64,9 @@ public class SelfSignedCertService {
 
     public SelfSignedCertService(IConfiguration config, ILogger<SelfSignedCertService> logger) {
         _logger = logger;
+        // Kept so the SAN list can honour an Mdns:InstanceName override; the
+        // cert has to carry whatever name mDNS actually advertises.
+        _config = config;
         _certDir = config.GetValue("Server:Https:CertDir",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "NINA.Polaris", "cert"))!;
@@ -302,16 +306,17 @@ public class SelfSignedCertService {
     private List<string> BuildSanList() {
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Always-on DNS aliases.
-        names.Add("localhost");
-        var hostName = Dns.GetHostName();
-        if (!string.IsNullOrWhiteSpace(hostName)) {
-            names.Add(hostName);
-            // hostname.local, the form mDNS responders typically expose
-            names.Add(hostName + ".local");
-        }
-        names.Add("polaris.local");
-        names.Add("polaris-app.local");
+        // Every DNS name this device answers to, from the single source that
+        // also drives the mDNS advertisement.
+        //
+        // This list used to be assembled here by hand, and it omitted the one
+        // name that matters most: mDNS advertises polaris-app-{shortId}.local
+        // so that cloned cards do not collide, while the cert carried only a
+        // bare polaris-app.local. A client that DISCOVERED the device and
+        // connected to the name discovery handed it therefore always hit a
+        // certificate error, and the more the fleet relied on unique names the
+        // worse it got. Two components deciding the same fact independently.
+        foreach (var n in DeviceIdentity.DnsNames(_config)) names.Add(n);
 
         // Loopback always (covers 127.0.0.1 + ::1 paths).
         names.Add("127.0.0.1");

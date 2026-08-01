@@ -13504,23 +13504,32 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      uniquely (polaris-app-XXXX from its hardware id), so a
                      cloned SD-card image just works; this lets the owner
                      give each one a readable name. -->
+                <!-- Two names, and the card used to blur them into one. It was
+                     titled "Host name", the field was labelled "Name", and the
+                     mDNS name sat underneath as "Network name" -- so an
+                     operator typed a name, saw a different one below it, and
+                     reasonably concluded the setting had been ignored (field
+                     report). This label is cosmetic: it never touches the
+                     host's hostname and never enters the certificate. -->
                 <div class="settings-section" id="device-name-card">
-                    <h3 data-tour="set-devicename"><span class="settings-card-icon">🔭</span>Host name</h3>
+                    <h3 data-tour="set-devicename"><span class="settings-card-icon">🔭</span>Display name</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
-                        Shown when clients (phones/tablets) discover this
-                        host on the network. Give it a name you'll
-                        recognise (e.g. <em>Telescope on the balcony</em>).
-                        Leave blank to use the automatic name.
+                        What to call this host in the browser tab and in the phone
+                        apps. Pick something you will recognise, like
+                        <em>Telescope on the balcony</em>. Leave it blank to use
+                        the automatic name.
                     </p>
                     <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:10px">
-                        <span style="min-width:90px">Name</span>
+                        <span style="min-width:90px">Display name</span>
                         <input type="text" x-model="deviceFriendlyName"
                                maxlength="48" placeholder="Telescope on the balcony"
                                style="flex:1">
                         <button class="btn btn-sm btn-primary" @click="saveDeviceName()">Save</button>
                     </label>
-                    <p class="text-muted" style="font-size:12px; margin-top:8px" x-show="deviceMdnsName">
-                        Network name: <code x-text="deviceMdnsName"></code>
+                    <p class="text-muted" style="font-size:12px; margin-top:10px" x-show="deviceMdnsName">
+                        This is a label only. The address on your network stays
+                        <code x-text="deviceMdnsName + '.local'"></code>, which is
+                        fixed per device and is what the certificate covers.
                     </p>
                 </div>
 
@@ -19995,7 +20004,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260801-nolanczos"></script>
+    <script src="/js/app.js?v=20260801-devname"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

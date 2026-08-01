@@ -105,11 +105,11 @@ public class MdnsService : IHostedService, IDisposable {
             var hostname = Environment.MachineName;
 
             // Explicit override wins; otherwise auto-unique per device so a
-            // cloned image doesn't collide on the LAN.
-            var configured = _config["Mdns:InstanceName"];
-            _instanceName = !string.IsNullOrWhiteSpace(configured)
-                ? configured!
-                : $"polaris-app-{DeviceShortId()}";
+            // cloned image doesn't collide on the LAN. Shared with
+            // SelfSignedCertService through DeviceIdentity so the advertised
+            // name and the certificate can never disagree -- they did, and
+            // every discovery-based connection failed validation because of it.
+            _instanceName = DeviceIdentity.InstanceName(_config);
 
             // Friendly, human-set label (falls back to the instance name).
             var friendly = _profiles.Active.DeviceFriendlyName;
@@ -173,40 +173,6 @@ public class MdnsService : IHostedService, IDisposable {
     /// name. Lowercase hex, 4 chars -- enough to disambiguate the handful
     /// of Pis a hobbyist runs on one network while keeping the name short.
     /// </summary>
-    private static string DeviceShortId() {
-        // Raspberry Pi exposes the board serial in the device tree.
-        try {
-            const string dt = "/sys/firmware/devicetree/base/serial-number";
-            if (File.Exists(dt)) {
-                var s = File.ReadAllText(dt).Trim('\0', ' ', '\n', '\r', '\t');
-                if (s.Length >= 4) return s[^4..].ToLowerInvariant();
-            }
-        } catch { /* fall through */ }
-
-        // /proc/cpuinfo "Serial" line (older Pi OS / other ARM boards).
-        try {
-            foreach (var line in File.ReadLines("/proc/cpuinfo")) {
-                if (line.StartsWith("Serial", StringComparison.OrdinalIgnoreCase)) {
-                    var v = line.Split(':').Last().Trim();
-                    if (v.Length >= 4) return v[^4..].ToLowerInvariant();
-                }
-            }
-        } catch { /* fall through */ }
-
-        // Primary non-loopback MAC.
-        try {
-            var mac = NetworkInterface.GetAllNetworkInterfaces()
-                .Where(n => n.OperationalStatus == OperationalStatus.Up
-                    && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                .Select(n => n.GetPhysicalAddress().ToString())
-                .FirstOrDefault(m => !string.IsNullOrEmpty(m) && m.Trim('0').Length > 0);
-            if (!string.IsNullOrEmpty(mac) && mac.Length >= 4) return mac[^4..].ToLowerInvariant();
-        } catch { /* fall through */ }
-
-        // Last resort: stable hash of the machine name.
-        var h = Math.Abs(Environment.MachineName.GetHashCode());
-        return (h % 0x10000).ToString("x4");
-    }
 
     private void Teardown() {
         try {
