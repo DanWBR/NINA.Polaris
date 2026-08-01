@@ -2275,19 +2275,33 @@
    the knob. Wider than a normal modal because judging sharpening on a
    thumbnail is judging nothing. Collapses to one column on a phone, preview
    first, since that is the part you look at while dragging. */
-.wave-card {
+/* .modal-card.wave-card, not .wave-card alone. `.modal-card` caps every dialog
+   at 440px and lives in 08-plan-misc.css, which loads AFTER this file; at equal
+   specificity the later rule wins, so the 1040px here was silently discarded
+   and the modal rendered at 440px. With a fixed sliders column that left the
+   preview a ~60px strip, and the absolutely-positioned A/B button wider than
+   the box it sits in, hanging off the left edge.
+   Two classes (0-2-0) beat the single-class cap wherever the files sit in the
+   cascade. The other wide dialogs in this app dodge the same cap with inline
+   style="max-width:...", which works but cannot be restyled from a stylesheet. */
+.modal-card.wave-card {
     width: min(1040px, 96vw);
-    max-width: 96vw;
+    max-width: min(1040px, 96vw);
 }
 .wave-body {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 320px;
+    /* The sliders column has to fit label + [-]slider[+] + value +
+       [-]slider[+]: app.js wraps every range input in stepper buttons, so a
+       row needs far more than the 320px this used to reserve, and the
+       overflow pushed the buttons out past the card edge. */
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 400px);
     gap: 14px;
     align-items: start;
 }
 .wave-preview {
     position: relative;
-    min-height: 320px;
+    min-height: 260px;
+    max-height: 70vh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2310,6 +2324,12 @@
     right: 8px;
     bottom: 8px;
     opacity: 0.85;
+    /* Never wider than the box it floats in. Anchored on the right, an
+       oversized button grows leftwards and walks out of the frame. */
+    max-width: calc(100% - 16px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .wave-sliders {
     display: flex;
@@ -2318,7 +2338,11 @@
 }
 .wave-row {
     display: grid;
-    grid-template-columns: 58px 1fr 42px 74px;
+    /* Both sliders carry stepper buttons (28px each plus gaps), so neither can
+       be given a fixed width narrow enough to fit the old 74px. Proportional
+       tracks with a floor keep the sharpen slider the wider of the two, which
+       matches which one gets dragged more. */
+    grid-template-columns: 58px minmax(96px, 1.35fr) 42px minmax(84px, 1fr);
     align-items: center;
     gap: 6px;
 }
