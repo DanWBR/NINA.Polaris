@@ -1953,3 +1953,56 @@ label select.input-sm.select-compact {
     }
 }
 
+
+/* ---- PLAN8-2: focus sharpness (VIDEO) ------------------------------
+   A contrast reading that peaks at best focus, the thing every planetary
+   capture program puts on screen. Deliberately compact: it sits inside the
+   VIDEO sidebar next to the controls the operator is already touching, and
+   it has to stay readable on a tablet at arm reach in the dark. */
+.sharp-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 8px 10px;
+    margin: 0 0 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+.sharp-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.sharp-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+.sharp-pct {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+.sharp-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+.sharp-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    /* No transition: this number is feedback for a hand turning a knob, and
+       an animated bar would lag the very motion it is reporting on. */
+}
+.sharp-bar-fill.sharp-far  { background: var(--text-muted); }
+.sharp-bar-fill.sharp-near { background: var(--warn, #d98c00); }
+.sharp-bar-fill.sharp-peak { background: var(--ok, #3fb950); }
+.sharp-trace {
+    width: 100%;
+    height: 34px;
+    color: var(--accent);
+    opacity: 0.85;
+}

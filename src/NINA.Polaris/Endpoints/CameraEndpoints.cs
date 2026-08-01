@@ -607,6 +607,15 @@ public static class CameraEndpoints {
             return Results.Ok(new { running = false, frames = stream.FrameCount });
         });
 
+        // PLAN8-2: drop the running maximum the focus bar is measured against.
+        // The metric is only comparable within one target at one exposure and
+        // gain, so after moving to another planet the old best is a yardstick
+        // for nothing and would peg the bar low forever.
+        group.MapPost("/stream/sharpness/reset", (CameraStreamService stream) => {
+            stream.ResetSharpness();
+            return Results.Ok(new { reset = true });
+        });
+
         // Live exposure/gain tweak for a running stream so the VIDEO controls
         // stay usable while streaming (ASIAIR-style). Loop mode picks the new
         // values up on the next frame; native mode is restarted to apply them.

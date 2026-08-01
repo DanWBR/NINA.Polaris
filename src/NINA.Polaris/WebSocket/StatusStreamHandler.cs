@@ -542,6 +542,15 @@ public static class StatusStreamHandler {
                             // BEFORE the disk finds out.
                             width = cameraStream.LastFrameWidth,
                             height = cameraStream.LastFrameHeight,
+                            // PLAN8-2: focus aid. `sharpness` is the current
+                            // contrast reading, `sharpnessBest` the best since
+                            // the stream started (the yardstick to maximise),
+                            // and the history is sampled at 2 Hz for the trend
+                            // line. Absolute values mean nothing across
+                            // targets, which is why the UI plots a ratio.
+                            sharpness = cameraStream.Sharpness,
+                            sharpnessBest = cameraStream.SharpnessBest,
+                            sharpnessHistory = cameraStream.SharpnessHistory,
                             lastError = cameraStream.LastError,
                             supportsNative = equip.Camera?.Capabilities.SupportsVideoStream ?? false
                         },

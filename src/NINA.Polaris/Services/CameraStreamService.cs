@@ -145,6 +145,11 @@ public class CameraStreamService : IDisposable {
             _lastFrameAt = _startedAt;
             _cts = new CancellationTokenSource();
 
+            // PLAN8-2: the sharpness yardstick is only meaningful within one
+            // stream. Exposure, gain, ROI and target all change what "sharp"
+            // measures, and every one of them restarts the stream.
+            ResetSharpness();
+
             var useNative = !cfg.ForceLoop && cam.Capabilities.SupportsVideoStream;
             if (useNative) StartNative(cam, _cts.Token);
             else StartLoop(cam, _cts.Token);
@@ -306,6 +311,67 @@ public class CameraStreamService : IDisposable {
         }
     }
 
+    // ---- PLAN8-2: live sharpness (focus aid) ---------------------------
+    //
+    // Focusing a planet by eye on a small screen is guesswork, which is why
+    // every planetary capture program shows a contrast number that peaks at
+    // best focus. Polaris already computes exactly that for the stacker's
+    // frame ranking (Laplacian variance); it just never ran while the operator
+    // was actually turning the focuser.
+    //
+    // The metric is RELATIVE by nature: its absolute value depends on the
+    // target, the exposure and the gain. It is meant to be maximised, so the
+    // panel plots the trend and normalises against the best seen since the
+    // stream started.
+    private readonly object _sharpLock = new();
+    private readonly Queue<double> _sharpHistory = new();
+    private const int SharpHistoryLength = 120;   // ~a minute at 2 Hz sampling
+    private DateTime _lastSharpAt = DateTime.MinValue;
+
+    /// <summary>Newest first is NOT the convention here: oldest first, so the
+    /// UI can draw it left to right without reversing.</summary>
+    public double[] SharpnessHistory {
+        get { lock (_sharpLock) return _sharpHistory.ToArray(); }
+    }
+    public double Sharpness { get; private set; }
+    public double SharpnessBest { get; private set; }
+
+    private void UpdateSharpness(IImageData frame) {
+        // Sampling twice a second is plenty for a human turning a knob, and it
+        // keeps a 130 fps stream from spending every core on the metric: on a
+        // 640x640 ROI one pass is cheap, on a full frame it is not.
+        var now = DateTime.UtcNow;
+        if ((now - _lastSharpAt).TotalMilliseconds < 500) return;
+        _lastSharpAt = now;
+        try {
+            var px = frame.Data;
+            if (px == null || px.Length == 0) return;
+            int w = frame.Properties.Width, h = frame.Properties.Height;
+            // Centre window: the planet is what is being focused, and the
+            // corners are sky that only adds noise to the number.
+            int roi = Math.Min(w, h) / 2;
+            double v = NINA.Polaris.Services.Planetary.FrameQualityAnalyzer
+                          .LaplacianVariance(px, w, h, roi);
+            Sharpness = v;
+            if (v > SharpnessBest) SharpnessBest = v;
+            lock (_sharpLock) {
+                _sharpHistory.Enqueue(v);
+                while (_sharpHistory.Count > SharpHistoryLength) _sharpHistory.Dequeue();
+            }
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Sharpness metric failed for a stream frame");
+        }
+    }
+
+    /// <summary>Forget the running maximum. The operator moved to another
+    /// target or changed exposure/gain, so the old best is not a yardstick
+    /// for anything any more.</summary>
+    public void ResetSharpness() {
+        Sharpness = 0;
+        SharpnessBest = 0;
+        lock (_sharpLock) _sharpHistory.Clear();
+    }
+
     private void OnStreamFrame(IImageData frame) {
         Interlocked.Increment(ref _frameCount);
         _lastFrameAt = DateTime.UtcNow;
@@ -315,6 +381,7 @@ public class CameraStreamService : IDisposable {
         LastFrameWidth = props.Width;
         LastFrameHeight = props.Height;
         LastFrameRawBytes = (long)(frame.Data?.Length ?? 0) * 2;
+        UpdateSharpness(frame);
         try {
             // Efficient video path: relay a downscaled JPEG instead of
             // the full RAW buffer. RAW streaming ships W*H*2 bytes/frame

@@ -24363,6 +24363,50 @@ function ninaApp() {
             }
         },
 
+        // ---- PLAN8-2: focus sharpness helpers ----
+        //
+        // The metric is a contrast measure (Laplacian variance) computed on the
+        // host over the centre of each streamed frame. Its absolute value is
+        // meaningless across targets, exposures and gains, so everything here
+        // is expressed against the best reading of the CURRENT stream: the
+        // operator's job is to make the bar longer.
+        sharpnessPercent() {
+            const best = this.cameraStream.sharpnessBest || 0;
+            const now = this.cameraStream.sharpness || 0;
+            if (best <= 0) return 0;
+            return Math.max(0, Math.min(100, Math.round(100 * now / best)));
+        },
+        sharpnessPercentLabel() {
+            if (!(this.cameraStream.sharpnessBest > 0)) return this._t('measuring...');
+            return this.sharpnessPercent() + '% ' + this._t('of best');
+        },
+        sharpnessTone() {
+            const p = this.sharpnessPercent();
+            return p >= 95 ? 'sharp-peak' : p >= 75 ? 'sharp-near' : 'sharp-far';
+        },
+        // Polyline over the 2 Hz history, scaled to the window's own min/max so
+        // the shape of the last minute is visible even when the changes are a
+        // few percent. A flat line means the last turns changed nothing.
+        sharpnessTracePoints() {
+            const h = this.cameraStream.sharpnessHistory;
+            if (!Array.isArray(h) || h.length < 2) return '';
+            const lo = Math.min(...h), hi = Math.max(...h);
+            const span = hi - lo;
+            const n = h.length;
+            const pts = [];
+            for (let i = 0; i < n; i++) {
+                const x = (240 * i) / (n - 1);
+                // 2px padding top and bottom so the peak is not clipped.
+                const y = span > 0 ? 32 - 30 * ((h[i] - lo) / span) : 17;
+                pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+            }
+            return pts.join(' ');
+        },
+        async resetSharpness() {
+            try { await this.apiPost('/api/camera/stream/sharpness/reset'); }
+            catch (e) { this.toastFail('Reset failed', e); }
+        },
+
         // PLAN8: what a recording would cost, in the two units that decide
         // whether it survives: megabytes per second and gigabytes per minute.
         // The operator's 4.10 GB clip filled a disk in 39 seconds with nothing
