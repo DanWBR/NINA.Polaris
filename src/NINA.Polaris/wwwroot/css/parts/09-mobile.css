@@ -48,15 +48,17 @@
         overflow-x: auto;
         overflow-y: hidden;
         -webkit-overflow-scrolling: touch;   /* momentum scroll on iOS */
-        scrollbar-width: thin;
+        /* No native scrollbar, for the layout-shift reason spelled out in
+           03-equipment-mount.css: a horizontal scrollbar ADDS to the height of
+           a content-sized row, the SIRIL SCRIPTS row changes width with the
+           selection, and the resulting few-pixel jump moved the file list
+           between the two taps of a double-tap. Worse on touch than on a
+           mouse, since a finger covers the row it is aiming at. */
+        scrollbar-width: none;
+        -ms-overflow-style: none;
     }
     .files-actions-icons > * { flex: 0 0 auto; }
-    /* A slim, unobtrusive horizontal scrollbar so it's clearly swipeable. */
-    .files-actions-icons::-webkit-scrollbar { height: 5px; }
-    .files-actions-icons::-webkit-scrollbar-thumb {
-        background: color-mix(in srgb, var(--accent) 45%, transparent);
-        border-radius: 3px;
-    }
+    .files-actions-icons::-webkit-scrollbar { width: 0; height: 0; }
 
     /* --- AF param grid (FOCUS) wraps too. --- */
     .af-params { flex-wrap: wrap; }
@@ -106,6 +108,9 @@
         overflow-x: auto;
         overflow-y: hidden;
         -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;               /* same layout-shift reason */
+        -ms-overflow-style: none;
     }
     .files-actions-icons > * { flex: 0 0 auto; }
+    .files-actions-icons::-webkit-scrollbar { width: 0; height: 0; }
 }
