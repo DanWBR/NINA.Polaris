@@ -1408,6 +1408,13 @@ button,
     width: 80%;
     max-width: 220px;
     field-sizing: content;
+    /* The comment above has claimed a min-width since it was written, and
+       there was never one. With field-sizing: content a short value shrinks the
+       box to fit that value and nothing else, so the SSH port "22" rendered as
+       a sliver with its second digit behind the spinner arrows -- the same
+       failure the comment says the fixed 80px used to cause, reintroduced by
+       the fix for it. */
+    min-width: 72px;
     padding: 9px 10px;
     min-height: 38px;
     box-sizing: border-box;
@@ -1418,6 +1425,13 @@ button,
     font-size: 13px;
     outline: none;
     transition: border-color var(--transition);
+}
+
+/* Number fields carry native spinner arrows, roughly 20px the text never gets
+   to use. Five digits (a port, a focuser position) plus the spinner needs more
+   than the generic floor above. */
+input[type="number"].input-sm {
+    min-width: 96px;
 }
 
 /* A <select> is not a number field, and the rule above was written for one.
