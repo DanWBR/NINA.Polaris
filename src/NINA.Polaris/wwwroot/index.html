@@ -11534,23 +11534,28 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </button>
                 </div>
 
-                <!-- SIRIL SCRIPTS — one bar whose contents follow the
-                     selection. Every entry is a ported Siril script; what
-                     differs is how many files it consumes. Exactly one file
-                     selected shows the single-frame scripts; no selection or a
-                     multi-file selection shows the ones that work on a set,
-                     which is also what the folder itself offers. Replaces the
-                     old split, where the same feature lived both in a bar
-                     inside the image viewer and in a dropdown on the file
-                     toolbar, under two different names. -->
+                <!-- SIRIL SCRIPTS — every ported Siril script, always, in one
+                     stable order. What differs between them is how many files
+                     they consume, and that is now shown by whether a button is
+                     enabled rather than by taking it away: a frame script needs
+                     exactly one file selected, a folder script always has a
+                     folder to work on.
+                     The bar used to swap sets with the selection, 17 buttons
+                     against 4, so every click redrew it, the horizontal
+                     scrollbar came and went, and the file list moved between
+                     the two clicks of a double-click. Replaces the even older
+                     split, where the same feature lived both in a bar inside
+                     the image viewer and in a dropdown on the file toolbar,
+                     under two different names. -->
                 <div class="files-actions files-actions-icons files-ai-toolbar files-scripts-toolbar"
                      x-init="loadScripts()"
                      x-show="studioScripts().length" x-cloak>
                     <span class="files-ai-label" aria-hidden="true">SIRIL SCRIPTS</span>
                     <template x-for="s in studioScripts()" :key="s.path">
-                        <button class="btn btn-sm btn-icon" :disabled="scripts.busy"
+                        <button class="btn btn-sm btn-icon"
+                                :disabled="scripts.busy || !scriptApplies(s)"
                                 @click="runStudioScript(s.path)"
-                                :title="s.description || s.displayName" :aria-label="s.displayName">
+                                :title="scriptTitle(s)" :aria-label="s.displayName">
                             <span class="files-icon" x-text="s.icon"></span>
                             <span class="files-icon-label" x-text="s.displayName"></span>
                         </button>
@@ -20007,7 +20012,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- VIEWFILT: the Lanczos resampler behind the editor's view filter.
          Display only, never touches saved pixels. ~4 KB. -->
     <script src="/js/resample.js?v=20260801-viewfilt"></script>
-    <script src="/js/app.js?v=20260801-viewfilt"></script>
+    <script src="/js/app.js?v=20260801-scriptbar"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

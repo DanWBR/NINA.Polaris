@@ -13862,15 +13862,44 @@ function ninaApp() {
         folderScripts() {
             return (this.scripts.list || []).filter(s => s.scope === 'folder' || s.scope === 'any');
         },
-        // What the STUDIO "SIRIL SCRIPTS" bar shows, chosen by the selection.
-        // All of them are ported Siril scripts; the split is arity. One file
-        // selected means the operator is working on THAT frame, so offer the
-        // single-frame scripts; with nothing selected, or several files, the
-        // subject is the set, so offer the ones that consume a set. Scripts
-        // declaring scope 'any' appear either way, which both filters honour.
+        // What the STUDIO "SIRIL SCRIPTS" bar shows: everything, always, in one
+        // stable order.
+        //
+        // It used to swap sets with the selection -- frame scripts with one
+        // file selected, folder scripts otherwise. That is 17 buttons against
+        // 4, so every selection change redrew the whole bar, and the change in
+        // width made a horizontal scrollbar come and go, which moved the file
+        // list between the two clicks of a double-click (field report). Beyond
+        // the layout bug it was also disorienting on its own terms: the tool
+        // you were reaching for vanished because you clicked a file.
+        //
+        // Now the row never changes size or contents, and applicability is
+        // shown by whether a button is enabled. A button that is greyed out
+        // stays in the same place, which is also how you learn what it needs.
         studioScripts() {
-            const n = (this.files?.selectedPaths || []).length;
-            return n === 1 ? this.frameScripts() : this.folderScripts();
+            return this.scripts.list || [];
+        },
+
+        // Whether a script can run against the CURRENT selection. Only frame
+        // scripts have a real constraint: they consume one frame, so they need
+        // exactly one selected. Folder scripts always have a folder to work on,
+        // and 'any' declares itself indifferent -- neither has a reason to be
+        // disabled just because a file happens to be highlighted.
+        scriptApplies(s) {
+            if (!s) return false;
+            if (s.scope === 'folder' || s.scope === 'any') return true;
+            return (this.files?.selectedPaths || []).length === 1;
+        },
+
+        // The tooltip does double duty: what the script does when it can run,
+        // and what is missing when it cannot. A greyed button with no
+        // explanation is worse than one that is simply absent.
+        scriptTitle(s) {
+            if (!s) return '';
+            if (this.scripts.busy) return this._t('Another script is still running');
+            if (!this.scriptApplies(s))
+                return this._t('Select exactly one frame to run this script');
+            return s.description || s.displayName || '';
         },
         // Run a script from the STUDIO SIRIL SCRIPTS bar. Passes BOTH the
         // single selected file (what a frame script consumes) and the current
