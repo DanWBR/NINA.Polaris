@@ -206,8 +206,91 @@ public class VideoRecordingService : IDisposable {
         // zero-frame recording (stream died before the first frame) leaves a
         // file nobody wants on the share.
         if (!string.IsNullOrEmpty(path) && frames > 0 && File.Exists(path)) {
+            WriteCaptureLog(path!, writer, frames);
             try { RecordingSaved?.Invoke(path); }
             catch (Exception ex) { _logger.LogDebug(ex, "RecordingSaved handler threw"); }
+        }
+    }
+
+    /// <summary>PLANLOG: a plain-text companion beside the .ser, the way
+    /// FireCapture and the rest of the planetary world do it.
+    ///
+    /// <para>A SER header holds geometry and little else, so a month later the
+    /// only record of the gain, the exposure, the scope or how many frames
+    /// were dropped is the operator's memory. Stacking software will not tell
+    /// you either. This costs a few hundred bytes next to a multi-gigabyte
+    /// recording and answers "what did I do that night" without asking anyone
+    /// to remember.</para>
+    ///
+    /// <para>Written after the SER is closed and only for a recording that
+    /// produced frames, so the log's existence means the file beside it is
+    /// readable. Any failure here is logged and swallowed: a missing companion
+    /// must never cost the recording.</para></summary>
+    private void WriteCaptureLog(string serPath, SerFileWriter? writer, int frames) {
+        try {
+            var started = _startedAt;
+            var ended = DateTime.UtcNow;
+            var seconds = Math.Max(0.001, (ended - started).TotalSeconds);
+            var cam = _equip.Camera;
+            var rig = _profiles.ActiveEquipmentProfile;
+            var fi = new FileInfo(serPath);
+
+            var sb = new System.Text.StringBuilder();
+            void Line(string k, object? v) {
+                if (v == null) return;
+                var s = v.ToString();
+                if (!string.IsNullOrWhiteSpace(s)) sb.AppendLine($"{k,-22}{s}");
+            }
+
+            sb.AppendLine("Polaris Astro Controller, planetary capture log");
+            sb.AppendLine(new string('-', 58));
+            Line("File", Path.GetFileName(serPath));
+            Line("Started (UTC)", started.ToString("yyyy-MM-dd HH:mm:ss"));
+            Line("Ended (UTC)", ended.ToString("yyyy-MM-dd HH:mm:ss"));
+            Line("Duration", $"{seconds:0.0} s");
+            sb.AppendLine();
+
+            Line("Camera", cam?.DeviceName);
+            Line("Driver", rig?.CameraDriver);
+            if (writer != null) {
+                Line("Frame size", $"{writer.Width} x {writer.Height}");
+                Line("Recorded depth", $"{writer.BitDepth}-bit");
+                Line("Colour mode", writer.ColorMode.ToString());
+            }
+            Line("Exposure", $"{_stream.ExposureSeconds * 1000:0.###} ms");
+            Line("Gain", _stream.Gain);
+            if (cam != null && !double.IsNaN(cam.Temperature)) Line("Sensor temp", $"{cam.Temperature:0.0} C");
+            Line("Binning", $"{_stream.BinX} x {_stream.BinY}");
+            sb.AppendLine();
+
+            Line("Frames written", frames);
+            Line("Frames dropped", _droppedFrames);
+            Line("Average rate", $"{frames / seconds:0.0} fps");
+            Line("File size", $"{fi.Length / (1024.0 * 1024):0.0} MB");
+            sb.AppendLine();
+
+            Line("Telescope", _equip.Telescope?.DeviceName ?? rig?.TelescopeModel);
+            if (rig != null) {
+                if (rig.FocalLengthMm > 0) Line("Focal length", $"{rig.FocalLengthMm:0} mm");
+                if (rig.ApertureMm > 0) Line("Aperture", $"{rig.ApertureMm:0} mm");
+            }
+            var scope = _equip.Telescope;
+            if (scope is { IsConnected: true }
+                    && !double.IsNaN(scope.RightAscension) && !double.IsNaN(scope.Declination)) {
+                Line("Pointing", $"RA {scope.RightAscension:0.0000} h, Dec {scope.Declination:0.0000} deg");
+            }
+            var focuser = _equip.Focuser;
+            if (focuser is { IsConnected: true }) Line("Focuser position", focuser.Position);
+            sb.AppendLine();
+
+            Line("Rig", rig?.Name);
+            Line("Polaris", typeof(VideoRecordingService).Assembly.GetName().Version?.ToString());
+
+            var logPath = Path.ChangeExtension(serPath, ".txt");
+            File.WriteAllText(logPath, sb.ToString());
+            _logger.LogInformation("Capture log written → {Path}", Path.GetFileName(logPath));
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Could not write the capture log beside {Path}", serPath);
         }
     }
 
