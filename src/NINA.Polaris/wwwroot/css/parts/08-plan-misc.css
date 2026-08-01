@@ -1138,16 +1138,9 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     gap: 10px;
     flex-wrap: wrap;
 }
-/* The disk picker has to show enough of the name to choose by. .input-sm caps
-   every small control at 220px, which cut "KBG40ZNS256G NVMe KIOXIA 256GB" down
-   to "KBG40ZN" -- the part that identifies the disk was the part removed. Let
-   it size to its content, with a ceiling so a long model name cannot push the
-   buttons off the row. */
-.storage-actions select.input-sm {
-    width: auto;
-    min-width: 260px;
-    max-width: 460px;
-}
+/* Disk names are long even by dropdown standards, so this one starts wider
+   than the global select floor. The cap is the global one. */
+.storage-actions select.input-sm { min-width: 260px; }
 .storage-move { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .storage-err { margin: 8px 2px 0; font-size: 12px; color: var(--danger, #e66); }
 

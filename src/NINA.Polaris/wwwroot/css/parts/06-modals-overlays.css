@@ -784,7 +784,7 @@
    via imageSmoothingEnabled:false in app.js. */
 /* VIEWFILT: .editor-preview-img is no longer in this list. The editor now
    carries an inline `image-rendering` from viewFilterCss(), so the operator
-   picks nearest / smooth / Lanczos per session; nearest is still the default
+   picks nearest or smooth per session; nearest is still the default
    and still what these other surfaces get unconditionally. */
 .crop-picker-img,
 .graxpert-compare-src,
@@ -798,9 +798,6 @@
 .editor-preview-img {
     image-rendering: crisp-edges;
     image-rendering: pixelated;
-}
-.view-filter-select {
-    max-width: 170px;
 }
 .studio-viewer-stars {
     position: absolute;

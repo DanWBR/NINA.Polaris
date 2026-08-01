@@ -1420,6 +1420,26 @@ button,
     transition: border-color var(--transition);
 }
 
+/* A <select> is not a number field, and the rule above was written for one.
+   Its `width: 80%; max-width: 220px` exists so a cooler setpoint and its
+   spinner arrows fit a narrow column; applied to a dropdown it truncates the
+   label to whatever fits 220px. That is how "Nearest (real pixels)" rendered as
+   "Nearest (r" and a disk named "KBG40ZNS256G NVMe KIOXIA 256GB" as "KBG40ZN":
+   the part that identifies the option is exactly the part that gets cut.
+
+   A select is sized by its content, because it has to fit its widest option or
+   the choice cannot be read. `field-sizing: content` (inherited above) does
+   that on Chromium; `width: auto` is the floor everywhere else. The cap is
+   generous and relative, so a long option grows without a select ever pushing
+   its row sideways. Anything that needs more than this should widen that one
+   select, not go back to trimming labels. */
+select.input-sm,
+select.input-md {
+    width: auto;
+    min-width: 120px;
+    max-width: min(100%, 460px);
+}
+
 /* Exposure-preset inputs hold up to 4 chars + a decimal + spinner
    arrows (e.g. "1000" or "0.0001"). Bump them a bit beyond the
    default .input-sm so the value never gets cropped. Selector

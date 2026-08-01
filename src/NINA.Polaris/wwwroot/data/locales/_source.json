@@ -85,7 +85,6 @@
   "How the image is resampled when zoomed in. Affects the view only, never the file.": "How the image is resampled when zoomed in. Affects the view only, never the file.",
   "How the image is resampled when zoomed in. Affects the view only, never the saved file.": "How the image is resampled when zoomed in. Affects the view only, never the saved file.",
   "Installing restarts Polaris, which stops {what}. Frames already written to disk are safe.": "",
-  "Lanczos (sharpest)": "Lanczos (sharpest)",
   "Last status frame: {s}s ago": "",
   "Link to the host is healthy.": "",
   "measuring...": "",

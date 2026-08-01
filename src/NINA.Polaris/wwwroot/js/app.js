@@ -2217,10 +2217,6 @@ function ninaApp() {
             previewUrl: '',        // current edited preview blob URL
             originalUrl: '',       // unedited preview blob URL (for compare)
             showOriginal: false,
-            // VIEWFILT: true while the Lanczos-resampled canvas is the layer
-            // on screen. False during a zoom or pan (the browser's fast filter
-            // is showing) and whenever the resample was skipped as too big.
-            lanczosActive: false,
             // Histogram overlay toggle. The histogram lives as an
             // absolutely-positioned strip pinned to the bottom of
             // the preview area instead of stealing a permanent
@@ -3597,20 +3593,19 @@ function ninaApp() {
         // VIEWFILT: how a magnified image is resampled FOR DISPLAY. Never
         // touches the pixels that get saved or exported.
         //
-        // Only three entries, because only three are real. The browser exposes
-        // exactly two resampling behaviours through CSS -- `image-rendering:
+        // Two entries, because the browser has two: `image-rendering:
         // pixelated` (nearest neighbour) and everything else (a bilinear-ish
-        // filter whose details belong to the engine) -- so listing "bilinear"
-        // and "bicubic" as separate choices would be two names for one code
-        // path. Lanczos is the third because resample.js actually computes it.
+        // filter whose details belong to the engine). Listing "bilinear" and
+        // "bicubic" separately would be two names for one code path, and
+        // trilinear interpolates between mipmap levels in a 3D texture sampler,
+        // which means nothing for a still image on a 2D canvas.
         //
-        // Trilinear is deliberately absent: it interpolates between mipmap
-        // levels in a 3D texture sampler and has no meaning for a still image
-        // on a 2D canvas. Putting it in the menu would be a label, not a filter.
+        // A "lanczos" value may still be sitting in localStorage from the
+        // version that offered it; it falls back to nearest here.
         viewFilter: (function () {
             try {
-                const v = localStorage.getItem('polaris.viewFilter');
-                return (v === 'smooth' || v === 'lanczos') ? v : 'nearest';
+                return localStorage.getItem('polaris.viewFilter') === 'smooth'
+                    ? 'smooth' : 'nearest';
             } catch (e) { return 'nearest'; }
         })(),
         // Width (px) of the editor's right-hand sliders panel. Drag the
@@ -15881,7 +15876,6 @@ function ninaApp() {
             this.editorState.zoom = 1;
             this.editorState.panX = 0;
             this.editorState.panY = 0;
-            this._editorScheduleLanczos();   // VIEWFILT
         },
 
         _editorZoomBy(factor, anchorX, anchorY) {
@@ -15897,7 +15891,6 @@ function ninaApp() {
                 s.panY -= (anchorY - s.panY) * k / (next / s.zoom);
             }
             s.zoom = next;
-            this._editorScheduleLanczos();   // VIEWFILT
         },
 
         editorOnWheel(ev) {
@@ -15945,7 +15938,6 @@ function ninaApp() {
             if (ev && ev.pointerId != null) {
                 try { ev.currentTarget.releasePointerCapture(ev.pointerId); } catch (_) { }
             }
-            this._editorScheduleLanczos();   // VIEWFILT
         },
 
         // Two-finger pinch, anchored at the midpoint so the gesture zooms
@@ -16159,14 +16151,6 @@ function ninaApp() {
             const url = URL.createObjectURL(blob);
             if (this.editorState.previewUrl) URL.revokeObjectURL(this.editorState.previewUrl);
             this.editorState.previewUrl = url;
-            // VIEWFILT: a new preview makes any existing resample stale. The
-            // <img> has to decode before it can be read back, so wait for it
-            // rather than resampling whatever the element still holds.
-            if (this.viewFilter === 'lanczos') {
-                const probe = new Image();
-                probe.onload = () => this._editorScheduleLanczos();
-                probe.src = url;
-            }
         },
 
         _editorRunPreviewWasm(maxDim = 1600) {
@@ -18914,9 +18898,8 @@ function ninaApp() {
                 // VIEWFILT: nearest by default, so the operator inspects real
                 // pixels and the viewer never invents structure that is not in
                 // the frame. The toolbar can switch it per session. OSD does
-                // nearest or smooth and nothing else: Lanczos here would mean
-                // writing a custom tiled drawer, so it maps to smooth rather
-                // than the menu claiming something the viewer cannot do.
+                // nearest or smooth and nothing else, which is exactly what
+                // the picker offers.
                 imageSmoothingEnabled: this.viewFilter !== 'nearest',
                 gestureSettingsMouse: { clickToZoom: false },
                 gestureSettingsTouch: { clickToZoom: false },
@@ -37290,12 +37273,19 @@ function ninaApp() {
 
         // ---- VIEWFILT: display-only resampling -------------------------
 
-        // The CSS half. Nearest keeps real pixels visible, which is what the
-        // editor and the viewers have always done and stays the default: on
-        // astro data a smoothed view invents structure that is not in the
-        // frame. Lanczos still asks for a smooth CSS filter, because the
-        // resampled canvas can be a fraction off the exact on-screen size and
-        // pixelating that last fraction would undo the point.
+        // Two options, because the browser has two. `image-rendering:
+        // pixelated` is nearest neighbour and everything else is a
+        // bilinear-ish filter whose details belong to the engine; there is no
+        // third knob in CSS or on a canvas.
+        //
+        // A Lanczos entry was here briefly, backed by a real resampler. It only
+        // engaged above 1:1, so at 100% zoom -- where the operator actually
+        // sits -- picking it did nothing at all, and a menu entry that silently
+        // declines to work is worse than one that does not exist. Removed
+        // rather than papered over.
+        //
+        // Nearest stays the default: on astro data a smoothed view invents
+        // structure that is not in the frame.
         viewFilterCss() {
             return this.viewFilter === 'nearest' ? 'pixelated' : 'auto';
         },
@@ -37303,25 +37293,20 @@ function ninaApp() {
         viewFilterLabel(v) {
             const map = {
                 nearest: this._t('Nearest (real pixels)'),
-                smooth:  this._t('Smooth'),
-                lanczos: this._t('Lanczos (sharpest)')
+                smooth:  this._t('Smooth')
             };
             return map[v || this.viewFilter] || v;
         },
 
         setViewFilter(v) {
-            if (v !== 'nearest' && v !== 'smooth' && v !== 'lanczos') v = 'nearest';
+            if (v !== 'nearest' && v !== 'smooth') v = 'nearest';
             this.viewFilter = v;
             try { localStorage.setItem('polaris.viewFilter', v); } catch (e) {}
             // OpenSeadragon decides smoothing when it paints a tile, so it has
             // to be told; the editor picks the change up through its binding.
             this._viewFilterApplyOsd();
-            this._editorScheduleLanczos();
         },
 
-        // OSD gets nearest or smooth. Lanczos would mean writing a custom
-        // drawer for a tiled viewer, so it maps to smooth here rather than
-        // pretending: the option is honest about what each surface can do.
         _viewFilterApplyOsd() {
             const v = this._osdViewer;
             if (!v) return;
@@ -37332,86 +37317,6 @@ function ninaApp() {
                     v.drawer.setImageSmoothingEnabled(smooth);
                 }
             } catch (e) { /* an older drawer simply keeps what it was built with */ }
-        },
-
-        // The Lanczos half, for the editor only.
-        //
-        // Resampling on every wheel tick would make the viewer unusable: an
-        // 800x600 preview to twice that measures ~84 ms on a desktop and several
-        // hundred on a phone. So the view stays on the browser's fast filter
-        // while the operator moves, and the resampled canvas replaces it once
-        // things settle.
-        _editorScheduleLanczos() {
-            clearTimeout(this._editorLanczosTimer);
-            // Drop the canvas the moment anything moves. It was resampled for
-            // the old zoom, and letting the transform stretch a stale resample
-            // looks worse than the plain filter it is meant to beat.
-            this.editorState.lanczosActive = false;
-            if (this.viewFilter !== 'lanczos' || !this.editorState.modalOpen) return;
-            this._editorLanczosTimer = setTimeout(() => this._editorRenderLanczos(), 220);
-        },
-
-        _editorRenderLanczos() {
-            const R = window.PolarisResample;
-            const dst = document.getElementById('editorLanczosCanvas');
-            if (!R || !dst) return;
-
-            // Whatever the stage is currently SHOWING: the server-mode <img>,
-            // the WASM canvas, or the unedited original during a compare. All
-            // three sit in the DOM at once and x-show only hides them, so the
-            // VISIBLE one has to be picked rather than the first that matches.
-            // Otherwise a WASM-mode edit would be resampled from the stale
-            // server JPEG hidden beside it.
-            const stage = document.querySelector('.editor-preview-stage');
-            if (!stage) return;
-            const src = Array.from(
-                stage.querySelectorAll('.editor-preview-img:not(#editorLanczosCanvas)'))
-                .find(el => el.getClientRects().length > 0);
-            if (!src) return;
-            const sw = src.naturalWidth || src.width;
-            const sh = src.naturalHeight || src.height;
-            if (!sw || !sh) return;
-
-            const zoom = Math.max(1, Number(this.editorState.zoom) || 1);
-            // Only magnification is worth the work. Below 1:1 the browser is
-            // already downsampling with a decent filter and Lanczos would cost
-            // time to change almost nothing.
-            if (zoom <= 1.01) { this.editorState.lanczosActive = false; return; }
-
-            let dw = Math.round(sw * zoom);
-            let dh = Math.round(sh * zoom);
-            // Bound the backing store. 24 Mpx of RGBA is ~96 MB, which is
-            // already generous on a tablet; past that, fall back rather than
-            // hand the browser an allocation it may not survive.
-            const MAX_PX = 24e6;
-            if (dw * dh > MAX_PX) {
-                const k = Math.sqrt(MAX_PX / (dw * dh));
-                dw = Math.max(1, Math.round(dw * k));
-                dh = Math.max(1, Math.round(dh * k));
-            }
-            if (R.estimateCost(sw, sh, dw, dh, 3) > 3e9) {
-                this.editorState.lanczosActive = false;
-                return;
-            }
-
-            try {
-                const tmp = document.createElement('canvas');
-                tmp.width = sw; tmp.height = sh;
-                const tctx = tmp.getContext('2d', { willReadFrequently: true });
-                tctx.drawImage(src, 0, 0, sw, sh);
-                const srcData = tctx.getImageData(0, 0, sw, sh);
-
-                const out = R.resampleRGBA(srcData.data, sw, sh, dw, dh, 3);
-                dst.width = dw; dst.height = dh;
-                dst.getContext('2d').putImageData(new ImageData(out, dw, dh), 0, 0);
-                this.editorState.lanczosActive = true;
-            } catch (e) {
-                // A tainted canvas, an OOM, anything: the fast view is still on
-                // screen underneath, so the worst case is that the filter did
-                // not apply.
-                console.warn('[Polaris] Lanczos view filter skipped:', e);
-                this.editorState.lanczosActive = false;
-            }
         },
 
         // ---- INDI profile assistant ------------------------------------
