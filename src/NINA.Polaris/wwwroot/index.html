@@ -47,7 +47,7 @@
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260728-slimaddr2">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260731-videonudge">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260731-edpan">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260728-barcollapse">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260731-wave">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260714-overlayfix">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260730-nudgerow">
@@ -11394,6 +11394,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </button>
                     <!-- Colour calibration on a plate-solved RGB master: PCC
                          (APASS B-V) and SPCC (spectral integration). One file. -->
+                    <!-- WAVE-3: wavelets belonged in the workflow builder only,
+                         which is not how a planetary stack gets tuned. Same row
+                         as the other single-file tools. -->
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1"
+                            @click="waveOpenModal(files.selectedPaths[0])"
+                            title="Wavelet layers: sharpen or soften each detail scale on its own, with a live preview. The planetary sharpening tool."
+                            aria-label="Wavelet layers">
+                        <span class="files-icon" x-text="wave.busy ? '⏳' : '〰️'"></span>
+                        <span class="files-icon-label">Wavelets</span>
+                    </button>
                     <button class="btn btn-sm btn-icon"
                             :disabled="files.selectedPaths.length !== 1"
                             @click="pccOpenModal(files.selectedPaths[0])"
@@ -18771,6 +18782,66 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- WAVE-3: wavelet layers.
+         Planetary sharpening is a dialogue, not a form: drag a layer, look,
+         drag again. So the preview renders server-side at PREVIEW SIZE on every
+         change (debounced) and only Apply writes a FITS. Layer 1 is the finest
+         scale; the layer carrying Jupiter's festoons is not the one carrying
+         the seeing noise, which is exactly why one Detail knob was not enough. -->
+    <div class="modal-overlay" x-show="wave.modalOpen" x-cloak
+         @click.self="if(!wave.busy) wave.modalOpen=false"
+         @keydown.escape.window="if(!wave.busy) wave.modalOpen=false">
+        <div class="modal-card wave-card">
+            <div class="modal-head">
+                <span class="modal-icon">〰️</span>
+                <h3>Wavelet layers</h3>
+            </div>
+            <div class="wave-body">
+                <div class="wave-preview">
+                    <img :src="wave.previewUrl" x-show="wave.previewUrl" alt="preview">
+                    <div class="wave-preview-empty" x-show="!wave.previewUrl"
+                         x-text="wave.busy ? 'Rendering...' : 'No preview yet'"></div>
+                    <button class="btn btn-sm wave-ab"
+                            @pointerdown="waveShowOriginal(true)"
+                            @pointerup="waveShowOriginal(false)"
+                            @pointerleave="waveShowOriginal(false)"
+                            title="Hold to see the original">Hold: original</button>
+                </div>
+                <div class="wave-sliders">
+                    <template x-for="(g, i) in wave.gains" :key="i">
+                        <div class="wave-row">
+                            <span class="wave-lab" x-text="'Layer ' + (i + 1)"></span>
+                            <input type="range" min="0" max="4" step="0.05"
+                                   :value="wave.gains[i]"
+                                   @input="wave.gains[i] = +$event.target.value; waveQueuePreview()">
+                            <span class="wave-val" x-text="(+wave.gains[i]).toFixed(2)"></span>
+                            <input type="range" class="wave-dn" min="0" max="1" step="0.05"
+                                   :title="'Denoise layer ' + (i + 1)"
+                                   :value="wave.denoise[i]"
+                                   @input="wave.denoise[i] = +$event.target.value; waveQueuePreview()">
+                        </div>
+                    </template>
+                    <div class="text-muted" style="font-size:11px">
+                        The left slider sharpens that scale (1.00 leaves it alone), the right
+                        one removes noise from it. Layer 1 is the finest detail.
+                    </div>
+                    <div class="wave-presets">
+                        <button class="btn btn-sm" @click="wavePreset('reset')">Reset</button>
+                        <button class="btn btn-sm" @click="wavePreset('planet')">Planet</button>
+                        <button class="btn btn-sm" @click="wavePreset('moon')">Moon</button>
+                    </div>
+                </div>
+            </div>
+            <p x-show="wave.error" style="color:var(--danger,#e66);font-size:12px" x-text="wave.error"></p>
+            <div class="modal-actions">
+                <button class="btn btn-sm" :disabled="wave.busy" @click="wave.modalOpen=false">Cancel</button>
+                <button class="btn btn-sm btn-primary" :disabled="wave.busy" @click="waveApply()">
+                    <span x-text="wave.busy ? 'Working...' : 'Apply'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- INDI profile assistant: review + confirm.
          Deliberately a confirmation step, not a one-click apply: creating a
          profile rewrites the user's INDI setup, and the scan cannot resolve
@@ -19849,7 +19920,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260731-updgate"></script>
+    <script src="/js/app.js?v=20260731-wave"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

@@ -152,6 +152,46 @@ public static class PostProcessEndpoints {
             return Results.Ok(new { results, failures });
         });
 
+        // WAVE-2: per-layer wavelets, the way RegiStax and AstroSurface present
+        // them. One gain per scale beats one Detail knob for planetary work,
+        // where the layer that carries the festoons is not the layer that
+        // carries the seeing noise.
+        g.MapPost("/wavelet-layers", async (
+                WaveletService svc,
+                FrameLibraryService library,
+                WaveletLayersRequest req) => {
+            if (req.Paths == null || req.Paths.Length == 0)
+                return Results.BadRequest(new { error = "paths is required" });
+            if (req.Gains == null || req.Gains.Length == 0)
+                return Results.BadRequest(new { error = "gains is required (one value per scale)" });
+            var results = new List<object>();
+            var failures = new List<object>();
+            foreach (var path in req.Paths) {
+                try {
+                    var r = svc.SharpenLayers(path, req.Gains, req.Denoise);
+                    results.Add(new { sourcePath = path, outputPath = r.OutputPath,
+                        width = r.Width, height = r.Height, channels = r.Channels });
+                } catch (Exception ex) { failures.Add(new { sourcePath = path, error = ex.Message }); }
+            }
+            if (results.Count > 0) { try { await library.RescanAsync(); } catch { } }
+            return Results.Ok(new { results, failures });
+        });
+
+        // WAVE-3: preview for the slider panel. Returns a JPEG, writes nothing.
+        // Capped at 1600 px because the point is a fast answer, not a master.
+        g.MapPost("/wavelet-preview", (WaveletService svc, WaveletPreviewRequest req) => {
+            if (string.IsNullOrWhiteSpace(req.Path))
+                return Results.BadRequest(new { error = "path is required" });
+            try {
+                var jpeg = svc.PreviewLayers(req.Path, req.Gains ?? Array.Empty<double>(),
+                    req.Denoise, Math.Clamp(req.MaxDim ?? 900, 128, 1600),
+                    Math.Clamp(req.Quality ?? 85, 40, 95));
+                return Results.File(jpeg, "image/jpeg");
+            } catch (Exception ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
         // Multiscale HDR: recover blown cores (à-trous, luminance).
         g.MapPost("/wavescale-hdr", async (
                 WaveletService svc,
@@ -275,6 +315,18 @@ public static class PostProcessEndpoints {
     // scales = à-trous levels.
     public record WaveletSharpenRequest(
         string[] Paths, double? Detail = null, double? Denoise = null, int? Scales = null);
+
+    /// <summary>WAVE-2: one gain per wavelet scale, FINEST FIRST. 1.0 leaves a
+    /// layer alone, above sharpens, below softens. Denoise is optional, one
+    /// value per scale, in units of that layer's own noise sigma.</summary>
+    public record WaveletLayersRequest(
+        string[] Paths, double[] Gains, double[]? Denoise = null);
+
+    /// <summary>WAVE-3: the same numbers on ONE file, rendered as a JPEG at
+    /// preview size so a slider drag stays responsive on a big master.</summary>
+    public record WaveletPreviewRequest(
+        string Path, double[] Gains, double[]? Denoise = null,
+        int? MaxDim = null, int? Quality = null);
 
     // amount 0..1 = core compression strength; scales = à-trous levels.
     public record WaveScaleHdrRequest(

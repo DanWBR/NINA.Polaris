@@ -3376,6 +3376,19 @@ function ninaApp() {
             exclusionRadius: 9, stage: '', error: '',
         },
 
+        // WAVE-3: per-layer wavelets. Five layers is what planetary work uses
+        // in practice (the sixth is already the disc, not detail), and every
+        // gain starts neutral so opening the panel changes nothing until the
+        // operator asks for it.
+        wave: {
+            modalOpen: false, busy: false, framePath: '', error: '',
+            gains: [1, 1, 1, 1, 1],
+            denoise: [0, 0, 0, 0, 0],
+            previewUrl: '',      // object URL of the current render
+            originalUrl: '',     // the untouched frame, for the hold-to-compare
+            showingOriginal: false
+        },
+
         // Photometric Color Calibration modal (APASS B-V, fixed-slope).
         // Operates on the Lights slot's integrated master. Modes: bg (no
         // catalog) | pcc (plate-solve + APASS). Manual ROI mode stays on
@@ -32992,6 +33005,141 @@ function ninaApp() {
         // pairs: [{ src, out, label }]; index picks which pair to show.
 
         // ── Star colour repair (SVBony debayer fringe) ──────────────────
+        // ---- WAVE-3: wavelet layers modal ----
+
+        waveOpenModal(framePath) {
+            if (!framePath) { this.toast('Select one frame first', 'warn'); return; }
+            this.wave.framePath = framePath;
+            this.wave.error = '';
+            this.wave.busy = false;
+            this.wave.showingOriginal = false;
+            this.wave.modalOpen = true;
+            // The neutral render IS the original, so one request seeds both the
+            // preview and the hold-to-compare reference.
+            this._waveRender(true);
+        },
+
+        wavePreset(which) {
+            // Two starting points, not a promise: seeing decides the rest.
+            // 'planet' leans on the middle scales, where festoons and belts
+            // live; 'moon' pushes the finest, where the terminator's texture
+            // is, and denoises it because that is also where the noise is.
+            if (which === 'planet') {
+                this.wave.gains = [1.15, 1.55, 1.35, 1.1, 1.0];
+                this.wave.denoise = [0.35, 0.15, 0, 0, 0];
+            } else if (which === 'moon') {
+                this.wave.gains = [1.6, 1.4, 1.15, 1.0, 1.0];
+                this.wave.denoise = [0.25, 0.1, 0, 0, 0];
+            } else {
+                this.wave.gains = [1, 1, 1, 1, 1];
+                this.wave.denoise = [0, 0, 0, 0, 0];
+            }
+            this.waveQueuePreview();
+        },
+
+        // Debounced: a slider drag fires dozens of input events and each render
+        // is a full à-trous pass on the host. 180 ms is below the threshold
+        // where the panel feels laggy and well above the event rate.
+        waveQueuePreview() {
+            clearTimeout(this._waveTimer);
+            this._waveTimer = setTimeout(() => this._waveRender(false), 180);
+        },
+
+        async _waveRender(seedOriginal) {
+            if (!this.wave.framePath) return;
+            // One render at a time; the queued timer will catch the latest
+            // values right after this one lands.
+            if (this._waveRendering) { this._waveDirty = true; return; }
+            this._waveRendering = true;
+            this.wave.busy = true;
+            this.wave.error = '';
+            try {
+                const body = {
+                    path: this.wave.framePath,
+                    gains: seedOriginal ? [1, 1, 1, 1, 1] : this.wave.gains.map(Number),
+                    denoise: seedOriginal ? [0, 0, 0, 0, 0] : this.wave.denoise.map(Number),
+                    maxDim: 900
+                };
+                const r = await this.apiFetch('/api/post/wavelet-preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                    timeout: 120000
+                });
+                if (!r.ok) {
+                    let msg = 'Preview failed.';
+                    try { const j = await r.json(); if (j?.error) msg = j.error; } catch (e) {}
+                    this.wave.error = msg;
+                    return;
+                }
+                const url = URL.createObjectURL(await r.blob());
+                if (seedOriginal) {
+                    if (this.wave.originalUrl) URL.revokeObjectURL(this.wave.originalUrl);
+                    this.wave.originalUrl = url;
+                    this.wave.previewUrl = url;
+                } else {
+                    // Never revoke the URL the <img> is still showing, or the
+                    // panel blinks empty between renders.
+                    const old = this.wave.previewUrl;
+                    this.wave.previewUrl = url;
+                    if (old && old !== this.wave.originalUrl) URL.revokeObjectURL(old);
+                }
+            } catch (e) {
+                this.toastFail('Wavelet preview failed', e);
+            } finally {
+                this._waveRendering = false;
+                this.wave.busy = false;
+                if (this._waveDirty) { this._waveDirty = false; this.waveQueuePreview(); }
+            }
+        },
+
+        // Hold-to-compare. Sharpening is judged against what you started with,
+        // and flipping between two images beats remembering one.
+        waveShowOriginal(on) {
+            if (!this.wave.originalUrl) return;
+            if (on) {
+                this._waveShown = this.wave.previewUrl;
+                this.wave.previewUrl = this.wave.originalUrl;
+                this.wave.showingOriginal = true;
+            } else if (this.wave.showingOriginal) {
+                this.wave.previewUrl = this._waveShown || this.wave.previewUrl;
+                this.wave.showingOriginal = false;
+            }
+        },
+
+        async waveApply() {
+            if (!this.wave.framePath || this.wave.busy) return;
+            this.wave.busy = true;
+            this.wave.error = '';
+            try {
+                const r = await this.apiFetch('/api/post/wavelet-layers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        paths: [this.wave.framePath],
+                        gains: this.wave.gains.map(Number),
+                        denoise: this.wave.denoise.map(Number)
+                    }),
+                    timeout: 600000
+                });
+                const j = await r.json();
+                if (!r.ok || (j.failures || []).length > 0) {
+                    this.wave.error = (j.failures?.[0]?.error) || j.error || 'Apply failed.';
+                    return;
+                }
+                const out = j.results?.[0]?.outputPath;
+                this.toast(out ? 'Saved ' + out.split(/[\\/]/).pop() : 'Applied', 'ok');
+                this.wave.modalOpen = false;
+                // The new _wsharp lands next to the source, so re-list the
+                // folder the operator is looking at.
+                try { if (this.files?.cwd) this.filesCd(this.files.cwd); } catch (e) {}
+            } catch (e) {
+                this.toastFail('Wavelet apply failed', e);
+            } finally {
+                this.wave.busy = false;
+            }
+        },
+
         starColorOpenModal(framePath) {
             if (!framePath) { this.toast?.('Select one frame first'); return; }
             this.starColor.framePath = framePath;

@@ -15,6 +15,7 @@
 using NINA.Image.FileFormat.FITS;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
+using NINA.Polaris.Services.Studio;
 
 namespace NINA.Polaris.Services.PostProcess;
 
@@ -44,6 +45,52 @@ public class WaveletService {
         _logger.LogInformation("Wavelet sharpen: {Src} ({W}×{H} ch={Ch}) detail={D} denoise={N} scales={S} → {Out}",
             sourcePath, w, h, ch, detail, denoise, scales, outPath);
         return new WaveletResult(outPath, w, h, ch);
+    }
+
+    /// <summary>WAVE-2: per-layer sharpen, the RegiStax model. One gain per
+    /// wavelet scale (finest first) plus an optional denoise threshold per
+    /// scale, in units of that layer's own noise sigma.</summary>
+    public WaveletResult SharpenLayers(string sourcePath, double[] gains, double[]? denoise) {
+        if (gains == null || gains.Length == 0)
+            throw new ArgumentException("gains is required (one value per wavelet scale)", nameof(gains));
+        var (src, w, h, ch, pixels) = Load(sourcePath);
+        WaveletSharpen.ApplyLayers(pixels, w, h, ch, gains, denoise);
+        // Stamp the sliders into the header. A wavelet result cannot be
+        // reverse-engineered from the pixels, and the operator will want the
+        // settings that worked on last month's Jupiter.
+        var kw = new List<KeyValuePair<string, string>> {
+            new("WSHLAY", gains.Length.ToString())
+        };
+        for (int j = 0; j < gains.Length && j < 8; j++) {
+            kw.Add(new($"WSHG{j + 1}", gains[j].ToString("0.###")));
+            if (denoise != null && j < denoise.Length && denoise[j] > 0)
+                kw.Add(new($"WSHN{j + 1}", denoise[j].ToString("0.###")));
+        }
+        var outPath = Write(src, sourcePath, pixels, "_wsharp", kw.ToArray());
+        _logger.LogInformation("Wavelet layers: {Src} ({W}×{H} ch={Ch}) gains=[{G}] → {Out}",
+            sourcePath, w, h, ch, string.Join(", ", gains.Select(g => g.ToString("0.##"))), outPath);
+        return new WaveletResult(outPath, w, h, ch);
+    }
+
+    /// <summary>WAVE-3: the same maths rendered straight to a JPEG at preview
+    /// size instead of written as a FITS.
+    ///
+    /// <para>Wavelet tuning is a dialogue: drag, look, drag again. A
+    /// full-resolution round trip per drag is unusable on a 20 MP master, so
+    /// the modal previews on a DOWNSCALED copy and only Apply writes a file.
+    /// The transform runs before the downscale so the preview shows the real
+    /// per-layer effect rather than the effect of resampling it.</para>
+    /// </summary>
+    public byte[] PreviewLayers(string sourcePath, double[] gains, double[]? denoise,
+                                int maxDim = 900, int quality = 85) {
+        var (src, w, h, ch, pixels) = Load(sourcePath);
+        if (gains is { Length: > 0 })
+            WaveletSharpen.ApplyLayers(pixels, w, h, ch, gains, denoise);
+        return ch == 3
+            ? FitsThumbnailer.RenderJpegFromRgbPlanes(pixels, w, h, src.Properties.BitDepth,
+                                                      maxDim, quality)
+            : FitsThumbnailer.RenderJpegFromBuffer(pixels, w, h, src.Properties.BitDepth,
+                                                   maxDim, quality);
     }
 
     public WaveletResult Hdr(string sourcePath, double amount, int scales) {

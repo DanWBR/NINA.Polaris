@@ -2257,3 +2257,78 @@
     transition: opacity .12s ease, transform .12s ease;
 }
 .touch-tip.show { opacity: 1; transform: translateY(0); }
+
+/* ---- WAVE-3: wavelet layers modal ----------------------------------
+   Two columns: the preview carries the decision, the sliders are the hand on
+   the knob. Wider than a normal modal because judging sharpening on a
+   thumbnail is judging nothing. Collapses to one column on a phone, preview
+   first, since that is the part you look at while dragging. */
+.wave-card {
+    width: min(1040px, 96vw);
+    max-width: 96vw;
+}
+.wave-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 14px;
+    align-items: start;
+}
+.wave-preview {
+    position: relative;
+    min-height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.wave-preview img {
+    max-width: 100%;
+    max-height: 62vh;
+    display: block;
+}
+.wave-preview-empty {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+.wave-ab {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    opacity: 0.85;
+}
+.wave-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.wave-row {
+    display: grid;
+    grid-template-columns: 58px 1fr 42px 74px;
+    align-items: center;
+    gap: 6px;
+}
+.wave-lab {
+    font-size: 11.5px;
+    color: var(--text-muted);
+}
+.wave-val {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    text-align: right;
+}
+/* The denoise slider is deliberately smaller and quieter: it is the second
+   decision, taken after the sharpening one. */
+.wave-dn { opacity: 0.75; }
+.wave-presets {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+    .wave-body { grid-template-columns: 1fr; }
+    .wave-preview img { max-height: 40vh; }
+}
