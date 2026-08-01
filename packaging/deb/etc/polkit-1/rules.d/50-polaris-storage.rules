@@ -1,0 +1,34 @@
+// TWIN: keep in sync with ../localauthority/50-local.d/50-polaris-storage.pkla
+// (that .pkla covers polkit < 0.106 / Ubuntu 22.04, which ignores this JS format).
+//
+// PolicyKit rule shipped by the polaris .deb. Grants the 'polaris' system user
+// the ability to start the on-demand capture-disk unit, used by
+// StorageSetupService when the browser POSTs /api/storage/prepare or
+// /api/storage/format:
+//
+//   systemctl start polaris-storage-prep.service
+//
+// That unit (running as root) mounts a data disk and writes the fstab entry, or
+// -- when the request says so explicitly -- partitions and formats a blank one,
+// then exits.
+//
+// This file exists because STORAGE-1 assumed the self-update rule already
+// covered it. It does not: 50-polaris-update.rules scopes its grant to
+// action.lookup("unit") == "polaris-self-update.service", and on this appliance
+// polkit is version 124, which reads .rules and IGNORES the broad manage-units
+// grant in the .pkla twin. The result was "Interactive authentication required"
+// on every attempt to set up a disk.
+//
+// Scope is intentionally narrow, matching the update / power / clock / network
+// rules: only the polaris user, only this one unit. The unit itself re-derives
+// every safety check from the kernel, so the grant does not widen what the
+// unprivileged half can actually do.
+polkit.addRule(function(action, subject) {
+    if (subject.user != "polaris") return;
+
+    if ((action.id == "org.freedesktop.systemd1.manage-units"
+            || action.id == "org.freedesktop.systemd1.manage-unit-files")
+        && action.lookup("unit") == "polaris-storage-prep.service") {
+        return polkit.Result.YES;
+    }
+});

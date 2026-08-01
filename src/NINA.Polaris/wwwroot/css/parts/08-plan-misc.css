@@ -1098,30 +1098,58 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
    Sits between the status cards and Get Started: visible on arrival, easy to
    dismiss, and never in the way of anything. Amber rather than red, because
    this is advice about a future problem, not a fault. */
-.home-storage { margin: 12px 0 4px; }
+.home-storage { margin: 18px 0; }
 .storage-card {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
-    background: rgba(217, 140, 0, 0.08);
-    border: 1px solid rgba(217, 140, 0, 0.35);
+    gap: 16px;
+    /* Room to breathe. The card sits between the status tiles and Get
+       Started, and at 12px it read as a squeezed strip rather than a
+       card. row-gap covers the wrapped layout on a narrow panel, where
+       the actions drop under the text. */
+    padding: 16px 20px;
+    row-gap: 14px;
+    /* Near-opaque, not a tint. HOME sits on a photographic sky background, and
+       an 8% amber wash left the description sitting on stars: the text was
+       there and unreadable, which is worse than not showing it. The panel
+       colour carries just enough amber to still read as a warning. */
+    background: color-mix(in srgb, var(--panel-bg, #161a22) 94%, #d98c00 6%);
+    border: 1px solid rgba(217, 140, 0, 0.45);
     border-left: 3px solid var(--warn, #d98c00);
     border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
     flex-wrap: wrap;
 }
-.storage-icon { font-size: 22px; line-height: 1; }
-.storage-text { flex: 1 1 260px; min-width: 220px; }
+.storage-icon { font-size: 22px; line-height: 1; align-self: flex-start; margin-top: 2px; }
+.storage-text { flex: 1 1 320px; min-width: 240px; }
 .storage-text strong { display: block; font-size: 14px; }
-.storage-text p { margin: 2px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+/* --text-secondary, not --text-muted: muted is tuned for a flat panel and
+   comes out too faint here even against the opaque background. */
+.storage-text p {
+    margin: 4px 0 0;
+    font-size: 12.5px;
+    color: var(--text-secondary, #b9c2cf);
+    line-height: 1.5;
+}
 .storage-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: flex-end;
+    gap: 10px;
     flex-wrap: wrap;
 }
-.storage-move { display: flex; align-items: center; gap: 5px; font-size: 12px; }
-.storage-err { margin: 6px 2px 0; font-size: 12px; color: var(--danger, #e66); }
+/* The disk picker has to show enough of the name to choose by. .input-sm caps
+   every small control at 220px, which cut "KBG40ZNS256G NVMe KIOXIA 256GB" down
+   to "KBG40ZN" -- the part that identifies the disk was the part removed. Let
+   it size to its content, with a ceiling so a long model name cannot push the
+   buttons off the row. */
+.storage-actions select.input-sm {
+    width: auto;
+    min-width: 260px;
+    max-width: 460px;
+}
+.storage-move { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.storage-err { margin: 8px 2px 0; font-size: 12px; color: var(--danger, #e66); }
 
 /* INDIAUTO: the note shown only when the equipment dialog opened by itself.
    Informational blue, not the amber the storage card uses: nothing is wrong

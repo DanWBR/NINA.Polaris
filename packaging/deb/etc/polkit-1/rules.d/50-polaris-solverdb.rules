@@ -1,0 +1,26 @@
+// TWIN: keep in sync with ../localauthority/50-local.d/50-polaris-update.pkla,
+// whose broad manage-units grant already covers this on polkit < 0.106.
+//
+// PolicyKit rule shipped by the polaris .deb. Grants the 'polaris' system user
+// the ability to start the on-demand solver-database install unit, used by
+// SolverDatabaseService:
+//
+//   systemctl start polaris-solverdb.service
+//
+// That unit (running as root) moves a downloaded star-index set into the
+// solver's data directory, then exits.
+//
+// Found by auditing every unit the app starts with `systemctl start` against
+// the units actually named in a .rules grant. Modern polkit reads .rules and
+// IGNORES the broad .pkla twin, so this path would have failed with
+// "Interactive authentication required" the same way the capture-disk setup
+// did -- silently, and only on a host that had never installed a database.
+polkit.addRule(function(action, subject) {
+    if (subject.user != "polaris") return;
+
+    if ((action.id == "org.freedesktop.systemd1.manage-units"
+            || action.id == "org.freedesktop.systemd1.manage-unit-files")
+        && action.lookup("unit") == "polaris-solverdb.service") {
+        return polkit.Result.YES;
+    }
+});

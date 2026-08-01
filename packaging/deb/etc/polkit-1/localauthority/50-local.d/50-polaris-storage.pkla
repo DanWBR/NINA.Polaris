@@ -1,0 +1,15 @@
+# .pkla twin of ../../rules.d/50-polaris-storage.rules for polkit < 0.106
+# (e.g. Ubuntu 22.04). Lets the polaris user start the on-demand
+# capture-disk unit (polaris-storage-prep.service) without a password.
+#
+# A .pkla cannot scope to a single unit -- it matches by action id, not by
+# unit name -- so on those systems this is already covered by the broad
+# manage-units grant in 50-polaris-update.pkla. It is written out anyway so
+# the pair stays symmetrical and nobody has to remember that one of the two
+# formats is implicitly covering the other.
+[Polaris passwordless capture-disk setup (polkit < 0.106)]
+Identity=unix-user:polaris
+Action=org.freedesktop.systemd1.manage-units;org.freedesktop.systemd1.manage-unit-files
+ResultAny=yes
+ResultInactive=yes
+ResultActive=yes

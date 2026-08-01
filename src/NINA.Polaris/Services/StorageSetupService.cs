@@ -35,7 +35,11 @@ namespace NINA.Polaris.Services;
 /// script.</para>
 ///
 /// <para>The privileged half runs in polaris-storage-prep.service, started
-/// through the same PolicyKit manage-units rule the self-update uses.</para>
+/// through its OWN PolicyKit rule (50-polaris-storage.rules). The v1 claimed
+/// the self-update's rule already covered it; it does not, because that rule
+/// scopes its grant to <c>action.lookup("unit") == "polaris-self-update.service"</c>
+/// and modern polkit ignores the broad .pkla twin. Every attempt to set up a
+/// disk came back "Interactive authentication required".</para>
 /// </summary>
 public class StorageSetupService {
     private const string StageDir = "/home/polaris/.cache/polaris-storage";
