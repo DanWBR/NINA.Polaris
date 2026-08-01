@@ -175,9 +175,19 @@ public class HardwareAutoConnectService : IHostedService {
                 }
             }
         }
-        _logger.LogInformation(lastError,
-            "Auto-connect to INDI {Host}:{Port} failed after {Attempts} attempts",
-            _indiClient.Host, _indiClient.Port, MaxAttempts);
+        // Same reasoning as PHD2 below: an INDI server that is not running is a
+        // state of the world, and the retries above already logged the detail
+        // at Debug. Only a surprise gets a stack trace here.
+        if (lastError != null && !IsExpectedUnreachable(lastError)) {
+            _logger.LogWarning(lastError,
+                "Auto-connect to INDI {Host}:{Port} failed unexpectedly after {Attempts} attempts",
+                _indiClient.Host, _indiClient.Port, MaxAttempts);
+        } else {
+            _logger.LogInformation(
+                "INDI not reachable at {Host}:{Port} after {Attempts} attempts ({Reason})",
+                _indiClient.Host, _indiClient.Port, MaxAttempts,
+                lastError != null ? DescribeUnreachable(lastError) : "no response");
+        }
         _notify.Push("warn",
             $"INDI unavailable at {_indiClient.Host}:{_indiClient.Port} after {MaxAttempts} retries, connect manually from Rigs.");
         return false;
@@ -199,10 +209,52 @@ public class HardwareAutoConnectService : IHostedService {
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
             await _phd2.ConnectAsync(host, port, timeoutCts.Token);
             _notify.Push("ok", $"PHD2 connected ({host}:{port})");
+        } catch (Exception ex) when (IsExpectedUnreachable(ex)) {
+            // PHD2 not running is the NORMAL case: most operators start it
+            // later, or never, and auto-connect tries on every boot regardless.
+            // Logging a full socket stack trace for that made a healthy startup
+            // read as a fault. One line, no trace.
+            _logger.LogInformation(
+                "PHD2 not reachable at {Host}:{Port} ({Reason}); skipping auto-connect",
+                host, port, DescribeUnreachable(ex));
+            _notify.Push("warn", $"PHD2 unavailable at {host}:{port}, connect manually from Guide.");
         } catch (Exception ex) {
-            _logger.LogInformation(ex, "Auto-connect to PHD2 {Host}:{Port} failed", host, port);
+            // Anything that is NOT "nothing is listening there" is worth a
+            // trace, because it is something nobody predicted.
+            _logger.LogWarning(ex, "Auto-connect to PHD2 {Host}:{Port} failed unexpectedly", host, port);
             _notify.Push("warn", $"PHD2 unavailable at {host}:{port}, connect manually from Guide.");
         }
+    }
+
+    /// <summary>"Nothing is listening on that port", in its several spellings.
+    /// These are states of the world, not defects: a stack trace for them is
+    /// noise, and noise is what teaches people to skim past the log.</summary>
+    private static bool IsExpectedUnreachable(Exception ex) {
+        var e = ex is AggregateException agg ? agg.GetBaseException() : ex;
+        if (e is OperationCanceledException or TimeoutException) return true;
+        if (e is System.Net.Sockets.SocketException se) {
+            return se.SocketErrorCode is System.Net.Sockets.SocketError.ConnectionRefused
+                or System.Net.Sockets.SocketError.TimedOut
+                or System.Net.Sockets.SocketError.HostNotFound
+                or System.Net.Sockets.SocketError.HostUnreachable
+                or System.Net.Sockets.SocketError.NetworkUnreachable
+                or System.Net.Sockets.SocketError.TryAgain;
+        }
+        return e.InnerException != null && IsExpectedUnreachable(e.InnerException);
+    }
+
+    /// <summary>The reason in two words, so the one-line message still says
+    /// WHY. "ConnectionRefused" and "HostNotFound" are different problems and
+    /// the operator can act on the difference.</summary>
+    private static string DescribeUnreachable(Exception ex) {
+        var e = ex is AggregateException agg ? agg.GetBaseException() : ex;
+        while (e is not System.Net.Sockets.SocketException && e.InnerException != null)
+            e = e.InnerException;
+        return e switch {
+            System.Net.Sockets.SocketException se => se.SocketErrorCode.ToString(),
+            OperationCanceledException => "timed out",
+            _ => e.GetType().Name
+        };
     }
 
     private async Task TryDiscoverAlpacaAsync(CancellationToken ct) {

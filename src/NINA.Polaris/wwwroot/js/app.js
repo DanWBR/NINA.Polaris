@@ -28741,7 +28741,11 @@ function ninaApp() {
             // category name -> exact normalized titles it contains (emoji
             // stripped, lowercased). Category order is the display order.
             const CATS = [
-                ['Appearance & interface', ['appearance', 'host name']],
+                // 'host name' stays next to 'display name': this map keys on
+                // the card's TITLE, so renaming a card silently drops it into
+                // "Other" until the entry follows. That is exactly what
+                // happened when Host name became Display name.
+                ['Appearance & interface', ['appearance', 'display name', 'host name']],
                 ['Location & time',     ['clock', 'observatory']],
                 ['Equipment & capture', ['hardware', 'indi server', 'indi status', 'plate solving', 'sequencer']],
                 ['AI Tools', ['assistant', 'ai models']],
@@ -28780,9 +28784,14 @@ function ninaApp() {
                 addHeader(name);
                 group.forEach(x => { frag.appendChild(x.card); used.add(x.card); });
             }
-            // Any card not matched by a category goes under "Other".
+            // Any card not matched by a category goes under "Other". Say so in
+            // the console: an unmatched card is almost always a title that was
+            // renamed without updating CATS, and silently filing it under
+            // "Other" is how that goes unnoticed until somebody reports it.
             const leftovers = cards.filter(x => !used.has(x.card));
             if (leftovers.length) {
+                console.warn('[Polaris] settings cards with no category (add them to CATS):',
+                    leftovers.map(x => x.key));
                 leftovers.sort((a, b) => a.display.localeCompare(b.display));
                 addHeader('Other');
                 leftovers.forEach(x => frag.appendChild(x.card));
