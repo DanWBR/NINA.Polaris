@@ -55,6 +55,18 @@ public static class StatusStreamHandler {
             return;
         }
 
+        // Accept before resolving anything. The dependencies below are all
+        // singletons, so after the first connection each costs a dictionary
+        // lookup, but they sat between the client's handshake and our 101 and
+        // anything throwing in there reached the browser as a bare "can't
+        // establish a connection to the server" -- indistinguishable from the
+        // network being down or the certificate being refused, which is exactly
+        // the ambiguity that made a field report expensive to diagnose. Accept
+        // first, and a failure has a real socket to report itself on.
+        using var ws = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext {
+            KeepAliveInterval = PingInterval
+        });
+
         var equip = context.RequestServices.GetRequiredService<EquipmentManager>();
         var cameraStream = context.RequestServices.GetRequiredService<CameraStreamService>();
         var videoRecording = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Planetary.VideoRecordingService>();
@@ -102,10 +114,6 @@ public static class StatusStreamHandler {
         var auxCapture = context.RequestServices.GetRequiredService<AuxCaptureService>();
         var logService = context.RequestServices.GetRequiredService<NINA.Polaris.Services.Logging.LogService>();
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-
-        using var ws = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext {
-            KeepAliveInterval = PingInterval
-        });
 
         using var cts = new CancellationTokenSource();
 

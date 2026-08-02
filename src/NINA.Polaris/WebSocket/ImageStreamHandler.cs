@@ -29,13 +29,16 @@ public static class ImageStreamHandler {
             return;
         }
 
-        var relay = context.RequestServices.GetRequiredService<ImageRelayService>();
-        var liveStack = context.RequestServices.GetRequiredService<LiveStackingService>();
-        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
-
+        // Accept first, resolve after: same reasoning as StatusStreamHandler.
+        // Anything that fails before the 101 is reported to the browser as a
+        // plain "can't establish a connection", which says nothing about why.
         using var ws = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext {
             KeepAliveInterval = PingInterval
         });
+
+        var relay = context.RequestServices.GetRequiredService<ImageRelayService>();
+        var liveStack = context.RequestServices.GetRequiredService<LiveStackingService>();
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
         var clientId = Guid.NewGuid().ToString("N");
         relay.RegisterClient(clientId, ws);

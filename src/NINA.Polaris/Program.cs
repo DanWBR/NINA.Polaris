@@ -369,9 +369,16 @@ builder.Services.AddResponseCompression(o => {
     o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
     o.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
     // The default list omits application/javascript and image/svg+xml, which
-    // between them are most of the payload. Images, video, FITS and the
-    // already-Brotli'd wasm assets are deliberately absent: re-compressing
-    // them burns CPU to make them slightly bigger.
+    // between them are most of the payload. Images, video and FITS are
+    // deliberately absent: re-compressing them burns CPU to make them slightly
+    // bigger.
+    //
+    // application/wasm IS here, and an earlier version of this comment claimed
+    // the opposite. The wasm bundle is not pre-compressed: dotnet.native.wasm
+    // is 8.31 MB raw and 2.74 MB Brotli'd, so leaving it out costs a user on a
+    // slow link far more than the ~130 ms of CPU it takes to compress the whole
+    // 14 MB bundle. That cost is paid once per cold load, because afterwards the
+    // browser revalidates by ETag and gets a 304 with no body.
     o.MimeTypes = new[] {
         "text/html", "text/css", "text/plain", "text/javascript",
         "application/javascript", "application/json", "application/manifest+json",
@@ -539,6 +546,13 @@ builder.Services.AddSingleton(sp =>
 });
 
 var app = builder.Build();
+
+// The cert had to be built before this point, so it ran against a NullLogger
+// and everything it decided about the user's certificate was thrown away.
+// Replay it now, into the real pipeline: journald gets it, and so does the
+// DEBUG panel. Regenerating a self-signed cert voids every stored browser and
+// app exception, and until now it did so without leaving a single line behind.
+certService.ReplayLogInto(app.Services.GetRequiredService<ILogger<NINA.Polaris.Services.SelfSignedCertService>>());
 
 // Seed the built-in "Standard" Auto Workflow on first run (one-time, marker-
 // guarded so a user-deleted default stays deleted). Best-effort.

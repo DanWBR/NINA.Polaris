@@ -43,11 +43,14 @@ public class SelfSignedCertServiceTests {
         }
     }
 
-    private SelfSignedCertService MakeService() {
+    private SelfSignedCertService MakeService(Dictionary<string, string?>? extra = null) {
+        var settings = new Dictionary<string, string?> {
+            ["Server:Https:CertDir"] = _tempDir,
+        };
+        foreach (var kv in extra ?? new Dictionary<string, string?>()) settings[kv.Key] = kv.Value;
+
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> {
-                ["Server:Https:CertDir"] = _tempDir,
-            })
+            .AddInMemoryCollection(settings)
             .Build();
         return new SelfSignedCertService(config,
             NullLogger<SelfSignedCertService>.Instance);
@@ -78,14 +81,100 @@ public class SelfSignedCertServiceTests {
     }
 
     [Test]
-    public void GetOrCreate_PersistsPfxAndSanHashSidecar() {
+    public void GetOrCreate_PersistsPfxAndReadableSanSidecar() {
         var svc = MakeService();
         svc.GetOrCreate();
 
         Assert.That(File.Exists(Path.Combine(_tempDir, "polaris.pfx")),
             "PFX must be on disk so subsequent boots can reuse without browser re-trust.");
-        Assert.That(File.Exists(Path.Combine(_tempDir, "polaris.san")),
-            "SAN-hash sidecar is the marker for 'did the host's name list change?'.");
+
+        // The sidecar used to hold a hash and gate regeneration. The gate now
+        // reads the names out of the certificate, so the file exists purely as
+        // a readable record of what this cert covers, which is the first thing
+        // worth seeing when someone reports "it will not validate".
+        var sidecar = Path.Combine(_tempDir, "polaris.san");
+        Assert.That(File.Exists(sidecar), "SAN sidecar records what the cert covers.");
+        Assert.That(File.ReadAllLines(sidecar), Does.Contain("localhost"),
+            "sidecar must be the plain name list, not an opaque digest.");
+    }
+
+    [Test]
+    public void GetOrCreate_KeepsCertWhenOnlyNewDnsAliasesAppear() {
+        // A release that adds an alias must NOT void every browser's and both
+        // mobile apps' stored exception. Simulate it: issue a cert, then hand a
+        // fresh service an extra Mdns:InstanceName that the cert predates.
+        var first = MakeService().GetOrCreate();
+
+        var svc = MakeService(new Dictionary<string, string?> {
+            ["Mdns:InstanceName"] = "an-alias-the-cert-predates"
+        });
+        var second = svc.GetOrCreate();
+
+        Assert.That(second.Thumbprint, Is.EqualTo(first.Thumbprint),
+            "An additive name change must reuse the cert; regenerating breaks every saved exception.");
+        Assert.That(svc.UncoveredNames, Is.Not.Empty,
+            "The names the cert does not cover are reported instead of acted on.");
+        Assert.That(svc.UncoveredNames, Has.Some.Contains("an-alias-the-cert-predates"));
+    }
+
+    // A host with working IPv6 gains and loses global addresses on its own:
+    // privacy extensions rotate the interface id on a timer, the ISP rotates the
+    // delegated prefix. Treating that as "the machine moved" regenerated the
+    // certificate every day or two, and every regeneration voids the exception
+    // stored by every browser and both mobile apps. A changed IPv4 address is a
+    // different thing: the old one genuinely no longer reaches this host.
+    private static readonly ISet<string> Covered = new HashSet<string>(
+        new[] { "localhost", "polaris.local", "127.0.0.1", "192.168.1.103",
+                "2001:db8:1:2:aaaa:bbbb:cccc:dddd" },
+        StringComparer.OrdinalIgnoreCase);
+
+    [Test]
+    public void RotatedGlobalIPv6_DoesNotForceRegeneration() {
+        var required = Covered.Concat(new[] { "2001:db8:1:2:dc3b:8761:1712:cc28" }).ToList();
+
+        var reason = SelfSignedCertService.WhyNamesForceRegeneration(
+            Covered, required, out var uncovered);
+
+        Assert.That(reason, Is.Null,
+            "A rotated IPv6 must not cost every client its stored certificate exception.");
+        Assert.That(uncovered, Does.Contain("2001:db8:1:2:dc3b:8761:1712:cc28"),
+            "It is still reported, just not acted on.");
+    }
+
+    [Test]
+    public void NewIPv4Address_ForcesRegeneration() {
+        var required = Covered.Concat(new[] { "10.9.9.9" }).ToList();
+
+        var reason = SelfSignedCertService.WhyNamesForceRegeneration(
+            Covered, required, out _);
+
+        Assert.That(reason, Does.Contain("10.9.9.9"),
+            "A new IPv4 address means the host moved; the old cert cannot serve it.");
+    }
+
+    [Test]
+    public void NewDnsAlias_DoesNotForceRegeneration() {
+        var required = Covered.Concat(new[] { "polaris-app-5fb6.local" }).ToList();
+
+        var reason = SelfSignedCertService.WhyNamesForceRegeneration(
+            Covered, required, out var uncovered);
+
+        Assert.That(reason, Is.Null,
+            "Adding an alias in a release must not void every saved exception in the fleet.");
+        Assert.That(uncovered, Does.Contain("polaris-app-5fb6.local"));
+    }
+
+    [Test]
+    public void SanEntries_ReportsWhatTheCertCoversNotWhatTheHostWants() {
+        MakeService().GetOrCreate();
+
+        var svc = MakeService(new Dictionary<string, string?> {
+            ["Mdns:InstanceName"] = "an-alias-the-cert-predates"
+        });
+
+        Assert.That(svc.SanEntries(), Has.None.Contains("an-alias-the-cert-predates"),
+            "Settings shows which URLs actually validate, so it must read the certificate.");
+        Assert.That(svc.SanEntries(), Does.Contain("localhost"));
     }
 
     [Test]

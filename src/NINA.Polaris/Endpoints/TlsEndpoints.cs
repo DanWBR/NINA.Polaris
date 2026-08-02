@@ -44,7 +44,8 @@ public static class TlsEndpoints {
                 Thumbprint: selfSigned.Fingerprint,
                 FingerprintSha256: selfSigned.Fingerprint256,
                 NotAfterUtc: cert.NotAfter.ToUniversalTime(),
-                SubjectAlternativeNames: selfSigned.SanEntries()
+                SubjectAlternativeNames: selfSigned.SanEntries(),
+                UncoveredNames: selfSigned.UncoveredNames
             );
 
             var p = profiles.Active;

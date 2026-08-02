@@ -33,7 +33,12 @@ public record SelfSignedCertInfo(
     string Thumbprint,            // SHA-1, colon-separated, legacy format
     string FingerprintSha256,     // 64 lowercase hex chars, modern browser UI format
     DateTime NotAfterUtc,
-    IReadOnlyList<string> SubjectAlternativeNames
+    IReadOnlyList<string> SubjectAlternativeNames,
+    // Names this host answers to that the running certificate does NOT cover.
+    // Normally empty. Non-empty means a newer build started advertising an alias
+    // the certificate predates, and Polaris kept the certificate on purpose:
+    // replacing it voids the exception every browser and both mobile apps stored.
+    IReadOnlyList<string> UncoveredNames
 );
 
 /// <summary>

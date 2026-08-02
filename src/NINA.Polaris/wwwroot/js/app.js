@@ -1149,6 +1149,9 @@ function ninaApp() {
         _imageWsAttempt: 0,
         _statusWsTimer: null,
         _imageWsTimer: null,
+        // One-shot guard for the 'nina-wasm-ready' hook in connectImageWs, so a
+        // reconnect loop cannot stack up listeners.
+        _wasmReadyHooked: false,
 
         // Toast notifications
         toasts: [],
@@ -7489,15 +7492,27 @@ function ninaApp() {
             // Re-send capability when WASM finishes loading after the
             // WS opens (race common on first page load because WASM
             // init is async). Mode message no longer needed (always raw).
-            window.addEventListener('nina-wasm-ready', () => {
-                if (ws.readyState === WebSocket.OPEN) {
-                    this._wsSendTracked(ws, JSON.stringify({
-                        type: 'client-capability',
-                        wasm: true,
-                        wasmVersion: this.wasmVersion
-                    }));
-                }
-            }, { once: true });
+            //
+            // Hooked once for the page, not once per connect. `once: true`
+            // retires the listener when the event fires, but a browser whose
+            // WASM runtime fails to boot never fires it, so every reconnect
+            // used to leave another listener behind holding the socket it
+            // closed over. That is the one situation where the client is
+            // reconnecting every few seconds for hours. Reading this.imageWs
+            // at fire time also targets whichever socket is actually open.
+            if (!this._wasmReadyHooked) {
+                this._wasmReadyHooked = true;
+                window.addEventListener('nina-wasm-ready', () => {
+                    const sock = this.imageWs;
+                    if (sock && sock.readyState === WebSocket.OPEN) {
+                        this._wsSendTracked(sock, JSON.stringify({
+                            type: 'client-capability',
+                            wasm: true,
+                            wasmVersion: this.wasmVersion
+                        }));
+                    }
+                }, { once: true });
+            }
 
             ws.onmessage = (evt) => {
                 // NET-1: account for both control text + binary frame.
