@@ -949,18 +949,27 @@ app.UseStaticFiles(new StaticFileOptions {
     // server for hundreds of revalidations per page load. They
     // get a 7-day max-age which is plenty short for the rare
     // upstream update + a hard refresh to recover from.
+    //
+    // /js/wasm/ used to be on that list and must NOT be. Those files are not
+    // independent assets: dotnet.boot.js carries a SHA-256 for every other file
+    // in the bundle and the runtime refuses any file whose hash disagrees. A
+    // 7-day cache with no revalidation lets the parts drift apart, because the
+    // browser evicts cache entries individually and by size: after an update,
+    // the 8.3 MB dotnet.native.wasm gets evicted and re-fetched from the new
+    // build while the 2 KB dotnet.boot.js is still served from the old one. The
+    // integrity check then fails on exactly the files that changed in the
+    // release, the runtime never boots, and the page never finishes loading.
+    // That is a field report, not a hypothetical, and it survived hard
+    // refreshes for days. Revalidation costs a conditional request per file and
+    // no body when nothing changed; a bundle that must be internally consistent
+    // does not get to skip it.
+    // The rule itself lives in StaticAssetCachePolicy, where it is covered by
+    // tests: getting it wrong does not slow the app down, it stops the app
+    // loading, and that is worth more than a lambda.
     OnPrepareResponse = ctx => {
-        var path = ctx.Context.Request.Path.Value ?? "";
-        var headers = ctx.Context.Response.Headers;
-        if (path.StartsWith("/sky/data/", StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith("/js/lib/", StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith("/css/lib/", StringComparison.OrdinalIgnoreCase)
-            || path.Contains("/wasm/", StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith("/catalogs/", StringComparison.OrdinalIgnoreCase)) {
-            headers["Cache-Control"] = "public, max-age=604800";  // 7 days
-        } else {
-            headers["Cache-Control"] = "no-cache, must-revalidate";
-        }
+        ctx.Context.Response.Headers["Cache-Control"] =
+            NINA.Polaris.Services.StaticAssetCachePolicy.For(
+                ctx.Context.Request.Path.Value ?? "");
     }
 });
 
