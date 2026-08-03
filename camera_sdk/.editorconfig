@@ -1,0 +1,17 @@
+# Manufacturer camera SDK drops (ToupTek, Altair) and their sample apps,
+# imported verbatim. Nothing under this directory is written by this project,
+# so a fix here would be undone by the next SDK refresh and would break the
+# diff against the vendor's own source.
+#
+# Only the two rules these sources actually trip are turned off, so anything
+# new in this subtree still shows up in the build.
+#
+# SYSLIB0004: [ReliabilityContract] on the SafeHandle.ReleaseHandle override
+#             in toupcam.cs. The constrained-execution attributes are obsolete
+#             in modern .NET and ignored at runtime.
+# CS8605:     unboxing the object? that Marshal.PtrToStructure returns, in the
+#             altaircam.cs typed read helper.
+
+[*.cs]
+dotnet_diagnostic.SYSLIB0004.severity = none
+dotnet_diagnostic.CS8605.severity = none
