@@ -204,26 +204,36 @@
        the build with "Duplicate 'Content' items were included"). -->
 
   <!-- THUMPACK-1: keep the ~215 MB DSO thumbnail set OUT of the
-       distribution package. dso-thumbs/ is 17k DSS2 cutouts (Git LFS);
-       shipping it took the .deb from ~80 MB to ~450 MB. Polaris downloads
+       distribution package. dso-thumbs/ is 17k DSS2 cutouts; shipping it
+       took the .deb from ~80 MB to ~450 MB. Polaris downloads
        it on demand into the writable data dir instead (DsoThumbPackService).
        Remove it from the publish output only — a source-tree `dotnet run`
        still serves it straight from wwwroot, so dev/testing is unaffected;
        only `dotnet publish` (the packaged build) drops it.
 
-       The curated dso-thumbs-core/ subset (a few hundred showpieces, real
-       bytes, NOT LFS) is a SIBLING folder, so this glob doesn't match it —
-       it stays bundled so M8/M42/M31 etc. render offline out of the box. -->
+       The curated dso-thumbs-core/ subset (a few hundred showpieces) is a
+       SIBLING folder, so this glob doesn't match it — it stays bundled so
+       M8/M42/M31 etc. render offline out of the box.
+
+       LFSBW: dso-thumbs/ itself is no longer in the repo at all. It was tracked
+       in Git LFS, which charged the account for it on every clone and every
+       release-matrix job while never reaching a user that way. It is now
+       maintainer-local and gitignored, published to the `data-pack` release by
+       scripts/publish-data-packs.sh. This Remove therefore matches nothing on a
+       fresh clone, and is kept so a `dotnet publish` on a machine that DOES
+       have the folder still leaves it out. -->
   <ItemGroup>
     <Content Remove="wwwroot\sky\data\skydata\dso-thumbs\**" />
   </ItemGroup>
 
   <!-- THUMPACK-3: keep the converted ncnn GPU models OUT of the package too.
        Their siblings (.onnx / .rknn / qnn .bin) are gitignored and fetched at
-       runtime, but the ncnn model.ncnn.bin files are committed via Git LFS and so
-       leaked into `dotnet publish` — 246 MB (bge 104 + denoise 142) straight into
-       every distro. Exclude the whole ncnn/ tree from the publish output (they
-       stay in the repo for a future download pack). Absence degrades cleanly:
+       runtime, but the ncnn model.ncnn.bin files used to be committed via Git
+       LFS and so leaked into `dotnet publish` — 246 MB (bge 104 + denoise 142)
+       straight into every distro. Exclude the whole ncnn/ tree from the publish
+       output. They are no longer in the repo either (LFSBW: same reasoning as
+       the thumbs above), so this now matches nothing on a fresh clone and only
+       bites on a machine that has the folder. Absence degrades cleanly:
        NcnnInferenceService.ResolveModel returns null when the .param is gone, so
        GraXpertService skips the ncnn-Vulkan path and falls back to the GraXpert
        CLI / ONNX — no crash, just no GPU-Vulkan accel until the models are

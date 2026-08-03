@@ -41,7 +41,6 @@ src/NINA.Polaris/wwwroot/sky/data/skydata/** -text
 # write under these paths.
 ###############################################################################
 src/NINA.Polaris/wwwroot/sky/data/skydata/surveys/dss/** filter=lfs diff=lfs merge=lfs -text
-src/NINA.Polaris/wwwroot/sky/data/skydata/dso-thumbs/** filter=lfs diff=lfs merge=lfs -text
 ###############################################################################
 # Set default behavior for command prompt diff.
 #
@@ -97,4 +96,3 @@ src/NINA.Polaris/wwwroot/sky/data/skydata/dso-thumbs/** filter=lfs diff=lfs merg
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
-src/NINA.Polaris/wwwroot/graxpert/models/ncnn/**/*.bin filter=lfs diff=lfs merge=lfs -text
