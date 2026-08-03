@@ -388,7 +388,7 @@ public sealed class AscomComCamera : ICamera, IDisposable {
             },
             Exposure = new ImageMetaData.ExposureInfo {
                 ExposureTime = exposureSeconds,
-                Filter = opts?.Filter,
+                Filter = opts?.Filter ?? string.Empty,
                 ImageType = opts?.ImageType ?? "LIGHT"
             },
             Target = string.IsNullOrEmpty(opts?.TargetName)
@@ -473,8 +473,11 @@ public sealed class AscomComCamera : ICamera, IDisposable {
     public Task SetIsoAsync(int iso, CancellationToken ct = default) => Task.CompletedTask;
 
     public Task AbortExposureAsync(CancellationToken ct = default) => _disp.Invoke(() => {
-        if (!_canAbort || _driver == null) return;
-        try { _driver.AbortExposure(); } catch { /* state-dependent */ }
+        // Read the field once: a concurrent Disconnect can null it between
+        // the check and the call.
+        var drv = _driver;
+        if (!_canAbort || drv is null) return;
+        try { drv.AbortExposure(); } catch { /* state-dependent */ }
     });
 
     public Task SetSubframeAsync(int x, int y, int width, int height,

@@ -160,14 +160,18 @@ public sealed class AscomComTelescope : ITelescope, IDisposable {
     public Task MoveEastAsync (CancellationToken ct = default) => Jog(0, +JogRate);
     public Task MoveWestAsync (CancellationToken ct = default) => Jog(0, -JogRate);
     public Task StopMotionAsync(CancellationToken ct = default) => _disp.Invoke(() => {
-        if (!_canMoveAxis || _driver == null) return;
-        try { _driver.MoveAxis(0, 0.0); } catch { }
-        try { _driver.MoveAxis(1, 0.0); } catch { }
+        // Read the field once: a concurrent Disconnect can null it between
+        // the check and the call.
+        var drv = _driver;
+        if (!_canMoveAxis || drv is null) return;
+        try { drv.MoveAxis(0, 0.0); } catch { }
+        try { drv.MoveAxis(1, 0.0); } catch { }
     });
 
     private Task Jog(int axis, double rate) => _disp.Invoke(() => {
-        if (!_canMoveAxis || _driver == null) return;
-        try { _driver.MoveAxis(axis, rate); } catch { }
+        var drv = _driver;
+        if (!_canMoveAxis || drv is null) return;
+        try { drv.MoveAxis(axis, rate); } catch { }
     });
 
     public void Dispose() {

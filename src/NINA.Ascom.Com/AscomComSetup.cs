@@ -130,6 +130,10 @@ public static class AscomComSetup {
     // fine: the assembly is only loaded on Windows when an ASCOM
     // adapter is actually wired up.
     [System.Runtime.CompilerServices.ModuleInitializer]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2255",
+        Justification = "The AppContext switch has to be set before the first ASCOM COM " +
+                        "call, and this assembly is only ever loaded when an ASCOM adapter " +
+                        "is wired up, so module load is the correct and only hook.")]
     internal static void EnableLegacyCorruptedStateExceptionPolicy() {
         try {
             AppContext.SetSwitch("System.Runtime.LegacyCorruptedStateExceptionsPolicy", true);
