@@ -54,7 +54,7 @@ public class FitsWriterRaTests {
         using var fs = File.OpenRead(path);
         var hdr = FITSReader.ReadHeadersOnly(fs);
         Assert.That(hdr.TryGetValue("RA", out var card), Is.True, "RA keyword present");
-        return double.Parse(card.Value, CultureInfo.InvariantCulture);
+        return double.Parse(card!.Value, CultureInfo.InvariantCulture);
     }
 
     [Test]
@@ -90,6 +90,6 @@ public class FitsWriterRaTests {
         using var fs = File.OpenRead(path);
         var hdr = FITSReader.ReadHeadersOnly(fs);
         Assert.That(hdr.TryGetValue("DATE-OBS", out var card), Is.True, "DATE-OBS keyword present");
-        Assert.That(card.Value, Is.EqualTo("2026-07-12T03:45:12.500"));
+        Assert.That(card!.Value, Is.EqualTo("2026-07-12T03:45:12.500"));
     }
 }

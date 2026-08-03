@@ -1035,7 +1035,7 @@ public class LiveStackingService {
         _logger.LogDebug("Detected {Count} stars in frame", stars.Count);
 
         if (mode == StackMode.Full) {
-            ushort[] alignedData;
+            ushort[]? alignedData;
             // Transform that aligned THIS frame onto the reference grid
             // (null for the reference frame / identity). In colour mode we
             // apply it per-debayered-plane instead of warping the raw CFA.

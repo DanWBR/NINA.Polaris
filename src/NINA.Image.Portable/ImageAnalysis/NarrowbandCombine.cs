@@ -36,7 +36,7 @@ public static class NarrowbandCombine {
     ///   HOS : R=Ha,  G=OIII,B=SII
     ///   HOO : R=Ha,  G=OIII,B=OIII (bicolor)
     /// </summary>
-    public static ushort[] Compose(ushort[] ha, ushort[] oiii, ushort[] sii,
+    public static ushort[] Compose(ushort[]? ha, ushort[]? oiii, ushort[]? sii,
                                    int width, int height, string palette, bool normalize = true) {
         long plane = (long)width * height;
         ushort[] r, g, b;

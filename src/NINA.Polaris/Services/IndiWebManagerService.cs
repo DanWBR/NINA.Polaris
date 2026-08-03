@@ -188,7 +188,11 @@ public class IndiWebManagerService : BackgroundService {
         }
     }
 
-    public async Task<bool> StartAsync(CancellationToken ct = default) {
+    // Hides BackgroundService.StartAsync on purpose (like CanopusServerService):
+    // the hosted lifecycle still runs via the base StartAsync -> ExecuteAsync
+    // through IHostedService; this overload is what the endpoints call to launch
+    // indi-web on demand and get a success bool back.
+    public new async Task<bool> StartAsync(CancellationToken ct = default) {
         if (!IsSupportedOs) { LastError = "OS not supported"; return false; }
         if (!Installed) { LastError = "indi-web not installed"; return false; }
         if (await ProbeHealthAsync(ct)) {
@@ -249,7 +253,8 @@ public class IndiWebManagerService : BackgroundService {
         return false;
     }
 
-    public Task<bool> StopAsync(CancellationToken ct = default) {
+    // Hides BackgroundService.StopAsync, same reasoning as StartAsync above.
+    public new Task<bool> StopAsync(CancellationToken ct = default) {
         if (!IsSupportedOs) return Task.FromResult(false);
         if (_process == null || _process.HasExited) {
             Running = false;

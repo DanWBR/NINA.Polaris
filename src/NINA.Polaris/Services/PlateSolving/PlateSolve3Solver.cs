@@ -106,7 +106,7 @@ public class PlateSolve3Solver : IPlateSolver {
                 onLog($"[exit {proc.ExitCode}]");
             }
 
-            var result = ParseStdout(stdout, fitsPath);
+            var result = ParseStdout(stdout ?? "", fitsPath);
             result.Output = PlateSolveProcessOutput.Combine(SolverPath, args, stdout, stderr, proc.ExitCode);
             return result;
         } catch (Exception ex) when (ex is not OperationCanceledException) {

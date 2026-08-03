@@ -207,7 +207,9 @@ public class DeconvolutionService {
 
         // Measure the PSF — a single global one, or a per-region field.
         PsfModel psf;
-        PsfField psfField = null;
+        // Non-null exactly when `field` is set. Every read below tests
+        // psfField rather than `field`, so the two cannot drift apart.
+        PsfField? psfField = null;
         if (field) {
             int g = Math.Clamp(grid, 2, 8);
             psfField = ex.ExtractField(lum, w, h, g, g);
@@ -286,7 +288,7 @@ public class DeconvolutionService {
         for (long i = 0; i < plane; i++) if (lum[i] > maxLum) maxLum = lum[i];
         if (maxLum >= 0.85 * ceiling) {
             double satLevel = 0.90 * ceiling;
-            int psfR = field ? psfField.Global.Radius : psf.Radius;
+            int psfR = psfField?.Global.Radius ?? psf.Radius;
             int satDilate = psfR + 3;
             int feather = Math.Max(4, psfR);   // smooth the kept↔deconvolved edge
             RichardsonLucyDeconvolution.ApplySaturationGuard(mask, lumF, w, h, satLevel, satDilate, feather);
@@ -298,7 +300,7 @@ public class DeconvolutionService {
         // and reports per-tile progress. FFT keeps the per-iteration cost
         // independent of the measured PSF stamp size.
         PsfField runField;
-        if (field) {
+        if (psfField != null) {
             runField = psfField;
         } else {
             const int tile = 512;
@@ -336,8 +338,8 @@ public class DeconvolutionService {
         var stem = Path.GetFileNameWithoutExtension(sourcePath);
         var outPath = Path.Combine(dir, stem + "_rl.fits");
 
-        int gridCells = field ? psfField.GridX * psfField.GridY : 0;
-        int measured = field ? psfField.MeasuredCellCount : 0;
+        int gridCells = psfField != null ? psfField.GridX * psfField.GridY : 0;
+        int measured = psfField?.MeasuredCellCount ?? 0;
 
         FITSWriter.Write(dst, outPath, customKeywords: new[] {
             new KeyValuePair<string, string>("DECONALG",
@@ -347,7 +349,7 @@ public class DeconvolutionService {
             new KeyValuePair<string, string>("DECONECC", psf.Eccentricity.ToString("F3")),
             new KeyValuePair<string, string>("DECONSTAR", psf.StarsUsed.ToString()),
             new KeyValuePair<string, string>("DECONGRID",
-                field ? $"{psfField.GridX}x{psfField.GridY}" : "1x1"),
+                psfField != null ? $"{psfField.GridX}x{psfField.GridY}" : "1x1"),
         });
 
         _logger.LogInformation(

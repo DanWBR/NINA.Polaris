@@ -25,7 +25,8 @@ namespace NINA.Polaris.Test;
 /// "platform missing" case gracefully, and never throws.
 /// </summary>
 [TestFixture]
-[Platform("Win")]
+[Platform("Win")]                                       // NUnit: skip off Windows
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]   // CA1416: same fact, for the compiler
 public class AscomComRegistryTests {
 
     [Test]

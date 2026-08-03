@@ -128,7 +128,7 @@ public class PsfExtractorTests {
     // and dumps the kernel as a PGM next to the temp dir for eyeballing.
     [Test, Explicit("Requires local polaris-ai/data/own/raw/originals FITS")]
     public void RealFrame_MeasuresPsf() {
-        string dir = FindOriginalsDir();
+        string? dir = FindOriginalsDir();
         if (dir == null) Assert.Ignore("originals folder not found; skipping real-frame test");
 
         var fits = Directory.GetFiles(dir!, "*.fit")
@@ -168,7 +168,7 @@ public class PsfExtractorTests {
         return lum;
     }
 
-    private static string FindOriginalsDir() {
+    private static string? FindOriginalsDir() {
         var d = new DirectoryInfo(AppContext.BaseDirectory);
         for (int up = 0; up < 8 && d != null; up++, d = d.Parent) {
             string cand = Path.Combine(d.FullName, "polaris-ai", "data", "own", "raw", "originals");

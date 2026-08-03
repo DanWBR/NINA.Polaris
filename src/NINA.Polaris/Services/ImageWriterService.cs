@@ -440,14 +440,15 @@ public class ImageWriterService {
         // optic property), falling back to the legacy profile value only if
         // no rigs have been set up.
         if (_equip.Telescope != null && _equip.Telescope.IsConnected) {
-            var rigFocalLen = _profile.ActiveEquipmentProfile.FocalLengthMm;
+            var rig = _profile.ActiveEquipmentProfile;
+            var rigFocalLen = rig?.FocalLengthMm ?? 0;
             var focalLength = rigFocalLen > 0 ? rigFocalLen : profile.FocalLengthMm;
             m.Telescope.Name = _equip.Telescope.DeviceName;
             // OTA brand+model is a per-rig optic property kept distinct from the
             // mount device name (TELESCOP); it drives the "OTA" FITS/XISF keyword.
             var ota = string.Join(" ", new[] {
-                _profile.ActiveEquipmentProfile.TelescopeBrand,
-                _profile.ActiveEquipmentProfile.TelescopeModel
+                rig?.TelescopeBrand ?? "",
+                rig?.TelescopeModel ?? ""
             }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()));
             if (!string.IsNullOrWhiteSpace(ota))
                 m.Telescope.OpticalTube = ota;

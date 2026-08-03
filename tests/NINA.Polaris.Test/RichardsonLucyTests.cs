@@ -204,7 +204,7 @@ public class RichardsonLucyTests {
     // ── optional: real frame — measured PSF then RL, FWHM before/after ──────
     [Test, Explicit("Requires local polaris-ai/data/own/raw/originals FITS")]
     public void RealFrame_Sharpens() {
-        string dir = FindOriginalsDir();
+        string? dir = FindOriginalsDir();
         if (dir == null) Assert.Ignore("originals folder not found");
         var fits = Directory.GetFiles(dir!, "*.fit").OrderBy(f => f).FirstOrDefault();
         if (fits == null) Assert.Ignore("no FITS in originals");
@@ -245,7 +245,7 @@ public class RichardsonLucyTests {
         Assert.That(after.FwhmPx, Is.LessThan(before), "real stars should get tighter");
     }
 
-    private static string FindOriginalsDir() {
+    private static string? FindOriginalsDir() {
         var d = new DirectoryInfo(AppContext.BaseDirectory);
         for (int up = 0; up < 8 && d != null; up++, d = d.Parent) {
             string c = Path.Combine(d.FullName, "polaris-ai", "data", "own", "raw", "originals");

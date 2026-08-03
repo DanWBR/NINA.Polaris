@@ -499,7 +499,7 @@ public class RealDataPipelineTests {
         var swPcc = Stopwatch.StartNew();
         var pccJobId = _colorcal.StartJob(
             new ColorCalibrationService.ColorCalibrationRequest(
-                FramePath: rgbSolved.Path,
+                FramePath: rgbSolved!.Path,
                 Mode: ColorCalibrationService.Modes.Photometric,
                 BgSample: "auto"));
         var pcc = await WaitFor(() => _colorcal.GetStatus(pccJobId),

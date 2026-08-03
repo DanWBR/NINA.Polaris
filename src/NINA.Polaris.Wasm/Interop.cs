@@ -20,6 +20,12 @@ using NINA.Image.Editor;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
 
+// This assembly only ever runs in the browser: [JSExport] / [JSImport] are
+// themselves browser-only, so declare it once here rather than annotating
+// every member of the interop surface. The MSBuild <SupportedOSPlatform>
+// property does not emit this attribute; it has to be written in code.
+[assembly: System.Runtime.Versioning.SupportedOSPlatform("browser")]
+
 namespace NINA.Polaris.Wasm;
 
 /// <summary>

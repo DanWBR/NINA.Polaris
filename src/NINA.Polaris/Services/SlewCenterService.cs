@@ -40,7 +40,7 @@ public class SlewCenterService {
     private readonly PlateSolveService _solver;
     private readonly ProfileService _profiles;
     private readonly CameraStreamService _stream;
-    private readonly ActiveGuiderProvider _guiders;
+    private readonly ActiveGuiderProvider? _guiders;
     private readonly ILogger<SlewCenterService> _logger;
     private readonly NINA.Polaris.Services.PlateSolving.PlateSolveProgressService? _progress;
     // Resolved lazily (not a constructor dependency): the guard sits high in the
@@ -217,7 +217,7 @@ public class SlewCenterService {
             // Surface the same multi-solver diagnostic in the failure
             // path so the user still gets actionable install / API-key
             // guidance, just AFTER the mount has moved.
-            string solverUnavailableError = null;
+            string? solverUnavailableError = null;
             if (!_solver.IsAvailable) {
                 var lines = _solver.AllSolvers.Select(s =>
                     "  • " + s.DisplayName + ", "
@@ -281,7 +281,7 @@ public class SlewCenterService {
             // the locked guide star will leave the frame. Stop now; we
             // re-acquire a NEW star and restart guiding only after a
             // successful centre (see the finally block).
-            var guider = _guiders.Active;
+            var guider = _guiders?.Active;
             bool guiderWasGuiding = false;
             try {
                 if (guider != null && guider.IsConnected && guider.IsGuiding) {
@@ -334,7 +334,12 @@ public class SlewCenterService {
                 // SKY slew-and-solve fail intermittently. All camera backends
                 // honour CaptureOptions.BinX/Y per-capture, so the next preview/
                 // live capture restores the user's binning on its own.
-                var imageData = await CameraCaptureGate.RunAsync(() => _equip.Camera.CaptureAsync(
+                // Re-read the camera here rather than trusting the check at the
+                // top of the job: a disconnect between the slew and the solve
+                // frame is exactly the case this has to survive.
+                var camera = _equip.Camera
+                    ?? throw new InvalidOperationException("Camera disconnected before the solve frame");
+                var imageData = await CameraCaptureGate.RunAsync(() => camera.CaptureAsync(
                     solveExposure,
                     new NINA.Image.Interfaces.CaptureOptions(Gain: solveGain, BinX: 1, BinY: 1, ImageType: "SOLVE"),
                     ct), ct);
@@ -541,7 +546,7 @@ public class SlewCenterService {
                 // star is out of frame after the slew, so re-acquire a new
                 // one (AutoSelectStar) before restarting. On failure/cancel
                 // we leave guiding off rather than guide on the wrong field.
-                if (guiderWasGuiding && job.State == SlewCenterState.Centered) {
+                if (guider != null && guiderWasGuiding && job.State == SlewCenterState.Centered) {
                     try {
                         _logger.LogInformation("Resuming guiding: re-selecting guide star");
                         await guider.AutoSelectStarAsync(ct);

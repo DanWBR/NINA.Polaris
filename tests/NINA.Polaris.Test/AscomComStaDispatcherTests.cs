@@ -24,7 +24,8 @@ namespace NINA.Polaris.Test;
 /// gates the whole fixture so CI on Linux just skips.
 /// </summary>
 [TestFixture]
-[Platform("Win")]
+[Platform("Win")]                                       // NUnit: skip off Windows
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]   // CA1416: same fact, for the compiler
 public class AscomComStaDispatcherTests {
 
     [Test]
