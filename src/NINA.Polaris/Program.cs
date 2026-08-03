@@ -389,6 +389,11 @@ builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompre
     o => o.Level = System.IO.Compression.CompressionLevel.Optimal);
 builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(
     o => o.Level = System.IO.Compression.CompressionLevel.Optimal);
+// The once-per-second /ws/status payload. Singleton because nothing in it is
+// per-request: it used to be assembled inside the WebSocket handler, which
+// pulled 42 services out of the request container before it would even accept
+// the socket.
+builder.Services.AddSingleton<NINA.Polaris.WebSocket.StatusPayloadBuilder>();
 builder.Services.AddSingleton<MeridianFlipService>();
 // Auto meridian flip during LIVE stacking (polls HA, flips when due).
 builder.Services.AddHostedService<MeridianFlipAutoLiveService>();
