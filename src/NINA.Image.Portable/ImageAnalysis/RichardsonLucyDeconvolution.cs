@@ -72,7 +72,7 @@ public class RichardsonLucyDeconvolution {
     }
 
     public float[] Deconvolve(ushort[] image, int width, int height, PsfModel psf,
-                              float[] supportMask = null, float[] noiseSigma = null) {
+                              float[]? supportMask = null, float[]? noiseSigma = null) {
         if (image == null) throw new ArgumentNullException(nameof(image));
         var f = new float[image.Length];
         for (int i = 0; i < image.Length; i++) f[i] = image[i];
@@ -86,7 +86,7 @@ public class RichardsonLucyDeconvolution {
     /// deconvolution is used.
     /// </summary>
     public float[] Deconvolve(float[] image, int width, int height, PsfModel psf,
-                              float[] supportMask = null, float[] noiseSigma = null) {
+                              float[]? supportMask = null, float[]? noiseSigma = null) {
         if (image == null) throw new ArgumentNullException(nameof(image));
         if (psf == null) throw new ArgumentNullException(nameof(psf));
         if (image.Length != (long)width * height)
@@ -96,7 +96,6 @@ public class RichardsonLucyDeconvolution {
         if (noiseSigma != null && noiseSigma.Length != image.Length)
             throw new ArgumentException("sigma length != image length", nameof(noiseSigma));
 
-        bool damp = DampingThreshold > 0 && noiseSigma != null;
 
         int n = image.Length;
         int ks = psf.Size, kr = ks / 2;
@@ -114,7 +113,7 @@ public class RichardsonLucyDeconvolution {
         var blur = new float[n];
         var ratio = new float[n];
         var corr = new float[n];
-        float[] tv = TvLambda > 0 ? new float[n] : null;
+        float[]? tv = TvLambda > 0 ? new float[n] : null;
 
         // FFT engine (built once from the PSF) when enabled — convolution cost
         // then no longer scales with the kernel size.
@@ -124,7 +123,7 @@ public class RichardsonLucyDeconvolution {
         for (int it = 0; it < Iterations; it++) {
             if (fft != null) { var b = fft.Convolve(est); Array.Copy(b, blur, n); }  // H·e
             else Correlate(est, width, height, flipH, ks, kr, blur);                 // H·e
-            if (damp) {
+            if (DampingThreshold > 0 && noiseSigma != null) {
                 // Damped RL (White 1994): suppress the correction where the
                 // re-blurred model already fits the data to within ~T·σ. The
                 // raw ratio r = d/(H·e) is pulled toward 1 by a factor U that

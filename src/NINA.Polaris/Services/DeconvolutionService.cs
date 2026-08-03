@@ -206,7 +206,7 @@ public class DeconvolutionService {
             "isolated, round stars). Use AI deconvolution for star-poor frames.";
 
         // Measure the PSF — a single global one, or a per-region field.
-        PsfModel psf;
+        PsfModel? psf;
         // Non-null exactly when `field` is set. Every read below tests
         // psfField rather than `field`, so the two cannot drift apart.
         PsfField? psfField = null;

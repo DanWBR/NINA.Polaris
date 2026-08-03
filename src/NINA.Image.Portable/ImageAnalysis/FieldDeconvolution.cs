@@ -38,8 +38,8 @@ public class FieldDeconvolution {
     public bool UseFft { get; set; } = false;
 
     public float[] Deconvolve(float[] image, int width, int height, PsfField field,
-                              float[] supportMask = null, float[] noiseSigma = null,
-                              Action<int, int> tileProgress = null) {
+                              float[]? supportMask = null, float[]? noiseSigma = null,
+                              Action<int, int>? tileProgress = null) {
         if (image == null) throw new ArgumentNullException(nameof(image));
         if (field == null) throw new ArgumentNullException(nameof(field));
         if (image.Length != (long)width * height)
@@ -83,10 +83,10 @@ public class FieldDeconvolution {
 
                 // Extract tile, deconvolve with this cell's PSF.
                 var tile = new float[tw * th];
-                float[] sigTile = noiseSigma != null ? new float[tw * th] : null;
+                float[]? sigTile = noiseSigma != null ? new float[tw * th] : null;
                 for (int y = 0; y < th; y++) {
                     Array.Copy(image, (long)(ty0 + y) * width + tx0, tile, (long)y * tw, tw);
-                    if (sigTile != null)
+                    if (sigTile != null && noiseSigma != null)
                         Array.Copy(noiseSigma, (long)(ty0 + y) * width + tx0, sigTile, (long)y * tw, tw);
                 }
                 var dec = rl.Deconvolve(tile, tw, th, psf, null, sigTile);

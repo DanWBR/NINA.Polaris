@@ -43,7 +43,7 @@ public static class StarReduction {
     /// </summary>
     public static int Apply(ushort[] data, int width, int height, int channels,
                             double amount = 0.5, int size = 2, bool protectCore = true,
-                            StarDetector detector = null) {
+                            StarDetector? detector = null) {
         int ch = channels == 3 ? 3 : 1;
         long plane = (long)width * height;
         double a = Math.Clamp(amount, 0.0, 1.0);

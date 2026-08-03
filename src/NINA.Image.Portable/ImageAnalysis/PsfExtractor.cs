@@ -67,7 +67,7 @@ public class PsfExtractor {
 
     private readonly StarDetector _detector;
 
-    public PsfExtractor(StarDetector detector = null) {
+    public PsfExtractor(StarDetector? detector = null) {
         _detector = detector ?? new StarDetector();
     }
 
@@ -76,7 +76,7 @@ public class PsfExtractor {
     /// to reuse a detection you already ran; otherwise stars are detected here.
     /// Returns null when fewer than <see cref="MinStars"/> clean probes exist.
     /// </summary>
-    public PsfModel Extract(ushort[] data, int width, int height, IList<DetectedStar> stars = null) {
+    public PsfModel? Extract(ushort[] data, int width, int height, IList<DetectedStar>? stars = null) {
         if (data == null) throw new ArgumentNullException(nameof(data));
         if (data.Length != (long)width * height)
             throw new ArgumentException("data length != width*height", nameof(data));
@@ -127,9 +127,9 @@ public class PsfExtractor {
     /// no consumer tool models that. Returns null when even the global PSF
     /// can't be measured.
     /// </summary>
-    public PsfField ExtractField(ushort[] data, int width, int height,
+    public PsfField? ExtractField(ushort[] data, int width, int height,
                                  int gridX = 3, int gridY = 3,
-                                 IList<DetectedStar> stars = null) {
+                                 IList<DetectedStar>? stars = null) {
         if (data == null) throw new ArgumentNullException(nameof(data));
         gridX = Math.Max(1, gridX); gridY = Math.Max(1, gridY);
 
@@ -172,7 +172,7 @@ public class PsfExtractor {
                 var local = probes
                     .Where(p => p.X >= x0 && p.X < x1 && p.Y >= y0 && p.Y < y1)
                     .OrderByDescending(p => p.Peak).Take(MaxStars).ToList();
-                PsfModel m = local.Count >= cellMin
+                PsfModel? m = local.Count >= cellMin
                     ? BuildPsf(data, width, height, local, r, size, CombineSigma, cellMin)
                     : null;
                 cells[gy * gridX + gx] = m ?? global;   // fall back to global
@@ -183,7 +183,7 @@ public class PsfExtractor {
 
     // Build a normalized empirical PSF from a probe list (shared by the global
     // and per-cell paths).
-    private static PsfModel BuildPsf(ushort[] data, int width, int height,
+    private static PsfModel? BuildPsf(ushort[] data, int width, int height,
                                      List<DetectedStar> probes, int r, int size,
                                      double combineSigma, int minStars) {
         var stamps = new List<float[]>(probes.Count);
@@ -208,7 +208,7 @@ public class PsfExtractor {
     // Cuts a stamp around the star, subtracts the local background (median of
     // the stamp border ring), finds the flux-weighted centroid and bilinearly
     // resamples so the centroid lands on the stamp centre, then normalizes.
-    private static float[] BuildAlignedStamp(ushort[] data, int width, int height,
+    private static float[]? BuildAlignedStamp(ushort[] data, int width, int height,
                                              DetectedStar star, int r, int size) {
         int sx = (int)Math.Round(star.X), sy = (int)Math.Round(star.Y);
         var raw = new float[size * size];

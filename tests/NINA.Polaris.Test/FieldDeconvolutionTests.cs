@@ -123,9 +123,9 @@ public class FieldDeconvolutionTests {
         for (int i = 0; i < u.Length; i++) f[i] = u[i];
 
         var fieldOut = new FieldDeconvolution { Iterations = 24, TvLambda = 0.001 }
-            .Deconvolve(f, W, H, field);
+            .Deconvolve(f, W, H, field!);
         var globalOut = new RichardsonLucyDeconvolution { Iterations = 24, TvLambda = 0.001 }
-            .Deconvolve(f, W, H, global);
+            .Deconvolve(f, W, H, global!);
 
         // a planted corner star (grid step 40 -> one at 440,440)
         const int sx = 440, sy = 440, win = 14;
