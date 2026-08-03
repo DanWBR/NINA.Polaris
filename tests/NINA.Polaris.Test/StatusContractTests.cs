@@ -38,6 +38,11 @@ namespace NINA.Polaris.Test;
 /// The companion file status-contract.txt holds the full 388-path capture taken
 /// from a running server, as the reference for a manual before/after diff when
 /// the payload is restructured.
+///
+/// If you take that capture: give the process a minute first. Several blocks are
+/// filled by background services and are simply absent from the first ticks
+/// (host.device is populated by HostMetricsService and cost an afternoon once,
+/// read as a regression when it was a cold server).
 /// </summary>
 [TestFixture]
 public class StatusContractTests {
