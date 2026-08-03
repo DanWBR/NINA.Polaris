@@ -703,6 +703,7 @@ public class GraXpertService {
             StartedAt = DateTime.UtcNow
         };
         _jobs[jobId] = job;
+        JobRetention.TrimFinished(_jobs, j => j.StartedAt, j => j.CompletedAt != null);
 
         // Per-job cancellation, linked to any outer token. CancelJob
         // cancels this so the in-flight subprocess is actually killed

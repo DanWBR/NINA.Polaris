@@ -50,6 +50,7 @@ public class PlanetaryStackerService {
             StartedAt = DateTime.UtcNow
         };
         _jobs[job.Id] = job;
+        JobRetention.TrimFinished(_jobs, j => j.StartedAt, j => j.CompletedAt != null);
         CurrentJob = job;
         job.Cts = new CancellationTokenSource();
         job.Task = Task.Run(() => RunAsync(job, job.Cts.Token));

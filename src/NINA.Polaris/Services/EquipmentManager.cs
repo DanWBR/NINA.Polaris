@@ -102,7 +102,9 @@ public class EquipmentManager : IDisposable {
     /// serial number reported by the SDK enumeration call.</summary>
     public ICamera SelectCamera(string driver, string deviceId) {
         driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        var previousCamera = Camera;
         Camera = CreateCamera(driver, deviceId);
+        ReleaseReplacedDevice(previousCamera);
         CameraDriver = driver;
         CameraDeviceId = deviceId;
         // Defensive: if this device was previously the guide camera its
@@ -176,7 +178,9 @@ public class EquipmentManager : IDisposable {
         // so a swapped camera goes back to normal logging.
         if (GuideCameraDriver == "indi" && !string.IsNullOrEmpty(GuideCameraDeviceId))
             _indiClient.SetQuietGuideLogging(GuideCameraDeviceId, false);
+        var previousGuideCamera = GuideCamera;
         GuideCamera = CreateCamera(driver, deviceId);
+        ReleaseReplacedDevice(previousGuideCamera);
         GuideCameraDriver = driver;
         GuideCameraDeviceId = deviceId;
         if (driver == "indi") _indiClient.SetQuietGuideLogging(deviceId, true);
@@ -210,7 +214,9 @@ public class EquipmentManager : IDisposable {
             throw new InvalidOperationException(
                 "Aux camera must differ from the imaging camera while it is connected.");
         }
+        var previousAuxCamera = AuxCamera;
         AuxCamera = CreateCamera(driver, deviceId);
+        ReleaseReplacedDevice(previousAuxCamera);
         AuxCameraDriver = driver;
         AuxCameraDeviceId = deviceId;
         _logger.LogInformation("Aux camera selected: driver={Driver}, id={DeviceId}",
@@ -851,25 +857,33 @@ public class EquipmentManager : IDisposable {
     }
 
     public IndiRotator SelectRotator(string deviceName) {
+        var previousRotator = Rotator;
         Rotator = new IndiRotator(_indiClient, deviceName);
+        ReleaseReplacedDevice(previousRotator);
         _logger.LogInformation("Rotator selected: {Name}", deviceName);
         return Rotator;
     }
 
     public IndiFlatDevice SelectFlatDevice(string deviceName) {
+        var previousFlatDevice = FlatDevice;
         FlatDevice = new IndiFlatDevice(_indiClient, deviceName);
+        ReleaseReplacedDevice(previousFlatDevice);
         _logger.LogInformation("Flat device selected: {Name}", deviceName);
         return FlatDevice;
     }
 
     public IndiDome SelectDome(string deviceName) {
+        var previousDome = Dome;
         Dome = new IndiDome(_indiClient, deviceName);
+        ReleaseReplacedDevice(previousDome);
         _logger.LogInformation("Dome selected: {Name}", deviceName);
         return Dome;
     }
 
     public IndiWeather SelectWeather(string deviceName) {
+        var previousWeather = Weather;
         Weather = new IndiWeather(_indiClient, deviceName);
+        ReleaseReplacedDevice(previousWeather);
         _logger.LogInformation("Weather selected: {Name}", deviceName);
         return Weather;
     }
@@ -1166,6 +1180,38 @@ public class EquipmentManager : IDisposable {
 
     private void OnDeviceFound(string deviceName) {
         _logger.LogInformation("INDI device discovered: {Name}", deviceName);
+    }
+
+    /// <summary>Release the device object a Select* call just replaced.
+    ///
+    /// Selecting a device builds a new adapter and overwrites the slot. The old
+    /// one is unreachable from here but not dead: the INDI adapters hold event
+    /// subscriptions on the shared IndiClient, and the native SDK backends hold
+    /// a driver handle. Neither goes away on its own, so a night of driver
+    /// recoveries piles up adapters that still react to every frame.
+    ///
+    /// Call this AFTER the slot has been assigned: the guards below read the
+    /// current slots to avoid disposing an object another slot still uses (one
+    /// sensor can legitimately serve as both imaging and guide camera).</summary>
+    private void ReleaseReplacedDevice(object? previous) {
+        if (previous == null) return;
+        if (ReferenceEquals(previous, Camera)
+            || ReferenceEquals(previous, GuideCamera)
+            || ReferenceEquals(previous, AuxCamera)
+            || ReferenceEquals(previous, Rotator)
+            || ReferenceEquals(previous, FlatDevice)
+            || ReferenceEquals(previous, Dome)
+            || ReferenceEquals(previous, Weather)) return;
+
+        if (previous is IDisposable disposable) {
+            try {
+                disposable.Dispose();
+            } catch (Exception ex) {
+                // A driver that objects to being closed must not take the
+                // selection down with it: the new device is already in place.
+                _logger.LogDebug(ex, "Releasing the replaced device failed");
+            }
+        }
     }
 
     public void Dispose() {

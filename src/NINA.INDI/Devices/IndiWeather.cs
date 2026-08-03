@@ -17,7 +17,7 @@ using NINA.INDI.Protocol;
 
 namespace NINA.INDI.Devices;
 
-public class IndiWeather {
+public class IndiWeather : IDisposable {
     private readonly IndiClient _client;
 
     public string DeviceName { get; }
@@ -68,4 +68,14 @@ public class IndiWeather {
         if (device != DeviceName) return;
         // Could raise events for UI updates here
     }
+
+    /// <summary>Detach from the shared IndiClient. The client outlives every
+    /// device object, so without this the instance stays in its delegate list
+    /// for the process lifetime, and a device that is re-selected (driver
+    /// recovery does exactly that) has its events handled by every past
+    /// instance as well as the live one.</summary>
+    public void Dispose() {
+        _client.PropertyChanged -= OnPropertyChanged;
+    }
+
 }

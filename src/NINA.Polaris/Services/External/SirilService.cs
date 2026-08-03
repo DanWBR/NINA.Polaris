@@ -292,6 +292,7 @@ public class SirilService {
             StartedAt = DateTime.UtcNow
         };
         _jobs[jobId] = job;
+        JobRetention.TrimFinished(_jobs, j => j.StartedAt, j => j.CompletedAt != null);
 
         _ = Task.Run(() => RunJobAsync(job, req, ct), ct);
         return job;

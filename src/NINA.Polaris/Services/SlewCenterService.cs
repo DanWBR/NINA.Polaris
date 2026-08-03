@@ -82,6 +82,9 @@ public class SlewCenterService {
         };
 
         _jobs[job.Id] = job;
+        JobRetention.TrimFinished(_jobs, j => j.CreatedAt,
+            j => j.State is SlewCenterState.Centered or SlewCenterState.Failed
+                         or SlewCenterState.Cancelled);
 
         job.Cts = new CancellationTokenSource();
         job.Task = Task.Run(() => RunJobAsync(job, job.Cts.Token));

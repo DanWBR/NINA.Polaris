@@ -212,11 +212,13 @@ public sealed class ScriptRunnerService {
             job.State = "failed";
             job.Error = $"Could not start Python: {ex.Message}. Is python installed on this host?";
             _jobs[job.Id] = job;
+            JobRetention.TrimFinished(_jobs, j => j.StartedAt, j => j.State != "running");
             return job;
         }
 
         job.Proc = proc;
         _jobs[job.Id] = job;
+        JobRetention.TrimFinished(_jobs, j => j.StartedAt, j => j.State != "running");
         _log.LogInformation("Script started: {Name} (job {Id})", job.Name, job.Id);
         return job;
     }

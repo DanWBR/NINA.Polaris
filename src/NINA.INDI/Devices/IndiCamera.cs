@@ -22,7 +22,7 @@ using SkiaSharp;
 
 namespace NINA.INDI.Devices;
 
-public class IndiCamera : ICamera {
+public class IndiCamera : ICamera, IDisposable {
     private readonly IndiClient _client;
     private TaskCompletionSource<IImageData>? _exposureTcs;
     // FIELD7-1: true from the moment CCD_EXPOSURE is sent until the driver is done
@@ -1210,5 +1210,17 @@ public class IndiCamera : ICamera {
         } catch (Exception ex) {
             tcs.TrySetException(ex);
         }
+    }
+
+    /// <summary>Detach from the shared IndiClient. The client outlives every
+    /// camera object, so without this the instance stays in its delegate list
+    /// for the process lifetime. That is worse than the memory: OnBlobReceived
+    /// only filters on the device name, so after a driver recovery re-selects
+    /// the same camera, every abandoned instance decodes the incoming frame
+    /// alongside the live one.</summary>
+    public void Dispose() {
+        _client.BlobReceived -= OnBlobReceived;
+        _client.PropertyChanged -= OnPropertyChanged;
+        _streamSubscribers.Clear();
     }
 }

@@ -92,6 +92,9 @@ public class PolarAlignmentService {
             StartedAt = DateTime.UtcNow
         };
         _jobs[job.Id] = job;
+        JobRetention.TrimFinished(_jobs, j => j.StartedAt,
+            j => j.Phase is PolarAlignmentPhase.Ok or PolarAlignmentPhase.Failed
+                          or PolarAlignmentPhase.Cancelled);
         CurrentJob = job;
         job.Cts = new CancellationTokenSource();
         job.Task = Task.Run(() => RunAsync(job, job.Cts.Token));
@@ -805,6 +808,9 @@ public class PolarAlignmentService {
             TargetName = req.TargetName,
         };
         _jobs[job.Id] = job;
+        JobRetention.TrimFinished(_jobs, j => j.StartedAt,
+            j => j.Phase is PolarAlignmentPhase.Ok or PolarAlignmentPhase.Failed
+                          or PolarAlignmentPhase.Cancelled);
         CurrentJob = job;
         job.Cts = new CancellationTokenSource();
 

@@ -83,6 +83,9 @@ public class SolarSystemCenterService {
             CreatedAt = DateTime.UtcNow
         };
         _jobs[job.Id] = job;
+        JobRetention.TrimFinished(_jobs, j => j.CreatedAt,
+            j => j.State is SolarSystemCenterState.Done or SolarSystemCenterState.Failed
+                         or SolarSystemCenterState.Cancelled);
         job.Cts = new CancellationTokenSource();
         job.Task = Task.Run(() => RunJobAsync(job, job.Cts.Token));
         return job;

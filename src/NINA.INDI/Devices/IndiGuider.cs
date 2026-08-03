@@ -20,7 +20,7 @@ using NINA.INDI.Protocol;
 
 namespace NINA.INDI.Devices;
 
-public class IndiGuider {
+public class IndiGuider : IDisposable {
     private readonly IndiClient _client;
     private TaskCompletionSource<IImageData>? _exposureTcs;
 
@@ -146,4 +146,15 @@ public class IndiGuider {
         if (device != DeviceName) return;
         // Could raise events for UI updates here
     }
+
+    /// <summary>Detach from the shared IndiClient. The client outlives every
+    /// device object, so without this the instance stays in its delegate list
+    /// for the process lifetime, and a device that is re-selected (driver
+    /// recovery does exactly that) has its events handled by every past
+    /// instance as well as the live one.</summary>
+    public void Dispose() {
+        _client.BlobReceived -= OnBlobReceived;
+        _client.PropertyChanged -= OnPropertyChanged;
+    }
+
 }
