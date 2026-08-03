@@ -389,10 +389,24 @@ builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompre
     o => o.Level = System.IO.Compression.CompressionLevel.Optimal);
 builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(
     o => o.Level = System.IO.Compression.CompressionLevel.Optimal);
-// The once-per-second /ws/status payload. Singleton because nothing in it is
-// per-request: it used to be assembled inside the WebSocket handler, which
-// pulled 42 services out of the request container before it would even accept
-// the socket.
+// The once-per-second /ws/status frame. Each contributor owns its own blocks
+// and declares which ones; the builder puts the envelope around them and
+// refuses to start if two of them claim the same key. Adding a status field is
+// a change to one of these files and nothing else.
+builder.Services.AddSingleton<NINA.Polaris.WebSocket.Status.IStatusContributor,
+    NINA.Polaris.WebSocket.Status.EquipmentStatusContributor>();
+builder.Services.AddSingleton<NINA.Polaris.WebSocket.Status.IStatusContributor,
+    NINA.Polaris.WebSocket.Status.GuidingStatusContributor>();
+builder.Services.AddSingleton<NINA.Polaris.WebSocket.Status.IStatusContributor,
+    NINA.Polaris.WebSocket.Status.LiveStackStatusContributor>();
+builder.Services.AddSingleton<NINA.Polaris.WebSocket.Status.IStatusContributor,
+    NINA.Polaris.WebSocket.Status.CaptureStatusContributor>();
+builder.Services.AddSingleton<NINA.Polaris.WebSocket.Status.IStatusContributor,
+    NINA.Polaris.WebSocket.Status.SequencingStatusContributor>();
+builder.Services.AddSingleton<NINA.Polaris.WebSocket.Status.IStatusContributor,
+    NINA.Polaris.WebSocket.Status.ProcessingStatusContributor>();
+builder.Services.AddSingleton<NINA.Polaris.WebSocket.Status.IStatusContributor,
+    NINA.Polaris.WebSocket.Status.HostStatusContributor>();
 builder.Services.AddSingleton<NINA.Polaris.WebSocket.StatusPayloadBuilder>();
 builder.Services.AddSingleton<MeridianFlipService>();
 // Auto meridian flip during LIVE stacking (polls HA, flips when due).
