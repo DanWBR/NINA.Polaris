@@ -147,6 +147,16 @@ public class IndiWebManagerService : BackgroundService {
             try { await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken); }
             catch (TaskCanceledException) { break; }
         }
+
+        // Deliberately no StopAsync here: indi-web outlives Polaris.
+        //
+        // CanopusServerService does stop its child processes on the way out, so
+        // the difference looks like an oversight. It is not. Restarting Polaris
+        // (an update, a crash, a systemctl restart) should not bounce the INDI
+        // drivers underneath it: the mount keeps tracking, the cooler keeps its
+        // setpoint, and nothing goes through a USB re-enumeration for what is a
+        // few seconds of downtime in the layer above. The operator stops
+        // indi-web explicitly from the INDI panel when they actually mean it.
     }
 
     private async Task DetectAsync(CancellationToken ct) {
