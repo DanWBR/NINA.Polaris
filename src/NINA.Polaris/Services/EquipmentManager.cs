@@ -519,10 +519,8 @@ public class EquipmentManager : IDisposable {
             }
         }
         if (driver == "ascom-com" && OperatingSystem.IsWindows()) {
-            return EnumerateAscomDrivers(
-                    NINA.Ascom.Com.AscomComRegistry.DeviceType.Camera)
-                .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
-                .ToList();
+            return DiscoverAscomDrivers(
+                NINA.Ascom.Com.AscomComRegistry.DeviceType.Camera);
         }
         if (driver == "alpaca") {
             // Pulls from the cache populated by /api/alpaca/discover.
@@ -554,10 +552,8 @@ public class EquipmentManager : IDisposable {
                 .ToList();
         }
         if (driver == "ascom-com" && OperatingSystem.IsWindows()) {
-            return EnumerateAscomDrivers(
-                    NINA.Ascom.Com.AscomComRegistry.DeviceType.Telescope)
-                .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
-                .ToList();
+            return DiscoverAscomDrivers(
+                NINA.Ascom.Com.AscomComRegistry.DeviceType.Telescope);
         }
         return Array.Empty<DiscoveredCamera>();
     }
@@ -570,10 +566,8 @@ public class EquipmentManager : IDisposable {
                 .ToList();
         }
         if (driver == "ascom-com" && OperatingSystem.IsWindows()) {
-            return EnumerateAscomDrivers(
-                    NINA.Ascom.Com.AscomComRegistry.DeviceType.Focuser)
-                .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
-                .ToList();
+            return DiscoverAscomDrivers(
+                NINA.Ascom.Com.AscomComRegistry.DeviceType.Focuser);
         }
         return Array.Empty<DiscoveredCamera>();
     }
@@ -586,10 +580,8 @@ public class EquipmentManager : IDisposable {
                 .ToList();
         }
         if (driver == "ascom-com" && OperatingSystem.IsWindows()) {
-            return EnumerateAscomDrivers(
-                    NINA.Ascom.Com.AscomComRegistry.DeviceType.FilterWheel)
-                .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
-                .ToList();
+            return DiscoverAscomDrivers(
+                NINA.Ascom.Com.AscomComRegistry.DeviceType.FilterWheel);
         }
         return Array.Empty<DiscoveredCamera>();
     }
@@ -602,10 +594,8 @@ public class EquipmentManager : IDisposable {
                 .ToList();
         }
         if (driver == "ascom-com" && OperatingSystem.IsWindows()) {
-            return EnumerateAscomDrivers(
-                    NINA.Ascom.Com.AscomComRegistry.DeviceType.Switch)
-                .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
-                .ToList();
+            return DiscoverAscomDrivers(
+                NINA.Ascom.Com.AscomComRegistry.DeviceType.Switch);
         }
         return Array.Empty<DiscoveredCamera>();
     }
@@ -618,6 +608,19 @@ public class EquipmentManager : IDisposable {
         if (!OperatingSystem.IsWindows()) return 0;
         try { return EnumerateAscomDrivers(type).Count; } catch { return 0; }
     }
+
+    /// <summary>The registered ASCOM drivers, projected onto the shared
+    /// discovery shape. Its own method because the projection runs inside a
+    /// lambda, and CA1416's flow analysis does not carry the caller's
+    /// OperatingSystem.IsWindows() guard across that boundary: every caller
+    /// below is guarded, so the attribute states what is already true rather
+    /// than suppressing the rule.</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static IReadOnlyList<DiscoveredCamera> DiscoverAscomDrivers(
+            NINA.Ascom.Com.AscomComRegistry.DeviceType type)
+        => EnumerateAscomDrivers(type)
+            .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
+            .ToList();
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static IReadOnlyList<NINA.Ascom.Com.AscomComRegistry.AscomDriver>
@@ -712,9 +715,7 @@ public class EquipmentManager : IDisposable {
             NINA.Ascom.Com.AscomComRegistry.DeviceType type) {
         if (!OperatingSystem.IsWindows()) return Array.Empty<DiscoveredCamera>();
         try {
-            return EnumerateAscomDrivers(type)
-                .Select(d => new DiscoveredCamera(d.ProgId, d.Description, d.ProgId))
-                .ToList();
+            return DiscoverAscomDrivers(type);
         } catch (Exception ex) {
             _logger.LogWarning(ex, "ASCOM {Type} discovery failed", type);
             return Array.Empty<DiscoveredCamera>();

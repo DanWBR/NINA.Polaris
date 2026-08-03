@@ -18,9 +18,6 @@
          in a Windows-only Condition so non-Windows publish
          outputs skip it entirely. -->
     <SupportedOSPlatform>windows</SupportedOSPlatform>
-    <!-- dynamic dispatch (Type.GetTypeFromProgID + late-bound
-         property/method calls) drives the whole adapter. -->
-    <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

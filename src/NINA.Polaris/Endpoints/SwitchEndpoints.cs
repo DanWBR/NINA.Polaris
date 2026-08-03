@@ -93,7 +93,7 @@ public static class SwitchEndpoints {
 
         group.MapGet("/discover", (EquipmentManager equip, string? driver) => {
             var d = (driver ?? "indi").Trim().ToLowerInvariant();
-            if (d == "ascom-com")
+            if (d == "ascom-com" && OperatingSystem.IsWindows())
                 return Results.Ok(equip.GetAscomDrivers(
                     NINA.Ascom.Com.AscomComRegistry.DeviceType.Switch));
             if (d == "alpaca")
