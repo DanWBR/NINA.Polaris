@@ -57,13 +57,22 @@ jobs:
         uses: actions/checkout@v7
         with:
           submodules: recursive
-          # LFS holds the bundled DSS sky-survey imagery
-          # (wwwroot/sky/data/skydata/surveys/dss/**, ~46 MB) and the
-          # dso-thumbs + ncnn models. Without lfs:true the checkout
-          # materialises pointer stubs, so the published .deb/tar/zip
-          # ships a broken DSS survey — the SKY map renders black on the
-          # SBC (regressed since the DSS-via-LFS migration in 1e87c03a).
-          lfs: true
+          # NOT lfs: true. A blanket LFS checkout pulls all 483 MB tracked in
+          # this repo, and this job runs six times per release, so every tag
+          # cost 2.9 GB of the account's LFS bandwidth quota. Most of it was
+          # thrown away seconds later: the csproj removes dso-thumbs (182 MB)
+          # and the ncnn models (257 MB) from the publish output, and both are
+          # already distributed as `data-pack` release assets, which do not
+          # count against the quota. Only the DSS survey ships in the package,
+          # so only the DSS survey is fetched, below.
+          lfs: false
+
+      # Without this the DSS files are pointer stubs, the published
+      # .deb/tar/zip ships a broken survey, and the SKY map renders black on
+      # the SBC (the regression in 1e87c03a). Scoped to the one path the
+      # package actually contains: 44 MB per job instead of 483 MB.
+      - name: Fetch the LFS content the package ships (DSS survey only)
+        run: git lfs pull --include="src/NINA.Polaris/wwwroot/sky/data/skydata/surveys/dss/**"
 
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v6
