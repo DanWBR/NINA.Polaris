@@ -335,7 +335,7 @@ public class SelfSignedCertService {
             // X509KeyStorageFlags.PersistKeySet keeps the private key
             // alongside the PFX on Windows; without it the key may
             // get GC'd when the X509Certificate2 falls out of scope.
-            return new X509Certificate2(_certPath, (string?)null,
+            return X509CertificateLoader.LoadPkcs12FromFile(_certPath, (string?)null,
                 X509KeyStorageFlags.PersistKeySet
                 | X509KeyStorageFlags.MachineKeySet
                 | X509KeyStorageFlags.Exportable);
@@ -412,7 +412,7 @@ public class SelfSignedCertService {
         // persistence on Windows and avoids a "no private key"
         // surprise when Kestrel tries to use it for TLS.
         var pfxBytes = rawCert.Export(X509ContentType.Pfx);
-        return new X509Certificate2(pfxBytes, (string?)null,
+        return X509CertificateLoader.LoadPkcs12(pfxBytes, (string?)null,
             X509KeyStorageFlags.PersistKeySet
             | X509KeyStorageFlags.MachineKeySet
             | X509KeyStorageFlags.Exportable);

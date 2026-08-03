@@ -155,7 +155,7 @@ public class HardwareAutoConnectService : IHostedService {
                 // come in. Give the server up to 2s to enumerate before we
                 // try to bind rig devices, without this the device list is
                 // empty and every Select* lookup misses.
-                for (int i = 0; i < 20 && _indiClient.Devices.Count == 0; i++) {
+                for (int i = 0; i < 20 && _indiClient.Devices.IsEmpty; i++) {
                     await Task.Delay(100, ct);
                 }
                 _notify.Push("ok",
