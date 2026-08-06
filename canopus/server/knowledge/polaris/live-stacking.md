@@ -76,7 +76,8 @@ colour by default.
 
 Every per-pixel buffer of a session is resident at once (frame count,
 R/G/B accumulators, variance terms, debayer + warp scratch), so the
-working set is **~38 B/px colour, ~30 B/px mono**
+working set is **~96 B/px colour, ~76 B/px mono, plus a ~710 MB fixed
+floor**
 (`LiveStackingService.StackBytesPerPixel`). **Stacking resolution**
 (sidebar, under the Bin buttons) box-averages the frame down before it
 enters the stack. The reduction is CFA-preserving: it works on whole
@@ -84,7 +85,8 @@ enters the stack. The reduction is CFA-preserving: it works on whole
 pattern and debayer/warp/accumulate keep working unchanged.
 
 - **Auto** (default), `ResolveAutoBinning` returns the first of `1, 2, 4`
-  whose cost fits `budget = max(96 MB, TotalAvailableMemoryBytes / 4)`.
+  whose cost fits `budget = TotalAvailableMemoryBytes` minus a reserve of
+  `max(768 MB, 15%)` for the OS and the rest of Polaris.
 - **1:1 / 1:2 / 1:4** override it. Persisted per camera + machine.
 - `GET /api/livestack/binning-options` returns each option's
   `width`/`height`/`estimatedMB`/`fits`; options that do not fit are
@@ -109,8 +111,24 @@ Two things to take from this:
 preview buffers) that no stacking resolution touches. Fitting
 `RSS = floor + k·px` through the 1:1 and 1:4 points gives floor ≈ 370 MB
 and predicts 501 MB at 1:2 against 450 measured, which is within the
-noise of RSS sampling. The 38 B/px model is therefore sound for the
-**marginal** cost, and the budget check is right to measure only that.
+noise of RSS sampling.
+
+**Superseded.** A second bench (Radxa Dragon Q6A, 5.1 GB, 26 MP OSC) does not
+fit that model. Peaks during capture: 1:1 26.09 Mpx = 3096 MB, 1:2 6.52 Mpx =
+1305 MB, giving **96 B/px with a ~710 MB floor** and reproducing both points to
+under 1%. The old figure advertised 1:1 as ~945 MB against 3096 measured, and
+1:4 as ~59 MB when nothing can cost less than the floor.
+
+Steady state runs about 1 GB below the peak: with the stack idle at 26 frames
+and nothing released, RSS fell from 2801 to 1965 MB on its own. That gap is
+per-frame garbage, not resident stack, which is why the estimate targets the
+peak - that is what runs a host out of memory.
+
+The two benches still disagree (this model predicts 1780 MB for the OrangePi
+point that measured 903). The likely reason is that the .NET GC sizes its heap
+to the machine, so cost depends partly on available RAM and not on pixels
+alone. Treat the numbers as calibrated for 5 GB-class hosts, and bench a small
+board before tightening the `fits` rule.
 
 **1:4 buys ~50 MB over 1:2** for 4x the resolution loss. `ResolveAutoBinning`
 iterates `1, 2, 4` and returns the first that fits, so it already prefers

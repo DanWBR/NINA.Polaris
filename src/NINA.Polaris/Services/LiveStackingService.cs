@@ -255,9 +255,65 @@ public class LiveStackingService {
     }
 
     /// <summary>Per-pixel working-set cost of a live-stack session, in bytes.
-    /// Colour: 4 (count) + 12 (R/G/B accumulators) + 16 (scratch planes) + ~6
-    /// transient. Mono drops the two extra accumulators.</summary>
-    internal static long StackBytesPerPixel(bool colour) => colour ? 38 : 30;
+    ///
+    /// This used to be 38 (colour), derived by adding up the buffers on paper:
+    /// 4 count + 12 accumulators + 16 scratch + ~6 transient. Measured on a
+    /// Radxa Dragon Q6A against an IMX571-class OSC, that accounting is off by
+    /// roughly 3x, because it counts the buffers the design names and not the
+    /// churn around them (debayer and warp working per plane, the encoder's
+    /// copy, GC headroom before a collection actually lands):
+    ///
+    ///     1:2  3124x2088  =  6.52 Mpx  ->  1305 MB RSS peak
+    ///     1:1  6248x4176  = 26.09 Mpx  ->  3096 MB RSS peak
+    ///
+    /// Two points: (3096-1305) MiB / 19.57 Mpx = 96 B/px with a ~710 MiB floor.
+    /// Both points then reproduce to under 1%. The figure predicts the PEAK,
+    /// which is what runs a host out of memory; steady state sits ~1 GiB lower
+    /// because much of the difference is per-frame garbage. That was measured
+    /// directly: with the stack idle at 26 frames and nothing released, RSS
+    /// decayed from 2801 to 1965 MiB on its own as allocation pressure stopped.
+    ///
+    /// Caveat worth keeping: an earlier bench on an OrangePi 5 Pro (4 GiB,
+    /// 11.7 Mpx) measured 903 MiB where this model predicts 1780. The likely
+    /// reason is that the .NET GC sizes its heap to the machine, so cost is
+    /// partly a function of available RAM rather than of pixels alone. Until
+    /// that is measured on a small board, treat this as calibrated for
+    /// 5 GiB-class hosts and do not tighten the Fits rule on its strength.
+    ///
+    /// The mono figure keeps the old 0.79 ratio to colour. It is NOT measured:
+    /// there was no mono sensor on the bench.</summary>
+    internal static long StackBytesPerPixel(bool colour) => colour ? 96 : 76;
+
+    /// <summary>Fixed cost of a session regardless of frame size: the decoded
+    /// sub, the preview JPEG, the star lists and the per-session scratch that
+    /// does not scale with the stacking resolution. Measured as the intercept
+    /// of the two points above. Its absence is why 1:4 Quarter used to be
+    /// advertised at ~59 MB when it cannot cost less than the floor.</summary>
+    internal const long StackFloorBytes = 710L * 1024 * 1024;
+
+    /// <summary>Peak working set a live-stack session would reach at this
+    /// pixel count, in bytes. One place, so the estimate the UI shows and the
+    /// rule that picks Auto can never drift apart.</summary>
+    internal static long EstimateStackBytes(long pixelCount, bool colour) =>
+        pixelCount <= 0 ? 0 : StackFloorBytes + (pixelCount * StackBytesPerPixel(colour));
+
+    /// <summary>How much of the machine a live stack may claim.
+    ///
+    /// Was TotalAvailableMemoryBytes/4, which paired with the old 3x-low
+    /// per-pixel figure to look about right by cancelling error. With a
+    /// truthful estimate a quarter of RAM would reject options that demonstrably
+    /// run: 1:2 on this 5 GiB board measures 1206 MB against a 1.27 GiB
+    /// quarter-budget. Reserve room for the OS and the rest of Polaris instead,
+    /// and let the stack have what is genuinely left.
+    ///
+    /// Deliberately not tighter than that: with a real floor in the estimate a
+    /// strict budget would refuse every option on a 2 GiB board, and no small
+    /// board has been benched yet. Better to advertise an honest number than
+    /// to block a resolution that may well run.</summary>
+    internal static long StackBudgetBytes(long totalRamBytes) {
+        long reserve = Math.Max(768L * 1024 * 1024, totalRamBytes / 100 * 15);
+        return Math.Max(96L * 1024 * 1024, totalRamBytes - reserve);
+    }
 
     /// <summary>
     /// What each working-resolution option would COST for the camera that is
@@ -274,10 +330,10 @@ public class LiveStackingService {
         long px = w * h;
         bool colour = ColorStacking;
         long ram = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
-        long budget = Math.Max(96L * 1024 * 1024, ram / 4);
+        long budget = StackBudgetBytes(ram);
         var list = new List<StackBinningOption>();
         foreach (var bin in new[] { 1, 2, 4 }) {
-            long cost = px <= 0 ? 0 : px / ((long)bin * bin) * StackBytesPerPixel(colour);
+            long cost = EstimateStackBytes(px / ((long)bin * bin), colour);
             list.Add(new StackBinningOption(
                 Bin: bin,
                 EstimatedMB: (int)(cost / (1024 * 1024)),
@@ -289,15 +345,16 @@ public class LiveStackingService {
 
     /// <summary>Memory budget the options are measured against (MB).</summary>
     public int StackBudgetMB =>
-        (int)(Math.Max(96L * 1024 * 1024,
-                       GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 4) / (1024 * 1024));
+        (int)(StackBudgetBytes(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes) / (1024 * 1024));
 
     internal static int ResolveAutoBinning(long pixelCount, bool colour, long totalRamBytes) {
         if (pixelCount <= 0) return 1;
-        long perPixel = colour ? 38 : 30;
-        long budget = Math.Max(96L * 1024 * 1024, totalRamBytes / 4);
+        // Same estimate and same budget the dropdown shows. This used to carry
+        // its own copy of the per-pixel constant, so a correction in one place
+        // would have left Auto picking against the old number.
+        long budget = StackBudgetBytes(totalRamBytes);
         foreach (var bin in new[] { 1, 2, 4 }) {
-            if (pixelCount / ((long)bin * bin) * perPixel <= budget) return bin;
+            if (EstimateStackBytes(pixelCount / ((long)bin * bin), colour) <= budget) return bin;
         }
         return 4;
     }
