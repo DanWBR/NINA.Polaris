@@ -721,6 +721,32 @@ public static class PlateSolveEndpoints {
             double pixSize = headerPix > 0 ? headerPix
                 : (equip.Camera?.PixelSizeY ?? equip.Camera?.PixelSizeX ?? 3.76);
             if (imgHeight <= 0) imgHeight = 3008;
+
+            // A reduced frame has a BIGGER effective pixel, and nothing in the
+            // header says so: XPIXSZ/YPIXSZ keep reporting the sensor's native
+            // pitch. Mixing that pitch with the reduced NAXIS2 put both hints
+            // out by exactly the reduction factor, so a live stack at 1:2 told
+            // ASTAP the field was half its real size and every solve failed on
+            // frames that were fine. Field report 2026-08-06: 100% failure at
+            // 1:2, instant solve at 1:1, same sky, same mount, same session.
+            //
+            // Recover the factor from what the frame covers against what the
+            // sensor has, and only trust it near a whole number: a cropped or
+            // ROI frame is smaller for a different reason and must not be
+            // rescaled.
+            long sensorHeight = equip.Camera?.MaxY ?? 0;
+            if (sensorHeight > imgHeight && imgHeight > 0) {
+                double factor = (double)sensorHeight / imgHeight;
+                double nearest = Math.Round(factor);
+                if (nearest >= 2 && Math.Abs(factor - nearest) < 0.02) {
+                    pixSize *= nearest;
+                    logger.LogInformation(
+                        "Plate solve: {H}px frame from a {S}px sensor, so the effective "
+                        + "pixel is {Pix:F2}um (native x{N}) for the scale hints",
+                        imgHeight, sensorHeight, pixSize, nearest);
+                }
+            }
+
             double scaleArcsec = 0;
             if (fl > 0) {
                 // Pixel scale (arcsec/pixel) is dimension-independent and the

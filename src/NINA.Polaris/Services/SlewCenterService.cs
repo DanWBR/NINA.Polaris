@@ -389,6 +389,26 @@ public class SlewCenterService {
                 double pixSize = _equip.Camera?.PixelSizeY ?? 0;
                 if (pixSize <= 0) pixSize = _equip.Camera?.PixelSizeX ?? 0;
                 int imgHeight = imageData.Properties.Height;
+
+                // Same trap as the FILES solve: a reduced frame keeps the
+                // sensor's native pixel pitch in its metadata, so pairing that
+                // pitch with the reduced height puts both hints out by the
+                // reduction factor. This path captures at bin 1 so it should
+                // see a full frame, but "should" is what the 1:2 live-stack
+                // failure was made of - scale it here too and the hint is right
+                // whatever the frame turns out to be.
+                long sensorHeight = _equip.Camera?.MaxY ?? 0;
+                if (sensorHeight > imgHeight && imgHeight > 0) {
+                    double factor = (double)sensorHeight / imgHeight;
+                    double nearest = Math.Round(factor);
+                    if (nearest >= 2 && Math.Abs(factor - nearest) < 0.02) {
+                        pixSize *= nearest;
+                        _logger.LogInformation(
+                            "Solve hints: {H}px frame from a {S}px sensor, effective pixel {Pix:F2}um (native x{N})",
+                            imgHeight, sensorHeight, pixSize, nearest);
+                    }
+                }
+
                 if (fl > 0 && pixSize > 0) {
                     // Pixel scale is dimension-independent and the tightest,
                     // most reliable hint: ASTAP uses -fov (height) below, but
