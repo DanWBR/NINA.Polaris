@@ -1466,6 +1466,13 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
+    /* These rows sit in a flex COLUMN above the file listing, and a flex item
+       shrinks by default. With a long listing the three toolbars were being
+       squeezed - on mobile, where each row is a nowrap horizontal scroller
+       with an 8px scrollbar of its own, the squeeze ate the row's own height
+       and the labels overlapped the row above. The height must not depend on
+       how many files the folder happens to hold. */
+    flex-shrink: 0;
     /* Tight vertical padding: three of these rows stack above the file list,
        so every pixel here costs three from the listing. */
     padding: 4px 14px;
