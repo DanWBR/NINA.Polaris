@@ -87,4 +87,38 @@ public class AstapDownsampleEscalationTests {
             "the retry ladder's coarser factor must win over the profile default");
         Assert.That(escalated, Does.Not.Contain("-z 1"));
     }
+
+    /// <summary>
+    /// The ladder escalates to a COARSER downsample because the failures it was
+    /// built for are noisy, finely-sampled frames. On an undersampled frame that
+    /// is backwards: the stars already span about a pixel, and binning turns
+    /// them into single-pixel spikes ASTAP reads as hot pixels.
+    ///
+    /// Field report 2026-08-07: a live stack at 1:2 put a 2.75"/px rig at
+    /// 5.5"/px, and the ladder answered with -z 4, i.e. 22"/px. Every solve
+    /// failed for an hour; the same sky solved instantly at 1:1.
+    /// </summary>
+    [TestCase(5.5)]
+    [TestCase(4.0)]
+    [TestCase(12.0)]
+    public void CoarseFramesRetryWithEveryPixel(double arcsecPerPixel) {
+        Assert.That(AstapSolver.EscalatedDownsample(2, arcsecPerPixel), Is.EqualTo(1),
+            $"a {arcsecPerPixel} arcsec/px nao sobra estrela para binar: "
+            + "a retentativa tem de usar todos os pixels");
+    }
+
+    [TestCase(1.0)]
+    [TestCase(2.75)]
+    [TestCase(3.9)]
+    public void FinelySampledFramesStillEscalateCoarser(double arcsecPerPixel) {
+        Assert.That(AstapSolver.EscalatedDownsample(2, arcsecPerPixel), Is.EqualTo(4),
+            "frames bem amostrados continuam ganhando a deteccao mais grosseira do FIELD6-14");
+    }
+
+    /// <summary>Scale unknown (0) must not change the established behaviour.</summary>
+    [Test]
+    public void UnknownScaleKeepsTheOriginalLadder() {
+        Assert.That(AstapSolver.EscalatedDownsample(2, 0), Is.EqualTo(4));
+        Assert.That(AstapSolver.EscalatedDownsample(0, 0), Is.EqualTo(4));
+    }
 }

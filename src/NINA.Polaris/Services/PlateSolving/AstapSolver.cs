@@ -102,8 +102,10 @@ public class AstapSolver : IPlateSolver {
         // the failing solve verbatim (field log: three identical -z 1 commands
         // under a line announcing -z 4).
         var currentZ = EffectiveDownsample(options);
-        var escalatedZ = EscalatedDownsample(currentZ);
-        if (escalatedZ > currentZ && currentZ >= 0) {
+        var escalatedZ = EscalatedDownsample(currentZ, options.ScaleArcsecPerPixel);
+        // Coarse frames retry DOWN (see the overload): accept that as progress
+        // too, otherwise the last rung is skipped exactly where it is needed.
+        if (escalatedZ != currentZ && currentZ >= 0) {
             var coarse = new PlateSolveOptions {
                 HintRa = options.HintRa, HintDec = options.HintDec,
                 SearchRadiusDeg = options.SearchRadiusDeg, FovDeg = options.FovDeg,
@@ -111,7 +113,12 @@ public class AstapSolver : IPlateSolver {
                 Downsample = escalatedZ,
                 DownsampleIsExplicit = true
             };
-            _logger.LogInformation("ASTAP blind solve failed too; retrying hinted at -z {Z} (coarser detection)", escalatedZ);
+            _logger.LogInformation(
+                "ASTAP blind solve failed too; retrying hinted at -z {Z} ({Why})", escalatedZ,
+                escalatedZ < currentZ
+                    ? $"frame already coarse at {options.ScaleArcsecPerPixel:F1} arcsec/px, "
+                      + "keeping every pixel instead of binning the stars away"
+                    : "coarser detection");
             try { onLog?.Invoke($"== retrying ASTAP hinted at downsample {escalatedZ} (marginal frame) =="); } catch { }
             var coarseResult = await SolveOnceAsync(fitsPath, coarse, ct, onLog);
             if (coarseResult.Success) return coarseResult;
@@ -454,6 +461,27 @@ public class AstapSolver : IPlateSolver {
     internal static int EscalatedDownsample(int current)
         => Math.Max(4, current <= 0 ? 4 : current + 2);
 
+    /// <summary>Sampling below which downsampling further can only destroy
+    /// stars. At 4 arcsec/pixel a typical star already spans about one pixel.</summary>
+    internal const double CoarseArcsecPerPixel = 4.0;
+
+    /// <summary>The retry downsample, aware of how coarsely the frame is
+    /// already sampled.
+    ///
+    /// The escalation above assumes the frame is finely sampled and the problem
+    /// is noise or nebulosity, where averaging down helps. On an UNDERSAMPLED
+    /// frame it is backwards: the stars already span about a pixel, and binning
+    /// further turns them into single-pixel spikes that ASTAP cannot tell from
+    /// hot pixels. Field report 2026-08-07: a live stack at 1:2 put a 2.75"/px
+    /// rig at 5.5"/px, and the ladder answered by retrying at -z 4, i.e. 22"/px.
+    /// Every attempt failed for an hour.
+    ///
+    /// When the frame is already coarse, go the other way and give ASTAP every
+    /// pixel it has. A value of 0 (auto) is treated as "unknown scale" and
+    /// keeps the original behaviour.</summary>
+    internal static int EscalatedDownsample(int current, double arcsecPerPixel)
+        => arcsecPerPixel >= CoarseArcsecPerPixel ? 1 : EscalatedDownsample(current);
+
     /// <summary>The downsample this call will actually run with: the profile
     /// setting, then appsettings, then the per-call value, EXCEPT when the
     /// caller marked its value explicit (the retry ladder). Shared by BuildArgs
@@ -544,6 +572,32 @@ public class AstapSolver : IPlateSolver {
             $"({w}x{h} {full.Properties.BitDepth}-bit)";
         _logger.LogInformation("ASTAP proxy stats: {Stats}", planeStats);
 
+        // Why a perfectly good frame can be unsolvable, and why the operator
+        // needs to be told rather than left with "exit 1".
+        //
+        // A reduced frame does not just lose pixels, it loses STARS: binning
+        // 1:2 doubles the arcsec/pixel, and on an already-undersampled rig the
+        // stars fall below one pixel. ASTAP cannot centroid a single-pixel
+        // spike - it is indistinguishable from a hot pixel - so hinted, blind
+        // and coarse-downsample all fail on a frame that looks fine on screen.
+        //
+        // Field report 2026-08-07: live stack at 1:2 on a 2.75"/px rig with
+        // HFR 0.94 px. Every solve failed for an hour; switching to 1:1 solved
+        // instantly on the same sky. Nothing in the output said "your stacking
+        // resolution is the problem", which is what this string is for.
+        double coarseScale = 0;
+        var scopeMeta = full.MetaData.Telescope;
+        var camMeta = full.MetaData.Camera;
+        if (scopeMeta.FocalLength > 0 && camMeta.PixelSizeX > 0) {
+            coarseScale = 206.2648 * camMeta.PixelSizeX / scopeMeta.FocalLength;
+        }
+        string undersampledHint = coarseScale >= 4.0
+            ? $" The frame works out to about {coarseScale:F1} arcsec/pixel, which is coarse "
+              + "enough that stars span barely a pixel and star detection has little to hold "
+              + "on to. If the live stack is running at a reduced stacking resolution, that "
+              + "halves or quarters the sampling: try 1:1, or solve a full-resolution sub."
+            : "";
+
         // Put the proxy in the user's temp dir, not next to the
         // source. ASTAP writes the .ini result file next to the FITS
         // it solved; dropping it into the source directory pollutes
@@ -622,6 +676,7 @@ public class AstapSolver : IPlateSolver {
                         Success = false, SolverUsed = Id, Output = output,
                         Error = $"ASTAP failed on multi-channel proxy " +
                             $"(exit {proc.ExitCode}, {planeStats}, proxy={proxyPath}): {detail}"
+                            + undersampledHint
                     };
                 }
 
