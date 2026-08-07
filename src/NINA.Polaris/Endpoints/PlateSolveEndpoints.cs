@@ -235,13 +235,31 @@ public static class PlateSolveEndpoints {
                 PlateSolveProgressService progress,
                 EquipmentManager equip,
                 ProfileService profiles,
+                LiveStackingService liveStack,
                 ILogger<PlateSolveStatusMarker> logger,
                 CancellationToken ct) => {
-            var image = relay.LatestImageData;
+            // Prefer a sensor-resolution sub over the relayed image.
+            //
+            // The relayed image is the stacked one, and a live stack at a
+            // reduced stacking resolution only exists at that resolution. Half
+            // the sampling means half the star size in pixels, and on a rig that
+            // is already undersampled the stars drop below one pixel: field
+            // report 2026-08-07, every solve failed at 1:2 for an hour and the
+            // same sky solved instantly at 1:1. The reduction is there to bound
+            // the accumulator's memory, and the solver gains nothing from it.
+            //
+            // LastFullResolutionFrame is null unless reduction is in force, so
+            // at 1:1 (and with no live stack at all) this changes nothing.
+            var image = liveStack.LastFullResolutionFrame ?? relay.LatestImageData;
             if (image == null) {
                 return Results.BadRequest(new {
                     error = "No image available; capture a frame first."
                 });
+            }
+            if (!ReferenceEquals(image, relay.LatestImageData)) {
+                logger.LogInformation(
+                    "PREVIEW plate solve: using the {W}x{H} sub instead of the reduced live stack",
+                    image.Properties.Width, image.Properties.Height);
             }
 
             if (!solver.IsAvailable) {

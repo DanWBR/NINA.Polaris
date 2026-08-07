@@ -221,6 +221,28 @@ public class LiveStackingService {
     /// geometry can never change mid-stack; cleared by Reset.</summary>
     private int _stackBin;
 
+    private IImageData? _lastFullResFrame;
+
+    /// <summary>The most recent sub at SENSOR resolution, kept only while the
+    /// stack is reduced (_stackBin > 1).
+    ///
+    /// The stacked image only exists at the stacking resolution, so anything
+    /// that plate-solves "the current image" during a reduced live stack was
+    /// handed a frame with half or a quarter of the sampling. On a rig that is
+    /// already undersampled that puts the stars below a pixel and ASTAP has
+    /// nothing to centroid: field report 2026-08-07, 100% solve failure at 1:2
+    /// and an instant solve at 1:1 on the same sky. The stacking resolution
+    /// exists to bound the accumulator's memory; the solver gains nothing from
+    /// it and loses the stars.
+    ///
+    /// Costs one sub held in memory (~52 MB on a 26 MP sensor, about 4% of the
+    /// measured 1:2 working set) and only when reduction is actually in force -
+    /// at 1:1 the relayed image is already full resolution and this stays null.
+    /// Replaced each frame, so it never accumulates.</summary>
+    public IImageData? LastFullResolutionFrame {
+        get { lock (_lock) { return _lastFullResFrame; } }
+    }
+
     private ushort[]? _scratchCal;
     private ushort[]? _dbR, _dbG, _dbB;
     private ushort[]? _warpR, _warpG, _warpB, _warpMono;
@@ -771,6 +793,7 @@ public class LiveStackingService {
             // Re-resolve the working resolution on the next session (the rig or
             // the operator's choice may have changed since).
             _stackBin = 0;
+            _lastFullResFrame = null;
             _stackR = null;
             _stackG = null;
             _stackB = null;
@@ -948,6 +971,11 @@ public class LiveStackingService {
             _dbR = null; _dbG = null; _dbB = null;
             _warpR = null; _warpG = null; _warpB = null; _warpMono = null;
             _scratchSnr = null;
+            // Same reasoning for the retained full-resolution sub (~52 MB on a
+            // 26 MP sensor): it only serves solves of a LIVE frame, and no new
+            // frames arrive while stopped. The recentre path does not depend on
+            // it either - SlewCenterService captures its own frame at bin 1.
+            _lastFullResFrame = null;
         }
         _logger.LogInformation("Live stacking stopped after {Count} frames", _frameCount);
         // User-paced action (Stop button): compact the freed LOH scratch so RSS
@@ -1096,6 +1124,11 @@ public class LiveStackingService {
             data = BinFrame(data, props.Width, props.Height, _stackBin, isBayer,
                             out int binW, out int binH);
             props = props with { Width = binW, Height = binH };
+            // Keep this sub at sensor resolution for anything that needs to
+            // plate-solve. See LastFullResolutionFrame: from here on, every
+            // downstream consumer sees the reduced geometry, and a solver
+            // handed that has no stars left to work with.
+            lock (_lock) { _lastFullResFrame = imageData; }
         }
 
         // StarDetector runs in BOTH modes:
