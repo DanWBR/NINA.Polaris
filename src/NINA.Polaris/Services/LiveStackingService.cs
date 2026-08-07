@@ -853,6 +853,20 @@ public class LiveStackingService {
                 && p != BayerPatternEnum.Auto) {
             return p;
         }
+        // Last resort, and the one that stops a session flipping to mono
+        // halfway through: a pattern this session already stacked with.
+        //
+        // A CFA dropout is a driver hiccup, not a change of sensor. Without
+        // this the resolver answered None on the dropped frame, the deferral
+        // budget (per session, never reset) eventually ran out, and the
+        // re-init at that point locked _colorActive to false - so the operator
+        // watched a colour stack turn monochrome mid-run with nothing in the
+        // UI to explain it. The sensor did not stop being a colour sensor
+        // because one frame arrived without its header.
+        if (_lastGoodBayer != BayerPatternEnum.None
+                && _lastGoodBayer != BayerPatternEnum.Auto) {
+            return _lastGoodBayer;
+        }
         return BayerPatternEnum.None;
     }
 
