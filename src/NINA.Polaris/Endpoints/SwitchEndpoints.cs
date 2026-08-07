@@ -138,8 +138,10 @@ public static class SwitchEndpoints {
         group.MapPost("/disconnect", async (EquipmentManager equip) => {
             if (equip.Switch == null)
                 return Results.BadRequest(new { error = "No power box selected" });
-            await equip.Switch.DisconnectAsync();
-            return Results.Ok(new { connected = false });
+            return await DeviceConnectGuard.RunAsync(
+                "disconnect", equip.Switch.DeviceName,
+                ct => equip.Switch.DisconnectAsync(ct),
+                () => Results.Ok(new { connected = false }));
         });
 
         group.MapPost("/refresh", async (EquipmentManager equip) => {

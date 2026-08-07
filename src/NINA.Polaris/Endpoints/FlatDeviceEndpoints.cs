@@ -81,16 +81,20 @@ public static class FlatDeviceEndpoints {
             if (equip.FlatDevice == null)
                 return Results.BadRequest(new { error = "No flat device selected" });
 
-            await equip.FlatDevice.ConnectAsync();
-            return Results.Ok(new { status = "connected", device = equip.FlatDevice.DeviceName });
+            return await DeviceConnectGuard.RunAsync(
+                "connect", equip.FlatDevice.DeviceName,
+                ct => equip.FlatDevice.ConnectAsync(ct),
+                () => Results.Ok(new { status = "connected", device = equip.FlatDevice.DeviceName }));
         });
 
         group.MapPost("/disconnect", async (EquipmentManager equip) => {
             if (equip.FlatDevice == null)
                 return Results.BadRequest(new { error = "No flat device selected" });
 
-            await equip.FlatDevice.DisconnectAsync();
-            return Results.Ok(new { status = "disconnected" });
+            return await DeviceConnectGuard.RunAsync(
+                "disconnect", equip.FlatDevice.DeviceName,
+                ct => equip.FlatDevice.DisconnectAsync(ct),
+                () => Results.Ok(new { status = "disconnected" }));
         });
     }
 

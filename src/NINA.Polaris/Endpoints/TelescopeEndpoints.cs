@@ -619,8 +619,10 @@ public static class TelescopeEndpoints {
             if (equip.Telescope == null)
                 return Results.BadRequest(new { error = "No telescope selected" });
 
-            await equip.Telescope.DisconnectAsync();
-            return Results.Ok(new { status = "disconnected" });
+            return await DeviceConnectGuard.RunAsync(
+                "disconnect", equip.Telescope.DeviceName,
+                ct => equip.Telescope.DisconnectAsync(ct),
+                () => Results.Ok(new { status = "disconnected" }));
         });
     }
 

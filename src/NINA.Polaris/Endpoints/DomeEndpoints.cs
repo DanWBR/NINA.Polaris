@@ -100,16 +100,20 @@ public static class DomeEndpoints {
             if (equip.Dome == null)
                 return Results.BadRequest(new { error = "No dome selected" });
 
-            await equip.Dome.ConnectAsync();
-            return Results.Ok(new { status = "connected", device = equip.Dome.DeviceName });
+            return await DeviceConnectGuard.RunAsync(
+                "connect", equip.Dome.DeviceName,
+                ct => equip.Dome.ConnectAsync(ct),
+                () => Results.Ok(new { status = "connected", device = equip.Dome.DeviceName }));
         });
 
         group.MapPost("/disconnect", async (EquipmentManager equip) => {
             if (equip.Dome == null)
                 return Results.BadRequest(new { error = "No dome selected" });
 
-            await equip.Dome.DisconnectAsync();
-            return Results.Ok(new { status = "disconnected" });
+            return await DeviceConnectGuard.RunAsync(
+                "disconnect", equip.Dome.DeviceName,
+                ct => equip.Dome.DisconnectAsync(ct),
+                () => Results.Ok(new { status = "disconnected" }));
         });
     }
 

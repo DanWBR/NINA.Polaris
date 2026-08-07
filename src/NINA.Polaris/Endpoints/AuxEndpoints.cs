@@ -42,7 +42,8 @@ public static class AuxEndpoints {
                 ProfileService profileSvc, ILoggerFactory loggerFactory) => {
             if (equip.AuxCamera == null)
                 return Results.BadRequest(new { error = "No aux camera selected. Use POST /api/aux/camera/select/{name} first" });
-            await equip.AuxCamera.ConnectAsync();
+            await DeviceConnectGuard.BoundedAsync("connect", equip.AuxCamera.DeviceName,
+                ct => equip.AuxCamera.ConnectAsync(ct));
             // Per-rig pixel-size fallback for a DSLR on the aux port (gphoto
             // reports CCD_INFO pixel size as 0). Mirrors the main-camera connect.
             try {
@@ -139,15 +140,19 @@ public static class AuxEndpoints {
         group.MapPost("/focuser/connect", async (EquipmentManager equip) => {
             if (equip.AuxFocuser == null)
                 return Results.BadRequest(new { error = "No aux focuser selected" });
-            await equip.AuxFocuser.ConnectAsync();
-            return Results.Ok(new { status = "connected", device = equip.AuxFocuser.DeviceName });
+            return await DeviceConnectGuard.RunAsync(
+                "connect", equip.AuxFocuser.DeviceName,
+                ct => equip.AuxFocuser.ConnectAsync(ct),
+                () => Results.Ok(new { status = "connected", device = equip.AuxFocuser.DeviceName }));
         });
 
         group.MapPost("/focuser/disconnect", async (EquipmentManager equip) => {
             if (equip.AuxFocuser == null)
                 return Results.Ok(new { status = "disconnected" });
-            await equip.AuxFocuser.DisconnectAsync();
-            return Results.Ok(new { status = "disconnected" });
+            return await DeviceConnectGuard.RunAsync(
+                "disconnect", equip.AuxFocuser.DeviceName,
+                ct => equip.AuxFocuser.DisconnectAsync(ct),
+                () => Results.Ok(new { status = "disconnected" }));
         });
 
         group.MapPost("/focuser/move/absolute", async (EquipmentManager equip,

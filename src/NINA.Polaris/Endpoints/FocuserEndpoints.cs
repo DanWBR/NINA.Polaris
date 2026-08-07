@@ -184,16 +184,20 @@ public static class FocuserEndpoints {
             if (equip.Focuser == null)
                 return Results.BadRequest(new { error = "No focuser selected" });
 
-            await equip.Focuser.ConnectAsync();
-            return Results.Ok(new { status = "connected", device = equip.Focuser.DeviceName });
+            return await DeviceConnectGuard.RunAsync(
+                "connect", equip.Focuser.DeviceName,
+                ct => equip.Focuser.ConnectAsync(ct),
+                () => Results.Ok(new { status = "connected", device = equip.Focuser.DeviceName }));
         });
 
         group.MapPost("/disconnect", async (EquipmentManager equip) => {
             if (equip.Focuser == null)
                 return Results.BadRequest(new { error = "No focuser selected" });
 
-            await equip.Focuser.DisconnectAsync();
-            return Results.Ok(new { status = "disconnected" });
+            return await DeviceConnectGuard.RunAsync(
+                "disconnect", equip.Focuser.DeviceName,
+                ct => equip.Focuser.DisconnectAsync(ct),
+                () => Results.Ok(new { status = "disconnected" }));
         });
 
         // Software-only EAF recovery: cycle the per-device CONNECTION

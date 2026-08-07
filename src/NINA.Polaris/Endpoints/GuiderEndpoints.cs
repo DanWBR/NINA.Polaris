@@ -233,7 +233,8 @@ public static class GuiderEndpoints {
         group.MapPost("/camera/connect", async (EquipmentManager equip, NativeCameraControlStore controlStore) => {
             if (equip.GuideCamera == null)
                 return Results.BadRequest(new { error = "No guide camera selected. Use POST /api/guider/camera/select/{name} first" });
-            await equip.GuideCamera.ConnectAsync();
+            await DeviceConnectGuard.BoundedAsync("connect", equip.GuideCamera.DeviceName,
+                ct => equip.GuideCamera.ConnectAsync(ct));
             // Re-apply the guide camera's persisted native controls (gain, etc.).
             try { controlStore.ApplySaved(equip.GuideCamera); } catch { /* non-fatal */ }
             return Results.Ok(new { status = "connected", device = equip.GuideCamera.DeviceName });
@@ -242,8 +243,10 @@ public static class GuiderEndpoints {
         group.MapPost("/camera/disconnect", async (EquipmentManager equip) => {
             if (equip.GuideCamera == null)
                 return Results.Ok(new { status = "disconnected" });
-            await equip.GuideCamera.DisconnectAsync();
-            return Results.Ok(new { status = "disconnected" });
+            return await DeviceConnectGuard.RunAsync(
+                "disconnect", equip.GuideCamera.DeviceName,
+                ct => equip.GuideCamera.DisconnectAsync(ct),
+                () => Results.Ok(new { status = "disconnected" }));
         });
 
         // ----- Guide-scope focuser selection + connection + manual jog -----
@@ -265,15 +268,19 @@ public static class GuiderEndpoints {
         group.MapPost("/focuser/connect", async (EquipmentManager equip) => {
             if (equip.GuideFocuser == null)
                 return Results.BadRequest(new { error = "No guide focuser selected" });
-            await equip.GuideFocuser.ConnectAsync();
-            return Results.Ok(new { status = "connected", device = equip.GuideFocuser.DeviceName });
+            return await DeviceConnectGuard.RunAsync(
+                "connect", equip.GuideFocuser.DeviceName,
+                ct => equip.GuideFocuser.ConnectAsync(ct),
+                () => Results.Ok(new { status = "connected", device = equip.GuideFocuser.DeviceName }));
         });
 
         group.MapPost("/focuser/disconnect", async (EquipmentManager equip) => {
             if (equip.GuideFocuser == null)
                 return Results.Ok(new { status = "disconnected" });
-            await equip.GuideFocuser.DisconnectAsync();
-            return Results.Ok(new { status = "disconnected" });
+            return await DeviceConnectGuard.RunAsync(
+                "disconnect", equip.GuideFocuser.DeviceName,
+                ct => equip.GuideFocuser.DisconnectAsync(ct),
+                () => Results.Ok(new { status = "disconnected" }));
         });
 
         group.MapPost("/focuser/move/absolute", async (EquipmentManager equip,

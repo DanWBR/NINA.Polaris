@@ -516,7 +516,8 @@ public static class CameraEndpoints {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected. Use POST /api/camera/select/{name} first" });
 
-            await equip.Camera.ConnectAsync();
+            await DeviceConnectGuard.BoundedAsync("connect", equip.Camera.DeviceName,
+                ct => equip.Camera.ConnectAsync(ct));
             // Re-apply the native-SDK controls the user tuned last time (gain,
             // offset, cooler, gamma, USB speed, …). The SDK forgets everything
             // on close, so this is what makes the config panel "persist".
@@ -572,8 +573,10 @@ public static class CameraEndpoints {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected" });
 
-            await equip.Camera.DisconnectAsync();
-            return Results.Ok(new { status = "disconnected" });
+            return await DeviceConnectGuard.RunAsync(
+                "disconnect", equip.Camera.DeviceName,
+                ct => equip.Camera.DisconnectAsync(ct),
+                () => Results.Ok(new { status = "disconnected" }));
         });
 
         // ----- Video stream (continuous frame feed) -----

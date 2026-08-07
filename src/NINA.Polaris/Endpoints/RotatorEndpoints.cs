@@ -72,16 +72,20 @@ public static class RotatorEndpoints {
             if (equip.Rotator == null)
                 return Results.BadRequest(new { error = "No rotator selected" });
 
-            await equip.Rotator.ConnectAsync();
-            return Results.Ok(new { status = "connected", device = equip.Rotator.DeviceName });
+            return await DeviceConnectGuard.RunAsync(
+                "connect", equip.Rotator.DeviceName,
+                ct => equip.Rotator.ConnectAsync(ct),
+                () => Results.Ok(new { status = "connected", device = equip.Rotator.DeviceName }));
         });
 
         group.MapPost("/disconnect", async (EquipmentManager equip) => {
             if (equip.Rotator == null)
                 return Results.BadRequest(new { error = "No rotator selected" });
 
-            await equip.Rotator.DisconnectAsync();
-            return Results.Ok(new { status = "disconnected" });
+            return await DeviceConnectGuard.RunAsync(
+                "disconnect", equip.Rotator.DeviceName,
+                ct => equip.Rotator.DisconnectAsync(ct),
+                () => Results.Ok(new { status = "disconnected" }));
         });
     }
 

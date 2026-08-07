@@ -163,16 +163,20 @@ public static class FilterWheelEndpoints {
             if (equip.FilterWheel == null)
                 return Results.BadRequest(new { error = "No filter wheel selected" });
 
-            await equip.FilterWheel.ConnectAsync();
-            return Results.Ok(new { connected = true });
+            return await DeviceConnectGuard.RunAsync(
+                "connect", equip.FilterWheel.DeviceName,
+                ct => equip.FilterWheel.ConnectAsync(ct),
+                () => Results.Ok(new { connected = true }));
         });
 
         group.MapPost("/disconnect", async (EquipmentManager equip) => {
             if (equip.FilterWheel == null)
                 return Results.BadRequest(new { error = "No filter wheel selected" });
 
-            await equip.FilterWheel.DisconnectAsync();
-            return Results.Ok(new { connected = false });
+            return await DeviceConnectGuard.RunAsync(
+                "disconnect", equip.FilterWheel.DeviceName,
+                ct => equip.FilterWheel.DisconnectAsync(ct),
+                () => Results.Ok(new { connected = false }));
         });
     }
 

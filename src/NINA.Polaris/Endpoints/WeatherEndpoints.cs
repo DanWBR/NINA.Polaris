@@ -60,16 +60,20 @@ public static class WeatherEndpoints {
             if (equip.Weather == null)
                 return Results.BadRequest(new { error = "No weather device selected" });
 
-            await equip.Weather.ConnectAsync();
-            return Results.Ok(new { status = "connected", device = equip.Weather.DeviceName });
+            return await DeviceConnectGuard.RunAsync(
+                "connect", equip.Weather.DeviceName,
+                ct => equip.Weather.ConnectAsync(ct),
+                () => Results.Ok(new { status = "connected", device = equip.Weather.DeviceName }));
         });
 
         group.MapPost("/disconnect", async (EquipmentManager equip) => {
             if (equip.Weather == null)
                 return Results.BadRequest(new { error = "No weather device selected" });
 
-            await equip.Weather.DisconnectAsync();
-            return Results.Ok(new { status = "disconnected" });
+            return await DeviceConnectGuard.RunAsync(
+                "disconnect", equip.Weather.DeviceName,
+                ct => equip.Weather.DisconnectAsync(ct),
+                () => Results.Ok(new { status = "disconnected" }));
         });
 
         // 7Timer astronomical forecast (3-day, 3-hour slots). Lat/lon may be
