@@ -4112,5 +4112,7 @@
   "🔒 Install this rig's certificate": "🔒 Instalar o certificado deste equipamento",
   "🔒 Live connection blocked by the certificate": "🔒 Conexão ao vivo bloqueada pelo certificado",
   "🔒 No live connection: this browser does not trust the rig's certificate.": "🔒 Sem conexão ao vivo: este navegador não confia no certificado do equipamento.",
-  "🔒 This rig uses its own certificate": "🔒 Este equipamento usa o próprio certificado"
+  "🔒 This rig uses its own certificate": "🔒 Este equipamento usa o próprio certificado",
+  "No networks found. Some adapters refuse to scan while the hotspot is up; you can still type the SSID and password below.": "Nenhuma rede encontrada. Alguns adaptadores se recusam a varrer enquanto o hotspot está ativo; você ainda pode digitar o SSID e a senha abaixo.",
+  "The scan took too long and was cancelled. Some WiFi adapters need a while on the first scan after boot. Try again, or type the SSID and password below.": "A varredura demorou demais e foi cancelada. Alguns adaptadores WiFi levam um tempo na primeira varredura após ligar. Tente de novo, ou digite o SSID e a senha abaixo."
 }

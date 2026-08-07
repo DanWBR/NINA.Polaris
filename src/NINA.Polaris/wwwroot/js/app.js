@@ -37188,10 +37188,31 @@ function ninaApp() {
             this.networkStation.scanning = true;
             this.networkStation.lastError = '';
             try {
-                const results = await this.apiGet('/api/network/scan');
+                // The default 15s is shorter than this endpoint's own worst
+                // case: ScanAsync gives nmcli 25s for the forced rescan and
+                // another 15s for the cached fallback. The client was giving up
+                // first, so a board whose first scan after boot is slow (field
+                // report 2026-08-06: Orange Pi 4 Pro, shipped image) reported a
+                // timeout and an empty list while the host was still scanning,
+                // and the operator had to type the SSID by hand.
+                //
+                // Stay above the server's ceiling: whoever waits less decides
+                // the outcome, and that must be the side that knows what is
+                // happening.
+                const results = await this.apiGet('/api/network/scan', { timeout: 45000 });
                 this.networkStation.scanResults = Array.isArray(results) ? results : [];
+                if (!this.networkStation.scanResults.length) {
+                    this.networkStation.lastError =
+                        'No networks found. Some adapters refuse to scan while the hotspot '
+                        + 'is up; you can still type the SSID and password below.';
+                }
             } catch (e) {
-                this.networkStation.lastError = 'Scan failed: ' + (e.message || e);
+                const aborted = e && (e.name === 'AbortError' || /abort/i.test(e.message || ''));
+                this.networkStation.lastError = aborted
+                    ? 'The scan took too long and was cancelled. Some WiFi adapters need a '
+                      + 'while on the first scan after boot. Try again, or type the SSID and '
+                      + 'password below.'
+                    : 'Scan failed: ' + (e.message || e);
                 this.networkStation.scanResults = [];
             } finally {
                 this.networkStation.scanning = false;
