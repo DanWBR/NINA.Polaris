@@ -3582,6 +3582,9 @@ function ninaApp() {
         },
         _histoToken: 0,       // bumped each time a new raw frame is cached
         _histoDrag: null,     // { which:'black'|'white', tab, rect } while dragging
+        // Last live-stack status that carried a colorHistogram, kept so the
+        // panel does not change source on the ticks that omit it.
+        _lastServerHisto: null,
 
         // Editor stretch histogram (same UX as the live mini-panel, but the
         // black/white handles drive the editor's Blacks/Whites light params and
@@ -8257,7 +8260,15 @@ function ninaApp() {
                     // The server already auto-stretched this JPEG. Seed the
                     // handles at identity (black 0, mid 0.5, white 1) so the
                     // first drag flips to manual without a brightness jump.
-                    if (this.stretchAuto) {
+                    // ...but never while the operator is dragging a handle. This
+                    // runs on EVERY incoming stack frame, and the guard was only
+                    // on stretchAuto, which stays true until the drag is released
+                    // (_histoDragMove sets stretchBlack/White/Mid, not the flag).
+                    // So a frame landing mid-gesture snapped the handles back to
+                    // identity under the operator's finger and the reference they
+                    // were aiming at moved. Everything else in this handler
+                    // already respects the _histoDrag freeze; this did not.
+                    if (this.stretchAuto && !this._histoDrag) {
                         this.histo.blackFrac = 0;
                         this.histo.whiteFrac = 1;
                         this.histo.midFrac = 0.5;
@@ -8724,7 +8735,23 @@ function ninaApp() {
             // server sends the real 16-bit histogram + stats over the WS status.
             // Use those so the panel reflects the true data (min/max/mean/std +
             // bars on the 0..65535 scale) instead of the 8-bit JPEG luminance.
-            const ls = this.liveStackStatus;
+            let ls = this.liveStackStatus;
+            const serverHisto = !!(ls && Array.isArray(ls.colorHistogram)
+                && ls.colorHistogram.length === 256);
+            // Hold on to the last server histogram for as long as the same live
+            // stack is running. The block is not in every status tick, and
+            // without this the panel changed SOURCE between refreshes: a tick
+            // with it drew one white luminance line, the next tick without it
+            // fell through and drew three RGB lines off the JPEG. Same frame,
+            // two different panels, flickering back and forth.
+            if (serverHisto) {
+                this._lastServerHisto = ls;
+            } else if (this._lastServerHisto
+                    && ls && ls.isRunning && ls.startedAt === this._lastServerHisto.startedAt) {
+                ls = this._lastServerHisto;
+            } else {
+                this._lastServerHisto = null;
+            }
             if (!hasRaw && ls && Array.isArray(ls.colorHistogram)
                     && ls.colorHistogram.length === 256) {
                 return this._histogramFromServer(ls);
@@ -8853,9 +8880,27 @@ function ninaApp() {
             // the operator never asked for. A JPEG-derived luminance really is
             // 0..255 display space, so there full scale IS maxVal.
             this.histo._fullScale = hasRaw ? ((1 << (f.bitDepth || 16)) - 1) : maxVal;
-            this.histo._autoBlack = Math.max(0, Math.min(1, ap.shadow / maxVal));
-            this.histo._autoWhite = Math.max(0, Math.min(1, aWhite / maxVal));
-            this.histo._autoMid = ap.midtone;
+            if (hasRaw) {
+                this.histo._autoBlack = Math.max(0, Math.min(1, ap.shadow / maxVal));
+                this.histo._autoWhite = Math.max(0, Math.min(1, aWhite / maxVal));
+                this.histo._autoMid = ap.midtone;
+            } else {
+                // The JPEG on screen was ALREADY display-stretched by the server
+                // (the comment where lum[] is built says so). Deriving auto
+                // endpoints from it and applying them stretches the frame twice:
+                // the endpoints come off a luminance array but the render applies
+                // them per channel, so the weakest channel lifts the most and a
+                // stacked OSC goes blue. It only looked intermittent because the
+                // panel picks its source per refresh - a tick carrying
+                // ls.colorHistogram takes _histogramFromServer, which already
+                // pins the handles to identity, and the next tick without it
+                // lands here and re-derives them. Same frame, two answers.
+                //
+                // Identity here too, matching _histogramFromServer.
+                this.histo._autoBlack = 0;
+                this.histo._autoWhite = 1;
+                this.histo._autoMid = 0.5;
+            }
             this.histo._token = this._histoToken;
             this._histoUpdateEndpoints();
             return true;
