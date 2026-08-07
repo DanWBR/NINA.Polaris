@@ -1767,6 +1767,17 @@
     font-variant-numeric: tabular-nums;
     color: var(--text-muted);
 }
+/* The host's own leg, immediately after the browser pair. Deliberately dimmer
+   and separated by a hairline: these are two different measurements standing
+   side by side, and reading them as one four-line block would be worse than
+   not showing the second at all. The double arrows (⇓⇑ against ↓↑) carry the
+   distinction where colour cannot, night mode included. */
+.activity-net-host {
+    opacity: 0.72;
+    padding-left: 6px;
+    border-left: 1px solid var(--border);
+}
+
 /* Auto-push to network storage (SMB/SFTP) chip in the activity bar. */
 .activity-storage {
     display: inline-flex;

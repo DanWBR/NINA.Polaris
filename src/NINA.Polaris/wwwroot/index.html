@@ -47,7 +47,7 @@
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260801-hscroll">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260731-videonudge">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260731-edpan">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260801-selectwidth">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260807-hostnet">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260801-selectwidth">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260801-hscroll">
@@ -16304,6 +16304,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <span class="activity-net-rate" x-text="formatBytesPerSec(net.txRate)"></span>
             </span>
         </div>
+        <!-- The host's own leg. The pair on the left counts only what crosses
+             between this browser and Polaris, so a download the HOST makes
+             (model packs, catalogs, an update) was invisible: 181 MB landed on
+             the board in seconds while the indicator read 8 KB/s. Hidden until
+             the host actually reports counters, so a platform without interface
+             stats shows nothing rather than a fake zero. -->
+        <div class="activity-net activity-net-host" x-show="hostNetAvailable()"
+             :title="hostNetTooltip()">
+            <span class="activity-net-row activity-net-rx">
+                <span class="activity-net-arrow">⇓</span>
+                <span class="activity-net-rate"
+                      x-text="formatBytesPerSec(host.netRxBytesPerSec || 0)"></span>
+            </span>
+            <span class="activity-net-row activity-net-tx">
+                <span class="activity-net-arrow">⇑</span>
+                <span class="activity-net-rate"
+                      x-text="formatBytesPerSec(host.netTxBytesPerSec || 0)"></span>
+            </span>
+        </div>
         <!-- NETUX-4: health of THIS browser's link to the host, which is a
              different measurement from the WiFi bars beside it: those are the
              host's own radio, reported by the host, and they stay green while
@@ -20004,7 +20023,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260807-histosource"></script>
+    <script src="/js/app.js?v=20260807-netmeter"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

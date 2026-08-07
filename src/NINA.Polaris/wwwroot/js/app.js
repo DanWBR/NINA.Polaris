@@ -17176,6 +17176,22 @@ function ninaApp() {
         },
 
         filesDownloadOne(path) {
+            // Credit the meter before navigating.
+            //
+            // A browser-managed download does NOT appear in Performance
+            // Resource Timing - it is not a page subresource - so the sweep in
+            // _netDrainResourceTimings never sees it. A 50 MB FITS crossed the
+            // link and the indicator showed nothing, which is exactly the kind
+            // of silent under-count that makes the whole number untrustworthy.
+            //
+            // Deliberately NOT switching to fetch + blob: streaming straight to
+            // disk is the right mechanism here (a multi-GB file must not be
+            // buffered in memory), so account for it instead of changing it.
+            // The listing already knows the size; headers are not included,
+            // which is a rounding error at these sizes.
+            const entry = this.files.entries.find(x => x.fullPath === path);
+            const bytes = Number(entry && entry.sizeBytes) || 0;
+            if (bytes > 0) this._netRx(bytes);
             // window.location triggers the same dialog the user would
             // get from a direct link; honours Content-Disposition.
             window.location = '/api/files/download?path=' + encodeURIComponent(path);
@@ -39270,6 +39286,32 @@ function ninaApp() {
             lines.push('Click to open Settings');
             return lines.join('\n');
         },
+        // ---- Host's own network leg (status bar, beside the browser pair) ----
+        // Only show it once the host has reported counters: a container or
+        // sandbox without interface stats reports nothing, and a chip stuck at
+        // 0 B/s would read as "the host has no traffic", which is a lie.
+        hostNetAvailable() {
+            const h = this.host || {};
+            return h.netRxBytesPerSec != null || h.netRxTotalBytes > 0;
+        },
+        hostNetTooltip() {
+            const h = this.host || {};
+            const fmt = (b) => {
+                if (!b) return '0 B';
+                if (b < 1024) return b + ' B';
+                if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+                if (b < 1024 * 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + ' MB';
+                return (b / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+            };
+            return 'Traffic on the HOST\'s own network interfaces, since it started\n'
+                 + '  ⇓ ' + fmt(h.netRxTotalBytes) + ' received\n'
+                 + '  ⇑ ' + fmt(h.netTxTotalBytes) + ' sent\n'
+                 + 'This is where a download the host makes shows up: model packs, '
+                 + 'catalogs, updates.\n'
+                 + 'Counts every interface that is up, so on a single-WiFi board it '
+                 + 'includes this browser\'s traffic too.';
+        },
+
         netTooltip() {
             const fmtTotal = (b) => {
                 if (b < 1024) return b + ' B';
@@ -39282,10 +39324,22 @@ function ninaApp() {
             // host in seconds while this read 8 KB/s and fairly called it fake
             // news: that download never crossed this link, the host pulled it
             // from the internet itself.
-            return 'Traffic between this browser and Polaris, this session\n'
-                 + '  ↓ ' + fmtTotal(this.net.rxTotal) + ' received\n'
-                 + '  ↑ ' + fmtTotal(this.net.txTotal) + ' sent\n'
-                 + 'Downloads the HOST makes (catalogs, models, packs) do not cross this link and are not counted.';
+            const lines = [
+                'Traffic between this browser and Polaris, this session',
+                '  ↓ ' + fmtTotal(this.net.rxTotal) + ' received',
+                '  ↑ ' + fmtTotal(this.net.txTotal) + ' sent',
+                'Downloads the HOST makes (catalogs, models, packs) do not cross this link '
+                    + 'and are not counted.',
+            ];
+            // Be honest about the one transfer that crosses this link and still
+            // cannot be seen: in the mobile app the AI model is fetched by the
+            // native shell straight to storage, with no fetch and no WebSocket
+            // for the page to observe.
+            if (this._canopusMobilePlugin()) {
+                lines.push('The AI model download is handled by the app itself and is not '
+                         + 'visible to this counter.');
+            }
+            return lines.join('\n');
         },
 
         // ---- WiFi signal indicator (status bar, next to net rx/tx) ----

@@ -114,6 +114,61 @@ public class HostMetricsService : BackgroundService {
     /// and the current process. Updates the in/out cpu trackers in
     /// place so the caller can call repeatedly.
     /// </summary>
+    // ---- Host-wide network counters -------------------------------------
+    // Cumulative interface byte counts from the previous sample, so the
+    // difference gives a rate. Kept here rather than read fresh each time
+    // because the OS exposes totals, not rates.
+    private long _netRxLast, _netTxLast;
+    private DateTime _netLastAt;
+    private long _netRxTotal, _netTxTotal;
+
+    /// <summary>Bytes per second across the host's real network interfaces.
+    ///
+    /// This is the OTHER leg. The browser's own meter counts what crosses
+    /// between the page and Polaris, which by design says nothing about what
+    /// the host itself pulls from the internet: a 181 MB model pack landing on
+    /// the host in seconds showed as a flat 8 KB/s in the UI, and the operator
+    /// fairly called it fake news. Now both are visible side by side.
+    ///
+    /// Honest about what it is: EVERY interface the OS calls up and non-
+    /// loopback, so on the usual single-WiFi board it includes this browser's
+    /// traffic as well as the host's own. Separating internet from LAN would
+    /// need routing-table awareness for a number nobody would trust more.
+    /// Loopback is excluded, which matters here: the Canopus proxy and the
+    /// INDI server talk over it constantly and would swamp the reading.</summary>
+    private (long rx, long tx) SampleNetwork() {
+        long rx = 0, tx = 0;
+        try {
+            foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()) {
+                if (nic.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Loopback) continue;
+                if (nic.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+                var s = nic.GetIPStatistics();
+                rx += s.BytesReceived;
+                tx += s.BytesSent;
+            }
+        } catch {
+            // Container or sandbox without interface stats: report nothing
+            // rather than a fabricated zero rate.
+            return (0, 0);
+        }
+
+        var now = DateTime.UtcNow;
+        if (_netLastAt == default || rx < _netRxLast || tx < _netTxLast) {
+            // First sample, or the counters wrapped / the interface set
+            // changed. Re-baseline instead of emitting a nonsense spike.
+            _netRxLast = rx; _netTxLast = tx; _netLastAt = now;
+            return (0, 0);
+        }
+
+        var seconds = (now - _netLastAt).TotalSeconds;
+        if (seconds <= 0.05) return (0, 0);
+
+        long dRx = rx - _netRxLast, dTx = tx - _netTxLast;
+        _netRxTotal += dRx; _netTxTotal += dTx;
+        _netRxLast = rx; _netTxLast = tx; _netLastAt = now;
+        return ((long)(dRx / seconds), (long)(dTx / seconds));
+    }
+
     public HostMetricsSnapshot Sample(Process process,
                                        ref TimeSpan lastCpuTime,
                                        ref DateTime lastSampleTime,
@@ -189,8 +244,13 @@ public class HostMetricsService : BackgroundService {
         // sysfs path because it doesn't require shelling out and is
         // available on every Pi that booted normally.
         var (uvNow, uvOccurred) = TryReadPiThrottleState();
+        var (netRx, netTx) = SampleNetwork();
 
         return new HostMetricsSnapshot {
+            NetRxBytesPerSec = netRx,
+            NetTxBytesPerSec = netTx,
+            NetRxTotalBytes = _netRxTotal,
+            NetTxTotalBytes = _netTxTotal,
             CpuPercent = Math.Round(util.CpuUsedPercentage, 1),
             MemoryPercent = Math.Round(usedPercent, 1),
             MemoryUsedMB = usedBytes / (1024 * 1024),
@@ -456,6 +516,16 @@ public class HostMetricsService : BackgroundService {
 /// the UI doesn't display jittery sub-percent values.
 /// </summary>
 public sealed record HostMetricsSnapshot {
+    /// <summary>Host-wide network throughput and session totals, across every
+    /// non-loopback interface that is up. The counterpart to the browser's own
+    /// meter: that one sees only the page-to-Polaris link, so a download the
+    /// HOST makes (model packs, catalogs, an update) was invisible to the
+    /// operator. Includes this browser's traffic too on a single-interface
+    /// board - see SampleNetwork for why that is the honest scope.</summary>
+    public long NetRxBytesPerSec { get; init; }
+    public long NetTxBytesPerSec { get; init; }
+    public long NetRxTotalBytes { get; init; }
+    public long NetTxTotalBytes { get; init; }
     public double CpuPercent { get; init; }
     public double MemoryPercent { get; init; }
     public long MemoryUsedMB { get; init; }
