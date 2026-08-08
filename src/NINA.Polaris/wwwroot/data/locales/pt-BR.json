@@ -3542,7 +3542,6 @@
   "tap a field, so the native tablet keyboard never covers the live view": "toque em um campo, para que o teclado nativo do tablet nunca cubra a visualização em tempo real",
   "Target": "Alvo",
   "Target (catalog search)": "Target (busca no catálogo)",
-  "Target added from current mount position": "Alvo adicionado a partir da posição atual de montagem",
   "Target ADU": "ADU-alvo",
   "Target FOV rotation set to": "Rotação do campo de visão (FOV) definido como",
   "Target identified:": "Alvo identificado:",
@@ -4110,5 +4109,7 @@
   "No networks found. Some adapters refuse to scan while the hotspot is up; you can still type the SSID and password below.": "Nenhuma rede encontrada. Alguns adaptadores se recusam a varrer enquanto o hotspot está ativo; você ainda pode digitar o SSID e a senha abaixo.",
   "The scan took too long and was cancelled. Some WiFi adapters need a while on the first scan after boot. Try again, or type the SSID and password below.": "A varredura demorou demais e foi cancelada. Alguns adaptadores WiFi levam um tempo na primeira varredura após ligar. Tente de novo, ou digite o SSID e a senha abaixo.",
   "Port set. Reconnect the device for it to take effect.": "Porta definida. Reconecte o dispositivo para valer.",
-  "Could not set the port": "Nao foi possivel definir a porta"
+  "Could not set the port": "Nao foi possivel definir a porta",
+  "Nothing catalogued at this pointing, added as Mount position": "Nada catalogado nesta posição, adicionado como Mount position",
+  "Add a target at the mount's current pointing, named after the catalogued object there": "Adiciona um alvo na posição atual da montagem, com o nome do objeto catalogado que estiver lá"
 }

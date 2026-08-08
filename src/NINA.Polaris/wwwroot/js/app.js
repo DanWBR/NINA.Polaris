@@ -21664,17 +21664,59 @@ function ninaApp() {
             this._planPushTarget(t);
         },
 
-        planAddTargetFromMount() {
+        // Add where the mount is pointing right now, named after whatever is
+        // actually there. Same lookup the LIVE tab runs after a plate solve
+        // (/api/sky/identify, then the nearest Solar System body), so a target
+        // captured this way carries a real name into the file layout instead
+        // of a placeholder the operator has to rename by hand.
+        async planAddTargetFromMount() {
             if (!Number.isFinite(this.mount.ra) || !Number.isFinite(this.mount.dec)) {
                 this.toast('Mount position unknown: connect the mount first', 'warn');
                 return;
             }
+            const ra = this.mount.ra, dec = this.mount.dec;
             const t = this._blankTarget();
-            t.name = 'Mount position';
-            t.raHours = this.mount.ra;
-            t.decDeg = this.mount.dec;
+            t.raHours = ra;
+            t.decDeg = dec;
+
+            const hit = await this._identifyNameAt(ra, dec);
+            t.name = hit?.name || 'Mount position';
+            if (hit?.thumbKey) t.thumbKey = hit.thumbKey;
+
             this._planPushTarget(t);
-            this.toast('Target added from current mount position', 'ok');
+            this.toast(hit?.name
+                ? ('Added ' + hit.name)
+                : 'Nothing catalogued at this pointing, added as Mount position',
+                'ok');
+        },
+
+        // What sits at a pointing, as {name, thumbKey}. The lookup half of
+        // _identifyAt, without the side effect of writing the LIVE / VIDEO
+        // target fields, so callers that only want a name can reuse it.
+        // Returns null when nothing is close enough.
+        async _identifyNameAt(ra, dec) {
+            try {
+                const fov = this._fovRadiusDeg();
+                const r = await this.apiGet('/api/sky/identify?ra=' + encodeURIComponent(ra)
+                    + '&dec=' + encodeURIComponent(dec) + '&fov=' + encodeURIComponent(fov));
+                if (r?.found) {
+                    return {
+                        name: r.displayName || r.name,
+                        // the catalog designation, so the card thumbnail still
+                        // resolves when displayName is a common name
+                        thumbKey: r.name || null,
+                    };
+                }
+                const p = await this.apiGet('/api/sky/nearest-planet?ra='
+                    + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec));
+                if (p?.found && p.angularSepDeg <= Math.max(fov * 1.5, 2)) {
+                    return { name: p.name, thumbKey: null };
+                }
+                return null;
+            } catch (e) {
+                // A naming lookup must never block adding the target.
+                return null;
+            }
         },
 
         async planCatSearch() {

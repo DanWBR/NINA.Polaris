@@ -10012,7 +10012,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <!-- Add target -->
                     <div class="plan-add-row">
                         <button class="btn btn-sm" @click="planAddTargetManual()">＋ Manual</button>
-                        <button class="btn btn-sm" @click="planAddTargetFromMount()">＋ Mount position</button>
+                        <button class="btn btn-sm" @click="planAddTargetFromMount()" title="Add a target at the mount's current pointing, named after the catalogued object there">＋ Mount position</button>
                         <button class="btn btn-sm" @click="planAddCatalogOpen = !planAddCatalogOpen" :class="{ 'btn-active': planAddCatalogOpen }">＋ Catalog</button>
                         <button class="btn btn-sm" @click="planFrameInSky()">Frame in SkyAtlas</button>
                     </div>

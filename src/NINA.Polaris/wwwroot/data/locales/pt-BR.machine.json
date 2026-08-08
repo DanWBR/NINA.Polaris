@@ -3070,7 +3070,6 @@
   "Tap": true,
   "tap a field, so the native tablet keyboard never covers the live view": true,
   "Target (catalog search)": true,
-  "Target added from current mount position": true,
   "Target ADU": true,
   "Target FOV rotation set to": true,
   "Target is": true,
@@ -3551,5 +3550,7 @@
   "Zoom to fit (whole frame)": true,
   "ZWO preset gains": true,
   "ZWO preset gains, L=": true,
-  "× scaling)": true
+  "× scaling)": true,
+  "Nothing catalogued at this pointing, added as Mount position": "Nada catalogado nesta posição, adicionado como Mount position",
+  "Add a target at the mount's current pointing, named after the catalogued object there": "Adiciona um alvo na posição atual da montagem, com o nome do objeto catalogado que estiver lá"
 }

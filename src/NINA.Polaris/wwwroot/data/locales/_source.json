@@ -3037,7 +3037,6 @@
   "Target": "",
   "Target (catalog search)": "",
   "Target °C": "",
-  "Target added from current mount position": "",
   "Target ADU": "",
   "Target FOV rotation set to": "",
   "Target identified:": "",
@@ -3427,5 +3426,7 @@
   "No networks found. Some adapters refuse to scan while the hotspot is up; you can still type the SSID and password below.": "",
   "The scan took too long and was cancelled. Some WiFi adapters need a while on the first scan after boot. Try again, or type the SSID and password below.": "",
   "Port set. Reconnect the device for it to take effect.": "",
-  "Could not set the port": ""
+  "Could not set the port": "",
+  "Nothing catalogued at this pointing, added as Mount position": "",
+  "Add a target at the mount's current pointing, named after the catalogued object there": ""
 }

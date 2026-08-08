@@ -614,7 +614,12 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 }
 
 /* ───────────────────────── PLAN mode ───────────────────────── */
-.tab-panel-plan { padding: 12px; overflow-y: auto; }
+/* No bottom padding: the sticky run bar is the panel's footer and sits
+   flush against the bottom edge. With padding here the bar had to be
+   pulled down by a negative margin to bleed over it, and a sticky element
+   is held by its MARGIN box, so the negative margin pushed its border box
+   below the scrollport and clipped the buttons. */
+.tab-panel-plan { padding: 12px 12px 0; overflow-y: auto; }
 .plan-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
 .plan-select { flex: 1; min-width: 160px; padding: 6px 8px; }
 .plan-empty { color: var(--text-muted, #9aa4b2); padding: 24px 8px; text-align: center; }
@@ -673,14 +678,15 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
    whole plan) fill the remaining width. Negative margins bleed it to
    the panel edges so it reads as a full-width footer. */
 .plan-runbar {
-    /* margin-top:auto pushes the bar to the bottom of the (flex-column)
-       plan panel when the content is short; position:sticky keeps it
-       pinned to the foot of the scroll viewport when the target list is
-       long. The negative side/bottom margins bleed it to the panel edges
-       so it reads as a full-width footer. */
+    /* position:sticky keeps it pinned to the foot of the scroll viewport
+       when the target list is long. The negative SIDE margins bleed it to
+       the panel edges so it reads as a full-width footer; there is no
+       negative bottom margin, see .tab-panel-plan. */
     position: sticky; bottom: 0; z-index: 5;
-    display: flex; align-items: center; gap: 12px;
-    margin: auto -12px -12px; padding: 10px 12px;
+    /* wrap so a narrow phone stacks the buttons instead of pushing the
+       last one out of the panel */
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    margin: auto -12px 0; padding: 10px 12px;
     border-top: 1px solid var(--border, #2a2f3a);
     background: var(--bg-secondary, #161a22);
 }
