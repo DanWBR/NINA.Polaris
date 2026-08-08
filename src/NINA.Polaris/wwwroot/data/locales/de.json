@@ -4111,5 +4111,6 @@
   "Port set. Reconnect the device for it to take effect.": "Port gesetzt. Verbinde das Geraet neu, damit es wirkt.",
   "Could not set the port": "Port konnte nicht gesetzt werden",
   "Nothing catalogued at this pointing, added as Mount position": "Nichts katalogisiert an dieser Position, als Mount position hinzugefügt",
-  "Add a target at the mount's current pointing, named after the catalogued object there": "Fügt ein Ziel an der aktuellen Montierungsposition hinzu, benannt nach dem dort katalogisierten Objekt"
+  "Add a target at the mount's current pointing, named after the catalogued object there": "Fügt ein Ziel an der aktuellen Montierungsposition hinzu, benannt nach dem dort katalogisierten Objekt",
+  "The last captured frame of the running plan appears here.": "Das zuletzt aufgenommene Bild des laufenden Plans erscheint hier."
 }

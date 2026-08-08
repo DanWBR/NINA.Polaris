@@ -10284,10 +10284,13 @@ function ninaApp() {
                 case 2:  return ['focusCanvas', 'manualFocusCanvas'];       // Focus
                 case 3:  return ['videoCaptureCanvas'];                     // Video
                 case 4:  return ['slewPreviewCanvas'];                      // SlewPreview
-                // AUTORUN / ADV sequence captures land ONLY on the autorun
-                // centre preview — kept separate from Live so a running
+                // AUTORUN / ADV / PLAN sequence captures land on the sequence
+                // previews only — kept separate from Live so a running
                 // sequence doesn't bleed onto the LIVE tab (and vice-versa).
-                case 5:  return ['autorunCanvas'];                          // Autorun
+                // PLAN runs through the same engine and relays the same kind,
+                // so both canvases get the frame and whichever tab is open
+                // shows it.
+                case 5:  return ['autorunCanvas', 'planCanvas'];            // Autorun / Plan
                 // Server live-stack OUTPUT (dedicated kind). Same canvas as
                 // Live, but while a server stack runs the client drops kind-0
                 // frames so ONLY the stack can paint the LIVE view.
@@ -10820,6 +10823,7 @@ function ninaApp() {
                 ['previewCanvas'],
                 ['videoCaptureCanvas'],
                 ['autorunCanvas'],
+                ['planCanvas'],
                 ['focusCanvas'],          // FOCUS > Auto V-curve
                 ['manualFocusCanvas']     // FOCUS > Manual Assist
             ];
@@ -12530,6 +12534,7 @@ function ninaApp() {
                 video: ['videoCaptureCanvas'],
                 sequence: ['autorunCanvas'],
                 seqadv: ['autorunCanvas'],
+                plan: ['planCanvas'],
                 files: ['#osd-viewer canvas'],
             };
             const drawn = (c) => c && c.width > 1 && c.height > 1 && c.offsetParent !== null;
@@ -12541,7 +12546,8 @@ function ninaApp() {
             }
             // Fallback: any visible imaging canvas currently holding a frame.
             for (const id of ['liveCanvas', 'previewCanvas', 'manualFocusCanvas', 'focusCanvas',
-                              'videoCaptureCanvas', 'autorunCanvas', 'slewPreviewCanvas']) {
+                              'videoCaptureCanvas', 'autorunCanvas', 'planCanvas',
+                              'slewPreviewCanvas']) {
                 const c = document.getElementById(id);
                 if (drawn(c)) return c;
             }

@@ -9765,271 +9765,296 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <a href="https://github.com/DanWBR/NINA.Polaris/issues" target="_blank" rel="noopener">Click here to report an issue</a>
                 </div>
 
-                <!-- Plan picker toolbar -->
-                <div class="plan-toolbar">
-                    <select class="plan-select" x-model="planSelectedId" @change="selectPlan(planSelectedId)">
-                        <option value="" disabled>- Select a plan -</option>
-                        <template x-for="p in plans" :key="p.id">
-                            <option :value="p.id" x-text="p.name"></option>
-                        </template>
-                    </select>
-                    <button class="btn btn-sm" @click="newPlan()">＋ New</button>
-                    <button class="btn btn-sm" @click="duplicatePlan()" :disabled="!plan">Duplicate</button>
-                    <button class="btn btn-sm btn-danger" @click="deletePlan()" :disabled="!plan">Delete</button>
-                    <button class="btn btn-sm" @click="planSettingsOpen = !planSettingsOpen" :disabled="!plan"
-                            :class="{ 'btn-active': planSettingsOpen }" title="Plan settings">⬡ Settings</button>
-                    <button class="btn btn-sm" @click="exportPlan()" :disabled="!plan"
-                            title="Download this plan as a shareable JSON file">⤓ Export</button>
-                    <button class="btn btn-sm" @click="importPlanPrompt()"
-                            title="Import a plan from a JSON file (adds a new plan)">⤒ Import</button>
-                    <input type="file" x-ref="planImportFile" accept=".json,application/json"
-                           style="display:none" @change="importPlanFile($event)">
-                </div>
-
-                <div x-show="!plan" class="plan-empty">No plans yet. Tap <b>＋ New</b> to create one.</div>
-
-                <template x-if="plan">
-                <div class="plan-body">
-                    <input class="plan-name" type="text" x-model="plan.name" @change="savePlan()" placeholder="Plan name">
-
-                    <!-- Settings sheet -->
-                    <div x-show="planSettingsOpen" class="plan-settings card">
-                        <div class="plan-set-grid">
-                            <label>Start
-                                <select x-model="plan.startMode" @change="savePlan()">
-                                    <option value="Now">When I press Start</option>
-                                    <option value="AtTime">At time (UTC)</option>
-                                </select>
-                            </label>
-                            <label x-show="plan.startMode === 'AtTime'">Start time (local)
-                                <input type="time" :value="_todUtcToLocal(plan.startAtUtc)" @change="plan.startAtUtc = _todLocalToUtc($event.target.value); savePlan()">
-                            </label>
-                            <label>End
-                                <select x-model="plan.endMode" @change="savePlan()">
-                                    <option value="AllDone">When all frames are done</option>
-                                    <option value="Dawn">At astronomical dawn</option>
-                                    <option value="AtTime">At time (UTC)</option>
-                                </select>
-                            </label>
-                            <label x-show="plan.endMode === 'AtTime'">End time (local)
-                                <input type="time" :value="_todUtcToLocal(plan.endAtUtc)" @change="plan.endAtUtc = _todLocalToUtc($event.target.value); savePlan()">
-                            </label>
+                <!-- Two columns: the plan editor scrolls on the left, the
+                     last captured frame sits on the right. Same panel the
+                     AUTORUN tab shows, fed by the same FrameKind.Autorun
+                     frames the sequence engine relays, so a running plan
+                     is watchable without leaving the tab. -->
+                <div class="plan-split">
+                <div class="plan-main">
+                        <!-- Plan picker toolbar -->
+                        <div class="plan-toolbar">
+                            <select class="plan-select" x-model="planSelectedId" @change="selectPlan(planSelectedId)">
+                                <option value="" disabled>- Select a plan -</option>
+                                <template x-for="p in plans" :key="p.id">
+                                    <option :value="p.id" x-text="p.name"></option>
+                                </template>
+                            </select>
+                            <button class="btn btn-sm" @click="newPlan()">＋ New</button>
+                            <button class="btn btn-sm" @click="duplicatePlan()" :disabled="!plan">Duplicate</button>
+                            <button class="btn btn-sm btn-danger" @click="deletePlan()" :disabled="!plan">Delete</button>
+                            <button class="btn btn-sm" @click="planSettingsOpen = !planSettingsOpen" :disabled="!plan"
+                                    :class="{ 'btn-active': planSettingsOpen }" title="Plan settings">⬡ Settings</button>
+                            <button class="btn btn-sm" @click="exportPlan()" :disabled="!plan"
+                                    title="Download this plan as a shareable JSON file">⤓ Export</button>
+                            <button class="btn btn-sm" @click="importPlanPrompt()"
+                                    title="Import a plan from a JSON file (adds a new plan)">⤒ Import</button>
+                            <input type="file" x-ref="planImportFile" accept=".json,application/json"
+                                   style="display:none" @change="importPlanFile($event)">
                         </div>
-                        <div class="plan-set-toggles">
-                            <label class="chk"><input type="checkbox" x-model="plan.autoGuiding" @change="savePlan()"> Auto guiding</label>
-                            <label class="chk"><input type="checkbox" x-model="plan.autoMeridianFlip" @change="savePlan()"> Auto meridian flip</label>
-                            <label class="chk"><input type="checkbox" x-model="plan.autoCooling" @change="savePlan()"> Auto cooling</label>
-                            <label class="chk" x-show="plan.autoCooling">Target °C
-                                <input type="number" step="1" style="width:4em" x-model.number="plan.coolTargetC" @change="savePlan()">
-                            </label>
-                            <label class="chk"><input type="checkbox" x-model="plan.autoFocusOnStart" @change="savePlan()"> Auto-focus at start</label>
-                            <label class="chk"><input type="checkbox" x-model="plan.autoFocusEachTarget" @change="savePlan()"> Auto-focus before each target</label>
-                        </div>
-                        <!-- Meridian-flip tuning. Only shown when auto flip is on;
-                             these apply to the whole plan when it starts. -->
-                        <div class="plan-set-flip" x-show="plan.autoMeridianFlip" x-cloak>
-                            <div class="plan-set-end-title">Meridian flip</div>
-                            <div class="plan-set-toggles">
-                                <label class="chk">Flip when past meridian by (min)
-                                    <input type="number" min="0" max="60" step="1" style="width:4em"
-                                           x-model.number="plan.meridianFlipMinutesAfter" @change="savePlan()">
-                                </label>
-                                <label class="chk"><input type="checkbox" x-model="plan.meridianFlipRecenter" @change="savePlan()"> Re-center after flip (plate solve)</label>
-                                <label class="chk"><input type="checkbox" x-model="plan.meridianFlipAutoFocus" @change="savePlan()"> Auto-focus after flip</label>
-                            </div>
-                        </div>
-                        <div class="plan-set-end">
-                            <div class="plan-set-end-title">End of session</div>
-                            <label class="chk"><input type="checkbox" x-model="plan.endWarmCoolerOff" @change="savePlan()"> Warm camera + cooler off</label>
-                            <label class="chk"><input type="checkbox" x-model="plan.endGoHome" @change="savePlan()"> Go to home / park mount</label>
-                            <label class="chk"><input type="checkbox" x-model="plan.endEafZero" @change="savePlan()"> EAF return to zero</label>
-                            <label class="chk chk-danger">
-                                <input type="checkbox" x-model="plan.endShutdownHost"
-                                       @change="if (plan.endShutdownHost) { planShutdownConfirm = true; } savePlan()">
-                                Shut down the host at the end
-                            </label>
-                        </div>
-                    </div>
 
-                    <!-- Target list -->
-                    <div class="plan-targets">
-                        <template x-for="(t, ti) in plan.targets" :key="t.id">
-                            <div class="plan-target-card" :class="{ 'is-open': planSelectedTargetId === t.id, 'is-disabled': !t.enabled }">
-                                <div class="plan-target-head">
-                                    <input type="checkbox" x-model="t.enabled" @change="savePlan()" title="Include in run">
-                                    <img class="plan-target-thumb" loading="lazy"
-                                         x-show="planTargetThumbUrl(t)" :src="planTargetThumbUrl(t)"
-                                         @error="$el.style.display='none'" alt=""
-                                         @click="planToggleTargetDetail(t)">
-                                    <div class="plan-target-id" @click="planToggleTargetDetail(t)">
-                                        <span class="plan-target-name" x-text="t.name || 'Target'"></span>
-                                        <span class="plan-target-coords"
-                                              x-text="'RA ' + (t.raHours||0).toFixed(3) + 'h · Dec ' + (t.decDeg||0).toFixed(2) + '° · ' + planTargetFrameSummary(t)"></span>
-                                    </div>
-                                    <div class="plan-target-actions">
-                                        <button class="btn btn-sm btn-icon" @click="planMoveTarget(ti, -1)" :disabled="ti===0" title="Move up">▲</button>
-                                        <button class="btn btn-sm btn-icon" @click="planMoveTarget(ti, 1)" :disabled="ti===plan.targets.length-1" title="Move down">▼</button>
-                                        <button class="btn btn-sm btn-icon" @click="planToggleTargetDetail(t)" title="Edit">✎</button>
-                                        <button class="btn btn-sm btn-icon btn-danger" @click="planRemoveTarget(t)" title="Remove">✕</button>
+                        <div x-show="!plan" class="plan-empty">No plans yet. Tap <b>＋ New</b> to create one.</div>
+
+                        <template x-if="plan">
+                        <div class="plan-body">
+                            <input class="plan-name" type="text" x-model="plan.name" @change="savePlan()" placeholder="Plan name">
+
+                            <!-- Settings sheet -->
+                            <div x-show="planSettingsOpen" class="plan-settings card">
+                                <div class="plan-set-grid">
+                                    <label>Start
+                                        <select x-model="plan.startMode" @change="savePlan()">
+                                            <option value="Now">When I press Start</option>
+                                            <option value="AtTime">At time (UTC)</option>
+                                        </select>
+                                    </label>
+                                    <label x-show="plan.startMode === 'AtTime'">Start time (local)
+                                        <input type="time" :value="_todUtcToLocal(plan.startAtUtc)" @change="plan.startAtUtc = _todLocalToUtc($event.target.value); savePlan()">
+                                    </label>
+                                    <label>End
+                                        <select x-model="plan.endMode" @change="savePlan()">
+                                            <option value="AllDone">When all frames are done</option>
+                                            <option value="Dawn">At astronomical dawn</option>
+                                            <option value="AtTime">At time (UTC)</option>
+                                        </select>
+                                    </label>
+                                    <label x-show="plan.endMode === 'AtTime'">End time (local)
+                                        <input type="time" :value="_todUtcToLocal(plan.endAtUtc)" @change="plan.endAtUtc = _todLocalToUtc($event.target.value); savePlan()">
+                                    </label>
+                                </div>
+                                <div class="plan-set-toggles">
+                                    <label class="chk"><input type="checkbox" x-model="plan.autoGuiding" @change="savePlan()"> Auto guiding</label>
+                                    <label class="chk"><input type="checkbox" x-model="plan.autoMeridianFlip" @change="savePlan()"> Auto meridian flip</label>
+                                    <label class="chk"><input type="checkbox" x-model="plan.autoCooling" @change="savePlan()"> Auto cooling</label>
+                                    <label class="chk" x-show="plan.autoCooling">Target °C
+                                        <input type="number" step="1" style="width:4em" x-model.number="plan.coolTargetC" @change="savePlan()">
+                                    </label>
+                                    <label class="chk"><input type="checkbox" x-model="plan.autoFocusOnStart" @change="savePlan()"> Auto-focus at start</label>
+                                    <label class="chk"><input type="checkbox" x-model="plan.autoFocusEachTarget" @change="savePlan()"> Auto-focus before each target</label>
+                                </div>
+                                <!-- Meridian-flip tuning. Only shown when auto flip is on;
+                                     these apply to the whole plan when it starts. -->
+                                <div class="plan-set-flip" x-show="plan.autoMeridianFlip" x-cloak>
+                                    <div class="plan-set-end-title">Meridian flip</div>
+                                    <div class="plan-set-toggles">
+                                        <label class="chk">Flip when past meridian by (min)
+                                            <input type="number" min="0" max="60" step="1" style="width:4em"
+                                                   x-model.number="plan.meridianFlipMinutesAfter" @change="savePlan()">
+                                        </label>
+                                        <label class="chk"><input type="checkbox" x-model="plan.meridianFlipRecenter" @change="savePlan()"> Re-center after flip (plate solve)</label>
+                                        <label class="chk"><input type="checkbox" x-model="plan.meridianFlipAutoFocus" @change="savePlan()"> Auto-focus after flip</label>
                                     </div>
                                 </div>
-                                <div x-show="planSelectedTargetId === t.id" class="plan-target-detail">
-                                    <div class="plan-detail-grid">
-                                        <label>Name <input type="text" x-model="t.name" @change="savePlan()"></label>
-                                        <label title="Wait this many minutes before this target starts (relative to when the plan reaches it). Use this to push a target later without drawing a time window on the chart.">Delay start (min)
-                                            <input type="number" min="0" step="1"
-                                                   :value="Math.round((t.firstDelaySec || 0) / 60)"
-                                                   @change="t.firstDelaySec = Math.max(0, Math.round((+$event.target.value || 0) * 60)); savePlan()"></label>
-                                        <label>RA (hours) <input type="number" step="0.0001" x-model.number="t.raHours" @change="savePlan(); planLoadAlt(t, true)"></label>
-                                        <label>Dec (deg) <input type="number" step="0.001" x-model.number="t.decDeg" @change="savePlan(); planLoadAlt(t, true)"></label>
-                                        <label>Rotation (°) <input type="number" step="0.1" x-model.number="t.rotation" @change="savePlan()"></label>
-                                    </div>
+                                <div class="plan-set-end">
+                                    <div class="plan-set-end-title">End of session</div>
+                                    <label class="chk"><input type="checkbox" x-model="plan.endWarmCoolerOff" @change="savePlan()"> Warm camera + cooler off</label>
+                                    <label class="chk"><input type="checkbox" x-model="plan.endGoHome" @change="savePlan()"> Go to home / park mount</label>
+                                    <label class="chk"><input type="checkbox" x-model="plan.endEafZero" @change="savePlan()"> EAF return to zero</label>
+                                    <label class="chk chk-danger">
+                                        <input type="checkbox" x-model="plan.endShutdownHost"
+                                               @change="if (plan.endShutdownHost) { planShutdownConfirm = true; } savePlan()">
+                                        Shut down the host at the end
+                                    </label>
+                                </div>
+                            </div>
 
-                                    <!-- Capture mode: fixed frame counts vs a time window drawn on the elevation chart -->
-                                    <div class="plan-sched">
-                                        <div class="plan-sched-toggle">
-                                            <button class="btn btn-sm" :class="{ 'btn-active': (t.scheduleMode||'Frames') === 'Frames' }"
-                                                    @click="planSetScheduleMode(t, 'Frames')">By frame count</button>
-                                            <button class="btn btn-sm" :class="{ 'btn-active': t.scheduleMode === 'TimeWindow' }"
-                                                    @click="planSetScheduleMode(t, 'TimeWindow')">By time window</button>
-                                        </div>
-
-                                        <template x-if="(t.scheduleMode || 'Frames') !== 'TimeWindow'">
-                                            <div class="plan-sched-note muted">
-                                                Starts as soon as the plan reaches it.
-                                                <template x-if="(t.firstDelaySec || 0) > 0">
-                                                    <span>Delayed <strong x-text="Math.round((t.firstDelaySec || 0) / 60)"></strong> min (set <em>Delay start</em> above).</span>
-                                                </template>
-                                                <template x-if="!((t.firstDelaySec || 0) > 0)">
-                                                    <span>Set <em>Delay start</em> above to push it later without using the time-window chart.</span>
-                                                </template>
+                            <!-- Target list -->
+                            <div class="plan-targets">
+                                <template x-for="(t, ti) in plan.targets" :key="t.id">
+                                    <div class="plan-target-card" :class="{ 'is-open': planSelectedTargetId === t.id, 'is-disabled': !t.enabled }">
+                                        <div class="plan-target-head">
+                                            <input type="checkbox" x-model="t.enabled" @change="savePlan()" title="Include in run">
+                                            <img class="plan-target-thumb" loading="lazy"
+                                                 x-show="planTargetThumbUrl(t)" :src="planTargetThumbUrl(t)"
+                                                 @error="$el.style.display='none'" alt=""
+                                                 @click="planToggleTargetDetail(t)">
+                                            <div class="plan-target-id" @click="planToggleTargetDetail(t)">
+                                                <span class="plan-target-name" x-text="t.name || 'Target'"></span>
+                                                <span class="plan-target-coords"
+                                                      x-text="'RA ' + (t.raHours||0).toFixed(3) + 'h · Dec ' + (t.decDeg||0).toFixed(2) + '° · ' + planTargetFrameSummary(t)"></span>
                                             </div>
-                                        </template>
+                                            <div class="plan-target-actions">
+                                                <button class="btn btn-sm btn-icon" @click="planMoveTarget(ti, -1)" :disabled="ti===0" title="Move up">▲</button>
+                                                <button class="btn btn-sm btn-icon" @click="planMoveTarget(ti, 1)" :disabled="ti===plan.targets.length-1" title="Move down">▼</button>
+                                                <button class="btn btn-sm btn-icon" @click="planToggleTargetDetail(t)" title="Edit">✎</button>
+                                                <button class="btn btn-sm btn-icon btn-danger" @click="planRemoveTarget(t)" title="Remove">✕</button>
+                                            </div>
+                                        </div>
+                                        <div x-show="planSelectedTargetId === t.id" class="plan-target-detail">
+                                            <div class="plan-detail-grid">
+                                                <label>Name <input type="text" x-model="t.name" @change="savePlan()"></label>
+                                                <label title="Wait this many minutes before this target starts (relative to when the plan reaches it). Use this to push a target later without drawing a time window on the chart.">Delay start (min)
+                                                    <input type="number" min="0" step="1"
+                                                           :value="Math.round((t.firstDelaySec || 0) / 60)"
+                                                           @change="t.firstDelaySec = Math.max(0, Math.round((+$event.target.value || 0) * 60)); savePlan()"></label>
+                                                <label>RA (hours) <input type="number" step="0.0001" x-model.number="t.raHours" @change="savePlan(); planLoadAlt(t, true)"></label>
+                                                <label>Dec (deg) <input type="number" step="0.001" x-model.number="t.decDeg" @change="savePlan(); planLoadAlt(t, true)"></label>
+                                                <label>Rotation (°) <input type="number" step="0.1" x-model.number="t.rotation" @change="savePlan()"></label>
+                                            </div>
 
-                                        <template x-if="t.scheduleMode === 'TimeWindow'">
-                                            <div class="plan-altchart-wrap">
-                                                <div class="plan-altchart-head">
-                                                    <span class="muted">Elevation tonight: drag the green handles to set start &amp; end</span>
-                                                    <span class="plan-window-times">
-                                                        <span x-text="(t.startAtUtc ? _todUtcToLocal(t.startAtUtc) : '-') + ' → ' + (t.endAtUtc ? _todUtcToLocal(t.endAtUtc) : '-') + ' local'"></span>
-                                                        <button class="btn btn-sm" @click="planLoadAlt(t, true)" title="Refresh chart">↻</button>
-                                                    </span>
+                                            <!-- Capture mode: fixed frame counts vs a time window drawn on the elevation chart -->
+                                            <div class="plan-sched">
+                                                <div class="plan-sched-toggle">
+                                                    <button class="btn btn-sm" :class="{ 'btn-active': (t.scheduleMode||'Frames') === 'Frames' }"
+                                                            @click="planSetScheduleMode(t, 'Frames')">By frame count</button>
+                                                    <button class="btn btn-sm" :class="{ 'btn-active': t.scheduleMode === 'TimeWindow' }"
+                                                            @click="planSetScheduleMode(t, 'TimeWindow')">By time window</button>
                                                 </div>
-                                                <template x-if="planAlt[t.id] && planAlt[t.id].loading">
-                                                    <div class="plan-alt-msg muted">Computing elevation…</div>
-                                                </template>
-                                                <template x-if="planAlt[t.id] && planAlt[t.id].empty">
-                                                    <div class="plan-alt-msg muted">No elevation data (set your location in Settings).</div>
-                                                </template>
-                                                <template x-if="planAlt[t.id] && planAlt[t.id].path">
-                                                    <svg class="plan-altchart" :viewBox="'0 0 ' + planAlt[t.id].VBW + ' ' + planAlt[t.id].VBH"
-                                                         preserveAspectRatio="none">
-                                                        <!-- night band (astronomical dark) -->
-                                                        <rect :x="planAlt[t.id].nightX0" y="0"
-                                                              :width="Math.max(0, planAlt[t.id].nightX1 - planAlt[t.id].nightX0)"
-                                                              :height="planAlt[t.id].VBH" class="plan-alt-night"></rect>
-                                                        <!-- hourly gridlines -->
-                                                        <template x-for="tk in (planAlt[t.id].ticks || [])" :key="'g'+tk.x">
-                                                            <line :x1="tk.x" y1="0" :x2="tk.x" :y2="planAlt[t.id].VBH" class="plan-alt-tick"></line>
+
+                                                <template x-if="(t.scheduleMode || 'Frames') !== 'TimeWindow'">
+                                                    <div class="plan-sched-note muted">
+                                                        Starts as soon as the plan reaches it.
+                                                        <template x-if="(t.firstDelaySec || 0) > 0">
+                                                            <span>Delayed <strong x-text="Math.round((t.firstDelaySec || 0) / 60)"></strong> min (set <em>Delay start</em> above).</span>
                                                         </template>
-                                                        <!-- 30° guide line -->
-                                                        <line x1="0" :y1="planAlt[t.id].y30" :x2="planAlt[t.id].VBW" :y2="planAlt[t.id].y30" class="plan-alt-guide"></line>
-                                                        <!-- selected window shading -->
-                                                        <rect :x="planAltX(t, t.startAtUtc)" y="0"
-                                                              :width="Math.max(0, planAltX(t, t.endAtUtc) - planAltX(t, t.startAtUtc))"
-                                                              :height="planAlt[t.id].VBH" class="plan-alt-sel"></rect>
-                                                        <!-- altitude curve -->
-                                                        <path :d="planAlt[t.id].path" class="plan-alt-curve"></path>
-                                                        <!-- start handle (wide hit area + grab knobs for touch) -->
-                                                        <g class="plan-alt-handle" @pointerdown="planAltHandleDown($event, t, 'start')">
-                                                            <line :x1="planAltX(t, t.startAtUtc)" y1="0" :x2="planAltX(t, t.startAtUtc)" :y2="planAlt[t.id].VBH" class="plan-alt-handle-line start"></line>
-                                                            <rect :x="planAltX(t, t.startAtUtc) - 9" y="0" width="18" height="26" rx="4" class="plan-alt-handle-knob"></rect>
-                                                            <rect :x="planAltX(t, t.startAtUtc) - 9" :y="planAlt[t.id].VBH - 26" width="18" height="26" rx="4" class="plan-alt-handle-knob"></rect>
-                                                            <rect :x="planAltX(t, t.startAtUtc) - 26" y="0" width="52" :height="planAlt[t.id].VBH" class="plan-alt-handle-hit"></rect>
-                                                        </g>
-                                                        <!-- end handle -->
-                                                        <g class="plan-alt-handle" @pointerdown="planAltHandleDown($event, t, 'end')">
-                                                            <line :x1="planAltX(t, t.endAtUtc)" y1="0" :x2="planAltX(t, t.endAtUtc)" :y2="planAlt[t.id].VBH" class="plan-alt-handle-line end"></line>
-                                                            <rect :x="planAltX(t, t.endAtUtc) - 9" y="0" width="18" height="26" rx="4" class="plan-alt-handle-knob"></rect>
-                                                            <rect :x="planAltX(t, t.endAtUtc) - 9" :y="planAlt[t.id].VBH - 26" width="18" height="26" rx="4" class="plan-alt-handle-knob"></rect>
-                                                            <rect :x="planAltX(t, t.endAtUtc) - 26" y="0" width="52" :height="planAlt[t.id].VBH" class="plan-alt-handle-hit"></rect>
-                                                        </g>
-                                                    </svg>
-                                                </template>
-                                                <!-- X-axis hour labels (local), positioned over the chart width -->
-                                                <template x-if="planAlt[t.id] && planAlt[t.id].ticks">
-                                                    <div class="plan-altchart-axis">
-                                                        <template x-for="tk in planAlt[t.id].ticks" :key="'l'+tk.x">
-                                                            <span class="plan-axis-tick" :style="'left:' + tk.leftPct + '%'" x-text="tk.label"></span>
+                                                        <template x-if="!((t.firstDelaySec || 0) > 0)">
+                                                            <span>Set <em>Delay start</em> above to push it later without using the time-window chart.</span>
                                                         </template>
                                                     </div>
                                                 </template>
-                                                <div class="plan-window-fields">
-                                                    <label>Start (local) <input type="time" :value="_todUtcToLocal(t.startAtUtc)" @change="t.startAtUtc = _todLocalToUtc($event.target.value); savePlan()"></label>
-                                                    <label>End (local) <input type="time" :value="_todUtcToLocal(t.endAtUtc)" @change="t.endAtUtc = _todLocalToUtc($event.target.value); savePlan()"></label>
+
+                                                <template x-if="t.scheduleMode === 'TimeWindow'">
+                                                    <div class="plan-altchart-wrap">
+                                                        <div class="plan-altchart-head">
+                                                            <span class="muted">Elevation tonight: drag the green handles to set start &amp; end</span>
+                                                            <span class="plan-window-times">
+                                                                <span x-text="(t.startAtUtc ? _todUtcToLocal(t.startAtUtc) : '-') + ' → ' + (t.endAtUtc ? _todUtcToLocal(t.endAtUtc) : '-') + ' local'"></span>
+                                                                <button class="btn btn-sm" @click="planLoadAlt(t, true)" title="Refresh chart">↻</button>
+                                                            </span>
+                                                        </div>
+                                                        <template x-if="planAlt[t.id] && planAlt[t.id].loading">
+                                                            <div class="plan-alt-msg muted">Computing elevation…</div>
+                                                        </template>
+                                                        <template x-if="planAlt[t.id] && planAlt[t.id].empty">
+                                                            <div class="plan-alt-msg muted">No elevation data (set your location in Settings).</div>
+                                                        </template>
+                                                        <template x-if="planAlt[t.id] && planAlt[t.id].path">
+                                                            <svg class="plan-altchart" :viewBox="'0 0 ' + planAlt[t.id].VBW + ' ' + planAlt[t.id].VBH"
+                                                                 preserveAspectRatio="none">
+                                                                <!-- night band (astronomical dark) -->
+                                                                <rect :x="planAlt[t.id].nightX0" y="0"
+                                                                      :width="Math.max(0, planAlt[t.id].nightX1 - planAlt[t.id].nightX0)"
+                                                                      :height="planAlt[t.id].VBH" class="plan-alt-night"></rect>
+                                                                <!-- hourly gridlines -->
+                                                                <template x-for="tk in (planAlt[t.id].ticks || [])" :key="'g'+tk.x">
+                                                                    <line :x1="tk.x" y1="0" :x2="tk.x" :y2="planAlt[t.id].VBH" class="plan-alt-tick"></line>
+                                                                </template>
+                                                                <!-- 30° guide line -->
+                                                                <line x1="0" :y1="planAlt[t.id].y30" :x2="planAlt[t.id].VBW" :y2="planAlt[t.id].y30" class="plan-alt-guide"></line>
+                                                                <!-- selected window shading -->
+                                                                <rect :x="planAltX(t, t.startAtUtc)" y="0"
+                                                                      :width="Math.max(0, planAltX(t, t.endAtUtc) - planAltX(t, t.startAtUtc))"
+                                                                      :height="planAlt[t.id].VBH" class="plan-alt-sel"></rect>
+                                                                <!-- altitude curve -->
+                                                                <path :d="planAlt[t.id].path" class="plan-alt-curve"></path>
+                                                                <!-- start handle (wide hit area + grab knobs for touch) -->
+                                                                <g class="plan-alt-handle" @pointerdown="planAltHandleDown($event, t, 'start')">
+                                                                    <line :x1="planAltX(t, t.startAtUtc)" y1="0" :x2="planAltX(t, t.startAtUtc)" :y2="planAlt[t.id].VBH" class="plan-alt-handle-line start"></line>
+                                                                    <rect :x="planAltX(t, t.startAtUtc) - 9" y="0" width="18" height="26" rx="4" class="plan-alt-handle-knob"></rect>
+                                                                    <rect :x="planAltX(t, t.startAtUtc) - 9" :y="planAlt[t.id].VBH - 26" width="18" height="26" rx="4" class="plan-alt-handle-knob"></rect>
+                                                                    <rect :x="planAltX(t, t.startAtUtc) - 26" y="0" width="52" :height="planAlt[t.id].VBH" class="plan-alt-handle-hit"></rect>
+                                                                </g>
+                                                                <!-- end handle -->
+                                                                <g class="plan-alt-handle" @pointerdown="planAltHandleDown($event, t, 'end')">
+                                                                    <line :x1="planAltX(t, t.endAtUtc)" y1="0" :x2="planAltX(t, t.endAtUtc)" :y2="planAlt[t.id].VBH" class="plan-alt-handle-line end"></line>
+                                                                    <rect :x="planAltX(t, t.endAtUtc) - 9" y="0" width="18" height="26" rx="4" class="plan-alt-handle-knob"></rect>
+                                                                    <rect :x="planAltX(t, t.endAtUtc) - 9" :y="planAlt[t.id].VBH - 26" width="18" height="26" rx="4" class="plan-alt-handle-knob"></rect>
+                                                                    <rect :x="planAltX(t, t.endAtUtc) - 26" y="0" width="52" :height="planAlt[t.id].VBH" class="plan-alt-handle-hit"></rect>
+                                                                </g>
+                                                            </svg>
+                                                        </template>
+                                                        <!-- X-axis hour labels (local), positioned over the chart width -->
+                                                        <template x-if="planAlt[t.id] && planAlt[t.id].ticks">
+                                                            <div class="plan-altchart-axis">
+                                                                <template x-for="tk in planAlt[t.id].ticks" :key="'l'+tk.x">
+                                                                    <span class="plan-axis-tick" :style="'left:' + tk.leftPct + '%'" x-text="tk.label"></span>
+                                                                </template>
+                                                            </div>
+                                                        </template>
+                                                        <div class="plan-window-fields">
+                                                            <label>Start (local) <input type="time" :value="_todUtcToLocal(t.startAtUtc)" @change="t.startAtUtc = _todLocalToUtc($event.target.value); savePlan()"></label>
+                                                            <label>End (local) <input type="time" :value="_todUtcToLocal(t.endAtUtc)" @change="t.endAtUtc = _todLocalToUtc($event.target.value); savePlan()"></label>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+
+                                            <!-- Periodic maintenance during this target (0 = off). -->
+                                            <div class="plan-maint">
+                                                <div class="plan-maint-title muted">During capture (0 = off)</div>
+                                                <div class="plan-maint-row">
+                                                    <label>Re-center every
+                                                        <input type="number" min="0" step="1" x-model.number="t.recenterEveryNFrames" @change="savePlan()"> frames</label>
+                                                    <label>Re-focus every
+                                                        <input type="number" min="0" step="1" x-model.number="t.refocusEveryNFrames" @change="savePlan()"> frames</label>
+                                                    <label>Dither every
+                                                        <input type="number" min="0" step="1" x-model.number="t.ditherEveryNFrames" @change="savePlan()"> frames</label>
                                                 </div>
                                             </div>
-                                        </template>
-                                    </div>
 
-                                    <!-- Periodic maintenance during this target (0 = off). -->
-                                    <div class="plan-maint">
-                                        <div class="plan-maint-title muted">During capture (0 = off)</div>
-                                        <div class="plan-maint-row">
-                                            <label>Re-center every
-                                                <input type="number" min="0" step="1" x-model.number="t.recenterEveryNFrames" @change="savePlan()"> frames</label>
-                                            <label>Re-focus every
-                                                <input type="number" min="0" step="1" x-model.number="t.refocusEveryNFrames" @change="savePlan()"> frames</label>
-                                            <label>Dither every
-                                                <input type="number" min="0" step="1" x-model.number="t.ditherEveryNFrames" @change="savePlan()"> frames</label>
-                                        </div>
-                                    </div>
-
-                                    <div class="plan-frames">
-                                        <div class="plan-frames-head">
-                                            <span x-text="t.scheduleMode === 'TimeWindow' ? 'Frames (looped until end time)' : 'Frames'"></span>
-                                            <span class="plan-frames-tools">
-                                                <button class="btn btn-sm" @click="planAddFrame(t)">＋ Frame</button>
-                                                <button class="btn btn-sm" @click="planCopyFramesToAll(t)" title="Copy this frame list to every target">Copy to all</button>
-                                            </span>
-                                        </div>
-                                        <template x-for="(f, fi) in t.frames" :key="fi">
-                                            <div class="plan-frame-row">
-                                                <label>Exp(s) <input type="number" step="0.1" min="0" x-model.number="f.exposureSeconds" @change="savePlan()"></label>
-                                                <label>× <input type="number" min="1" x-model.number="f.count" @change="savePlan()"></label>
-                                                <label>Filter <input type="text" style="width:5em" x-model="f.filter" @change="savePlan()" placeholder="-"></label>
-                                                <label>Gain <input type="number" style="width:5em" x-model.number="f.gain" @change="savePlan()" placeholder="auto"></label>
-                                                <label>Bin <input type="number" min="1" style="width:3.5em" x-model.number="f.binning" @change="savePlan()"></label>
-                                                <button class="btn btn-sm btn-icon btn-danger" @click="planRemoveFrame(t, fi)" title="Remove frame">✕</button>
+                                            <div class="plan-frames">
+                                                <div class="plan-frames-head">
+                                                    <span x-text="t.scheduleMode === 'TimeWindow' ? 'Frames (looped until end time)' : 'Frames'"></span>
+                                                    <span class="plan-frames-tools">
+                                                        <button class="btn btn-sm" @click="planAddFrame(t)">＋ Frame</button>
+                                                        <button class="btn btn-sm" @click="planCopyFramesToAll(t)" title="Copy this frame list to every target">Copy to all</button>
+                                                    </span>
+                                                </div>
+                                                <template x-for="(f, fi) in t.frames" :key="fi">
+                                                    <div class="plan-frame-row">
+                                                        <label>Exp(s) <input type="number" step="0.1" min="0" x-model.number="f.exposureSeconds" @change="savePlan()"></label>
+                                                        <label>× <input type="number" min="1" x-model.number="f.count" @change="savePlan()"></label>
+                                                        <label>Filter <input type="text" style="width:5em" x-model="f.filter" @change="savePlan()" placeholder="-"></label>
+                                                        <label>Gain <input type="number" style="width:5em" x-model.number="f.gain" @change="savePlan()" placeholder="auto"></label>
+                                                        <label>Bin <input type="number" min="1" style="width:3.5em" x-model.number="f.binning" @change="savePlan()"></label>
+                                                        <button class="btn btn-sm btn-icon btn-danger" @click="planRemoveFrame(t, fi)" title="Remove frame">✕</button>
+                                                    </div>
+                                                </template>
                                             </div>
-                                        </template>
+                                        </div>
                                     </div>
+                                </template>
+                            </div>
+
+                            <!-- Add target -->
+                            <div class="plan-add-row">
+                                <button class="btn btn-sm" @click="planAddTargetManual()">＋ Manual</button>
+                                <button class="btn btn-sm" @click="planAddTargetFromMount()" title="Add a target at the mount's current pointing, named after the catalogued object there">＋ Mount position</button>
+                                <button class="btn btn-sm" @click="planAddCatalogOpen = !planAddCatalogOpen" :class="{ 'btn-active': planAddCatalogOpen }">＋ Catalog</button>
+                                <button class="btn btn-sm" @click="planFrameInSky()">Frame in SkyAtlas</button>
+                            </div>
+                            <div x-show="planAddCatalogOpen" class="plan-catalog">
+                                <input type="text" x-model="planCatQuery" @input.debounce.300ms="planCatSearch()" placeholder="Search catalog (e.g. M31, NGC 7000)…">
+                                <div class="plan-cat-results">
+                                    <template x-for="o in planCatResults" :key="o.name">
+                                        <div class="plan-cat-item" @click="planAddTargetFromCatalog(o)">
+                                            <span x-text="o.commonName || o.name"></span>
+                                            <span class="muted" x-text="(o.type || '') + ' · RA ' + ((o.ra ?? o.raHours)||0).toFixed(2) + 'h Dec ' + ((o.dec ?? o.decDeg)||0).toFixed(1) + '°'"></span>
+                                        </div>
+                                    </template>
                                 </div>
                             </div>
-                        </template>
-                    </div>
 
-                    <!-- Add target -->
-                    <div class="plan-add-row">
-                        <button class="btn btn-sm" @click="planAddTargetManual()">＋ Manual</button>
-                        <button class="btn btn-sm" @click="planAddTargetFromMount()" title="Add a target at the mount's current pointing, named after the catalogued object there">＋ Mount position</button>
-                        <button class="btn btn-sm" @click="planAddCatalogOpen = !planAddCatalogOpen" :class="{ 'btn-active': planAddCatalogOpen }">＋ Catalog</button>
-                        <button class="btn btn-sm" @click="planFrameInSky()">Frame in SkyAtlas</button>
-                    </div>
-                    <div x-show="planAddCatalogOpen" class="plan-catalog">
-                        <input type="text" x-model="planCatQuery" @input.debounce.300ms="planCatSearch()" placeholder="Search catalog (e.g. M31, NGC 7000)…">
-                        <div class="plan-cat-results">
-                            <template x-for="o in planCatResults" :key="o.name">
-                                <div class="plan-cat-item" @click="planAddTargetFromCatalog(o)">
-                                    <span x-text="o.commonName || o.name"></span>
-                                    <span class="muted" x-text="(o.type || '') + ' · RA ' + ((o.ra ?? o.raHours)||0).toFixed(2) + 'h Dec ' + ((o.dec ?? o.decDeg)||0).toFixed(1) + '°'"></span>
-                                </div>
-                            </template>
                         </div>
-                    </div>
+                        </template>
+                </div><!-- /.plan-main -->
 
-                </div>
-                </template>
+                <div class="preview-area plan-preview">
+                    <canvas id="planCanvas" class="preview-canvas"></canvas>
+                    <div class="pz-toolbar" @pointerdown.stop @dblclick.stop @wheel.stop>
+                        <button @click="_pzFit('planCanvas')" title="Zoom to fit (whole frame)">⊡</button>
+                        <button @click="_pzFitWidth('planCanvas')" title="Fit width">↔</button>
+                        <button @click="_pzFitHeight('planCanvas')" title="Fit height">↕</button>
+                        <button @click="_pzZoomButton('planCanvas', 1.3)" title="Zoom in">＋</button>
+                        <button @click="_pzZoomButton('planCanvas', 1/1.3)" title="Zoom out">－</button>
+                        <button @click="toggleAutoStretch()" :class="stretchAuto ? 'pz-active' : ''" title="Auto-stretch brightness">◐</button>
+                    </div>
+                    <div class="preview-overlay" x-show="!_lastRawFrame">
+                        <p>The last captured frame of the running plan appears here.</p>
+                    </div>
+                </div><!-- /.plan-preview -->
+                </div><!-- /.plan-split -->
+
 
                 <!-- Run control + progress: fixed bottom bar. Start/Stop on
                      the left, two progress bars (current target + whole plan)

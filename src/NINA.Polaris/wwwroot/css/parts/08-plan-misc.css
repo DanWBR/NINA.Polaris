@@ -614,12 +614,26 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 }
 
 /* ───────────────────────── PLAN mode ───────────────────────── */
-/* No bottom padding: the sticky run bar is the panel's footer and sits
-   flush against the bottom edge. With padding here the bar had to be
-   pulled down by a negative margin to bleed over it, and a sticky element
-   is held by its MARGIN box, so the negative margin pushed its border box
-   below the scrollport and clipped the buttons. */
-.tab-panel-plan { padding: 12px 12px 0; overflow-y: auto; }
+/* The panel is a fixed-height flex column (header / split / run bar) and
+   does NOT scroll: .plan-main does. The run bar used to be sticky inside a
+   scrolling panel, bled over the panel padding with a negative bottom
+   margin, and a sticky box is held by its MARGIN box, so that margin pushed
+   its border box past the scrollport and clipped the buttons. As an
+   ordinary last flex child it cannot leave the panel at all. */
+.tab-panel-plan { padding: 12px 12px 0; overflow: hidden; }
+
+/* Two columns: the plan editor scrolls, the last captured frame does not. */
+.plan-split { display: flex; flex: 1 1 auto; min-height: 0; gap: 12px; }
+.plan-main  { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding-bottom: 12px; }
+.plan-preview {
+    flex: 0 0 clamp(260px, 28%, 520px);
+    min-height: 0;
+    border: 1px solid var(--border, #2a2f3a);
+    border-radius: var(--radius);
+}
+/* Below this the editor needs every pixel it can get; the frame is one
+   tab away in AUTORUN. */
+@media (max-width: 1100px) { .plan-preview { display: none; } }
 .plan-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
 .plan-select { flex: 1; min-width: 160px; padding: 6px 8px; }
 .plan-empty { color: var(--text-muted, #9aa4b2); padding: 24px 8px; text-align: center; }
@@ -678,15 +692,14 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
    whole plan) fill the remaining width. Negative margins bleed it to
    the panel edges so it reads as a full-width footer. */
 .plan-runbar {
-    /* position:sticky keeps it pinned to the foot of the scroll viewport
-       when the target list is long. The negative SIDE margins bleed it to
-       the panel edges so it reads as a full-width footer; there is no
-       negative bottom margin, see .tab-panel-plan. */
-    position: sticky; bottom: 0; z-index: 5;
+    /* Last flex child of the panel, so it always sits at the foot of the
+       panel and never scrolls away. The negative SIDE margins bleed it to
+       the panel edges so it reads as a full-width footer. */
+    flex: 0 0 auto;
     /* wrap so a narrow phone stacks the buttons instead of pushing the
        last one out of the panel */
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-    margin: auto -12px 0; padding: 10px 12px;
+    margin: 0 -12px; padding: 10px 12px;
     border-top: 1px solid var(--border, #2a2f3a);
     background: var(--bg-secondary, #161a22);
 }

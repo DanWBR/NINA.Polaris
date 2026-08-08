@@ -3428,5 +3428,6 @@
   "Port set. Reconnect the device for it to take effect.": "",
   "Could not set the port": "",
   "Nothing catalogued at this pointing, added as Mount position": "",
-  "Add a target at the mount's current pointing, named after the catalogued object there": ""
+  "Add a target at the mount's current pointing, named after the catalogued object there": "",
+  "The last captured frame of the running plan appears here.": ""
 }

@@ -3569,5 +3569,6 @@
   "ZWO preset gains, L=": true,
   "× scaling)": true,
   "Nothing catalogued at this pointing, added as Mount position": "Rien de catalogué à cette position, ajouté comme Mount position",
-  "Add a target at the mount's current pointing, named after the catalogued object there": "Ajoute une cible à la position actuelle de la monture, nommée d'après l'objet catalogué qui s'y trouve"
+  "Add a target at the mount's current pointing, named after the catalogued object there": "Ajoute une cible à la position actuelle de la monture, nommée d'après l'objet catalogué qui s'y trouve",
+  "The last captured frame of the running plan appears here.": "La dernière image capturée du plan en cours apparaît ici."
 }
