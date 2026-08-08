@@ -37,7 +37,18 @@ public sealed record UsbDeviceInfo(
     string? Manufacturer,
     string? Product,
     string? Serial,
-    int SpeedMbps);
+    int SpeedMbps,
+    /// <summary>False when the kernel bound no driver to ANY of this device's
+    /// interfaces, i.e. it enumerated on the bus and then nothing claimed it.
+    /// For a USB-serial bridge that is precisely why no /dev/ttyUSB* appears,
+    /// and the symptom the operator sees is a port picker that simply does not
+    /// list their focuser. Field report 2026-08-06, Orange Pi 4 Pro on the
+    /// shipped image: a Gemini focuser was plugged in and the only serial port
+    /// on the whole system was the ZWO mount's.</summary>
+    bool DriverBound = true,
+    /// <summary>Kernel module that would claim this device, when it is a
+    /// USB-serial bridge we recognise and nothing is bound. Null otherwise.</summary>
+    string? MissingModuleHint = null);
 
 /// <summary>A serial port and the stable by-id name that points at it.</summary>
 /// <param name="ByIdName">Entry under <c>/dev/serial/by-id/</c>. Built from the
@@ -119,6 +130,7 @@ public sealed class UsbScanService {
 
             var pid = ReadAttr(dir, "idProduct") ?? "";
             _ = int.TryParse(ReadAttr(dir, "speed"), out int speed);
+            bool bound = AnyInterfaceHasDriver(dir);
             devices.Add(new UsbDeviceInfo(
                 Path: System.IO.Path.GetFileName(dir),
                 VendorId: vid.ToLowerInvariant(),
@@ -126,7 +138,9 @@ public sealed class UsbScanService {
                 Manufacturer: ReadAttr(dir, "manufacturer"),
                 Product: ReadAttr(dir, "product"),
                 Serial: ReadAttr(dir, "serial"),
-                SpeedMbps: speed));
+                SpeedMbps: speed,
+                DriverBound: bound,
+                MissingModuleHint: bound ? null : SerialBridgeModule(vid.ToLowerInvariant())));
         }
         devices.Sort((a, b) => string.CompareOrdinal(a.Path, b.Path));
 
@@ -140,6 +154,52 @@ public sealed class UsbScanService {
             result.Devices.Count, result.SerialPorts.Count);
         return result;
     }
+
+    /// <summary>Did the kernel bind a driver to any interface of this device?
+    ///
+    /// A USB device's interfaces appear as sub-directories named
+    /// <c>&lt;dev&gt;:&lt;config&gt;.&lt;interface&gt;</c>, and each grows a
+    /// <c>driver</c> symlink once something claims it. No symlink anywhere
+    /// means the device enumerated and then nothing took it - the module for
+    /// it is not loaded, or not present in this kernel at all.
+    ///
+    /// Checking for a bound driver rather than matching a list of chips is
+    /// deliberate: it catches any device the image cannot drive, including
+    /// bridges nobody has added to the table yet.</summary>
+    private static bool AnyInterfaceHasDriver(string deviceDir) {
+        try {
+            var self = System.IO.Path.GetFileName(deviceDir);
+            foreach (var sub in Directory.EnumerateDirectories(deviceDir)) {
+                var name = System.IO.Path.GetFileName(sub);
+                // Interfaces are "1-1:1.0"; skip the device's own children
+                // ("1-1.4" is a downstream device on a hub, not an interface).
+                if (!name.StartsWith(self + ":", StringComparison.Ordinal)) continue;
+                if (Directory.Exists(System.IO.Path.Combine(sub, "driver"))
+                        || File.Exists(System.IO.Path.Combine(sub, "driver"))) {
+                    return true;
+                }
+            }
+            // A hub or a device we could not read interfaces for: do not cry
+            // wolf. Only an explicit "interfaces exist and none is claimed"
+            // counts as unbound.
+            return !Directory.EnumerateDirectories(deviceDir)
+                .Any(d => System.IO.Path.GetFileName(d)
+                    .StartsWith(self + ":", StringComparison.Ordinal));
+        } catch {
+            return true;
+        }
+    }
+
+    /// <summary>Kernel module for the USB-serial bridges that turn up on this
+    /// kind of gear, keyed by vendor id. Only used to make an unbound device
+    /// actionable ("install/load ch341"), never to decide anything.</summary>
+    private static string? SerialBridgeModule(string vendorId) => vendorId switch {
+        "1a86" => "ch341",    // QinHeng CH340 / CH341, the cheap bridge in most focusers
+        "10c4" => "cp210x",   // Silicon Labs CP2102 / CP2104
+        "0403" => "ftdi_sio", // FTDI FT232 and friends
+        "067b" => "pl2303",   // Prolific PL2303
+        _ => null,
+    };
 
     private List<SerialPortInfo> ScanSerialPorts() {
         var ports = new List<SerialPortInfo>();

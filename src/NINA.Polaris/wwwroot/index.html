@@ -19002,6 +19002,19 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </div>
                     <div x-show="d.note" style="font-size:11px;color:var(--text-muted);margin-top:4px;"
                          x-text="d.note"></div>
+                    <!-- Plugged in, and the kernel bound nothing to it. For a
+                         USB-serial focuser this is why no port shows up in any
+                         picker, and without saying so the operator sees only an
+                         absence and concludes the device is broken. -->
+                    <div x-show="d.driverBound === false"
+                         style="font-size:11px;color:var(--warn);margin-top:4px;"
+                         x-text="'The kernel has no driver bound to this device, so it will not appear '
+                                 + 'as a serial port. '
+                                 + (d.missingModuleHint
+                                     ? 'Its USB-serial chip needs the ' + d.missingModuleHint
+                                       + ' kernel module: try `sudo modprobe ' + d.missingModuleHint
+                                       + '`, and install linux-modules-extra for this kernel if that fails.'
+                                     : 'This kernel appears to have no module for it.')"></div>
                     <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
                         <span style="font-size:11px;color:var(--text-muted);min-width:52px;">Driver</span>
                         <select class="input input-sm" style="flex:1;"
@@ -20023,7 +20036,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260807-wifiscan"></script>
+    <script src="/js/app.js?v=20260807-usbdriver"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
