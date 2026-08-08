@@ -1829,6 +1829,11 @@ function ninaApp() {
         //                   the indi-cp sub-tab is visible)
         //   busy            in-flight GET; suppresses overlapping fetches
         //   lastError       last /set rejection (400/403/500)
+        // DEVICE_PORT of the device selected in the INDI panel. `serial` is
+        // false for anything that exposes no DEVICE_PORT, and the picker stays
+        // hidden rather than offering a port to a USB camera.
+        indiPort: { serial: false, port: null, options: [], busy: false },
+
         indiProps: {
             devices: [],
             selectedDevice: '',
@@ -37757,6 +37762,48 @@ function ninaApp() {
         // so per-element _draft inputs survive the re-render (when
         // the user is mid-edit on element X we don't want to overwrite
         // their unsaved value with the freshly-fetched one).
+        // ---- DEVICE_PORT for the selected INDI device -----------------------
+        // A serial driver falls back to /dev/ttyUSB0, and ttyUSBn follows boot
+        // enumeration order. Two USB-serial devices on one rig (a ZWO AM3 and a
+        // Gemini focuser, say) and the loser quietly talks to the wrong
+        // hardware, with nothing in the UI naming the port. Field report
+        // 2026-08-06, in the field, at night.
+        async indiPortLoad() {
+            const dev = this.indiProps.selectedDevice;
+            if (!dev) { this.indiPort = { serial: false, port: null, options: [], busy: false }; return; }
+            try {
+                const r = await this.apiGet(
+                    '/api/indi/devices/' + encodeURIComponent(dev) + '/port');
+                this.indiPort = {
+                    serial: !!r?.serial,
+                    port: r?.port ?? null,
+                    options: r?.options || [],
+                    busy: false,
+                };
+            } catch {
+                // Not knowing is not the same as "not serial": leave the picker
+                // hidden rather than showing one that cannot work.
+                this.indiPort = { serial: false, port: null, options: [], busy: false };
+            }
+        },
+
+        async indiPortSet(port) {
+            const dev = this.indiProps.selectedDevice;
+            if (!dev || !port) return;
+            this.indiPort.busy = true;
+            try {
+                await this.apiPut('/api/indi/devices/' + encodeURIComponent(dev) + '/port',
+                                  { port });
+                this.indiPort.port = port;
+                this.toast('Port set. Reconnect the device for it to take effect.', 'ok');
+            } catch (e) {
+                this.toastFail('Could not set the port', e);
+                await this.indiPortLoad();   // resync with what the driver actually holds
+            } finally {
+                this.indiPort.busy = false;
+            }
+        },
+
         async indiPropsLoad() {
             if (this.indiProps.busy) return;
             this.indiProps.busy = true;

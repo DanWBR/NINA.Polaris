@@ -14,6 +14,7 @@
 
 using System.Net.Sockets;
 using NINA.INDI.Client;
+using NINA.Polaris.Services;
 
 namespace NINA.Polaris.Endpoints;
 
@@ -104,7 +105,54 @@ public static class IndiEndpoints {
 
             return Results.Ok(new { device = deviceName, properties = result });
         });
+
+        // Which serial node a driver is pointed at, plus the stable choices.
+        //
+        // Serial drivers default to /dev/ttyUSB0, and ttyUSBn numbering follows
+        // enumeration order at boot. Two USB-serial devices on one rig and the
+        // loser silently talks to the wrong hardware, with nothing in the UI
+        // that even names the port. Field report 2026-08-06: a Gemini focuser
+        // bound to a port that had a ZWO device on it, in the field, at night.
+        group.MapGet("/devices/{deviceName}/port", (
+                IndiClient client, UsbScanService usb, string deviceName) => {
+            if (!client.Devices.ContainsKey(deviceName))
+                return Results.NotFound(new { error = $"Device '{deviceName}' not found" });
+
+            var current = client.GetDevicePort(deviceName);
+            var scan = usb.Scan();
+            return Results.Ok(new {
+                device = deviceName,
+                // false = this driver has no DEVICE_PORT, i.e. it is not serial
+                // and the picker should not be offered at all.
+                serial = current != null,
+                port = current,
+                // by-id paths survive a reboot; ttyUSBn does not, which is the
+                // whole reason this endpoint exists.
+                options = scan.SerialPorts.Select(p => new {
+                    value = "/dev/serial/by-id/" + p.ByIdName,
+                    label = p.ByIdName,
+                    resolvesTo = p.Device,
+                }).ToList(),
+            });
+        });
+
+        group.MapPut("/devices/{deviceName}/port", async (
+                IndiClient client, string deviceName, IndiPortRequest request) => {
+            if (!client.Devices.ContainsKey(deviceName))
+                return Results.NotFound(new { error = $"Device '{deviceName}' not found" });
+            var port = (request?.Port ?? "").Trim();
+            if (port.Length == 0)
+                return Results.BadRequest(new { error = "No port given" });
+            if (client.GetDevicePort(deviceName) == null) {
+                return Results.BadRequest(new {
+                    error = $"'{deviceName}' exposes no DEVICE_PORT, so it is not a serial device."
+                });
+            }
+            await client.SetDevicePortAsync(deviceName, port);
+            return Results.Ok(new { device = deviceName, port });
+        });
     }
 
     public record IndiConnectRequest(string? Host = "localhost", int? Port = 7624);
+    public record IndiPortRequest(string? Port);
 }

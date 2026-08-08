@@ -7975,7 +7975,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                               x-text="indiProps.devices.length + ' device' + (indiProps.devices.length === 1 ? '' : 's')"></span>
                         <label style="font-size:12px;color:var(--text-muted);">Device:</label>
                         <select class="input-sm" x-model="indiProps.selectedDevice"
-                                @change="indiProps.collapsedGroups = {}">
+                                @change="indiProps.collapsedGroups = {}; indiPortLoad()">
                             <option value="">- All -</option>
                             <template x-for="d in indiProps.devices" :key="d.name">
                                 <option :value="d.name" x-text="d.name"></option>
@@ -7984,6 +7984,37 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <input type="text" class="input-sm" style="flex:1;min-width:160px;"
                                placeholder="Filter by property / group / element…"
                                x-model="indiProps.search">
+                        <!-- Serial port, for the selected device only. A serial
+                             driver defaults to /dev/ttyUSB0, and ttyUSBn follows
+                             boot enumeration order, so with two USB-serial
+                             devices on a rig the loser talks to the wrong
+                             hardware. Offering the by-id paths here is the
+                             difference between a two-click fix in the field and
+                             giving up on the focuser for the night. -->
+                        <template x-if="indiPort.serial">
+                            <span style="display:inline-flex;align-items:center;gap:6px;">
+                                <span style="font-size:11px;color:var(--text-muted);">Port</span>
+                                <select class="input-sm" style="max-width:300px;"
+                                        @change="indiPortSet($event.target.value)"
+                                        :disabled="indiPort.busy">
+                                    <option value="" :selected="!indiPort.port">- not set -</option>
+                                    <!-- Whatever the driver holds now, when it is not
+                                         one of the stable paths. Usually the
+                                         /dev/ttyUSB0 default that caused the trouble,
+                                         and it has to stay selectable so the picker
+                                         does not silently rewrite a working setup. -->
+                                    <template x-if="indiPort.port
+                                              && !indiPort.options.some(o => o.value === indiPort.port)">
+                                        <option :value="indiPort.port" selected
+                                                x-text="indiPort.port + '  (not stable across reboots)'"></option>
+                                    </template>
+                                    <template x-for="o in indiPort.options" :key="o.value">
+                                        <option :value="o.value" :selected="indiPort.port === o.value"
+                                                x-text="o.label + '  ->  ' + o.resolvesTo"></option>
+                                    </template>
+                                </select>
+                            </span>
+                        </template>
                         <label class="checkbox-label" style="font-size:12px;">
                             <input type="checkbox" x-model="indiProps.autoRefresh"
                                    @change="indiPropsScheduleRefresh()">
@@ -20036,7 +20067,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260807-usbdriver"></script>
+    <script src="/js/app.js?v=20260807-deviceport"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

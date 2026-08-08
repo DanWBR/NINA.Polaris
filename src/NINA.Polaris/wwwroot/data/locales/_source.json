@@ -3431,5 +3431,7 @@
   "ZWO preset gains": "",
   "ZWO preset gains, L=": "",
   "No networks found. Some adapters refuse to scan while the hotspot is up; you can still type the SSID and password below.": "",
-  "The scan took too long and was cancelled. Some WiFi adapters need a while on the first scan after boot. Try again, or type the SSID and password below.": ""
+  "The scan took too long and was cancelled. Some WiFi adapters need a while on the first scan after boot. Try again, or type the SSID and password below.": "",
+  "Port set. Reconnect the device for it to take effect.": "",
+  "Could not set the port": ""
 }

@@ -4114,5 +4114,7 @@
   "🔒 No live connection: this browser does not trust the rig's certificate.": "🔒 Sin conexión en vivo: este navegador no confía en el certificado del equipo.",
   "🔒 This rig uses its own certificate": "🔒 Este equipo usa su propio certificado",
   "No networks found. Some adapters refuse to scan while the hotspot is up; you can still type the SSID and password below.": "No se encontraron redes. Algunos adaptadores se niegan a escanear mientras el hotspot está activo; aún puedes escribir el SSID y la contraseña abajo.",
-  "The scan took too long and was cancelled. Some WiFi adapters need a while on the first scan after boot. Try again, or type the SSID and password below.": "El escaneo tardó demasiado y se canceló. Algunos adaptadores WiFi necesitan un rato en el primer escaneo tras el arranque. Inténtalo de nuevo, o escribe el SSID y la contraseña abajo."
+  "The scan took too long and was cancelled. Some WiFi adapters need a while on the first scan after boot. Try again, or type the SSID and password below.": "El escaneo tardó demasiado y se canceló. Algunos adaptadores WiFi necesitan un rato en el primer escaneo tras el arranque. Inténtalo de nuevo, o escribe el SSID y la contraseña abajo.",
+  "Port set. Reconnect the device for it to take effect.": "Puerto definido. Reconecta el dispositivo para que surta efecto.",
+  "Could not set the port": "No se pudo definir el puerto"
 }

@@ -412,6 +412,44 @@ public class IndiClient : IDisposable {
     /// INDIROB-3: also honours <see cref="PreConnectDelaysMs"/> by
     /// sleeping briefly before the write when the device has a
     /// per-device delay configured.</summary>
+    /// <summary>Read one element of a text property, or null when the device,
+    /// the property or the element is not there.</summary>
+    public string? GetText(string device, string property, string element) {
+        if (!Devices.TryGetValue(device, out var props)) return null;
+        if (!props.TryGetValue(property, out var p)) return null;
+        return p is IndiTextProperty t && t.Values.TryGetValue(element, out var v) ? v : null;
+    }
+
+    /// <summary>Conventional property and element a serial INDI driver reads
+    /// its device node from.</summary>
+    public const string DevicePortProperty = "DEVICE_PORT";
+    public const string DevicePortElement = "PORT";
+
+    /// <summary>The serial node this driver is pointed at, or null when it
+    /// exposes no DEVICE_PORT (a USB or network device).</summary>
+    public string? GetDevicePort(string device)
+        => GetText(device, DevicePortProperty, DevicePortElement);
+
+    /// <summary>Point a serial driver at a specific device node.
+    ///
+    /// Nothing used to set this, so every serial driver fell back to its
+    /// compiled default, almost always /dev/ttyUSB0. With two USB-serial
+    /// devices on one rig (a ZWO AM3 mount and a Gemini focuser, say) the
+    /// ttyUSBn numbering follows enumeration order at boot, so whichever came
+    /// up first took ttyUSB0 and the other driver quietly talked to the wrong
+    /// hardware. Field report 2026-08-06.
+    ///
+    /// Prefer a /dev/serial/by-id/ path: those are built from the USB
+    /// descriptor and survive a reboot, which is the whole point.
+    ///
+    /// The write is followed by the driver's own config save, so the choice
+    /// outlives the session instead of having to be redone every night.</summary>
+    public async Task SetDevicePortAsync(string device, string port, CancellationToken ct = default) {
+        await SetTextAsync(device, DevicePortProperty,
+            new Dictionary<string, string> { [DevicePortElement] = port }, ct);
+        ScheduleConfigSaveDebounced(device);
+    }
+
     public async Task ConnectDeviceAsync(string device, CancellationToken ct = default) {
         // Mark intent BEFORE the write (and even on the already-connected path):
         // this is what makes a later unrequested DISCONNECT identifiable as
