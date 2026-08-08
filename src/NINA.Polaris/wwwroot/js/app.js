@@ -333,11 +333,6 @@ function ninaApp() {
         // Hydrated from the active rig on _applyRigToChoices and
         // persisted via PUT /api/livestack/max-duration.
         liveStackMaxMinutes: 0,
-        // CLST-7: per-rig override for where the math runs.
-        // "auto" = let the server pick based on WASM handshake (default).
-        // "server" / "client" = force. Hydrated from active rig +
-        // persisted via PUT /api/equipment/rigs/{id}.
-        liveStackComputeMode: 'auto',
         // Per-frame disk persistence toggle. Mirrors the LIVE tab
         // checkbox. PUT /api/livestack/save-frames updates both the
         // running service flag and the active rig's
@@ -7484,43 +7479,7 @@ function ninaApp() {
                 // (reported from the field). Always ask for raw; the
                 // server defaults to raw anyway, this is belt + braces.
                 this._wsSendTracked(ws, JSON.stringify({ mode: 'raw' }));
-                // Tell the server whether the client-side WASM stacker
-                // is ready (CLST-5: flips LiveStackingService to
-                // MetricsOnly when at least one capable client is
-                // attached). The mode itself is no longer gated on
-                // WASM -- the only renderer left IS the raw + WebGL
-                // path; WASM only controls whether the server keeps
-                // accumulating server-side.
-                this._wsSendTracked(ws, JSON.stringify({
-                    type: 'client-capability',
-                    wasm: !!this.wasmReady,
-                    wasmVersion: this.wasmVersion || null
-                }));
             };
-            // Re-send capability when WASM finishes loading after the
-            // WS opens (race common on first page load because WASM
-            // init is async). Mode message no longer needed (always raw).
-            //
-            // Hooked once for the page, not once per connect. `once: true`
-            // retires the listener when the event fires, but a browser whose
-            // WASM runtime fails to boot never fires it, so every reconnect
-            // used to leave another listener behind holding the socket it
-            // closed over. That is the one situation where the client is
-            // reconnecting every few seconds for hours. Reading this.imageWs
-            // at fire time also targets whichever socket is actually open.
-            if (!this._wasmReadyHooked) {
-                this._wasmReadyHooked = true;
-                window.addEventListener('nina-wasm-ready', () => {
-                    const sock = this.imageWs;
-                    if (sock && sock.readyState === WebSocket.OPEN) {
-                        this._wsSendTracked(sock, JSON.stringify({
-                            type: 'client-capability',
-                            wasm: true,
-                            wasmVersion: this.wasmVersion
-                        }));
-                    }
-                }, { once: true });
-            }
 
             ws.onmessage = (evt) => {
                 // NET-1: account for both control text + binary frame.
@@ -8059,7 +8018,7 @@ function ninaApp() {
                 console.log('[Polaris] first image frame: ' + (isJpeg ? 'JPEG' : 'RAW')
                     + ' · ' + arrayBuffer.byteLength + ' bytes'
                     + ' · wasmReady=' + !!this.wasmReady
-                    + ' · serverMode=' + (this.liveStackStatus?.mode || 'full'));
+                    );
             }
 
             // XFER-4: ephemeral chip for each image-stream frame that
@@ -8170,8 +8129,8 @@ function ninaApp() {
                 .then(res => {
                     // FIELD6-10: mark this frame count consumed on 'ok' AND on
                     // 'unavailable'. Only 'ok' used to count, so a server that
-                    // reports frames but holds no stacked image (client/WASM
-                    // compute = MetricsOnly, or a reset racing the tick) left
+                    // reports frames but holds no stacked image (a reset racing
+                    // the tick, say) left
                     // _lastStackFrameShown behind forever: the guard above stayed
                     // true and we re-fetched EVERY tick, ~1/s all night, each
                     // costing a warn + an error line. That retry loop — not the
@@ -9852,33 +9811,9 @@ function ninaApp() {
         // evaluator re-runs on rig-switch and immediately on the next
         // WS handshake event, so the new setting takes effect within
         // ~1 second without an explicit refresh.
-        async saveLiveStackComputeMode() {
-            try {
-                const rig = this.rigs.find(r => r.id === this.activeRigId);
-                if (!rig) return;
-                // Partial PUT: send only the field we're patching. The server
-                // guards each field so an ABSENT one is left alone — string fields
-                // via !IsNullOrWhiteSpace, value-types via nullable+HasValue
-                // (RIGPUT-1). This used to silently reset gain/offset/binning/cooler
-                // to model defaults (the offset→0 black-level bug) because those
-                // were written unconditionally; that hole is closed. Still, prefer
-                // full saves for user-facing edits — this thin patch is fine only
-                // because every field it omits is now guarded.
-                await this.apiPost('/api/equipment/rigs/' + encodeURIComponent(rig.id), null, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ liveStackComputeMode: this.liveStackComputeMode })
-                });
-                rig.liveStackComputeMode = this.liveStackComputeMode;
-                this.toast(`Live-stack compute: ${this.liveStackComputeMode}`, 'ok');
-            } catch (e) {
-                this.toastFail('Save failed', e);
-            }
-        },
-
         // Persist the per-rig mount-slew safety thresholds (confirm-above
         // move size + anti-crash altitude floor) edited in the mount card.
-        // Same partial-PUT trick as saveLiveStackComputeMode: the server
+        // Partial PUT: the server
         // merges only the fields we send (both are nullable server-side),
         // so this leaves every other rig field untouched, and the slew
         // pre-check + live abort pick the new value up immediately. Empty
@@ -10022,72 +9957,8 @@ function ninaApp() {
             return `${h}h${m.toString().padStart(2, '0')}`;
         },
 
-        // CLST-6: upload the WASM-accumulated stack to the server as a
-        // FITS. Reads the latest cached raw frame for dimensions +
-        // metadata; the actual pixels come from the WASM module's
-        // GetStackedResult (NOT the cached frame, those might be a
-        // single frame's worth, not the accumulator).
-        async saveClientStack() {
-            if (!this.wasmReady) {
-                this.toast('WASM not ready yet, wait for the live-stack module to load.', 'warn');
-                return;
-            }
-            const interop = globalThis.NINA?.Polaris?.Wasm?.Interop;
-            if (!interop) { this.toast('WASM Interop missing.', 'error'); return; }
-
-            const [w, h] = interop.GetDimensions();
-            if (w === 0 || h === 0) {
-                this.toast('No frames stacked yet.', 'warn');
-                return;
-            }
-            const stackedInt32 = interop.GetStackedResult();
-            if (!stackedInt32 || stackedInt32.length === 0) {
-                this.toast('Stack is empty.', 'warn');
-                return;
-            }
-
-            // Pack int[] → uint16 LE bytes for the POST body.
-            const bytes = new Uint8Array(stackedInt32.length * 2);
-            const dv = new DataView(bytes.buffer);
-            for (let i = 0; i < stackedInt32.length; i++) {
-                dv.setUint16(i * 2, stackedInt32[i] & 0xFFFF, /* littleEndian */ true);
-            }
-
-            const target = ((this.targetName || '').trim()
-                            || this.seqStatus?.currentTarget
-                            || this.skyTarget?.name
-                            || 'live-stack').replace(/[^A-Za-z0-9_\-]/g, '_');
-            const frameCount = this.liveStackFrames || 0;
-            const bitDepth = this._lastRawFrame?.bitDepth || 16;
-            const url = `/api/livestack/upload-result?width=${w}&height=${h}`
-                      + `&bitDepth=${bitDepth}&target=${encodeURIComponent(target)}`
-                      + `&frameCount=${frameCount}`;
-
-            this.toast('Uploading stack...', 'info');
-            try {
-                // XFER: apiUpload via XHR so the activity bar shows
-                // upload progress for the multi-MB stacked buffer
-                // (24Mpix mono 16-bit ~46 MB; RGB triples it).
-                const resp = await this.apiUpload(url, bytes, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/octet-stream' },
-                    label: 'Save stack (' + target + ')'
-                });
-                if (!resp.ok) {
-                    const err = await resp.text();
-                    throw new Error(`HTTP ${resp.status}: ${err}`);
-                }
-                const data = await resp.json();
-                this.toast(`Stack saved: ${data.savedPath}`, 'success');
-            } catch (e) {
-                console.error('saveClientStack failed', e);
-                this.toastFail('Save failed', e);
-            }
-        },
-
-        // Save the SERVER-side accumulated stack as a FITS. Used when the
-        // stack lives on the server (colour OSC mode, or any full-mode
-        // session) — the browser has no raw accumulator to upload, only
+        // Save the accumulated stack as a FITS. Integration is server-side,
+        // so the browser has no accumulator to upload, only
         // the JPEG preview, so the server materialises + writes the master
         // (3-channel RGB in colour mode, mono otherwise).
         async saveServerStack() {
@@ -10115,148 +9986,6 @@ function ninaApp() {
                 console.error('saveServerStack failed', e);
                 this.toast('Save failed: ' + msg, 'error');
             }
-        },
-
-        // CLST-4: feed a raw uint16 frame to the WASM stacker and
-        // return the running-mean accumulator for display. Side
-        // effect: posts a 'client-stack-progress' message back to the
-        // server so the LSTR trigger orchestrator gets HFR + star
-        // count even though the server itself isn't accumulating
-        // anymore (MetricsOnly mode).
-        //
-        // LSPP-5: async because BGE pre-processing (when enabled)
-        // runs ORT inference which is fundamentally async. handleImageFrame
-        // awaits this -- no caller relies on a sync return.
-        async _stackViaWasm(pixels, width, height, bayerPattern) {
-            const interop = globalThis.NINA.Polaris.Wasm.Interop;
-
-            // LSPP-5: BGE per-frame before stacking. Lazy-load the
-            // pipeline first time it's enabled in the session so the
-            // 208MB model isn't fetched until the operator actually
-            // turns BGE on. Graceful fallback on error -- the frame
-            // still gets stacked, just without gradient removal.
-            const bgeOn = this.liveStackStatus?.preProc?.bge?.enabled === true;
-            if (bgeOn && globalThis.OnnxRegistry?.BgePipeline) {
-                try {
-                    if (!this._lsppBgePipeline) {
-                        this._lsppBgePipeline = new OnnxRegistry.BgePipeline();
-                        this._lsppBgeProcessed = 0;
-                        this._lsppBgeFallback = 0;
-                        console.log('[Polaris] live-stack BGE pipeline initialised');
-                    }
-                    const correction = this.liveStackStatus?.preProc?.bge?.correction || 'Subtraction';
-                    const smoothing  = this.liveStackStatus?.preProc?.bge?.smoothing ?? 1.0;
-                    const bgeOut = await this._lsppBgePipeline.run(pixels, width, height,
-                        { channels: 1, correction, smoothing });
-                    if (bgeOut?.pixels?.length === pixels.length) {
-                        pixels = bgeOut.pixels;
-                        this._lsppBgeProcessed = (this._lsppBgeProcessed || 0) + 1;
-                    } else {
-                        this._lsppBgeFallback = (this._lsppBgeFallback || 0) + 1;
-                        console.warn('[Polaris] live-stack BGE returned mismatched buffer, using raw');
-                    }
-                } catch (e) {
-                    this._lsppBgeFallback = (this._lsppBgeFallback || 0) + 1;
-                    this._lsppBgeLastError = e?.message || String(e);
-                    console.warn('[Polaris] live-stack BGE failed, using raw frame:', e);
-                }
-            }
-
-            // JSExport marshaller doesn't grok Uint16Array directly;
-            // pass through Int32Array (free aliasing, no per-element
-            // copy, JS just reinterprets the buffer view).
-            const asInt32 = new Int32Array(pixels.length);
-            for (let i = 0; i < pixels.length; i++) asInt32[i] = pixels[i];
-
-            // (Re-)initialise the accumulator whenever the incoming
-            // frame's dimensions don't match what's already cached.
-            // The WASM Interop has no separate Initialize() — AddFrame
-            // itself auto-bootstraps the buffers on the first frame
-            // (frameCount==0), so all we need to do here is Reset()
-            // to drop the previous-resolution buffers + reference
-            // stars. Without this, a snap captured at a different
-            // resolution than the previous video stream would land in
-            // an AddFrame that silently rejects (frame-size mismatch
-            // branch) and the renderer would loop on a stale buffer.
-            const expectedLen = width * height;
-            if (this._wasmInitDims?.w !== width
-                || this._wasmInitDims?.h !== height) {
-                try {
-                    interop.Reset();
-                    this._wasmInitDims = { w: width, h: height };
-                } catch (e) {
-                    console.warn('[Polaris] WASM Reset failed:', e);
-                    return pixels;   // bail to raw frame
-                }
-            }
-
-            // Pass the frame's Bayer code so the stacker can lock a colour
-            // session (debayer + per-plane warp) instead of smearing the raw
-            // CFA mosaic. 0 (None) keeps the mono path.
-            const metrics = interop.AddFrame(asInt32, width, height, bayerPattern | 0);
-            // SNR-5: packed return is now int[7]; slots 5 + 6 carry
-            // per-frame SNR and cumulative SNR × 100 so the server's
-            // LiveStackingService can populate LastFrameSnr /
-            // CumulativeSnr / ETA in MetricsOnly (WASM) mode too.
-            const [frameCount, hfrX100, starCount, alignmentOk, _reserved,
-                   frameSnrX100, cumSnrX100] = metrics;
-
-            // Send the metrics back to the server so the trigger
-            // orchestrator (LiveStackTriggersService) sees the same
-            // numbers it'd get from server-side StarDetector, and the
-            // SNR fields feed the LIVE overlay + ETA widget without
-            // the server having to re-process the accumulator itself.
-            if (this.imageWs && this.imageWs.readyState === WebSocket.OPEN) {
-                // LSPP-5: include BGE counters when BGE is on so the
-                // server mirrors them to every connected browser via
-                // the WS preProc.bge sub-object. Older clients (pre-
-                // LSPP) omit these; ImageStreamHandler treats them as
-                // optional and falls back to the 3-arg overload.
-                this._wsSendTracked(this.imageWs, JSON.stringify({
-                    type: 'client-stack-progress',
-                    frameCount,
-                    hfr: hfrX100 / 100,
-                    starCount,
-                    alignmentOk: !!alignmentOk,
-                    frameSnr: frameSnrX100 / 100,
-                    cumulativeSnr: cumSnrX100 / 100,
-                    bgeProcessed: this._lsppBgeProcessed || 0,
-                    bgeFallback: this._lsppBgeFallback || 0,
-                    bgeError: this._lsppBgeLastError || null
-                }));
-            }
-
-            // If the stacker didn't actually integrate this frame
-            // (frameCount didn't tick, alignment failed, no stars
-            // detected, frame rejected), the accumulator is still
-            // empty / unchanged. Returning GetStackedResult here
-            // would hand back a zero-filled buffer the right size,
-            // and the outer renderer would happily paint a black
-            // canvas over the user's actual scene. Falling back to
-            // the raw incoming pixels keeps short-exposure planetary
-            // video, snap previews of dim fields, and any other
-            // "stacker can't use this frame" case visible. Live
-            // stacking still works because frameCount > 0 once the
-            // first usable frame lands.
-            if (!frameCount || frameCount <= 0) {
-                return pixels;
-            }
-
-            // Pull the accumulated stack out for display. The
-            // GetStackedResult export returns int[] (JSExport doesn't
-            // marshal ushort[]); widen back to Uint16Array via the
-            // low 16 bits. If the returned buffer doesn't match the
-            // expected pixel count (init race, marshalling glitch,
-            // single-frame snap that the stacker hasn't seen), fall
-            // back to the raw incoming pixels so the canvas isn't
-            // left empty.
-            const stackedInt32 = interop.GetStackedResult();
-            if (!stackedInt32 || stackedInt32.length !== expectedLen) {
-                return pixels;
-            }
-            const out = new Uint16Array(stackedInt32.length);
-            for (let i = 0; i < stackedInt32.length; i++) out[i] = stackedInt32[i] & 0xFFFF;
-            return out;
         },
 
         // LSPP-5: async because the WASM stack path awaits BGE
@@ -10449,49 +10178,8 @@ function ninaApp() {
                     + ' · bayer=' + bayerPattern);
             }
 
-            // CLST-4: when the server tells us it's in MetricsOnly
-            // mode and our WASM module is loaded, route this frame
-            // through the WASM stacker instead of treating it as the
-            // displayable result. WASM accumulates → we display its
-            // running mean. While the server stays in Full mode the
-            // raw frames it relays are ALREADY the accumulated stack,
-            // so feeding them to WASM again would compound, only run
-            // the WASM path when the server is opted into metrics-only.
-            //
-            // Additionally gate on liveStackRunning, without it, a
-            // WASM-capable client would route EVERY frame through the
-            // accumulator (snap previews, video stream frames, focus
-            // captures) even when the user isn't live-stacking. That
-            // turned the VIDEO tab into a black canvas because the
-            // star matcher rejects every short-exposure planetary
-            // frame, leaving the accumulator empty.
-            const serverMode = this.liveStackStatus?.mode || 'full';
-            // frameKind=1 (PREVIEW snap, FOCUS Manual, etc.) means the
-            // server already decided this frame is a one-off test shot
-            // and must NOT feed the stacker. Without this gate, a tap
-            // on PREVIEW would bump the always-on stack counter and
-            // poison the running mean with a frame the user only
-            // wanted to glance at.
-            if (this.wasmReady && serverMode === 'metricsonly'
-                && this.liveStackEnabled
-                && frameKind === 0
-                && globalThis.NINA?.Polaris?.Wasm?.Interop) {
-                try {
-                    // LSPP-5: now async because BGE pre-processing
-                    // (when enabled) does ORT inference inside the
-                    // WASM path. handleImageFrame isn't awaited by
-                    // the WS handler, so returning a Promise from
-                    // here is harmless on its own; we await to keep
-                    // the downstream `pixels` cache consistent.
-                    pixels = await this._stackViaWasm(pixels, width, height, bayerPattern);
-                } catch (e) {
-                    console.warn('[Polaris] WASM stack failed, rendering raw frame as-is:', e);
-                }
-            }
-
-            // Cache the (possibly WASM-accumulated) frame so manual-
-            // stretch slider changes re-render against the latest
-            // accumulator without waiting for the next capture.
+            // Cache the frame so manual-stretch slider changes re-render
+            // against the latest one without waiting for the next capture.
             //
             // Keep frameKind in the cache. Without it, applyManualStretch
             // re-renders the cached frame with kind=0 (default arg) ->
@@ -10612,14 +10300,12 @@ function ninaApp() {
         },
 
         // True while the SERVER owns the LIVE display: a live stack is running
-        // in full (server-integrated) mode. In that window the stack arrives
-        // as dedicated LiveStack (kind 6) frames and the client must IGNORE
-        // kind-0 frames on the LIVE canvas — that's what used to flash B&W
-        // between colour stack updates. MetricsOnly (client compute) still
-        // consumes kind-0 raw frames as the WASM stacker input.
+        // The stack arrives as dedicated LiveStack (kind 6) frames and the
+        // client must IGNORE kind-0 frames on the LIVE canvas — that's what
+        // used to flash B&W between colour stack updates. Always true while
+        // the stack runs: integration is server-side, the only kind there is.
         _serverStackOwnsLive() {
-            return !!this.liveStackEnabled
-                && (this.liveStackStatus?.mode || 'full').toLowerCase() === 'full';
+            return !!this.liveStackEnabled;
         },
 
         // Backing-store size for a display canvas. We render at the source
@@ -20847,9 +20533,6 @@ function ninaApp() {
         },
 
         _applyRigToChoices(rig) {
-            // CLST-7: per-rig compute target override. Defaults to
-            // "auto" for old rigs without the field.
-            this.liveStackComputeMode = rig.liveStackComputeMode || 'auto';
             // Per-rig save-each-frame toggle. Defaults ON when the
             // field is missing (matches the new server-side default
             // post-redesign) so legacy rigs adopt the same friendly
@@ -36934,11 +36617,7 @@ function ninaApp() {
             if (this.liveStackEnabled && (this.liveStackFrames || 0) > 0) {
                 out.push({
                     id: 'ls',
-                    // CLST-7: show where the stacking math is running.
-                    // 🌐 = browser (WASM), 🖥 = server. The chip
-                    // doubles as an at-a-glance debug aid when
-                    // diagnosing "is my Pi pegged?".
-                    icon: (this.liveStackStatus?.mode === 'metricsonly') ? '🌐' : '🖥',
+                    icon: '🖥',
                     kind: 'info',
                     label: `Live stack ${this.liveStackFrames || 0} frames`,
                     onClick: () => { this.tab = 'live'; }
@@ -40180,8 +39859,8 @@ function ninaApp() {
                     // server's per-frame live-stack metrics. These used to be
                     // populated ONLY by the retired client-driven capture loop
                     // (/api/camera/capture), so in server-owned LIVE they read
-                    // blank. The server computes them every frame in both Full
-                    // and MetricsOnly modes, so read them here.
+                    // blank. The server computes them every frame, so read
+                    // them here.
                     const ls = msg.liveStack;
                     if (typeof ls.lastFrameStarCount === 'number' && ls.lastFrameStarCount > 0)
                         this.stats.starCount = ls.lastFrameStarCount;

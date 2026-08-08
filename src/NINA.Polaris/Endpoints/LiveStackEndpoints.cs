@@ -136,14 +136,6 @@ public static class LiveStackEndpoints {
         });
 
         group.MapGet("/preview", (LiveStackingService stack, ImageRelayService relay, int? quality) => {
-            // FIELD8-1: in MetricsOnly the STACK LIVES IN THE BROWSER. The
-            // server holds only the last raw sub, so answering with it here
-            // replaced an N-frame client stack with a single frame in the
-            // middle of a session (field report, 2026-07-31). 404 is the
-            // honest answer, and the client's restore treats it as
-            // "unavailable": a normal outcome it does not retry.
-            if (stack.Mode == StackMode.MetricsOnly)
-                return Results.NotFound(new { error = "Stack is client-side (compute mode)" });
             var jpeg = relay.GetLatestJpeg(quality ?? 85);
             if (jpeg == null)
                 return Results.NotFound(new { error = "No stacked image available" });
@@ -321,103 +313,10 @@ public static class LiveStackEndpoints {
             return Results.Ok(new { ok = true, dim });
         });
 
-        // ----- CLST-6: persist a client-stacked result as FITS -----
-        //
-        // When live-stacking happens in the browser (server is in
-        // MetricsOnly mode), the accumulated buffer never reaches the
-        // server. This endpoint lets the client POST the running mean
-        // up so we can write it as a FITS into the rig's integrated/
-        // directory and surface it in STUDIO via FrameLibraryService.
-        //
-        // Wire format (kept simple, no multipart, no JSON-encoded
-        // pixels):
-        //   POST /api/livestack/upload-result
-        //     ?width=W&height=H&bitDepth=16&target=NAME&frameCount=N
-        //   Content-Type: application/octet-stream
-        //   Body: uint16 LE pixels (width*height*2 bytes)
-        group.MapPost("/upload-result", async (HttpContext ctx,
-                                               ImageWriterService writer,
-                                               ILoggerFactory loggerFactory) => {
-            var log = loggerFactory.CreateLogger("LiveStack.UploadResult");
-            try {
-                var q = ctx.Request.Query;
-                if (!int.TryParse(q["width"], out var width) || width <= 0 ||
-                    !int.TryParse(q["height"], out var height) || height <= 0) {
-                    return Results.BadRequest(new { error = "width + height query parameters required and must be positive integers" });
-                }
-                var bitDepth = int.TryParse(q["bitDepth"], out var bd) ? bd : 16;
-                var target = q["target"].ToString();
-                if (string.IsNullOrWhiteSpace(target)) target = "live-stack";
-                var frameCount = int.TryParse(q["frameCount"], out var fc) ? fc : 0;
-
-                // Read uint16 LE body. Cap at a sane size to avoid OOM if a
-                // malicious client claims a huge frame.
-                const long maxBytes = 512L * 1024 * 1024;  // 512 MB; > full-frame uint16
-                var expected = (long)width * height * 2;
-                if (expected > maxBytes) {
-                    return Results.BadRequest(new { error = $"frame too large ({expected} bytes > {maxBytes})" });
-                }
-
-                using var ms = new MemoryStream(capacity: (int)Math.Min(expected, int.MaxValue));
-                await ctx.Request.Body.CopyToAsync(ms);
-                var bytes = ms.ToArray();
-                if (bytes.Length != expected) {
-                    return Results.BadRequest(new {
-                        error = $"body size {bytes.Length} doesn't match width*height*2={expected}"
-                    });
-                }
-
-                // Reinterpret as ushort[], same on-wire format the server
-                // uses in raw-mode broadcasts, just travelling the other
-                // direction now.
-                var pixels = new ushort[width * height];
-                Buffer.BlockCopy(bytes, 0, pixels, 0, bytes.Length);
-
-                var props = new ImageProperties {
-                    Width = width,
-                    Height = height,
-                    BitDepth = bitDepth
-                };
-                var image = new BaseImageData(pixels, props, new ImageMetaData {
-                    Target = new ImageMetaData.TargetInfo { Name = target }
-                });
-
-                // User-requested stack save: imageType="MASTER" + stacked:true
-                // routes to {rig}/stacked/{target}/{filter}/{session} so the
-                // integrated result sits in its own folder, apart from the raw
-                // lights. FrameLibraryService still picks it up on next rescan.
-                var saved = writer.SaveImage(image, targetName: target,
-                                              imageType: "MASTER", gain: 0, stacked: true);
-                if (saved == null) {
-                    return Results.Problem(
-                        detail: "ImageOutputDir not configured on the active profile. " +
-                                "Set the output directory in Settings → Files → Image Output before saving stacks.",
-                        statusCode: 500);
-                }
-                return Results.Ok(new { savedPath = saved, frameCount });
-            } catch (Exception ex) {
-                // Without this catch any FITS writer / disk / permission
-                // failure surfaces as an opaque "500 Internal Server
-                // Error" on the client with the actual exception
-                // buried in stderr. Echo the type + message so the
-                // toast tells the user what to fix (read-only path,
-                // path doesn't exist, etc.).
-                log.LogError(ex, "Failed to save uploaded live stack");
-                return Results.Problem(
-                    detail: $"{ex.GetType().Name}: {ex.Message}",
-                    statusCode: 500);
-            }
-        }).DisableAntiforgery();
-
-        // Save the SERVER-side accumulated stack as a FITS master. Used
-        // when the stack lives on the server (colour OSC mode, or any
-        // full-mode session) rather than in the browser WASM accumulator
-        // — the colour stack in particular never reaches the client as
-        // raw pixels, only as a JPEG preview, so the client can't upload
-        // it. Colour mode writes a 3-channel RGB FITS; mono writes a
-        // single-plane FITS. Lands in integrated/{target}/ as a MASTER,
-        // same place /upload-result + STUDIO batch stacks go, so
-        // FrameLibraryService surfaces it in STUDIO on the next rescan.
+        // Save the accumulated stack as a FITS master. Colour mode writes a
+        // 3-channel RGB FITS; mono writes a single-plane FITS. Lands in
+        // integrated/{target}/ as a MASTER, same place STUDIO batch stacks
+        // go, so FrameLibraryService surfaces it on the next rescan.
         group.MapPost("/save-current", (LiveStackingService stack,
                                          ImageWriterService writer,
                                          [Microsoft.AspNetCore.Mvc.FromQuery] string? target,

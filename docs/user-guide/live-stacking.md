@@ -7,11 +7,8 @@ watching your DSO target build up while you have a beer.
 > **Capture vs. stacking are separate things.** The LIVE *capture loop*
 > always runs on the **server** (the Pi / mini-PC keeps exposing even if
 > your browser is backgrounded, on another tab, or disconnects entirely -
-> you can run two Polaris tabs and switch freely). The **Compute** dropdown
-> (Auto / Server / Client) only chooses *where the per-frame stacking math
-> runs*, not who drives the camera. On underpowered hosts (Pi 2/3) flip it
-> to client-side WASM offload so the browser owns the accumulator - see
-> [client-side compute](client-side-compute.md).
+> you can run two Polaris tabs and switch freely). The per-frame stacking
+> math always runs on the host.
 
 ## How it works
 
@@ -171,15 +168,10 @@ without SNR keeping up, focus is drifting and you should refocus (or
 let Auto re-focus do it). If SNR plateaus while HFR is fine, clouds or
 sky glow rolled in.
 
-### Where SNR comes from in each mode
+### Where SNR comes from
 
-- **Server full mode**, the server's `LiveStackingService` computes SNR
-  on the accumulator buffer after each integration; UI updates via the
-  1 Hz status payload.
-- **Client (WASM) mode**, the WASM stacker computes SNR on the running
-  mean and posts it back via `client-stack-progress`. The server's
-  `InjectClientStackMetrics` feeds the same ETA calculator + WS payload
-  so the UI behaves identically.
+The server's `LiveStackingService` computes SNR on the accumulator buffer
+after each integration; the UI updates via the 1 Hz status payload.
 
 ## Auto re-focus / re-center
 
@@ -414,23 +406,17 @@ LiveStackingService.Reset (e.g. target switch).
 
 ### BGE (background extraction)
 
-Toggle `Apply GraXpert BGE to each frame before stacking`. Runs the
-GraXpert BGE model on every frame before it is added to the stack -
-**wherever the stack actually runs**:
+Toggle `Apply GraXpert BGE to each frame before stacking`. The host runs
+the GraXpert BGE model on every frame before it is added to the stack,
+through its GraXpert backend: the GraXpert CLI, or the RK3588 **NPU** fast
+path where available (see [NPU acceleration](npu-acceleration.md)).
+Per-frame BGE on a Pi 4/5 CPU is fast enough at normal exposure cadence. If
+no GraXpert backend is installed, the banner explains it's unavailable and
+the frame is stacked without BGE.
 
-- **Client-mode (MetricsOnly) stacking** - the browser runs the BGE
-  model via WebAssembly + WebGPU. The 208MB model is downloaded lazily
-  the first time BGE is enabled in a session (spares bandwidth on rigs
-  that never use it).
-- **Server-mode (Full) stacking** - the host runs BGE through its
-  GraXpert backend: the GraXpert CLI, or the RK3588 **NPU** fast path
-  where available (see [NPU acceleration](npu-acceleration.md)). Per-frame
-  BGE on a Pi 4/5 CPU is fast enough at normal exposure cadence. If no
-  server-side GraXpert backend is installed, the banner explains it's
-  unavailable and the frame is stacked without BGE.
-- Counters mirror the calibration ones (processed / fallback / last
-  error). The browser posts them back to the server so every other
-  connected browser sees the same numbers.
+Counters mirror the calibration ones (processed / fallback / last error),
+and go out in the status payload so every connected browser sees the same
+numbers.
 
 ### Failure mode
 

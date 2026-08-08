@@ -51,13 +51,6 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
                 lastFrameHfr = liveStack.LastFrameMedianHfr,
                 lastFrameStarCount = liveStack.LastFrameStarCount,
                 lastFrameMean = liveStack.LastFrameMean,
-                // CLST-1/CLST-4: "full" (server-side accumulator) or
-                // "metricsonly" (client owns the accumulator via WASM).
-                // The client only routes raw frames through its WASM
-                // stacker when this is "metricsonly", otherwise the
-                // raw frames the server relays ARE the accumulated
-                // stack and re-stacking would compound.
-                mode = liveStack.GetStatus().Mode,
                 // Per-frame-to-disk toggle + count of frames
                 // actually written this session. Drives the
                 // LIVE tab checkbox state + the "(N saved)"

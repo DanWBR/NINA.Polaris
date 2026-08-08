@@ -21,11 +21,8 @@ namespace NINA.Polaris.Services;
 /// LIVE-tab UI can show real-time "X calibrated / Y fallback" badges
 /// without needing to poll a REST endpoint.
 ///
-/// BGE counters are populated by client-stack-progress messages
-/// (LSPP-5 wires app.js to post bgeApplied/bgeFallback flags into
-/// LiveStackingService.InjectClientStackMetrics). Calibration
-/// counters are populated server-side in LiveStackingService
-/// directly (LSPP-4 splice).
+/// BGE and calibration counters are populated server-side in
+/// LiveStackingService as each frame is integrated.
 ///
 /// All writes happen on the AddFrameAsync chain (serialised) so no
 /// lock is needed. Reads from the WS broadcaster may race but the
@@ -42,7 +39,7 @@ public class LiveStackPreProcStatus {
     public string? MasterBiasUsed { get; private set; }
     public string? LastCalibrationError { get; private set; }
 
-    // BGE (client-side, MetricsOnly only) ----------------------------
+    // BGE ------------------------------------------------------------
     public bool BgeSupportedThisSession { get; set; }
     public int FramesBgeProcessed { get; private set; }
     public int FramesBgeFallback { get; private set; }
@@ -59,9 +56,8 @@ public class LiveStackPreProcStatus {
         FramesBgeProcessed = 0;
         FramesBgeFallback = 0;
         LastBgeError = null;
-        // BgeSupportedThisSession is recomputed per-frame from the
-        // current StackMode, so leaving it alone is fine -- the next
-        // frame overwrites it.
+        // BgeSupportedThisSession is recomputed per-frame, so leaving it
+        // alone is fine -- the next frame overwrites it.
     }
 
     public void RecordCalibrationApplied(PreProcessResult res) {
@@ -88,16 +84,7 @@ public class LiveStackPreProcStatus {
         MasterBiasUsed = null;
     }
 
-    /// <summary>Called by client-stack-progress handler (LSPP-5) so
-    /// the server-side WS broadcast can mirror the client-side BGE
-    /// counters back to ALL connected browsers.</summary>
-    public void InjectClientBgeMetrics(int processed, int fallback, string? error) {
-        FramesBgeProcessed = processed;
-        FramesBgeFallback = fallback;
-        if (error != null) LastBgeError = error;
-    }
-
-    /// <summary>Server-side BGE (Full stack mode): increment the per-session
+    /// <summary>Server-side BGE: increment the per-session
     /// counters one frame at a time as GraXpert BGE runs on the host.</summary>
     public void RecordServerBge(bool ok, string? error) {
         if (ok) FramesBgeProcessed++;

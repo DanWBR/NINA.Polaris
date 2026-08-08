@@ -919,22 +919,6 @@ public class EquipmentProfile {
     /// connect; survives restarts because it lives on the profile.</summary>
     public Dictionary<string, int> PreConnectDelayMsByDevice { get; set; } = new();
 
-    /// <summary>CLST-7: where live-stacking math runs.
-    /// <list type="bullet">
-    /// <item><b>auto</b> (default), server flips to MetricsOnly
-    /// when a WASM-capable client connects, back to Full otherwise.</item>
-    /// <item><b>server</b>, force server-side accumulator regardless
-    /// of clients. Use when you want a Pi to be the canonical source
-    /// for multiple browsers, or when WASM is slow on the client.</item>
-    /// <item><b>client</b>, force MetricsOnly. Useful for testing the
-    /// WASM path, or to free Pi CPU even if no client is currently
-    /// hooked up (the next one that connects will pick up the stack
-    /// from frame 1 on its side).</item>
-    /// </list>
-    /// Stored per-rig because the trade-off depends on the host:
-    /// Pi 2/3 → client; Pi 5 / mini-PC → either works.</summary>
-    public string LiveStackComputeMode { get; set; } = "auto";
-
     /// <summary>Per-rig angular move size (deg) at or above which a SKY "Go To"
     /// is flagged for confirmation before the mount moves. A big swing can make
     /// the mount un-flip and take the long way toward the pier/tripod (the AM3
@@ -1008,11 +992,10 @@ public class EquipmentProfile {
     public double? TargetSnr { get; set; }
 
     /// <summary>LSPP-3: per-frame pre-processing toggles for live
-    /// stacking. Calibration applies dark/flat/bias on the server
-    /// (or wherever the stack runs); BGE applies GraXpert background
-    /// extraction on the client (MetricsOnly mode only). Both default
-    /// OFF so existing rigs behave identically to the pre-LSPP build
-    /// until the operator opts in via the LIVE tab.</summary>
+    /// stacking. Calibration applies dark/flat/bias, BGE applies GraXpert
+    /// background extraction. Both default OFF so existing rigs behave
+    /// identically to the pre-LSPP build until the operator opts in via
+    /// the LIVE tab.</summary>
     public LiveStackPreProcSettings LiveStackPreProcessing { get; set; } = new();
 
     /// <summary>Last-used VIDEO tab ROI / FOV (subframe). Persisted so

@@ -43,88 +43,22 @@ public class LiveStackingServiceTests {
         return new BaseImageData(new ushort[w * h], props);
     }
 
-    [Test]
-    public void Mode_DefaultsToFull() {
-        var svc = MakeService();
-        Assert.That(svc.Mode, Is.EqualTo(StackMode.Full));
-        Assert.That(svc.GetStatus().Mode, Is.EqualTo("full"));
-    }
+
 
     [Test]
-    public void Mode_MetricsOnly_ReflectedInStatus() {
-        var svc = MakeService();
-        svc.Mode = StackMode.MetricsOnly;
-        Assert.That(svc.GetStatus().Mode, Is.EqualTo("metricsonly"));
-    }
-
-    [Test]
-    public async Task AddFrame_InFullMode_AccumulatesStackBuffer() {
+    public async Task AddFrame_AccumulatesStackBuffer() {
         var svc = MakeService();
         svc.Start();
         await svc.AddFrameAsync(MakeFrame());
 
-        // Full mode allocates + fills the stack buffer. GetStackedResult
+        // The service allocates + fills the stack buffer. GetStackedResult
         // returns a non-empty array after frame 1.
         Assert.That(svc.FrameCount, Is.EqualTo(1));
         Assert.That(svc.GetStackedResult().Length, Is.EqualTo(64 * 64));
     }
 
-    [Test]
-    public async Task AddFrame_InMetricsOnlyMode_DoesNotAllocateStackBuffer() {
-        var svc = MakeService();
-        svc.Start();
-        svc.Mode = StackMode.MetricsOnly;
-        await svc.AddFrameAsync(MakeFrame());
 
-        // MetricsOnly increments the frame count + sets width/height
-        // (so the trigger orchestrator + status payload look populated)
-        // but never allocates the accumulator. GetStackedResult is the
-        // cleanest probe, returns empty when the buffer is null.
-        Assert.That(svc.FrameCount, Is.EqualTo(1));
-        Assert.That(svc.Width, Is.EqualTo(64));
-        Assert.That(svc.Height, Is.EqualTo(64));
-        Assert.That(svc.GetStackedResult(), Is.Empty,
-            "Stack buffer must stay null in MetricsOnly, client owns the accumulator.");
-    }
 
-    [Test]
-    public async Task AddFrame_InMetricsOnlyMode_StillRunsStarDetector() {
-        var svc = MakeService();
-        svc.Start();
-        svc.Mode = StackMode.MetricsOnly;
-        // Synthetic blank frame → 0 stars. The point of the test is
-        // that LastFrameStarCount is touched (i.e. the detector ran),
-        // not that it found anything in noise.
-        await svc.AddFrameAsync(MakeFrame());
-
-        // LastFrameStarCount is only written by AddFrameAsync. If
-        // MetricsOnly skipped it (regression), this would stay at the
-        // -1 sentinel we don't have, instead it'd be 0 from default.
-        // Confirm via the frame-count delta + the fact that no
-        // exception fired.
-        Assert.That(svc.FrameCount, Is.EqualTo(1));
-        Assert.That(svc.LastFrameStarCount, Is.GreaterThanOrEqualTo(0));
-    }
-
-    [Test]
-    public async Task ModeChange_BetweenFrames_TakesEffectImmediately() {
-        var svc = MakeService();
-        svc.Start();
-        await svc.AddFrameAsync(MakeFrame());     // Full mode → accumulates
-        Assert.That(svc.GetStackedResult(), Is.Not.Empty);
-
-        // Switch mid-session. The accumulator stays from previous Full
-        // frames (Reset clears it, mode change alone does not, by
-        // design, so a transient WASM-client disconnect doesn't lose
-        // the in-progress stack).
-        svc.Mode = StackMode.MetricsOnly;
-        await svc.AddFrameAsync(MakeFrame());
-
-        Assert.That(svc.FrameCount, Is.EqualTo(2),
-            "Frame count advances in both modes.");
-        Assert.That(svc.GetStackedResult().Length, Is.EqualTo(64 * 64),
-            "Existing accumulator from Full mode is preserved; only new MetricsOnly frames skip it.");
-    }
 
     private static BaseImageData MakeFrame(BayerPatternEnum pattern, int w = 64, int h = 64) {
         var props = new ImageProperties {
@@ -230,18 +164,6 @@ public class LiveStackingServiceTests {
             "elapsed should climb again once stacking resumes");
     }
 
-    [Test]
-    public void Reset_PreservesModeSetting() {
-        // Mode is configured externally (by CLST-5 handshake or
-        // user override); Reset is for the per-session accumulator
-        // state, not the policy. Persist mode across resets so the
-        // user doesn't get surprised by the server flipping back to
-        // Full when they hit Reset in the UI.
-        var svc = MakeService();
-        svc.Mode = StackMode.MetricsOnly;
-        svc.Reset();
-        Assert.That(svc.Mode, Is.EqualTo(StackMode.MetricsOnly));
-    }
 
     /// <summary>
     /// A mono camera with Colour stacking left on must start stacking almost
@@ -299,102 +221,38 @@ public class LiveStackingServiceTests {
     }
 
 
-    /// <summary>
-    /// MetricsOnly hands accumulation to the browser. If the browser never
-    /// reports back, nobody is stacking and the operator watches raw frames
-    /// while /api/livestack/preview 404s. After a few silent frames the
-    /// service must say so, so the mode evaluator can take the work back.
-    /// </summary>
-    [Test]
-    public async Task MetricsOnly_WithNoClientProgress_FlagsTheStallAfterAFewFrames() {
-        var svc = MakeService();
-        svc.Mode = StackMode.MetricsOnly;
-        svc.Start();
 
-        var stalls = new List<bool>();
-        svc.ClientStackStalledChanged += v => stalls.Add(v);
-
-        for (var i = 0; i < 5; i++) await svc.AddFrameAsync(MakeFrame());
-
-        Assert.That(svc.ClientStackStalled, Is.True,
-            "Silent client must be reported, otherwise nothing accumulates anywhere.");
-        Assert.That(stalls, Is.EqualTo(new[] { true }),
-            "The event fires once on the transition, not per frame.");
-    }
-
-    /// <summary>A client that IS reporting must keep MetricsOnly: the whole
-    /// point is to spare the host the accumulation.</summary>
-    [Test]
-    public async Task MetricsOnly_WithClientProgress_DoesNotStall() {
-        var svc = MakeService();
-        svc.Mode = StackMode.MetricsOnly;
-        svc.Start();
-
-        for (var i = 0; i < 5; i++) {
-            await svc.AddFrameAsync(MakeFrame());
-            svc.InjectClientStackMetrics(i + 1, frameSnr: 10, cumulativeSnr: 12);
-        }
-
-        Assert.That(svc.ClientStackStalled, Is.False);
-    }
 
     /// <summary>
-    /// In MetricsOnly the capture endpoint hands the frame to this service
-    /// INSTEAD of the relay, so this service has to broadcast it or the browser
-    /// receives nothing: the LIVE image freezes and the WASM client has no
-    /// pixels to accumulate. Regression for the Q6A report ("only the first
-    /// frame arrived"), where seven frames were processed and zero relayed.
+    /// The browser has to receive something every time a frame is integrated,
+    /// or the LIVE image freezes while the counter climbs. Regression for the
+    /// Q6A report ("only the first frame arrived"), where seven frames were
+    /// processed and zero reached the client.
+    ///
+    /// The service relays the ACCUMULATOR (FrameKind.LiveStack), not the input
+    /// frame: the client ignores raw frames on the LIVE canvas while the stack
+    /// runs, which is what stopped it flashing an unstacked sub between
+    /// updates. Asserting identity with the input frame would therefore assert
+    /// the bug.
     /// </summary>
     [Test]
-    public async Task MetricsOnly_RelaysEveryRawFrame() {
+    public async Task RelaysTheStackOnTheFirstFrame() {
         var relay = new ImageRelayService(NullLogger<ImageRelayService>.Instance);
         var svc = new LiveStackingService(relay, NullLogger<LiveStackingService>.Instance);
-        svc.Mode = StackMode.MetricsOnly;
         svc.Start();
 
-        // The relay records the frame it last broadcast; asserting it tracks
-        // each frame we push proves the broadcast actually happened.
-        for (var i = 0; i < 3; i++) {
-            var frame = MakeFrame();
-            await svc.AddFrameAsync(frame);
-            Assert.That(relay.LatestImageData, Is.SameAs(frame),
-                $"Frame {i + 1} never reached the client.");
-        }
+        var frame = MakeFrame();
+        await svc.AddFrameAsync(frame);
 
-        Assert.That(svc.FrameCount, Is.EqualTo(3));
+        Assert.That(relay.LatestImageData, Is.Not.Null,
+            "nothing reached the client, the LIVE canvas would sit empty");
+        Assert.That(relay.LatestImageData, Is.Not.SameAs(frame),
+            "what goes out is the accumulator, not the raw sub");
+        Assert.That(svc.FrameCount, Is.EqualTo(1));
+
+        // Frames 2+ cannot be asserted here: these synthetic frames carry no
+        // stars, so alignment rejects them and no new stack is broadcast. That
+        // is the fixture's limit, not the behaviour under test.
     }
 
-    /// <summary>
-    /// The exact field sequence from the Q6A on 30 Jul: the tablet was stacking
-    /// in the browser (MetricsOnly), it stopped reporting, the watchdog flipped
-    /// the stacker to Full mid-session, and every frame after that threw a
-    /// NullReferenceException inside AddFrameAsync. MetricsOnly counts frames
-    /// without allocating an accumulator, so Full arrived with a non-zero frame
-    /// count and null buffers and skipped its own init.
-    /// </summary>
-    [Test]
-    public async Task SwitchingToFullMidSession_StartsAccumulatingInsteadOfThrowing() {
-        var svc = MakeService();
-        svc.Start();
-
-        svc.Mode = StackMode.MetricsOnly;
-        await svc.AddFrameAsync(MakeFrame());
-        await svc.AddFrameAsync(MakeFrame());
-        Assert.That(svc.FrameCount, Is.EqualTo(2),
-            "MetricsOnly counts the frames the client is stacking");
-
-        // The client goes away.
-        svc.Mode = StackMode.Full;
-        Assert.DoesNotThrowAsync(async () => await svc.AddFrameAsync(MakeFrame()),
-            "the server has to take over the accumulation, not dereference buffers "
-            + "that the client-side mode never allocated");
-
-        Assert.That(svc.FrameCount, Is.EqualTo(1),
-            "the stack starts here: the counted frames were never accumulated on the server, "
-            + "so keeping them would report an integration time the pixels do not have");
-
-        // A second frame cannot be asserted here: these synthetic frames carry
-        // no stars, so alignment against the reference rejects them, which is
-        // the fixture's limit rather than the behaviour under test.
-    }
 }

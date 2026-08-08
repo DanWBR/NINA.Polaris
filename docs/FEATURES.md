@@ -247,12 +247,8 @@ frames arrive. → [live-stacking.md](user-guide/live-stacking.md)
   re-center when HFR drifts or the target wanders.
 - **Save the current stack** to FITS at any time (into a dedicated `stacked`
   folder).
-- **Client-side compute offload**: on a slow server (Pi 2/3) the stacking
-  math can run in your browser via WebAssembly instead of the host.
-  → [client-side-compute.md](user-guide/client-side-compute.md)
-- **Server-side capture loop** (experimental): an opt-in mode that runs the
-  capture loop on the server, so the stack keeps building even if the browser
-  disconnects; the browser still handles WASM stacking compute.
+- **Server-side capture loop**: the capture loop runs on the server, so the
+  stack keeps building even if the browser disconnects.
 - **Reference-frame suggestions** to improve alignment quality.
 
 ---
@@ -384,7 +380,6 @@ fastest, with no per-frame cloud calls. → [onnx-inference.md](user-guide/onnx-
   Download models).
 - **In-browser inference**: onnxruntime-web uses the client device's GPU
   (WebGPU) or WASM SIMD; the server just hosts the `.onnx` files.
-  → [client-side-compute.md](user-guide/client-side-compute.md)
 - **Server-side CLI** fallback (GraXpert) when you prefer the host to do it.
   → [graxpert-setup.md](graxpert-setup.md)
 - **NPU acceleration**: on Rockchip RK3588 boards (RKNPU2, e.g. Orange Pi 5

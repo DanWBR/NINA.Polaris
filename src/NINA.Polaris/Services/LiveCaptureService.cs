@@ -23,7 +23,6 @@ namespace NINA.Polaris.Services;
 /// tab is backgrounded. The client's WASM live-stacking is then pure compute
 /// offload — it consumes the relayed frames but no longer controls the cadence.
 /// Where stacking runs (server-full vs client-WASM) is the orthogonal
-/// LiveStackComputeMode (auto/server/client); this loop is agnostic to it.
 ///
 /// Frame path is identical to the client-driven <c>POST /api/camera/capture</c>
 /// loop: when the LIVE stacker is running the frame is fed to it

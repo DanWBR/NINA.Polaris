@@ -43,15 +43,15 @@ public class RigPartialPutTests {
     // The web binder ASP.NET uses for the PUT body: camelCase, case-insensitive.
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
 
-    /// <summary>THE mechanism. A partial body (only name + a LIVE compute-mode
-    /// field, exactly what app.js patches) must leave every value-type field null,
+    /// <summary>THE mechanism. A partial body (only name + one string field,
+    /// exactly what app.js patches) must leave every value-type field null,
     /// so the handler's `if (HasValue)` skips them and the rig keeps its values.
     /// If any came back non-null (e.g. a lingering initializer), the handler would
     /// write the model default over the rig — the bug.</summary>
     [Test]
     public void PartialBody_LeavesValueTypeFieldsNull() {
         const string partial = """
-            { "name": "Backyard", "liveStackComputeMode": "server" }
+            { "name": "Backyard", "attachedFilter": "Ha" }
             """;
         var p = JsonSerializer.Deserialize<EquipmentProfile>(partial, Web)!;
 
@@ -132,14 +132,14 @@ public class RigPartialPutTests {
             // User configured a non-default offset (the field that clipped to black).
             svc.UpdateEquipmentProfile(rig.Id, r => { r.DefaultOffset = 120; r.DefaultGain = 300; });
 
-            // A partial PUT arrives: only liveStackComputeMode present ⇒ the omitted
+            // A partial PUT arrives: only attachedFilter present ⇒ the omitted
             // numerics are null ⇒ the handler's guard skips them.
             var patch = JsonSerializer.Deserialize<EquipmentProfile>(
-                "{ \"liveStackComputeMode\": \"client\" }", Web)!;
+                "{ \"attachedFilter\": \"Ha\" }", Web)!;
             svc.UpdateEquipmentProfile(rig.Id, r => {
                 if (patch.DefaultOffset.HasValue) r.DefaultOffset = patch.DefaultOffset.Value;
                 if (patch.DefaultGain.HasValue) r.DefaultGain = patch.DefaultGain.Value;
-                r.LiveStackComputeMode = patch.LiveStackComputeMode;
+                r.AttachedFilter = patch.AttachedFilter;
             });
 
             // Read the SPECIFIC rig back (CreateEquipmentProfile doesn't make it
@@ -179,14 +179,14 @@ public class RigPartialPutTests {
     };
 
     [Test]
-    public void Merge_ComputeModeOnlyBody_KeepsTheRigName() {
+    public void Merge_OneFieldBody_KeepsTheRigName() {
         var merged = RigPatch.Merge(StoredRig(),
-            JsonNode.Parse("""{ "liveStackComputeMode": "server" }""")!.AsObject());
+            JsonNode.Parse("""{ "attachedFilter": "Ha" }""")!.AsObject());
 
         Assert.Multiple(() => {
             Assert.That(merged.Name, Is.EqualTo("SV503"),
                 "the reported bug: an absent name arrived as the initialiser \"Default\"");
-            Assert.That(merged.LiveStackComputeMode, Is.EqualTo("server"), "the field actually sent");
+            Assert.That(merged.AttachedFilter, Is.EqualTo("Ha"), "the field actually sent");
         });
     }
 

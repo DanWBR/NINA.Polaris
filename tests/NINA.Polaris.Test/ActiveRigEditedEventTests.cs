@@ -24,11 +24,9 @@ namespace NINA.Polaris.Test;
 
 /// <summary>
 /// Some runtime state is derived from per-rig FIELDS, not from which rig is
-/// active: the live-stack compute mode is read off
-/// EquipmentProfile.LiveStackComputeMode and evaluated on an event. Editing
-/// that field used to raise nothing, so the operator could set "server" in the
-/// UI and watch the stacker stay in client mode until the next client connect
-/// or rig switch. ActiveEquipmentProfileEdited closes that gap.
+/// active. Editing such a field used to raise nothing, so the operator could
+/// change it in the UI and watch the running session keep the stale value
+/// until the next rig switch. ActiveEquipmentProfileEdited closes that gap.
 /// </summary>
 [TestFixture]
 public class ActiveRigEditedEventTests {
@@ -65,13 +63,13 @@ public class ActiveRigEditedEventTests {
         profiles.ActiveEquipmentProfileEdited += _ => raised++;
 
         var ok = profiles.UpdateEquipmentProfile(active!.Id,
-            r => r.LiveStackComputeMode = "server");
+            r => r.AttachedFilter = "Ha");
 
         Assert.That(ok, Is.True);
         Assert.That(raised, Is.EqualTo(1),
             "Changing a per-rig field on the ACTIVE rig has to notify, "
             + "or the derived runtime state keeps the stale value.");
-        Assert.That(profiles.ActiveEquipmentProfile!.LiveStackComputeMode, Is.EqualTo("server"));
+        Assert.That(profiles.ActiveEquipmentProfile!.AttachedFilter, Is.EqualTo("Ha"));
     }
 
     [Test]
@@ -85,7 +83,7 @@ public class ActiveRigEditedEventTests {
         var raised = 0;
         profiles.ActiveEquipmentProfileEdited += _ => raised++;
 
-        profiles.UpdateEquipmentProfile(other.Id, r => r.LiveStackComputeMode = "server");
+        profiles.UpdateEquipmentProfile(other.Id, r => r.AttachedFilter = "Ha");
 
         Assert.That(raised, Is.Zero,
             "Editing a rig that is not running must not disturb the live session.");

@@ -60,7 +60,6 @@ Automation: [AUTORUN](user-guide/autorun.md) ·
 
 Imaging & EAA: [Live stacking](user-guide/live-stacking.md) ·
 [Video / planetary](user-guide/video-planetary.md) ·
-[Client-side compute](user-guide/client-side-compute.md) ·
 [NPU acceleration](user-guide/npu-acceleration.md)
 
 Processing: [Studio](user-guide/studio.md) ·

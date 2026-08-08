@@ -118,68 +118,6 @@ public static class ImageStreamHandler {
 
             // Discriminated messages, capability handshake + per-
             // frame metrics from the client-side WASM stacker. CLST-5.
-            if (root.TryGetProperty("type", out var typeProp)) {
-                var type = typeProp.GetString();
-                switch (type) {
-                    case "client-capability":
-                        var hasWasm = root.TryGetProperty("wasm", out var w) && w.ValueKind == JsonValueKind.True;
-                        string? ver = null;
-                        if (root.TryGetProperty("wasmVersion", out var verProp) && verProp.ValueKind == JsonValueKind.String) {
-                            ver = verProp.GetString();
-                        }
-                        relay.SetClientCapability(clientId, hasWasm, ver);
-                        break;
-
-                    case "client-stack-progress":
-                        // Logged at debug for HFR/star count (still
-                        // computed by the server-side StarDetector in
-                        // MetricsOnly mode, so no need to wire them).
-                        // SNR-5: the SNR fields ARE wired to
-                        // LiveStackingService.InjectClientStackMetrics
-                        // because the server has no accumulator in
-                        // MetricsOnly mode and so can't recompute
-                        // cumulativeSnr itself. Same call feeds the
-                        // ETA calculator + WS status payload.
-                        if (root.TryGetProperty("frameCount", out var fc)
-                            && root.TryGetProperty("hfr", out var hfr)
-                            && root.TryGetProperty("starCount", out var sc)) {
-                            logger.LogDebug("Client {Id} integrated frame {N}: HFR={Hfr:F2} stars={Stars}",
-                                clientId, fc.GetInt32(), hfr.GetDouble(), sc.GetInt32());
-                        }
-                        if (root.TryGetProperty("frameCount", out var fcSnr)
-                            && root.TryGetProperty("frameSnr", out var fsnr)
-                            && root.TryGetProperty("cumulativeSnr", out var csnr)) {
-                            try {
-                                // LSPP-5: BGE counters are optional --
-                                // older clients (pre-LSPP) just don't
-                                // send them. The 6-arg overload accepts
-                                // nulls and skips the BgeMetrics call,
-                                // keeping the legacy 3-arg path intact.
-                                int? bgeP = null, bgeF = null;
-                                string? bgeErr = null;
-                                if (root.TryGetProperty("bgeProcessed", out var bp)
-                                    && bp.ValueKind == JsonValueKind.Number)
-                                    bgeP = bp.GetInt32();
-                                if (root.TryGetProperty("bgeFallback", out var bf)
-                                    && bf.ValueKind == JsonValueKind.Number)
-                                    bgeF = bf.GetInt32();
-                                if (root.TryGetProperty("bgeError", out var be)
-                                    && be.ValueKind == JsonValueKind.String)
-                                    bgeErr = be.GetString();
-                                liveStack.InjectClientStackMetrics(
-                                    fcSnr.GetInt32(),
-                                    fsnr.GetDouble(),
-                                    csnr.GetDouble(),
-                                    bgeProcessed: bgeP,
-                                    bgeFallback: bgeF,
-                                    bgeError: bgeErr);
-                            } catch (Exception ex) {
-                                logger.LogDebug(ex, "Client {Id} SNR inject failed", clientId);
-                            }
-                        }
-                        break;
-                }
-            }
         } catch (JsonException) {
             // Ignore malformed messages
         }

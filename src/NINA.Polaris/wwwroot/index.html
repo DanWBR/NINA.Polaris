@@ -1486,50 +1486,20 @@
                               title="The stack reached the configured duration cap. Frames still arrive + save to disk; the integrated preview is the master at the cap moment. Reset to start over.">
                             ✓ Complete
                         </span>
-                        <!-- CLST-6: save the client-accumulated stack as a FITS
-                             on the server. Only shown when the server is in
-                             metricsonly mode (the WASM module owns the
-                             accumulator) and there's at least one frame
-                             integrated. Server-side stacking already saves
-                             via the regular capture path. -->
-                        <button class="btn"
-                                @click="saveClientStack()"
-                                x-show="liveStackStatus?.mode === 'metricsonly' && wasmReady"
-                                :disabled="!_lastRawFrame"
-                                title="Upload the WASM-accumulated stack as a FITS into integrated/{target}/">
-                            💾 Save current stack
-                        </button>
                         <!-- Server-side save: the stack lives on the server
                              (colour OSC mode, or any full-mode session), so
                              the browser has no raw accumulator to upload.
                              Writes a 3-channel RGB FITS in colour mode, mono
-                             otherwise, into integrated/{target}/. Shown when
-                             the server is NOT in metricsonly mode and at least
-                             one frame has been integrated. -->
+                             otherwise, into integrated/{target}/. Shown once
+                             at least one frame has been integrated. -->
                         <button class="btn"
                                 @click="saveServerStack()"
-                                x-show="liveStackStatus && liveStackStatus?.mode !== 'metricsonly'"
+                                x-show="liveStackStatus"
                                 :disabled="!(liveStackStatus?.frameCount > 0)"
                                 title="Save the server-side accumulated stack as a FITS into integrated/{target}/ (RGB in colour mode)">
                             💾 Save current stack<span x-show="liveStackColorActive"> (colour)</span>
                         </button>
                         <button class="btn" @click="openImageViewer()" :disabled="!selectedCamera" title="Full-resolution zoom/pan viewer">⛶ View</button>
-                        <!-- CLST-7: per-rig override for the compute
-                             target. Auto follows the WASM handshake;
-                             server forces the Pi to keep stacking;
-                             client forces MetricsOnly even without a
-                             WASM client connected (next browser that
-                             arrives stacks from frame 1 on its side). -->
-                        <label class="livestack-compute-label" title="Where live-stacking math runs. Saved per rig.">
-                            Compute:
-                            <select class="input-sm"
-                                    x-model="liveStackComputeMode"
-                                    @change="saveLiveStackComputeMode()">
-                                <option value="auto">Auto</option>
-                                <option value="server">🖥 Server</option>
-                                <option value="client">🌐 Client (WASM)</option>
-                            </select>
-                        </label>
                         <!-- Per-frame disk persistence. When on, each raw
                              frame fed to the live stacker is also saved
                              into lights/{target}/{filter}/{date}/ as a

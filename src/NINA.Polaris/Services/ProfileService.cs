@@ -512,7 +512,6 @@ public class ProfileService {
             },
             NativeGuideCalibrationMode = src.NativeGuideCalibrationMode,
             NativeGuideDarkFrames = src.NativeGuideDarkFrames,
-            LiveStackComputeMode = src.LiveStackComputeMode,
             LiveStackSaveFramesToDisk = src.LiveStackSaveFramesToDisk,
             LiveStackColor = src.LiveStackColor,
             LiveStackSigmaRejection = src.LiveStackSigmaRejection,

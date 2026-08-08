@@ -42,7 +42,6 @@ namespace NINA.Polaris.Services;
 /// master shouldn't abort a 3-hour capture.
 ///
 /// BGE is NOT handled here. BGE runs on the client (WASM) when in
-/// MetricsOnly mode; see app.js _stackViaWasm for the client-side hook.
 /// </summary>
 public class LiveStackPreProcessor {
     private readonly FrameLibraryService _library;

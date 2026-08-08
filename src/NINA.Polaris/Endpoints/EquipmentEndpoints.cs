@@ -410,8 +410,6 @@ public static class EquipmentEndpoints {
                 // CLST-7: live-stack compute target override. "auto"
                 // (default), "server", or "client". Empty/null from
                 // old clients leaves the existing setting alone.
-                if (!string.IsNullOrWhiteSpace(update.LiveStackComputeMode))
-                    r.LiveStackComputeMode = update.LiveStackComputeMode.Trim().ToLowerInvariant();
                 // Per-rig mount-slew safety thresholds. Nullable: a PUT that
                 // omits them (e.g. the compute-mode-only save) leaves the
                 // stored value alone; an explicit value (incl. 0 = disable)

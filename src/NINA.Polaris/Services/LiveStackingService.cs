@@ -42,27 +42,15 @@ public record LiveStackFrameInfo(
     double CumulativeSnr = 0); // SNR of the running-mean accumulator
 
 /// <summary>
-/// Where the per-frame stacking math runs.
-/// <list type="bullet">
-/// <item><b>Full</b> (default): the server runs the whole pipeline,
-/// StarDetector + StarMatcher + AffineTransform + ImageResampler +
-/// running-mean accumulator. Server holds the accumulated stack and
-/// pushes it as the live preview. This is the historical behaviour
-/// and stays the safe fallback.</item>
-/// <item><b>MetricsOnly</b>: the server still runs StarDetector (so
-/// the trigger orchestrator gets HFR/star count + the reference solve
-/// on frame 1 still happens), but skips matching/warping/accumulating.
-/// The raw frame is still relayed to clients via ImageRelayService;
-/// a client-side WASM module is expected to do the actual stacking
-/// and render its own preview. Used by the CLST offloading work,
-/// see plan file.</item>
-/// </list>
+/// Per-frame stacking: StarDetector + StarMatcher + AffineTransform +
+/// ImageResampler + running-mean accumulator, all on the server. The
+/// server holds the accumulated stack and pushes it as the live preview.
+///
+/// There used to be a second mode that ran the accumulator in the browser
+/// (WASM) and left the server doing detection only. After enough field
+/// sessions the server proved capable on every supported board, so the
+/// browser is a renderer again and this is the only path.
 /// </summary>
-public enum StackMode {
-    Full,
-    MetricsOnly
-}
-
 public class LiveStackingService {
     private readonly ImageRelayService _relay;
     // Optional: null in unit tests that don't exercise SaveFramesToDisk.
@@ -604,31 +592,6 @@ public class LiveStackingService {
     /// the WS broadcaster can serve it without re-fitting.</summary>
     public SnrEtaCalculator.EtaResult? LastEta { get; private set; }
 
-    /// <summary>Where the per-frame math runs. Default <see cref="StackMode.Full"/>.
-    /// Switched to <see cref="StackMode.MetricsOnly"/> by the WASM
-    /// handshake (CLST-5) when a WASM-capable client is connected and
-    /// the active rig hasn't forced server-side.</summary>
-    public StackMode Mode { get; set; } = StackMode.Full;
-
-    // CLST-6: MetricsOnly hands the accumulation to the browser, so the
-    // server keeps NO stack. If the client that promised to do the work never
-    // reports back - its WASM failed to load, the tab was backgrounded, or the
-    // capable client is a different browser from the one the operator is
-    // watching - then nobody stacks and the viewer sees single frames with
-    // /api/livestack/preview 404ing. Count the frames we process without a
-    // peep from the client and hand the work back to the server.
-    private int _framesSinceClientMetrics;
-    private const int MaxSilentClientFrames = 3;
-
-    /// <summary>True when MetricsOnly was in force but no client reported
-    /// stack progress for <see cref="MaxSilentClientFrames"/> frames. The mode
-    /// evaluator treats this as "no capable client" so the server resumes
-    /// accumulating. Cleared as soon as a client reports again.</summary>
-    public bool ClientStackStalled { get; private set; }
-
-    /// <summary>Raised when <see cref="ClientStackStalled"/> changes, so the
-    /// composition root can re-run its mode evaluation.</summary>
-    public event Action<bool>? ClientStackStalledChanged;
 
     // LSPP-3+4: per-frame pre-processing. Settings read from the active
     // rig on every frame so live toggles take effect without a restart.
@@ -654,14 +617,11 @@ public class LiveStackingService {
     /// Whether BGE can run with the current setup — computed live (so the LIVE
     /// settings panel reflects it even while idle, not just mid-stack). True
     /// when the stack is computed client-side (the browser runs GraXpert ONNX
-    /// over WASM cpu/gpu, MetricsOnly) OR a GraXpert backend is present on the
-    /// host (CLI or RK3588 NPU) for server-side stacking. Only the genuinely
-    /// impossible case — server-side stacking on a host with no GraXpert at all
-    /// — reports false.
+    /// over a GraXpert backend on the host (CLI or RK3588 NPU). A host with no
+    /// GraXpert at all reports false.
     /// </summary>
     public bool BgeSupported {
         get {
-            if (Mode == StackMode.MetricsOnly) return true;   // client-side ONNX (WASM)
             return _graxpert != null
                    && (_graxpert.IsAvailable || _graxpert.NpuAvailable)
                    && !_serverBgeUnavailable;                 // host CLI / NPU
@@ -809,8 +769,6 @@ public class LiveStackingService {
             _lastGoodBayer = BayerPatternEnum.None;
             _colorDeferrals = 0;
             _colorDeferStart = null;
-            _framesSinceClientMetrics = 0;
-            ClientStackStalled = false;
             _referenceStars = null;
             _flipped = false;
             _referencePier = PierSide.pierUnknown;
@@ -1035,9 +993,8 @@ public class LiveStackingService {
         var props = imageData.Properties;
         var data = imageData.Data;
 
-        var mode = Mode;
-        _logger.LogInformation("Live stack: processing frame {N} ({W}x{H}), mode={Mode}",
-            _frameCount + 1, props.Width, props.Height, mode);
+        _logger.LogInformation("Live stack: processing frame {N} ({W}x{H})",
+            _frameCount + 1, props.Width, props.Height);
 
         // Mark the stacking math as active for the whole detect/align/integrate
         // pass (cleared in the finally below, even on a reject or throw) so the
@@ -1045,12 +1002,9 @@ public class LiveStackingService {
         _isStacking = true;
         try {
 
-        // LSPP-4: per-frame pre-processing splice. Calibration runs
-        // here on the server (or via the client when MetricsOnly is
-        // chosen by the server-side stack -- either way the pixels
-        // we feed into StarDetector below are the calibrated ones).
-        // BGE is handled client-side ONLY (MetricsOnly) so the server
-        // just tracks supportedThisSession for the WS payload.
+        // LSPP-4: per-frame pre-processing splice. Calibration runs here,
+        // so the pixels we feed into StarDetector below are the calibrated
+        // ones.
         var preProcSettings = _profiles?.ActiveEquipmentProfile?.LiveStackPreProcessing
                               ?? new LiveStackPreProcSettings();
         // Keep the stored flag in sync during stacking; BgeSupported is the
@@ -1087,13 +1041,11 @@ public class LiveStackingService {
             }
         }
 
-        // Server-side BGE — Full (server-stacked) mode only. The client WASM
-        // path already does BGE in MetricsOnly mode; this covers the case where
-        // the SBC integrates the stack, so a Pi/SBC session still gets gradient
+        // Server-side BGE, so a Pi/SBC session still gets gradient
         // removal. One BGE per exposure (GraXpert CLI, or the RK3588 NPU when
         // present) is cheap at capture cadence. Honours the same BgeEnabled
         // toggle; fully graceful (any failure feeds the un-BGE'd frame).
-        if (mode == StackMode.Full && preProcSettings.BgeEnabled
+        if (preProcSettings.BgeEnabled
                 && _graxpert != null && !_serverBgeUnavailable) {
             data = await ApplyServerBgeAsync(data, props, imageData.MetaData, preProcSettings, ct);
         }
@@ -1131,14 +1083,15 @@ public class LiveStackingService {
             lock (_lock) { _lastFullResFrame = imageData; }
         }
 
-        // StarDetector runs in BOTH modes:
-        //   - Full: feeds StarMatcher for alignment + provides HFR
-        //   - MetricsOnly: trigger orchestrator (LSTR-3) needs HFR +
-        //     star count even when stacking happens client-side
+        // StarDetector feeds StarMatcher for alignment and provides the HFR +
+        // star count the trigger orchestrator (LSTR-3) runs on.
         var stars = _detector.Detect(data, props.Width, props.Height);
         _logger.LogDebug("Detected {Count} stars in frame", stars.Count);
 
-        if (mode == StackMode.Full) {
+        // Integration. A plain block: this was the server arm of an if/else
+        // against a mode that handed the accumulator to the browser, and
+        // keeping the block avoids re-flowing 300 lines to delete a condition.
+        {
             ushort[]? alignedData;
             // Transform that aligned THIS frame onto the reference grid
             // (null for the reference frame / identity). In colour mode we
@@ -1146,11 +1099,11 @@ public class LiveStackingService {
             AffineTransform? usedTransform = null;
 
             lock (_lock) {
-                // "First frame" means the first frame THIS BRANCH sees, not the
-                // first of the session. MetricsOnly counts frames without ever
-                // allocating an accumulator (the client is doing the stacking),
-                // so a mid-session switch to Full arrives here with a non-zero
-                // count and null buffers, and integration dereferenced them:
+                // "First frame" means the first frame THIS BRANCH sees, not
+                // the first of the session. The removed browser-side mode
+                // counted frames without ever allocating an accumulator, so a
+                // mid-session switch arrived here with a non-zero count and
+                // null buffers, and integration dereferenced them:
                 // NullReferenceException on every frame from then on, the frame
                 // counter frozen, and nothing new to show when the operator
                 // came back. Field log (Q6A, 30 Jul): the tablet stopped
@@ -1470,45 +1423,11 @@ public class LiveStackingService {
                     props.BayerPattern != relayBayer);
                 await _relay.RelayImageAsync(stackedImage, FrameKind.LiveStack, ct);
             }
-        } else {
-            // MetricsOnly: bookkeep frame count + dimensions so triggers
-            // and status broadcasts have something to render, but skip
-            // the accumulator.
-            lock (_lock) {
-                if (_frameCount == 0) {
-                    _startedAt = DateTime.UtcNow;
-                    BeginElapsedSegment();
-                    _width = props.Width;
-                    _height = props.Height;
-                    _referenceStars = stars;
-                }
-                _frameCount++;
-            }
-
-            // ...and RELAY THE RAW FRAME, because nothing else will.
-            //
-            // This block used to assume the capture path had already
-            // broadcast it. It had not: CameraEndpoints routes a frame
-            // either to this service OR to the relay, never both
-            // (feedStack && IsRunning ? AddFrameAsync : RelayImageAsync).
-            // So with the live stack running in MetricsOnly the server
-            // sent the browser nothing at all: the LIVE image froze on
-            // whatever was on screen before the stack started, and the
-            // WASM client had no pixels to accumulate, which surfaced as
-            // cum=0.0 frame after frame. Seen on the Q6A: seven frames
-            // processed, zero relays in the log.
-            //
-            // The RAW frame is the right thing to send here. It carries
-            // the Bayer code the WASM stacker needs to lock a colour
-            // session, and the client displays its own accumulator.
-            await _relay.RelayImageAsync(imageData, FrameKind.LiveStack, ct);
         }
 
         // Compute median HFR from the already-detected stars (no extra
         // pixel pass). Falls back to 0 when no stars, handlers that
         // care about HFR should treat 0 as "no data this frame".
-        // Computed in BOTH modes so trigger orchestrator (auto-AF based
-        // on HFR degradation) still works in MetricsOnly mode.
         double medianHfr = 0;
         if (stars.Count > 0) {
             var sorted = stars.Select(s => s.HFR).Where(h => h > 0).OrderBy(h => h).ToList();
@@ -1521,40 +1440,21 @@ public class LiveStackingService {
         // - LastFrameSnr is the snap-quality of the incoming frame.
         //   Cheap (one extra pixel pass that piggy-backs on the same
         //   median/MAD we already need for the stretch path).
-        // - CumulativeSnr is the SNR of the running-mean accumulator.
-        //   In Full mode we compute it from _accumulator; in
-        //   MetricsOnly mode the WASM client tells us via
-        //   InjectCumulativeSnr() below (no buffer here to inspect).
+        // - CumulativeSnr is the SNR of the running-mean accumulator,
+        //   computed from _accumulator.
         try {
             LastFrameSnr = ComputeFrameSnr(imageData.Data);
             LastFrameMean = ImageStatistics.ComputeMean(imageData.Data);
-            if (mode == StackMode.Full) {
-                CumulativeSnr = ComputeCumulativeSnrFromAccumulator();
-            }
+            CumulativeSnr = ComputeCumulativeSnrFromAccumulator();
             RecordSnrSample(_frameCount, CumulativeSnr);
             RecomputeEta();
         } catch (Exception ex) {
             _logger.LogDebug(ex, "Live stack: SNR computation failed (non-fatal)");
         }
 
-        _logger.LogInformation("Live stack: frame {N} added, {Stars} stars (HFR={Hfr:F2}, snr={Snr:F1} cum={Cum:F1}), mode={Mode}",
-            _frameCount, stars.Count, medianHfr, LastFrameSnr, CumulativeSnr, mode);
+        _logger.LogInformation("Live stack: frame {N} added, {Stars} stars (HFR={Hfr:F2}, snr={Snr:F1} cum={Cum:F1})",
+            _frameCount, stars.Count, medianHfr, LastFrameSnr, CumulativeSnr);
 
-        // CLST-6 watchdog: in MetricsOnly the browser owns the accumulator and
-        // reports back through InjectClientStackMetrics. Silence means nobody
-        // is stacking, so give the job back to the server rather than let the
-        // operator watch un-stacked frames all night.
-        if (mode == StackMode.MetricsOnly) {
-            _framesSinceClientMetrics++;
-            if (_framesSinceClientMetrics > MaxSilentClientFrames && !ClientStackStalled) {
-                ClientStackStalled = true;
-                _logger.LogWarning(
-                    "Live stack: {N} frames in MetricsOnly with no client-stack-progress, so no one is accumulating. Falling back to server-side stacking (the browser's WASM stacker is missing or stalled)",
-                    _framesSinceClientMetrics);
-                try { ClientStackStalledChanged?.Invoke(true); }
-                catch (Exception ex) { _logger.LogDebug(ex, "ClientStackStalledChanged handler threw"); }
-            }
-        }
 
         // Snapshot handlers + await sequentially. Any handler that
         // throws is logged + swallowed, one bad subscriber can't
@@ -1677,55 +1577,6 @@ public class LiveStackingService {
     /// Capture endpoints push the last exposure here so the ETA
     /// reflects the actual sub length being shot.</summary>
     public double AverageExposureSec { get; set; } = 1.0;
-
-    /// <summary>MetricsOnly mode bridge: the WASM client side
-    /// computes cumulativeSnr on its accumulator and posts it back
-    /// via the existing 'client-stack-progress' WS message. The
-    /// ImageStreamHandler consumes the message and forwards via
-    /// this method so the WS broadcast + ETA work the same as in
-    /// Full mode. Frame-side per-frame snr also flows here so the
-    /// LIVE / PREVIEW UIs render consistent numbers.</summary>
-    public void InjectClientStackMetrics(int frameCount, double frameSnr, double cumulativeSnr) {
-        InjectClientStackMetrics(frameCount, frameSnr, cumulativeSnr,
-            bgeProcessed: null, bgeFallback: null, bgeError: null);
-    }
-
-    /// <summary>LSPP-5: extended overload that also lets the client
-    /// report per-session BGE counters back to the server. When the
-    /// browser runs BGE per-frame (MetricsOnly + bgeEnabled), it
-    /// posts the running counters here so the WS broadcast can
-    /// mirror them to every other connected browser + the LIVE-tab
-    /// status badge stays in sync. Null params on the legacy
-    /// 3-arg overload keep the existing CLST-5 wire format working
-    /// untouched.</summary>
-    public void InjectClientStackMetrics(int frameCount, double frameSnr, double cumulativeSnr,
-                                          int? bgeProcessed, int? bgeFallback, string? bgeError) {
-        // A live client: reset the watchdog and clear any stall latch.
-        _framesSinceClientMetrics = 0;
-        if (ClientStackStalled) {
-            ClientStackStalled = false;
-            _logger.LogInformation("Live stack: client stacker reporting again");
-            try { ClientStackStalledChanged?.Invoke(false); }
-            catch (Exception ex) { _logger.LogDebug(ex, "ClientStackStalledChanged handler threw"); }
-        }
-        if (Mode != StackMode.MetricsOnly) return;
-        // Defensive: only update when the WASM client's frameCount is
-        // not behind ours (it lags by ≤1 due to async dispatch). A
-        // stale message shouldn't rewrite history.
-        if (frameCount < _frameCount - 1) return;
-        if (double.IsFinite(frameSnr) && frameSnr >= 0) LastFrameSnr = frameSnr;
-        if (double.IsFinite(cumulativeSnr) && cumulativeSnr >= 0) {
-            CumulativeSnr = cumulativeSnr;
-            RecordSnrSample(frameCount, cumulativeSnr);
-            RecomputeEta();
-        }
-        if (bgeProcessed.HasValue || bgeFallback.HasValue) {
-            PreProcStatus.InjectClientBgeMetrics(
-                processed: bgeProcessed ?? 0,
-                fallback:  bgeFallback  ?? 0,
-                error: bgeError);
-        }
-    }
 
     private double ComputeFrameSnr(ushort[] data) {
         // BENCH-PERF: delegate to the shared ImageStatistics path, which
@@ -1880,7 +1731,6 @@ public class LiveStackingService {
             Width = _width,
             Height = _height,
             ReferenceStarCount = _referenceStars?.Count ?? 0,
-            Mode = Mode.ToString().ToLowerInvariant(),
             SaveFramesToDisk = SaveFramesToDisk,
             FramesSavedToDisk = _framesSavedToDisk,
             MeridianFlipsHandled = MeridianFlipsHandled,
@@ -1910,11 +1760,6 @@ public class LiveStackingService {
         public int Width { get; set; }
         public int Height { get; set; }
         public int ReferenceStarCount { get; set; }
-        /// <summary>"full" or "metricsonly". UI uses this for the
-        /// compute-location chip + the "Save current stack" button
-        /// gating (only meaningful when a WASM client is actually
-        /// doing the accumulation).</summary>
-        public string Mode { get; set; } = "full";
         /// <summary>Mirrors <see cref="LiveStackingService.SaveFramesToDisk"/>
         /// so the UI checkbox reflects the live state across
         /// browser tabs (it is also persisted to the user profile
