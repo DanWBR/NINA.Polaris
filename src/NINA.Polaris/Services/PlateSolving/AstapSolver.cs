@@ -199,6 +199,8 @@ public class AstapSolver : IPlateSolver {
             }
 
             var result = ParseIniResult(fitsPath);
+            if (!result.Success)
+                result.Error = ExplainHeadless(result.Error, stdout, stderr, SolverPath);
             result.Output = output;
             return result;
         } catch (Exception ex) when (ex is not OperationCanceledException) {
@@ -257,6 +259,31 @@ public class AstapSolver : IPlateSolver {
     }
 
     /// <summary>Public so unit tests can drop in a synthetic .ini next to a fake FITS path.</summary>
+    /// <summary>Turn "ASTAP .ini result file not found" into something the
+    /// operator can act on when the cause is a GUI binary with no display.
+    ///
+    /// ASTAP ships two binaries: the headless <c>astap_cli</c> and the GTK
+    /// <c>astap</c>. On a headless host the GTK one prints "cannot open
+    /// display" and exits — with status 0, having solved nothing. So the exit
+    /// code says success, no .ini appears, and the operator is told a result
+    /// file is missing, which points nowhere.
+    ///
+    /// Reproduced on an Orange Pi 4 Pro, 2026-08-08. It works on a board that
+    /// happens to run a desktop, which is why this hid for so long: the same
+    /// build solves fine there and breaks the moment the desktop is removed.</summary>
+    internal static string ExplainHeadless(
+            string? error, string? stdout, string? stderr, string solverPath) {
+        var output = (stdout ?? "") + "\n" + (stderr ?? "");
+        if (output.IndexOf("cannot open display", StringComparison.OrdinalIgnoreCase) < 0
+                && output.IndexOf("Gtk-WARNING", StringComparison.OrdinalIgnoreCase) < 0) {
+            return error ?? "ASTAP failed";
+        }
+        return "ASTAP could not open a display, so it exited without solving. "
+             + $"'{solverPath}' is the graphical build, which needs a desktop session. "
+             + "Install the headless astap_cli (Polaris prefers it automatically once it "
+             + "is on the host) or set the solver path to it in Settings.";
+    }
+
     public PlateSolveResult ParseIniResult(string fitsPath) {
         var iniPath = Path.ChangeExtension(fitsPath, ".ini");
         if (!File.Exists(iniPath)) return PlateSolveResult.Failed("ASTAP .ini result file not found");
@@ -356,20 +383,39 @@ public class AstapSolver : IPlateSolver {
         return GetDefaultAstapPath();
     }
 
-    private static IEnumerable<string> AstapCandidates() {
-        if (OperatingSystem.IsWindows()) {
-            yield return @"C:\Program Files\astap\astap_cli.exe";
-            yield return @"C:\Program Files\astap\astap.exe";
-            yield return @"C:\Program Files (x86)\astap\astap_cli.exe";
-            yield return @"C:\Program Files (x86)\astap\astap.exe";
-        } else {
-            yield return "/usr/bin/astap_cli";
-            yield return "/usr/local/bin/astap_cli";
-            yield return "/usr/bin/astap";
-            yield return "/usr/local/bin/astap";
-            yield return "/opt/astap/astap_cli";
-            yield return "/opt/astap/astap";
-        }
+    internal static IEnumerable<string> AstapCandidates()
+        => OperatingSystem.IsWindows() ? WindowsCandidates() : LinuxCandidates();
+
+    /// <summary>Search order on Linux: every headless astap_cli BEFORE any
+    /// graphical astap.
+    ///
+    /// This used to interleave locations with binary kinds, so
+    /// /usr/local/bin/astap (the GTK build) beat /opt/astap/astap_cli and
+    /// Polaris ran the graphical binary on a headless board: it printed
+    /// "cannot open display", exited 0 and solved nothing. Our own installer
+    /// puts both of those exactly there, so the wrong one won on every image
+    /// without a desktop. Sorting by BINARY KIND first is the whole fix;
+    /// location only breaks ties within a kind. Orange Pi 4 Pro, 2026-08-08.
+    ///
+    /// Split out from the Windows list so a test can check both orders
+    /// whatever platform it runs on - the first version of that test passed on
+    /// Windows while the Linux order was still wrong.</summary>
+    internal static IEnumerable<string> LinuxCandidates() {
+        yield return "/usr/bin/astap_cli";
+        yield return "/usr/local/bin/astap_cli";
+        yield return "/opt/astap/astap_cli";
+        yield return "/usr/bin/astap";
+        yield return "/usr/local/bin/astap";
+        yield return "/opt/astap/astap";
+    }
+
+    /// <summary>Same rule. A desktop is always there on Windows so the GUI
+    /// build would work, but one ordering rule beats two.</summary>
+    internal static IEnumerable<string> WindowsCandidates() {
+        yield return @"C:\Program Files\astap\astap_cli.exe";
+        yield return @"C:\Program Files (x86)\astap\astap_cli.exe";
+        yield return @"C:\Program Files\astap\astap.exe";
+        yield return @"C:\Program Files (x86)\astap\astap.exe";
     }
 
     private static string? FindOnPath(string fileName) {
@@ -681,6 +727,8 @@ public class AstapSolver : IPlateSolver {
                 }
 
                 var result = ParseIniResult(proxyPath);
+                if (!result.Success)
+                    result.Error = ExplainHeadless(result.Error, stdout, stderr, SolverPath);
                 result.Output = output;
                 if (!result.Success) return result;
 
