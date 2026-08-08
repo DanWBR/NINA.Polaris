@@ -167,6 +167,53 @@ case "$1" in
         # under /media/polaris. Reload so they apply without a reboot; the trigger
         # also mounts any drive already connected. Harmless when udev isn't
         # present (minimal containers).
+        # ---- 5c. get brltty off the USB-serial bridges ----
+        # brltty drives braille displays, several of which use the very same
+        # USB-serial bridges as astronomy focusers, mounts and filter wheels.
+        # Its udev rule claims the CH340 (1a86:7523) among others, and the
+        # daemon takes the port away a tenth of a second after the kernel made
+        # it:
+        #
+        #   ch341 3-1.1.2:1.0: ch341-uart converter detected
+        #   usb 3-1.1.2: ch341-uart converter now attached to ttyUSB0
+        #   usb 3-1.1.2: usbfs: interface 0 claimed by ch341 while brltty sets config #1
+        #   ch341-uart ttyUSB0: ch341-uart converter now disconnected from ttyUSB0
+        #
+        # The operator sees no serial port at all, and concludes the focuser is
+        # dead. Diagnosed 2026-08-08 on an Orange Pi 4 Pro where a Gemini
+        # focuser never appeared while the same rig worked on another board.
+        # brltty arrives as a dependency of the vendor desktop metapackage, so
+        # it is on the image without anyone having chosen it.
+        #
+        # Both halves are needed. Masking the rule stops new udev-triggered
+        # launches, but a daemon already running keeps probing USB through
+        # libusb and grabs the port anyway: verified on the board, with only
+        # the rule masked the port still died; with the service masked too,
+        # /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0 appeared and stayed.
+        #
+        # Braille support is off on this appliance as a result. To restore it:
+        #   rm /etc/udev/rules.d/85-brltty.rules
+        #   systemctl unmask brltty-udev.service brltty.service
+        if [ -f /usr/lib/udev/rules.d/85-brltty.rules ] \
+                || [ -f /lib/udev/rules.d/85-brltty.rules ]; then
+            mkdir -p /etc/udev/rules.d
+            # The same filename under /etc shadows the one in /usr/lib entirely.
+            cat > /etc/udev/rules.d/85-brltty.rules <<'BRLTTY'
+# Installed by Polaris. brltty claims USB-serial bridges that astronomy gear
+# also uses (the CH340, 1a86:7523, above all) and takes the port away right
+# after the kernel creates it. See the polaris postinst for the full story.
+BRLTTY
+            echo "polaris: masked the brltty udev rules (they steal CH340 serial ports)"
+        fi
+        if [ -d /run/systemd/system ]; then
+            for unit in brltty-udev.service brltty.service; do
+                systemctl disable --now "$unit" >/dev/null 2>&1 || true
+                systemctl mask "$unit" >/dev/null 2>&1 || true
+            done
+            # It may already be up from this boot, still holding a port.
+            pkill -x brltty >/dev/null 2>&1 || true
+        fi
+
         if command -v udevadm >/dev/null 2>&1; then
             udevadm control --reload-rules >/dev/null 2>&1 || true
             udevadm trigger >/dev/null 2>&1 || true
