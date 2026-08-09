@@ -24845,6 +24845,7 @@ function ninaApp() {
                 ['--guide-side-width', 'polaris.guideSideWidth', 240, 900],
                 ['--autorun-side-w', 'polaris.autorunSideW', 180, 700],
                 ['--autorun-list-w', 'polaris.autorunListW', 200, 700],
+                ['--plan-preview-w', 'polaris.planPreviewW', 240, 900],
             ];
             for (const [v, k, lo, hi] of defs) {
                 try {
@@ -24867,6 +24868,10 @@ function ninaApp() {
         resetAutorunSide()  { this._panelResizeReset('--autorun-side-w', 'polaris.autorunSideW', 260); },
         startAutorunListResize(ev){ this._panelResize(ev, '--autorun-list-w', 'polaris.autorunListW', 300, 200, 640, 'right'); },
         resetAutorunList()  { this._panelResizeReset('--autorun-list-w', 'polaris.autorunListW', 300); },
+        // PLAN's frame column sits to the RIGHT of its grip, so it grows when
+        // the grip is dragged left: the helper's default direction.
+        startPlanPreviewResize(ev){ this._panelResize(ev, '--plan-preview-w', 'polaris.planPreviewW', 360, 240, 900); },
+        resetPlanPreview() { this._panelResizeReset('--plan-preview-w', 'polaris.planPreviewW', 360); },
 
         // Toggle the floating overlay chrome on the image frames. Called by
         // the pan/zoom tap detector (a clean tap on the bare canvas), so the

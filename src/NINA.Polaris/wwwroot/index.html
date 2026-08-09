@@ -10039,6 +10039,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </template>
                 </div><!-- /.plan-main -->
 
+                <!-- Drag to resize the preview column. -->
+                <div class="col-splitter"
+                     @pointerdown="startPlanPreviewResize($event)"
+                     @dblclick="resetPlanPreview()"
+                     title="Drag to resize · double-click to reset"></div>
+
                 <div class="preview-area plan-preview">
                     <canvas id="planCanvas" class="preview-canvas"></canvas>
                     <div class="pz-toolbar" @pointerdown.stop @dblclick.stop @wheel.stop>

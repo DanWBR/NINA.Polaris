@@ -632,14 +632,18 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .plan-split { display: flex; flex: 1 1 auto; min-height: 0; gap: 12px; }
 .plan-main  { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding-bottom: 12px; }
 .plan-preview {
-    flex: 0 0 clamp(260px, 28%, 520px);
+    /* Resizable via the .col-splitter to its left; persisted. */
+    flex: 0 0 var(--plan-preview-w, 360px);
     min-height: 0;
+    min-width: 0;
     border: 1px solid var(--border, #2a2f3a);
     border-radius: var(--radius);
 }
 /* Below this the editor needs every pixel it can get; the frame is one
    tab away in AUTORUN. */
-@media (max-width: 1100px) { .plan-preview { display: none; } }
+@media (max-width: 1100px) {
+    .plan-preview, .plan-split > .col-splitter { display: none; }
+}
 .plan-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
 .plan-select { flex: 1; min-width: 160px; padding: 6px 8px; }
 .plan-empty { color: var(--text-muted, #9aa4b2); padding: 24px 8px; text-align: center; }
