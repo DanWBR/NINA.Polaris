@@ -35,7 +35,7 @@ public class PlanetaryPathTests {
     [Test]
     public void RecordingsGoUnderTheRig() {
         Assert.That(ImageWriterService.BuildPlanetarySubDir("EdgeHD", "Jupiter"),
-            Is.EqualTo(Sep("EdgeHD/planetary/Jupiter")));
+            Is.EqualTo(Sep("EdgeHD/Jupiter/planetary")));
     }
 
     [Test]
@@ -53,7 +53,7 @@ public class PlanetaryPathTests {
     [Test]
     public void RigAndTargetAreSanitisedLikeEveryOtherFolder() {
         var p = ImageWriterService.BuildPlanetarySubDir("SV503 80ED", "Mars/2026");
-        Assert.That(p, Is.EqualTo(Sep("SV503_80ED/planetary/Mars_2026")));
+        Assert.That(p, Is.EqualTo(Sep("SV503_80ED/Mars_2026/planetary")));
         Assert.That(p.Split(Path.DirectorySeparatorChar).Length, Is.EqualTo(3),
             "a slash in the target must not add a directory level");
     }
@@ -62,7 +62,7 @@ public class PlanetaryPathTests {
     [TestCase(null)]
     public void AMissingRigNameFallsBackToDefault(string? rig) {
         Assert.That(ImageWriterService.BuildPlanetarySubDir(rig!, "Saturn"),
-            Is.EqualTo(Sep("Default/planetary/Saturn")));
+            Is.EqualTo(Sep("Default/Saturn/planetary")));
     }
 
     // ---- reading the rig back off a path ----
@@ -74,9 +74,27 @@ public class PlanetaryPathTests {
     }
 
     [Test]
-    public void TheRigIsReadBackFromANewLayoutPath() {
+    public void TheRigIsReadBackFromACurrentLayoutPath() {
+        var root = Sep("/home/polaris/files");
+        var clip = Path.Combine(root, Sep("EdgeHD/Jupiter/planetary/2026-08-01T22-10-05.ser"));
+        Assert.That(RigOf(root, clip), Is.EqualTo("EdgeHD"));
+    }
+
+    /// <summary>Clips written before the target moved ahead of the frame kind
+    /// are still on disk and nothing rewrites them, so their rig has to read
+    /// back too.</summary>
+    [Test]
+    public void TheRigIsReadBackFromTheEarlierPerRigLayout() {
         var root = Sep("/home/polaris/files");
         var clip = Path.Combine(root, Sep("EdgeHD/planetary/Jupiter/2026-08-01T22-10-05.ser"));
+        Assert.That(RigOf(root, clip), Is.EqualTo("EdgeHD"));
+    }
+
+    /// <summary>A clip recorded without naming a target.</summary>
+    [Test]
+    public void TheRigIsReadBackWithNoTargetFolder() {
+        var root = Sep("/home/polaris/files");
+        var clip = Path.Combine(root, Sep("EdgeHD/planetary/2026-08-01T22-10-05.ser"));
         Assert.That(RigOf(root, clip), Is.EqualTo("EdgeHD"));
     }
 
@@ -98,7 +116,7 @@ public class PlanetaryPathTests {
     public void ARigNamedPlanetaryIsStillDistinguishable() {
         var root = Sep("/home/polaris/files");
         var legacy = Path.Combine(root, Sep("planetary/Mars/a.ser"));
-        var rigged = Path.Combine(root, Sep("planetary/planetary/Mars/a.ser"));
+        var rigged = Path.Combine(root, Sep("planetary/Mars/planetary/a.ser"));
         Assert.That(RigOf(root, legacy), Is.Empty);
         Assert.That(RigOf(root, rigged), Is.EqualTo("planetary"));
     }

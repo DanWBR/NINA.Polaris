@@ -59,7 +59,7 @@ themselves. It's a one-time, free process.
   camera's SD card. You can leave the card removed if you want.
 - **Image format**: leave the camera set to **RAW + JPEG**.
   Polaris uses the JPEG for the on-screen preview and saves the
-  CR2 (or CR3) verbatim under `{rig}/lights/{target}/{filter}/{session}/`
+  CR2 (or CR3) verbatim under `{rig}/{target}/lights/{session}/`
   alongside what dedicated astronomy cameras produce.
 - **ISO**: surfaced as a dropdown in the Camera card (instead of
   the gain field that astronomy cameras use). Common values from

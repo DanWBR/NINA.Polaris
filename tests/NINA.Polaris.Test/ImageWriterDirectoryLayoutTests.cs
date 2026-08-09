@@ -45,13 +45,16 @@ public class ImageWriterDirectoryLayoutTests {
     private static DateTime Session(int y, int mo, int d) => new(y, mo, d);
 
     [Test]
-    public void Light_GoesUnder_rig_lights_target_filter_session() {
+    public void Light_GoesUnder_rig_target_lights_session() {
         var img = Frame("Ha", 300, 100, "M31", "LIGHT",
             new DateTime(2026, 5, 21, 22, 30, 0, DateTimeKind.Local));
         var sub = ImageWriterService.BuildSubDir("LIGHT", img, EmptyProfile(),
             "Backyard 130mm APO", Session(2026, 5, 21));
         Assert.That(sub, Is.EqualTo(Path.Combine("Backyard_130mm_APO",
-            "lights", "M31", "Ha", "2026-05-21")));
+            "M31", "lights", "2026-05-21")),
+            "target before kind, so one object's whole night is one folder; and "
+            + "no filter level, because the filename and the FITS header both "
+            + "carry the filter already");
     }
 
     [Test]
@@ -117,15 +120,14 @@ public class ImageWriterDirectoryLayoutTests {
     }
 
     [Test]
-    public void Aux_GoesUnder_rig_aux_target_filter_session() {
-        // Auxiliary-camera frames live in their own aux/ tree (parallel to
-        // lights/) so they never mix with the main camera's lights, even on
-        // the same sky target.
+    public void Aux_GoesUnder_rig_target_aux_session() {
+        // Auxiliary-camera frames sit beside the main camera's lights under the
+        // same target, in their own aux/ folder so the two never mix.
         var img = Frame("L", 120, 0, "M31", "AUX",
             new DateTime(2026, 5, 21, 22, 30, 0, DateTimeKind.Local));
         var sub = ImageWriterService.BuildSubDir("AUX", img, EmptyProfile(),
             "MyRig", Session(2026, 5, 21));
-        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "aux", "M31", "L", "2026-05-21")));
+        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "M31", "aux", "2026-05-21")));
     }
 
     [Test]

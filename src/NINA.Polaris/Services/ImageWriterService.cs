@@ -41,8 +41,11 @@ namespace NINA.Polaris.Services;
 ///
 ///   ImageOutputDir/
 ///     {rig}/                                     ← active equipment-profile name
-///       lights/{target}/{filter}/{session}/      ← session = local night (noon-to-noon)
-///         light_*.fits
+///       {target}/                                ← everything shot on one object
+///         lights/{session}/light_*.fits          ← session = local night (noon-to-noon)
+///         aux/{session}/...                      ← second camera, same object
+///         stacked/{session}/...                  ← user-requested integrations
+///         planetary/...                          ← SER clips + their stacks
 ///       calibration/                             ← rig-level, reusable across sessions
 ///         dark/{exposure}s_g{gain}/dark_*.fits
 ///         bias/g{gain}/bias_*.fits
@@ -186,9 +189,9 @@ public class ImageWriterService {
             // active rig and the astronomical session date.
             var rigName = _profile.ActiveEquipmentProfile?.Name ?? "Default";
             var sessionDate = SessionDateForLocal(imageData.MetaData.CreationTime.ToLocalTime());
-            // User-requested stacked saves go into their own "stacked" tree
-            // ({rig}/stacked/{target}/{filter}/{session}) so the integrated
-            // master sits apart from the raw lights/calibration frames.
+            // User-requested stacked saves go into their own "stacked" folder
+            // ({rig}/{target}/stacked/{session}) so the integrated master sits
+            // beside that target's subs without being mixed in with them.
             var subDir = stacked
                 ? BuildStackedSubDir(imageData, rigName, sessionDate)
                 : BuildSubDir(imageType, imageData, profile, rigName, sessionDate);
@@ -534,11 +537,26 @@ public class ImageWriterService {
     /// <summary>
     /// Pick the structured subdirectory under ImageOutputDir for a frame
     /// based on the active rig + IMAGETYP. Lights live under
-    /// {rig}/lights/{target}/{filter}/{session}; calibration frames are
+    /// {rig}/{target}/lights/{session}; calibration frames are
     /// grouped by the keys that matter for matching them to lights later
     /// (exposure + gain for darks, gain for bias, filter + gain for
     /// flats). Calibration is rig-level (no session bucket) so masters
     /// can be reused across nights.
+    ///
+    /// <para>The TARGET comes before the kind of frame, so everything shot on
+    /// one object sits together: {rig}/IC_4592/lights, /aux, /stacked. The
+    /// other order scattered one night's work across sibling trees.</para>
+    ///
+    /// <para>Lights are NOT foldered by filter. The filename carries the
+    /// filter (the default pattern has {filter} in it) and so does the FITS
+    /// header, which is where STUDIO reads it from, so the directory level
+    /// only added depth to click through. Flats keep theirs: there it is not
+    /// a label but the key a master is matched on.</para>
+    ///
+    /// <para>Frames already on disk are not moved. An existing install keeps
+    /// writing new frames under the new shape and the old folders stay where
+    /// they are; STUDIO indexes both, since it reads FITS headers rather than
+    /// path segments.</para>
     /// </summary>
     public static string BuildSubDir(string imageType, IImageData img, UserProfile profile,
                                      string rigName, DateTime sessionDate) {
@@ -560,21 +578,23 @@ public class ImageWriterService {
                             FormattableString.Invariant($"{filter}_g{gain}")),
             // PREVIEW-tab snaps live in their own tree so they don't
             // mix with the science lights from a sequence. Folder is
-            // {rig}/snaps/{filter}_{session-date}/{snap_NNNN}.fits.
+            // {rig}/snaps/{filter}_{session-date}/{snap_NNNN}.fits. No target
+            // to lead with (a snap is a test shot), and the filter is part of
+            // the folder NAME here rather than a level of its own.
             "SNAP"      => Path.Combine("snaps",
                             FormattableString.Invariant(
                                 $"{filter}_{sessionDate:yyyy-MM-dd}")),
-            // Auxiliary (second) camera frames live in their own aux/ tree so
-            // they never mix with the main camera's lights, even when both are
-            // on the same sky target. Same {target}/{filter}/{session} shape.
-            "AUX"       => Path.Combine("aux",
+            // Auxiliary (second) camera frames sit beside the main camera's
+            // lights under the same target, in their own aux/ folder so the
+            // two never mix.
+            "AUX"       => Path.Combine(
                             SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name),
-                            filter,
+                            "aux",
                             sessionDate.ToString("yyyy-MM-dd",
                                 System.Globalization.CultureInfo.InvariantCulture)),
-            _           => Path.Combine("lights",
+            _           => Path.Combine(
                             SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name),
-                            filter,
+                            "lights",
                             sessionDate.ToString("yyyy-MM-dd",
                                 System.Globalization.CultureInfo.InvariantCulture))
         };
@@ -582,7 +602,8 @@ public class ImageWriterService {
     }
 
     /// <summary>Subdirectory for planetary recordings and their stacks:
-    /// <c>{rig}/planetary/{target}</c>.
+    /// <c>{rig}/{target}/planetary</c>, or <c>{rig}/planetary</c> when the clip
+    /// was shot without naming a target.
     ///
     /// <para>These used to be written to <c>planetary/</c> at the capture root,
     /// outside the per-rig tree every other output uses. With two rigs the
@@ -597,19 +618,19 @@ public class ImageWriterService {
         var rig = SanitizeFolder(string.IsNullOrEmpty(rigName) ? "Default" : rigName);
         return string.IsNullOrWhiteSpace(target)
             ? Path.Combine(rig, "planetary")
-            : Path.Combine(rig, "planetary", SanitizeFolder(target));
+            : Path.Combine(rig, SanitizeFolder(target), "planetary");
     }
 
     /// <summary>Subdirectory for a user-requested stacked master:
-    /// {rig}/stacked/{target}/{filter}/{session}. Kept separate from the
-    /// lights/calibration trees so the integrated result is easy to find and
-    /// doesn't get mixed in with the raw subs.</summary>
+    /// {rig}/{target}/stacked/{session}, beside that target's lights so the
+    /// integrated result is where its subs are, without being mixed in with
+    /// them. No filter level, for the same reason lights have none: the
+    /// filename and the header both carry it.</summary>
     public static string BuildStackedSubDir(IImageData img, string rigName, DateTime sessionDate) {
         var m = img.MetaData;
         var rig    = SanitizeFolder(string.IsNullOrEmpty(rigName) ? "Default" : rigName);
         var target = SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name);
-        var filter = SanitizeFolder(string.IsNullOrEmpty(m.Exposure.Filter) ? "L" : m.Exposure.Filter);
-        return Path.Combine(rig, "stacked", target, filter,
+        return Path.Combine(rig, target, "stacked",
             sessionDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
     }
 

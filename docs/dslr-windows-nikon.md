@@ -85,7 +85,7 @@ need to change:
 In Polaris **Equipment** → Camera card, pick the **Nikon (MAID
 SDK)** entry (or whichever you implemented) → **Detect** → pick
 the body → **Connect**. Captures land in
-`{rig}/lights/{target}/{filter}/{session}/IMG_*.nef` exactly
+`{rig}/{target}/lights/{session}/IMG_*.nef` exactly
 like Canon ones do as CR2.
 
 ## Tips for tethered Nikon sessions

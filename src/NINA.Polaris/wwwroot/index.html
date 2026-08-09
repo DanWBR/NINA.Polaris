@@ -1502,7 +1502,7 @@
                         <button class="btn" @click="openImageViewer()" :disabled="!selectedCamera" title="Full-resolution zoom/pan viewer">⛶ View</button>
                         <!-- Per-frame disk persistence. When on, each raw
                              frame fed to the live stacker is also saved
-                             into lights/{target}/{filter}/{date}/ as a
+                             into {target}/lights/{date}/ as a
                              normal LIGHT (same layout a sequence capture
                              would use). Off by default — EAA viewers
                              usually only care about the integrated
@@ -14263,7 +14263,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                            style="color:var(--accent);text-decoration:underline">Studio tab</a>:
                         navigate to the folder, then click <em>Set as Studio root</em>.
                         Files are organised under
-                        <code>{rig}/lights · calibration · calibrated · integrated · processed/...</code>
+                        <code>{rig}/{target}/lights · stacked · aux/... and {rig}/calibration/...</code>
                         automatically.
                     </p>
                     <label style="margin-top:10px">Filename pattern

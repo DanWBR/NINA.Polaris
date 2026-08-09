@@ -133,7 +133,7 @@ need to change:
 In Polaris **Equipment** → Camera card, pick the **Sony (Camera
 Remote SDK)** entry → **Detect** → pick the body → **Connect**.
 Captures land in
-`{rig}/lights/{target}/{filter}/{session}/IMG_*.arw` exactly
+`{rig}/{target}/lights/{session}/IMG_*.arw` exactly
 like Canon ones do as CR2.
 
 ## Tips for tethered Sony sessions

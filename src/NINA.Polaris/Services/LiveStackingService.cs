@@ -148,7 +148,7 @@ public class LiveStackingService {
     /// <summary>When true, every raw frame received via
     /// <see cref="AddFrameAsync"/> is also persisted to disk via
     /// <see cref="ImageWriterService.SaveImage"/> with imageType
-    /// "LIGHT", landing in {rig}/lights/{target}/{filter}/{date}
+    /// "LIGHT", landing in {rig}/{target}/lights/{date}
     /// like a regular sequence capture. Default ON — most users
     /// want both the integrated preview AND an archive of the raw
     /// frames so they can re-stack offline in Siril / PixInsight

@@ -286,7 +286,7 @@ Usually one of:
 **Rescan** button didn't pick up files. Causes:
 
 - `ImageOutputDir` is wrong, check FILES tab Studio root indicator;
-  re-set it from the actual folder containing `{rig}/lights/...`
+  re-set it from the actual folder containing `{rig}/{target}/lights/...`
 - New files were saved while the rescan was running, re-click Rescan
 
 ## Live preview canvas is black

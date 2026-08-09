@@ -170,22 +170,30 @@ public static class VideoEndpoints {
         });
     }
 
-    /// <summary>The rig a recording sits under, read back from its path:
-    /// {ImageOutputDir}/{rig}/planetary/... . Returns "" for a clip in the
-    /// legacy {ImageOutputDir}/planetary tree, which predates per-rig folders
-    /// and genuinely does not know which rig shot it.</summary>
+    /// <summary>The rig a recording sits under, read back from its path.
+    ///
+    /// <para>Three shapes are on disk at once and all of them have to read
+    /// back, because nothing rewrites clips that are already written:</para>
+    /// <list type="bullet">
+    ///   <item>current: <c>{rig}/{target}/planetary/x.ser</c></item>
+    ///   <item>no target: <c>{rig}/planetary/x.ser</c>, and the same shape as
+    ///         the previous layout's <c>{rig}/planetary/{target}/x.ser</c></item>
+    ///   <item>legacy, pre per-rig folders: <c>planetary/{target}/x.ser</c>,
+    ///         which genuinely does not know which rig shot it</item>
+    /// </list>
+    ///
+    /// <para>So: look for the "planetary" segment anywhere FROM INDEX 1. Found
+    /// means segment 0 is the rig. Not found leaves only the legacy tree, where
+    /// segment 0 is the literal folder. Starting the search at 1 rather than 0
+    /// is what keeps a rig actually named "planetary" from reading as a legacy
+    /// clip.</para></summary>
     private static string RigOfRecording(string outDir, string filePath) {
         try {
             var rel = Path.GetRelativePath(outDir, filePath);
             var parts = rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            // The SECOND segment is what tells the two layouts apart, and it is
-            // the only thing that does. New: {rig}/planetary/{target}/x.ser.
-            // Legacy: planetary/{target}/x.ser, where segment 1 is the target.
-            // Testing segment 0 instead would misread a rig that happens to be
-            // named "planetary" as a legacy clip.
-            if (parts.Length >= 3
-                && parts[1].Equals("planetary", StringComparison.OrdinalIgnoreCase)) {
-                return parts[0];
+            for (var i = 1; i < parts.Length - 1; i++) {
+                if (parts[i].Equals("planetary", StringComparison.OrdinalIgnoreCase))
+                    return parts[0];
             }
         } catch { /* a path outside the capture root has no rig to report */ }
         return "";
