@@ -143,3 +143,41 @@
     .tour-tip { max-width: calc(100vw - 24px); }
     .tour-offer { right: 10px; bottom: 10px; left: 10px; width: auto; }
 }
+
+/* Corner alert: the same card as the tour's first-run offer, in warning
+   colours. Deliberately the same shape, because it does the same job of
+   saying something that can wait but must not be missed. Sits just under
+   the tour's z-index so a tour in progress is never covered by it. */
+.corner-alert {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 870;
+    width: 300px;
+    padding: 14px 16px;
+    border: 1px solid var(--warning, #e0a82e);
+    border-radius: 10px;
+    background: var(--bg-secondary, #141a26);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    color: var(--text-primary, #e6ecf5);
+}
+.corner-alert-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--warning, #e0a82e);
+}
+.corner-alert-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary, #b6c0cf);
+}
+.corner-alert-btns { display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; }
+
+@media (max-width: 720px) {
+    .corner-alert { right: 10px; bottom: 10px; left: 10px; width: auto; }
+}
+

@@ -15761,6 +15761,38 @@ function ninaApp() {
         editorSetColor(key, val) { this._editorPatch('color', key, val); },
         editorSetEffects(key, val) { this._editorPatch('effects', key, val); },
 
+        // Corner card for a degraded guiding spell. Same shape as the tour's
+        // first-run offer: a session left running overnight has nobody watching
+        // the status bar, so the state has to still be there in the morning
+        // rather than having scrolled past as a toast.
+        //
+        // Dismissal is per SPELL, keyed on when it started: closing the card
+        // does not mute the next one, which would turn a one-tap dismissal into
+        // a silent night.
+        guideAlertDismissedSince: null,
+
+        guideAlertVisible() {
+            const h = this.guider?.health;
+            if (!h || !h.degraded || !h.degradedSinceUtc) return false;
+            return this.guideAlertDismissedSince !== h.degradedSinceUtc;
+        },
+
+        guideAlertRatio() {
+            const h = this.guider?.health;
+            if (!h || !(h.baselineRms > 0)) return null;
+            return (h.currentRms / h.baselineRms).toFixed(1);
+        },
+
+        guideAlertMinutes() {
+            const since = this.guider?.health?.degradedSinceUtc;
+            if (!since) return 0;
+            return Math.max(1, Math.round((Date.now() - new Date(since)) / 60000));
+        },
+
+        guideAlertDismiss() {
+            this.guideAlertDismissedSince = this.guider?.health?.degradedSinceUtc ?? null;
+        },
+
         // ── SASPRO-D: masks ────────────────────────────────────────────
         //
         // A mask says WHERE the sliders above land. Three kinds, matching

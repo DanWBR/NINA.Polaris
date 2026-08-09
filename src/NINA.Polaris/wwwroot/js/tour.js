@@ -164,18 +164,6 @@
             },
             {
                 before: bars,
-                target: '[data-tour="statusbar-indi"]', placement: 'bottom', skipIfMissing: true,
-                title: 'INDI status',
-                body: 'Whether the INDI server is connected. Green = connected, grey = off. Click it to jump to the Equipment tab.'
-            },
-            {
-                before: bars,
-                target: '[data-tour="statusbar-alpaca"]', placement: 'bottom', skipIfMissing: true,
-                title: 'Alpaca status',
-                body: 'ASCOM Alpaca devices discovered on the network, with a count. Click to open Equipment on the Alpaca source.'
-            },
-            {
-                before: bars,
                 target: '[data-tour="statusbar-phd2"]', placement: 'bottom', skipIfMissing: true,
                 title: 'Guiding status',
                 body: "The guider's connection + state (idle, guiding, lost…). Click to open the Guide tab."
@@ -226,7 +214,7 @@
                 before: bars,
                 target: '.activity-net', placement: 'top', skipIfMissing: true,
                 title: 'Network traffic',
-                body: 'Live client↔server data rate: ↓ received and ↑ sent, so you can see frames and previews flowing.'
+                body: 'Two pairs of rates. The first is this browser\'s link to the host (↓ received, ↑ sent), so you can watch frames and previews flowing. The second, when the host reports it, is the host\'s own internet traffic: that is what tells a slow tablet apart from a slow site connection.'
             },
             {
                 before: bars,

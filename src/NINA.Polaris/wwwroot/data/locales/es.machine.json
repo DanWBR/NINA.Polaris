@@ -3613,5 +3613,9 @@
   "Guiding rough": "Guiado irregular",
   "Guiding has been {x}x this session's usual error ({cur}\" vs {base}\") for {n} minutes. Nothing has been restarted: this is a heads-up so you can decide.": "El guiado está {x}x peor que lo normal de esta sesión ({cur}\" frente a {base}\") desde hace {n} minutos. No se reinició nada: es solo un aviso para que decidas.",
   "Guiding restarts exhausted": "Reinicios de guiado agotados",
-  "Guiding ran away again after {n} automatic restarts this session. No more will be attempted: past this point the settle time costs more frames than the weather does.": "El guiado volvió a descontrolarse tras {n} reinicios automáticos en esta sesión. No se intentarán más: a partir de aquí el tiempo de estabilización cuesta más fotogramas que el mal tiempo."
+  "Guiding ran away again after {n} automatic restarts this session. No more will be attempted: past this point the settle time costs more frames than the weather does.": "El guiado volvió a descontrolarse tras {n} reinicios automáticos en esta sesión. No se intentarán más: a partir de aquí el tiempo de estabilización cuesta más fotogramas que el mal tiempo.",
+  "Guiding is struggling": "El guiado está sufriendo",
+  "Running {x}x this session's usual error for {n} min.": "Va {x}x peor que el error habitual de esta sesión desde hace {n} min.",
+  "Frames are still being saved and marked, so grading can drop them later. Nothing has been stopped.": "Los fotogramas se siguen guardando y marcando, así la evaluación puede descartarlos después. No se detuvo nada.",
+  "Show guiding": "Ver guiado"
 }

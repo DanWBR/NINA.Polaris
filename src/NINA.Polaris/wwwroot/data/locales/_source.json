@@ -3471,5 +3471,9 @@
   "Guiding rough": "",
   "Guiding has been {x}x this session's usual error ({cur}\" vs {base}\") for {n} minutes. Nothing has been restarted: this is a heads-up so you can decide.": "",
   "Guiding restarts exhausted": "",
-  "Guiding ran away again after {n} automatic restarts this session. No more will be attempted: past this point the settle time costs more frames than the weather does.": ""
+  "Guiding ran away again after {n} automatic restarts this session. No more will be attempted: past this point the settle time costs more frames than the weather does.": "",
+  "Guiding is struggling": "",
+  "Running {x}x this session's usual error for {n} min.": "",
+  "Frames are still being saved and marked, so grading can drop them later. Nothing has been stopped.": "",
+  "Show guiding": ""
 }

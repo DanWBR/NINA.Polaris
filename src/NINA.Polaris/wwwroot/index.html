@@ -18794,6 +18794,27 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     </div>
 
     <!-- Toast notifications -->
+    <!-- Guiding has been worse than this session's normal for a while. Corner
+         card rather than a toast: an unattended run is discovered hours later,
+         and a toast would be long gone. Dismissal is per spell, so closing it
+         does not mute the rest of the night. -->
+    <div class="corner-alert" x-show="guideAlertVisible()" x-cloak>
+        <div class="corner-alert-title" x-text="$t('Guiding is struggling')"></div>
+        <div class="corner-alert-body">
+            <span x-text="$t('Running {x}x this session\'s usual error for {n} min.',
+                             { x: guideAlertRatio() ?? '?', n: guideAlertMinutes() })"></span>
+            <span x-text="$t('Frames are still being saved and marked, so grading can '
+                           + 'drop them later. Nothing has been stopped.')"></span>
+        </div>
+        <div class="corner-alert-btns">
+            <button class="tour-btn" type="button" @click="guideAlertDismiss()"
+                    x-text="$t('Dismiss')"></button>
+            <button class="tour-btn tour-btn-primary" type="button"
+                    @click="tab = 'guide'; guideAlertDismiss()"
+                    x-text="$t('Show guiding')"></button>
+        </div>
+    </div>
+
     <div class="toast-container">
         <template x-for="t in toasts" :key="t.id">
             <div class="toast" :class="'toast-' + t.type" @click="dismissToast(t.id)" x-transition>
