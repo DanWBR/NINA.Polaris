@@ -9108,7 +9108,31 @@ function ninaApp() {
             for (let i = 0; i < NB; i++) if (bins[i] > peak) peak = bins[i];
             const maxVal = 65535;
             this.histo.bins = bins;
-            this.histo.color = false; this.histo.binsR = null;   // server sends a single (luminance) histogram
+            // Three curves whenever the server sent per-channel bins, which is
+            // what an OSC stack should show. The server used to send only the
+            // luminance array, so this panel drew ONE white line and the only
+            // way to see RGB was to click Auto -- which recomputed locally off
+            // the 8-bit JPEG -- until the next status tick overwrote it again.
+            const cr = ls.colorHistogramR, cg = ls.colorHistogramG, cb = ls.colorHistogramB;
+            const haveRgb = Array.isArray(cr) && cr.length === NB
+                         && Array.isArray(cg) && cg.length === NB
+                         && Array.isArray(cb) && cb.length === NB;
+            if (haveRgb) {
+                const bR = Float64Array.from(cr);
+                const bG = Float64Array.from(cg);
+                const bB = Float64Array.from(cb);
+                let pk = 1;
+                for (let i = 0; i < NB; i++) {
+                    if (bR[i] > pk) pk = bR[i];
+                    if (bG[i] > pk) pk = bG[i];
+                    if (bB[i] > pk) pk = bB[i];
+                }
+                this.histo.binsR = bR; this.histo.binsG = bG; this.histo.binsB = bB;
+                this.histo.peakRGB = Math.log1p(pk); this.histo.color = true;
+            } else {
+                // Older host, or a mono stack: single luminance curve.
+                this.histo.color = false; this.histo.binsR = null;
+            }
             this.histo.peak = Math.log1p(peak);
             this.histo.count = bins.reduce((a, b) => a + b, 0);
             this.histo.min = (ls.colorHistMin || 0) | 0;

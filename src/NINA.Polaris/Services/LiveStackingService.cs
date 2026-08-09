@@ -586,18 +586,40 @@ public class LiveStackingService {
     public double ColorHistMean { get; private set; }
     public double ColorHistStd { get; private set; }
 
+    // Per-channel bins on the same 0..65535 / 256-bucket scale. The panel wants
+    // three curves for an OSC stack; sending only the luminance above meant the
+    // LIVE histogram drew ONE white line, and the only way to see RGB was to
+    // click Auto — which recomputed locally from the 8-bit JPEG — until the next
+    // status tick overwrote it with the luminance again (field, 2026-08-09).
+    public int[]? ColorHistogramR { get; private set; }
+    public int[]? ColorHistogramG { get; private set; }
+    public int[]? ColorHistogramB { get; private set; }
+
     /// <summary>Build the 256-bin 16-bit luminance histogram + min/max/mean/std
     /// of a planar RGB stack (subsampled on big sensors). Cheap; runs once per
     /// integrated colour frame, off the relay's broadcast.</summary>
     private void ComputeColorHistogram(ushort[] rgb, int w, int h) {
         int plane = w * h;
-        if (rgb.Length < plane * 3 || plane == 0) { ColorHistogram = null; return; }
+        if (rgb.Length < plane * 3 || plane == 0) {
+            ColorHistogram = null;
+            ColorHistogramR = ColorHistogramG = ColorHistogramB = null;
+            return;
+        }
         const int NB = 256;
         var bins = new int[NB];
+        var binsR = new int[NB];
+        var binsG = new int[NB];
+        var binsB = new int[NB];
         int mn = 65535, mx = 0; double sum = 0, sumSq = 0; long cnt = 0;
         int step = Math.Max(1, plane / 300_000);
         for (int i = 0; i < plane; i += step) {
-            int lum = (int)(rgb[i] * 0.299 + rgb[plane + i] * 0.587 + rgb[2 * plane + i] * 0.114);
+            int r = rgb[i], g = rgb[plane + i], b = rgb[2 * plane + i];
+            binsR[r * (NB - 1) / 65535]++;
+            binsG[g * (NB - 1) / 65535]++;
+            binsB[b * (NB - 1) / 65535]++;
+            // Stats stay on luminance: they feed the MAX/AVG/MIN/STD readout,
+            // which is a single number per label, not three.
+            int lum = (int)(r * 0.299 + g * 0.587 + b * 0.114);
             if (lum < 0) lum = 0; else if (lum > 65535) lum = 65535;
             if (lum < mn) mn = lum;
             if (lum > mx) mx = lum;
@@ -606,6 +628,9 @@ public class LiveStackingService {
         }
         var mean = cnt > 0 ? sum / cnt : 0;
         ColorHistogram = bins;
+        ColorHistogramR = binsR;
+        ColorHistogramG = binsG;
+        ColorHistogramB = binsB;
         ColorHistMin = cnt > 0 ? mn : 0;
         ColorHistMax = mx;
         ColorHistMean = mean;

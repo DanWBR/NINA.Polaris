@@ -156,6 +156,67 @@ public class LiveStackingServiceTests {
     }
 
     /// <summary>
+    /// An OSC stack has to publish PER-CHANNEL histograms, not just luminance.
+    ///
+    /// The server used to compute only a 16-bit luminance histogram and the
+    /// LIVE panel drew a single white line for a colour stack. Clicking Auto
+    /// made three RGB curves appear, because that recomputed locally from the
+    /// 8-bit JPEG, and the next WS status tick put the white line back (field,
+    /// 2026-08-09). The frame here is RGGB with R bright, G mid and B dark, so
+    /// the three histograms must land in that order.
+    /// </summary>
+    [Test]
+    public async Task ColourStack_PublishesPerChannelHistograms() {
+        var svc = MakeService();
+        svc.ColorStacking = true;
+        svc.Start();
+
+        await svc.AddFrameAsync(MakeChannelRampFrame());
+
+        Assert.That(svc.ColorActive, Is.True, "precondition: colour session");
+        Assert.That(svc.ColorHistogramR, Is.Not.Null, "R bins missing");
+        Assert.That(svc.ColorHistogramG, Is.Not.Null, "G bins missing");
+        Assert.That(svc.ColorHistogramB, Is.Not.Null, "B bins missing");
+        Assert.That(svc.ColorHistogram, Is.Not.Null, "luminance bins still feed the stats readout");
+
+        double mr = MeanBin(svc.ColorHistogramR!);
+        double mg = MeanBin(svc.ColorHistogramG!);
+        double mb = MeanBin(svc.ColorHistogramB!);
+        Assert.That(mr, Is.GreaterThan(mg),
+            $"R should sit above G (R={mr:F1} G={mg:F1}); identical channels mean "
+            + "the panel would draw three curves on top of each other");
+        Assert.That(mg, Is.GreaterThan(mb),
+            $"G should sit above B (G={mg:F1} B={mb:F1})");
+    }
+
+    /// <summary>Centre of mass of a 256-bin histogram, in bin units.</summary>
+    private static double MeanBin(int[] bins) {
+        double n = 0, s = 0;
+        for (int i = 0; i < bins.Length; i++) { n += bins[i]; s += (double)i * bins[i]; }
+        return n > 0 ? s / n : 0;
+    }
+
+    /// <summary>RGGB frame with clearly separated channel levels, so a
+    /// per-channel histogram is distinguishable from a luminance one.</summary>
+    private static BaseImageData MakeChannelRampFrame(int w = 64, int h = 64) {
+        var props = new ImageProperties {
+            Width = w, Height = h, BitDepth = 16,
+            IsBayered = true, BayerPattern = BayerPatternEnum.RGGB,
+        };
+        var buf = new ushort[w * h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                bool evenRow = (y & 1) == 0, evenCol = (x & 1) == 0;
+                // RGGB: R G / G B
+                ushort v = evenRow ? (evenCol ? (ushort)50000 : (ushort)20000)
+                                   : (evenCol ? (ushort)20000 : (ushort)3000);
+                buf[y * w + x] = v;
+            }
+        }
+        return new BaseImageData(buf, props);
+    }
+
+    /// <summary>
     /// The counterweight to the test above, and the reason auto keys on
     /// POSITIVE evidence. A frame with no CFA and a backend that cannot say
     /// what the sensor is (IsColorSensor = null, the normal INDI state before

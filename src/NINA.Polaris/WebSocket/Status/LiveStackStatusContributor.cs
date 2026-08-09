@@ -108,6 +108,12 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
                 // colour-stacking. Lets the LIVE histogram panel show
                 // real 16-bit min/max/mean/std + bars.
                 colorHistogram = liveStack.ColorActive ? liveStack.ColorHistogram : null,
+                // Per-channel bins on the same scale, so the panel can draw the
+                // three RGB curves an OSC stack should show. Without these it
+                // fell back to the luminance array and drew one white line.
+                colorHistogramR = liveStack.ColorActive ? liveStack.ColorHistogramR : null,
+                colorHistogramG = liveStack.ColorActive ? liveStack.ColorHistogramG : null,
+                colorHistogramB = liveStack.ColorActive ? liveStack.ColorHistogramB : null,
                 colorHistMin = liveStack.ColorHistMin,
                 colorHistMax = liveStack.ColorHistMax,
                 colorHistMean = liveStack.ColorHistMean,
