@@ -38,6 +38,7 @@ public sealed class GuideRunawayGuard : BackgroundService {
 
     private readonly ActiveGuiderProvider _guiders;
     private readonly ProfileService _profiles;
+    private readonly NotificationService? _notify;
     private readonly ILogger<GuideRunawayGuard> _logger;
 
     /// <summary>Frames kept per axis. Long enough that a single gust cannot
@@ -76,15 +77,28 @@ public sealed class GuideRunawayGuard : BackgroundService {
 
     // ---- the warning, read by the status payload ----
     public bool Degraded => _degradation.Degraded;
+
+    /// <summary>Frames written while degraded. Counted here rather than
+    /// derived later because only the writer knows a frame was actually kept:
+    /// the elapsed minutes do not say how many subs fell inside them.</summary>
+    public int DegradedFrames { get; private set; }
+
+    /// <summary>Total time spent degraded this session.</summary>
+    public TimeSpan DegradedTotal { get; private set; }
+
+    /// <summary>Called by the image writer for each frame it stamps.</summary>
+    public void NoteDegradedFrame() => DegradedFrames++;
     public DateTime? DegradedSinceUtc => _degradation.DegradedSinceUtc;
     public double? BaselineRmsArcsec => _degradation.BaselineArcsec;
     public double CurrentRmsArcsec => _degradation.CurrentArcsec;
 
     public GuideRunawayGuard(ActiveGuiderProvider guiders, ProfileService profiles,
-                             ILogger<GuideRunawayGuard> logger) {
+                             ILogger<GuideRunawayGuard> logger,
+                             NotificationService? notify = null) {
         _guiders = guiders;
         _profiles = profiles;
         _logger = logger;
+        _notify = notify;
     }
 
     private bool Enabled =>
@@ -143,7 +157,13 @@ public sealed class GuideRunawayGuard : BackgroundService {
             // Feed the warning from the same window, so the two never disagree
             // about what the current error is.
             var wasDegraded = _degradation.Degraded;
+            var wasSince = _degradation.DegradedSinceUtc;
             _degradation.Push(verdict.RmsArcsec, DateTime.UtcNow);
+            if (wasDegraded && !_degradation.Degraded && wasSince != null) {
+                // Bank the spell as it ends, so the session summary can report
+                // total time rather than only whether it is bad right now.
+                DegradedTotal += DateTime.UtcNow - wasSince.Value;
+            }
             if (_degradation.Degraded && !wasDegraded) {
                 _logger.LogWarning(
                     "Guiding has been {Factor:F1}x worse than this session's normal "
@@ -152,6 +172,11 @@ public sealed class GuideRunawayGuard : BackgroundService {
                     _degradation.BaselineArcsec > 0
                         ? _degradation.CurrentArcsec / _degradation.BaselineArcsec.Value : 0,
                     _degradation.CurrentArcsec, _degradation.BaselineArcsec ?? 0);
+                _notify?.Push("warn",
+                    $"Guiding is running "
+                    + $"{(_degradation.BaselineArcsec > 0 ? _degradation.CurrentArcsec / _degradation.BaselineArcsec.Value : 0):F1}x "
+                    + $"worse than this session's normal. Frames are still being "
+                    + $"saved and marked, nothing has been stopped.", 8000);
             }
             LastRmsArcsec = verdict.RmsArcsec;
             LastAlternation = verdict.AlternationRate;
@@ -174,6 +199,44 @@ public sealed class GuideRunawayGuard : BackgroundService {
         }
 
         _ = RestartAsync(verdict);
+    }
+
+    /// <summary>One line on how guiding went, for the end of an unattended
+    /// run. Null when there is nothing to report, so a clean night says
+    /// nothing rather than saying "no problems", which is noise.
+    ///
+    /// <para>Frame count and elapsed time are both here on purpose: twenty
+    /// minutes rough during a gap between targets costs nothing, and the same
+    /// twenty minutes across eight subs costs eight subs.</para></summary>
+    public string? SummariseSession() {
+        var total = DegradedTotal;
+        if (_degradation.Degraded && _degradation.DegradedSinceUtc is { } since)
+            total += DateTime.UtcNow - since;
+
+        if (total <= TimeSpan.Zero && RestartsThisSession == 0) return null;
+
+        var parts = new List<string>();
+        if (total > TimeSpan.Zero) {
+            parts.Add($"guiding was rough for {total.TotalMinutes:F0} min");
+            if (DegradedFrames > 0)
+                parts.Add($"{DegradedFrames} frame(s) marked for review");
+        }
+        if (RestartsThisSession > 0)
+            parts.Add($"{RestartsThisSession} automatic restart(s)");
+        if (BudgetExhausted)
+            parts.Add("the restart budget ran out");
+        return string.Join(", ", parts) + ".";
+    }
+
+    /// <summary>Start a fresh accounting period. Called when a sequence run
+    /// begins, so the summary describes THAT run and not the whole uptime of
+    /// the host.</summary>
+    public void BeginSession() {
+        DegradedFrames = 0;
+        DegradedTotal = TimeSpan.Zero;
+        RestartsThisSession = 0;
+        BudgetExhausted = false;
+        _degradation.Reset();
     }
 
     private static void Push(Queue<double> q, double v) {

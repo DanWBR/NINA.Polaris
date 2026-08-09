@@ -59,6 +59,22 @@ public class ImageMetaData {
         public int SampleCount { get; set; }
         /// <summary>"native" or "phd2".</summary>
         public string Backend { get; set; } = string.Empty;
+
+        /// <summary>Guiding was running well below this session's own normal
+        /// while this frame was exposing.
+        ///
+        /// <para>Recorded rather than acted on: an unattended run keeps
+        /// shooting, because sky time cannot be recovered and a frame that
+        /// looks poor by this measure may still stack. The mark is what lets
+        /// STUDIO's grading throw it out later on evidence, instead of the
+        /// operator guessing which subs came from the windy hour.</para></summary>
+        public bool Degraded { get; set; }
+
+        /// <summary>The session's normal RMS at the time, arcsec. Zero when
+        /// there was not enough history to have one. Paired with
+        /// <see cref="RmsTotalArcsec"/> this says HOW far off the frame was,
+        /// which a bare flag cannot.</summary>
+        public double BaselineArcsec { get; set; }
     }
 
     public class CameraInfo {

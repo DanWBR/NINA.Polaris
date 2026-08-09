@@ -43,6 +43,10 @@ public class SequenceEngine {
     // Dithering/guider control goes through the active guider (native or PHD2),
     // not the concrete PHD2 client, so dither-every-N-frames works on both.
     private readonly ActiveGuiderProvider _guiders;
+    // Optional: an unattended run reports how guiding went when it finishes.
+    // Nullable so a test can build the engine without the whole graph.
+    private readonly GuideRunawayGuard? _guideGuard;
+    private readonly NotificationService? _notify;
     private readonly MeridianFlipService _meridianFlip;
     private readonly ImageWriterService _imageWriter;
     private readonly ProfileService _profile;
@@ -92,7 +96,11 @@ public class SequenceEngine {
         CaptureProgressService captureProgress,
         AuxCaptureService aux,
         CameraReadyGate cameraReady,
-        ILogger<SequenceEngine> logger) {
+        ILogger<SequenceEngine> logger,
+        GuideRunawayGuard? guideGuard = null,
+        NotificationService? notify = null) {
+        _guideGuard = guideGuard;
+        _notify = notify;
         _equip = equip;
         _relay = relay;
         _liveStack = liveStack;
@@ -160,6 +168,9 @@ public class SequenceEngine {
         LastError = null;
         _framesSinceDither = 0;
         DithersIssued = 0;
+        // Reset the guiding accounting so the end-of-run report covers this
+        // run rather than everything since the host booted.
+        _guideGuard?.BeginSession();
         // Reset filter tracking so the first filtered item moves the wheel +
         // applies its offset from a clean baseline.
         _filterState.CurrentFilter = null;
@@ -571,6 +582,21 @@ public class SequenceEngine {
             await RunEndActionsAsync(triggeredByStop: true);
         } finally {
             try { _aux.NotifySessionActive(false); } catch { }
+            ReportGuidingForSession();
+        }
+    }
+
+    /// <summary>Say how guiding went, once, at the end of a run. Silent on a
+    /// clean night: a report that always fires is one nobody reads.</summary>
+    private void ReportGuidingForSession() {
+        try {
+            var summary = _guideGuard?.SummariseSession();
+            if (string.IsNullOrEmpty(summary)) return;
+            _logger.LogWarning("Guiding report for this run: {Summary}", summary);
+            _notify?.Push("warn", "Guiding report: " + summary, 15000);
+        } catch (Exception ex) {
+            // Reporting must not be the thing that breaks the end of a run.
+            _logger.LogDebug(ex, "Guiding session report failed");
         }
     }
 

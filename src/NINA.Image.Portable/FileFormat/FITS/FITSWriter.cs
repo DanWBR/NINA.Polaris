@@ -234,6 +234,15 @@ public static class FITSWriter {
             Add(cards, "GUIDNSMP", meta.Guiding.SampleCount.ToString(CultureInfo.InvariantCulture),
                 "Guide samples in exposure");
             AddStr(cards, "GUIDER", meta.Guiding.Backend);
+            // Only written when true, so an ordinary frame's header does not
+            // grow a card saying nothing happened.
+            if (meta.Guiding.Degraded) {
+                Add(cards, "GUIDDEG", "T", "Guiding degraded vs session normal");
+                if (meta.Guiding.BaselineArcsec > 0) {
+                    Add(cards, "GUIDBASE", Fmt(meta.Guiding.BaselineArcsec),
+                        "Session normal guide RMS (arcsec)");
+                }
+            }
         }
 
         // ---- Rotator (optional, separate metadata bag) ----

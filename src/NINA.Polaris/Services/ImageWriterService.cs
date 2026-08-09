@@ -81,6 +81,7 @@ public class ImageWriterService {
     private readonly EquipmentManager _equip;
     private readonly ProfileService _profile;
     private readonly ILogger<ImageWriterService> _logger;
+    private readonly GuideRunawayGuard? _guideGuard;
 
     private int _sessionFrameNumber;
     private string? _lastWrittenPath;
@@ -103,7 +104,8 @@ public class ImageWriterService {
     public ImageWriterService(EquipmentManager equip, ProfileService profile,
         ILogger<ImageWriterService> logger,
         SkyCatalogService? sky = null, PlateSolveService? plateSolve = null,
-        ActiveGuiderProvider? guiders = null) {
+        ActiveGuiderProvider? guiders = null, GuideRunawayGuard? guideGuard = null) {
+        _guideGuard = guideGuard;
         _equip = equip;
         _profile = profile;
         _logger = logger;
@@ -349,6 +351,14 @@ public class ImageWriterService {
             var start = end.AddSeconds(-exposureSec);
             m.Guiding = GuidingStatsCollector.Summarise(
                 guider.SnapshotSteps(), start, end, guider.Backend);
+            // Mark the frame if the session was in a rough spell while it was
+            // exposing. An unattended run does not stop for this; the mark is
+            // what lets grading act on it afterwards.
+            if (_guideGuard is { Degraded: true }) {
+                m.Guiding.Degraded = true;
+                m.Guiding.BaselineArcsec = _guideGuard.BaselineRmsArcsec ?? 0;
+                _guideGuard.NoteDegradedFrame();
+            }
         } catch (Exception ex) {
             // A header nicety must never cost a frame.
             _logger.LogDebug(ex, "Guiding stats for the frame header failed");
