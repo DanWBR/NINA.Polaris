@@ -1185,3 +1185,115 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     border-left: 3px solid var(--accent, #388bfd);
     border-radius: 8px;
 }
+
+/* ───────────────────── SASPRO-C2: frame grading ─────────────────────
+   Result table for a grading run. Rows are ranked best first; the keep
+   flag comes from the server's selection rule, and moving a threshold
+   re-ranks server-side rather than re-measuring anything. */
+.grade-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: min(880px, 94vw);
+    max-height: 86vh;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-secondary);
+}
+.grade-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 600;
+}
+.grade-head .muted { font-weight: 400; font-size: 12px; }
+.grade-head .btn { margin-left: auto; }
+
+.grade-progress { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.grade-progress-track {
+    flex: 1 1 auto;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--bg-tertiary, #0f1218);
+    overflow: hidden;
+}
+.grade-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width .25s ease;
+}
+
+.grade-error {
+    padding: 8px 10px;
+    border: 1px solid var(--error, #dc2626);
+    border-left-width: 4px;
+    border-radius: 6px;
+    background: rgba(220, 38, 38, 0.12);
+    font-size: 12.5px;
+}
+
+.grade-thresholds,
+.grade-blink {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 12.5px;
+}
+.grade-thresholds label { display: flex; align-items: center; gap: 5px; }
+.grade-thresholds .input-sm { width: 6em; }
+.grade-thresholds .btn { margin-left: auto; }
+
+/* The table is the tall part: it scrolls, the controls above stay put. */
+.grade-table-wrap { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.grade-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+}
+.grade-table th,
+.grade-table td {
+    padding: 5px 8px;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+.grade-table th:nth-child(-n+2),
+.grade-table td:nth-child(-n+2) { text-align: left; }
+.grade-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+.grade-table tbody tr { cursor: pointer; }
+.grade-table tbody tr:hover { background: rgba(127, 127, 127, .12); }
+.grade-name { max-width: 34ch; overflow: hidden; text-overflow: ellipsis; }
+
+/* Kept vs dropped has to read at a glance while scrolling a hundred rows,
+   so it is a row tint plus the tick, not the tick alone. */
+.grade-table tr.grade-drop { color: var(--text-muted, #9aa4b2); }
+.grade-table tr.grade-keep td:first-child { color: var(--success, #16a34a); font-weight: 700; }
+.grade-table tr.grade-current { outline: 1px solid var(--accent); outline-offset: -1px; }
+
+/* Fixed-size box: consecutive frames must land at the same scale and in the
+   same place, or flipping between them compares framing instead of quality. */
+.grade-blink-pane {
+    flex: 0 0 auto;
+    height: min(38vh, 320px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: #000;
+    overflow: hidden;
+}
+.grade-blink-pane img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+.grade-empty { padding: 18px 4px; text-align: center; }

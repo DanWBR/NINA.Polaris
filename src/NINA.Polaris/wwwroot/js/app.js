@@ -2557,6 +2557,31 @@ function ninaApp() {
             this._stackPersist();
         },
 
+        // SASPRO-C2: frame grading. The backend measures each sub (stars,
+        // HFR, eccentricity) and ranks them; this panel shows the table and
+        // lets the operator move the keep threshold. Measuring is the slow
+        // half and happens once per run; moving the threshold re-ranks the
+        // numbers already measured through /reselect, which is instant and
+        // keeps the keep rule defined server-side only.
+        grade: {
+            open: false,
+            jobId: null,
+            running: false,
+            done: 0, total: 0,
+            error: null,
+            rows: [],            // GradedFrameDto[], best first
+            selectedCount: 0,
+            // 'best' = keep a fixed count, 'hfr' = keep within a % of the
+            // sharpest frame. Mirrors the backend's own precedence.
+            mode: 'hfr',
+            keepBest: 20,
+            hfrTolerancePct: 15,
+            // Which row the blink pane is showing, and its image URL.
+            previewIndex: -1,
+            previewUrl: '',
+            previewName: '',
+        },
+
         // UNIF-3b: action handlers. Each posts paths from the relevant
         // slot to /api/studio/* and polls the job status until done.
         // Parameters are collected via prompt() to keep this commit
@@ -2602,6 +2627,171 @@ function ninaApp() {
                     return null;
                 }
             }
+        },
+
+        // Grade the lights currently in the slot. Explicit paths, not a
+        // library query: the slot is what the operator curated, and grading
+        // something else would be a surprise.
+        async stackRunGrade() {
+            const paths = this.stack.lights;
+            if (paths.length < 2) {
+                this.toast(this._t('Add at least 2 lights to the slot first'), 'warn');
+                return;
+            }
+            this.grade.open = true;
+            this.grade.error = null;
+            this.grade.rows = [];
+            this.grade.selectedCount = 0;
+            this.grade.previewIndex = -1;
+            this.grade.running = true;
+            this.grade.done = 0;
+            this.grade.total = paths.length;
+            try {
+                const resp = await this.apiPost('/api/studio/grade', {
+                    framePaths: paths,
+                    ...(this.grade.mode === 'best'
+                        ? { keepBest: Math.max(1, this.grade.keepBest | 0) }
+                        : { hfrTolerancePct: Math.max(0, +this.grade.hfrTolerancePct || 0) })
+                });
+                const body = await resp.json();
+                this.grade.jobId = body.jobId;
+            } catch (e) {
+                this.grade.running = false;
+                this.grade.error = e.message;
+                this.toastFail(this._t('Grading failed'), e);
+                return;
+            }
+            await this._gradePoll();
+        },
+
+        async _gradePoll() {
+            const started = Date.now();
+            for (;;) {
+                await new Promise(r => setTimeout(r, 700));
+                if (!this.grade.jobId) return;      // panel closed
+                let st;
+                try {
+                    st = await this.apiGet('/api/studio/grade/'
+                        + encodeURIComponent(this.grade.jobId) + '/status');
+                } catch (e) {
+                    this.grade.running = false;
+                    this.grade.error = e.message;
+                    return;
+                }
+                this.grade.done = st.done ?? 0;
+                this.grade.total = st.total ?? 0;
+                if (st.inProgress === false || st.stage === 'done' || st.stage === 'error') {
+                    this.grade.running = false;
+                    this.grade.error = st.error || null;
+                    this._gradeApplyStatus(st);
+                    if (!st.error) {
+                        this.toast(this._t('Graded {n} frame(s), keeping {k}',
+                            { n: st.total ?? 0, k: st.selectedCount ?? 0 }), 'ok');
+                    }
+                    return;
+                }
+                // The star detector runs one frame at a time; a night of subs
+                // on an SBC is minutes, not seconds. Still, a job that never
+                // finishes must not poll until the tab is closed.
+                if (Date.now() - started > 60 * 60 * 1000) {
+                    this.grade.running = false;
+                    this.grade.error = this._t('Grading timed out after an hour');
+                    return;
+                }
+            }
+        },
+
+        _gradeApplyStatus(st) {
+            this.grade.rows = Array.isArray(st.results) ? st.results : [];
+            this.grade.selectedCount = st.selectedCount ?? 0;
+        },
+
+        // Move the threshold without re-measuring anything. The server re-ranks
+        // the metrics it already has, so this stays responsive on a slider.
+        async gradeReselect() {
+            if (!this.grade.jobId || this.grade.running) return;
+            try {
+                const resp = await this.apiPost(
+                    '/api/studio/grade/' + encodeURIComponent(this.grade.jobId) + '/reselect',
+                    this.grade.mode === 'best'
+                        ? { keepBest: Math.max(1, this.grade.keepBest | 0) }
+                        : { hfrTolerancePct: Math.max(0, +this.grade.hfrTolerancePct || 0) });
+                this._gradeApplyStatus(await resp.json());
+            } catch (e) {
+                this.toastFail(this._t('Could not move the threshold'), e);
+            }
+        },
+
+        // Debounced so dragging a number input does not fire a request per
+        // keystroke.
+        gradeReselectDebounced() {
+            clearTimeout(this._gradeReselectTimer);
+            this._gradeReselectTimer = setTimeout(() => this.gradeReselect(), 250);
+        },
+
+        // Replace the lights slot with the keepers. This is the point of the
+        // whole panel: the next Integrate then runs on the frames that
+        // survived, with no manual re-picking in the browser.
+        async gradeApplyToSlot() {
+            const keep = this.grade.rows.filter(r => r.keep).map(r => r.path);
+            if (keep.length === 0) {
+                this.toast(this._t('Nothing is marked keep'), 'warn');
+                return;
+            }
+            const dropped = this.stack.lights.length - keep.length;
+            const ok = await this._confirmAsync(
+                this._t('Keep {k} of {n} lights in the slot and drop the other {d}? '
+                      + 'The files stay on disk.',
+                        { k: keep.length, n: this.stack.lights.length, d: Math.max(0, dropped) }),
+                { title: this._t('Frame grading'), okLabel: this._t('Keep these') });
+            if (!ok) return;
+            this.stack.lights = keep;
+            this._stackPersist();
+            this.toast(this._t('Lights slot now holds the {k} keepers', { k: keep.length }), 'ok');
+        },
+
+        gradeClose() {
+            this.grade.open = false;
+            this.grade.jobId = null;     // also stops the poller
+            this.grade.running = false;
+            // Drop the image so closing the panel releases it instead of
+            // holding a decoded full-size frame for the rest of the session.
+            this.grade.previewUrl = '';
+            this.grade.previewIndex = -1;
+        },
+
+        // Blink comparison: one frame at a time in a pane INSIDE this panel,
+        // stepped through in ranked order.
+        //
+        // Deliberately not the full-screen image viewer. That viewer sits below
+        // the modal layer, so from here it would open behind this panel, and
+        // even stacked the other way it would cover the ◀ ▶ buttons: a blink
+        // comparator whose step controls are hidden is not one. An <img> in a
+        // fixed-size pane also guarantees the thing that makes blinking work,
+        // which is that consecutive frames land at exactly the same scale and
+        // position.
+        gradePreview(index) {
+            if (index < 0 || index >= this.grade.rows.length) return;
+            this.grade.previewIndex = index;
+            const row = this.grade.rows[index];
+            // Same endpoint FILES uses, so the stretch matches what the
+            // operator sees there rather than being a second rendering.
+            this.grade.previewUrl = this.authUrl(
+                '/api/files/preview?path=' + encodeURIComponent(row.path) + '&maxDim=1400');
+            this.grade.previewName = row.fileName || row.path;
+        },
+
+        gradePreviewStep(delta) {
+            if (this.grade.rows.length === 0) return;
+            const n = this.grade.rows.length;
+            const next = this.grade.previewIndex < 0
+                ? 0
+                : (this.grade.previewIndex + delta + n) % n;
+            this.gradePreview(next);
+        },
+
+        gradeHfrClass(row) {
+            return row.keep ? 'grade-keep' : 'grade-drop';
         },
 
         async stackRunMaster(kind) {

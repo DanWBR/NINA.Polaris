@@ -11899,6 +11899,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             title="Calibrate lights using master darks/flats/biases (auto-matched via FrameLibrary unless slots filled)">
                                         Calibrate Lights
                                     </button>
+                                    <button class="btn btn-sm"
+                                            @click="stackRunGrade()"
+                                            :disabled="stack.lights.length < 2 || !!stack.activeJob || grade.running"
+                                            title="Measure every light in the slot (stars, HFR, eccentricity), rank them, and pick which ones to keep before integrating">
+                                        Grade frames
+                                    </button>
                                     <button class="btn btn-sm btn-primary"
                                             @click="stackRunIntegrate()"
                                             :disabled="stack.lights.length < 2 || !!stack.activeJob"
@@ -19302,6 +19308,116 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <span x-text="spcc.busy ? 'Running…' : 'Run SPCC'"></span>
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- SASPRO-C2: frame grading results. The backend measured every sub;
+         this is where the operator sees the numbers, moves the keep line and
+         hands the survivors to Integrate. -->
+    <div class="modal-overlay" x-show="grade.open" x-cloak
+         @click.self="gradeClose()"
+         @keydown.escape.window="grade.open && gradeClose()"
+         @keydown.arrow-left.window="grade.open && gradePreviewStep(-1)"
+         @keydown.arrow-right.window="grade.open && gradePreviewStep(1)">
+        <div class="grade-modal">
+            <div class="grade-head">
+                <span x-text="$t('Frame grading')"></span>
+                <span class="muted" x-show="grade.rows.length > 0"
+                      x-text="grade.selectedCount + ' / ' + grade.rows.length + ' ' + $t('kept')"></span>
+                <button class="btn btn-sm" @click="gradeClose()">✕</button>
+            </div>
+
+            <div class="grade-progress" x-show="grade.running">
+                <div class="grade-progress-track">
+                    <div class="grade-progress-fill"
+                         :style="`width:${grade.total ? (100 * grade.done / grade.total) : 0}%`"></div>
+                </div>
+                <span class="muted"
+                      x-text="$t('Measuring') + ' ' + grade.done + ' / ' + grade.total"></span>
+            </div>
+
+            <div class="grade-error" x-show="grade.error" x-cloak x-text="grade.error"></div>
+
+            <!-- Threshold. Changing it re-ranks the numbers already measured,
+                 so it answers immediately; nothing is re-read from disk. -->
+            <div class="grade-thresholds" x-show="grade.rows.length > 0" x-cloak>
+                <label>
+                    <input type="radio" value="hfr" x-model="grade.mode"
+                           @change="gradeReselect()">
+                    <span x-text="$t('Within % of the sharpest')"></span>
+                </label>
+                <input type="number" class="input-sm" min="0" max="200" step="1"
+                       x-model.number="grade.hfrTolerancePct"
+                       :disabled="grade.mode !== 'hfr'"
+                       @input="gradeReselectDebounced()">
+                <label>
+                    <input type="radio" value="best" x-model="grade.mode"
+                           @change="gradeReselect()">
+                    <span x-text="$t('Keep the best')"></span>
+                </label>
+                <input type="number" class="input-sm" min="1" step="1"
+                       x-model.number="grade.keepBest"
+                       :disabled="grade.mode !== 'best'"
+                       @input="gradeReselectDebounced()">
+                <button class="btn btn-sm btn-primary"
+                        @click="gradeApplyToSlot()"
+                        :disabled="grade.selectedCount === 0"
+                        :title="$t('Replace the lights slot with the frames marked keep')">
+                    <span x-text="$t('Keep these')"></span>
+                </button>
+            </div>
+
+            <!-- Blink: step through the frames in ranked order, each landing
+                 at the same scale in the same box. Comparing two subs by
+                 flipping between them is the only way to check the grader
+                 agrees with your eyes; ← / → step without leaving the table. -->
+            <div class="grade-blink" x-show="grade.rows.length > 0" x-cloak>
+                <button class="btn btn-sm" @click="gradePreviewStep(-1)"
+                        :title="$t('Previous frame')">◀</button>
+                <button class="btn btn-sm" @click="gradePreviewStep(1)"
+                        :title="$t('Next frame')">▶</button>
+                <span class="muted" x-show="grade.previewIndex >= 0"
+                      x-text="$t('Showing') + ' #' + (grade.previewIndex + 1)
+                              + ' · ' + grade.previewName"></span>
+                <span class="muted" x-show="grade.previewIndex < 0"
+                      x-text="$t('Click a row to open the frame')"></span>
+            </div>
+            <div class="grade-blink-pane" x-show="grade.previewUrl" x-cloak>
+                <img :src="grade.previewUrl" :alt="grade.previewName">
+            </div>
+
+            <div class="grade-table-wrap" x-show="grade.rows.length > 0" x-cloak>
+                <table class="grade-table">
+                    <thead>
+                        <tr>
+                            <th x-text="$t('Keep')"></th>
+                            <th x-text="$t('Frame')"></th>
+                            <th x-text="$t('Stars')"></th>
+                            <th>HFR</th>
+                            <th x-text="$t('Ecc')"></th>
+                            <th x-text="$t('Score')"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(row, i) in grade.rows" :key="row.path">
+                            <tr :class="[gradeHfrClass(row),
+                                         grade.previewIndex === i ? 'grade-current' : '']"
+                                @click="gradePreview(i)" :title="row.path">
+                                <td x-text="row.keep ? '✓' : ''"></td>
+                                <td class="grade-name" x-text="row.fileName"></td>
+                                <td x-text="row.stars"></td>
+                                <td x-text="row.hfr.toFixed(2)"></td>
+                                <td x-text="row.eccentricity.toFixed(2)"></td>
+                                <td x-text="row.score.toFixed(3)"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <p class="muted grade-empty"
+               x-show="!grade.running && grade.rows.length === 0 && !grade.error" x-cloak
+               x-text="$t('No results yet.')"></p>
         </div>
     </div>
 

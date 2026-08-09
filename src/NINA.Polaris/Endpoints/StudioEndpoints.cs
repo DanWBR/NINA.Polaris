@@ -216,6 +216,19 @@ public static class StudioEndpoints {
             return p == null ? Results.NotFound() : Results.Ok(p);
         });
 
+        // Move the keep threshold on a job that already ran. Body:
+        //   { keepBest?: 20, hfrTolerancePct?: 15 }
+        // Both null falls back to the default rule. Cheap: it re-ranks the
+        // numbers the job already measured, so the UI can drive it from a
+        // slider without re-reading any FITS.
+        g.MapPost("/grade/{jobId}/reselect", (
+                FrameGradingService svc, string jobId, GradeReselectRequest? req) => {
+            var p = svc.Reselect(jobId, req?.KeepBest, req?.HfrTolerancePct);
+            return p == null
+                ? Results.NotFound(new { error = "No finished grading job with that id." })
+                : Results.Ok(p);
+        });
+
         // Recommend a drizzle scale for the selected frames from their star
         // FWHM (undersampled -> 2x, well-sampled -> 1x) + sub count. The UI
         // calls this when the drizzle control is opened. Body: { framePaths }.
@@ -448,6 +461,11 @@ public static class StudioEndpoints {
 
     /// <summary>Body of POST /api/studio/drizzle-advice: the frames the user is
     /// about to integrate. The service samples a few for star FWHM.</summary>
+    /// <summary>Body of POST /grade/{jobId}/reselect. Both null = the default
+    /// keep rule; KeepBest wins over HfrTolerancePct, same precedence the
+    /// grading job itself uses.</summary>
+    public record GradeReselectRequest(int? KeepBest, double? HfrTolerancePct);
+
     public record DrizzleAdviceRequest(List<string> FramePaths);
 
     /// <summary>Thrown from the preview RenderCache lambda when the

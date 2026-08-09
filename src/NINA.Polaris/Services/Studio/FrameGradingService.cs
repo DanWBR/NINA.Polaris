@@ -86,6 +86,39 @@ public class FrameGradingService {
     public GradeProgress? GetStatus(string jobId)
         => _jobs.TryGetValue(jobId, out var p) ? p : null;
 
+    /// <summary>Re-apply the keep rule to a finished job with new thresholds.
+    ///
+    /// <para>Measuring the frames is the expensive half (a star detection pass
+    /// per FITS); choosing where to cut is arithmetic on numbers we already
+    /// have. Separating them is what lets the operator drag a threshold and see
+    /// the keep set move without re-reading a night of subs, and it keeps the
+    /// rule in <see cref="FrameGrading.Rank"/> as the single definition of what
+    /// "keep" means, rather than a second copy of it in the browser.</para>
+    ///
+    /// <para>Returns null when the job is unknown or still running.</para>
+    /// </summary>
+    public GradeProgress? Reselect(string jobId, int? keepBest, double? hfrTolerancePct) {
+        if (!_jobs.TryGetValue(jobId, out var job)) return null;
+        if (job.InProgress || job.Results.Count == 0) return null;
+
+        var metrics = job.Results
+            .Select(r => new FrameGrading.FrameMetric(
+                r.Path, r.FileName, r.Stars, r.Hfr, r.Eccentricity))
+            .ToList();
+        var ranked = FrameGrading.Rank(metrics, keepBest, hfrTolerancePct);
+        var selected = FrameGrading.Selected(ranked);
+
+        var updated = job with {
+            Results = ranked.Select(r => new GradedFrameDto(
+                r.Path, r.FileName, r.Stars, r.Hfr, r.Eccentricity,
+                r.Score, r.Keep)).ToList(),
+            Selected = selected.ToList(),
+            SelectedCount = selected.Count,
+        };
+        _jobs[jobId] = updated;
+        return updated;
+    }
+
     /// <summary>Resolve the frame path list: explicit paths win; otherwise
     /// query the library index. Defaults the type filter to LIGHT — grading
     /// darks/flats/bias makes no sense.</summary>
