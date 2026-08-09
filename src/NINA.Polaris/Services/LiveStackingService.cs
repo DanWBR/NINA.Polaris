@@ -156,14 +156,44 @@ public class LiveStackingService {
     /// via PUT /api/livestack/save-frames.</summary>
     public bool SaveFramesToDisk { get; set; } = true;
 
-    /// <summary>Per-rig opt-in: stack OSC frames in colour. When on AND the
-    /// incoming frames are Bayered, each frame is debayered to RGB, aligned
-    /// per-channel and integrated into 3 accumulators; the live preview is a
-    /// colour JPEG. OFF (default) keeps the historical mono-CFA stack (client
-    /// debayers for display). Set via PUT /api/livestack/color, persisted in
-    /// the active rig's LiveStackColor field; loaded on rig change in
-    /// Program.cs. Mono cameras ignore it.</summary>
-    public bool ColorStacking { get; set; } = false;
+    /// <summary>Explicit colour-stacking override. null (the default) means
+    /// AUTO: decide from the camera, which is what <see cref="ColourWanted"/>
+    /// does. Set to true/false only by PUT /api/livestack/color.
+    ///
+    /// This used to be a plain `bool = false` whose doc claimed it was "loaded
+    /// on rig change in Program.cs". No such load existed, and the LIVE tab's
+    /// toggle had already been removed in favour of automatic detection, so
+    /// nothing ever wrote it: colour stacking was unreachable. Every OSC
+    /// session took the mono branch, which relays the WARPED CFA mosaic and
+    /// tells the client to debayer it — the alignment has already destroyed the
+    /// Bayer phase by then, so frame #0 looked right and everything after it
+    /// came out grey with mosaic banding (field, Q6A, 2026-08-09).</summary>
+    public bool? ColorStacking { get; set; }
+
+    /// <summary>Whether colour is wanted judging by the camera alone.
+    ///
+    /// AUTO by design: the camera knows what it is, so ask it instead of asking
+    /// the user. ICamera.IsColorSensor is tri-state and implemented by INDI,
+    /// ASCOM, Alpaca and all five native SDKs.
+    ///
+    /// POSITIVE EVIDENCE ONLY. `null` (the backend cannot tell yet, which is
+    /// the normal INDI state before the first frame) must NOT count as colour:
+    /// wanting colour arms the Bayer-dropout deferral downstream, so treating
+    /// unknown as colour made every pattern-less frame get deferred and a mono
+    /// session produced nothing for dozens of frames. Frame-level evidence is
+    /// handled by <see cref="ColourWantedFor"/>, which is what the session
+    /// actually decides on.</summary>
+    public bool ColourWanted
+        => ColorStacking ?? (_equipment?.Camera?.IsColorSensor == true);
+
+    /// <summary>The colour decision for a concrete frame. The frame's own CFA
+    /// is the strongest evidence available and it arrives even when the backend
+    /// still reports IsColorSensor = null, which is exactly the OSC-over-INDI
+    /// case that was stacking mono in the field.</summary>
+    private bool ColourWantedFor(BayerPatternEnum pattern)
+        => ColorStacking ?? (_equipment?.Camera?.IsColorSensor == true
+                             || (pattern != BayerPatternEnum.None
+                                 && pattern != BayerPatternEnum.Auto));
 
     /// <summary>True once the current session is integrating in colour
     /// (ColorStacking + a Bayered reference frame). Drives the colour
@@ -257,7 +287,7 @@ public class LiveStackingService {
     private int ResolveStackBinning(ImageProperties props) {
         var configured = _profiles?.ActiveEquipmentProfile?.LiveStackBinning ?? 0;
         if (configured is 1 or 2 or 4) return configured;
-        bool colour = ColorStacking
+        bool colour = ColourWantedFor(props.BayerPattern)
                       && props.BayerPattern != BayerPatternEnum.None
                       && props.BayerPattern != BayerPatternEnum.Auto;
         long ram = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
@@ -338,7 +368,7 @@ public class LiveStackingService {
         long w = cam?.MaxX ?? 0, h = cam?.MaxY ?? 0;
         if (w <= 0 || h <= 0) { w = _width; h = _height; }
         long px = w * h;
-        bool colour = ColorStacking;
+        bool colour = ColourWanted;
         long ram = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
         long budget = StackBudgetBytes(ram);
         var list = new List<StackBinningOption>();
@@ -1131,7 +1161,7 @@ public class LiveStackingService {
                     // CFA, else the per-rig override (dropout-proof — the user
                     // set it, it never disappears). See ResolveSessionBayer.
                     var effectivePattern = ResolveSessionBayer(props);
-                    bool wantColour = ColorStacking;
+                    bool wantColour = ColourWantedFor(effectivePattern);
                     bool haveUsablePattern = effectivePattern != BayerPatternEnum.None
                         && effectivePattern != BayerPatternEnum.Auto;
 
@@ -1349,7 +1379,13 @@ public class LiveStackingService {
             //             mush and renders grey. That combination is the bug.
             //   out{}     what we are about to tell the client this frame IS
             var traceIn = $"in{{bayer={props.BayerPattern} ch={props.Channels} bd={props.BitDepth} {props.Width}x{props.Height}}}";
-            var traceSession = $"session{{colorActive={_colorActive} pattern={_bayerPattern} lastGood={_lastGoodBayer} deferrals={_colorDeferrals} colorStackingToggle={ColorStacking}}}";
+            // Log the DECISION and its inputs, not just the override. The
+            // previous line printed only the override, so a session reading
+            // `colorStackingToggle=False` looked like a user setting when it
+            // was really "nobody ever set this" — which is what hid the bug.
+            var traceOverride = ColorStacking?.ToString() ?? "auto";
+            var traceSensor = _equipment?.Camera?.IsColorSensor?.ToString() ?? "unknown";
+            var traceSession = $"session{{colorActive={_colorActive} pattern={_bayerPattern} lastGood={_lastGoodBayer} deferrals={_colorDeferrals} colourWanted={ColourWanted} override={traceOverride} sensorIsColour={traceSensor}}}";
             var traceAlign = $"align{{{(usedTransform == null ? "identity(reference,no-warp)" : "WARPED")}}}";
             _logger.LogInformation(
                 "LIVE-TRACE frame=#{N} {In} {Session} {Align} out{{branch={Branch}}}",

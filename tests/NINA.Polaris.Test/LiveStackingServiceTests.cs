@@ -127,6 +127,104 @@ public class LiveStackingServiceTests {
         Assert.That(svc.ColorActive, Is.True);
     }
 
+    /// <summary>
+    /// THE DEFAULT, which is what actually ships. Every other colour test in
+    /// this fixture sets ColorStacking = true by hand, so the suite stayed
+    /// green for months while the shipped default did the opposite: colour was
+    /// a flag nothing set (the LIVE toggle had been removed in favour of
+    /// auto-detection that was never wired on the server), so every OSC
+    /// session took the mono branch. That relays the WARPED CFA mosaic and
+    /// asks the client to debayer it, and since the alignment has already
+    /// destroyed the Bayer phase, the stack came out grey and banded after
+    /// frame #0 (field, Radxa Q6A + SV550, 2026-08-09).
+    ///
+    /// No override, no equipment: an OSC frame alone has to produce a colour
+    /// session.
+    /// </summary>
+    [Test]
+    public async Task ColourStack_NoOverride_OscFrameStacksInColour() {
+        var svc = MakeService();
+        Assert.That(svc.ColorStacking, Is.Null,
+            "precondition: colour must be AUTO out of the box, not a dead flag");
+        svc.Start();
+
+        await svc.AddFrameAsync(MakeFrame(BayerPatternEnum.RGGB));
+
+        Assert.That(svc.FrameCount, Is.EqualTo(1));
+        Assert.That(svc.ColorActive, Is.True,
+            "an OSC frame with no operator input must stack in colour");
+    }
+
+    /// <summary>
+    /// The counterweight to the test above, and the reason auto keys on
+    /// POSITIVE evidence. A frame with no CFA and a backend that cannot say
+    /// what the sensor is (IsColorSensor = null, the normal INDI state before
+    /// the first frame) must stack immediately in mono. Treating unknown as
+    /// colour armed the Bayer-dropout deferral and produced nothing for dozens
+    /// of frames — caught by seven existing tests when this fix was first
+    /// written the loose way.
+    /// </summary>
+    [Test]
+    public async Task ColourStack_UnknownSensorAndNoPattern_StacksMonoImmediately() {
+        var svc = MakeService();
+        Assert.That(svc.ColourWanted, Is.False,
+            "an unknown sensor is not evidence of colour");
+        svc.Start();
+
+        await svc.AddFrameAsync(MakeFrame(BayerPatternEnum.None));
+
+        Assert.That(svc.FrameCount, Is.EqualTo(1),
+            "nothing to wait for, so the frame must integrate at once");
+        Assert.That(svc.ColorActive, Is.False);
+    }
+
+    /// <summary>
+    /// The other half of the auto decision: a backend that positively reports
+    /// a MONO sensor must not want colour, so mono rigs keep the plain
+    /// accumulation path without anyone configuring anything. The simulator
+    /// declares itself mono, which is what makes this checkable without
+    /// hardware.
+    /// </summary>
+    [Test]
+    public async Task ColourStack_DeclaredMonoSensor_AutoDoesNotWantColour() {
+        var indi = new NINA.INDI.Client.IndiClient("localhost", 7624);
+        var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance,
+            new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache(),
+            new NINA.Polaris.Services.Simulator.Gear.SimGearService());
+        var cam = equip.SelectCamera("sim", "sim");
+        await cam.ConnectAsync();
+        Assert.That(cam.IsColorSensor, Is.False,
+            "precondition: the simulator has to declare its sensor mono");
+
+        var relay = new ImageRelayService(NullLogger<ImageRelayService>.Instance);
+        var svc = new LiveStackingService(relay, NullLogger<LiveStackingService>.Instance,
+            equipment: equip);
+
+        Assert.That(svc.ColourWanted, Is.False,
+            "a declared-mono sensor must switch auto off without a toggle");
+    }
+
+    /// <summary>
+    /// Auto is the default, not a straitjacket: an explicit PUT
+    /// /api/livestack/color still decides, in both directions.
+    /// </summary>
+    [Test]
+    public async Task ColourStack_ExplicitOverrideBeatsAutoDetection() {
+        var svc = MakeService();
+
+        svc.ColorStacking = false;
+        Assert.That(svc.ColourWanted, Is.False);
+        svc.Start();
+        await svc.AddFrameAsync(MakeFrame(BayerPatternEnum.RGGB));
+        Assert.That(svc.ColorActive, Is.False,
+            "override off means an OSC frame stacks mono on purpose, even "
+            + "though the frame's own CFA would otherwise select colour");
+
+        svc.ColorStacking = true;
+        Assert.That(svc.ColourWanted, Is.True,
+            "override on must win with no camera evidence at all");
+    }
+
     [Test]
     public async Task ElapsedSeconds_FreezesAfterStop() {
         // Field report: the "Total integration time" counter kept

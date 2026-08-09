@@ -61,11 +61,13 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
                 // is configured, so frames are silently dropped. The
                 // LIVE tab shows a warning to set a folder.
                 saveFramesNoDir = liveStack.SaveFramesNoOutputDir,
-                // Colour (OSC debayer → RGB) stacking toggle +
-                // whether it's actually engaged this session (ON
-                // + the reference frame was Bayered). Drives the
-                // LIVE tab colour checkbox + a "(colour)" hint.
-                colorStacking = liveStack.ColorStacking,
+                // Colour (OSC debayer → RGB) stacking: the EFFECTIVE decision
+                // (auto-detected from the camera unless overridden), plus
+                // whether it's actually engaged this session (wanted + the
+                // reference frame was Bayered). Reporting the raw override
+                // here was misleading once the LIVE tab toggle was removed:
+                // it read False on every rig because nothing ever set it.
+                colorStacking = liveStack.ColourWanted,
                 colorActive = liveStack.ColorActive,
                 // Part B: how many meridian flips the stacker
                 // re-oriented and kept stacking through.
