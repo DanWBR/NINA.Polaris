@@ -324,6 +324,32 @@
 .col-splitter.dragging {
     background: rgba(var(--accent2-light-rgb), 0.55);
 }
+/* Touch has no hover, so on a tablet the splitter is an invisible 7px strip
+   nobody can find. Give it a standing tint, the same grip glyph the editor
+   resizer uses, and a finger-sized hit area. Desktop keeps the clean look:
+   the pointer reveals it. */
+@media (hover: none) and (pointer: coarse) {
+    .col-splitter {
+        position: relative;
+        flex-basis: 18px;
+        margin: 0 -5px;
+        background: rgba(var(--accent2-light-rgb), 0.16);
+    }
+    .col-splitter::after {
+        content: "⋮";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 14px;
+        line-height: 1;
+        color: var(--text-secondary);
+        pointer-events: none;
+    }
+    .col-splitter.dragging {
+        background: rgba(var(--accent2-light-rgb), 0.55);
+    }
+}
 /* Col 2: the sequence cards rail. Own scroll, fixed width so the
    centre preview keeps the rest. Cards stack vertically (one per row)
    regardless of the wider auto-fit grid the list uses elsewhere. */
