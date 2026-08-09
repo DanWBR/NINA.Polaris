@@ -3598,5 +3598,16 @@
   "Keep": "Garder",
   "Frame": "Image",
   "Ecc": "Ecc",
-  "kept": "conservées"
+  "kept": "conservées",
+  "Luminance ramp": "Rampe de luminance",
+  "Range band": "Bande de plage",
+  "Painted": "Peinte",
+  "Low": "Bas",
+  "High": "Haut",
+  "Feather": "Adoucissement",
+  "Show mask": "Afficher le masque",
+  "Brush": "Pinceau",
+  "Erase": "Effacer",
+  "Arm the brush. While armed, dragging the preview paints instead of panning.": "Active le pinceau. Une fois actif, faire glisser dans l'aperçu peint au lieu de déplacer.",
+  "Clear the crop to paint: the mask is measured on the uncropped frame.": "Retirez le recadrage pour peindre : le masque est mesuré sur l'image non recadrée."
 }

@@ -12681,6 +12681,116 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </template>
                         </details>
 
+                        <!-- SASPRO-D: MASK. Everything above lands only where
+                             this says. Off by default, so an operator who never
+                             opens it sees the editor it always was. -->
+                        <details class="editor-section">
+                            <summary>Mask</summary>
+                            <label class="editor-slider-row">
+                                <span class="editor-slider-label" x-text="$t('Type')"></span>
+                                <select class="input-sm" style="flex:1"
+                                        :value="editorMask().kind"
+                                        @change="editorSetMaskKind($event.target.value)">
+                                    <option value="None" x-text="$t('Off')"></option>
+                                    <option value="Luminance" x-text="$t('Luminance ramp')"></option>
+                                    <option value="Range" x-text="$t('Range band')"></option>
+                                    <option value="Painted" x-text="$t('Painted')"></option>
+                                </select>
+                            </label>
+
+                            <template x-if="editorMask().kind !== 'None'">
+                                <div>
+                                    <label class="editor-slider-row"
+                                           x-show="editorMask().kind !== 'Painted'">
+                                        <span class="editor-slider-label" x-text="$t('Low')"></span>
+                                        <input type="range" min="0" max="1" step="0.01"
+                                               :value="editorMask().low"
+                                               @input="editorSetMask('low', +$event.target.value)">
+                                        <span class="editor-slider-value"
+                                              x-text="(editorMask().low ?? 0).toFixed(2)"></span>
+                                    </label>
+                                    <label class="editor-slider-row"
+                                           x-show="editorMask().kind !== 'Painted'">
+                                        <span class="editor-slider-label" x-text="$t('High')"></span>
+                                        <input type="range" min="0" max="1" step="0.01"
+                                               :value="editorMask().high"
+                                               @input="editorSetMask('high', +$event.target.value)">
+                                        <span class="editor-slider-value"
+                                              x-text="(editorMask().high ?? 1).toFixed(2)"></span>
+                                    </label>
+                                    <label class="editor-slider-row"
+                                           x-show="editorMask().kind === 'Range'">
+                                        <span class="editor-slider-label" x-text="$t('Feather')"></span>
+                                        <input type="range" min="0" max="0.5" step="0.01"
+                                               :value="editorMask().feather"
+                                               @input="editorSetMask('feather', +$event.target.value)">
+                                        <span class="editor-slider-value"
+                                              x-text="(editorMask().feather ?? 0).toFixed(2)"></span>
+                                    </label>
+                                    <label class="editor-slider-row">
+                                        <span class="editor-slider-label" x-text="$t('Strength')"></span>
+                                        <input type="range" min="0" max="1" step="0.01"
+                                               :value="editorMask().opacity"
+                                               @input="editorSetMask('opacity', +$event.target.value)">
+                                        <span class="editor-slider-value"
+                                              x-text="(editorMask().opacity ?? 1).toFixed(2)"></span>
+                                    </label>
+
+                                    <div class="editor-mask-actions">
+                                        <label>
+                                            <input type="checkbox" :checked="editorMask().invert"
+                                                   @change="editorSetMask('invert', $event.target.checked)">
+                                            <span x-text="$t('Invert')"></span>
+                                        </label>
+                                        <label>
+                                            <input type="checkbox" x-model="editorState.showMask"
+                                                   @change="_editorSchedulePreview()">
+                                            <span x-text="$t('Show mask')"></span>
+                                        </label>
+                                    </div>
+
+                                    <!-- Brush. Painted kind only, and only with
+                                         no crop: the pipeline crops AFTER the
+                                         adjustments, so with a crop set the
+                                         preview and the mask sit in different
+                                         coordinate systems and the strokes
+                                         would land somewhere else. -->
+                                    <template x-if="editorMask().kind === 'Painted'">
+                                        <div class="editor-mask-brush">
+                                            <p class="muted" x-show="!editorMaskPaintable()"
+                                               x-text="$t('Clear the crop to paint: the mask is measured on the uncropped frame.')"></p>
+                                            <template x-if="editorMaskPaintable()">
+                                                <div>
+                                                    <div class="editor-mask-actions">
+                                                        <button class="btn btn-sm"
+                                                                :class="editorState.maskPainting ? 'btn-active' : ''"
+                                                                @click="editorState.maskPainting = !editorState.maskPainting"
+                                                                :title="$t('Arm the brush. While armed, dragging the preview paints instead of panning.')">
+                                                            <span x-text="$t('Brush')"></span>
+                                                        </button>
+                                                        <button class="btn btn-sm"
+                                                                :class="editorState.maskErase ? 'btn-active' : ''"
+                                                                @click="editorState.maskErase = !editorState.maskErase"
+                                                                x-text="$t('Erase')"></button>
+                                                        <button class="btn btn-sm"
+                                                                @click="editorMaskClearPaint()"
+                                                                x-text="$t('Clear')"></button>
+                                                    </div>
+                                                    <label class="editor-slider-row">
+                                                        <span class="editor-slider-label" x-text="$t('Size')"></span>
+                                                        <input type="range" min="2" max="60" step="1"
+                                                               x-model.number="editorState.maskBrush">
+                                                        <span class="editor-slider-value"
+                                                              x-text="editorState.maskBrush + '%'"></span>
+                                                    </label>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </details>
+
                         <!-- DETALHE / DETAIL -->
                         <details class="editor-section">
                             <summary>Detail</summary>

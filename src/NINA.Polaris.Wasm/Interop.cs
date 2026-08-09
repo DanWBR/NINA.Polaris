@@ -48,6 +48,8 @@ namespace NINA.Polaris.Wasm;
 [JsonSerializable(typeof(ToneCurveParams))]
 [JsonSerializable(typeof(CurvePoint))]
 [JsonSerializable(typeof(CropParams))]
+[JsonSerializable(typeof(MaskParams))]
+[JsonSerializable(typeof(MaskKind))]
 [JsonSerializable(typeof(IReadOnlyList<CurvePoint>))]
 [JsonSerializable(typeof(List<CurvePoint>))]
 internal partial class EditorJsonContext : JsonSerializerContext { }

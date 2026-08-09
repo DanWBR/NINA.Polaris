@@ -4138,5 +4138,16 @@
   "Keep": "Behalten",
   "Frame": "Bild",
   "Ecc": "Ecc",
-  "kept": "behalten"
+  "kept": "behalten",
+  "Luminance ramp": "Luminanz-Rampe",
+  "Range band": "Wertebereich",
+  "Painted": "Gemalt",
+  "Low": "Unten",
+  "High": "Oben",
+  "Feather": "Weiche Kante",
+  "Show mask": "Maske anzeigen",
+  "Brush": "Pinsel",
+  "Erase": "Radieren",
+  "Arm the brush. While armed, dragging the preview paints instead of panning.": "Pinsel aktivieren. Solange er aktiv ist, malt Ziehen in der Vorschau, statt zu verschieben.",
+  "Clear the crop to paint: the mask is measured on the uncropped frame.": "Zuschnitt entfernen zum Malen: die Maske wird am unbeschnittenen Bild gemessen."
 }

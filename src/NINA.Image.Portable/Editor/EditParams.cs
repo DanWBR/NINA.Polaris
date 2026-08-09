@@ -50,7 +50,11 @@ public sealed record EditParams(
     EffectsParams? Effects = null,
     ToneCurveParams? ToneCurve = null,
     CropParams? Crop = null,
-    int Rotate = 0
+    int Rotate = 0,
+    /// <summary>Restrict every adjustment above to part of the frame. Null or
+    /// <see cref="MaskKind.None"/> applies them everywhere, which is what the
+    /// editor did before masks existed and stays the default.</summary>
+    MaskParams? Mask = null
 ) {
     /// <summary>All-defaults instance (no-op pipeline).</summary>
     public static EditParams Defaults => new();

@@ -3455,5 +3455,16 @@
   "Keep": "",
   "Frame": "",
   "Ecc": "",
-  "kept": ""
+  "kept": "",
+  "Luminance ramp": "",
+  "Range band": "",
+  "Painted": "",
+  "Low": "",
+  "High": "",
+  "Feather": "",
+  "Show mask": "",
+  "Brush": "",
+  "Erase": "",
+  "Arm the brush. While armed, dragging the preview paints instead of panning.": "",
+  "Clear the crop to paint: the mask is measured on the uncropped frame.": ""
 }

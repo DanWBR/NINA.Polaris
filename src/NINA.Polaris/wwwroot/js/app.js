@@ -2220,6 +2220,13 @@ function ninaApp() {
             previewUrl: '',        // current edited preview blob URL
             originalUrl: '',       // unedited preview blob URL (for compare)
             showOriginal: false,
+            // SASPRO-D mask brush. maskPainting arms the brush, which takes
+            // over the pointer on the preview, so it defaults off and the
+            // ordinary pan/zoom keeps working until the operator asks for it.
+            maskPainting: false,
+            maskErase: false,
+            maskBrush: 12,          // % of the frame's width
+            showMask: false,        // tint the covered area to see the mask
             // Histogram overlay toggle. The histogram lives as an
             // absolutely-positioned strip pinned to the bottom of
             // the preview area instead of stealing a permanent
@@ -15753,6 +15760,173 @@ function ninaApp() {
         editorSetLight(key, val) { this._editorPatch('light', key, val); },
         editorSetColor(key, val) { this._editorPatch('color', key, val); },
         editorSetEffects(key, val) { this._editorPatch('effects', key, val); },
+
+        // ── SASPRO-D: masks ────────────────────────────────────────────
+        //
+        // A mask says WHERE the sliders above land. Three kinds, matching
+        // MaskKind server-side: a luminance ramp (one end of the histogram), a
+        // range band (midtones), and a hand-painted bitmap.
+        //
+        // The painted bitmap is kept small and scaled up when applied: brush
+        // strokes are smooth, and a full-resolution mask would be larger than
+        // everything else in the sidecar put together.
+        editorMaskPaintSize: 512,
+
+        editorSetMask(key, val) {
+            if (!this.editorState.session) return;
+            const e = this.editorState.edits;
+            if (!e.mask) e.mask = { kind: 'None', low: 0, high: 1, feather: 0.15,
+                                    invert: false, opacity: 1 };
+            e.mask[key] = val;
+            this.editorState.dirty = true;
+            this._editorSchedulePreview();
+        },
+
+        editorMask() {
+            return this.editorState.edits.mask
+                || { kind: 'None', low: 0, high: 1, feather: 0.15,
+                     invert: false, opacity: 1 };
+        },
+
+        // Switching kind clears the painted bitmap only when leaving Painted,
+        // so flipping to Luminance to compare and back does not throw away the
+        // strokes.
+        editorSetMaskKind(kind) {
+            const prev = this.editorMask().kind;
+            this.editorSetMask('kind', kind);
+            if (kind !== 'Painted' && prev === 'Painted') return;   // keep it
+            if (kind === 'Painted') this._editorEnsurePaintCanvas();
+        },
+
+        editorMaskPaintable() {
+            // The pipeline applies the crop AFTER the adjustments, so what the
+            // mask is measured against is the UNCROPPED frame while the preview
+            // on screen is cropped. Painting under those two coordinate systems
+            // would put the strokes somewhere other than where they were drawn,
+            // so the brush is only offered when no crop is set.
+            return !this.editorState.edits.crop;
+        },
+
+        _editorEnsurePaintCanvas() {
+            if (this._maskPaintCanvas) return this._maskPaintCanvas;
+            const c = document.createElement('canvas');
+            // Square working bitmap: the aspect ratio is restored by the
+            // server-side bilinear scale, and a fixed size keeps the encoded
+            // mask a predictable weight regardless of sensor.
+            c.width = this.editorMaskPaintSize;
+            c.height = this.editorMaskPaintSize;
+            const ctx = c.getContext('2d', { willReadFrequently: true });
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, c.width, c.height);
+            this._maskPaintCanvas = c;
+            return c;
+        },
+
+        // Paint (or erase) a dab at a point given in 0..1 of the preview.
+        editorMaskPaintAt(u, v) {
+            const c = this._editorEnsurePaintCanvas();
+            const ctx = c.getContext('2d');
+            const x = u * c.width, y = v * c.height;
+            const r = Math.max(2, (this.editorState.maskBrush || 12) / 100 * c.width / 2);
+            // A soft edge is what makes a painted mask usable; a hard disc
+            // shows its own outline in the result.
+            const g = ctx.createRadialGradient(x, y, r * 0.35, x, y, r);
+            const on = !this.editorState.maskErase;
+            g.addColorStop(0, on ? 'rgba(255,255,255,1)' : 'rgba(0,0,0,1)');
+            g.addColorStop(1, on ? 'rgba(255,255,255,0)' : 'rgba(0,0,0,0)');
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+            this._maskPaintDirty = true;
+        },
+
+        // Push the painted bitmap into the edit params. Debounced: encoding is
+        // cheap but a preview render per brush sample is not.
+        editorMaskCommitPaint() {
+            if (!this._maskPaintDirty) return;
+            clearTimeout(this._maskPaintTimer);
+            this._maskPaintTimer = setTimeout(() => {
+                const c = this._maskPaintCanvas;
+                if (!c) return;
+                const ctx = c.getContext('2d');
+                const img = ctx.getImageData(0, 0, c.width, c.height).data;
+                const gray = new Uint8Array(c.width * c.height);
+                for (let i = 0, j = 0; j < gray.length; i += 4, j++) gray[j] = img[i];
+                const e = this.editorState.edits;
+                if (!e.mask) e.mask = {};
+                e.mask.kind = 'Painted';
+                e.mask.painted = this._rleEncode(gray);
+                e.mask.paintedWidth = c.width;
+                e.mask.paintedHeight = c.height;
+                this._maskPaintDirty = false;
+                this.editorState.dirty = true;
+                this._editorSchedulePreview();
+            }, 180);
+        },
+
+        editorMaskClearPaint() {
+            const c = this._editorEnsurePaintCanvas();
+            const ctx = c.getContext('2d');
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, c.width, c.height);
+            const e = this.editorState.edits;
+            if (e.mask) { e.mask.painted = null; e.mask.paintedWidth = 0; e.mask.paintedHeight = 0; }
+            this._maskPaintDirty = false;
+            this.editorState.dirty = true;
+            this._editorSchedulePreview();
+        },
+
+        // Same wire format as EditMask.EncodeRle: [value][count:u16 LE] triples,
+        // base64. Kept byte-compatible on purpose, it is the only thing the two
+        // implementations have to agree on.
+        _rleEncode(data) {
+            const out = [];
+            let i = 0;
+            while (i < data.length) {
+                const v = data[i];
+                let run = 1;
+                while (i + run < data.length && data[i + run] === v && run < 65535) run++;
+                out.push(v, run & 0xFF, (run >> 8) & 0xFF);
+                i += run;
+            }
+            let bin = '';
+            const CH = 0x8000;   // btoa on a 260k-element spread overflows the stack
+            for (let k = 0; k < out.length; k += CH) {
+                bin += String.fromCharCode.apply(null, out.slice(k, k + CH));
+            }
+            return btoa(bin);
+        },
+
+        // Pointer handlers for the brush, bound on the preview stage. Only
+        // active while the Painted kind is selected and the brush is armed, so
+        // the ordinary pan/zoom keeps working the rest of the time.
+        editorMaskPointerDown(ev) {
+            if (!this.editorState.maskPainting) return;
+            ev.preventDefault();
+            this._maskStroking = true;
+            this._editorMaskPaintEvent(ev);
+        },
+        editorMaskPointerMove(ev) {
+            if (!this._maskStroking) return;
+            this._editorMaskPaintEvent(ev);
+        },
+        editorMaskPointerUp() {
+            if (!this._maskStroking) return;
+            this._maskStroking = false;
+            this.editorMaskCommitPaint();
+        },
+        _editorMaskPaintEvent(ev) {
+            const el = ev.currentTarget;
+            const r = el.getBoundingClientRect();
+            if (r.width <= 0 || r.height <= 0) return;
+            this.editorMaskPaintAt(
+                Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)),
+                Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height)));
+        },
+
         editorSetDetail(key, val) { this._editorPatch('detail', key, val); },
         editorSetWB(key, val)    { this._editorPatch('whiteBalance', key, val); },
 
@@ -15890,6 +16064,9 @@ function ninaApp() {
         //   - capture the pointer, or a fast drag that leaves the container
         //     leaves the view stuck mid-pan with no pointerup to end it.
         editorOnPanStart(ev) {
+            // Brush first: while it is armed a drag paints and must not also
+            // move the frame under the stroke.
+            if (this.editorState.maskPainting) { this.editorMaskPointerDown(ev); return; }
             if (this.editorState.zoom <= 1) return;
             if (ev.pointerType === 'mouse' && ev.button !== 0) return;
             if (this._editorPinching) return;
@@ -15903,6 +16080,7 @@ function ninaApp() {
             try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch (_) { }
         },
         editorOnPanMove(ev) {
+            if (this._maskStroking) { this.editorMaskPointerMove(ev); return; }
             if (!this.editorState.panning || this._editorPinching) return;
             this.editorState.panX = this.editorState._panOriginX
                                     + (ev.clientX - this.editorState._panStartX);
@@ -15910,6 +16088,7 @@ function ninaApp() {
                                     + (ev.clientY - this.editorState._panStartY);
         },
         editorOnPanEnd(ev) {
+            if (this._maskStroking) this.editorMaskPointerUp();
             this.editorState.panning = false;
             if (ev && ev.pointerId != null) {
                 try { ev.currentTarget.releasePointerCapture(ev.pointerId); } catch (_) { }
@@ -16119,7 +16298,11 @@ function ninaApp() {
                     sessionId: this.editorState.session,
                     edits: this.editorState.edits,
                     maxDim: maxDim,
-                    quality: 85
+                    quality: 85,
+                    // The tint is rendered from the same coverage the blend
+                    // uses, so what the operator sees is the mask rather than
+                    // a second guess at it computed here.
+                    showMask: !!this.editorState.showMask
                 })
             });
             if (!r.ok) throw new Error(`HTTP ${r.status}`);

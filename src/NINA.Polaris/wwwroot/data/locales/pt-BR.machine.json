@@ -3581,5 +3581,16 @@
   "Keep": "Manter",
   "Frame": "Frame",
   "Ecc": "Ecc",
-  "kept": "mantidos"
+  "kept": "mantidos",
+  "Luminance ramp": "Rampa de luminância",
+  "Range band": "Faixa de valores",
+  "Painted": "Pintada",
+  "Low": "Mínimo",
+  "High": "Máximo",
+  "Feather": "Suavização",
+  "Show mask": "Mostrar máscara",
+  "Brush": "Pincel",
+  "Erase": "Apagar",
+  "Arm the brush. While armed, dragging the preview paints instead of panning.": "Ativa o pincel. Com ele ativo, arrastar na prévia pinta em vez de deslocar.",
+  "Clear the crop to paint: the mask is measured on the uncropped frame.": "Remova o corte para pintar: a máscara é medida no frame sem corte."
 }

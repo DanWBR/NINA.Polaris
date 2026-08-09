@@ -72,10 +72,14 @@ public class ImageEditService : IDisposable {
     /// long side so slider drags stay snappy on big masters; pass 0 to
     /// render at full resolution.
     /// </summary>
+    /// <param name="showMask">Tint the covered area instead of only applying
+    /// the mask there, so the operator can see the coverage. Preview only: an
+    /// export is the picture, not a diagnostic of it.</param>
     public Task<byte[]?> RenderPreviewAsync(string sessionId, EditParams edits,
                                             int maxDim = 1600, int quality = 85,
+                                            bool showMask = false,
                                             CancellationToken ct = default)
-        => Task.Run<byte[]?>(() => RenderPreviewSync(sessionId, edits, maxDim, quality), ct);
+        => Task.Run<byte[]?>(() => RenderPreviewSync(sessionId, edits, maxDim, quality, showMask), ct);
 
     /// <summary>
     /// Apply <paramref name="edits"/> then compute a 256-bin histogram per
@@ -287,7 +291,8 @@ public class ImageEditService : IDisposable {
 
     // ─── preview ─────────────────────────────────────────────────────
 
-    private byte[]? RenderPreviewSync(string sessionId, EditParams edits, int maxDim, int quality) {
+    private byte[]? RenderPreviewSync(string sessionId, EditParams edits, int maxDim,
+                                      int quality, bool showMask = false) {
         if (!_sessions.TryGetValue(sessionId, out var s)) {
             _logger.LogDebug("Editor preview: session {Id} not found", sessionId);
             return null;
@@ -312,7 +317,17 @@ public class ImageEditService : IDisposable {
             working = downscaled; w = dw; h = dh;
         }
 
+        // The mask is measured on the pre-edit buffer, same as the pipeline
+        // does internally, so the overlay marks exactly the pixels the blend
+        // will spare.
+        byte[]? overlay = null;
+        if (showMask && edits.Mask is { } mp && !mp.IsNoOp) {
+            overlay = EditMask.Build(working, w, h, s.Channels, mp);
+        }
+
         EditPipeline.Apply(working, w, h, s.Channels, edits, _gpu);
+
+        if (overlay != null) EditMask.Overlay(working, s.Channels, overlay);
 
         // If a crop is set, apply it after the pipeline (keep things in
         // the working frame's coordinate system).

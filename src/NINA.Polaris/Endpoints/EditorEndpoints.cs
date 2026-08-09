@@ -56,7 +56,7 @@ public static class EditorEndpoints {
         g.MapPost("/preview", async (ImageEditService svc, PreviewRequest req,
                                        CancellationToken ct) => {
             var bytes = await svc.RenderPreviewAsync(req.SessionId,
-                req.Edits ?? EditParams.Defaults, req.MaxDim, req.Quality, ct);
+                req.Edits ?? EditParams.Defaults, req.MaxDim, req.Quality, req.ShowMask, ct);
             return bytes == null
                 ? Results.NotFound(new { error = "Session not found." })
                 : Results.File(bytes, "image/jpeg");
@@ -230,7 +230,10 @@ public static class EditorEndpoints {
 
     public record LoadRequest(string Path);
     public record PreviewRequest(string SessionId, EditParams? Edits,
-                                  int MaxDim = 1600, int Quality = 85);
+                                  int MaxDim = 1600, int Quality = 85,
+                                  /// <summary>Tint the masked area so the
+                                  /// operator can see the coverage.</summary>
+                                  bool ShowMask = false);
     public record ExportRequestDto(string SessionId, EditParams? Edits,
                                     string? Format, int? Quality,
                                     int? TargetWidth, int? TargetHeight,

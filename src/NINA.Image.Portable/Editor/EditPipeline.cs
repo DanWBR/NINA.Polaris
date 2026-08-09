@@ -64,6 +64,19 @@ public static class EditPipeline {
                                IGpuCompute? gpu = null) {
         if (p == null) return buf;
 
+        // A masked edit is the ordinary pipeline plus a blend. Build the
+        // coverage from the image as it is NOW (before any adjustment), keep an
+        // untouched copy, run everything, then mix the two. Doing it this way
+        // rather than threading a mask through each stage is what keeps the
+        // spatial stages correct: an unsharp mask reads its neighbourhood, and
+        // a kernel that skipped masked-out neighbours would compute something
+        // else entirely along the mask edge.
+        byte[]? maskCoverage = null, unedited = null;
+        if (p.Mask is { } mp && !mp.IsNoOp) {
+            maskCoverage = EditMask.Build(buf, width, height, channels, mp);
+            unedited = (byte[])buf.Clone();
+        }
+
         // ── 1. White balance (RGB only, no-op for mono)
         if (channels == 3 && p.WhiteBalance != null && !p.WhiteBalance.IsDefault) {
             var (rG, gG, bG) = ColorSpace.TempTintToGain(p.WhiteBalance.TempK, p.WhiteBalance.Tint);
@@ -143,6 +156,11 @@ public static class EditPipeline {
         // ── 8.5. Final hue rotation (applied after vibrance/sat so the
         //        rotation acts on the final colour palette)
         // (already done inside ApplyColor, kept here for ordering doc)
+
+        // ── 16. Mask: bring the untouched pixels back where coverage is low.
+        if (maskCoverage != null && unedited != null) {
+            EditMask.Blend(buf, unedited, maskCoverage, channels);
+        }
         return buf;
     }
 
