@@ -20400,7 +20400,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </div>
 
             <!-- Floating action button (after subscription) -->
-            <button class="assistant-fab" x-ref="asstFab" x-show="asst.subscribed" x-cloak
+            <button class="assistant-fab" x-ref="asstFab" data-tour="asst-fab"
+                    x-show="asst.subscribed" x-cloak
                     :class="{ 'active': asst.open, 'has-img': _asstIconUrl() }" @click="assistantToggle()"
                     @pointerdown="assistantDragStart($event)" :style="_assistantLauncherStyle()"
                     :title="asst.manifest.iframe.fabLabel || asst.manifest.product.name">

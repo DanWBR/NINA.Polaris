@@ -253,6 +253,12 @@
                 body: 'Both bars fold away with this chevron, leaving a few pixels you tap to bring them back. On a narrow screen their contents move into a ••• button instead, so the row never wraps over the page.'
             },
             {
+                target: '[data-tour="asst-fab"]', placement: 'left', skipIfMissing: true,
+                title: 'Canopus: ask instead of hunting',
+                body: 'The co-pilot knows this rig and the current session. Ask it what is worth shooting tonight, why a solve failed, or to run something for you. Anything that would move the mount or change a device is shown for you to approve first, never done silently.',
+                before: function (a) { a.tab = 'home'; }
+            },
+            {
                 center: true,
                 title: 'Status bars: done',
                 body: 'Those two bars give you situational awareness from any screen. Back to imaging!'
@@ -286,6 +292,7 @@
             { target: '[data-tour="set-debuglog"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Debug logging', body: 'Control log verbosity and optionally persist the debug log to disk for troubleshooting.' },
             { target: '[data-tour="set-tools"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'External tools', body: 'Paths to optional external programs (e.g. Siril, GraXpert) Polaris can hand off to.' },
             { target: '[data-tour="set-ai"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'AI inference (ONNX)', body: 'Manage the AI models (star removal, denoise, deconvolution, BGE) and where they run (browser/NPU/CLI).' },
+            { target: '[data-tour="set-assistant"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Assistant (Canopus)', body: 'Where the Canopus co-pilot runs: the hosted cloud, a local model on this Polaris host, or one on the device you are browsing from. The on-host option needs no internet and no account, at the cost of speed.' },
             { target: '[data-tour="set-reset"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Reset to factory defaults', body: 'Danger zone: wipe all settings and start fresh. Use only as a last resort.' },
             { center: true, title: 'Settings: done', body: "That's the full Settings tour. You can revisit it any time from Help." }
         ];
