@@ -919,15 +919,18 @@ public class EquipmentProfile {
     /// connect; survives restarts because it lives on the profile.</summary>
     public Dictionary<string, int> PreConnectDelayMsByDevice { get; set; } = new();
 
-    /// <summary>Restart guiding when it falls into wind-driven runaway
-    /// oscillation. On by default: the state it catches does not recover on its
-    /// own, and the restart budget keeps it from being noisy.</summary>
-    public bool GuideOscillationRestart { get; set; } = true;
+    /// <summary>Restart guiding when the error runs away and stops coming
+    /// back. On by default: the state it catches does not recover on its own,
+    /// and the restart budget keeps it from being noisy.</summary>
+    public bool GuideRunawayRestart { get; set; } = true;
 
-    /// <summary>RMS (arcsec) a guide axis must exceed before the oscillation
-    /// guard will act. Amplitude alone never fires it, the sign pattern has to
-    /// agree, but a small scope in good seeing can raise this to be sure.</summary>
-    public double GuideOscillationRmsArcsec { get; set; } = 2.0;
+    /// <summary>RMS (arcsec) a guide axis must exceed, without recovering,
+    /// before the guard restarts guiding. The default of 30 comes from sweeping
+    /// two real data sets, a windy SV503 night and a calm FRA400 control: below
+    /// about 20 the control fires as often as the problem night, because poor
+    /// seeing on a small scope also reaches 8-15 arcsec. Lower it only if a rig
+    /// is genuinely losing sessions and the logs back it up.</summary>
+    public double GuideRunawayRmsArcsec { get; set; } = 30.0;
 
     /// <summary>Per-rig angular move size (deg) at or above which a SKY "Go To"
     /// is flagged for confirmation before the mount moves. A big swing can make

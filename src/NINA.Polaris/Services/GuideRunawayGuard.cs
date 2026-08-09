@@ -15,18 +15,18 @@
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// Restarts guiding when it falls into wind-driven runaway oscillation.
+/// Restarts guiding when the error runs away and stops coming back.
 ///
 /// <para>Field report, SV503 in wind, 2026-08-07: guiding "swung up and down
 /// and never came back to stability", and the fix each time was to stop and
-/// start it by hand. <see cref="GuideOscillationDetector"/> is what recognises
-/// that state; this is what does the stopping and starting.</para>
+/// start it by hand. <see cref="GuideRunawayDetector"/> is what recognises that
+/// state, calibrated against that night's 32 guide logs; this is what does the
+/// stopping and starting.</para>
 ///
-/// <para>Restarting is enough because the oscillation lives in the guider's
-/// own feedback loop, not in the mount: a fresh start drops the accumulated
-/// history and the loop re-converges from the current position. Calibration is
-/// deliberately NOT redone, which would take minutes and is not what is
-/// wrong.</para>
+/// <para>Restarting is enough because a fresh start re-locks on the star where
+/// it is now, zeroing an error the loop was never going to close with its
+/// per-correction limits in the way. Calibration is deliberately NOT redone,
+/// which would take minutes and is not what is wrong.</para>
 ///
 /// <para>The budget matters as much as the detection. A gust front lasting an
 /// hour would otherwise produce an hour of restarts, each costing settle time,
@@ -34,11 +34,11 @@ namespace NINA.Polaris.Services;
 /// <see cref="MaxRestartsPerHour"/> the guard gives up, says so, and leaves the
 /// session alone for the operator to judge.</para>
 /// </summary>
-public sealed class GuideOscillationGuard : BackgroundService {
+public sealed class GuideRunawayGuard : BackgroundService {
 
     private readonly ActiveGuiderProvider _guiders;
     private readonly ProfileService _profiles;
-    private readonly ILogger<GuideOscillationGuard> _logger;
+    private readonly ILogger<GuideRunawayGuard> _logger;
 
     /// <summary>Frames kept per axis. Long enough that a single gust cannot
     /// fill it, short enough that the guard reacts inside a sub rather than
@@ -67,19 +67,20 @@ public sealed class GuideOscillationGuard : BackgroundService {
     public bool BudgetExhausted { get; private set; }
     public double LastRmsArcsec { get; private set; }
     public double LastAlternation { get; private set; }
+    public double LastTrendArcsecPerFrame { get; private set; }
 
-    public GuideOscillationGuard(ActiveGuiderProvider guiders, ProfileService profiles,
-                                 ILogger<GuideOscillationGuard> logger) {
+    public GuideRunawayGuard(ActiveGuiderProvider guiders, ProfileService profiles,
+                             ILogger<GuideRunawayGuard> logger) {
         _guiders = guiders;
         _profiles = profiles;
         _logger = logger;
     }
 
     private bool Enabled =>
-        _profiles.ActiveEquipmentProfile?.GuideOscillationRestart ?? true;
+        _profiles.ActiveEquipmentProfile?.GuideRunawayRestart ?? true;
 
     private double RmsThreshold =>
-        _profiles.ActiveEquipmentProfile?.GuideOscillationRmsArcsec ?? 2.0;
+        _profiles.ActiveEquipmentProfile?.GuideRunawayRmsArcsec ?? 30.0;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
         // The active guider can change (PHD2 <-> native) when the operator
@@ -96,7 +97,7 @@ public sealed class GuideOscillationGuard : BackgroundService {
                     Reset();
                 }
             } catch (Exception ex) {
-                _logger.LogDebug(ex, "Oscillation guard could not resolve the active guider");
+                _logger.LogDebug(ex, "Runaway guard could not resolve the active guider");
             }
             await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken).ContinueWith(_ => { });
         }
@@ -114,7 +115,7 @@ public sealed class GuideOscillationGuard : BackgroundService {
         // is not wind.
         if (step.Dither) { Reset(); lock (_gate) { _blank = BlankAfterRestart; } return; }
 
-        GuideOscillationDetector.Verdict verdict;
+        GuideRunawayDetector.Verdict verdict;
         lock (_gate) {
             if (_blank > 0) { _blank--; return; }
             if (_restarting) return;
@@ -123,21 +124,22 @@ public sealed class GuideOscillationGuard : BackgroundService {
             Push(_dec, step.DecArcsec);
             if (_ra.Count < WindowFrames) return;
 
-            verdict = GuideOscillationDetector.JudgeWorst(
+            verdict = GuideRunawayDetector.JudgeWorst(
                 _ra.ToArray(), _dec.ToArray(),
                 minSamples: WindowFrames, rmsThresholdArcsec: RmsThreshold);
             LastRmsArcsec = verdict.RmsArcsec;
             LastAlternation = verdict.AlternationRate;
-            if (!verdict.Oscillating) return;
+            LastTrendArcsecPerFrame = verdict.TrendArcsecPerFrame;
+            if (!verdict.RunAway) return;
 
             if (!TakeBudget()) {
                 if (!BudgetExhausted) {
                     BudgetExhausted = true;
                     _logger.LogWarning(
-                        "Guiding is oscillating again (RMS {Rms:F2}\", {Alt:P0} reversals) but "
-                        + "the restart budget of {Max}/h is spent. Leaving it alone: past this "
-                        + "point the settle time costs more frames than the wind does.",
-                        verdict.RmsArcsec, verdict.AlternationRate, MaxRestartsPerHour);
+                        "Guiding has run away again (RMS {Rms:F2}\") but the restart budget of "
+                        + "{Max}/h is spent. Leaving it alone: past this point the settle time "
+                        + "costs more frames than the weather does.",
+                        verdict.RmsArcsec, MaxRestartsPerHour);
                 }
                 _ra.Clear(); _dec.Clear();
                 return;
@@ -164,14 +166,14 @@ public sealed class GuideOscillationGuard : BackgroundService {
         return true;
     }
 
-    private async Task RestartAsync(GuideOscillationDetector.Verdict verdict) {
+    private async Task RestartAsync(GuideRunawayDetector.Verdict verdict) {
         var guider = _hooked;
         try {
             _logger.LogWarning(
-                "Guiding is oscillating (RMS {Rms:F2}\", {Alt:P0} of frames reverse sign). "
-                + "Stopping and restarting: the loop is chasing itself and does not recover "
-                + "on its own.",
-                verdict.RmsArcsec, verdict.AlternationRate);
+                "Guide error has run away (RMS {Rms:F2}\", trend {Trend:+0.00;-0.00}\"/frame, "
+                + "{Alt:P0} reversals). Stopping and restarting: it is not pulling back and a "
+                + "fresh lock is what closes an error this size.",
+                verdict.RmsArcsec, verdict.TrendArcsecPerFrame, verdict.AlternationRate);
 
             if (guider != null) {
                 await guider.StopAsync();
@@ -184,13 +186,13 @@ public sealed class GuideOscillationGuard : BackgroundService {
 
             LastRestartUtc = DateTime.UtcNow;
             RestartsThisSession++;
-            _logger.LogInformation("Guiding restarted after oscillation ({N} this session)",
+            _logger.LogInformation("Guiding restarted after a runaway ({N} this session)",
                                    RestartsThisSession);
         } catch (Exception ex) {
             // A guard that throws must not take the session with it: the
             // operator still has a running sequence, just an unguided one, and
             // that is a strictly better place to be than a crashed host.
-            _logger.LogError(ex, "Could not restart guiding after detecting oscillation");
+            _logger.LogError(ex, "Could not restart guiding after detecting a runaway");
         } finally {
             lock (_gate) {
                 _ra.Clear(); _dec.Clear();

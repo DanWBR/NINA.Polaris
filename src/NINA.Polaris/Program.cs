@@ -417,11 +417,11 @@ builder.Services.AddHostedService<MeridianFlipAutoLiveService>();
 builder.Services.AddSingleton<MountSafetyGuardService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MountSafetyGuardService>());
 
-// Wind guard: watches the guide stream for runaway oscillation and restarts
-// guiding when it finds it. Hosted because it has to be listening before
-// anything asks it a question.
-builder.Services.AddSingleton<GuideOscillationGuard>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<GuideOscillationGuard>());
+// Wind guard: watches the guide stream for an error that has run away and is
+// not coming back, and restarts guiding when it finds one. Hosted because it
+// has to be listening before anything asks it a question.
+builder.Services.AddSingleton<GuideRunawayGuard>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<GuideRunawayGuard>());
 builder.Services.AddSingleton<FlatWizardService>();
 // PA-1: TPPA orchestrator. Singleton because it holds CurrentJob
 // (consumed by StatusStreamHandler) + the in-flight CancellationTokenSource.
