@@ -143,9 +143,36 @@ public class StorageSetupService {
         }
 
         var root = CaptureRoot();
+        // Which filesystem the captures currently land on. A host that was set
+        // up months ago answers with the very disk the card would offer to
+        // mount, so this is what keeps it quiet. Empty when the capture root is
+        // unset or the path cannot be resolved.
+        var rootSource = string.IsNullOrWhiteSpace(root)
+            ? "" : Run("findmnt", $"-no SOURCE --target {root}").Trim();
         return new(true, null, root, IsOnBootDisk(root, bootDisk),
-                   list.Where(c => !c.OnBootDisk).ToList(),
+                   Offerable(list, rootSource),
                    Formattable(rows, bootDisk));
+    }
+
+    /// <summary>Candidates worth SUGGESTING.
+    ///
+    /// <para>Two exclusions, both of which produced a card that made no sense.
+    /// The boot disk is never a capture disk. And the disk the captures are
+    /// already written to is not something to offer to mount: it is mounted,
+    /// that is how the frames are getting there. Field report 2026-08-08, a
+    /// fully configured host offering to set its own NVMe up again.</para>
+    ///
+    /// <para><paramref name="captureRootSource"/> is the device node
+    /// <c>findmnt --target</c> reports for the capture root, so a candidate is
+    /// matched by the filesystem actually in use rather than by a mount point
+    /// string that may be a parent, a symlink, or a bind.</para></summary>
+    internal static List<Candidate> Offerable(
+            IEnumerable<Candidate> all, string captureRootSource) {
+        var host = (captureRootSource ?? "").Trim();
+        return all.Where(c => !c.OnBootDisk
+                           && (host.Length == 0
+                               || !string.Equals(c.Device, host, StringComparison.Ordinal)))
+                  .ToList();
     }
 
     /// <summary>Whole disks that could be erased and set up. STORAGE-2.</summary>
@@ -210,6 +237,12 @@ public class StorageSetupService {
             var src = Run("findmnt", $"-no SOURCE --target {path}").Trim();
             if (string.IsNullOrEmpty(src)) return false;
             var disk = Run("lsblk", $"-no PKNAME {src}").Trim();
+            // A filesystem written straight to a whole disk (no partition
+            // table, which is how a hand-formatted NVMe often ends up) has no
+            // parent, so PKNAME is empty and the disk IS the node. The
+            // candidate loop already handles that case via `name == bootDisk`;
+            // without the same fallback here the two disagree.
+            if (string.IsNullOrEmpty(disk)) disk = Run("lsblk", $"-no KNAME {src}").Trim();
             return !string.IsNullOrEmpty(disk) && disk == bootDisk;
         } catch { return false; }
     }
