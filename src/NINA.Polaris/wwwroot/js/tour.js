@@ -126,6 +126,12 @@
                 before: function (a) { a.tab = 'files'; }
             },
             {
+                target: '[data-tour="studio-halo"]', placement: 'bottom', skipIfMissing: true,
+                title: 'Halo removal',
+                body: 'Reflection halos around the brightest stars, the rings a filter or corrector leaves behind. Runs on the same frames as star removal and is easiest to judge right after it.',
+                before: function (a) { a.tab = 'files'; }
+            },
+            {
                 target: '[data-tour="studio-bge"]', placement: 'bottom',
                 title: 'Background extraction (BGE)',
                 body: 'Remove light-pollution gradients and uneven background with GraXpert, for a flat, neutral sky.',
@@ -141,6 +147,12 @@
                 target: '[data-tour="studio-decon"]', placement: 'bottom',
                 title: 'Deconvolution',
                 body: 'Sharpen stars and structure with GraXpert deconvolution, recovering detail softened by seeing and optics.',
+                before: function (a) { a.tab = 'files'; }
+            },
+            {
+                target: '[data-tour="studio-upscale"]', placement: 'bottom', skipIfMissing: true,
+                title: 'Upscale',
+                body: 'AI super-resolution at 2x or 4x. Last of the pixel-level steps, because it wants the sharpest, cleanest input you can hand it: denoise and deconvolve first, enlarge after.',
                 before: function (a) { a.tab = 'files'; }
             },
             {
