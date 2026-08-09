@@ -4160,6 +4160,14 @@ function ninaApp() {
                             }, 180000); // 3 min away → suspend
                         }
                     }
+                    // The mount + target rectangles are pushed to the engine
+                    // when something moves them (slew, solve, target pick).
+                    // Come back to SKY without any of that having happened and
+                    // the engine can be holding no overlay layer: the iframe was
+                    // display:none, and on some returns it recomposes without
+                    // the rects, so they stayed missing until the next slew or
+                    // plate solve put them back. Re-push on entry.
+                    if (v === 'sky') this._refreshSkyOverlaysOnOpen();
                     // AFPORT: FOCUS panel mirrors the active rig's AutoFocus
                     // settings on every entry (a rig switch elsewhere would
                     // otherwise leave stale values in the form).
@@ -17738,6 +17746,25 @@ function ninaApp() {
             // which is exactly the value the solve just corrected. Fire and
             // forget: a catalog lookup must never hold up the frame.
             this._identifyFromSolve(raDeg / 15, decDeg);
+        },
+
+        // Re-send the FOV rectangles when SKY is opened.
+        //
+        // A suspended iframe (mobile, after minutes away) reloads and its
+        // 'ready' handler already re-hydrates everything, so this only has to
+        // cover the live-iframe case. The repeats mirror the ones after
+        // 'ready' and exist for the same reason: a push can land while the
+        // engine is still recomposing its layers after the panel went from
+        // display:none back to visible, and a push that lands then is dropped
+        // without a word. Each repeat re-checks the tab, so switching away
+        // makes the pending ones no-ops.
+        _refreshSkyOverlaysOnOpen() {
+            const push = () => {
+                if (this.tab !== 'sky' || !this._skyBridgeReady) return;
+                try { this._pushSkyFovOverlays(); } catch (_) { /* engine idle */ }
+            };
+            push();
+            [250, 900].forEach(ms => setTimeout(push, ms));
         },
 
         _pushSkyFovOverlays() {
