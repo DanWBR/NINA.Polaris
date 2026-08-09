@@ -8109,9 +8109,21 @@ function ninaApp() {
         _maybeRestoreLiveStackPreview(frameCount) {
             if (!frameCount || frameCount <= 0) {
                 // Stack reset / not running: clear the marker so the next
-                // run's first frame restores.
+                // run's first frame restores, and retire any fetch already in
+                // flight so its answer cannot land on the new stack.
                 this._lastStackFrameShown = 0;
+                this._stackRestoreEpoch = (this._stackRestoreEpoch || 0) + 1;
                 return;
+            }
+            // A stack that RESTARTED counts from 1 again, i.e. below the
+            // marker, and the guard below would then sit at "already shown"
+            // until the new stack passed the old one's length. Change the
+            // target, restack, and the canvas kept the old picture for as many
+            // frames as the previous run was long (field report 2026-08-08).
+            // A counter that went backwards is a new stack, full stop.
+            if (frameCount < (this._lastStackFrameShown || 0)) {
+                this._lastStackFrameShown = 0;
+                this._stackRestoreEpoch = (this._stackRestoreEpoch || 0) + 1;
             }
             // Already showed this (or a newer) stacked frame.
             if (frameCount <= (this._lastStackFrameShown || 0)) return;
@@ -8125,8 +8137,14 @@ function ninaApp() {
             // Guard against overlapping fetches when ticks pile up.
             if (this._stackRestoreInFlight) return;
             this._stackRestoreInFlight = true;
-            this.restoreLiveStackPreview()
+            // Which stack this fetch was asked for. A reset while it is in
+            // flight bumps the epoch, and the answer is then about a stack that
+            // no longer exists: painting it is how the previous target came
+            // back over the new one.
+            const epoch = this._stackRestoreEpoch || 0;
+            this.restoreLiveStackPreview(epoch)
                 .then(res => {
+                    if (epoch !== (this._stackRestoreEpoch || 0)) return;
                     // FIELD6-10: mark this frame count consumed on 'ok' AND on
                     // 'unavailable'. Only 'ok' used to count, so a server that
                     // reports frames but holds no stacked image (a reset racing
@@ -8144,7 +8162,7 @@ function ninaApp() {
 
         /// Returns 'ok' | 'unavailable' (server has no stacked image — a normal
         /// answer, do not retry for this frame count) | 'error' (transient, retry).
-        async restoreLiveStackPreview() {
+        async restoreLiveStackPreview(epoch = null) {
             try {
                 // 404 = "No stacked image available": expected, not a fault.
                 const resp = await this.apiFetch('/api/livestack/preview',
@@ -8156,6 +8174,9 @@ function ninaApp() {
                 // just nothing to paint. Same class as 404 — don't re-ask for
                 // this frame count.
                 if (!buf || buf.byteLength < 2) return 'unavailable';
+                // Re-check after the await: the stack may have been reset while
+                // the bytes were on the wire.
+                if (epoch !== null && epoch !== (this._stackRestoreEpoch || 0)) return 'unavailable';
                 // Paint as a Live-kind frame so it lands on the LIVE canvas
                 // and mirrors to the preview canvas, exactly like a WS frame.
                 this._renderJpegFrame(buf, 0);
@@ -24926,13 +24947,21 @@ function ninaApp() {
             // start both skip the prompt.
             let action = wantsPrep ? 'start-with-prep' : 'start';
             if (existingFrames > 0) {
-                const choice = await this._confirmAsync(
-                    existingFrames + ' frame(s) already stacked.\n\n' +
-                    '"Continue" keeps adding to the existing stack.\n' +
-                    '"Restart" clears the stack and begins fresh.',
-                    { title: 'Live stacking',
-                      okLabel: 'Continue', cancelLabel: 'Restart' });
-                if (choice) action = 'resume';
+                // Restart is the OK button and continuing is the cancel, which
+                // reads backwards until you notice what a dismissal has to do:
+                // ESC, a tap on the backdrop, or a stray second tap all resolve
+                // as cancel, and the destructive branch must never be what a
+                // dismissal picks. Losing an hour of integration to a misplaced
+                // tap is the one outcome worth designing around.
+                const restart = await this._confirmAsync(
+                    this._t('{n} frame(s) already stacked. Continue adds to them; '
+                          + 'restart clears them and begins a fresh stack.',
+                            { n: existingFrames }),
+                    { title: this._t('Live stacking'),
+                      okLabel: this._t('Restart'),
+                      cancelLabel: this._t('Continue'),
+                      danger: true });
+                if (!restart) action = 'resume';
             }
 
             this.liveStackEnabled = true;   // optimistic; rolled back on failure
@@ -24975,8 +25004,26 @@ function ninaApp() {
         // offers Continue/Restart; ↻ Reset clears it explicitly.
         async stopLiveSession() {
             if (this._liveSessionBusy) return;   // stop already in flight
-            this._liveSessionBusy = true;
             const wasStacking = this.liveStackEnabled;
+            // The shutter is a big target and stopping is easy to do by
+            // accident (field report: "I pressed it several times without
+            // meaning to"). Ask, but only when there is a stack in progress to
+            // interrupt: stopping a plain capture loop costs nothing and a
+            // prompt there would just be in the way.
+            const frames = this.liveStackFrames || 0;
+            if (wasStacking && frames > 0) {
+                const ok = await this._confirmAsync(
+                    this._t('Stop live stacking? The {n} frame(s) already stacked are kept, '
+                          + 'and the next shutter press offers to continue from them.',
+                            { n: frames }),
+                    { title: this._t('Live stacking'),
+                      okLabel: this._t('Stop'), cancelLabel: this._t('Keep going') });
+                if (!ok) return;
+                // The await above is a window in which a second tap could have
+                // started its own stop.
+                if (this._liveSessionBusy) return;
+            }
+            this._liveSessionBusy = true;
             try {
                 // Pause the STACK FIRST (fast — Stop() keeps the accumulator +
                 // its frame count) and reflect state immediately, BEFORE the

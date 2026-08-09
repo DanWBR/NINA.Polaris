@@ -135,8 +135,11 @@ public static class LiveStackEndpoints {
             });
         });
 
-        group.MapGet("/preview", (LiveStackingService stack, ImageRelayService relay, int? quality) => {
-            var jpeg = relay.GetLatestJpeg(quality ?? 85);
+        // The STACK, not the last frame of any kind. Serving the latter meant a
+        // client pulling this right after a target change repainted the canvas
+        // with the previous target's stack.
+        group.MapGet("/preview", (ImageRelayService relay, int? quality) => {
+            var jpeg = relay.GetStackJpeg(quality ?? 85);
             if (jpeg == null)
                 return Results.NotFound(new { error = "No stacked image available" });
             return Results.File(jpeg, "image/jpeg");

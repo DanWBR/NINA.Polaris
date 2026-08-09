@@ -4112,5 +4112,8 @@
   "Could not set the port": "No se pudo definir el puerto",
   "Nothing catalogued at this pointing, added as Mount position": "Nada catalogado en esta posición, añadido como Mount position",
   "Add a target at the mount's current pointing, named after the catalogued object there": "Añade un objetivo en la posición actual de la montura, con el nombre del objeto catalogado que haya allí",
-  "The last captured frame of the running plan appears here.": "La última imagen capturada del plan en ejecución aparece aquí."
+  "The last captured frame of the running plan appears here.": "La última imagen capturada del plan en ejecución aparece aquí.",
+  "Stop live stacking? The {n} frame(s) already stacked are kept, and the next shutter press offers to continue from them.": "¿Parar el live stacking? Los {n} fotograma(s) ya apilados se mantienen, y el siguiente toque del obturador ofrece continuar desde ellos.",
+  "{n} frame(s) already stacked. Continue adds to them; restart clears them and begins a fresh stack.": "{n} fotograma(s) ya apilados. Continuar suma a ellos; reiniciar los borra y empieza una pila nueva.",
+  "Keep going": "Seguir"
 }

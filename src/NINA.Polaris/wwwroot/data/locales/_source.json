@@ -3429,5 +3429,8 @@
   "Could not set the port": "",
   "Nothing catalogued at this pointing, added as Mount position": "",
   "Add a target at the mount's current pointing, named after the catalogued object there": "",
-  "The last captured frame of the running plan appears here.": ""
+  "The last captured frame of the running plan appears here.": "",
+  "Stop live stacking? The {n} frame(s) already stacked are kept, and the next shutter press offers to continue from them.": "",
+  "{n} frame(s) already stacked. Continue adds to them; restart clears them and begins a fresh stack.": "",
+  "Keep going": ""
 }

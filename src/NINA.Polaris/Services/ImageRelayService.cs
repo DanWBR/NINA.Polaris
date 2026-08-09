@@ -52,6 +52,17 @@ public class ImageRelayService : IDisposable {
     private IImageData? _latestImageData;
     private byte[]? _latestJpeg;
 
+    // The live STACK's own picture, kept apart from _latestImage. Those hold
+    // the last frame of ANY kind that went past, which is the wrong answer for
+    // /api/livestack/preview: after a target change the client pulled the
+    // preview and got the previous target's stack painted over the new one
+    // (field report 2026-08-08, "the first restack showed and then the old
+    // image came back"). Cleared by ClearStack() when the stacker resets, so
+    // between a reset and the first new frame the endpoint honestly 404s.
+    private IImageData? _stackImage;
+    private byte[]? _stackJpeg;
+    private readonly object _stackGate = new();
+
     // Stabilize a transient CCD_CFA dropout: some drivers momentarily report
     // BayerPattern=None mid-session, which (without an operator override) would
     // relay that single frame as mono and flash a grey / raw-mosaic frame on
@@ -298,6 +309,9 @@ public class ImageRelayService : IDisposable {
         _latestImage = buffer;
         _latestImageData = sourceData;
         _latestJpeg = null;
+        if (frameKind == (int)FrameKind.LiveStack) {
+            lock (_stackGate) { _stackImage = sourceData; _stackJpeg = null; }
+        }
 
         if (_clients.IsEmpty) return Task.CompletedTask;
 
@@ -488,6 +502,13 @@ public class ImageRelayService : IDisposable {
             // ToJpeg()'s greyscale stays correct for the mono/raw path in
             // RelayImageAsync, which still nulls the cache on purpose.
             _latestJpeg = jpeg;
+            if (kind == FrameKind.LiveStack) {
+                // Exactly the picture the LIVE canvas is showing, so the
+                // preview endpoint serves it verbatim instead of re-encoding
+                // (and, before the split above, instead of re-encoding it
+                // greyscale).
+                lock (_stackGate) { _stackImage = rgb; _stackJpeg = jpeg; }
+            }
             var header = buffer.GetStreamHeader((int)kind);
             var frame = new byte[4 + header.Length + jpeg.Length];
             BitConverter.GetBytes(header.Length).CopyTo(frame, 0);
@@ -600,6 +621,42 @@ public class ImageRelayService : IDisposable {
                 // guard anyway so a teardown race never escapes the relay.
                 try { entry.SendLock.Release(); } catch (ObjectDisposedException) { }
             }
+    }
+
+    /// <summary>The current live stack as a JPEG, or null when there is no
+    /// stack. Distinct from <see cref="GetLatestJpeg"/>, which answers with the
+    /// most recent frame of any kind: a preview snap, an autofocus exposure or
+    /// the previous target's stack all qualify there and none of them is the
+    /// stack the caller asked for.</summary>
+    public byte[]? GetStackJpeg(int quality = 85) {
+        IImageData? img;
+        lock (_stackGate) {
+            if (_stackJpeg != null) return _stackJpeg;
+            img = _stackImage;
+        }
+        if (img == null || img.Properties.Width <= 0 || img.Properties.Height <= 0) return null;
+        try {
+            var w = img.Properties.Width;
+            var h = img.Properties.Height;
+            // A colour stack arrives as three planar channels in one array.
+            var jpeg = img.Data.Length >= w * h * 3
+                ? FitsThumbnailer.RenderJpegFromRgbPlanes(
+                      img.Data, w, h, img.Properties.BitDepth, Math.Max(w, h), quality)
+                : ImageBuffer.FromImageData(img).ToJpeg(quality);
+            lock (_stackGate) { if (ReferenceEquals(_stackImage, img)) _stackJpeg = jpeg; }
+            return jpeg;
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "JPEG encode of the {W}x{H} stack failed",
+                               img.Properties.Width, img.Properties.Height);
+            return null;
+        }
+    }
+
+    /// <summary>Forget the stack picture. Called when the stacker resets, so a
+    /// preview pulled during the gap before the first new frame cannot answer
+    /// with the previous stack.</summary>
+    public void ClearStack() {
+        lock (_stackGate) { _stackImage = null; _stackJpeg = null; }
     }
 
     public byte[]? GetLatestJpeg(int quality = 85) {

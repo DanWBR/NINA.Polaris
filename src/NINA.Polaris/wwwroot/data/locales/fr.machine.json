@@ -3570,5 +3570,10 @@
   "× scaling)": true,
   "Nothing catalogued at this pointing, added as Mount position": "Rien de catalogué à cette position, ajouté comme Mount position",
   "Add a target at the mount's current pointing, named after the catalogued object there": "Ajoute une cible à la position actuelle de la monture, nommée d'après l'objet catalogué qui s'y trouve",
-  "The last captured frame of the running plan appears here.": "La dernière image capturée du plan en cours apparaît ici."
+  "The last captured frame of the running plan appears here.": "La dernière image capturée du plan en cours apparaît ici.",
+  "Stop live stacking? The {n} frame(s) already stacked are kept, and the next shutter press offers to continue from them.": "Arrêter le live stacking ? Les {n} image(s) déjà empilées sont conservées, et la prochaine pression sur l'obturateur propose de continuer à partir d'elles.",
+  "{n} frame(s) already stacked. Continue adds to them; restart clears them and begins a fresh stack.": "{n} image(s) déjà empilées. Continuer s'y ajoute ; redémarrer les efface et commence une nouvelle pile.",
+  "Keep going": "Continuer",
+  "Live stacking": "Live stacking",
+  "Stop": "Arrêter"
 }

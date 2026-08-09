@@ -747,6 +747,10 @@ public class LiveStackingService {
     /// stack begins immediately when the next frame arrives. Used
     /// when the user switches targets and wants to start over.</summary>
     public void Reset() {
+        // Outside the lock: the relay has its own gate and nothing here waits
+        // on it. Without this the preview endpoint keeps answering with the
+        // stack we are about to throw away.
+        _relay.ClearStack();
         lock (_lock) {
             _stackBuffer = null;
             _countBuffer = null;
