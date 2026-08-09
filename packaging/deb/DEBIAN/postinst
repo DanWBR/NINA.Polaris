@@ -205,10 +205,32 @@ case "$1" in
 BRLTTY
             echo "polaris: masked the brltty udev rules (they steal CH340 serial ports)"
         fi
+        # Masking runs OUTSIDE the systemd-is-running guard, and that placement
+        # is the whole point.
+        #
+        # An image is built with `curtin in-target`, i.e. in a chroot where
+        # /run/systemd/system does not exist. With the mask inside the guard,
+        # a build wrote the udev rule and skipped the units entirely, so the
+        # published image booted with brltty enabled: and we know from the
+        # board that the rule alone does not hold, because a running daemon
+        # finds the adapter over libusb regardless. The focuser would have
+        # gone missing again on every freshly flashed card, while a live
+        # `apt install` on a running system stayed fine. Masking is just a
+        # symlink to /dev/null, so it works offline and belongs here.
+        for unit in brltty-udev.service brltty.service; do
+            if command -v systemctl >/dev/null 2>&1; then
+                systemctl mask "$unit" >/dev/null 2>&1 || true
+            fi
+            # Belt and braces for a chroot where systemctl is absent or
+            # refuses to talk to a dead bus: the symlink IS the mask.
+            if [ ! -e "/etc/systemd/system/$unit" ]; then
+                mkdir -p /etc/systemd/system
+                ln -sf /dev/null "/etc/systemd/system/$unit" 2>/dev/null || true
+            fi
+        done
         if [ -d /run/systemd/system ]; then
             for unit in brltty-udev.service brltty.service; do
                 systemctl disable --now "$unit" >/dev/null 2>&1 || true
-                systemctl mask "$unit" >/dev/null 2>&1 || true
             done
             # It may already be up from this boot, still holding a port.
             pkill -x brltty >/dev/null 2>&1 || true
