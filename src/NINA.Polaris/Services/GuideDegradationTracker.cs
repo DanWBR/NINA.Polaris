@@ -39,11 +39,28 @@ namespace NINA.Polaris.Services;
 /// history is only taken from frames that already look normal.</para>
 ///
 /// <para>Calibrated on the same paired night as the guard, two rigs under one
-/// sky. At 2x held for 120s the wind-hit SV503 is warned for 15% of its guiding
-/// time (81 of 539 minutes) and the sheltered FRA400 for 2% (18 of 729). Raising
-/// the factor collapses that: at 2.5x it is 3% against 2%, which is no signal at
-/// all. So 2.0 is not a round number picked for looks, it is the only setting in
-/// the sweep that separates the rig in trouble from the rig beside it.</para>
+/// sky. At 2x held for 120s, replaying both halves end to end:</para>
+/// <code>
+///                  guiding   warnings   warned      restarts
+///   SV503 (wind)    539 min      4       101 min (19%)   4
+///   FRA400 (small)  729 min      7        43 min ( 6%)   2
+/// </code>
+/// <para>The interesting part is not the counts, it is the DURATION. The
+/// sheltered rig gets MORE warnings but shorter ones, 2 to 5 minutes each: gusts
+/// that pass. The SV503's last one runs 82 minutes, because on that tripod the
+/// degradation set in and stayed. A warning that only counted episodes would
+/// have called the small scope the worse of the two.</para>
+///
+/// <para>Both rigs degrade in the same window, around 07:10, which is the wind
+/// picking up rather than anything about either mount. The FRA400 takes one
+/// restart at 07:26 and recovers; the SV503 spends its whole budget between
+/// 07:12 and 07:15 and the error keeps climbing to 143 arcsec. Same weather,
+/// responses in proportion to what each rig was doing under it, which is what a
+/// per-session relative measure is for.</para>
+///
+/// <para>Raising the factor collapses the separation: at 2.5x it is 3% against
+/// 2%, no signal at all. So 2.0 is not a round number picked for looks, it is
+/// the only setting in the sweep that tells the two rigs apart.</para>
 /// </summary>
 public sealed class GuideDegradationTracker {
 
