@@ -59,14 +59,20 @@ namespace NINA.Polaris.Services;
 /// per-correction limits in the way. Calibration is not redone: it is not what
 /// is wrong, and it costs minutes.</para>
 ///
-/// <para><b>What this does NOT do.</b> Of the 14 sessions the operator ended by
-/// hand that night, only one carries a telemetry signature separable from an
-/// ordinary rough night; the control set spends time in the same 8-15 arcsec
-/// band without anything being broken. The other twelve were ended on
-/// judgement, watching a graph, and no threshold over these two data sets
-/// reproduces that without also firing on the calm scope. So this catches the
-/// collapse, not the operator's taste, and the manual stop/start stays the tool
-/// for a session that is merely disappointing.</para>
+/// <para><b>Where the night's trouble actually was.</b> Replaying both halves
+/// over the SV503 logs puts every event in one session. Median RMS per session:
+/// </para>
+/// <code>
+///   21:52 - 02:53   ten sessions, median 0.27 to 0.75 arcsec   quiet
+///   05:28 - 07:35   one session,  median 3.23, p90 45.96       the wind
+/// </code>
+/// <para>So the many short restarts early in the night were not a guider in
+/// trouble: those sessions were guiding at a third of an arcsec. Nothing should
+/// have fired there and nothing does. The failure is one 127-minute session at
+/// the end, and inside it the sequence is exactly what the two halves are built
+/// for: the warning comes up at 05:42 at 2.9x normal and escalates, and the
+/// collapse the guard acts on does not arrive until 07:12, an hour and a half
+/// later.</para>
 /// </summary>
 public static class GuideRunawayDetector {
 
