@@ -919,6 +919,16 @@ public class EquipmentProfile {
     /// connect; survives restarts because it lives on the profile.</summary>
     public Dictionary<string, int> PreConnectDelayMsByDevice { get; set; } = new();
 
+    /// <summary>Restart guiding when it falls into wind-driven runaway
+    /// oscillation. On by default: the state it catches does not recover on its
+    /// own, and the restart budget keeps it from being noisy.</summary>
+    public bool GuideOscillationRestart { get; set; } = true;
+
+    /// <summary>RMS (arcsec) a guide axis must exceed before the oscillation
+    /// guard will act. Amplitude alone never fires it, the sign pattern has to
+    /// agree, but a small scope in good seeing can raise this to be sure.</summary>
+    public double GuideOscillationRmsArcsec { get; set; } = 2.0;
+
     /// <summary>Per-rig angular move size (deg) at or above which a SKY "Go To"
     /// is flagged for confirmation before the mount moves. A big swing can make
     /// the mount un-flip and take the long way toward the pier/tripod (the AM3
