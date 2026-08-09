@@ -38,7 +38,7 @@
             {
                 target: '[data-tour="nav-rail"]', placement: 'right',
                 title: 'The sidebar',
-                body: 'Every screen lives here. The order roughly follows a session: equipment, sky, focus, guide, capture, then review your frames.',
+                body: 'Every screen lives here. The order roughly follows a session: equipment, polar alignment, sky, focus, guide, capture, then review your frames.',
                 before: function (a) { a.tab = 'home'; }
             },
             {
@@ -46,6 +46,12 @@
                 title: 'RIGS: your equipment',
                 body: 'Pick a rig, connect to INDI or Alpaca, then use "Connect all" to bring every selected device online at once.',
                 before: function (a) { a.tab = 'equip'; if (a.equipTab !== undefined) a.equipTab = 'equipment'; if (a._applyTabSideEffects) a._applyTabSideEffects('equip'); }
+            },
+            {
+                target: '[data-tour="nav-polar"]', placement: 'right', skipIfMissing: true,
+                title: 'POLAR: line up the mount',
+                body: 'Before anything else on a fresh setup: measure the polar alignment error and correct it, guided by an on-screen bullseye. Everything downstream, tracking, guiding and long exposures, gets easier once this is right.',
+                before: function (a) { a.tab = 'polar'; if (a.loadPolarTargets) a.loadPolarTargets(); }
             },
             {
                 target: '[data-tour="sky-search"]', placement: 'bottom',
@@ -78,10 +84,28 @@
                 before: function (a) { a.tab = 'sequence'; if (a.autorunTab !== undefined) a.autorunTab = 'sequence'; if (a._applyTabSideEffects) a._applyTabSideEffects('sequence'); }
             },
             {
+                target: '[data-tour="nav-plan"]', placement: 'right', skipIfMissing: true,
+                title: 'PLAN: a whole night, several targets',
+                body: 'Where AUTORUN shoots one target, PLAN sequences a night across several: each target gets its own frames, and you can hand it a time window or let it run in order. It slews, centres and refocuses between targets on its own.',
+                before: function (a) { a.tab = 'plan'; if (a.loadPlans) a.loadPlans(); }
+            },
+            {
+                target: '[data-tour="nav-adv"]', placement: 'right', skipIfMissing: true,
+                title: 'ADV: build your own sequence',
+                body: 'The advanced sequencer, for a night that does not fit the other two: a tree of instructions, conditions and triggers you assemble yourself. Reach for it when you need something AUTORUN and PLAN cannot express.',
+                before: function (a) { a.tab = 'seqadv'; if (a.loadAdvSeq) a.loadAdvSeq(); }
+            },
+            {
                 target: '[data-tour="nav-live"]', placement: 'right',
                 title: 'LIVE: watch it stack',
                 body: 'Open the LIVE view: frames stack in real time here (ASIAIR-style), so you watch the image build up as the session goes on.',
                 before: function (a) { a.tab = 'live'; if (a.quickControlsCollapsed) a.quickControlsCollapsed = false; }
+            },
+            {
+                target: '[data-tour="nav-video"]', placement: 'right', skipIfMissing: true,
+                title: 'VIDEO: planets and the Moon',
+                body: 'A different kind of night. Record a high frame-rate SER clip instead of long exposures, then stack the sharpest frames of it (lucky imaging). The sharpness readout while recording is your focus aid.',
+                before: function (a) { a.tab = 'video'; if (a.loadCameraCapabilities) a.loadCameraCapabilities(); }
             },
             {
                 target: '[data-tour="nav-studio"]', placement: 'right',
