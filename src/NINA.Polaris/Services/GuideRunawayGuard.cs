@@ -53,6 +53,11 @@ public sealed class GuideRunawayGuard : BackgroundService {
     /// alternating by nature and would read as the very thing we just fixed.</summary>
     private const int BlankAfterRestart = 20;
 
+    /// <summary>The warning half. The guard restarts on collapse; this only
+    /// says "worse than this session's normal for a while", which is the case
+    /// the restart threshold deliberately does not cover.</summary>
+    private readonly GuideDegradationTracker _degradation = new();
+
     private readonly object _gate = new();
     private readonly Queue<double> _ra = new();
     private readonly Queue<double> _dec = new();
@@ -68,6 +73,12 @@ public sealed class GuideRunawayGuard : BackgroundService {
     public double LastRmsArcsec { get; private set; }
     public double LastAlternation { get; private set; }
     public double LastTrendArcsecPerFrame { get; private set; }
+
+    // ---- the warning, read by the status payload ----
+    public bool Degraded => _degradation.Degraded;
+    public DateTime? DegradedSinceUtc => _degradation.DegradedSinceUtc;
+    public double? BaselineRmsArcsec => _degradation.BaselineArcsec;
+    public double CurrentRmsArcsec => _degradation.CurrentArcsec;
 
     public GuideRunawayGuard(ActiveGuiderProvider guiders, ProfileService profiles,
                              ILogger<GuideRunawayGuard> logger) {
@@ -106,6 +117,8 @@ public sealed class GuideRunawayGuard : BackgroundService {
 
     private void Reset() {
         lock (_gate) { _ra.Clear(); _dec.Clear(); _blank = 0; }
+        // A new session or a backend switch: the old normal describes nothing.
+        _degradation.Reset();
     }
 
     private void OnStep(GuideStep step) {
@@ -127,6 +140,19 @@ public sealed class GuideRunawayGuard : BackgroundService {
             verdict = GuideRunawayDetector.JudgeWorst(
                 _ra.ToArray(), _dec.ToArray(),
                 minSamples: WindowFrames, rmsThresholdArcsec: RmsThreshold);
+            // Feed the warning from the same window, so the two never disagree
+            // about what the current error is.
+            var wasDegraded = _degradation.Degraded;
+            _degradation.Push(verdict.RmsArcsec, DateTime.UtcNow);
+            if (_degradation.Degraded && !wasDegraded) {
+                _logger.LogWarning(
+                    "Guiding has been {Factor:F1}x worse than this session's normal "
+                    + "({Cur:F2}\" vs {Base:F2}\") for over two minutes. Not restarting: "
+                    + "this is a heads-up, not a fault.",
+                    _degradation.BaselineArcsec > 0
+                        ? _degradation.CurrentArcsec / _degradation.BaselineArcsec.Value : 0,
+                    _degradation.CurrentArcsec, _degradation.BaselineArcsec ?? 0);
+            }
             LastRmsArcsec = verdict.RmsArcsec;
             LastAlternation = verdict.AlternationRate;
             LastTrendArcsecPerFrame = verdict.TrendArcsecPerFrame;

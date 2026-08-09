@@ -29,7 +29,10 @@ public sealed class GuidingStatusContributor : IStatusContributor {
     private readonly Phd2VncSessionService _phd2Vnc;
     private readonly PHD2ProfileSyncService _profileSync;
 
-    public GuidingStatusContributor(EquipmentManager equip, ActiveGuiderProvider guiders, PHD2CalibrationOrchestrator phd2Calibration, Phd2GuiSessionService phd2Gui, Phd2VncSessionService phd2Vnc, PHD2ProfileSyncService profileSync) {
+    private readonly GuideRunawayGuard _guard;
+
+    public GuidingStatusContributor(EquipmentManager equip, ActiveGuiderProvider guiders, PHD2CalibrationOrchestrator phd2Calibration, Phd2GuiSessionService phd2Gui, Phd2VncSessionService phd2Vnc, PHD2ProfileSyncService profileSync, GuideRunawayGuard guard) {
+        _guard = guard;
         _equip = equip;
         _guiders = guiders;
         _phd2Calibration = phd2Calibration;
@@ -173,7 +176,19 @@ public sealed class GuidingStatusContributor : IStatusContributor {
                 profileSync = profileSyncPayload,
                 calibrateJob = calibrateJobPayload,
                 guiSession = guiSessionPayload,
-                vncSession = vncSessionPayload
+                vncSession = vncSessionPayload,
+                // How guiding is doing against its OWN normal for this session,
+                // plus what the runaway guard has had to do. Advisory: the UI
+                // shows it, nothing acts on it.
+                health = new {
+                    degraded = _guard.Degraded,
+                    degradedSinceUtc = _guard.DegradedSinceUtc,
+                    baselineRms = _guard.BaselineRmsArcsec,
+                    currentRms = _guard.CurrentRmsArcsec,
+                    restarts = _guard.RestartsThisSession,
+                    lastRestartUtc = _guard.LastRestartUtc,
+                    budgetExhausted = _guard.BudgetExhausted
+                }
             };
         } else {
             guiderPayload = new {

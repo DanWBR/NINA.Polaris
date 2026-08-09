@@ -37114,6 +37114,50 @@ function ninaApp() {
             // taken any frames yet. Tying visibility to frame count
             // means the chip only surfaces when there's real activity
             // to report.
+            // Guiding is worse than this session's own normal, and has been
+            // for a while. A suggestion, not a fault: the operator decides
+            // whether to ride it out, and the runaway guard handles the case
+            // where it stops being a judgement call.
+            const gh = this.guider?.health;
+            if (gh && gh.degraded) {
+                const since = gh.degradedSinceUtc ? new Date(gh.degradedSinceUtc) : null;
+                const mins = since ? Math.max(1, Math.round((Date.now() - since) / 60000)) : null;
+                const ratio = (gh.baselineRms > 0)
+                    ? (gh.currentRms / gh.baselineRms).toFixed(1) : null;
+                out.push({
+                    id: 'guide-degraded',
+                    icon: '〰',
+                    kind: 'warn',
+                    label: mins
+                        ? this._t('Guiding rough for {n} min', { n: mins })
+                        : this._t('Guiding rough'),
+                    tooltip: this._t(
+                        'Guiding has been {x}x this session\'s usual error '
+                        + '({cur}" vs {base}") for {n} minutes. Nothing has been '
+                        + 'restarted: this is a heads-up so you can decide.',
+                        { x: ratio ?? '?', cur: (gh.currentRms ?? 0).toFixed(2),
+                          base: (gh.baselineRms ?? 0).toFixed(2), n: mins ?? '?' }),
+                    onClick: () => { this.tab = 'guide'; }
+                });
+            }
+            // The runaway guard gave up: it restarted as often as it is allowed
+            // to and the error came back. Worth saying out loud, because from
+            // here on nothing is watching the session for you.
+            if (gh && gh.budgetExhausted) {
+                out.push({
+                    id: 'guide-budget',
+                    icon: '⚠',
+                    kind: 'warn',
+                    label: this._t('Guiding restarts exhausted'),
+                    tooltip: this._t(
+                        'Guiding ran away again after {n} automatic restarts this '
+                        + 'session. No more will be attempted: past this point the '
+                        + 'settle time costs more frames than the weather does.',
+                        { n: gh.restarts ?? 0 }),
+                    onClick: () => { this.tab = 'guide'; }
+                });
+            }
+
             if (this.liveStackEnabled && (this.liveStackFrames || 0) > 0) {
                 out.push({
                     id: 'ls',

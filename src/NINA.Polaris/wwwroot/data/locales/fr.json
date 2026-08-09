@@ -4149,5 +4149,10 @@
   "Brush": "Pinceau",
   "Erase": "Effacer",
   "Arm the brush. While armed, dragging the preview paints instead of panning.": "Active le pinceau. Une fois actif, faire glisser dans l'aperçu peint au lieu de déplacer.",
-  "Clear the crop to paint: the mask is measured on the uncropped frame.": "Retirez le recadrage pour peindre : le masque est mesuré sur l'image non recadrée."
+  "Clear the crop to paint: the mask is measured on the uncropped frame.": "Retirez le recadrage pour peindre : le masque est mesuré sur l'image non recadrée.",
+  "Guiding rough for {n} min": "Guidage dégradé depuis {n} min",
+  "Guiding rough": "Guidage dégradé",
+  "Guiding has been {x}x this session's usual error ({cur}\" vs {base}\") for {n} minutes. Nothing has been restarted: this is a heads-up so you can decide.": "Le guidage est {x}x pire que la normale de cette session ({cur}\" contre {base}\") depuis {n} minutes. Rien n'a été redémarré : c'est un simple avertissement.",
+  "Guiding restarts exhausted": "Redémarrages de guidage épuisés",
+  "Guiding ran away again after {n} automatic restarts this session. No more will be attempted: past this point the settle time costs more frames than the weather does.": "Le guidage a de nouveau décroché après {n} redémarrages automatiques dans cette session. Il n'y en aura plus : passé ce point, le temps de stabilisation coûte plus d'images que la météo."
 }

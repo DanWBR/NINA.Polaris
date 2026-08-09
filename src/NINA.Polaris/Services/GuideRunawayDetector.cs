@@ -18,11 +18,21 @@ namespace NINA.Polaris.Services;
 /// Spots a guider whose error has run away and is not coming back, the state
 /// where the only fix is to stop and start again.
 ///
-/// <para>Calibrated against two real data sets: the SV503 wind night of
-/// 2026-08-07/08 on an OPi 4 Pro (23087 frames, 14 sessions, most of them ended
-/// by the operator restarting by hand) and, as a control, an Askar FRA400 on a
-/// Q6A across several calm nights (47898 frames, 34 sessions) where the small
-/// scope barely felt the wind.</para>
+/// <para><b>Calibrated against a paired field experiment.</b> Two rigs ran the
+/// same night, 2026-08-07/08, at the same site, in the same wind and the same
+/// seeing:</para>
+/// <list type="bullet">
+///   <item>an SV503 on a not-especially-rigid tripod, driven by an OPi 4 Pro:
+///         23087 frames over 14 sessions, most of them ended by the operator
+///         restarting guiding by hand</item>
+///   <item>an Askar FRA400, small enough that the wind barely reached it, on a
+///         Q6A: 30387 frames over 12 sessions</item>
+/// </list>
+/// <para>Because the only variable is the rig, the FRA400 is a genuine control
+/// rather than a different night with different weather. That is what makes the
+/// numbers below mean anything: a threshold that fires on both is responding to
+/// the sky, and one that fires only on the SV503 is responding to the tripod.
+/// </para>
 ///
 /// <para><b>What the logs actually show, and what they killed.</b> The first
 /// version of this looked for oscillation: the classic over-correction runaway
@@ -79,25 +89,22 @@ public static class GuideRunawayDetector {
     /// is not a runaway; what matters is the state that persists.</param>
     /// <param name="rmsThresholdArcsec">RMS the window must exceed.
     ///
-    /// <para>The default of 30 is deliberately conservative, and the control
-    /// data is why. Sweeping the threshold across both sets, counting sessions
-    /// touched:</para>
+    /// <para>The default of 30 is deliberately conservative, and the paired
+    /// control is why. Sweeping it over both rigs, as frames per firing:</para>
     /// <code>
-    ///   thresh   SV503 windy      FRA400 calm (control)
-    ///      8"    4/32 sessions    9/34 sessions   &lt;- no separation at all
-    ///     12"    4/32             9/34
-    ///     16"    3/32             7/34
-    ///     20"    2/32             6/34
-    ///     25"    1/32             4/34
-    ///     30"    1/32             4/34
-    ///     60"    1/32             0/34
+    ///   thresh   SV503 (wind-hit)   FRA400 (control)   ratio
+    ///      8"        1 / 699          1 / 1266          1.8x
+    ///     12"        1 / 796          1 / 2762          3.5x
+    ///     16"        1 / 855          1 / 5064          5.9x
+    ///     20"        1 / 923          1 / 10129        11x
+    ///     30"        1 / 1154         1 / 15193        13x
+    ///     60"        1 / 2098         never             -
     /// </code>
-    /// <para>Below about 20 arcsec the calm night fires as often as the windy
-    /// one, because a small scope in poor seeing also spends time at 8-11
-    /// arcsec RMS. That is bad guiding, not a broken loop, and restarting there
-    /// would cost settle time for nothing. At 30 the control fires roughly once
-    /// per 12000 frames, about one per three hours of guiding, which the
-    /// restart budget absorbs.</para></param>
+    /// <para>At 8 arcsec the two rigs are nearly indistinguishable, so a
+    /// threshold there is an alarm on the sky both of them were under, not on
+    /// the one that was in trouble. The separation grows with the threshold and
+    /// is 13x by 30, where the control fires about once per four hours of
+    /// guiding and the restart budget absorbs it.</para></param>
     public static Verdict Judge(IReadOnlyList<double> errors,
                                 int minSamples = 12,
                                 double rmsThresholdArcsec = 30.0) {

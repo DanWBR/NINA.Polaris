@@ -3592,5 +3592,10 @@
   "Brush": "Pincel",
   "Erase": "Apagar",
   "Arm the brush. While armed, dragging the preview paints instead of panning.": "Ativa o pincel. Com ele ativo, arrastar na prévia pinta em vez de deslocar.",
-  "Clear the crop to paint: the mask is measured on the uncropped frame.": "Remova o corte para pintar: a máscara é medida no frame sem corte."
+  "Clear the crop to paint: the mask is measured on the uncropped frame.": "Remova o corte para pintar: a máscara é medida no frame sem corte.",
+  "Guiding rough for {n} min": "Guiagem ruim há {n} min",
+  "Guiding rough": "Guiagem ruim",
+  "Guiding has been {x}x this session's usual error ({cur}\" vs {base}\") for {n} minutes. Nothing has been restarted: this is a heads-up so you can decide.": "A guiagem está {x}x pior que o normal desta sessão ({cur}\" contra {base}\") há {n} minutos. Nada foi reiniciado: é só um aviso para você decidir.",
+  "Guiding restarts exhausted": "Reinícios de guiagem esgotados",
+  "Guiding ran away again after {n} automatic restarts this session. No more will be attempted: past this point the settle time costs more frames than the weather does.": "A guiagem fugiu de novo depois de {n} reinícios automáticos nesta sessão. Não haverá mais tentativas: daqui em diante o tempo de settle custa mais frames que o tempo ruim."
 }

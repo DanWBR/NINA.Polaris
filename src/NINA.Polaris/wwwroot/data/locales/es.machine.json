@@ -3608,5 +3608,10 @@
   "Brush": "Pincel",
   "Erase": "Borrar",
   "Arm the brush. While armed, dragging the preview paints instead of panning.": "Activa el pincel. Con él activo, arrastrar en la vista previa pinta en vez de desplazar.",
-  "Clear the crop to paint: the mask is measured on the uncropped frame.": "Quita el recorte para pintar: la máscara se mide en el fotograma sin recortar."
+  "Clear the crop to paint: the mask is measured on the uncropped frame.": "Quita el recorte para pintar: la máscara se mide en el fotograma sin recortar.",
+  "Guiding rough for {n} min": "Guiado irregular hace {n} min",
+  "Guiding rough": "Guiado irregular",
+  "Guiding has been {x}x this session's usual error ({cur}\" vs {base}\") for {n} minutes. Nothing has been restarted: this is a heads-up so you can decide.": "El guiado está {x}x peor que lo normal de esta sesión ({cur}\" frente a {base}\") desde hace {n} minutos. No se reinició nada: es solo un aviso para que decidas.",
+  "Guiding restarts exhausted": "Reinicios de guiado agotados",
+  "Guiding ran away again after {n} automatic restarts this session. No more will be attempted: past this point the settle time costs more frames than the weather does.": "El guiado volvió a descontrolarse tras {n} reinicios automáticos en esta sesión. No se intentarán más: a partir de aquí el tiempo de estabilización cuesta más fotogramas que el mal tiempo."
 }

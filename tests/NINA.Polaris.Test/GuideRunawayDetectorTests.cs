@@ -18,18 +18,21 @@ using NUnit.Framework;
 namespace NINA.Polaris.Test;
 
 /// <summary>
-/// Calibrated against two real data sets: a windy SV503 night (23087 frames, 14
-/// sessions, most ended by hand) and a calm FRA400 control (47898 frames, 34
-/// sessions). The figures here come from that data rather than being invented,
+/// Calibrated against a paired field experiment: two rigs on the same night at
+/// the same site, one SV503 on a soft tripod that the wind reached (23087
+/// frames, 14 sessions, most ended by hand) and one small Askar FRA400 that it
+/// did not (30387 frames, 12 sessions). Same sky, so the only variable is the
+/// rig. The figures here come from that data rather than being invented,
 /// because two plausible theories died against it:
 ///
 /// <list type="number">
 ///   <item>sign-alternating over-correction: in 23087 frames not one window
 ///         above 8 arcsec RMS had alternation even above 0.5, so the failure is
 ///         a monotonic excursion, not an oscillation</item>
-///   <item>a modest absolute threshold: at 8 arcsec the CALM night fires as
-///         often as the windy one, so anything that low is an alarm on poor
-///         seeing rather than on a broken loop</item>
+///   <item>a modest absolute threshold: at 8 arcsec the SHELTERED rig fires
+///         almost as often as the wind-hit one (1/1266 frames vs 1/699), so
+///         anything that low is an alarm on the shared sky rather than on the
+///         rig that was actually in trouble</item>
 /// </list>
 /// </summary>
 [TestFixture]
@@ -82,9 +85,9 @@ public class GuideRunawayDetectorTests {
 
     /// <summary>Bad seeing is a hard night, not a broken loop, and restarting
     /// costs settle time and changes nothing. The values are measured: 2.15 and
-    /// 4.70 are the peaks of the windy night's two long healthy sessions, and
-    /// 8.0 to 11.4 is the band the CALM control scope lived in during poor
-    /// seeing. Firing anywhere in here is what makes a guard a nuisance.</summary>
+    /// 4.70 are the peaks of the SV503's two long healthy sessions, and 8.0 to
+    /// 11.4 is the band the sheltered FRA400 lived in under the same sky.
+    /// Firing anywhere in here is what makes a guard a nuisance.</summary>
     [TestCase(2.15)]
     [TestCase(4.70)]
     [TestCase(8.0)]
