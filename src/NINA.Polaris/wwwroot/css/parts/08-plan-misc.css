@@ -622,6 +622,12 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
    ordinary last flex child it cannot leave the panel at all. */
 .tab-panel-plan { padding: 12px 12px 0; overflow: hidden; }
 
+/* Header and banner keep their height: they are flex children of a
+   fixed-height column now, and without this they compress before
+   .plan-main does. */
+.tab-panel-plan > .panel-header,
+.tab-panel-plan > .feature-untested-warn { flex: 0 0 auto; }
+
 /* Two columns: the plan editor scrolls, the last captured frame does not. */
 .plan-split { display: flex; flex: 1 1 auto; min-height: 0; gap: 12px; }
 .plan-main  { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding-bottom: 12px; }
