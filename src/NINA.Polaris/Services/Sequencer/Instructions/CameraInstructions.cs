@@ -237,7 +237,7 @@ public class CoolCameraInstruction : SequenceInstruction {
         // Wait for the setpoint to finish walking before we start judging the
         // sensor against the target — otherwise the tolerance check races a
         // setpoint that hasn't arrived yet and the timeout fires mid-ramp.
-        await ctx.CoolingRamp.Current();
+        await ctx.CoolingRamp.WaitAsync(ct);
 
         var deadline = DateTime.UtcNow.AddSeconds(TimeoutSeconds);
         while (DateTime.UtcNow < deadline) {
@@ -273,7 +273,7 @@ public class WarmCameraInstruction : SequenceInstruction {
         ctx.CoolingRamp.Start(cam, TargetTempC, RateDegPerMinute,
                               coolerOnFirst: false, coolerOffWhenDone: true,
                               source: "Sequencer warm-up");
-        await ctx.CoolingRamp.Current();
+        await ctx.CoolingRamp.WaitAsync(ct);
         ct.ThrowIfCancellationRequested();
         ctx.Logger.LogInformation("Cooler ramped from {Start:0.0}°C to {Target}°C and powered off", start, TargetTempC);
     }
@@ -300,7 +300,7 @@ public class CoolAuxCameraInstruction : SequenceInstruction {
         ctx.CoolingRamp.Start(cam, TargetTempC, rate,
                               coolerOnFirst: true, coolerOffWhenDone: false,
                               source: "Sequencer aux cooldown", slot: CoolingRampService.Aux);
-        await ctx.CoolingRamp.Current(CoolingRampService.Aux);
+        await ctx.CoolingRamp.WaitAsync(ct, CoolingRampService.Aux);
 
         var deadline = DateTime.UtcNow.AddSeconds(TimeoutSeconds);
         while (DateTime.UtcNow < deadline) {

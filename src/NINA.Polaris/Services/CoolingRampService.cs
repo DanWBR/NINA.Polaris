@@ -86,6 +86,25 @@ public class CoolingRampService {
     /// until the setpoint finishes walking; the sequencer does, the UI doesn't.</summary>
     public Task Current(string slot = Main) { lock (_gate) return SlotFor(slot).Current; }
 
+    /// <summary>Await the in-flight ramp while observing <paramref name="ct"/>, and
+    /// cancel the ramp itself if the wait is cancelled.
+    ///
+    /// The sequencer used to `await Current()` with no token and only check the
+    /// token afterwards. A ramp is minutes long by design (2 C/min, so -10 to
+    /// +20 is a quarter of an hour), and during it Stop did nothing observable:
+    /// the plan sat in the warm-up with the operator unable to end it until the
+    /// cooler finished. Cancelling the ramp too matters as much as returning —
+    /// otherwise a stopped plan leaves a setpoint still walking in the
+    /// background, moving hardware nobody is watching any more.</summary>
+    public async Task WaitAsync(CancellationToken ct, string slot = Main) {
+        try {
+            await Current(slot).WaitAsync(ct);
+        } catch (OperationCanceledException) {
+            Cancel(slot);
+            throw;
+        }
+    }
+
     public RampState? Snapshot(string slot = Main) { lock (_gate) return SlotFor(slot).State; }
 
     /// <summary>Every slot's state, for the WS status block.</summary>
