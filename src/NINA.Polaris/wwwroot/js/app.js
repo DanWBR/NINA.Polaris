@@ -1635,6 +1635,17 @@ function ninaApp() {
         confirmModal: { open: false, title: '', message: '',
                         okLabel: 'OK', cancelLabel: 'Cancel', danger: false },
         _confirmResolver: null,
+        // Backdrop dismissal only counts when the press that STARTED the click
+        // also landed on the backdrop. Several call sites open this modal from
+        // a pointerdown handler (the LIVE shutter stops on press, on purpose,
+        // because a swallowed pointerup left the loop running on touch). The
+        // browser then dispatches the compatibility click at those same
+        // coordinates, and by that moment the full-screen overlay is what sits
+        // under the finger, so a plain @click.self read it as "clicked outside"
+        // and cancelled instantly: the modal flashed and vanished before it
+        // could be read. Arming on pointerdown.self makes that impossible
+        // without a timing guess.
+        _modalBackdropArmed: false,
 
         // Custom single-select modal -- replaces window.prompt() for the
         // STUDIO integration / calibration method pickers (a native prompt
@@ -26036,6 +26047,9 @@ function ninaApp() {
                 this._confirmResolver(false);
                 this._confirmResolver = null;
             }
+            // A press that happened before this modal existed must never count
+            // as a backdrop dismissal.
+            this._modalBackdropArmed = false;
             this.confirmModal = {
                 open: true,
                 title: opts.title || 'Confirm',
@@ -26163,6 +26177,9 @@ function ninaApp() {
                 this._optionResolver(null);
                 this._optionResolver = null;
             }
+            // See _modalBackdropArmed: a press from before this modal
+            // existed must not count as a backdrop dismissal.
+            this._modalBackdropArmed = false;
             const options = opts.options || [];
             this.optionModal = {
                 open: true,
@@ -26204,6 +26221,9 @@ function ninaApp() {
                 this._textResolver(null);
                 this._textResolver = null;
             }
+            // See _modalBackdropArmed: a press from before this modal
+            // existed must not count as a backdrop dismissal.
+            this._modalBackdropArmed = false;
             this.textModal = {
                 open: true,
                 title: opts.title || 'Enter value',

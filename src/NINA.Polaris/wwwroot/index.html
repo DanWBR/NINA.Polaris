@@ -20035,9 +20035,15 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          other floating layer in the app -- the first commit shipped
          with z-index 2000 and the modal rendered BEHIND the log,
          operator had to close the log just to see it. -->
+    <!-- Backdrop dismissal is ARMED by a pointerdown on the backdrop and only
+         then honoured on the matching click. A bare @click.self cancelled the
+         modal the instant it opened whenever the opener ran on pointerdown
+         (the LIVE shutter stops on press): the compatibility click that
+         follows lands on this overlay, which by then covers the screen. -->
     <div class="confirm-modal-overlay"
          x-show="confirmModal.open" x-cloak
-         @click.self="_confirmCancel()">
+         @pointerdown.self="_modalBackdropArmed = true"
+         @click.self="if (_modalBackdropArmed) { _modalBackdropArmed = false; _confirmCancel(); }">
         <div class="confirm-modal-card">
             <h3 class="confirm-modal-title" x-text="confirmModal.title"></h3>
             <p class="confirm-modal-message" x-text="confirmModal.message"></p>
@@ -20179,7 +20185,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          _pickOptionAsync(). -->
     <div class="confirm-modal-overlay"
          x-show="optionModal.open" x-cloak
-         @click.self="_optionCancel()">
+         @pointerdown.self="_modalBackdropArmed = true"
+         @click.self="if (_modalBackdropArmed) { _modalBackdropArmed = false; _optionCancel(); }">
         <div class="confirm-modal-card">
             <h3 class="confirm-modal-title" x-text="optionModal.title"></h3>
             <p class="confirm-modal-message" x-show="optionModal.message"
@@ -20203,7 +20210,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          _promptTextAsync(). -->
     <div class="confirm-modal-overlay"
          x-show="textModal.open" x-cloak
-         @click.self="_textCancel()">
+         @pointerdown.self="_modalBackdropArmed = true"
+         @click.self="if (_modalBackdropArmed) { _modalBackdropArmed = false; _textCancel(); }">
         <div class="confirm-modal-card">
             <h3 class="confirm-modal-title" x-text="textModal.title"></h3>
             <p class="confirm-modal-message" x-show="textModal.message"
