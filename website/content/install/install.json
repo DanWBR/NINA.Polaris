@@ -5,25 +5,25 @@
     "title": "System requirements",
     "sub": "RAM is what really decides. Everything else is comfortable on any modern little board, and a few of them even lend a GPU or an NPU to the AI tools.",
     "ramNote": "Polaris sizes the live stack to the board it is running on, picking full, half or quarter resolution so the work fits in a quarter of the memory. In round numbers: a 12 MP colour camera needs about 900 MB at full resolution and 450 MB at half, on top of a fixed 370 MB for everything else. 2 GB is comfortable, a 1.5 GB board works at reduced resolution, and if you would rather not spend the memory at all, the browser can do the stacking instead.",
-    "recommendedNote": "Recommended board: the Orange Pi 4 Pro with 4 GB. It is the best balance of cost and capability of every SBC tested so far: a Polaris score of 180 for around $50 to $70, with eight cores, LPDDR5 memory, a GPU and a 3 TOPS NPU. If you want the highest score whatever the price, the Radxa Dragon Q6A leads at 317. If you lean on the AI tools, the Orange Pi 5 Pro is the proven accelerated option, adding OpenCL on the GPU and GraXpert AI on the NPU.",
+    "recommendedNote": "Recommended board: the Orange Pi 4 Pro with 4 GB. Best balance of cost and capability of every board tested so far, at around $50 to $70, with eight cores, a GPU and an NPU. The scores on this page come from our own benchmark, where a Raspberry Pi 4 sits at 110: the 4 Pro scores 180. If you want the most speed regardless of price, the Radxa Dragon Q6A leads at 317. If the AI tools matter most, the Orange Pi 5 Pro is the one whose acceleration is fully proven.",
     "rows": [
       {
         "host": "Raspberry Pi 3",
         "ram": "1 GB",
         "status": "Below RAM target",
-        "notes": "Broadcom BCM2837 (4x Cortex-A53, up to 1.2 GHz), VideoCore IV GPU. Runs, but tight; PHD2 GUI embed is auto-disabled (32-bit ARM gate)."
+        "notes": "Too little memory for live stacking and slow with everything else, but it will capture and guide. The built-in PHD2 window is not available on this board because its system is 32-bit. Broadcom BCM2837 (4x Cortex-A53 up to 1.2 GHz), VideoCore IV GPU."
       },
       {
         "host": "Raspberry Pi 4",
         "ram": "2+ GB",
         "status": "Minimum",
-        "notes": "Broadcom BCM2711 (4x Cortex-A72, up to 1.8 GHz), VideoCore VI GPU, LPDDR4. Comfortable at 2 GB: the live stack drops to a lower stacking resolution on its own, and client-side WASM can offload the heavy math."
+        "notes": "The sensible floor. At 2 GB Polaris drops the live stack to a lower resolution on its own so it fits, and it can hand the heavy maths to your browser instead of the board. Broadcom BCM2711 (4x Cortex-A72 up to 1.8 GHz), VideoCore VI GPU, LPDDR4."
       },
       {
         "host": "Raspberry Pi 5",
         "ram": "2+ GB",
         "status": "Great",
-        "notes": "Broadcom BCM2712 (4x Cortex-A76, up to 2.4 GHz), VideoCore VII GPU, LPDDR4X. Lossless: live stacking plus simultaneous Studio jobs are fine."
+        "notes": "No compromises: live stacking and Studio jobs at the same time are fine. About twice the speed of a Pi 4. Broadcom BCM2712 (4x Cortex-A76 up to 2.4 GHz), VideoCore VII GPU, LPDDR4X."
       },
       {
         "host": "Orange Pi 4 Pro",
@@ -31,7 +31,7 @@
         "status": "Recommended",
         "highlight": true,
         "tag": "GPU + NPU",
-        "notes": "The best balance of cost and capability here: Polaris score 180, at the price of a Raspberry Pi 4. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, up to 2.0 GHz), Imagination BXM-4-64 GPU, 3 TOPS NPU, LPDDR5. Active cooling is worth it: it holds the CPU clocks up under the sustained load. Same GPU-plus-NPU story as the 5 Pro (OpenCL on the GPU, GraXpert on the NPU), pending validation."
+        "notes": "The best balance of price and capability here: the price of a Raspberry Pi 4 for about 1.6 times its speed (score 180). Add a fan, it keeps the clocks up through a long night. GPU and NPU acceleration work as on the 5 Pro, though we have not finished testing them on this board. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55 up to 2.0 GHz), Imagination BXM-4-64 GPU, 3 TOPS NPU, LPDDR5."
       },
       {
         "host": "Orange Pi 5 Pro",
@@ -39,7 +39,7 @@
         "status": "Great",
         "highlight": true,
         "tag": "GPU + NPU",
-        "notes": "Proven daily driver, and the pick if you want AI acceleration. RK3588S (4x Cortex-A76 + 4x Cortex-A55), Mali-G610 GPU, 6 TOPS NPU. Full experience: OpenCL on the GPU and GraXpert AI on the NPU."
+        "notes": "The proven choice when you want the AI tools accelerated: both the GPU and the NPU are used. About 2.5 times a Pi 4 (score 274). RK3588S (4x Cortex-A76 + 4x Cortex-A55), Mali-G610 GPU, 6 TOPS NPU."
       },
       {
         "host": "Radxa Dragon Q6A",
@@ -47,13 +47,13 @@
         "status": "Fastest",
         "highlight": true,
         "tag": "Top score",
-        "notes": "The fastest SBC tested so far (Polaris score 317), on the strength of its CPU. Qualcomm QCS6490 (octa-core Kryo: 1x 2.7 GHz + 3x 2.4 GHz + 4x 1.9 GHz), LPDDR5. Polaris runs the image pipeline CPU-only here: the Adreno GPU is a net loss, so the OpenCL toggle stays off. The Hexagon NPU is used, through QAIRT, for the AI tools."
+        "notes": "The fastest board tested so far, close to three times a Pi 4 (score 317), and all of it from the CPU. The AI tools use its NPU. The GPU is left alone because it did not make anything faster here. Qualcomm QCS6490 (octa-core Kryo: 1x 2.7 GHz + 3x 2.4 GHz + 4x 1.9 GHz), LPDDR5."
       },
       {
         "host": "Windows mini PC / desktop / laptop",
         "ram": "4+ GB",
         "status": "Full features",
-        "notes": "Same feature set as Linux, plus vendor DSLR drivers."
+        "notes": "Everything Linux does, plus the vendor drivers for DSLRs. Cameras with their own USB driver need the maker's Windows driver installed; ASCOM and INDI cameras do not."
       }
     ]
   },

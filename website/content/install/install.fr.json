@@ -5,25 +5,25 @@
     "title": "Configuration requise",
     "sub": "C'est la mémoire vive qui décide. Tout le reste passe tranquillement sur n'importe quelle petite carte récente, et certaines prêtent même un GPU ou un NPU aux outils d'IA.",
     "ramNote": "Polaris adapte l'empilement en direct à la carte sur laquelle il tourne, en choisissant la pleine résolution, la moitié ou le quart pour que le travail tienne dans un quart de la mémoire. En gros : une caméra couleur de 12 MP demande environ 900 Mo en pleine résolution et 450 Mo en demi, plus 370 Mo fixes pour le reste. 2 Go, c'est confortable, une carte de 1,5 Go fonctionne en résolution réduite, et si vous préférez ne pas y consacrer cette mémoire, le navigateur peut faire l'empilement à sa place.",
-    "recommendedNote": "Carte recommandée : l'Orange Pi 4 Pro avec 4 Go. C'est le meilleur équilibre entre prix et capacités de tous les SBC testés à ce jour : un score Polaris de 180 pour environ 50 à 70 dollars, avec huit cœurs, de la mémoire LPDDR5, un GPU et un NPU de 3 TOPS. Si vous voulez le meilleur score quel qu'en soit le prix, le Radxa Dragon Q6A domine avec 317. Si vous comptez beaucoup sur les outils d'IA, l'Orange Pi 5 Pro constitue une alternative éprouvée, grâce à l'ajout d'OpenCL sur le GPU et de GraXpert AI sur le NPU.",
+    "recommendedNote": "Carte recommandée : l'Orange Pi 4 Pro en 4 Go. Meilleur rapport coût/capacité de tout ce que nous avons testé, autour de 50 à 70 US$, avec huit cœurs, un GPU et un NPU. Les scores de cette page viennent de notre propre banc d'essai, où une Raspberry Pi 4 se situe à 110 : la 4 Pro obtient 180. Si vous voulez la vitesse avant tout, la Radxa Dragon Q6A mène avec 317. Si ce sont les outils IA qui comptent, l'Orange Pi 5 Pro est celle dont l'accélération est pleinement éprouvée.",
     "rows": [
       {
         "host": "Raspberry Pi 3",
         "ram": "1 GB",
         "status": "En dessous de l'objectif de RAM",
-        "notes": "Broadcom BCM2837 (4 cœurs Cortex-A53, jusqu'à 1,2 GHz), GPU VideoCore IV. Fonctionne, mais avec des limitations ; l'intégration de l'interface graphique PHD2 est automatiquement désactivée (restriction ARM 32 bits)."
+        "notes": "Trop peu de mémoire pour le live stacking et lente pour le reste, mais elle acquiert et autoguide. La fenêtre PHD2 intégrée n'est pas disponible sur cette carte, son système étant en 32 bits. Broadcom BCM2837 (4x Cortex-A53 jusqu'à 1,2 GHz), GPU VideoCore IV."
       },
       {
         "host": "Raspberry Pi 4",
         "ram": "2+ GB",
         "status": "Minimum",
-        "notes": "Broadcom BCM2711 (4x Cortex-A72, jusqu'à 1,8 GHz), GPU VideoCore VI, LPDDR4. Confortable avec 2 Go : le live stack redescend seul à une résolution de stacking plus basse, et le WASM côté client peut prendre en charge le gros du calcul."
+        "notes": "Le plancher raisonnable. À 2 Go, Polaris réduit tout seul la résolution du live stack pour qu'il tienne, et peut confier les gros calculs à votre navigateur plutôt qu'à la carte. Broadcom BCM2711 (4x Cortex-A72 jusqu'à 1,8 GHz), GPU VideoCore VI, LPDDR4."
       },
       {
         "host": "Raspberry Pi 5",
         "ram": "2+ GB",
         "status": "Super !",
-        "notes": "Broadcom BCM2712 (4 cœurs Cortex-A76, jusqu'à 2,4 GHz), GPU VideoCore VII, LPDDR4X. En mode sans perte : le live stacking et l'exécution simultanée de tâches Studio fonctionnent sans problème."
+        "notes": "Sans compromis : live stacking et travaux Studio en même temps passent sans souci. Environ deux fois une Pi 4. Broadcom BCM2712 (4x Cortex-A76 jusqu'à 2,4 GHz), GPU VideoCore VII, LPDDR4X."
       },
       {
         "host": "Orange Pi 4 Pro",
@@ -31,7 +31,7 @@
         "status": "Recommandé",
         "highlight": true,
         "tag": "GPU + NPU",
-        "notes": "Le meilleur équilibre entre prix et capacités de ce tableau : un score Polaris de 180, pour le prix d'un Raspberry Pi 4. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, jusqu'à 2,0 GHz), GPU Imagination BXM-4-64, NPU de 3 TOPS, LPDDR5. Le refroidissement actif en vaut la peine : il permet de maintenir les fréquences du processeur sous une charge soutenue. Même configuration GPU + NPU que le 5 Pro (OpenCL sur le GPU, GraXpert sur le NPU), en attente de validation."
+        "notes": "Le meilleur rapport prix/capacité ici : le prix d'une Raspberry Pi 4 pour environ 1,6 fois sa vitesse (score 180). Ajoutez un ventilateur, il maintient les fréquences sur une longue nuit. L'accélération GPU et NPU fonctionne comme sur la 5 Pro, mais nous n'avons pas fini de la tester sur cette carte. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55 jusqu'à 2,0 GHz), GPU Imagination BXM-4-64, NPU 3 TOPS, LPDDR5."
       },
       {
         "host": "Orange Pi 5 Pro",
@@ -39,7 +39,7 @@
         "status": "Super !",
         "highlight": true,
         "tag": "GPU + NPU",
-        "notes": "Un appareil qui a fait ses preuves au quotidien, et le choix idéal si vous recherchez des performances d'accélération IA. RK3588S (4 x Cortex-A76 + 4 x Cortex-A55), GPU Mali-G610, NPU de 6 TOPS. Une expérience complète : OpenCL sur le GPU et GraXpert AI sur le NPU."
+        "notes": "Le choix éprouvé pour accélérer les outils IA : le GPU et le NPU sont tous deux utilisés. Environ 2,5 fois une Pi 4 (score 274). RK3588S (4x Cortex-A76 + 4x Cortex-A55), GPU Mali-G610, NPU 6 TOPS."
       },
       {
         "host": "Radxa Dragon Q6A",
@@ -47,13 +47,13 @@
         "status": "Le plus rapide",
         "highlight": true,
         "tag": "Meilleur score",
-        "notes": "Le SBC le plus rapide testé à ce jour (score Polaris de 317), grâce à la puissance de son processeur. Qualcomm QCS6490 (octa-core Kryo : 1x 2,7 GHz + 3x 2,4 GHz + 4x 1,9 GHz), LPDDR5. Polaris exécute ici le traitement d'image uniquement sur le CPU : le GPU Adreno est un frein, l'option OpenCL reste donc désactivée. Le NPU Hexagon, lui, est utilisé par les outils d'IA via QAIRT."
+        "notes": "La carte la plus rapide testée à ce jour, près de trois fois une Pi 4 (score 317), et tout cela vient du processeur. Les outils IA utilisent son NPU. Le GPU reste de côté : ici il n'accélérait rien. Qualcomm QCS6490 (Kryo octo-cœur : 1x 2,7 GHz + 3x 2,4 GHz + 4x 1,9 GHz), LPDDR5."
       },
       {
         "host": "Mini-PC / ordinateur de bureau / ordinateur portable sous Windows",
         "ram": "4+ GB",
         "status": "Fonctionnalités complètes",
-        "notes": "Les mêmes fonctionnalités que sous Linux, ainsi que les pilotes des appareils photo reflex numériques des différents fabricants."
+        "notes": "Tout ce que fait Linux, plus les pilotes constructeur pour reflex. Les caméras dotées de leur propre pilote USB réclament le pilote Windows du fabricant ; les caméras ASCOM et INDI non."
       }
     ]
   },

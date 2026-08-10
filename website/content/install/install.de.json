@@ -5,25 +5,25 @@
     "title": "Systemanforderungen",
     "sub": "Entscheidend ist der Arbeitsspeicher. Alles andere läuft auf jedem modernen kleinen Board bequem, und einige leihen den KI-Werkzeugen sogar eine GPU oder eine NPU.",
     "ramNote": "Polaris passt das Live-Stacking an das Board an und wählt volle, halbe oder viertel Auflösung, damit die Arbeit in ein Viertel des Speichers passt. Grob gerechnet: Eine 12-MP-Farbkamera braucht rund 900 MB bei voller und 450 MB bei halber Auflösung, dazu feste 370 MB für alles Übrige. 2 GB sind bequem, ein Board mit 1,5 GB arbeitet mit reduzierter Auflösung, und wenn Sie den Speicher lieber sparen, übernimmt der Browser das Stacking.",
-    "recommendedNote": "Empfohlenes Board: der Orange Pi 4 Pro mit 4 GB. Er bietet das beste Verhältnis von Preis und Leistungsfähigkeit aller bisher getesteten SBCs: ein Polaris-Wert von 180 für rund 50 bis 70 Dollar, mit acht Kernen, LPDDR5-Speicher, einer GPU und einer 3-TOPS-NPU. Wenn Sie den höchsten Wert ohne Rücksicht auf den Preis wollen, führt das Radxa Dragon Q6A mit 317. Wenn Sie vor allem auf KI-Tools setzen, ist der Orange Pi 5 Pro die bewährte Alternative, die zusätzlich OpenCL auf der GPU und GraXpert AI auf der NPU bietet.",
+    "recommendedNote": "Empfohlenes Board: die Orange Pi 4 Pro mit 4 GB. Bestes Verhältnis aus Kosten und Leistung von allem bisher Getesteten, für rund 50 bis 70 US$, mit acht Kernen, GPU und NPU. Die Werte auf dieser Seite stammen aus unserem eigenen Benchmark, in dem eine Raspberry Pi 4 bei 110 liegt: die 4 Pro erreicht 180. Wenn es nur um Tempo geht, führt die Radxa Dragon Q6A mit 317. Wenn die KI-Werkzeuge im Vordergrund stehen, ist die Orange Pi 5 Pro diejenige mit vollständig belegter Beschleunigung.",
     "rows": [
       {
         "host": "Raspberry Pi 3",
         "ram": "1 GB",
         "status": "Unterhalb des RAM-Zielwerts",
-        "notes": "Broadcom BCM2837 (4x Cortex-A53, bis zu 1,2 GHz), VideoCore IV-GPU. Läuft, aber mit Einschränkungen; die PHD2-GUI-Einbettung wird automatisch deaktiviert (32-Bit-ARM-Sperre)."
+        "notes": "Zu wenig Speicher für Live Stacking und langsam beim Rest, aber Aufnahme und Guiding gehen. Das eingebaute PHD2-Fenster gibt es auf diesem Board nicht, weil sein System 32-bit ist. Broadcom BCM2837 (4x Cortex-A53 bis 1,2 GHz), VideoCore-IV-GPU."
       },
       {
         "host": "Raspberry Pi 4",
         "ram": "2+ GB",
         "status": "Mindestwert",
-        "notes": "Broadcom BCM2711 (4x Cortex-A72, bis 1,8 GHz), VideoCore-VI-GPU, LPDDR4. Mit 2 GB bequem: Der Live-Stack geht von selbst auf eine niedrigere Stacking-Auflösung, und WASM auf der Clientseite kann die schwere Rechnung übernehmen."
+        "notes": "Die vernünftige Untergrenze. Mit 2 GB senkt Polaris die Auflösung des Live Stacks von allein, damit es passt, und kann die schwere Rechnerei an Ihren Browser abgeben statt an das Board. Broadcom BCM2711 (4x Cortex-A72 bis 1,8 GHz), VideoCore-VI-GPU, LPDDR4."
       },
       {
         "host": "Raspberry Pi 5",
         "ram": "2+ GB",
         "status": "Toll",
-        "notes": "Broadcom BCM2712 (4x Cortex-A76, bis zu 2,4 GHz), VideoCore VII-GPU, LPDDR4X. Verlustfrei: Live-Stacking und gleichzeitige Studio-Aufträge sind kein Problem."
+        "notes": "Ohne Abstriche: Live Stacking und Studio-Aufgaben gleichzeitig laufen problemlos. Etwa doppelt so schnell wie eine Pi 4. Broadcom BCM2712 (4x Cortex-A76 bis 2,4 GHz), VideoCore-VII-GPU, LPDDR4X."
       },
       {
         "host": "Orange Pi 4 Pro",
@@ -31,7 +31,7 @@
         "status": "Empfohlen",
         "highlight": true,
         "tag": "GPU + NPU",
-        "notes": "Das beste Verhältnis von Preis und Leistungsfähigkeit in dieser Tabelle: Polaris-Wert 180, zum Preis eines Raspberry Pi 4. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55, bis zu 2,0 GHz), Imagination BXM-4-64-GPU, 3 TOPS NPU, LPDDR5. Die aktive Kühlung lohnt sich: Sie hält die CPU-Taktfrequenzen auch unter Dauerlast aufrecht. Gleiche GPU-plus-NPU-Konfiguration wie beim 5 Pro (OpenCL auf der GPU, GraXpert auf der NPU), Validierung steht noch aus."
+        "notes": "Das beste Verhältnis aus Preis und Leistung hier: der Preis einer Raspberry Pi 4 bei etwa 1,6-facher Geschwindigkeit (Wert 180). Ein Lüfter lohnt sich, er hält die Taktraten über eine lange Nacht. GPU- und NPU-Beschleunigung arbeiten wie bei der 5 Pro, getestet haben wir sie auf diesem Board aber noch nicht zu Ende. Allwinner A733 (2x Cortex-A76 + 6x Cortex-A55 bis 2,0 GHz), Imagination-BXM-4-64-GPU, 3-TOPS-NPU, LPDDR5."
       },
       {
         "host": "Orange Pi 5 Pro",
@@ -39,7 +39,7 @@
         "status": "Toll",
         "highlight": true,
         "tag": "GPU + NPU",
-        "notes": "Ein bewährtes Gerät für den täglichen Gebrauch und die erste Wahl, wenn Sie KI-Beschleunigung wünschen. RK3588S (4x Cortex-A76 + 4x Cortex-A55), Mali-G610-GPU, 6 TOPS NPU. Das volle Erlebnis: OpenCL auf der GPU und GraXpert AI auf der NPU."
+        "notes": "Die bewährte Wahl, wenn die KI-Werkzeuge beschleunigt laufen sollen: GPU und NPU werden beide genutzt. Etwa 2,5-mal eine Pi 4 (Wert 274). RK3588S (4x Cortex-A76 + 4x Cortex-A55), Mali-G610-GPU, 6-TOPS-NPU."
       },
       {
         "host": "Radxa Dragon Q6A",
@@ -47,13 +47,13 @@
         "status": "Am schnellsten",
         "highlight": true,
         "tag": "Höchstpunktzahl",
-        "notes": "Der bislang schnellste getestete SBC (Polaris-Ergebnis 317), was vor allem auf seine CPU zurückzuführen ist. Qualcomm QCS6490 (Octa-Core-Kryo: 1x 2,7 GHz + 3x 2,4 GHz + 4x 1,9 GHz), LPDDR5. Polaris rechnet die Bildverarbeitung hier nur auf der CPU: Die Adreno-GPU ist ein Nettoverlust, der OpenCL-Schalter bleibt also aus. Die Hexagon-NPU wird dagegen über QAIRT für die KI-Tools genutzt."
+        "notes": "Das schnellste bisher getestete Board, knapp dreimal eine Pi 4 (Wert 317), und das alles aus der CPU. Die KI-Werkzeuge nutzen die NPU. Die GPU bleibt außen vor, weil sie hier nichts beschleunigt hat. Qualcomm QCS6490 (Octa-Core-Kryo: 1x 2,7 GHz + 3x 2,4 GHz + 4x 1,9 GHz), LPDDR5."
       },
       {
         "host": "Windows-Mini-PC / Desktop-PC / Laptop",
         "ram": "4+ GB",
         "status": "Alle Funktionen",
-        "notes": "Gleiche Funktionen wie unter Linux, zusätzlich Treiber für DSLR-Kameras verschiedener Hersteller."
+        "notes": "Alles, was Linux kann, plus die Herstellertreiber für DSLRs. Kameras mit eigenem USB-Treiber brauchen den Windows-Treiber des Herstellers; ASCOM- und INDI-Kameras nicht."
       }
     ]
   },
