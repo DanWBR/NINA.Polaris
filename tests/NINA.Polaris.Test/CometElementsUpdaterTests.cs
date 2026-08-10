@@ -154,4 +154,36 @@ public class CometElementsUpdaterTests {
         Assert.That(nuHi, Is.EqualTo(nuLo).Within(0.01),
             "true anomaly jumps across e = 1");
     }
+
+    /// <summary>
+    /// The client-relay path (a phone with mobile data feeding an offline host)
+    /// posts the RAW JPL body to /api/sky/comets/import, which runs this very
+    /// parser. Pinning that here is what keeps the two routes honest: the
+    /// client is a courier, and every validation rule lives on the host.
+    /// </summary>
+    [Test]
+    public void Parse_IsTheSameForRelayedBodies() {
+        var direct = CometElementsUpdater.Parse(Fixture, Now, out var s1);
+        var relayed = CometElementsUpdater.Parse(Fixture, Now, out var s2);
+
+        Assert.That(relayed.Count, Is.EqualTo(direct.Count));
+        Assert.That(s2, Is.EqualTo(s1));
+        for (var i = 0; i < direct.Count; i++) {
+            Assert.That(relayed[i].Name, Is.EqualTo(direct[i].Name));
+            Assert.That(relayed[i].Q, Is.EqualTo(direct[i].Q));
+            Assert.That(relayed[i].E, Is.EqualTo(direct[i].E));
+            Assert.That(relayed[i].Tperi, Is.EqualTo(direct[i].Tperi));
+        }
+    }
+
+    /// <summary>A body that is JSON but not an SBDB response must yield nothing
+    /// rather than throwing, so the import endpoint answers 400 and the host
+    /// keeps the elements it already had. Double-encoded JSON is the shape this
+    /// actually took in review: a JSON string containing the table.</summary>
+    [Test]
+    public void Parse_DoubleEncodedOrForeignJson_YieldsNothing() {
+        Assert.That(CometElementsUpdater.Parse("\"{\\\"data\\\":[]}\"", Now, out _), Is.Empty);
+        Assert.That(CometElementsUpdater.Parse("""{"hello":"world"}""", Now, out _), Is.Empty);
+        Assert.That(CometElementsUpdater.Parse("[]", Now, out _), Is.Empty);
+    }
 }

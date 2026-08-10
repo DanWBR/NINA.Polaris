@@ -16892,8 +16892,24 @@ function ninaApp() {
             if (this.cometRefreshing) return;
             this.cometRefreshing = true;
             try {
-                const r = await this.apiPost('/api/sky/comets/refresh', {});
-                const j = await r.json();
+                // 1) Let the host do it. When the host has internet this is the
+                //    whole story and nothing else runs.
+                let j = null;
+                try {
+                    const r = await this.apiPost('/api/sky/comets/refresh', {});
+                    j = await r.json();
+                } catch (e) { j = null; }
+
+                // 2) Host could not reach JPL. In the app we still might: the
+                //    box is on an isolated field network while this phone has
+                //    mobile data. Fetch through the native shell and hand the
+                //    body to the host. A plain browser cannot do this leg --
+                //    JPL sends no CORS header -- so it simply does not offer.
+                if (!j || !j.ok) {
+                    const relayed = await this._cometRelayViaDevice();
+                    if (relayed) j = relayed;
+                }
+
                 if (j && j.ok) {
                     this.cometStatus = {
                         count: j.count, source: j.source,
@@ -16912,6 +16928,73 @@ function ninaApp() {
             } finally {
                 this.cometRefreshing = false;
             }
+        },
+
+        // Fetch the elements over THIS device's connection and post them to the
+        // host. Returns the host's import result, or null when there is no
+        // native shell to fetch through (every desktop browser, and the app
+        // before the bridge shipped).
+        async _cometRelayViaDevice() {
+            if (window.parent === window) return null;   // not embedded, no shell
+            let url;
+            try {
+                const src = await this.apiGet('/api/sky/comets/source');
+                url = src && src.url;
+            } catch (e) { return null; }
+            if (!url) return null;
+
+            const body = await this._nativeFetchText(url);
+            if (!body) return null;
+
+            this.toast(this._t('Fetched on this device; sending to the host'), 'ok');
+            try {
+                // body is already JSON text, so it goes through opts rather
+                // than the second argument: apiPost JSON.stringify()s that one,
+                // which would wrap the whole table in a string literal and
+                // leave the host parsing a string instead of comets.
+                const r = await this.apiPost('/api/sky/comets/import', null, {
+                    headers: { 'Content-Type': 'application/json' },
+                    body
+                });
+                return await r.json();
+            } catch (e) {
+                return null;
+            }
+        },
+
+        // Ask the native shell to GET a URL. Resolves to the body, or null when
+        // no shell answers. Two timeouts on purpose: a short one for the ack,
+        // so a plain browser (where nothing will ever reply) falls through in a
+        // moment instead of making the operator watch a spinner, and a long one
+        // for the transfer itself.
+        _nativeFetchText(url) {
+            return new Promise((resolve) => {
+                const id = 'cf' + Date.now() + Math.random().toString(36).slice(2, 8);
+                let acked = false, done = false;
+                const finish = (v) => {
+                    if (done) return;
+                    done = true;
+                    window.removeEventListener('message', onMsg);
+                    clearTimeout(ackTimer);
+                    clearTimeout(resTimer);
+                    resolve(v);
+                };
+                const onMsg = (ev) => {
+                    const d = ev.data;
+                    if (!d || d.id !== id) return;
+                    if (d.__polarisFetchAck === true) { acked = true; return; }
+                    if (d.__polarisFetchRes !== true) return;
+                    finish(d.ok && typeof d.body === 'string' ? d.body : null);
+                };
+                window.addEventListener('message', onMsg);
+                const ackTimer = setTimeout(() => { if (!acked) finish(null); }, 1200);
+                const resTimer = setTimeout(() => finish(null), 60000);
+                try {
+                    window.parent.postMessage({ __polarisFetchReq: true, id, url }, '*');
+                } catch (e) {
+                    finish(null);
+                }
+            });
         },
 
         async loadTonightsBest(force = false) {

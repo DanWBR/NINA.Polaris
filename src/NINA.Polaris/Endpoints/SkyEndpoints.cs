@@ -367,6 +367,54 @@ public static class SkyEndpoints {
             }
         });
 
+        // The URL the host would fetch. Handing it out keeps BuildQueryUrl the
+        // single source of truth: a client that fetches on the host's behalf
+        // asks for this rather than reimplementing the query, so the perihelion
+        // window and field list can never drift between the two paths.
+        group.MapGet("/comets/source", () => Results.Ok(new {
+            url = CometElementsUpdater.BuildQueryUrl(DateTime.UtcNow)
+        }));
+
+        // Install elements fetched by somebody else, for the case the host
+        // cannot reach the internet at all: out in a field the tablet has
+        // mobile data and the Polaris box has none. The body is the raw JPL
+        // response, parsed here by the very same parser the host path uses, so
+        // the client stays a courier and every validation rule lives in one
+        // place.
+        group.MapPost("/comets/import", async (HttpRequest req,
+                                               CometEphemerisService comets,
+                                               ILoggerFactory loggerFactory) => {
+            var log = loggerFactory.CreateLogger("CometImport");
+            string body;
+            using (var reader = new StreamReader(req.Body)) {
+                // A sane ceiling: the filtered query is ~12 KB and the entire
+                // unfiltered comet table is under 2 MB.
+                var buffer = new char[4 * 1024 * 1024];
+                var read = await reader.ReadBlockAsync(buffer, 0, buffer.Length);
+                body = new string(buffer, 0, read);
+            }
+            if (string.IsNullOrWhiteSpace(body))
+                return Results.BadRequest(new { error = "Empty body" });
+
+            try {
+                var parsed = CometElementsUpdater.Parse(body, DateTime.UtcNow, out var skipped);
+                if (parsed.Count == 0)
+                    return Results.BadRequest(new {
+                        error = "No usable comets in the supplied data; keeping the current elements"
+                    });
+                comets.ReplaceElements(parsed, "jpl", DateTime.UtcNow);
+                log.LogInformation("Imported {Kept} comet elements from a client ({Skipped} skipped)",
+                    parsed.Count, skipped);
+                return Results.Ok(new {
+                    ok = true, count = parsed.Count, skipped,
+                    source = comets.Source, fetchedAtUtc = comets.FetchedAtUtc
+                });
+            } catch (Exception ex) {
+                log.LogWarning(ex, "Client comet import failed");
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
         // ---- Altitude chart + night window ----
 
         group.MapGet("/altitude", (double ra, double dec, int? stepMinutes,

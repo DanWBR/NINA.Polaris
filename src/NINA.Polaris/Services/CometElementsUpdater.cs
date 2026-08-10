@@ -101,8 +101,17 @@ public class CometElementsUpdater {
         skipped = 0;
         var result = new List<CometElements>();
         using var doc = JsonDocument.Parse(json);
+        // Anything that is not an SBDB object yields nothing rather than
+        // throwing. TryGetProperty raises InvalidOperationException on a string
+        // or array root, and the relay path feeds this whatever a phone
+        // received: a captive-portal page, or the table double-encoded as a
+        // JSON string. Returning empty lets the caller answer "no usable
+        // comets" and keep the elements it already had.
+        if (doc.RootElement.ValueKind != JsonValueKind.Object) return result;
         if (!doc.RootElement.TryGetProperty("fields", out var fieldsEl)
             || !doc.RootElement.TryGetProperty("data", out var dataEl)) return result;
+        if (fieldsEl.ValueKind != JsonValueKind.Array || dataEl.ValueKind != JsonValueKind.Array)
+            return result;
 
         var index = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var fields = fieldsEl.EnumerateArray().ToList();

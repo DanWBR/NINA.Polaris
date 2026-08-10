@@ -4183,5 +4183,6 @@
   "Could not reach JPL; keeping the current elements": "JPL nicht erreichbar; aktuelle Elemente bleiben erhalten",
   "Update": "Aktualisieren",
   "Updating...": "Wird aktualisiert...",
-  "Download current comet orbital elements from JPL (needs internet on the host)": "Aktuelle Kometenbahnelemente vom JPL laden (benötigt Internet auf dem Host)"
+  "Download current comet orbital elements from JPL (needs internet on the host)": "Aktuelle Kometenbahnelemente vom JPL laden (benötigt Internet auf dem Host)",
+  "Fetched on this device; sending to the host": "Auf diesem Gerät geladen; wird an den Host gesendet"
 }

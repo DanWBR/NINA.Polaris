@@ -113,6 +113,59 @@ window.addEventListener('message', async (ev) => {
   }
 });
 
+// ---------- reference-data fetch bridge (parent side) ----------
+// Out in a field the Polaris box has no route to the internet while this phone
+// still has mobile data, so the host cannot refresh its comet elements but we
+// can. The iframe asks us to GET a URL, we fetch it natively and hand back the
+// body, and the iframe posts that to its host.
+//
+// It has to be CapacitorHttp, not fetch(): JPL sends no
+// Access-Control-Allow-Origin, so a WebView fetch from this page is blocked
+// exactly as it is inside the iframe. The native HTTP client is not subject to
+// CORS at all, which is the whole reason this bridge exists.
+//
+// DELIBERATELY NOT A GENERAL PROXY. Only the hosts listed here can be fetched.
+// The iframe is a remote origin we navigated to, so an arbitrary-URL fetch
+// would let whatever is served there read any site through this phone's
+// network. The whitelist keeps this a comet updater and nothing else.
+const FETCH_BRIDGE_HOSTS = ['ssd-api.jpl.nasa.gov'];
+
+window.addEventListener('message', async (ev) => {
+  const d = ev.data;
+  if (!d || d.__polarisFetchReq !== true) return;
+  const id = d.id;
+  const post = (msg) => { try { ev.source.postMessage(msg, '*'); } catch { /* ignore */ } };
+  // Ack first so the child knows a native fetcher exists and does not sit
+  // through its whole timeout on a plain browser.
+  post({ __polarisFetchAck: true, id });
+  const reply = (m) => post(Object.assign({ __polarisFetchRes: true, id }, m));
+
+  let url;
+  try { url = new URL(String(d.url || '')); }
+  catch { reply({ ok: false, error: 'Bad URL' }); return; }
+  if (url.protocol !== 'https:' || !FETCH_BRIDGE_HOSTS.includes(url.hostname)) {
+    reply({ ok: false, error: 'Host not allowed by the fetch bridge' });
+    return;
+  }
+
+  const Http = (Cap && Cap.Plugins && Cap.Plugins.CapacitorHttp)
+            || (typeof window !== 'undefined' ? window.CapacitorHttp : undefined);
+  if (!Http) { reply({ ok: false, error: 'Native HTTP not available in this build' }); return; }
+
+  try {
+    const res = await Http.get({ url: url.toString(), readTimeout: 45000, connectTimeout: 20000 });
+    const status = (res && typeof res.status === 'number') ? res.status : 0;
+    if (status < 200 || status >= 300) { reply({ ok: false, error: 'HTTP ' + status }); return; }
+    // CapacitorHttp parses JSON responses into objects; the host wants the raw
+    // text either way, so stringify whatever came back if it is not a string.
+    const data = res.data;
+    const body = (typeof data === 'string') ? data : JSON.stringify(data);
+    reply({ ok: true, body });
+  } catch (e) {
+    reply({ ok: false, error: (e && e.message) || 'Native fetch failed' });
+  }
+});
+
 // ---------- tab title bridge ----------
 // The Polaris UI (in the cross-origin iframe) posts its active-rig name so the
 // shell can label this instance's tab with it. We can't read the iframe's

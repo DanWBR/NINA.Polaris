@@ -3500,5 +3500,6 @@
   "Could not reach JPL; keeping the current elements": "",
   "Update": "",
   "Updating...": "",
-  "Download current comet orbital elements from JPL (needs internet on the host)": ""
+  "Download current comet orbital elements from JPL (needs internet on the host)": "",
+  "Fetched on this device; sending to the host": ""
 }
