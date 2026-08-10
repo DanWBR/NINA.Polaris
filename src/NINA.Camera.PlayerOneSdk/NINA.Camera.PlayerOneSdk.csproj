@@ -23,18 +23,14 @@
     <PoaLinux>$(PoaSdk)\Linux_v3.10.1\lib</PoaLinux>
     <PoaWin>$(PoaSdk)\Windows_v3.10.1\lib</PoaWin>
   </PropertyGroup>
-  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">
-    <Content Include="$(PoaLinux)\arm64\libPlayerOneCamera.so*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>%(Filename)%(Extension)</Link>
-    </Content>
-  </ItemGroup>
-  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
-    <Content Include="$(PoaLinux)\x64\libPlayerOneCamera.so*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>%(Filename)%(Extension)</Link>
-    </Content>
-  </ItemGroup>
+  <!-- No Linux <Content> here on purpose. The native camera libraries come
+       from the indi-3rdparty packages (libtoupcam, libaltaircam, libasi,
+       libsvbony, libplayerone), which the .deb Recommends, and dlopen finds
+       them on the default search path. A <Content> item declared here would
+       be fiction anyway: it sets CopyToOutputDirectory, and content from a
+       ProjectReference does not flow into the referencing app's publish
+       output, so nothing was ever shipped and nobody noticed because every
+       image already had the system packages. -->
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
     <Content Include="$(PoaWin)\x64\PlayerOneCamera.dll">
       <Link>PlayerOneCamera.dll</Link>

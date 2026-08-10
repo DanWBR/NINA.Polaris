@@ -27,18 +27,14 @@
   <PropertyGroup>
     <SvbSdk>$(MSBuildThisFileDirectory)..\..\camera_sdk\SVBony</SvbSdk>
   </PropertyGroup>
-  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">
-    <Content Include="$(SvbSdk)\SVBony_Linux\SVBCameraSDK\lib\armv8\libSVBCameraSDK.so">
-      <Link>libSVBCameraSDK.so</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
-  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'linux-x64'">
-    <Content Include="$(SvbSdk)\SVBony_Linux\SVBCameraSDK\lib\x64\libSVBCameraSDK.so">
-      <Link>libSVBCameraSDK.so</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+  <!-- No Linux <Content> here on purpose. The native camera libraries come
+       from the indi-3rdparty packages (libtoupcam, libaltaircam, libasi,
+       libsvbony, libplayerone), which the .deb Recommends, and dlopen finds
+       them on the default search path. A <Content> item declared here would
+       be fiction anyway: it sets CopyToOutputDirectory, and content from a
+       ProjectReference does not flow into the referencing app's publish
+       output, so nothing was ever shipped and nobody noticed because every
+       image already had the system packages. -->
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
     <Content Include="$(SvbSdk)\SVBony_Windows\SVBONY\lib\x64\SVBCameraSDK.dll">
       <Link>SVBCameraSDK.dll</Link>
