@@ -3491,5 +3491,14 @@
   "Canopus: ask instead of hunting": "",
   "The co-pilot knows this rig and the current session. Ask it what is worth shooting tonight, why a solve failed, or to run something for you. Anything that would move the mount or change a device is shown for you to approve first, never done silently.": "",
   "Reflection halos around the brightest stars, the rings a filter or corrector leaves behind. Runs on the same frames as star removal and is easiest to judge right after it.": "",
-  "AI super-resolution at 2x or 4x. Last of the pixel-level steps, because it wants the sharpest, cleanest input you can hand it: denoise and deconvolve first, enlarge after.": ""
+  "AI super-resolution at 2x or 4x. Last of the pixel-level steps, because it wants the sharpest, cleanest input you can hand it: denoise and deconvolve first, enlarge after.": "",
+  "Comets: bundled list of {n}": "",
+  "Comets: {n} from JPL, updated today": "",
+  "Comets: {n} from JPL, updated yesterday": "",
+  "Comets: {n} from JPL, updated {d} days ago": "",
+  "Comet elements updated ({n})": "",
+  "Could not reach JPL; keeping the current elements": "",
+  "Update": "",
+  "Updating...": "",
+  "Download current comet orbital elements from JPL (needs internet on the host)": ""
 }

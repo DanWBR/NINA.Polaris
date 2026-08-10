@@ -4174,5 +4174,14 @@
   "Canopus: ask instead of hunting": "Canopus: pregunta en vez de buscar",
   "The co-pilot knows this rig and the current session. Ask it what is worth shooting tonight, why a solve failed, or to run something for you. Anything that would move the mount or change a device is shown for you to approve first, never done silently.": "El copiloto conoce este equipo y la sesión actual. Pregúntale qué vale la pena fotografiar esta noche, por qué falló un solve, o pídele que ejecute algo. Todo lo que mueva la montura o cambie un dispositivo se muestra para que lo apruebes antes, nunca se hace en silencio.",
   "Reflection halos around the brightest stars, the rings a filter or corrector leaves behind. Runs on the same frames as star removal and is easiest to judge right after it.": "Halos de reflexión alrededor de las estrellas más brillantes, los anillos que deja un filtro o corrector. Se ejecuta sobre los mismos fotogramas que la eliminación de estrellas y es más fácil de juzgar justo después.",
-  "AI super-resolution at 2x or 4x. Last of the pixel-level steps, because it wants the sharpest, cleanest input you can hand it: denoise and deconvolve first, enlarge after.": "Superresolución por IA a 2x o 4x. Es el último paso a nivel de píxel, porque quiere la entrada más nítida y limpia posible: primero reduce ruido y deconvoluciona, amplía después."
+  "AI super-resolution at 2x or 4x. Last of the pixel-level steps, because it wants the sharpest, cleanest input you can hand it: denoise and deconvolve first, enlarge after.": "Superresolución por IA a 2x o 4x. Es el último paso a nivel de píxel, porque quiere la entrada más nítida y limpia posible: primero reduce ruido y deconvoluciona, amplía después.",
+  "Comets: bundled list of {n}": "Cometas: lista incluida de {n}",
+  "Comets: {n} from JPL, updated today": "Cometas: {n} del JPL, actualizados hoy",
+  "Comets: {n} from JPL, updated yesterday": "Cometas: {n} del JPL, actualizados ayer",
+  "Comets: {n} from JPL, updated {d} days ago": "Cometas: {n} del JPL, actualizados hace {d} días",
+  "Comet elements updated ({n})": "Elementos de cometas actualizados ({n})",
+  "Could not reach JPL; keeping the current elements": "No se pudo contactar con el JPL; se mantienen los elementos actuales",
+  "Update": "Actualizar",
+  "Updating...": "Actualizando...",
+  "Download current comet orbital elements from JPL (needs internet on the host)": "Descargar los elementos orbitales actuales de cometas del JPL (requiere internet en el host)"
 }

@@ -204,6 +204,22 @@
     gap: 6px;
     flex-wrap: wrap;
 }
+/* Provenance of the comet elements. Deliberately quiet: a footnote under the
+   filters, not a banner competing with the object list. */
+.tonight-comet-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+/* Bundled, or old enough that a new discovery could be missing. A tint, not a
+   red alert: an out-of-date comet list is a limitation, not a fault. */
+.tonight-comet-note .stale {
+    color: var(--warning, #d9a441);
+}
 .tonight-filter-chip {
     background: rgba(255, 255, 255, 0.04);
     color: var(--text-secondary);

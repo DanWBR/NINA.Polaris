@@ -2197,6 +2197,15 @@ function ninaApp() {
             thumbs: {}      // { [name]: { url, title, credit, missing } }
         },
 
+        // Provenance of the comet orbital elements the ephemeris is using.
+        // The bundled file is a build-time snapshot, so a comet discovered
+        // after the release cannot be in it -- which is precisely the comet
+        // worth pointing at. Surfacing the age is what tells the operator
+        // whether the list is worth trusting tonight.
+        // { count, source: 'bundled'|'jpl', fetchedAtUtc, ageDays }
+        cometStatus: null,
+        cometRefreshing: false,
+
         // ── Editor (Lightroom-style) state. The .edits subtree mirrors
         // the EditParams record on the server; we always send it whole on
         // every preview call so the pipeline doesn't have to remember
@@ -16849,6 +16858,62 @@ function ninaApp() {
 
         // ─── Tonight's Best (/api/sky/tonights-best) ─────────────────────
 
+        // --- Comet orbital elements ---
+
+        async loadCometStatus() {
+            try {
+                this.cometStatus = await this.apiGet('/api/sky/comets/status');
+            } catch (e) {
+                // Never block the SKY tab on this; the list still works.
+                this.cometStatus = null;
+            }
+        },
+
+        cometElementsLabel() {
+            const c = this.cometStatus;
+            if (!c || !c.count) return '';
+            if (c.source !== 'jpl' || c.ageDays == null)
+                return this._t('Comets: bundled list of {n}', { n: c.count });
+            const d = Math.round(c.ageDays);
+            if (d <= 0) return this._t('Comets: {n} from JPL, updated today', { n: c.count });
+            if (d === 1) return this._t('Comets: {n} from JPL, updated yesterday', { n: c.count });
+            return this._t('Comets: {n} from JPL, updated {d} days ago', { n: c.count, d });
+        },
+
+        // True once the set is old enough that a newly discovered comet could
+        // be missing. Drives a muted warning tint, not a nag.
+        cometElementsStale() {
+            const c = this.cometStatus;
+            if (!c || !c.count) return false;
+            return c.source !== 'jpl' || (c.ageDays != null && c.ageDays > 14);
+        },
+
+        async refreshCometElements() {
+            if (this.cometRefreshing) return;
+            this.cometRefreshing = true;
+            try {
+                const r = await this.apiPost('/api/sky/comets/refresh', {});
+                const j = await r.json();
+                if (j && j.ok) {
+                    this.cometStatus = {
+                        count: j.count, source: j.source,
+                        fetchedAtUtc: j.fetchedAtUtc, ageDays: 0
+                    };
+                    this.toast(this._t('Comet elements updated ({n})', { n: j.count }), 'ok');
+                    // The list on screen was built from the old elements.
+                    try { await this.loadTonightsBest(true); } catch (e) {}
+                } else {
+                    // Offline is the normal case out in a field, so say that
+                    // rather than presenting it as a fault.
+                    this.toast(this._t('Could not reach JPL; keeping the current elements'), 'warn');
+                }
+            } catch (e) {
+                this.toast(this._t('Could not reach JPL; keeping the current elements'), 'warn');
+            } finally {
+                this.cometRefreshing = false;
+            }
+        },
+
         async loadTonightsBest(force = false) {
             const lat = this.settings.latitude;
             const lng = this.settings.longitude;
@@ -16862,6 +16927,8 @@ function ninaApp() {
             // Refresh once per UI mount; force=true bypasses (e.g. button).
             if (!force && this.tonight.items.length && this._tonightLastKey === lat + ',' + lng) return;
             this._tonightLastKey = lat + ',' + lng;
+            // Cheap, and it tells the operator how old the comet elements are.
+            this.loadCometStatus();
             this.tonight.loading = true;
             this.tonight.error = '';
             this.tonight.errorCard = '';

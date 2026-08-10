@@ -9543,6 +9543,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </label>
                 </div>
 
+                <!-- Where the comet elements came from and how old they are.
+                     The bundled file is a build-time snapshot, so a comet
+                     discovered after the release cannot appear in it, and that
+                     is exactly the comet worth pointing at. Shown quietly
+                     rather than as a banner: it is provenance, not an alarm. -->
+                <div class="tonight-comet-note" x-show="cometElementsLabel()" x-cloak>
+                    <span :class="{ stale: cometElementsStale() }" x-text="cometElementsLabel()"></span>
+                    <button class="btn btn-xs" @click="refreshCometElements()"
+                            :disabled="cometRefreshing"
+                            x-text="cometRefreshing ? 'Updating...' : 'Update'"
+                            title="Download current comet orbital elements from JPL (needs internet on the host)"></button>
+                </div>
+
                 <!-- Card list -->
                 <div class="tonight-list" x-show="!tonight.loading && tonightFiltered().length">
                     <template x-for="item in tonightFiltered()" :key="item.category + '/' + item.name">
