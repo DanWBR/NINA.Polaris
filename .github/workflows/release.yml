@@ -404,6 +404,12 @@ jobs:
             extract, and run `NINA.Polaris.exe`. Open
             `http://localhost:5000` in any browser.
 
+            **Native camera support needs the vendor driver.** The zip does not
+            bundle the camera SDKs, so install the maker's Windows driver for
+            the cameras you actually own (ZWO ASI, ToupTek, Altair, SVBony,
+            Player One) and Polaris picks them up. ASCOM and INDI cameras need
+            none of that.
+
             For unattended Windows installs see the optional NSSM /
             scheduled-task recipes in
             [docs/user-guide/installation.md](https://github.com/${{ github.repository }}/blob/master/docs/user-guide/installation.md).

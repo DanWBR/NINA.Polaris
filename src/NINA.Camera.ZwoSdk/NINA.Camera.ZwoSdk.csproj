@@ -23,19 +23,16 @@
     <AsiLinux>$(AsiSdk)\ASI_linux_mac_SDK_V1.41\lib</AsiLinux>
     <AsiWin>$(AsiSdk)\ASI_Windows_SDK_V1.41\ASI SDK\lib</AsiWin>
   </PropertyGroup>
-  <!-- No Linux <Content> here on purpose. The native camera libraries come
-       from the indi-3rdparty packages (libtoupcam, libaltaircam, libasi,
-       libsvbony, libplayerone), which the .deb Recommends, and dlopen finds
-       them on the default search path. A <Content> item declared here would
-       be fiction anyway: it sets CopyToOutputDirectory, and content from a
-       ProjectReference does not flow into the referencing app's publish
-       output, so nothing was ever shipped and nobody noticed because every
-       image already had the system packages. -->
-  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
-    <Content Include="$(AsiWin)\x64\ASICamera2.dll">
-      <Link>ASICamera2.dll</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+  <!-- No <Content> for the native SDK here, on any platform.
+       Linux takes the libraries from the indi-3rdparty packages (libtoupcam,
+       libaltaircam, libasi, libsvbony, libplayerone), which the .deb
+       Recommends. Windows takes them from the vendor driver package the
+       operator installs for the cameras they actually own; the portable zip
+       says so on the download page.
+       An item here would be fiction either way: it sets
+       CopyToOutputDirectory, and content from a ProjectReference does not
+       reach the referencing app's publish output. Verified by publishing for
+       both RIDs: the managed assemblies arrive, the native ones never did,
+       and nobody noticed because every host already had them. -->
 
 </Project>
