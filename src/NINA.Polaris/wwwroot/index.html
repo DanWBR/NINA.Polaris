@@ -13864,17 +13864,40 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                         <div style="margin-top:10px">
                             <span style="font-size:12px; font-weight:600">astrometry.net</span>
-                            <div style="display:flex; align-items:center; gap:8px; padding:4px 0">
-                                <span class="text-muted" style="font-size:11px; flex:1">
-                                    Index bands for this field:
-                                    <strong x-text="(solverDbs.astrometry.recommended || []).join(', ') || 'unknown'"></strong>
-                                    <span x-show="solverDbs.astrometry.installed.length">
-                                        &middot; installed: <span x-text="solverDbs.astrometry.installed.join(', ')"></span>
-                                    </span>
-                                </span>
+                            <p class="text-muted" style="font-size:11px; margin:2px 0 6px; max-width:600px"
+                               x-show="astrometryBands().length">
+                                Every band listed can solve this field. They roughly double in size for
+                                each step finer, and the coarsest ones solve fastest, so the ticked pair
+                                is the cheapest that works. Add finer bands only if a sparse field fails.
+                            </p>
+                            <p class="text-muted" style="font-size:11px; margin:2px 0 6px"
+                               x-show="!astrometryBands().length">
+                                No index bands to suggest until this rig knows its optics.
+                            </p>
+                            <template x-for="b in astrometryBands()" :key="b.scale">
+                                <div style="display:flex; align-items:center; gap:8px; padding:3px 0">
+                                    <input type="checkbox" :checked="astrometryPicked(b.scale)"
+                                           :disabled="solverDbBusy()"
+                                           @change="toggleAstrometryPick(b.scale)"
+                                           :id="'astridx-' + b.scale">
+                                    <label :for="'astridx-' + b.scale" style="min-width:52px;
+                                           font-family:var(--font-mono); font-size:11px; cursor:pointer"
+                                           x-text="b.series + ':' + String(b.scale).padStart(2,'0')"></label>
+                                    <span class="text-muted" style="font-size:11px; flex:1"
+                                          x-text="astrometryBandLabel(b)"></span>
+                                    <span class="status-indicator-sm ok"
+                                          x-show="solverDbs.astrometry.installed.includes(b.scale)">installed</span>
+                                    <span class="status-indicator-sm af-phase"
+                                          x-show="(solverDbs.astrometry.recommended || []).includes(b.scale)">recommended</span>
+                                </div>
+                            </template>
+                            <div style="display:flex; align-items:center; gap:8px; padding:6px 0 0"
+                                 x-show="astrometryBands().length">
+                                <span class="text-muted" style="font-size:11px; flex:1"
+                                      x-text="astrometryPickLabel()"></span>
                                 <button class="btn btn-sm"
-                                        :disabled="solverDbBusy() || !(solverDbs.astrometry.recommended || []).length"
-                                        @click="installSolverDb('astrometry')">Install recommended</button>
+                                        :disabled="solverDbBusy() || !astrometryPicks.length"
+                                        @click="installSolverDb('astrometry')">Install selected</button>
                             </div>
                         </div>
 

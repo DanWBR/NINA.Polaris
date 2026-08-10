@@ -197,13 +197,19 @@ public sealed class SolverDatabaseService {
         var client = _http.CreateClient();
         client.Timeout = Timeout.InfiniteTimeSpan;    // large files; the token governs
 
+        EnsureRoomFor(State.TotalBytes);
+        await PreflightAsync(client, urls, ct);
+
         long received = 0;
         foreach (var url in urls) {
             ct.ThrowIfCancellationRequested();
             var name = FileNameFor(url, target);
             var dest = Path.Combine(StageDir, name);
             using var resp = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-            resp.EnsureSuccessStatusCode();
+            if (!resp.IsSuccessStatusCode) {
+                throw new InvalidOperationException(
+                    $"{name}: the mirror answered {(int)resp.StatusCode} {resp.ReasonPhrase}. ({url})");
+            }
             await using var src = await resp.Content.ReadAsStreamAsync(ct);
             await using (var dst = File.Create(dest)) {
                 var buf = new byte[1 << 20];
@@ -235,6 +241,74 @@ public sealed class SolverDatabaseService {
                 $"The install unit exited {rc}." + (log is null ? "" : $" Last log line: {log}"));
         }
         _logger.LogInformation("Installed solver database {Id} ({Target}). {Log}", id, target, log);
+    }
+
+    /// <summary>Refuse a job that cannot fit rather than filling the disk.
+    ///
+    /// <para>An index band can be 17 GB, and the staging directory sits on the
+    /// system disk on every SBC image, so running it out is not a download
+    /// failure but a broken host. A third over the payload covers the copy the
+    /// privileged unit makes into place.</para></summary>
+    private static void EnsureRoomFor(long bytes) {
+        if (bytes <= 0) return;
+        try {
+            var free = new DriveInfo(Path.GetPathRoot(StageDir) ?? "/").AvailableFreeSpace;
+            var needed = bytes + bytes / 3;
+            if (free < needed) {
+                throw new InvalidOperationException(
+                    $"That selection needs about {needed / 1_000_000_000.0:F1} GB free and this host has "
+                    + $"{free / 1_000_000_000.0:F1} GB. Pick fewer bands, or free some space first.");
+            }
+        } catch (Exception ex) when (ex is not InvalidOperationException) {
+            // An unreadable drive is not a reason to refuse the download.
+        }
+    }
+
+    /// <summary>Ask for every file's headers before pulling any of it.
+    ///
+    /// <para>The download used to die on the first bad URL, which for a band
+    /// list meant discovering a wrong filename only after the bands ahead of it
+    /// had already come down: a stale mirror path cost a full band of transfer
+    /// before it said 404. A few hundred HEADs cost seconds and name the file
+    /// that is missing.</para></summary>
+    private async Task PreflightAsync(HttpClient client, IReadOnlyList<string> urls,
+                                      CancellationToken ct) {
+        // Nothing ahead of a single file to waste, and the GET now names it in
+        // its own error. Skipping this also keeps SourceForge's redirecting
+        // download links, which are the whole ASTAP path, out of a HEAD.
+        if (urls.Count < 2) return;
+
+        var missing = new List<string>();
+        using var gate = new SemaphoreSlim(8);
+        var checks = urls.Select(async url => {
+            await gate.WaitAsync(ct);
+            try {
+                using var req = new HttpRequestMessage(HttpMethod.Head, url);
+                using var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+                // A mirror that will not answer HEAD at all says nothing about
+                // whether the file is there, so it must not fail the job.
+                if (resp.StatusCode is System.Net.HttpStatusCode.MethodNotAllowed
+                                    or System.Net.HttpStatusCode.NotImplemented) return;
+                if (!resp.IsSuccessStatusCode) {
+                    lock (missing) missing.Add($"{(int)resp.StatusCode} {url}");
+                }
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                lock (missing) missing.Add($"{ex.GetType().Name} {url}");
+            } finally {
+                gate.Release();
+            }
+        });
+        await Task.WhenAll(checks);
+        if (missing.Count == 0) return;
+
+        missing.Sort(StringComparer.Ordinal);
+        var head = string.Join("; ", missing.Take(3));
+        throw new InvalidOperationException(
+            missing.Count == 1
+                ? $"The mirror does not have {head}."
+                : $"{missing.Count} of {urls.Count} files are not on the mirror, starting with {head}.");
     }
 
     private static string FileNameFor(string url, string target) {

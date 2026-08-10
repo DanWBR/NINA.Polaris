@@ -62,6 +62,13 @@ const norm = (s) => decodeEntities(s).replace(/\s+/g, ' ').trim();
 // remaining rules already reject the code: see the tour.js branch.
 // `opts.maxLen` raises the length cap for sources that are known to be prose,
 // like the HELP tutorial bodies, whose paragraphs run past the default 320.
+// A {var} placeholder is the documented interpolation for t() / $t(), so it is
+// part of a real key rather than code. It has to be taken out before the
+// code-ish test, which rejects every brace: with it in, EVERY interpolated key
+// was invisible to extraction and lived in the catalog as a permanent orphan,
+// translated only where somebody had added it by hand.
+const PLACEHOLDER = /\{[A-Za-z_][A-Za-z0-9_]*\}/g;
+
 function keep(s, opts) {
     s = norm(s);
     const maxLen = (opts && opts.maxLen) || 320;
@@ -69,11 +76,14 @@ function keep(s, opts) {
     if (!/[A-Za-z]/.test(s)) return false;                       // needs a letter
     if (/^[^A-Za-z(À-ÿ]/.test(s)) return false;                  // must START with a letter or "("
     if (/^[a-z]/.test(s) && !/\s/.test(s)) return false;         // lone lowercase token (identifier/var)
+    // Judge the sentence, not its placeholders. Anything still holding a brace
+    // after they are removed is a real expression fragment and still goes.
+    const prose = s.replace(PLACEHOLDER, '');
     // Code-ish / Alpine-binding / expression fragments:
     const codeish = opts && opts.prose
         ? /[_<>{}`$@#]|=>|::|\|\||&&|\(\)|\/\/|\bx-[a-z]|@click|\bfunction\b/
         : /[_<>{}=`$@#"]|=>|::|\|\||&&|\(\)|\/\/|\bx-[a-z]|@click|\bfunction\b/;
-    if (codeish.test(s)) return false;
+    if (codeish.test(prose)) return false;
     if (/\b(null|undefined|true|false|return)\b/.test(s) && !/\s\w+\s\w+/.test(s)) return false;
     if (/^[-A-Za-z0-9]+\.[A-Za-z]/.test(s) && !/\s/.test(s)) return false; // dotted identifier
     if (/^[a-z]+([A-Z][a-z]+)+$/.test(s)) return false;          // camelCase identifier

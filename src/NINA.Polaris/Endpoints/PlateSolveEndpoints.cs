@@ -101,8 +101,10 @@ public static class PlateSolveEndpoints {
             var pixelScale = SolverDatabaseAdvisor.PixelScale(pixelUm, rig.FocalLengthMm);
             var fov = SolverDatabaseAdvisor.FovDegrees(pixelScale, sensorX, sensorY);
 
+            var seriesList = ReadAstrometrySeries(root);
             var recAstap = SolverDatabaseAdvisor.RecommendAstap(astap, fov);
-            var recScales = SolverDatabaseAdvisor.RecommendAstrometryScales(scales, fov);
+            var usableScales = SolverDatabaseAdvisor.RecommendAstrometryScales(scales, fov);
+            var recScales = SolverDatabaseAdvisor.DefaultAstrometryPicks(usableScales);
 
             return Results.Ok(new {
                 fovDeg = Math.Round(fov, 3),
@@ -114,18 +116,31 @@ public static class PlateSolveEndpoints {
                     recommended = recAstap?.Id
                 },
                 astrometry = new {
-                    scales,
-                    series = root.GetProperty("astrometrySeries").EnumerateArray()
-                        .Select(e => new {
-                            id = e.GetProperty("id").GetString(),
-                            name = e.GetProperty("name").GetString(),
-                            minScale = e.GetProperty("minScale").GetInt32(),
-                            maxScale = e.GetProperty("maxScale").GetInt32(),
-                            baseUrl = e.GetProperty("baseUrl").GetString(),
-                            healpixTiles = e.GetProperty("healpixTiles").GetInt32()
-                        }).ToList(),
+                    // Every band, with the series that owns it and what it
+                    // costs, so the picker can price a selection before the
+                    // operator commits to it.
+                    scales = scales.Select(s => {
+                        var owner = seriesList.FirstOrDefault(x => x.Bands.Any(b => b.Scale == s.Scale));
+                        var band = owner?.Bands.First(b => b.Scale == s.Scale);
+                        return new {
+                            s.Scale, s.MinArcmin, s.MaxArcmin,
+                            series = owner?.Id,
+                            seriesName = owner?.Name,
+                            files = band == null ? 0 : Math.Max(1, band.Tiles),
+                            bytes = band?.Bytes ?? 0
+                        };
+                    }).ToList(),
+                    series = seriesList.Select(s => new {
+                        id = s.Id, name = s.Name, baseUrl = s.BaseUrl, notes = s.Notes,
+                        minScale = s.Bands.Count == 0 ? 0 : s.Bands.Min(b => b.Scale),
+                        maxScale = s.Bands.Count == 0 ? 0 : s.Bands.Max(b => b.Scale)
+                    }).ToList(),
                     installed = dbs.InstalledAstrometryScales(),
-                    recommended = recScales.Select(s => s.Scale).ToList()
+                    // "usable" is astrometry.net's own 10%-to-100% rule;
+                    // "recommended" is the subset worth ticking by default.
+                    usable = usableScales.Select(s => s.Scale).ToList(),
+                    recommended = recScales,
+                    recommendedBytes = SolverDatabaseAdvisor.BytesFor(seriesList, recScales)
                 },
                 job = dbs.State
             });
@@ -163,26 +178,13 @@ public static class PlateSolveEndpoints {
                 var wanted = (req.Scales ?? new List<int>()).Distinct().OrderBy(x => x).ToList();
                 if (wanted.Count == 0)
                     return Results.BadRequest(new { error = "No index scales requested." });
-                foreach (var series in root.GetProperty("astrometrySeries").EnumerateArray()) {
-                    int lo = series.GetProperty("minScale").GetInt32();
-                    int hi = series.GetProperty("maxScale").GetInt32();
-                    var baseUrl = series.GetProperty("baseUrl").GetString() ?? "";
-                    var seriesId = series.GetProperty("id").GetString() ?? "";
-                    int tiles = series.GetProperty("healpixTiles").GetInt32();
-                    foreach (var s in wanted.Where(s => s >= lo && s <= hi)) {
-                        if (tiles > 0) {
-                            for (int h = 0; h < tiles; h++)
-                                urls.Add($"{baseUrl}index-{seriesId[..2]}{s:00}-{h:00}.fits");
-                        } else {
-                            urls.Add($"{baseUrl}index-{seriesId[..2]}{s:00}.fits");
-                        }
-                    }
-                }
+                var plan = SolverDatabaseAdvisor.PlanAstrometryDownload(ReadAstrometrySeries(root), wanted);
+                urls = plan.Urls.ToList();
                 if (urls.Count == 0)
                     return Results.BadRequest(new { error = "No published index files for those scales." });
                 id = "scales " + string.Join(",", wanted);
-                return dbs.StartInstall(id, target, urls, 0)
-                    ? Results.Ok(new { started = true, id, target, files = urls.Count })
+                return dbs.StartInstall(id, target, urls, plan.Bytes)
+                    ? Results.Ok(new { started = true, id, target, files = urls.Count, bytes = plan.Bytes })
                     : Results.Conflict(new { error = "Another database install is already running." });
             }
 
@@ -911,6 +913,32 @@ public static class PlateSolveEndpoints {
                 });
             }
         });
+    }
+
+    /// <summary>The astrometry.net series as the catalogue declares them.
+    ///
+    /// <para>Read in one place because the listing endpoint and the install
+    /// endpoint have to agree exactly on which files a band is made of. They
+    /// did not: the lister showed bands the installer then asked the mirror for
+    /// under names that do not exist.</para></summary>
+    private static List<SolverDatabaseAdvisor.AstrometrySeries> ReadAstrometrySeries(JsonElement root) {
+        if (!root.TryGetProperty("astrometrySeries", out var arr)
+            || arr.ValueKind != JsonValueKind.Array)
+            return new List<SolverDatabaseAdvisor.AstrometrySeries>();
+
+        return arr.EnumerateArray().Select(e => new SolverDatabaseAdvisor.AstrometrySeries(
+            e.GetProperty("id").GetString() ?? "",
+            e.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "",
+            e.TryGetProperty("prefix", out var p) ? p.GetString() ?? "" : "",
+            e.TryGetProperty("baseUrl", out var b) ? b.GetString() ?? "" : "",
+            e.TryGetProperty("notes", out var no) ? no.GetString() : null,
+            e.TryGetProperty("bands", out var bands) && bands.ValueKind == JsonValueKind.Array
+                ? bands.EnumerateArray().Select(x => new SolverDatabaseAdvisor.AstrometryBand(
+                      x.GetProperty("scale").GetInt32(),
+                      x.TryGetProperty("tiles", out var t) ? t.GetInt32() : 0,
+                      x.TryGetProperty("bytes", out var by) ? by.GetInt64() : 0)).ToList()
+                : new List<SolverDatabaseAdvisor.AstrometryBand>()
+        )).ToList();
     }
 
     /// <summary>Cone-search the DSO catalog over a solved field and project each

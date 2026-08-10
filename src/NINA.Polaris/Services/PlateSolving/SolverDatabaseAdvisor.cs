@@ -33,6 +33,76 @@ public static class SolverDatabaseAdvisor {
 
     public sealed record AstrometryScale(int Scale, double MinArcmin, double MaxArcmin);
 
+    /// <param name="Tiles">How many healpix files the band is split into, 0 for
+    /// a single file. Not cosmetic: asking for index-4207.fits when that band
+    /// is really twelve tiles is a 404, and the download dies on it after
+    /// everything ahead of it has already been pulled.</param>
+    /// <param name="Bytes">Measured total for the whole band.</param>
+    public sealed record AstrometryBand(int Scale, int Tiles, long Bytes);
+
+    public sealed record AstrometrySeries(string Id, string Name, string Prefix, string BaseUrl,
+                                          string? Notes, IReadOnlyList<AstrometryBand> Bands);
+
+    /// <summary>Every file that makes up one band, in order.</summary>
+    public static IReadOnlyList<string> FilesFor(AstrometrySeries series, AstrometryBand band) {
+        var baseUrl = series.BaseUrl.EndsWith('/') ? series.BaseUrl : series.BaseUrl + "/";
+        if (band.Tiles <= 0)
+            return new[] { $"{baseUrl}{series.Prefix}{band.Scale:00}.fits" };
+        return Enumerable.Range(0, band.Tiles)
+            .Select(h => $"{baseUrl}{series.Prefix}{band.Scale:00}-{h:00}.fits")
+            .ToList();
+    }
+
+    /// <summary>
+    /// The files and the total size for a set of bands.
+    ///
+    /// <para>Exactly one series owns each band, so a scale that two series both
+    /// listed cannot be fetched twice, and the byte total is the real one: a
+    /// job started with totalBytes = 0 showed no progress bar and no warning
+    /// while it tried to pull 18 GB onto an SBC.</para>
+    /// </summary>
+    public static (IReadOnlyList<string> Urls, long Bytes) PlanAstrometryDownload(
+            IReadOnlyList<AstrometrySeries> series, IEnumerable<int> scales) {
+        var urls = new List<string>();
+        long bytes = 0;
+        if (series == null || scales == null) return (urls, 0);
+        foreach (var scale in scales.Distinct().OrderBy(x => x)) {
+            foreach (var s in series) {
+                var band = s.Bands?.FirstOrDefault(b => b.Scale == scale);
+                if (band == null) continue;
+                urls.AddRange(FilesFor(s, band));
+                bytes += band.Bytes;
+                break;                      // one series owns the band
+            }
+        }
+        return (urls, bytes);
+    }
+
+    /// <summary>Total size of a set of bands, for the picker.</summary>
+    public static long BytesFor(IReadOnlyList<AstrometrySeries> series, IEnumerable<int> scales)
+        => PlanAstrometryDownload(series, scales).Bytes;
+
+    /// <summary>
+    /// The bands to tick by default, out of the ones the field can use.
+    ///
+    /// <para>Every band that overlaps 10% to 100% of the field is USABLE, and
+    /// that is what <see cref="RecommendAstrometryScales"/> returns, but
+    /// installing all of them is not the advice: the bands get roughly twice as
+    /// big for every step finer, so the eight usable bands for a half-degree
+    /// field come to 18 GB while the coarsest two come to 470 MB and solve that
+    /// field faster. Take the coarsest two and let the operator add more if a
+    /// sparse field needs them.</para>
+    /// </summary>
+    public static IReadOnlyList<int> DefaultAstrometryPicks(
+            IReadOnlyList<AstrometryScale> usable, int count = 2) {
+        if (usable == null || usable.Count == 0) return Array.Empty<int>();
+        return usable.OrderByDescending(s => s.Scale)
+                     .Take(Math.Max(1, count))
+                     .Select(s => s.Scale)
+                     .OrderBy(x => x)
+                     .ToList();
+    }
+
     /// <summary>
     /// The ASTAP database to use for a field, from a catalogue ordered widest
     /// to narrowest. Among the databases that cover the field, the SMALLEST

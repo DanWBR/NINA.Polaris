@@ -28953,9 +28953,13 @@ function ninaApp() {
         solverDbs: {
             loaded: false, fovDeg: 0, pixelScale: 0, knownOptics: false,
             astap: { catalogue: [], installed: [], recommended: null },
-            astrometry: { scales: [], series: [], installed: [], recommended: [] },
+            astrometry: { scales: [], series: [], installed: [], usable: [], recommended: [] },
             job: { state: 'idle', id: '', target: '', receivedBytes: 0, totalBytes: 0, error: null }
         },
+        // The bands ticked in the picker. Starts at the recommendation and is
+        // the operator's from then on, because the bands run from 130 kB to
+        // 17 GB and only they know their uplink.
+        astrometryPicks: [],
 
         async loadSolverDatabases() {
             try {
@@ -28967,9 +28971,13 @@ function ninaApp() {
                     pixelScale: d.pixelScaleArcsecPerPixel || 0,
                     knownOptics: !!d.knownOptics,
                     astap: d.astap || { catalogue: [], installed: [], recommended: null },
-                    astrometry: d.astrometry || { scales: [], series: [], installed: [], recommended: [] },
+                    astrometry: d.astrometry
+                        || { scales: [], series: [], installed: [], usable: [], recommended: [] },
                     job: d.job || this.solverDbs.job
                 };
+                if (!this.astrometryPicks.length) {
+                    this.astrometryPicks = (this.solverDbs.astrometry.recommended || []).slice();
+                }
                 if (this.solverDbs.job.state === 'downloading'
                     || this.solverDbs.job.state === 'installing') this._pollSolverDbJob();
             } catch (e) {
@@ -28979,13 +28987,76 @@ function ninaApp() {
             }
         },
 
+        // Bands the field can use, each with what it costs. Only the ones the
+        // catalogue actually publishes a download for are offered.
+        astrometryBands() {
+            const usable = this.solverDbs.astrometry.usable || [];
+            return (this.solverDbs.astrometry.scales || [])
+                .filter(b => b.series && usable.includes(b.scale));
+        },
+
+        astrometryPicked(scale) { return this.astrometryPicks.includes(scale); },
+
+        toggleAstrometryPick(scale) {
+            const i = this.astrometryPicks.indexOf(scale);
+            if (i >= 0) this.astrometryPicks.splice(i, 1);
+            else this.astrometryPicks.push(scale);
+        },
+
+        astrometryPickBytes() {
+            const by = {};
+            (this.solverDbs.astrometry.scales || []).forEach(b => { by[b.scale] = b.bytes || 0; });
+            return this.astrometryPicks.reduce((t, s) => t + (by[s] || 0), 0);
+        },
+
+        // Built here rather than concatenated in the markup: a translator needs
+        // the whole sentence, and the extractor turns "' arcmin, '" into a key
+        // of its own that no language can do anything with. Each one also has
+        // to START with a word, because the extractor drops a literal opening
+        // on '{' as code.
+        astrometryBandLabel(b) {
+            const vars = { lo: b.minArcmin, hi: b.maxArcmin,
+                           size: this.fmtDownloadSize(b.bytes), n: b.files };
+            return b.files > 1
+                ? this.$t('Covers {lo} to {hi} arcmin, {size} in {n} files', vars)
+                : this.$t('Covers {lo} to {hi} arcmin, {size}', vars);
+        },
+
+        astrometryPickLabel() {
+            const n = this.astrometryPicks.length;
+            return n === 0
+                ? this.$t('No bands selected')
+                : this.$t('Selected: {n} bands, {size} to download',
+                          { n, size: this.fmtDownloadSize(this.astrometryPickBytes()) });
+        },
+
+        // MB below a gigabyte, GB above: "18218 MB" does not read as a warning
+        // and "0.1 GB" does not read as cheap.
+        fmtDownloadSize(bytes) {
+            if (!(bytes > 0)) return '';
+            return bytes >= 1e9
+                ? (bytes / 1e9).toFixed(bytes >= 1e10 ? 0 : 1) + ' GB'
+                : Math.round(bytes / 1e6) + ' MB';
+        },
+
         async installSolverDb(target, id) {
             const body = target === 'astap'
                 ? { target, id }
-                : { target, scales: this.solverDbs.astrometry.recommended || [] };
-            if (target === 'astrometry' && body.scales.length === 0) {
-                this.toast('No index bands recommended: set the rig optics first', 'warn');
-                return;
+                : { target, scales: this.astrometryPicks.slice().sort((a, b) => a - b) };
+            if (target === 'astrometry') {
+                if (body.scales.length === 0) {
+                    this.toast(this.$t('Pick at least one index band'), 'warn');
+                    return;
+                }
+                // A band list is easy to tick into tens of gigabytes, and the
+                // download then runs for hours over an observatory uplink.
+                const bytes = this.astrometryPickBytes();
+                if (bytes >= 2e9) {
+                    const ok = await this._confirmAsync(
+                        this.$t('Those bands come to {size}. That is a long download over a typical link, and the host needs that much free space.', { size: this.fmtDownloadSize(bytes) }),
+                        { title: this.$t('Large download'), okLabel: this.$t('Download') });
+                    if (!ok) return;
+                }
             }
             try {
                 const r = await this.apiPost('/api/platesolve/databases/install', body);

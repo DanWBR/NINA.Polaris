@@ -56,7 +56,7 @@
       "notes": "Deepest of the D series, for the narrowest fields. 1.25 GB."
     }
   ],
-  "_astrometryDoc": "index-41xx (2MASS) and index-42xx (Tycho-2) share this scale numbering: the last two digits pick the skymark size band. index-52xx (Gaia DR2) covers the same small bands split into healpix tiles, for narrow fields. Download the bands whose range falls between 10% and 100% of the field.",
+  "_astrometryDoc": "index-42xx (Tycho-2) and index-52xx (Gaia DR2) share this scale numbering: the last two digits pick the skymark size band. A useful index has skymarks between 10% and 100% of the image field, and the COARSEST usable bands are both the cheapest and the fastest to solve with, so take those first and add finer ones only if the solve misses. Every band below is split into healpix tiles except 4208 and up; tiles and tileBytes are measured from the mirrors themselves (2026-08-10), not estimated, because a band can be anything from 130 kB to 17 GB and the operator has to see that before pressing Install.",
   "astrometryScales": [
     { "scale": 0,  "minArcmin": 2.0,    "maxArcmin": 2.8 },
     { "scale": 1,  "minArcmin": 2.8,    "maxArcmin": 4.0 },
@@ -79,26 +79,49 @@
     { "scale": 18, "minArcmin": 1000.0, "maxArcmin": 1400.0 },
     { "scale": 19, "minArcmin": 1400.0, "maxArcmin": 2000.0 }
   ],
+  "_astrometrySeriesDoc": "One series owns each band, so no band is ever fetched twice. Bands 0 to 6 come from Gaia DR2, which is the only catalogue dense enough for a field under a degree; 7 and up come from Tycho-2. 'tiles' is the number of healpix files the band is split into (0 = a single file) and 'bytes' is the measured total for the whole band. The Gaia files are the LITE build: half the size of the full one and what astrometry.net recommends for ordinary use.",
   "astrometrySeries": [
     {
       "id": "5200",
-      "name": "Gaia DR2 (5200 series)",
+      "name": "Gaia DR2 (5200 series, LITE)",
+      "prefix": "index-52",
       "minScale": 0,
-      "maxScale": 7,
-      "baseUrl": "http://data.astrometry.net/5200/",
-      "fileFormat": "index-52{scale:00}-{healpix:00}.fits",
-      "healpixTiles": 12,
-      "notes": "Narrow fields. Each band is split into 12 healpix tiles; only the tiles covering your sky are strictly needed."
+      "maxScale": 6,
+      "baseUrl": "https://portal.nersc.gov/project/cosmo/temp/dstn/index-5200/LITE/",
+      "notes": "Narrow fields, down to a couple of arcminutes. Hosted at NERSC: data.astrometry.net no longer carries the 5200 series and answers 404 for it.",
+      "bands": [
+        { "scale": 0, "tiles": 48, "bytes": 17203495680 },
+        { "scale": 1, "tiles": 48, "bytes": 9490662720 },
+        { "scale": 2, "tiles": 48, "bytes": 4855576320 },
+        { "scale": 3, "tiles": 48, "bytes": 2449330560 },
+        { "scale": 4, "tiles": 48, "bytes": 1219829760 },
+        { "scale": 5, "tiles": 48, "bytes": 614891520 },
+        { "scale": 6, "tiles": 48, "bytes": 307722240 }
+      ]
     },
     {
       "id": "4200",
       "name": "Tycho-2 (4200 series)",
+      "prefix": "index-42",
       "minScale": 7,
       "maxScale": 19,
       "baseUrl": "http://data.astrometry.net/4200/",
-      "fileFormat": "index-42{scale:00}.fits",
-      "healpixTiles": 0,
-      "notes": "Wide fields; one file per band."
+      "notes": "Half a degree and wider. Band 7 is split into 12 tiles; 8 and up are a single file each.",
+      "bands": [
+        { "scale": 7,  "tiles": 12, "bytes": 165438720 },
+        { "scale": 8,  "tiles": 0,  "bytes": 81835200 },
+        { "scale": 9,  "tiles": 0,  "bytes": 41178240 },
+        { "scale": 10, "tiles": 0,  "bytes": 20517120 },
+        { "scale": 11, "tiles": 0,  "bytes": 8017920 },
+        { "scale": 12, "tiles": 0,  "bytes": 4167360 },
+        { "scale": 13, "tiles": 0,  "bytes": 2157120 },
+        { "scale": 14, "tiles": 0,  "bytes": 1100160 },
+        { "scale": 15, "tiles": 0,  "bytes": 596160 },
+        { "scale": 16, "tiles": 0,  "bytes": 339840 },
+        { "scale": 17, "tiles": 0,  "bytes": 213120 },
+        { "scale": 18, "tiles": 0,  "bytes": 164160 },
+        { "scale": 19, "tiles": 0,  "bytes": 132480 }
+      ]
     }
   ]
 }
