@@ -32,23 +32,23 @@ public class RestoreGuidingTrigger : SequenceTrigger {
     public bool Recalibrate { get; set; } = false;
 
     public override Task<bool> ShouldFireAsync(SequenceContext ctx, CancellationToken ct) {
-        if (!ctx.PHD2.IsConnected) return Task.FromResult(false);
+        if (!ctx.Guider.IsConnected) return Task.FromResult(false);
 
         var seenKey = $"RestoreGuiding:{Id}:wasGuiding";
-        if (ctx.PHD2.IsGuiding) {
+        if (ctx.Guider.IsGuiding) {
             ctx.Scratch[seenKey] = true;   // latch: we've been guiding this run
             return Task.FromResult(false);
         }
         // Don't interrupt an in-progress (re)acquisition.
-        if (ctx.PHD2.IsCalibrating || ctx.PHD2.IsPaused) return Task.FromResult(false);
+        if (ctx.Guider.IsCalibrating || ctx.Guider.IsPaused) return Task.FromResult(false);
 
         var wasGuiding = ctx.Scratch.TryGetValue(seenKey, out var v) && v is true;
         return Task.FromResult(wasGuiding);
     }
 
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
-        ctx.Logger.LogWarning("Guiding dropped (PHD2 state '{State}'); restoring guiding.", ctx.PHD2.AppState);
-        await ctx.PHD2.StartGuidingAsync(SettlePixels, SettleTimeSeconds, SettleTimeoutSeconds, Recalibrate);
+        ctx.Logger.LogWarning("Guiding dropped (guider state '{State}'); restoring guiding.", ctx.Guider.AppState);
+        await ctx.Guider.StartGuidingAsync(SettlePixels, SettleTimeSeconds, SettleTimeoutSeconds, Recalibrate);
     }
 }
 

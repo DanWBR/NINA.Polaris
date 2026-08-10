@@ -47,7 +47,10 @@ public class DitherAfterNExposuresTrigger : SequenceTrigger {
     public int SettleTimeoutSeconds { get; set; } = 40;
 
     public override Task<bool> ShouldFireAsync(SequenceContext ctx, CancellationToken ct) {
-        if (EveryNFrames <= 0 || !ctx.PHD2.IsConnected || !ctx.PHD2.IsGuiding) return Task.FromResult(false);
+        // Reads the ACTIVE guider. Testing PHD2 here meant a native-guider rig
+        // never dithered: the trigger reported "not guiding" all night while
+        // the guider was in fact guiding perfectly well.
+        if (EveryNFrames <= 0 || !ctx.Guider.IsConnected || !ctx.Guider.IsGuiding) return Task.FromResult(false);
         var key = $"Dither:{Id}:last";
         var last = ctx.Scratch.TryGetValue(key, out var v) ? (int)v : 0;
         if (ctx.FramesCompleted - last >= EveryNFrames) {
@@ -58,7 +61,7 @@ public class DitherAfterNExposuresTrigger : SequenceTrigger {
     }
 
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
-        await ctx.PHD2.DitherAsync(Pixels, RaOnly, SettlePixels, SettleTimeSeconds, SettleTimeoutSeconds);
+        await ctx.Guider.DitherAsync(Pixels, RaOnly, SettlePixels, SettleTimeSeconds, SettleTimeoutSeconds);
     }
 }
 

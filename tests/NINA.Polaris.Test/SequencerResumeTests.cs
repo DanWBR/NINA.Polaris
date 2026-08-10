@@ -34,7 +34,7 @@ public class SequencerResumeTests {
 
     private static SequenceContext BareCtx(bool isResume = false) {
         var ctx = new SequenceContext(
-            null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!,
+            null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!,
             NullLogger.Instance);
         ctx.IsResume = isResume;
         return ctx;
@@ -130,7 +130,7 @@ public class SequencerResumeTests {
         var gate = new CameraReadyGate(() => equip.Camera,
             NullLogger<CameraReadyGate>.Instance);
         var ctx = new SequenceContext(
-            equip, relay, liveStack, null!, null!, null!, null!, null!,
+            equip, relay, liveStack, null!, null!, null!, null!, null!, null!,
             imageWriter, profile, new CaptureProgressService(), null!, gate,
             NullLogger.Instance);
         return (ctx, equip);

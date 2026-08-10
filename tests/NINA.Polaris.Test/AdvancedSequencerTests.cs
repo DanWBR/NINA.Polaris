@@ -247,7 +247,7 @@ public class AdvancedSequencerTests {
     // ----- Execution semantics: Attempts / ErrorBehavior + trigger cascade -----
 
     private static SequenceContext TestCtx() => new SequenceContext(
-        null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!,
+        null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!,
         NullLogger.Instance);
 
     /// <summary>Test instruction: counts runs, optionally throws on the first N.</summary>

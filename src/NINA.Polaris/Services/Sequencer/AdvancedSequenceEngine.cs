@@ -211,6 +211,7 @@ public class AdvancedSequenceEngine {
             relay: _services.GetRequiredService<ImageRelayService>(),
             liveStack: _services.GetRequiredService<LiveStackingService>(),
             phd2: _services.GetRequiredService<PHD2Client>(),
+            guiders: _services.GetRequiredService<ActiveGuiderProvider>(),
             autoFocus: _services.GetRequiredService<AutoFocusService>(),
             meridianFlip: _services.GetRequiredService<MeridianFlipService>(),
             plateSolver: _services.GetRequiredService<PlateSolveService>(),

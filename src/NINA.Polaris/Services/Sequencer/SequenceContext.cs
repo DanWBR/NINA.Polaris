@@ -30,7 +30,21 @@ public class SequenceContext {
     public EquipmentManager Equipment { get; }
     public ImageRelayService Relay { get; }
     public LiveStackingService LiveStack { get; }
+    /// <summary>PHD2 itself. Only for things that are PHD2 and nothing else
+    /// (its process, its profiles, who owns the guide camera's gain). Anything
+    /// that just means "the guider" must use <see cref="Guider"/>.</summary>
     public PHD2Client PHD2 { get; }
+
+    /// <summary>The guider this rig is actually configured to use.
+    ///
+    /// Every instruction and trigger used to call PHD2Client directly, so a rig
+    /// on the native guider could not start, stop or recover guiding from a
+    /// sequence, and the dither trigger bailed out on its
+    /// `!IsConnected` test, quietly never dithering. Resolved per call, not
+    /// captured, because the operator can switch backends between frames.</summary>
+    public IGuider Guider => _guiders.Active;
+
+    private readonly ActiveGuiderProvider _guiders;
     public AutoFocusService AutoFocus { get; }
     public MeridianFlipService MeridianFlip { get; }
     public PlateSolveService PlateSolver { get; }
@@ -110,6 +124,7 @@ public class SequenceContext {
         ImageRelayService relay,
         LiveStackingService liveStack,
         PHD2Client phd2,
+        ActiveGuiderProvider guiders,
         AutoFocusService autoFocus,
         MeridianFlipService meridianFlip,
         PlateSolveService plateSolver,
@@ -124,6 +139,7 @@ public class SequenceContext {
         Relay = relay;
         LiveStack = liveStack;
         PHD2 = phd2;
+        _guiders = guiders;
         AutoFocus = autoFocus;
         MeridianFlip = meridianFlip;
         PlateSolver = plateSolver;
