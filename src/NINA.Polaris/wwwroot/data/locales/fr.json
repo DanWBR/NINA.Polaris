@@ -655,7 +655,6 @@
   "Click any group to expand.": "Cliquez sur n'importe quel groupe pour le développer.",
   "Click any object on the map, or use Search above.": "Cliquez sur n'importe quel élément de la carte ou utilisez la fonction de recherche ci-dessus.",
   "Click anywhere to hide": "Cliquez n'importe où pour masquer",
-  "Click here to report an issue": "Cliquez ici pour signaler un problème",
   "Click items in the palette to build the sequence. Items run top-to-bottom; editor items apply together at the export step.": "Cliquez sur les éléments de la palette pour créer la séquence. Les éléments s'enchaînent de haut en bas ; les éléments de l'éditeur s'appliquent simultanément lors de l'exportation.",
   "Click on the planet to re-center the ROI": "Cliquez sur la planète pour recentrer la zone d'intérêt",
   "Click Start Stream (server loop mode, fps limited by exposure)": "Cliquez sur Start Stream (mode boucle serveur, fps limité par l'exposition)",

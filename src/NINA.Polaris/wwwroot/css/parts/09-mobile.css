@@ -84,14 +84,6 @@
        to scroll. */
     .nav-btn { padding: 6px 4px; gap: 2px; }
 
-    /* The "not tested yet" caution banner otherwise eats a big slice of the
-       short viewport. */
-    .feature-untested-warn {
-        padding: 6px 10px !important;
-        margin: 4px 0 !important;
-        line-height: 1.25 !important;
-    }
-
     /* Landscape is wide, but still apply the reflow niceties so nothing forces
        a horizontal scroll if a row is unusually long. */
     /* The focus nudge row is exempt: four arrows that mean "out fast, out,

@@ -1,23 +1,3 @@
-/* "Feature not tested yet" caution banner, shown under the header of
-   experimental panels (Polar alignment, Plan, Advanced Sequencer). */
-.feature-untested-warn {
-    margin: 0 16px 12px;
-    padding: 8px 12px;
-    border: 1px solid var(--warning, #e0a82e);
-    border-left-width: 4px;
-    border-radius: 6px;
-    background: rgba(224, 168, 46, 0.12);
-    color: var(--text-primary, #e6ecf5);
-    font-size: 12.5px;
-    line-height: 1.5;
-}
-.feature-untested-warn a {
-    color: var(--warning, #e0a82e);
-    font-weight: 600;
-    text-decoration: underline;
-}
-.feature-untested-warn a:hover { text-decoration: none; }
-
 /* Editor export heading mirror. */
 .editor-export-modal h3 {
     font-size: 17px !important;
@@ -625,8 +605,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 /* Header and banner keep their height: they are flex children of a
    fixed-height column now, and without this they compress before
    .plan-main does. */
-.tab-panel-plan > .panel-header,
-.tab-panel-plan > .feature-untested-warn { flex: 0 0 auto; }
+.tab-panel-plan > .panel-header { flex: 0 0 auto; }
 
 /* Two columns: the plan editor scrolls, the last captured frame does not. */
 .plan-split { display: flex; flex: 1 1 auto; min-height: 0; gap: 12px; }

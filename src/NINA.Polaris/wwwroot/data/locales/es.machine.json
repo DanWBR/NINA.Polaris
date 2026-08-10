@@ -588,7 +588,6 @@
   "Click any group to expand.": true,
   "Click any object on the map, or use Search above.": true,
   "Click anywhere to hide": true,
-  "Click here to report an issue": true,
   "Click items in the palette to build the sequence. Items run top-to-bottom; editor items apply together at the export step.": true,
   "Click on the planet to re-center the ROI": true,
   "Click Start Stream (server loop mode, fps limited by exposure)": true,

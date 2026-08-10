@@ -9779,11 +9779,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     Plan
                     <span class="status-indicator-sm" :class="planChipClass()" x-text="planChipLabel()"></span>
                 </div>
-                <div class="feature-untested-warn">
-                    ⚠ This feature was not tested yet - use it with caution.
-                    <a href="https://github.com/DanWBR/NINA.Polaris/issues" target="_blank" rel="noopener">Click here to report an issue</a>
-                </div>
-
                 <!-- Two columns: the plan editor scrolls on the left, the
                      last captured frame sits on the right. Same panel the
                      AUTORUN tab shows, fed by the same FrameKind.Autorun
@@ -11064,11 +11059,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <span class="status-indicator-sm" :class="advSeq.state === 'Running' ? 'ok' : (advSeq.lastError ? 'error' : 'warn')"
                           x-text="advSeq.state || 'Idle'"></span>
                 </div>
-                <div class="feature-untested-warn">
-                    ⚠ This feature was not tested yet - use it with caution.
-                    <a href="https://github.com/DanWBR/NINA.Polaris/issues" target="_blank" rel="noopener">Click here to report an issue</a>
-                </div>
-
                 <!-- Toolbar -->
                 <div class="advseq-toolbar">
                     <input type="text" x-model="advSeq.doc.name" placeholder="Sequence name" class="input-md">

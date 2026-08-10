@@ -26,11 +26,10 @@
 .hint { font-size: 12px; line-height: 1.4; }
 
 /* Help/idle blurbs + empty-state lines (e.g. "How TPPA works…",
-   "No saved sets yet."), plan title, the "not tested yet" caution banner,
-   and the advanced-sequencer properties placeholder. */
+   "No saved sets yet."), plan title, and the advanced-sequencer properties
+   placeholder. */
 .hint,
 .plan-name,
-.feature-untested-warn,
 .advseq-props .muted {
     zoom: var(--text-rescale, 1);
 }
@@ -39,8 +38,7 @@
    _defaultUiZoom() reacting to the viewport, not from an operator asking
    for a denser UI, so there is nothing to compensate for. Scaling these
    blocks up anyway made them the largest text on the screen: in the iPhone
-   app the "How TPPA works" blurb and the "not tested yet" banner dwarfed
-   the controls they were explaining. */
+   app the "How TPPA works" blurb dwarfed the controls it was explaining. */
 @media (max-width: 960px) {
     :root {
         --text-rescale: 1;
