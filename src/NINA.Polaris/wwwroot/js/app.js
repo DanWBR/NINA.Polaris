@@ -22667,9 +22667,24 @@ function ninaApp() {
 
                 // Sequential cursor for AllDone targets; TimeWindow targets sit
                 // at their explicit window and still advance the cursor.
-                let cursor = (this.plan.startMode === 'AtTime' && this.plan.startAtUtc)
-                    ? (this._planTodToWinMs(fromMs, this.plan.startAtUtc) ?? fromMs)
-                    : (duskMs && duskMs > fromMs ? duskMs : fromMs);
+                // The preview has to agree with what the runner will actually
+                // do. PlanStartMode has exactly two values, Now and AtTime, and
+                // PlanCompilerService only emits a WaitUntilTime for AtTime — a
+                // Now plan begins the instant you press start.
+                //
+                // This used to anchor everything that was not AtTime at dusk,
+                // so a Now plan built after dark drew its window in the PAST:
+                // at 22:52 the card read "Start 18:43, End 21:59 (AllDone)",
+                // an already-finished night that the run would not follow.
+                let cursor;
+                if (this.plan.startMode === 'AtTime' && this.plan.startAtUtc) {
+                    cursor = this._planTodToWinMs(fromMs, this.plan.startAtUtc) ?? fromMs;
+                } else {
+                    // Clamped into the charted night so the marker stays on the
+                    // canvas; before dusk it honestly shows the run starting in
+                    // twilight, because that is what Now does.
+                    cursor = Math.min(Math.max(Date.now(), fromMs), toMs);
+                }
                 const planStartMs = cursor;
 
                 // Linear-interpolated altitude (clamped 0..90) at an instant.
