@@ -135,3 +135,34 @@ public class PlateSolveHintsTests {
         Assert.That(o.ScaleArcsecPerPixel, Is.Zero);
     }
 }
+
+/// <summary>
+/// Index-file naming, pinned against what a real host actually carries.
+///
+/// The parser only understood "index-4209", so an Orange Pi 5 Pro holding a
+/// complete 311 MB set of "index-2mass-07-03.fits" reported nothing installed
+/// and the card offered to download what was already on disk.
+/// </summary>
+[TestFixture]
+public class SolverIndexNamingTests {
+
+    [TestCase("index-4209", 9)]
+    [TestCase("index-4200", 0)]
+    [TestCase("index-4219", 19)]
+    [TestCase("index-4209-03", 9)]
+    [TestCase("index-2mass-07", 7)]
+    [TestCase("index-2mass-07-03", 7)]
+    [TestCase("index-2mass-19", 19)]
+    public void ScaleOf_ReadsBothNamings(string name, int expected) {
+        Assert.That(NINA.Polaris.Services.PlateSolving.SolverDatabaseService.ScaleOf(name),
+            Is.EqualTo(expected));
+    }
+
+    [TestCase("index")]
+    [TestCase("index-2mass")]
+    [TestCase("not-an-index-file")]
+    public void ScaleOf_OnSomethingElse_ReturnsMinusOne(string name) {
+        Assert.That(NINA.Polaris.Services.PlateSolving.SolverDatabaseService.ScaleOf(name),
+            Is.EqualTo(-1));
+    }
+}

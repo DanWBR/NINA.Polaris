@@ -75,9 +75,22 @@ public sealed class SolverDatabaseService {
         try {
             var dir = "/opt/astap";
             if (!Directory.Exists(dir)) return Array.Empty<string>();
+            // An ASTAP database is a set of numbered files like d80_0101.1476,
+            // so the id is the prefix of a file whose extension is numeric.
+            // Keying on "has an underscore" alone reported ACKNOWLEDGEMENT,
+            // UNPROCESSED and VARIABLE as installed databases, because the
+            // folder also holds acknowledgement_of_databases.txt and friends.
             return Directory.EnumerateFiles(dir)
-                .Select(f => Path.GetFileName(f))
-                .Where(n => n.Length >= 3 && n.Contains('_'))
+                .Select(Path.GetFileName)
+                .Where(n => !string.IsNullOrEmpty(n))
+                .Select(n => n!)
+                .Where(n => {
+                    var us = n.IndexOf('_');
+                    if (us < 2) return false;
+                    var ext = Path.GetExtension(n);
+                    // ".1476", ".290" and so on: the database shard number.
+                    return ext.Length > 1 && ext[1..].All(char.IsDigit);
+                })
                 .Select(n => n[..n.IndexOf('_')].ToUpperInvariant())
                 .Distinct()
                 .OrderBy(x => x)
@@ -95,13 +108,35 @@ public sealed class SolverDatabaseService {
             try {
                 if (!Directory.Exists(dir)) continue;
                 foreach (var f in Directory.EnumerateFiles(dir, "index-*.fits")) {
-                    var name = Path.GetFileNameWithoutExtension(f);          // index-4209 / index-5200-03
-                    var digits = name.Split('-').Skip(1).FirstOrDefault();
-                    if (digits is { Length: 4 } && int.TryParse(digits[^2..], out var s)) scales.Add(s);
+                    var s = ScaleOf(Path.GetFileNameWithoutExtension(f));
+                    if (s >= 0) scales.Add(s);
                 }
             } catch { /* unreadable directory is simply "nothing installed" */ }
         }
         return scales.OrderBy(x => x).ToList();
+    }
+
+    /// <summary>The scale band an index file belongs to, or -1.
+    ///
+    /// Two namings are in the wild and only one was understood:
+    ///   index-4209.fits        the 42xx series, band = the last two digits
+    ///   index-4209-03.fits     the same, split into healpix tiles
+    ///   index-2mass-07.fits    the 2mass build, band = the number after the
+    ///   index-2mass-07-03.fits catalogue name
+    /// A host carrying a complete 2mass set therefore reported nothing
+    /// installed, and the card offered to download what was already there.</summary>
+    internal static int ScaleOf(string fileNameWithoutExtension) {
+        var parts = fileNameWithoutExtension.Split('-');
+        foreach (var part in parts.Skip(1)) {
+            if (!int.TryParse(part, out var n)) continue;   // "2mass" and the like
+            // A 4-digit series number carries the band in its last two digits;
+            // a bare 2-digit group already IS the band. Longer groups are
+            // healpix tile numbers, which only appear after the band.
+            if (part.Length == 4) return n % 100;
+            if (part.Length <= 2) return n;
+            return -1;
+        }
+        return -1;
     }
 
     // ---- install ----

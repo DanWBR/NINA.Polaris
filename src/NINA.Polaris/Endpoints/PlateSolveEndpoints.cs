@@ -59,6 +59,7 @@ public static class PlateSolveEndpoints {
         // what a download would cost. The recommendation is computed from the
         // publishers' own FOV tables (see SolverDatabaseAdvisor).
         group.MapGet("/databases", async (SolverDatabaseService dbs, ProfileService profiles,
+                                          EquipmentManager equip,
                                           CancellationToken ct) => {
             using var cat = await dbs.LoadCatalogueAsync(ct);
             var root = cat.RootElement;
@@ -79,12 +80,26 @@ public static class PlateSolveEndpoints {
                     e.GetProperty("minArcmin").GetDouble(),
                     e.GetProperty("maxArcmin").GetDouble())).ToList();
 
-            // FOV from the active rig's optics. Pixel size 0 means the camera
-            // reports it and we have no value here, so the card asks for it
-            // rather than recommending from a made-up scale.
+            // FOV from the rig's optics, falling back to what the CONNECTED
+            // camera reports.
+            //
+            // Reading the stored fields alone meant a rig whose camera reports
+            // its own pixel size and sensor size, and whose operator therefore
+            // never typed them, got fovDeg = 0: the card said "index bands for
+            // this field: unknown" and disabled its own Install button while
+            // the camera sitting right there was reporting 2.9um and 3840x2160
+            // (field, Orange Pi 5 Pro, 2026-08-10). Focal length has no such
+            // source, so it still has to come from the profile.
             var rig = profiles.ActiveEquipmentProfile;
-            var pixelScale = SolverDatabaseAdvisor.PixelScale(rig.CameraPixelSizeUm, rig.FocalLengthMm);
-            var fov = SolverDatabaseAdvisor.FovDegrees(pixelScale, rig.CameraMaxX, rig.CameraMaxY);
+            var cam = equip.Camera;
+            var pixelUm = rig.CameraPixelSizeUm > 0
+                ? rig.CameraPixelSizeUm
+                : (cam?.PixelSizeY > 0 ? cam.PixelSizeY : (cam?.PixelSizeX ?? 0));
+            var sensorX = rig.CameraMaxX > 0 ? rig.CameraMaxX : (cam?.MaxX ?? 0);
+            var sensorY = rig.CameraMaxY > 0 ? rig.CameraMaxY : (cam?.MaxY ?? 0);
+
+            var pixelScale = SolverDatabaseAdvisor.PixelScale(pixelUm, rig.FocalLengthMm);
+            var fov = SolverDatabaseAdvisor.FovDegrees(pixelScale, sensorX, sensorY);
 
             var recAstap = SolverDatabaseAdvisor.RecommendAstap(astap, fov);
             var recScales = SolverDatabaseAdvisor.RecommendAstrometryScales(scales, fov);
