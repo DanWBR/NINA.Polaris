@@ -33,6 +33,88 @@ public class BayerDebayerTests {
         return a;
     }
 
+    /// <summary>
+    /// Remosaic is the exact inverse of the debayer's SAMPLING step: at every
+    /// site the debayer copies the raw value into that site's own channel, so
+    /// taking it back out has to return the original mosaic bit for bit, for
+    /// all four patterns.
+    /// </summary>
+    [Test]
+    public void Remosaic_RoundTripsTheOriginalMosaic(
+            [Values(BayerPatternEnum.RGGB, BayerPatternEnum.GRBG,
+                    BayerPatternEnum.GBRG, BayerPatternEnum.BGGR)] BayerPatternEnum pattern) {
+        const int W = 16, H = 12;
+        var cfa = new ushort[W * H];
+        var rnd = new System.Random(7);
+        for (int i = 0; i < cfa.Length; i++) cfa[i] = (ushort)rnd.Next(0, 65536);
+
+        var ch = BayerDebayer.Bilinear(cfa, W, H, pattern);
+        var back = BayerDebayer.Remosaic(ch.R, ch.G, ch.B, W, H, pattern);
+
+        Assert.That(back, Is.EqualTo(cfa), $"round trip must be lossless for {pattern}");
+    }
+
+    /// <summary>
+    /// THE TECHNIQUE, pinned end to end (LIVEBAYER-4).
+    ///
+    /// A CFA mosaic must not be resampled as if it were one image: bilinear
+    /// blending mixes neighbours that are different colours, and the shift
+    /// moves the pattern off phase. The live stacker did exactly that and then
+    /// told the client to debayer the result, so the LIVE view went grey with
+    /// mosaic banding after the reference frame (field, Q6A, 2026-08-09).
+    ///
+    /// Here a synthetic OSC frame has R bright, G mid and B dark. Shifting it
+    /// by a whole pixel and putting it back is the cheapest transform that
+    /// still moves the CFA phase. Warping the mosaic directly must destroy the
+    /// channel separation; debayer + per-plane warp + remosaic must keep it.
+    /// </summary>
+    [Test]
+    public void Remosaic_PerPlaneWarpKeepsChannelsApart_MosaicWarpDoesNot() {
+        const int W = 32, H = 32;
+        const ushort R = 50000, G = 20000, B = 3000;
+        var cfa = new ushort[W * H];
+        for (int y = 0; y < H; y++) {
+            for (int x = 0; x < W; x++) {
+                bool er = (y & 1) == 0, ec = (x & 1) == 0;      // RGGB: R G / G B
+                cfa[y * W + x] = er ? (ec ? R : G) : (ec ? G : B);
+            }
+        }
+        // Sub-pixel, like a real alignment: this hits BOTH failure modes at
+        // once, the interpolation blending across colours and the phase shift.
+        // A whole-pixel shift would only demonstrate the phase half.
+        var t = new AffineTransform { M00 = 1, M11 = 1, Tx = 1.5, Ty = 0.5 };
+
+        // WRONG WAY: resample the mosaic itself, then debayer.
+        var mosaicWarped = ImageResampler.ApplyTransform(cfa, W, H, t, new ushort[W * H]);
+        var bad = BayerDebayer.Bilinear(mosaicWarped, W, H, BayerPatternEnum.RGGB);
+
+        // RIGHT WAY: debayer, warp each plane, remosaic, then debayer.
+        var src = BayerDebayer.Bilinear(cfa, W, H, BayerPatternEnum.RGGB);
+        var wr = ImageResampler.ApplyTransform(src.R, W, H, t, new ushort[W * H]);
+        var wg = ImageResampler.ApplyTransform(src.G, W, H, t, new ushort[W * H]);
+        var wb = ImageResampler.ApplyTransform(src.B, W, H, t, new ushort[W * H]);
+        var remosaiced = BayerDebayer.Remosaic(wr, wg, wb, W, H, BayerPatternEnum.RGGB);
+        var good = BayerDebayer.Bilinear(remosaiced, W, H, BayerPatternEnum.RGGB);
+
+        // Measure in the interior, away from the edges the shift leaves blank.
+        static double Mean(ushort[] p, int w, int h) {
+            double s = 0; int n = 0;
+            for (int y = 4; y < h - 4; y++)
+                for (int x = 4; x < w - 4; x++) { s += p[y * w + x]; n++; }
+            return n > 0 ? s / n : 0;
+        }
+        double goodSpread = Mean(good.R, W, H) - Mean(good.B, W, H);
+        double badSpread = Mean(bad.R, W, H) - Mean(bad.B, W, H);
+
+        Assert.That(goodSpread, Is.GreaterThan(0.8 * (R - B)),
+            "per-plane warp + remosaic must preserve the R-to-B separation "
+            + $"(got {goodSpread:F0}, source spread {R - B})");
+        Assert.That(badSpread, Is.LessThan(0.5 * goodSpread),
+            "warping the mosaic directly must visibly collapse the channels "
+            + $"towards each other (got {badSpread:F0} vs {goodSpread:F0}); if this "
+            + "ever stops being true the test is no longer proving anything");
+    }
+
     [Test]
     public void Bilinear_RGGB_RedAtTopLeftSurvives() {
         // Pattern: top-left is R. Force a 4×4 with the R pixel at (0,0)

@@ -1598,6 +1598,35 @@ public class LiveStackingService {
     /// (<see cref="IGpuCompute"/>) and on the CPU otherwise. The CPU helper is
     /// the canonical fallback whenever the GPU declines.</summary>
     private ushort[] Warp(ushort[] data, AffineTransform t) {
+        // A CFA mosaic must not be resampled as one image: bilinear blending
+        // mixes neighbours that are different colours, and the shift moves the
+        // pattern off phase. The client is then told to debayer the result, so
+        // frame #0 (identity, never warped) looked right and every frame after
+        // it degraded into grey with mosaic banding — the exact field report on
+        // the Q6A. Debayer, warp each plane, remosaic back onto the reference
+        // phase; interpolation then stays inside one colour channel.
+        //
+        // Only for the mono-CFA branch. When _colorActive the caller throws
+        // this result away and warps the planes itself from the original frame
+        // (see the _colorActive block in AddFrameAsync), so doing it here too
+        // would be three plane warps of pure waste.
+        if (!_colorActive
+                && _bayerPattern != BayerPatternEnum.None
+                && _bayerPattern != BayerPatternEnum.Auto) {
+            int pc = _width * _height;
+            EnsureScratch(ref _dbR, pc);
+            EnsureScratch(ref _dbG, pc);
+            EnsureScratch(ref _dbB, pc);
+            BayerDebayer.Bilinear(data, _width, _height, _bayerPattern, _dbR!, _dbG!, _dbB!);
+            EnsureScratch(ref _warpR, pc);
+            EnsureScratch(ref _warpG, pc);
+            EnsureScratch(ref _warpB, pc);
+            var wr = ImageResampler.ApplyTransform(_dbR!, _width, _height, t, _warpR!);
+            var wg = ImageResampler.ApplyTransform(_dbG!, _width, _height, t, _warpG!);
+            var wb = ImageResampler.ApplyTransform(_dbB!, _width, _height, t, _warpB!);
+            EnsureScratch(ref _warpMono, pc);
+            return BayerDebayer.Remosaic(wr, wg, wb, _width, _height, _bayerPattern, _warpMono!);
+        }
         if (_gpu.TryWarpAffine(data, _width, _height, t, out var warped)) return warped;
         // MEMOPT: the CPU-warped mono frame is only accumulated, never
         // retained, so it reuses one session scratch instead of a fresh

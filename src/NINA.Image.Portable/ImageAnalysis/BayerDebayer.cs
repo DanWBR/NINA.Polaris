@@ -133,6 +133,54 @@ public static class BayerDebayer {
     }
 
     /// <summary>
+    /// Sample three full-resolution planes back down to a single CFA mosaic:
+    /// the inverse of <see cref="Bilinear(ushort[], int, int, BayerPatternEnum)"/>'s
+    /// sampling step. Each output pixel takes the channel that belongs at its
+    /// site, so the result carries <paramref name="pattern"/> at the standard
+    /// phase and a consumer can debayer it normally.
+    ///
+    /// Why this exists: a CFA mosaic cannot be geometrically transformed as if
+    /// it were an ordinary image. Bilinear resampling blends neighbouring
+    /// pixels, which on a mosaic are DIFFERENT colours, and a non-integer shift
+    /// also moves the pattern off phase, so warping a mosaic wrecks the colour
+    /// twice over. The fix is debayer, transform each plane, then remosaic
+    /// here: every interpolation stays inside one colour channel and the
+    /// samples land back on the reference phase.
+    ///
+    /// <paramref name="dest"/> may be supplied to avoid an allocation. Every
+    /// output pixel is written, so it needs no clearing, and it must not alias
+    /// a source plane.
+    /// </summary>
+    public static ushort[] Remosaic(ushort[] r, ushort[] g, ushort[] b,
+                                    int width, int height, BayerPatternEnum pattern,
+                                    ushort[]? dest = null) {
+        if (pattern == BayerPatternEnum.None || pattern == BayerPatternEnum.Auto)
+            throw new ArgumentException("Pattern must be RGGB / GRBG / GBRG / BGGR.", nameof(pattern));
+        int n = width * height;
+        if (r.Length < n || g.Length < n || b.Length < n)
+            throw new ArgumentException("Source channel buffers too small for declared dimensions.");
+        dest ??= new ushort[n];
+        if (dest.Length < n)
+            throw new ArgumentException("Destination buffer too small for declared dimensions.", nameof(dest));
+        if (ReferenceEquals(dest, r) || ReferenceEquals(dest, g) || ReferenceEquals(dest, b))
+            throw new ArgumentException("Destination must not alias a source plane.", nameof(dest));
+
+        int[] block = ColorBlockFor(pattern);
+        Parallel.For(0, height, y => {
+            int rowBase = (y & 1) << 1;
+            for (int x = 0; x < width; x++) {
+                int idx = y * width + x;
+                dest[idx] = block[rowBase + (x & 1)] switch {
+                    0 => r[idx],
+                    1 => g[idx],
+                    _ => b[idx],
+                };
+            }
+        });
+        return dest;
+    }
+
+    /// <summary>
     /// Collapse (R, G, B) into perceptual luminance using the standard
     /// Rec.601 coefficients (Y = 0.299R + 0.587G + 0.114B). The result
     /// is a single ushort[] suitable for the FITS pipeline.
