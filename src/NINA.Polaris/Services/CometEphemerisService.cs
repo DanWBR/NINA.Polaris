@@ -49,30 +49,160 @@ public class CometEphemerisService {
 
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<CometEphemerisService> _logger;
+    private readonly string _overridePath;
+    private readonly object _gate = new();
     private List<CometElements> _comets = new();
 
-    public CometEphemerisService(IWebHostEnvironment env, ILogger<CometEphemerisService> logger) {
+    /// <summary>Where the working set came from: "bundled" or "jpl".</summary>
+    public string Source { get; private set; } = "bundled";
+
+    /// <summary>When the downloaded set was fetched. Null while running on the
+    /// bundled snapshot, which is what the UI needs to say "these elements are
+    /// from the install, not from tonight".</summary>
+    public DateTime? FetchedAtUtc { get; private set; }
+
+    public CometEphemerisService(IWebHostEnvironment env, IConfiguration config,
+                                 ILogger<CometEphemerisService> logger) {
         _env = env;
         _logger = logger;
+        // A downloaded set cannot live beside the bundled one: wwwroot sits
+        // under /opt/polaris owned by root, and a package update overwrites it.
+        _overridePath = config.GetValue("Sky:CometElementsPath",
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "NINA.Polaris", "comets.json"))!;
         LoadComets();
     }
 
-    public IReadOnlyList<CometElements> AllComets => _comets;
+    public IReadOnlyList<CometElements> AllComets { get { lock (_gate) return _comets; } }
+
+    /// <summary>Install a freshly downloaded set and persist it, so the next
+    /// start uses it without another download.
+    ///
+    /// An empty set is refused. A refresh that returned nothing (rate limit, a
+    /// changed response shape, a captive portal answering 200 with HTML) must
+    /// never be allowed to leave the operator with fewer comets than the
+    /// bundled file already gave them.</summary>
+    public void ReplaceElements(IReadOnlyList<CometElements> fresh, string source, DateTime fetchedUtc) {
+        if (fresh == null || fresh.Count == 0)
+            throw new ArgumentException("Refusing to install an empty comet set.", nameof(fresh));
+
+        var file = new CometsFile { Comets = fresh.ToList() };
+        var json = JsonSerializer.Serialize(file, new JsonSerializerOptions { WriteIndented = true });
+        Directory.CreateDirectory(Path.GetDirectoryName(_overridePath)!);
+        // Write then move: a crash mid-write must not leave a truncated file
+        // that the next start refuses to parse.
+        var tmp = _overridePath + ".tmp";
+        File.WriteAllText(tmp, json);
+        File.Move(tmp, _overridePath, overwrite: true);
+        File.SetLastWriteTimeUtc(_overridePath, fetchedUtc);
+
+        lock (_gate) {
+            _comets = file.Comets;
+            Source = source;
+            FetchedAtUtc = fetchedUtc;
+        }
+        _logger.LogInformation("Installed {Count} comet elements from {Source}", fresh.Count, source);
+    }
 
     private void LoadComets() {
-        var path = Path.Combine(_env.WebRootPath ?? "wwwroot", "data", "comets.json");
-        if (!File.Exists(path)) {
-            _logger.LogWarning("comets.json not found at {Path}; CometEphemerisService starts empty", path);
-            return;
-        }
+        // Downloaded set wins; the bundled snapshot is the floor so the SKY tab
+        // is never empty on a host that has never seen the internet.
+        if (TryLoadFrom(_overridePath, "jpl", File.Exists(_overridePath)
+                ? File.GetLastWriteTimeUtc(_overridePath) : null)) return;
+
+        var bundled = Path.Combine(_env.WebRootPath ?? "wwwroot", "data", "comets.json");
+        if (!TryLoadFrom(bundled, "bundled", null))
+            _logger.LogWarning("No comet elements found (tried {A} and {B}); "
+                + "CometEphemerisService starts empty", _overridePath, bundled);
+    }
+
+    private bool TryLoadFrom(string path, string source, DateTime? fetchedUtc) {
+        if (!File.Exists(path)) return false;
         try {
-            var json = File.ReadAllText(path);
-            var doc = JsonSerializer.Deserialize<CometsFile>(json);
-            _comets = doc?.Comets ?? new List<CometElements>();
-            _logger.LogInformation("Loaded {Count} comet elements from {Path}", _comets.Count, path);
+            var doc = JsonSerializer.Deserialize<CometsFile>(File.ReadAllText(path));
+            var list = doc?.Comets;
+            if (list == null || list.Count == 0) return false;
+            lock (_gate) {
+                _comets = list;
+                Source = source;
+                FetchedAtUtc = fetchedUtc;
+            }
+            _logger.LogInformation("Loaded {Count} comet elements from {Path} ({Source})",
+                list.Count, path, source);
+            return true;
         } catch (Exception ex) {
-            _logger.LogError(ex, "Failed to load comets.json at {Path}", path);
+            // A corrupt override must fall through to the bundled file rather
+            // than take the catalogue down with it.
+            _logger.LogError(ex, "Failed to load comet elements at {Path}", path);
+            return false;
         }
+    }
+
+    /// <summary>
+    /// True anomaly and heliocentric distance at <paramref name="daysFromPerihelion"/>,
+    /// picking the branch the eccentricity calls for.
+    ///
+    /// All three cases are Meeus, "Astronomical Algorithms" 2nd ed., ch. 30
+    /// (elliptic), ch. 35 (parabolic, Barker's equation) and ch. 35's
+    /// near-parabolic discussion (hyperbolic).
+    ///
+    /// Handling all three is not completeness for its own sake. The elliptic
+    /// branch alone computes a = q / (1 - e), which is infinite at e = 1 and
+    /// negative beyond it, so every long-period comet came out as NaN. In a
+    /// live JPL set of comets within ±550 days of perihelion, 67 of 118 have
+    /// e >= 0.98 — the bright, newly discovered ones people actually want to
+    /// photograph are exactly the ones the elliptic-only code could not do.
+    /// </summary>
+    internal static (double nu, double r) SolveOrbit(double q, double e, double daysFromPerihelion) {
+        const double NearParabolic = 1e-3;   // |e-1| below this: use Barker
+
+        if (Math.Abs(e - 1.0) < NearParabolic) {
+            // Barker's equation: an exact closed form, no iteration.
+            var A = 1.5 * GaussK * daysFromPerihelion / Math.Sqrt(2.0 * q * q * q);
+            var B = Math.Cbrt(A + Math.Sqrt(A * A + 1.0));
+            var tanHalfNu = B - 1.0 / B;
+            var nuP = 2.0 * Math.Atan(tanHalfNu);
+            var rP = q * (1.0 + tanHalfNu * tanHalfNu);
+            return (nuP, rP);
+        }
+
+        if (e > 1.0) {
+            // Hyperbolic: a = q/(e-1) > 0, M = e·sinh(H) - H.
+            var aH = q / (e - 1.0);
+            var nH = GaussK * Math.Sqrt(1.0 / (aH * aH * aH));
+            var MH = nH * daysFromPerihelion;
+            // Seed from the asymptotic form; Newton then converges in a few
+            // steps even far from perihelion.
+            var H = Math.Asinh(MH / e);
+            for (var i = 0; i < 60; i++) {
+                var f = e * Math.Sinh(H) - H - MH;
+                var fp = e * Math.Cosh(H) - 1.0;
+                var dH = f / fp;
+                H -= dH;
+                if (Math.Abs(dH) < 1e-12) break;
+            }
+            var nuH = 2.0 * Math.Atan2(Math.Sqrt(e + 1.0) * Math.Tanh(H / 2.0),
+                                       Math.Sqrt(e - 1.0));
+            var rH = aH * (e * Math.Cosh(H) - 1.0);
+            return (nuH, rH);
+        }
+
+        // Elliptic.
+        var a = q / (1.0 - e);
+        var n = GaussK * Math.Sqrt(1.0 / (a * a * a));
+        var M = n * daysFromPerihelion;
+        var E = M;
+        for (var i = 0; i < 60; i++) {
+            var f = E - e * Math.Sin(E) - M;
+            var fp = 1.0 - e * Math.Cos(E);
+            var dE = f / fp;
+            E -= dE;
+            if (Math.Abs(dE) < 1e-12) break;
+        }
+        var nuE = 2.0 * Math.Atan2(Math.Sqrt(1.0 + e) * Math.Sin(E / 2.0),
+                                   Math.Sqrt(1.0 - e) * Math.Cos(E / 2.0));
+        var rE = a * (1.0 - e * Math.Cos(E));
+        return (nuE, rE);
     }
 
     /// <summary>
@@ -86,27 +216,8 @@ public class CometEphemerisService {
         var jdNow   = ToJulianDate(utc);
         var jdPeri  = ToJulianDate(tperi);
 
-        // 2) Mean motion + mean anomaly.
-        var a = c.Q / (1 - c.E);                  // AU
-        var n = GaussK * Math.Sqrt(1.0 / (a * a * a)); // rad/day
-        var M = n * (jdNow - jdPeri);             // rad
-
-        // 3) Eccentric anomaly via Newton-Raphson (5 iterations is plenty
-        //    for e < 0.97; we cap at e = 0.97 for Halley-class orbits).
-        var E = M;
-        for (var i = 0; i < 30; i++) {
-            var f  = E - c.E * Math.Sin(E) - M;
-            var fp = 1 - c.E * Math.Cos(E);
-            var dE = f / fp;
-            E -= dE;
-            if (Math.Abs(dE) < 1e-10) break;
-        }
-
-        // 4) True anomaly + heliocentric distance.
-        var sinHalfNu = Math.Sqrt(1 + c.E) * Math.Sin(E / 2);
-        var cosHalfNu = Math.Sqrt(1 - c.E) * Math.Cos(E / 2);
-        var nu = 2 * Math.Atan2(sinHalfNu, cosHalfNu);
-        var r  = a * (1 - c.E * Math.Cos(E));
+        // 2-4) True anomaly + heliocentric distance, by orbit class.
+        var (nu, r) = SolveOrbit(c.Q, c.E, jdNow - jdPeri);
 
         // 5) Position in the orbital plane (perifocal frame).
         var xPeri = r * Math.Cos(nu);

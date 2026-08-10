@@ -12,7 +12,11 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System;
+using System.Collections.Generic;
+using System.IO;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
@@ -37,7 +41,14 @@ public class CometEphemerisServiceTests {
 
     private CometEphemerisService MakeService() {
         var env = new TestEnv();
-        return new CometEphemerisService(env, NullLogger<CometEphemerisService>.Instance);
+        // Point the downloaded-elements override at a path that does not
+        // exist, so these tests keep exercising the BUNDLED file regardless of
+        // whether the machine running them has ever refreshed from JPL.
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+            ["Sky:CometElementsPath"] = Path.Combine(Path.GetTempPath(),
+                "polaris-test-no-such-comets-" + Guid.NewGuid().ToString("N") + ".json")
+        }).Build();
+        return new CometEphemerisService(env, config, NullLogger<CometEphemerisService>.Instance);
     }
 
     [Test]

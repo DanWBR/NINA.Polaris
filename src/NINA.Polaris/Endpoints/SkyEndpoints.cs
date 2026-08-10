@@ -330,6 +330,43 @@ public static class SkyEndpoints {
             });
         });
 
+        // ---- Comet orbital elements ----
+
+        // What the ephemeris is working from, so the UI can say how old it is
+        // instead of presenting a build-time snapshot as if it were current.
+        group.MapGet("/comets/status", (CometEphemerisService comets) => Results.Ok(new {
+            count = comets.AllComets.Count,
+            source = comets.Source,                 // "bundled" or "jpl"
+            fetchedAtUtc = comets.FetchedAtUtc,     // null while on the bundled set
+            ageDays = comets.FetchedAtUtc is { } t
+                ? Math.Round((DateTime.UtcNow - t).TotalDays, 1)
+                : (double?)null
+        }));
+
+        // Manual refresh. The worker already does this when the host has
+        // internet, but a field host often gets a hotspot for one minute and
+        // the operator wants it to happen now rather than at the next tick.
+        group.MapPost("/comets/refresh", async (CometElementsUpdater updater,
+                                                CometEphemerisService comets,
+                                                CancellationToken ct) => {
+            try {
+                var n = await updater.RefreshAsync(ct);
+                return Results.Ok(new {
+                    ok = true, count = n,
+                    source = comets.Source, fetchedAtUtc = comets.FetchedAtUtc
+                });
+            } catch (Exception ex) {
+                // Offline is the common case, not a server fault: report it as
+                // a failed attempt with the reason, and leave the current
+                // elements in place.
+                return Results.Ok(new {
+                    ok = false, error = ex.Message,
+                    count = comets.AllComets.Count,
+                    source = comets.Source, fetchedAtUtc = comets.FetchedAtUtc
+                });
+            }
+        });
+
         // ---- Altitude chart + night window ----
 
         group.MapGet("/altitude", (double ra, double dec, int? stepMinutes,

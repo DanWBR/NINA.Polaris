@@ -437,6 +437,10 @@ builder.Services.AddSingleton<GeocodingService>();
 builder.Services.AddSingleton<WeatherForecastService>();
 builder.Services.AddSingleton<CelestialImageService>();
 builder.Services.AddSingleton<CometEphemerisService>();
+builder.Services.AddSingleton<CometElementsUpdater>();
+// Keeps the comet elements current when the host has internet; silent and
+// non-blocking when it does not (the usual case in the field).
+builder.Services.AddHostedService<CometElementsRefreshWorker>();
 builder.Services.AddSingleton<TonightsBestService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameLibraryService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameProcessingService>();
