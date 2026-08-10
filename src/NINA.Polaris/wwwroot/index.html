@@ -10083,10 +10083,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <button class="btn" @click="openPlanViz()"
                             :disabled="!plan || planTargetCount() === 0"
                             title="Visualize the whole plan timeline (elevation + sub-intervals)">▦ View plan</button>
+                    <!-- Three states, not two. When there is progress to
+                         resume, this button DISCARDS it and starts over, and
+                         it sits right next to Resume: labelling both "Start"
+                         and "Resume" put a destructive action and a safe one
+                         side by side under the same-looking word. -->
                     <button class="plan-run-btn" :class="{ running: planIsRunning() }"
                             @click="planIsRunning() ? stopPlan() : startPlan()"
                             :disabled="!plan || planTargetCount() === 0"
-                            x-text="planIsRunning() ? 'Stop' : 'Start'"></button>
+                            :title="planStartTitle()"
+                            x-text="planStartLabel()"></button>
                     <!-- Resume the last prematurely-ended plan (stop or
                          end-time) from its retained progress: completed
                          targets skip, already-captured frames are kept. -->

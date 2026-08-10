@@ -22547,6 +22547,25 @@ function ninaApp() {
                 this.toast('Plan started', 'ok');
             } catch (e) { this.toastFail('Start failed', e); }
         },
+        // Label for the PLAN run button. Three states: Stop while running,
+        // "Start over" when there is retained progress that starting would
+        // throw away, and plain Start otherwise. The middle one exists because
+        // that button sits beside Resume at three in the morning.
+        planStartLabel() {
+            if (this.planIsRunning()) return this._t('Stop');
+            if (this.planStatus && this.planStatus.canResume) return this._t('Start over');
+            return this._t('Start');
+        },
+
+        planStartTitle() {
+            if (this.planIsRunning()) return this._t('Stop the plan and keep what it has captured');
+            if (this.planStatus && this.planStatus.canResume) {
+                return this._t('Discard the {n} frames already done and run the plan from the beginning. '
+                    + 'Use Resume to continue instead.', { n: this.planStatus.resumeDoneFrames || 0 });
+            }
+            return this._t('Run the plan');
+        },
+
         async stopPlan() {
             try {
                 const r = await this.apiPost('/api/plan/stop', {});

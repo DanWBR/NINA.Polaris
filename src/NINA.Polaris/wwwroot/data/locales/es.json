@@ -4193,5 +4193,9 @@
   "The current frame will be discarded.": "El fotograma actual se descartará.",
   "plan": "plan",
   "run": "run",
-  "sequence": "secuencia"
+  "sequence": "secuencia",
+  "Start over": "Empezar de nuevo",
+  "Stop the plan and keep what it has captured": "Detener el plan y conservar lo ya capturado",
+  "Discard the {n} frames already done and run the plan from the beginning. Use Resume to continue instead.": "Descartar los {n} fotogramas ya hechos y ejecutar el plan desde el principio. Para continuar, usa Reanudar.",
+  "Run the plan": "Ejecutar el plan"
 }

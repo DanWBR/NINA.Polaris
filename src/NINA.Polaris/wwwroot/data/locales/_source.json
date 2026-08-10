@@ -3510,5 +3510,9 @@
   "The current frame will be discarded.": "",
   "plan": "",
   "run": "",
-  "sequence": ""
+  "sequence": "",
+  "Start over": "",
+  "Stop the plan and keep what it has captured": "",
+  "Discard the {n} frames already done and run the plan from the beginning. Use Resume to continue instead.": "",
+  "Run the plan": ""
 }
