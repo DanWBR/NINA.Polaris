@@ -33,7 +33,20 @@ public static class StatusStreamHandler {
     // still kills a genuinely dead peer, one KeepAliveInterval later.
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(30);
     private static readonly JsonSerializerOptions JsonOpts = new() {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        // A non-finite number must never be able to disconnect the operator.
+        // System.Text.Json throws on NaN / Infinity, and that exception used to
+        // kill the whole send: one bad ratio somewhere in the payload took the
+        // status socket down for every client, and because the value was
+        // retained state every later tick threw too, so the app could not
+        // reconnect until the process was restarted. See
+        // NonFiniteDoubleConverter for the full note.
+        Converters = {
+            new NonFiniteDoubleConverter(),
+            new NonFiniteNullableDoubleConverter(),
+            new NonFiniteSingleConverter(),
+            new NonFiniteNullableSingleConverter(),
+        }
     };
 
     // PERF #365: serialize the status payload at most once per tick and
