@@ -290,6 +290,15 @@ public static class PlateSolveEndpoints {
                 $"polaris_preview_solve_{Guid.NewGuid():N}.fits");
 
             try {
+                // Geometry BEFORE writing: the stamp has to be in the file the
+                // solver opens, and the hints have to be on the options. Without
+                // either, ASTAP searches every plate scale it knows.
+                var geom = PlateSolveHints.From(
+                    profiles.ActiveEquipmentProfile?.FocalLengthMm ?? 0,
+                    equip.Camera?.PixelSizeY > 0 ? equip.Camera.PixelSizeY : (equip.Camera?.PixelSizeX ?? 0),
+                    image.Properties.Height,
+                    equip.Camera?.MaxY ?? 0);
+                PlateSolveHints.StampFocalLength(image, profiles.ActiveEquipmentProfile?.FocalLengthMm ?? 0);
                 FITSWriter.Write(image, tempFits);
 
                 var options = new PlateSolveOptions {
@@ -297,6 +306,15 @@ public static class PlateSolveEndpoints {
                     HintDec = hintDec,
                     SearchRadiusDeg = request?.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
                 };
+                PlateSolveHints.Apply(options, geom);
+                if (geom.FovDeg > 0) {
+                    logger.LogInformation(
+                        "PREVIEW plate solve: fov={Fov:F2}° scale={Scale:F2}\"/px"
+                        + " (focal {Fl}mm, pixel {Pix:F2}um{Bin})",
+                        geom.FovDeg, geom.ScaleArcsecPerPixel,
+                        profiles.ActiveEquipmentProfile?.FocalLengthMm ?? 0, geom.EffectivePixelUm,
+                        geom.NativeBinning > 1 ? $", native x{geom.NativeBinning}" : "");
+                }
                 bool silent = request?.Silent ?? false;
                 logger.LogInformation(
                     "PREVIEW plate solve: hint RA={Ra} Dec={Dec} radius={Rad}°{Silent}",
@@ -405,12 +423,24 @@ public static class PlateSolveEndpoints {
                 // loop + aux focus use.
                 var image = await AuxCameraCaptureGate.RunAsync(
                     () => cam.CaptureAsync(exposure, opts, ct), ct);
+
+                // The aux train has its own focal length; using the main one
+                // here would hand the solver a hint that is confidently wrong,
+                // which is worse than none.
+                var auxFl = profiles.ActiveEquipmentProfile?.AuxFocalLengthMm ?? 0;
+                var geom = PlateSolveHints.From(
+                    auxFl,
+                    cam.PixelSizeY > 0 ? cam.PixelSizeY : cam.PixelSizeX,
+                    image.Properties.Height,
+                    cam.MaxY);
+                PlateSolveHints.StampFocalLength(image, auxFl);
                 FITSWriter.Write(image, tempFits);
 
                 var options = new PlateSolveOptions {
                     HintRa = hintRa, HintDec = hintDec,
                     SearchRadiusDeg = request?.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
                 };
+                PlateSolveHints.Apply(options, geom);
                 progress.Begin("AUX", ct);
                 PlateSolveResult result;
                 try { result = await solver.SolveAsync(tempFits, options, progress.Token, progress.Append); }
@@ -472,11 +502,18 @@ public static class PlateSolveEndpoints {
 
             var tempFits = Path.Combine(Path.GetTempPath(), $"polaris_annotate_{Guid.NewGuid():N}.fits");
             try {
+                var geom = PlateSolveHints.From(
+                    profiles.ActiveEquipmentProfile?.FocalLengthMm ?? 0,
+                    equip.Camera?.PixelSizeY > 0 ? equip.Camera.PixelSizeY : (equip.Camera?.PixelSizeX ?? 0),
+                    image.Properties.Height,
+                    equip.Camera?.MaxY ?? 0);
+                PlateSolveHints.StampFocalLength(image, profiles.ActiveEquipmentProfile?.FocalLengthMm ?? 0);
                 FITSWriter.Write(image, tempFits);
                 var options = new PlateSolveOptions {
                     HintRa = hintRa, HintDec = hintDec,
                     SearchRadiusDeg = request?.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
                 };
+                PlateSolveHints.Apply(options, geom);
                 progress.Begin("ANNOTATE", ct);
                 PlateSolveResult result;
                 try { result = await solver.SolveAsync(tempFits, options, progress.Token, progress.Append); }
