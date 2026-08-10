@@ -3502,5 +3502,14 @@
   "Updating...": "",
   "Download current comet orbital elements from JPL (needs internet on the host)": "",
   "Fetched on this device; sending to the host": "",
-  "This frame is too large to re-stretch here. Lower Preview quality in Appearance if you need the sliders.": ""
+  "This frame is too large to re-stretch here. Lower Preview quality in Appearance if you need the sliders.": "",
+  "Abort now": "",
+  "Keep running": "",
+  "Abort the running {what} now?": "",
+  "Aborted the {what}": "",
+  "Frames already taken are kept and you can resume later.": "",
+  "The current frame will be discarded.": "",
+  "plan": "",
+  "run": "",
+  "sequence": ""
 }

@@ -523,12 +523,17 @@
             </a>
         </div>
         <div class="status-bar-right">
-            <!-- Global panic button: abort the running sequence from
-                 anywhere in the app, even if the AUTORUN tab isn't open.
-                 Only shown while a sequence is running or paused. -->
-            <button class="status-panic-btn" x-show="seqState !== 'idle'" x-cloak
-                    @click="panicAbortSequence()"
-                    title="Abort the running sequence immediately">⛔ Abort run</button>
+            <!-- Global panic button: abort whatever is running, from anywhere
+                 in the app, even if the tab that started it is not open.
+                 It used to be gated on seqState alone, so it covered AUTORUN
+                 and nothing else: a PLAN could only be stopped from the PLAN
+                 tab, and the footer chip beside it is a readout, not a
+                 control. The label names what will be aborted, because the
+                 three do not stop the same way. -->
+            <button class="status-panic-btn" x-show="anyRunActive()" x-cloak
+                    @click="panicAbortRun()"
+                    :title="'Abort the running ' + activeRunLabel() + ' immediately'"
+                    x-text="'⛔ ' + $t('Abort') + ' ' + activeRunLabel()"></button>
             <!-- Self-update badge (SBC .deb installs only). Shown when GitHub
                  has a newer release for this host's architecture; click opens
                  the update modal with release notes + the install button. -->

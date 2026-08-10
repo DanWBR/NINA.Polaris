@@ -37150,18 +37150,64 @@ function ninaApp() {
         // running, from any tab. Confirms first since it kills the night's
         // run. Reuses the /stop endpoint; kept separate so the wording and
         // the confirmation are unambiguous.
-        async panicAbortSequence() {
-            if (!await this._confirmAsync('Abort the running sequence now? '
-                    + 'The current frame will be discarded.',
-                    { title: 'Abort sequence', okLabel: 'Abort now', cancelLabel: 'Keep running', danger: true })) return;
+        // Which long-running job the panic button is aimed at, or ''. PLAN
+        // wins because it drives the advanced engine underneath: while a plan
+        // runs, advSeq also reports Running, and aborting through the sequence
+        // endpoint would stop the engine while the plan runner kept believing
+        // it owned the night.
+        activeRunKind() {
+            if (this.planStatus && this.planStatus.active) return 'plan';
+            if (this.seqState !== 'idle') return 'autorun';
+            if (this.advSeq && this.advSeq.state === 'Running') return 'adv';
+            return '';
+        },
+
+        anyRunActive() { return this.activeRunKind() !== ''; },
+
+        activeRunLabel() {
+            switch (this.activeRunKind()) {
+                case 'plan':    return this._t('plan');
+                case 'autorun': return this._t('run');
+                case 'adv':     return this._t('sequence');
+                default:        return this._t('run');
+            }
+        },
+
+        // Global panic button (status bar). Aborts whatever is running, from
+        // any tab. Confirms first, since it ends the night's work.
+        //
+        // Routed per kind on purpose. A plan must go through /api/plan/stop:
+        // that keeps its progress stash so Resume can pick up where it left
+        // off, and it runs the plan's own end actions. Sending a plan to
+        // /api/sequence/stop would halt the engine under it and throw that
+        // away.
+        async panicAbortRun() {
+            const kind = this.activeRunKind();
+            if (!kind) return;
+
+            const what = this.activeRunLabel();
+            const extra = kind === 'plan'
+                ? this._t('Frames already taken are kept and you can resume later.')
+                : this._t('The current frame will be discarded.');
+            if (!await this._confirmAsync(
+                    this._t('Abort the running {what} now?', { what }) + ' ' + extra,
+                    { title: this._t('Abort'), okLabel: this._t('Abort now'),
+                      cancelLabel: this._t('Keep running'), danger: true })) return;
+
             try {
-                await this.apiPost('/api/sequence/stop');
-                this.seqState = 'idle';
-                this.toast('Sequence aborted', 'warn');
+                if (kind === 'plan') {
+                    const r = await this.apiPost('/api/plan/stop', {});
+                    try { this.planStatus = await r.json(); } catch (e) { /* status refreshes on the WS anyway */ }
+                } else {
+                    await this.apiPost('/api/sequence/stop');
+                    this.seqState = 'idle';
+                }
+                this.toast(this._t('Aborted the {what}', { what }), 'warn');
             } catch (e) {
                 this.toastFail('Abort failed', e);
             }
         },
+
 
         startSeqPolling() {
             this.stopSeqPolling();

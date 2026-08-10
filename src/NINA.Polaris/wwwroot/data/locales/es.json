@@ -4185,5 +4185,14 @@
   "Updating...": "Actualizando...",
   "Download current comet orbital elements from JPL (needs internet on the host)": "Descargar los elementos orbitales actuales de cometas del JPL (requiere internet en el host)",
   "Fetched on this device; sending to the host": "Descargado en este dispositivo; enviando al host",
-  "This frame is too large to re-stretch here. Lower Preview quality in Appearance if you need the sliders.": "Este fotograma es demasiado grande para reajustarlo aquí. Baja la calidad de vista previa en Apariencia si necesitas los controles."
+  "This frame is too large to re-stretch here. Lower Preview quality in Appearance if you need the sliders.": "Este fotograma es demasiado grande para reajustarlo aquí. Baja la calidad de vista previa en Apariencia si necesitas los controles.",
+  "Abort now": "Abortar ahora",
+  "Keep running": "Seguir",
+  "Abort the running {what} now?": "¿Abortar el {what} en curso ahora?",
+  "Aborted the {what}": "{what} abortado",
+  "Frames already taken are kept and you can resume later.": "Los fotogramas ya capturados se conservan y puedes reanudar después.",
+  "The current frame will be discarded.": "El fotograma actual se descartará.",
+  "plan": "plan",
+  "run": "run",
+  "sequence": "secuencia"
 }
