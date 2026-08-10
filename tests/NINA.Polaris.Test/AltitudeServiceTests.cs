@@ -12,6 +12,9 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using NINA.Polaris.Services;
 
@@ -98,5 +101,71 @@ public class AltitudeServiceTests {
         var utc = new DateTime(2024, 12, 21, 9, 21, 0, DateTimeKind.Utc);
         var (_, dec) = AltitudeService.SunPosition(utc);
         Assert.That(dec, Is.EqualTo(-23.4).Within(0.5));
+    }
+
+    // ---- ComputeNightWindow: which night ----
+
+    private static AltitudeService MakeService(double lat, double lng) {
+        var profile = new ProfileService(new ConfigurationBuilder().Build(),
+                                         NullLogger<ProfileService>.Instance);
+        profile.Active.Latitude = lat;
+        profile.Active.Longitude = lng;
+        return new AltitudeService(profile);
+    }
+
+    /// <summary>
+    /// The window must follow the SITE's date, not UTC's.
+    ///
+    /// The observer is at UTC-3 (lon -36.8). At 23:20 local on 9 August it is
+    /// already 02:20 UTC on the 10th, and taking the date off the UTC instant
+    /// made the service return the night that BEGINS on the 10th: sunset
+    /// eighteen hours in the future, while the observer was outside under the
+    /// current one. Every plan built after 21:00 local was charted against the
+    /// wrong night (field, Radxa Q6A, 2026-08-09).
+    /// </summary>
+    [Test]
+    public void ComputeNightWindow_LateEveningPastUtcMidnight_ReturnsTheNightInProgress() {
+        var svc = MakeService(-6.1269, -36.8183);
+        // 23:20 local on the 9th.
+        var anchor = new DateTime(2026, 8, 10, 2, 20, 0, DateTimeKind.Utc);
+
+        var w = svc.ComputeNightWindow(anchor);
+
+        Assert.That(w.Sunset, Is.LessThan(anchor),
+            $"sunset {w.Sunset:u} must already have happened at {anchor:u}; "
+            + "a window starting in the future means the UTC date was used");
+        Assert.That(w.Sunrise, Is.GreaterThan(anchor),
+            "the observer is mid-night, so sunrise is still ahead");
+        Assert.That(w.AstronomicalDuskUtc, Is.LessThan(anchor));
+        Assert.That(w.AstronomicalDawnUtc, Is.GreaterThan(anchor));
+        // Sunset belongs to the evening of the 9th local, which is the 9th UTC
+        // too (20:29 UTC).
+        Assert.That(w.Sunset.Date, Is.EqualTo(new DateTime(2026, 8, 9)));
+    }
+
+    /// <summary>Same night, asked for before UTC midnight: the answer must not
+    /// move. This is the control that shows the fix did not simply shift
+    /// everything back by a day.</summary>
+    [Test]
+    public void ComputeNightWindow_EarlyEvening_AgreesWithTheLateEveningAnswer() {
+        var svc = MakeService(-6.1269, -36.8183);
+        var early = svc.ComputeNightWindow(new DateTime(2026, 8, 9, 22, 0, 0, DateTimeKind.Utc)); // 19:00 local
+        var late  = svc.ComputeNightWindow(new DateTime(2026, 8, 10, 2, 20, 0, DateTimeKind.Utc)); // 23:20 local
+
+        Assert.That(late.Sunset, Is.EqualTo(early.Sunset).Within(TimeSpan.FromMinutes(1)),
+            "the same night must be reported either side of UTC midnight");
+        Assert.That(late.Sunrise, Is.EqualTo(early.Sunrise).Within(TimeSpan.FromMinutes(1)));
+    }
+
+    /// <summary>East of Greenwich the sign flips, so pin that too: at UTC+10,
+    /// 22:00 local on the 9th is 12:00 UTC on the 9th, still the same night.</summary>
+    [Test]
+    public void ComputeNightWindow_EastOfGreenwich_ReturnsTheNightInProgress() {
+        var svc = MakeService(-33.87, 151.21);   // Sydney
+        var anchor = new DateTime(2026, 8, 9, 12, 0, 0, DateTimeKind.Utc); // ~22:00 local
+        var w = svc.ComputeNightWindow(anchor);
+
+        Assert.That(w.Sunset, Is.LessThan(anchor), $"sunset {w.Sunset:u} should be behind us");
+        Assert.That(w.Sunrise, Is.GreaterThan(anchor));
     }
 }

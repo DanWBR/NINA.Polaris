@@ -56,11 +56,26 @@ public class AltitudeService {
     public NightWindow ComputeNightWindow(DateTime? nightUtc = null) {
         var lat = _profile.Active.Latitude;
         var lon = _profile.Active.Longitude;
-        // Pick the date that contains local noon, the night "belongs" to the
+        // Pick the date that contains local noon: the night "belongs" to the
         // day on whose evening it begins.
+        //
+        // That date has to be the SITE's, not UTC's. This used to read
+        // anchor.Year/Month/Day straight off the UTC instant, so the moment UTC
+        // rolled past midnight the whole window jumped a night forward while
+        // the observer was still standing under the current one. At 23:20 local
+        // in UTC-3 (02:20 UTC the next day) the plan chart offered tomorrow
+        // evening's sunset, eighteen hours out, and every plan built after
+        // 21:00 local was drawn against the wrong night (field, 2026-08-09).
+        //
+        // Longitude stands in for the timezone, which is what the rest of this
+        // service already assumes: a night window is about the site's solar
+        // day, not its civil one, and the host's own zone is irrelevant (the
+        // images ship as Etc/UTC).
         var anchor = nightUtc ?? DateTime.UtcNow;
-        var localNoon = new DateTime(anchor.Year, anchor.Month, anchor.Day, 12, 0, 0, DateTimeKind.Utc)
-            .AddHours(-lon / 15.0);
+        var lonOffsetHours = lon / 15.0;                  // east of Greenwich is positive
+        var siteLocal = anchor.AddHours(lonOffsetHours);  // the site's wall clock
+        var localNoon = new DateTime(siteLocal.Year, siteLocal.Month, siteLocal.Day, 12, 0, 0, DateTimeKind.Utc)
+            .AddHours(-lonOffsetHours);
 
         return new NightWindow {
             Sunset                 = FindSunAltCrossing(localNoon, +1, 0,    lat, lon),
