@@ -3501,5 +3501,6 @@
   "Update": "",
   "Updating...": "",
   "Download current comet orbital elements from JPL (needs internet on the host)": "",
-  "Fetched on this device; sending to the host": ""
+  "Fetched on this device; sending to the host": "",
+  "This frame is too large to re-stretch here. Lower Preview quality in Appearance if you need the sliders.": ""
 }

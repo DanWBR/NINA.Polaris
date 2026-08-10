@@ -4184,5 +4184,6 @@
   "Update": "Actualizar",
   "Updating...": "Actualizando...",
   "Download current comet orbital elements from JPL (needs internet on the host)": "Descargar los elementos orbitales actuales de cometas del JPL (requiere internet en el host)",
-  "Fetched on this device; sending to the host": "Descargado en este dispositivo; enviando al host"
+  "Fetched on this device; sending to the host": "Descargado en este dispositivo; enviando al host",
+  "This frame is too large to re-stretch here. Lower Preview quality in Appearance if you need the sliders.": "Este fotograma es demasiado grande para reajustarlo aquí. Baja la calidad de vista previa en Apariencia si necesitas los controles."
 }

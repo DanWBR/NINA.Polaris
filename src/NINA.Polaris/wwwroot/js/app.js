@@ -8424,22 +8424,24 @@ function ninaApp() {
 
             const img = new Image();
             img.onload = () => {
-                // Cache the decoded RGB pixels so the histogram handles can
-                // re-stretch the frame client-side. The colour OSC live stack
-                // is broadcast as an already-rendered JPEG (no raw 16-bit
-                // buffer reaches the client), so without this cache moving the
-                // black/white/mid handles did nothing while OSC stacking was
-                // on. The server downscales the JPEG to <=1280px, so the
-                // decoded buffer is small enough to keep + re-LUT every drag.
+                // Keep the decoded image. The RGB pixel cache that the manual
+                // stretch and the JPEG histogram need is built LAZILY by
+                // _ensureJpegPixels, not here.
+                //
+                // It used to be built on every frame, before anything was
+                // painted, and a failure was swallowed into
+                // `_lastJpegFrame = null` -- after which _buildJpegDisplayCanvas
+                // returned null and the entire paint block below was skipped.
+                // A blank canvas, no log, no toast. That mattered once the
+                // colour live stack stopped being small: the old comment here
+                // claimed "the server downscales the JPEG to <=1280px", but
+                // LiveStackingService sends it at the operator's Preview
+                // quality, up to native. At 6248x4176 the cache canvas plus its
+                // ImageData is ~208 MB per frame on a tablet.
                 try {
-                    const cache = this._jpegCacheCanvas
-                        || (this._jpegCacheCanvas = document.createElement('canvas'));
-                    cache.width = img.width;
-                    cache.height = img.height;
-                    const cctx = cache.getContext('2d', { willReadFrequently: true });
-                    cctx.drawImage(img, 0, 0);
                     this._lastJpegFrame = {
-                        imageData: cctx.getImageData(0, 0, img.width, img.height),
+                        bitmap: img,          // always paintable
+                        imageData: null,      // filled in on demand
                         width: img.width, height: img.height, frameKind
                     };
                     // Server colour live stack renders LIVE as an RGB JPEG — arm
@@ -8485,7 +8487,10 @@ function ninaApp() {
                         this.histo._autoMid = 0.5;
                     }
                 } catch (e) {
-                    this._lastJpegFrame = null;
+                    // Even this much should not fail, but if it does, keep
+                    // something paintable rather than dropping the frame.
+                    this._lastJpegFrame = { bitmap: img, imageData: null,
+                                            width: img.width, height: img.height, frameKind };
                 }
                 URL.revokeObjectURL(url);
 
@@ -8511,22 +8516,68 @@ function ninaApp() {
             img.src = url;
         },
 
-        // Build a native-resolution canvas holding the JPEG ready to draw.
-        // Auto mode: the server already stretched it, so blit the cached pixels
-        // unchanged. Manual mode: apply an MTF screen-transfer driven by the
-        // black/white/mid handles. Returns null when there's no cached frame.
+        // The decoded JPEG's RGB pixels, built on first use and kept until the
+        // next frame. Returns null when they cannot be produced, which callers
+        // must treat as "no manual stretch / no local histogram" rather than
+        // "no image": the frame itself is still in _lastJpegFrame.bitmap.
+        //
+        // A full-resolution ImageData is large (a 26 Mpx stack is ~104 MB), so
+        // this is deliberately not called unless something needs pixels.
+        _ensureJpegPixels() {
+            const f = this._lastJpegFrame;
+            if (!f || !f.bitmap) return null;
+            if (f.imageData) return f.imageData;
+            try {
+                const cache = this._jpegCacheCanvas
+                    || (this._jpegCacheCanvas = document.createElement('canvas'));
+                cache.width = f.width;
+                cache.height = f.height;
+                const cctx = cache.getContext('2d', { willReadFrequently: true });
+                cctx.drawImage(f.bitmap, 0, 0);
+                f.imageData = cctx.getImageData(0, 0, f.width, f.height);
+                return f.imageData;
+            } catch (e) {
+                // Say it once per session. Silence here is what turned a memory
+                // problem into "the image just does not show up".
+                if (!this._jpegPixelWarned) {
+                    this._jpegPixelWarned = true;
+                    console.warn('[LIVE] could not cache JPEG pixels '
+                        + f.width + 'x' + f.height + '; manual stretch and the '
+                        + 'local histogram are unavailable for this frame', e);
+                    try {
+                        this.toast(this._t('This frame is too large to re-stretch here. '
+                            + 'Lower Preview quality in Appearance if you need the sliders.'), 'warn');
+                    } catch (e2) { /* toast is a nicety, not a requirement */ }
+                }
+                return null;
+            }
+        },
+
+        // Something drawable for the current JPEG frame.
+        // Auto mode: the decoded image itself, since the server already
+        // stretched it. Manual mode: a canvas with an MTF screen-transfer
+        // applied, driven by the black/white/mid handles, degrading to the
+        // decoded image when the pixels cannot be cached. Returns null only
+        // when there is no frame at all.
         _buildJpegDisplayCanvas() {
             const f = this._lastJpegFrame;
-            if (!f) return null;
+            if (!f || !f.bitmap) return null;
+            // Auto: the server already stretched this JPEG, so the decoded
+            // image IS the picture. Drawing it straight avoids a full-frame
+            // ImageData round trip that bought nothing.
+            if (this.stretchAuto) return f.bitmap;
+
+            const src = this._ensureJpegPixels();
+            // No pixels means no LUT, but the operator still gets the frame:
+            // the server's auto-stretched version, which is what they were
+            // looking at before they touched a handle.
+            if (!src) return f.bitmap;
+
             const out = this._jpegDrawCanvas
                 || (this._jpegDrawCanvas = document.createElement('canvas'));
             out.width = f.width;
             out.height = f.height;
             const octx = out.getContext('2d');
-            if (this.stretchAuto) {
-                octx.putImageData(f.imageData, 0, 0);
-                return out;
-            }
             // 256-entry LUT: re-map the 8-bit server image through the manual
             // black/white window + midtone MTF. Same channel LUT for R/G/B so
             // the server's colour balance is preserved.
@@ -8541,13 +8592,13 @@ function ninaApp() {
                 x = x < 0 ? 0 : x > 1 ? 1 : x;
                 lut[v] = Math.round(this._mtf(x, mid) * 255);
             }
-            const src = f.imageData.data;
+            const srcData = src.data;
             const res = octx.createImageData(f.width, f.height);
             const dst = res.data;
-            for (let i = 0; i < src.length; i += 4) {
-                dst[i]     = lut[src[i]];
-                dst[i + 1] = lut[src[i + 1]];
-                dst[i + 2] = lut[src[i + 2]];
+            for (let i = 0; i < srcData.length; i += 4) {
+                dst[i]     = lut[srcData[i]];
+                dst[i + 1] = lut[srcData[i + 1]];
+                dst[i + 2] = lut[srcData[i + 2]];
                 dst[i + 3] = 255;
             }
             octx.putImageData(res, 0, 0);
@@ -8970,7 +9021,12 @@ function ninaApp() {
             // there's no raw buffer — otherwise the histogram + min/max/avg/std
             // stayed zeroed whenever the live feed was JPEG.
             const j = hasRaw ? null : this._lastJpegFrame;
-            const hasJpeg = !!(j && j.imageData && j.imageData.data && j.imageData.data.length);
+            // The pixel cache is lazy now, so ask for it here: this branch is
+            // one of the two things that genuinely need pixels. It returns null
+            // when the frame is too big to cache, and then there is simply no
+            // local histogram -- the image itself is unaffected.
+            const jpegPixels = j ? this._ensureJpegPixels() : null;
+            const hasJpeg = !!(jpegPixels && jpegPixels.data && jpegPixels.data.length);
             if (!hasRaw && !hasJpeg) return false;
             if (this.histo._token === this._histoToken && this.histo.bins) {
                 this._histoUpdateEndpoints();
@@ -8983,7 +9039,7 @@ function ninaApp() {
                 // Derive a luminance array (Rec.601) from the JPEG RGBA pixels.
                 // The server already display-stretched it, so the stats describe
                 // the shown image (0..255 space).
-                const d = j.imageData.data, npix = d.length >> 2;
+                const d = jpegPixels.data, npix = d.length >> 2;
                 const lum = new Uint16Array(npix);
                 for (let i = 0, p = 0; i < npix; i++, p += 4) {
                     lum[i] = (d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114) | 0;
@@ -9054,7 +9110,7 @@ function ninaApp() {
                 this.histo.binsR = bR; this.histo.binsG = bG; this.histo.binsB = bB;
                 this.histo.peakRGB = Math.log1p(pk); this.histo.color = true;
             } else if (hasJpeg && j) {
-                const d = j.imageData.data, npix = d.length >> 2;
+                const d = jpegPixels.data, npix = d.length >> 2;
                 const nb = 256, bR = new Float64Array(nb), bG = new Float64Array(nb), bB = new Float64Array(nb);
                 const st = Math.max(1, Math.floor(npix / 300000));
                 let isColor = false;
