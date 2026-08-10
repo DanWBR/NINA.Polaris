@@ -82,7 +82,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "3.03 GB (.7z)",
         "access": "https://polaris-linux.local:5000/",
-        "note": "Für jeden 64-Bit-PC oder Mini-PC. 7-Zip-Archiv: entpacken, die .img mit balenaEtcher oder Rufus auf einen USB-Stick schreiben und davon booten. Um Polaris auf die interne SSD zu bringen, vom Stick booten und sudo polaris-install-to-disk ausführen: Es klont das laufende System auf die gewählte Platte und macht sie bootfähig, Sie müssen das Image also nie auf eine Platte schreiben, von der Sie nicht booten können."
+        "note": "Der schnellste Weg zu Polaris, und kostenlos, wenn ohnehin ein Mini-PC oder ein altes Notebook herumliegt. Entpacken Sie das .7z, schreiben Sie das .img mit balenaEtcher oder Rufus auf einen USB-Stick und booten Sie davon. Läuft es, kopiert sudo polaris-install-to-disk alles auf die interne Platte und der Stick kann raus."
       },
       {
         "device": "Raspberry Pi 4",
@@ -93,7 +93,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "5.22 GB (.7z)",
         "access": "https://polaris-pi4-1.local:5000/",
-        "note": "7-Zip-Archiv; vor dem Flashen entpacken."
+        "note": "Das langsamste Board auf dieser Seite und trotzdem genug für eine normale Nacht: Aufnahme, Guiding, Plate Solving und Live Stacking laufen. Spürbar wird es bei großen Sensoren und den KI-Werkzeugen. Entpacken Sie das .7z und schreiben Sie das .img mit Raspberry Pi Imager, balenaEtcher oder Rufus."
       },
       {
         "device": "Raspberry Pi 5",
@@ -104,7 +104,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "7.68 GB (.7z)",
         "access": "https://polaris-pi.local:5000/",
-        "note": "7-Zip-Archiv; vor dem Flashen entpacken."
+        "note": "Etwa doppelt so schnell wie die Pi 4 und am leichtesten zu bekommen. Ein bequemer Allrounder, wenn Sie ohnehin in der Raspberry-Pi-Welt zu Hause sind. Entpacken Sie das .7z und schreiben Sie das .img mit Raspberry Pi Imager, balenaEtcher oder Rufus."
       },
       {
         "device": "Orange Pi Zero 3",
@@ -115,7 +115,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "3.69 GB (.7z)",
         "access": "https://orangepizero3.local:5000/",
-        "note": "Einsteiger-Board mit 1,5 GB. HDD Raw Copy Tool-Image (imgcv2): Entpacken Sie die .7z-Datei und brennen Sie anschließend die .img-Datei mit dem HDD Raw Copy Tool (oder balenaEtcher / Rufus) auf eine SD-Karte. Anmeldekennwort: polaris1234. Die GPU-Beschleunigung bleibt hier deaktiviert (der Mali-G31 ist bei dieser Pipeline ein Nettoverlust)."
+        "note": "Der günstigste Einstieg. Mit 1,5 GB RAM reicht es für Aufnahme, Guiding und Plate Solving; Live Stacking eines großen Sensors und die KI-Werkzeuge strapazieren die Geduld. Dieses Board hat keine GPU-Beschleunigung, die KI läuft also auf der CPU. Entpacken Sie das .7z und schreiben Sie das .img mit HDD Raw Copy Tool, balenaEtcher oder Rufus auf eine SD-Karte. Login-Passwort: polaris1234."
       },
       {
         "device": "Orange Pi 4 Pro",
@@ -126,7 +126,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "2.52 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
-        "note": "Empfohlenes Board: das beste Verhältnis von Preis und Leistungsfähigkeit. Verkleinertes Raw-Image (shrink). 7-Zip-Archiv: Entpacken Sie die .7z und schreiben Sie die .img mit HDD Raw Copy Tool (oder balenaEtcher / Rufus) auf den internen Speicher. Login-Passwort: polaris1234."
+        "note": "Das Board für den Zweifelsfall. Rund 50 US$, deutlich flotter als eine Pi 4 und das beste Verhältnis aus Preis und Leistung hier. Entpacken Sie das .7z und schreiben Sie das .img mit HDD Raw Copy Tool, balenaEtcher oder Rufus auf den internen Speicher. Login-Passwort: polaris1234."
       },
       {
         "device": "Orange Pi 5 Pro",
@@ -137,7 +137,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "8.26 GB (.7z)",
         "access": "https://polaris-opi5pro-1.local:5000/",
-        "note": "7-Zip-Archiv; vor dem Flashen entpacken.",
+        "note": "Zweieinhalbmal eine Pi 4, mit GPU-Beschleunigung für die KI-Werkzeuge. Lohnt sich, wenn Hintergrundextraktion, Entrauschen und Dekonvolution zu Ihrer Bildbearbeitung gehören. Entpacken Sie das .7z und schreiben Sie das .img mit balenaEtcher oder Rufus.",
         "gpu": "ja",
         "npu": "ja"
       },
@@ -151,7 +151,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "6.44 GB (.7z)",
         "access": "https://radxa-dragon-q6a.local:5000/",
-        "note": "7-Zip-Archiv; vor dem Flashen entpacken.",
+        "note": "Das schnellste Board hier, mit GPU- und NPU-Beschleunigung. Nehmen Sie es, wenn Sie viel mit den KI-Werkzeugen arbeiten oder große Bilder stapeln, während Sie noch aufnehmen. Entpacken Sie das .7z und schreiben Sie das .img mit balenaEtcher oder Rufus.",
         "gpu": "ja",
         "npu": "ja"
       }

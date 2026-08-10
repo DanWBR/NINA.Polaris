@@ -82,7 +82,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "3.03 GB (.7z)",
         "access": "https://polaris-linux.local:5000/",
-        "note": "Para cualquier PC o mini PC de 64 bits. Archivo 7-Zip: extrae, escribe el .img en una memoria USB con balenaEtcher o Rufus y arranca desde ella. Para pasar Polaris al SSD interno de la máquina, arranca desde el USB y ejecuta sudo polaris-install-to-disk: clona el sistema en marcha al disco que elijas y lo deja arrancable, así que nunca tienes que escribir la imagen en un disco desde el que no puedes arrancar."
+        "note": "La forma más rápida de usar Polaris, y gratis si ya tienes un mini PC o un portátil viejo sin uso. Extrae el .7z, graba el .img en un pendrive con balenaEtcher o Rufus y arranca desde él. Con el sistema en marcha, sudo polaris-install-to-disk lo copia todo al disco interno y puedes quitar el pendrive."
       },
       {
         "device": "Raspberry Pi 4",
@@ -93,7 +93,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "5.22 GB (.7z)",
         "access": "https://polaris-pi4-1.local:5000/",
-        "note": "Archivo 7-Zip; descomprímelo antes de flashearlo."
+        "note": "La placa más lenta de esta página, y aun así suficiente para una noche normal: captura, guiado, plate solving y live stacking funcionan. Los sensores grandes y las herramientas de IA son donde se nota. Extrae el .7z y graba el .img con Raspberry Pi Imager, balenaEtcher o Rufus."
       },
       {
         "device": "Raspberry Pi 5",
@@ -104,7 +104,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "7.68 GB (.7z)",
         "access": "https://polaris-pi.local:5000/",
-        "note": "Archivo 7-Zip; descomprímelo antes de flashearlo."
+        "note": "Alrededor del doble de rápida que la Pi 4 y la más fácil de encontrar en tienda. Buena opción general si ya te manejas con Raspberry Pi. Extrae el .7z y graba el .img con Raspberry Pi Imager, balenaEtcher o Rufus."
       },
       {
         "device": "Orange Pi Zero 3",
@@ -115,7 +115,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "3.69 GB (.7z)",
         "access": "https://orangepizero3.local:5000/",
-        "note": "Placa básica de 1,5 GB. Imagen de HDD Raw Copy Tool (imgcv2): descomprime el archivo .7z y, a continuación, graba el archivo .img en una tarjeta SD con HDD Raw Copy Tool (o balenaEtcher / Rufus). Contraseña de inicio de sesión: polaris1234. La aceleración por GPU permanece desactivada en este caso (la Mali-G31 supone una pérdida neta en esta cadena de procesamiento)."
+        "note": "La entrada más barata. Con 1,5 GB de RAM va bien para captura, guiado y plate solving; el live stacking de un sensor grande y las herramientas de IA pondrán a prueba tu paciencia. Esta placa no tiene aceleración por GPU, así que la IA corre en la CPU. Extrae el .7z y graba el .img en una tarjeta SD con HDD Raw Copy Tool, balenaEtcher o Rufus. Contraseña de acceso: polaris1234."
       },
       {
         "device": "Orange Pi 4 Pro",
@@ -126,7 +126,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "2.52 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
-        "note": "Placa recomendada: el mejor equilibrio entre coste y prestaciones. Imagen raw reducida (shrink). Archivo 7-Zip: extrae el .7z y escribe el .img en el almacenamiento interno con HDD Raw Copy Tool (o balenaEtcher / Rufus). Contraseña de acceso: polaris1234."
+        "note": "La que comprar si tienes dudas. Unos 50 US$, bastante más rápida que una Pi 4 y el mejor equilibrio entre precio y capacidad de esta lista. Extrae el .7z y graba el .img en el almacenamiento interno de la placa con HDD Raw Copy Tool, balenaEtcher o Rufus. Contraseña de acceso: polaris1234."
       },
       {
         "device": "Orange Pi 5 Pro",
@@ -137,7 +137,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "8.26 GB (.7z)",
         "access": "https://polaris-opi5pro-1.local:5000/",
-        "note": "Archivo 7-Zip; descomprímelo antes de flashearlo.",
+        "note": "Dos veces y media una Pi 4, con aceleración por GPU para las herramientas de IA. Merece la pena si la extracción de fondo, la reducción de ruido y la deconvolución forman parte de tu acabado. Extrae el .7z y graba el .img con balenaEtcher o Rufus.",
         "gpu": "sí",
         "npu": "sí"
       },
@@ -151,7 +151,7 @@
         "polaris": "0.97.27 (2026-08-09)",
         "size": "6.44 GB (.7z)",
         "access": "https://radxa-dragon-q6a.local:5000/",
-        "note": "Archivo 7-Zip; descomprímelo antes de flashearlo.",
+        "note": "La placa más rápida de aquí, con aceleración por GPU y NPU. Elígela si usas mucho las herramientas de IA o apilas fotogramas grandes mientras sigues fotografiando. Extrae el .7z y graba el .img con balenaEtcher o Rufus.",
         "gpu": "sí",
         "npu": "sí"
       }
