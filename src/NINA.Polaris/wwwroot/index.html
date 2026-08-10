@@ -9806,7 +9806,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <label>Start
                                         <select x-model="plan.startMode" @change="savePlan()">
                                             <option value="Now">When I press Start</option>
-                                            <option value="AtTime">At time (UTC)</option>
+                                            <option value="AtTime">At a set time</option>
                                         </select>
                                     </label>
                                     <label x-show="plan.startMode === 'AtTime'">Start time (local)
@@ -9816,7 +9816,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <select x-model="plan.endMode" @change="savePlan()">
                                             <option value="AllDone">When all frames are done</option>
                                             <option value="Dawn">At astronomical dawn</option>
-                                            <option value="AtTime">At time (UTC)</option>
+                                            <option value="AtTime">At a set time</option>
                                         </select>
                                     </label>
                                     <label x-show="plan.endMode === 'AtTime'">End time (local)
