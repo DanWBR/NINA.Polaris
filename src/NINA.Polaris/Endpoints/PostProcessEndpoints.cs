@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Image.ImageAnalysis;
 using NINA.Polaris.Services.PostProcess;
 using NINA.Polaris.Services.Studio;
 
@@ -192,6 +193,57 @@ public static class PostProcessEndpoints {
             }
         });
 
+        // DUST-1: dust-mote removal preview. Detects the soft circular shadows a
+        // dust speck casts and divides them out with a local synthetic flat,
+        // then returns before/after JPEGs (same stretch) plus the mote geometry
+        // so the modal can circle what it found. Writes nothing.
+        g.MapPost("/dust-preview", (DustRemovalService svc, DustPreviewRequest req) => {
+            if (string.IsNullOrWhiteSpace(req.Path))
+                return Results.BadRequest(new { error = "path is required" });
+            try {
+                var p = new DustMoteRemoval.Params(
+                    req.Sensitivity ?? 0.6, req.MinSize ?? 2.0,
+                    req.Feather ?? 2.5, req.Strength ?? 100.0);
+                var pv = svc.Preview(req.Path, p,
+                    Math.Clamp(req.MaxDim ?? 1024, 256, 1600),
+                    Math.Clamp(req.Quality ?? 85, 40, 95));
+                var motes = new object[pv.Motes.Count];
+                for (int i = 0; i < pv.Motes.Count; i++) {
+                    var m = pv.Motes[i];
+                    motes[i] = new { x = m.X, y = m.Y, r = m.R };
+                }
+                return Results.Ok(new {
+                    jpeg = pv.Jpeg, original = pv.Original,
+                    pw = pv.Width, ph = pv.Height, count = pv.Count, motes
+                });
+            } catch (Exception ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        // DUST-2: apply at full resolution, write `{stem}_dustfix.fits`.
+        g.MapPost("/dust-remove", async (
+                DustRemovalService svc,
+                FrameLibraryService library,
+                DustRemoveRequest req) => {
+            if (req.Paths == null || req.Paths.Length == 0)
+                return Results.BadRequest(new { error = "paths is required" });
+            var p = new DustMoteRemoval.Params(
+                req.Sensitivity ?? 0.6, req.MinSize ?? 2.0,
+                req.Feather ?? 2.5, req.Strength ?? 100.0);
+            var results = new List<object>();
+            var failures = new List<object>();
+            foreach (var path in req.Paths) {
+                try {
+                    var r = svc.Remove(path, p);
+                    results.Add(new { sourcePath = path, outputPath = r.OutputPath,
+                        width = r.Width, height = r.Height, channels = r.Channels, count = r.Count });
+                } catch (Exception ex) { failures.Add(new { sourcePath = path, error = ex.Message }); }
+            }
+            if (results.Count > 0) { try { await library.RescanAsync(); } catch { } }
+            return Results.Ok(new { results, failures });
+        });
+
         // Multiscale HDR: recover blown cores (à-trous, luminance).
         g.MapPost("/wavescale-hdr", async (
                 WaveletService svc,
@@ -331,6 +383,21 @@ public static class PostProcessEndpoints {
     // amount 0..1 = core compression strength; scales = à-trous levels.
     public record WaveScaleHdrRequest(
         string[] Paths, double? Amount = null, int? Scales = null);
+
+    /// <summary>DUST-1: dust-mote removal preview on ONE file. Sizes are a
+    /// PERCENT OF THE LONG SIDE. Sensitivity = dip depth that counts as a mote
+    /// (%); MinSize = smallest mote radius kept; Feather = correction edge
+    /// softness; Strength 0..100 = how much of the S/B correction to apply.</summary>
+    public record DustPreviewRequest(
+        string Path, double? Sensitivity = null, double? MinSize = null,
+        double? Feather = null, double? Strength = null,
+        int? MaxDim = null, int? Quality = null);
+
+    /// <summary>DUST-2: the same knobs applied at full resolution to one or more
+    /// files, each written as `{stem}_dustfix.fits`.</summary>
+    public record DustRemoveRequest(
+        string[] Paths, double? Sensitivity = null, double? MinSize = null,
+        double? Feather = null, double? Strength = null);
 
     // clipLimit ≥1 caps per-bin count (2-4 typical); tiles = grid per axis.
     public record ClaheRequest(

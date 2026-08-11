@@ -2471,3 +2471,42 @@
     .wave-body { grid-template-columns: 1fr; }
     .wave-preview img { max-height: 40vh; }
 }
+
+/* Dust-mote modal: a bigger canvas than the wavelet one. A mote is judged by
+   whether a faint disc is still there, so the preview wants room — up to ~80%
+   of the screen — while still collapsing sanely on a tablet or phone. Its own
+   class so widening it never touches the Wavelets dialog. Beats the 440px
+   `.modal-card` cap the same 0-2-0 way `.wave-card` does. */
+.modal-card.dust-card {
+    width: min(1600px, 84vw);
+    max-width: min(1600px, 84vw);
+    max-height: 92vh;
+    overflow-y: auto;
+}
+/* Phones: 84vw wastes the screen on a narrow device; take almost all of it. */
+@media (max-width: 700px) {
+    .modal-card.dust-card { width: 96vw; max-width: 96vw; }
+}
+/* The stage shrink-wraps the preview image so the circle overlay, pinned to
+   inset:0, lands exactly on the pixels the motes were measured in. */
+.dust-stage {
+    position: relative;
+    display: inline-block;
+    line-height: 0;
+    max-width: 100%;
+}
+.dust-stage img {
+    display: block;
+    max-width: 100%;
+    max-height: 66vh;
+}
+.dust-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+@media (max-width: 900px) {
+    .dust-stage img { max-height: 44vh; }
+}

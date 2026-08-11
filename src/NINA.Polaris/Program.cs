@@ -514,6 +514,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.PostProcess.StretchService>(
 builder.Services.AddSingleton<NINA.Polaris.Services.PostProcess.CosmeticService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.PostProcess.StarReductionService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.PostProcess.WaveletService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.PostProcess.DustRemovalService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.PostProcess.TonalService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.DeconvolutionService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameAnalysisService>();

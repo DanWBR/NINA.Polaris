@@ -11491,6 +11491,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon" x-text="wave.busy ? '⏳' : '〰️'"></span>
                         <span class="files-icon-label">Wavelets</span>
                     </button>
+                    <!-- Dust-mote removal: detect the soft circular dust shadows
+                         and divide them out with a local synthetic flat, live
+                         preview, then open the before/after comparator. One file. -->
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1"
+                            @click="dustOpenModal(files.selectedPaths[0])"
+                            title="Dust motes: find the soft circular dust shadows on the sky and divide them out from the surrounding sky, with a live preview."
+                            aria-label="Dust mote removal">
+                        <span class="files-icon" x-text="dust.busy ? '⏳' : '🟤'"></span>
+                        <span class="files-icon-label">Dust motes</span>
+                    </button>
                     <button class="btn btn-sm btn-icon"
                             :disabled="files.selectedPaths.length !== 1"
                             @click="pccOpenModal(files.selectedPaths[0])"
@@ -19139,6 +19150,94 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="btn btn-sm" :disabled="wave.busy" @click="wave.modalOpen=false">Cancel</button>
                 <button class="btn btn-sm btn-primary" :disabled="wave.busy" @click="waveApply()">
                     <span x-text="wave.busy ? 'Working...' : 'Apply'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dust-mote removal. Live before/after preview with the detected motes
+         circled; Apply writes _dustfix.fits and opens the comparator. -->
+    <div class="modal-overlay" x-show="dust.modalOpen" x-cloak
+         @click.self="if(!dust.busy) dust.modalOpen=false"
+         @keydown.escape.window="if(!dust.busy) dust.modalOpen=false">
+        <div class="modal-card wave-card dust-card">
+            <div class="modal-head">
+                <span class="modal-icon">🟤</span>
+                <h3>Dust mote removal</h3>
+            </div>
+            <div class="wave-body">
+                <div class="wave-preview">
+                    <!-- Stage wraps the img so the SVG can sit exactly on top of
+                         it (inset:0 on a box shrink-wrapped to the image), which
+                         keeps the mote circles aligned whatever the aspect. -->
+                    <div class="dust-stage" x-show="dust.previewUrl">
+                        <img :src="dust.previewUrl" alt="preview">
+                        <svg class="dust-overlay"
+                             x-show="!dust.showingOriginal && dust.motes.length"
+                             :viewBox="'0 0 ' + dust.pw + ' ' + dust.ph"
+                             preserveAspectRatio="none">
+                            <template x-for="(m, i) in dust.motes" :key="i">
+                                <circle :cx="m.x" :cy="m.y" :r="m.r"
+                                        fill="none" stroke="#5ad1ff" stroke-width="2.5"
+                                        stroke-dasharray="7 5"
+                                        vector-effect="non-scaling-stroke"></circle>
+                            </template>
+                        </svg>
+                    </div>
+                    <div class="wave-preview-empty" x-show="!dust.previewUrl"
+                         x-text="dust.busy ? 'Analysing...' : 'No preview yet'"></div>
+                    <span x-show="dust.previewUrl && !dust.showingOriginal"
+                          style="position:absolute;top:6px;left:8px;font-size:12px;padding:2px 7px;border-radius:10px;background:rgba(0,0,0,.55);color:#dff"
+                          x-text="dust.count + (dust.count === 1 ? ' mote found' : ' motes found')"></span>
+                    <button class="btn btn-sm wave-ab"
+                            @pointerdown="dustShowOriginal(true)"
+                            @pointerup="dustShowOriginal(false)"
+                            @pointerleave="dustShowOriginal(false)"
+                            title="Hold to see the original">Hold: original</button>
+                </div>
+                <div class="wave-sliders">
+                    <div class="wave-row">
+                        <span class="wave-lab">Sensitivity</span>
+                        <input type="range" min="0.2" max="3" step="0.1"
+                               :value="dust.sensitivity"
+                               @input="dust.sensitivity = +$event.target.value; dustQueuePreview()">
+                        <span class="wave-val" x-text="(+dust.sensitivity).toFixed(1) + '%'"></span>
+                    </div>
+                    <div class="wave-row">
+                        <span class="wave-lab">Min size</span>
+                        <input type="range" min="0.5" max="6" step="0.1"
+                               :value="dust.minSize"
+                               @input="dust.minSize = +$event.target.value; dustQueuePreview()">
+                        <span class="wave-val" x-text="(+dust.minSize).toFixed(1) + '%'"></span>
+                    </div>
+                    <div class="wave-row">
+                        <span class="wave-lab">Feather</span>
+                        <input type="range" min="0.5" max="6" step="0.1"
+                               :value="dust.feather"
+                               @input="dust.feather = +$event.target.value; dustQueuePreview()">
+                        <span class="wave-val" x-text="(+dust.feather).toFixed(1) + '%'"></span>
+                    </div>
+                    <div class="wave-row">
+                        <span class="wave-lab">Strength</span>
+                        <input type="range" min="0" max="200" step="5"
+                               :value="dust.strength"
+                               @input="dust.strength = +$event.target.value; dustQueuePreview()">
+                        <span class="wave-val" x-text="Math.round(+dust.strength) + '%'"></span>
+                    </div>
+                    <div class="text-muted" style="font-size:11px">
+                        Sensitivity sets how deep a shadow counts as a mote. Min size and
+                        feather are a percent of the long side; feather softens the
+                        correction edge. Strength scales how much is applied. The blue
+                        circles mark what will be corrected.
+                    </div>
+                </div>
+            </div>
+            <p x-show="dust.error" style="color:var(--danger,#e66);font-size:12px" x-text="dust.error"></p>
+            <div class="modal-actions">
+                <button class="btn btn-sm" :disabled="dust.busy" @click="dust.modalOpen=false">Cancel</button>
+                <button class="btn btn-sm btn-primary"
+                        :disabled="dust.busy || !dust.count" @click="dustApply()">
+                    <span x-text="dust.busy ? 'Working...' : (dust.count ? 'Apply' : 'No motes')"></span>
                 </button>
             </div>
         </div>

@@ -3621,6 +3621,20 @@ function ninaApp() {
             showingOriginal: false
         },
 
+        // Dust-mote removal modal. Detects the soft circular dust shadows and
+        // divides them out with a local synthetic flat. Sizes are a PERCENT OF
+        // THE LONG SIDE so the preview and the full-res apply agree. The preview
+        // returns before/after JPEGs (same stretch) plus the mote geometry so we
+        // can circle what was found.
+        dust: {
+            modalOpen: false, busy: false, framePath: '', error: '',
+            sensitivity: 0.6, minSize: 2.0, feather: 2.5, strength: 100,
+            previewUrl: '',      // corrected preview (data URL)
+            originalUrl: '',     // same-stretch original, for hold-to-compare
+            showingOriginal: false,
+            count: 0, motes: [], pw: 0, ph: 0
+        },
+
         // Photometric Color Calibration modal (APASS B-V, fixed-slope).
         // Operates on the Lights slot's integrated master. Modes: bg (no
         // catalog) | pcc (plate-solve + APASS). Manual ROI mode stays on
@@ -34066,6 +34080,129 @@ function ninaApp() {
                 this.toastFail('Wavelet apply failed', e);
             } finally {
                 this.wave.busy = false;
+            }
+        },
+
+        // --- Dust-mote removal ----------------------------------------------
+
+        dustOpenModal(framePath) {
+            if (!framePath) { this.toast('Select one frame first', 'warn'); return; }
+            this.dust.framePath = framePath;
+            this.dust.error = '';
+            this.dust.busy = false;
+            this.dust.showingOriginal = false;
+            this.dust.count = 0;
+            this.dust.motes = [];
+            this.dust.previewUrl = '';
+            this.dust.originalUrl = '';
+            this.dust.modalOpen = true;
+            this._dustRender();
+        },
+
+        // Debounced like the wavelet panel: detection + correction is a full
+        // working-scale pass, and a slider drag fires a burst of input events.
+        dustQueuePreview() {
+            clearTimeout(this._dustTimer);
+            this._dustTimer = setTimeout(() => this._dustRender(), 200);
+        },
+
+        async _dustRender() {
+            if (!this.dust.framePath) return;
+            if (this._dustRendering) { this._dustDirty = true; return; }
+            this._dustRendering = true;
+            this.dust.busy = true;
+            this.dust.error = '';
+            try {
+                const body = {
+                    path: this.dust.framePath,
+                    sensitivity: Number(this.dust.sensitivity),
+                    minSize: Number(this.dust.minSize),
+                    feather: Number(this.dust.feather),
+                    strength: Number(this.dust.strength),
+                    maxDim: 1024
+                };
+                const r = await this.apiFetch('/api/post/dust-preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                    timeout: 120000
+                });
+                const j = await r.json();
+                if (!r.ok) { this.dust.error = j?.error || 'Preview failed.'; return; }
+                this.dust.pw = j.pw; this.dust.ph = j.ph;
+                this.dust.count = j.count || 0;
+                this.dust.motes = j.motes || [];
+                this.dust.originalUrl = 'data:image/jpeg;base64,' + j.original;
+                this.dust.previewUrl = this.dust.showingOriginal
+                    ? this.dust.originalUrl
+                    : 'data:image/jpeg;base64,' + j.jpeg;
+                this._dustCorrected = 'data:image/jpeg;base64,' + j.jpeg;
+            } catch (e) {
+                this.toastFail('Dust preview failed', e);
+            } finally {
+                this._dustRendering = false;
+                this.dust.busy = false;
+                if (this._dustDirty) { this._dustDirty = false; this.dustQueuePreview(); }
+            }
+        },
+
+        // Hold-to-compare: the dust dip is subtle, so both sides share one
+        // stretch and flipping between them is how you see the change. Circles
+        // hide while the original is held.
+        dustShowOriginal(on) {
+            if (!this.dust.originalUrl) return;
+            if (on) {
+                this.dust.previewUrl = this.dust.originalUrl;
+                this.dust.showingOriginal = true;
+            } else {
+                this.dust.previewUrl = this._dustCorrected || this.dust.previewUrl;
+                this.dust.showingOriginal = false;
+            }
+        },
+
+        async dustApply() {
+            if (!this.dust.framePath || this.dust.busy) return;
+            this.dust.busy = true;
+            this.dust.error = '';
+            try {
+                const src = this.dust.framePath;
+                const r = await this.apiFetch('/api/post/dust-remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        paths: [src],
+                        sensitivity: Number(this.dust.sensitivity),
+                        minSize: Number(this.dust.minSize),
+                        feather: Number(this.dust.feather),
+                        strength: Number(this.dust.strength)
+                    }),
+                    timeout: 600000
+                });
+                const j = await r.json();
+                if (!r.ok || (j.failures || []).length > 0) {
+                    this.dust.error = (j.failures?.[0]?.error) || j.error || 'Apply failed.';
+                    return;
+                }
+                const res = j.results?.[0];
+                const out = res?.outputPath;
+                this.toast(out ? 'Saved ' + out.split(/[\\/]/).pop()
+                    + ' (' + (res?.count ?? 0) + ' mote' + ((res?.count === 1) ? '' : 's') + ')'
+                    : 'Applied', 'ok');
+                this.dust.modalOpen = false;
+                // Re-list the folder so the _dustfix sibling shows up, then open
+                // the before/after comparator on the pair (same helper the other
+                // tools use; 'compare' tags the two files by name).
+                try { if (this.files?.cwd) this.filesCd(this.files.cwd); } catch (e) {}
+                if (out) {
+                    const labelFor = p => p.split(/[\\/]+/).pop();
+                    this.graxpertOpenCompare([{
+                        src, out, label: labelFor(src) + '  ↔  ' + labelFor(out)
+                    }], 0, 'compare');
+                }
+            } catch (e) {
+                this.toastFail('Dust removal failed', e);
+            } finally {
+                this.dust.busy = false;
             }
         },
 
