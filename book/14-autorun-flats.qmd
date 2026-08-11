@@ -176,8 +176,10 @@ reuses it.
 Flats are evenly illuminated calibration frames; your processing
 software divides your lights by them to even out vignetting (the
 darkening toward the corners of the frame) and dust motes. See
-@sec-glossary for the fuller story. Two things matter when capturing
-them. First, the median ADU has to sit
+@sec-glossary for the fuller story. (For a night when you forgot to
+shoot flats, STUDIO's Dust motes tool can remove the mote shadows on
+their own, after the fact; see @sec-dust-motes.) Two things matter
+when capturing them. First, the median ADU has to sit
 in the right place: too dim and noise dominates the division, too
 bright and the wells clip and the flat is garbage. The classic sweet
 spot is about 30000 ADU on a 16-bit camera, roughly 45% of full well

@@ -239,6 +239,59 @@ extraction; the output is a sibling file ending in `_bge.fits`. The
 full AI pipeline, including the in-browser version shown in
 @fig-studio, is covered in @sec-ai-cleanup.
 
+## Removing dust motes {#sec-dust-motes}
+
+A dust mote is the soft, roughly circular shadow a speck of dust on
+the sensor, filter, or camera window casts on the sky: a faint dark
+disc that no amount of stretching removes. The proper cure is flat
+frames (@sec-autorun), which your processing divides the lights by to
+even out both vignetting and mote shadows. GraXpert's background
+extraction, above, flattens the broad sky glow but leaves dust motes
+alone, because a mote is a small local feature, not a smooth gradient.
+When you have no flats for a night, the **Dust motes** button on the
+file toolbar removes them by estimating that missing flat from the sky
+around each mote.
+
+The trick is that a mote does not add darkness, it *multiplies*: the
+dust lets only a fraction of the light through, so the fix is to
+*divide* it back out rather than paint over the hole. The tool builds
+a local "synthetic flat" (a correction map standing in for a real flat
+frame): it finds each mote automatically, measures the sky level in a
+ring just outside it, and scales the mote back up to match, fading the
+correction smoothly to nothing at the edge so no ring is left behind.
+A star that happens to sit on a mote is lifted back to its true
+brightness, not erased, because the frame is divided, not inpainted.
+
+To use it, select one FITS in the file browser and click **Dust
+motes**. A live preview shows the corrected frame with every detected
+mote circled in blue and a running count ("2 motes found"). Four
+sliders tune the result:
+
+- **Sensitivity**: how deep a shadow has to be to count as a mote.
+  Raise it to catch fainter motes; lower it if it starts circling
+  patches of sky that are not motes.
+- **Min size** and **Feather**: the smallest mote radius kept, and how
+  softly the correction fades at its edge, both as a percent of the
+  frame's long side.
+- **Strength**: how much of the correction to apply, from 0 to 200
+  percent. 100 percent aims to match the surrounding sky exactly; go
+  higher for a mote that is still visibly dark, or lower to ease off an
+  over-correction.
+
+Press and hold **Hold: original** to flip back to the untouched frame
+at the same stretch, so the change is judged against what you started
+with. **Apply** writes a sibling file ending in `_dustfix.fits`, with
+the original headers preserved and the settings recorded in `DUST*`
+keywords, and opens the before/after comparator.
+
+Two honest limits. Like the rest of STUDIO, the tool works on a 16-bit
+copy, and it matches the corrected sky to its surroundings, which is
+right for a pleasing final image but not for photometry (measuring a
+star's brightness precisely), where real flats remain the only correct
+answer. And because motes are found by a brightness threshold, glance
+at the circles and nudge **Sensitivity** until only genuine motes are
+marked before you Apply.
+
 ## Color and channels
 
 Two Stack actions get their own chapters and are only summarized
