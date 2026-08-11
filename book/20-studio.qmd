@@ -292,6 +292,10 @@ answer. And because motes are found by a brightness threshold, glance
 at the circles and nudge **Sensitivity** until only genuine motes are
 marked before you Apply.
 
+The same correction is also a step in Auto Workflow (below), so once a
+sensitivity that suits your optics is dialed in, a whole night's worth
+of frames can have their motes removed in a batch.
+
 ## Color and channels
 
 Two Stack actions get their own chapters and are only summarized
@@ -403,6 +407,9 @@ the roles cleared for you to reassign.
   Best placed after the stretch.
 - **Highlight Recovery**: soft-knee compression of blown highlights
   above a knee point.
+- **Dust Mote Removal**: divides out dust-mote shadows with a local
+  synthetic flat estimated from the surrounding sky, the same tool
+  described in @sec-dust-motes, here as a batchable step.
 
 **AI tools** (run in the browser, and need the models installed;
 @sec-ai-cleanup): Background Extraction, Denoise, Detail/Sharpen,

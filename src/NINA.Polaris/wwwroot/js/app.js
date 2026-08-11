@@ -33011,6 +33011,16 @@ function ninaApp() {
                             { k: 'size', label: 'Size (px)', type: 'number', min: 1, max: 12, step: 1, def: 2 },
                             { k: 'protectCore', label: 'Protect cores', type: 'bool', def: true } ],
                   defaults: { amount: 0.5, size: 2, protectCore: true } },
+                // Dust mote removal -- find the soft circular dust shadows and
+                // divide them out with a local synthetic flat. Sizes are a
+                // percent of the long side; strength scales the correction
+                // (100% matches sky, up to 200% to push a stubborn mote).
+                { type: 'dustremove', label: 'Dust Mote Removal', kind: 'post', endpoint: '/api/post/dust-remove', suffix: '_dustfix',
+                  fields: [ { k: 'sensitivity', label: 'Sensitivity', type: 'range', min: 0.2, max: 3, step: 0.1, def: 0.6 },
+                            { k: 'minSize', label: 'Min size', type: 'range', min: 0.5, max: 6, step: 0.1, def: 2.0 },
+                            { k: 'feather', label: 'Feather', type: 'range', min: 0.5, max: 6, step: 0.1, def: 2.5 },
+                            { k: 'strength', label: 'Strength', type: 'range', min: 0, max: 200, step: 5, def: 100 } ],
+                  defaults: { sensitivity: 0.6, minSize: 2.0, feather: 2.5, strength: 100 } },
                 // --- Editor adjustments: one item per slider. All enabled
                 // edit items are collected into ONE EditParams and applied in a
                 // single editor pass at the export step (order among them does
