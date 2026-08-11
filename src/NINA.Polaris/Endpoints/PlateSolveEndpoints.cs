@@ -959,6 +959,12 @@ public static class PlateSolveEndpoints {
         var hits = await dso.QueryRegionAsync(result.RaHours, result.DecDeg,
             Math.Max(0.05, radiusDeg), magLimit, 300);
 
+        // One row per designation is right for the catalogue and wrong for an
+        // overlay: M27 and NGC 6853 share coordinates to the last decimal, so
+        // the two labels printed on top of each other. Merge the synonyms and
+        // keep the folded-away names for the UI.
+        var merged = NINA.Polaris.Services.Sky.AnnotationSynonyms.Collapse(hits);
+
         // Prefer the full WCS CD matrix when the solver gave us one: it encodes
         // rotation AND parity (mirror/flip), so it lands on the right objects for
         // mirrored optical trains where the scalar-rotation projector (which
@@ -979,7 +985,7 @@ public static class PlateSolveEndpoints {
             };
         }
 
-        foreach (var o in hits) {
+        foreach (var (o, aka) in merged) {
             double x, y;
             if (wcs != null) {
                 var (px, py) = wcs.RaDecToPixel(o.RaHours * 15.0, o.DecDeg);
@@ -1004,7 +1010,8 @@ public static class PlateSolveEndpoints {
             objects.Add(new {
                 name = o.Name, commonName = o.CommonName,
                 x, y, type = o.Type, magnitude = o.Magnitude,
-                sizeArcmin = o.SizeArcmin, radiusPx
+                sizeArcmin = o.SizeArcmin, radiusPx,
+                aka
             });
         }
         return objects;

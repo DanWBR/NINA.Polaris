@@ -787,6 +787,27 @@ public class LiveStackingService {
         return new HandlerSub(this, handler);
     }
 
+    /// <summary>Run the frame-integrated subscribers for one frame.
+    ///
+    /// <para>Snapshot the handlers and await them sequentially. A handler that
+    /// throws is logged and swallowed: one bad subscriber cannot poison the
+    /// chain. Slow handlers (auto-focus, recenter, dither) deliberately pause
+    /// the upstream capture loop by extending this await.</para>
+    ///
+    /// <para>Its own method so the trigger chain can be exercised on a
+    /// synthetic frame, which is the only way to test decisions that depend on
+    /// equipment state at the instant a frame lands.</para></summary>
+    internal async Task RaiseFrameIntegratedAsync(LiveStackFrameInfo info) {
+        LiveStackFrameHandler[] handlers;
+        lock (_handlersLock) handlers = _frameHandlers.ToArray();
+        foreach (var h in handlers) {
+            try { await h(info); }
+            catch (Exception ex) {
+                _logger.LogWarning(ex, "LiveStack frame handler threw (continuing)");
+            }
+        }
+    }
+
     private sealed class HandlerSub : IDisposable {
         private readonly LiveStackingService _svc;
         private readonly LiveStackFrameHandler _h;
@@ -1521,22 +1542,9 @@ public class LiveStackingService {
             _frameCount, stars.Count, medianHfr, LastFrameSnr, CumulativeSnr);
 
 
-        // Snapshot handlers + await sequentially. Any handler that
-        // throws is logged + swallowed, one bad subscriber can't
-        // poison the chain. Slow handlers (AF, recenter) pause the
-        // upstream capture loop by extending this await.
-        LiveStackFrameHandler[] handlers;
-        lock (_handlersLock) handlers = _frameHandlers.ToArray();
-        if (handlers.Length > 0) {
-            var info = new LiveStackFrameInfo(_frameCount, imageData, medianHfr, stars.Count, DateTime.UtcNow,
-                FrameSnr: LastFrameSnr, CumulativeSnr: CumulativeSnr);
-            foreach (var h in handlers) {
-                try { await h(info); }
-                catch (Exception ex) {
-                    _logger.LogWarning(ex, "LiveStack frame handler threw (continuing)");
-                }
-            }
-        }
+        await RaiseFrameIntegratedAsync(new LiveStackFrameInfo(
+            _frameCount, imageData, medianHfr, stars.Count, DateTime.UtcNow,
+            FrameSnr: LastFrameSnr, CumulativeSnr: CumulativeSnr));
         } finally {
             _isStacking = false;
         }

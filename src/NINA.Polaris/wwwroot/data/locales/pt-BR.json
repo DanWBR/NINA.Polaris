@@ -1019,6 +1019,8 @@
   "Dither every": "Aplicar dither a cada",
   "Dither failed:": "Falha no dither:",
   "Dither px": "Dither px",
+  "Dither skipped: guider not connected": "Dither pulado: guider não conectado",
+  "Dither skipped: guider not guiding": "Dither pulado: guider não está guiando",
   "dithered · next in": "hesitou · a seguir em",
   "Dithering": "Dithering",
   "Dithering…": "Hesitando…",

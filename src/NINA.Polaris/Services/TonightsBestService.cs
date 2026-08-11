@@ -239,40 +239,75 @@ public class TonightsBestService {
     /// group the most familiar designation wins — Messier, then Caldwell,
     /// then NGC, then IC, then everything else; ties break on higher score.
     /// </summary>
-    private static List<TonightCandidate> DedupDsoByPosition(List<TonightCandidate> items) {
-        // Catalogue familiarity rank (lower = preferred). A code is
-        // "<letters><number>" or "<letters> <number>"; the char after the
-        // letters must be a digit or space so Melotte ("Mel"), Collinder
-        // ("Cr"), etc. aren't mistaken for Messier / Caldwell.
-        static int CatRank(string? name) {
-            if (string.IsNullOrEmpty(name)) return 99;
-            var n = name.TrimStart();
-            bool codeAfter(int i) => n.Length > i && (char.IsDigit(n[i]) || n[i] == ' ');
-            if (n.StartsWith("NGC", StringComparison.OrdinalIgnoreCase)) return 2;
-            if (n.StartsWith("IC",  StringComparison.OrdinalIgnoreCase)) return 3;
-            if (n.StartsWith("M",   StringComparison.OrdinalIgnoreCase) && codeAfter(1)) return 0;
-            if (n.StartsWith("C",   StringComparison.OrdinalIgnoreCase) && codeAfter(1)) return 1;
-            return 10;
-        }
-        // ~2-arcsec position buckets (1800 = 3600 arcsec / 2).
-        static (long, long) PosKey(TonightCandidate c) =>
-            ((long)Math.Round(c.RaHours * 1800.0), (long)Math.Round(c.DecDeg * 1800.0));
+    /// <summary>How far apart two rows may be and still be one object. Wide
+    /// enough for catalogues that disagree on a galaxy's centre, far below the
+    /// separation of any two objects worth listing separately.</summary>
+    internal const double DedupToleranceArcsec = 30.0;
 
-        var best = new Dictionary<(long, long), TonightCandidate>();
+    /// <summary>
+    /// One entry per physical object, under its most familiar name.
+    ///
+    /// <para>Two things were wrong. The rank was parsed out of the DISPLAY NAME
+    /// and only knew four catalogues, so everything else tied at 10 and the
+    /// winner fell out of input order. And the position match bucketed
+    /// coordinates at two arcseconds, which puts two rows for the same object
+    /// in different buckets whenever they straddle a boundary or disagree by
+    /// more than the bucket: Arp 168 and M32 are 3 arcsec apart, so Andromeda's
+    /// companion was listed twice, once under a name nobody uses.</para>
+    ///
+    /// <para>Now it compares real angular separation and uses the shared
+    /// catalogue rank. Position alone still decides, with no alias or type
+    /// check: this is a list of places to point the telescope for a night, and
+    /// two catalogue rows at one position are one place. That is deliberately
+    /// looser than the annotation overlay, which merges only on an alias link
+    /// (see <see cref="Sky.AnnotationSynonyms"/>) because hiding an object from
+    /// a picture of the sky is worse than a crowded label.</para>
+    /// </summary>
+    internal static List<TonightCandidate> DedupDsoByPosition(List<TonightCandidate> items) {
         var others = new List<TonightCandidate>();
+        var dsos = new List<TonightCandidate>();
         foreach (var c in items) {
-            if (c.Category != "Dso") { others.Add(c); continue; }
-            var key = PosKey(c);
-            if (!best.TryGetValue(key, out var prev)
-                || CatRank(c.Name) < CatRank(prev.Name)
-                || (CatRank(c.Name) == CatRank(prev.Name) && c.Score > prev.Score)) {
-                best[key] = c;
-            }
+            if (c.Category == "Dso") dsos.Add(c); else others.Add(c);
         }
-        // Order is irrelevant here — the caller re-sorts by score.
+
+        // Best first, so the survivor of each group is the one already at the
+        // front and every later row is compared against a decided winner.
+        var ranked = dsos
+            .OrderBy(c => NINA.Polaris.Services.Sky.DesignationRank.OfName(c.Name))
+            .ThenByDescending(c => c.Score)
+            .ThenBy(c => c.Name, StringComparer.Ordinal)
+            .ToList();
+
+        // Declination bands one tolerance wide, so each row is compared against
+        // the handful of neighbours that could possibly be it rather than
+        // against everything kept so far. The pool here is thousands of rows.
+        const double band = DedupToleranceArcsec / 3600.0;
+        var byBand = new Dictionary<long, List<TonightCandidate>>();
+        var kept = new List<TonightCandidate>();
+        foreach (var c in ranked) {
+            long b = (long)Math.Floor(c.DecDeg / band);
+            bool duplicate = false;
+            for (long k = b - 1; k <= b + 1 && !duplicate; k++) {
+                if (!byBand.TryGetValue(k, out var near)) continue;
+                duplicate = near.Any(o => SeparationArcsec(o, c) <= DedupToleranceArcsec);
+            }
+            if (duplicate) continue;
+            kept.Add(c);
+            if (!byBand.TryGetValue(b, out var list)) byBand[b] = list = new List<TonightCandidate>();
+            list.Add(c);
+        }
+
+        // Order is irrelevant here, the caller re-sorts by score.
         var result = new List<TonightCandidate>(others);
-        result.AddRange(best.Values);
+        result.AddRange(kept);
         return result;
+    }
+
+    private static double SeparationArcsec(TonightCandidate a, TonightCandidate b) {
+        var meanDec = (a.DecDeg + b.DecDeg) / 2.0 * Math.PI / 180.0;
+        var dRa = (a.RaHours - b.RaHours) * 15.0 * Math.Cos(meanDec);
+        var dDec = a.DecDeg - b.DecDeg;
+        return Math.Sqrt(dRa * dRa + dDec * dDec) * 3600.0;
     }
 
     private void AddSolarSystem(string name, Body body, string category,

@@ -84,6 +84,7 @@ public class LiveStackTriggersService : IDisposable {
                     LastRecenterAt = _lastRecenterAt == DateTime.MinValue ? null : _lastRecenterAt,
                     LastRecenterFrame = _lastRecenterFrame == 0 ? null : _lastRecenterFrame,
                     LastRecenterDriftArcsec = SafeDouble(_lastRecenterDriftArcsec, zeroMeansUnset: true),
+                    LastDitherFrame = _lastDitherFrame == 0 ? null : _lastDitherFrame,
                     ReferenceRaHours = SafeDouble(_referenceRaHours),
                     ReferenceDecDeg = SafeDouble(_referenceDecDeg),
                     ReferenceSolved = _referenceSolved,
@@ -161,13 +162,14 @@ public class LiveStackTriggersService : IDisposable {
             return;
         }
 
-        // Dither (ASIAIR-style, every N frames). Return after firing so we don't
-        // also recenter the same frame -- a recenter would cancel the dither
-        // offset we just applied.
+        // Dither (ASIAIR-style, every N frames). Return only if one actually
+        // ran, so a recenter cannot cancel the offset we just applied. A SKIP
+        // has to fall through: the dither gate no longer advances on a skip, so
+        // returning here would take the same branch on every frame and an
+        // unguided session would never recenter again.
         if (cfg.DitherEnabled && cfg.DitherEveryNFrames > 0
             && info.FrameCount - _lastDitherFrame >= cfg.DitherEveryNFrames) {
-            await ExecuteDitherAsync(info, cfg);
-            return;
+            if (await ExecuteDitherAsync(info, cfg)) return;
         }
 
         // Optional per-frame drift solve. Only run when the user has
@@ -304,15 +306,36 @@ public class LiveStackTriggersService : IDisposable {
         }
     }
 
-    private async Task ExecuteDitherAsync(LiveStackFrameInfo info, LiveStackTriggers cfg) {
+    /// <summary>Returns true when a dither was actually issued.</summary>
+    private async Task<bool> ExecuteDitherAsync(LiveStackFrameInfo info, LiveStackTriggers cfg) {
         var g = _guiders.Active;
-        // No guider guiding -> nothing to dither; advance the gate so we don't
-        // re-check every single frame, and surface why it was skipped.
+        // Nothing to dither with. The gate is deliberately NOT advanced: a skip
+        // is not a dither, and treating it as one turns a momentary blip into
+        // several frames with no dither at all.
+        //
+        // Measured in the field (2026-08-10): the native guider dropped a BLOB
+        // and declared the star lost at 23:43:37.887; frame 9 finished
+        // integrating at 23:43:37.927, forty milliseconds later. That one read
+        // of IsGuiding marked frame 9's dither as done, so with "every 3
+        // frames" the session dithered at 3, 6 and then not again until 12.
+        // Three minutes of subs landing on the same pixels because the guider
+        // hiccuped inside a 40 ms window.
+        //
+        // Re-testing on the next frame costs two boolean reads, so the only
+        // thing the old shortcut bought was quieter logs. Hence the transition
+        // guard below instead: the state is reported once, not per frame.
         if (!g.IsConnected || !g.IsGuiding) {
-            lock (_stateLock) _lastDitherFrame = info.FrameCount;
-            _lastError = "Dither skipped: guider not guiding";
-            _logger.LogDebug("Live-stack dither skipped: guider ({Backend}) not guiding", g.Backend);
-            return;
+            var why = !g.IsConnected ? "guider not connected" : "guider not guiding";
+            var notice = "Dither skipped: " + why;
+            if (_lastError != notice) {
+                _logger.LogInformation(
+                    "Live-stack dither skipped at frame {N}: {Why} ({Backend}). "
+                    + "It will dither on the first frame after guiding resumes.",
+                    info.FrameCount, why, g.Backend);
+            }
+            _lastError = notice;
+            Notify();
+            return false;
         }
 
         _isExecuting = true;
@@ -357,6 +380,7 @@ public class LiveStackTriggersService : IDisposable {
             _executingKind = null;
             Notify();
         }
+        return true;
     }
 
     private async Task SolveReferenceAsync(IImageData firstFrame) {
@@ -498,6 +522,11 @@ public class LiveStackTriggersStatus {
     public DateTime? LastRecenterAt { get; init; }
     /// <summary>Null = no recenter has run yet this session.</summary>
     public int? LastRecenterFrame { get; init; }
+
+    /// <summary>The frame a dither last ran on, or null. Null while dithers are
+    /// only being SKIPPED, which is the distinction the gate turns on: a skip
+    /// must leave this alone so the next frame tries again.</summary>
+    public int? LastDitherFrame { get; init; }
     /// <summary>Null = unknown.</summary>
     public double? LastRecenterDriftArcsec { get; init; }
     public double? ReferenceRaHours { get; init; }

@@ -1019,6 +1019,8 @@
   "Dither every": "Appliquer le tramage à chaque",
   "Dither failed:": "Échec du tramage :",
   "Dither px": "Dither px",
+  "Dither skipped: guider not connected": "Dither ignoré : guide non connecté",
+  "Dither skipped: guider not guiding": "Dither ignoré : le guidage ne guide pas",
   "dithered · next in": "hésitant · suivant dans",
   "Dithering": "Dithering",
   "Dithering…": "Hésitation…",

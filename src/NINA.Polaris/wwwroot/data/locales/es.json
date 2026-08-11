@@ -1019,6 +1019,8 @@
   "Dither every": "Aplicar tramado a cada",
   "Dither failed:": "Error en el dither:",
   "Dither px": "Dither px",
+  "Dither skipped: guider not connected": "Dither omitido: guiador no conectado",
+  "Dither skipped: guider not guiding": "Dither omitido: el guiador no está guiando",
   "dithered · next in": "indeciso · siguiente en",
   "Dithering": "Dithering",
   "Dithering…": "Dudando…",
