@@ -14,8 +14,15 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
+using NINA.INDI.Client;
 using NINA.Polaris.Services;
 using NINA.Polaris.Services.Sky;
 
@@ -158,6 +165,131 @@ public class TonightsBestDedupTests {
     [Test]
     public void AnEmptyListStaysEmpty() {
         Assert.That(TonightsBestService.DedupDsoByPosition(new List<TonightCandidate>()), Is.Empty);
+    }
+}
+
+/// <summary>
+/// Survey catalogues must not eat the list.
+///
+/// LBN and Sh2 are nebula surveys with no photometry, so the scorer ranks them
+/// by angular size, and a 20-degree molecular cloud beats every Messier on that
+/// scale. Counting what clears the pool gate in the shipped catalogue: 916 LBN,
+/// 186 Sh2, and not one of those 1102 rows carries a common name. LBN was
+/// capped when this first bit; Sh2 was not, and the field host came back with
+/// 58 Sh2 entries out of 128 DSOs, with 17 named objects in the whole list.
+/// </summary>
+[TestFixture]
+public class TonightsBestCatalogueCapTests {
+
+    /// <summary>
+    /// Built on the REAL dso.db, not the legacy fallback.
+    ///
+    /// This matters more than it looks. A SkyCatalogService constructed with no
+    /// DsoCatalog quietly serves a built-in list of about 200 Messier, Caldwell
+    /// and NGC objects, which contains no Sh2 and no LBN at all. A cap test
+    /// written against that passes by counting zero, proves nothing, and would
+    /// go on passing if the cap were deleted.
+    /// </summary>
+    private static TonightsBestService MakeService(double lat, double lng) {
+        var cfg = new ConfigurationBuilder().Build();
+        var profile = new ProfileService(cfg, NullLogger<ProfileService>.Instance);
+        profile.Active.Latitude = lat;
+        profile.Active.Longitude = lng;
+        var indi = new IndiClient("localhost", 7624);
+        var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance,
+            new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache(),
+            new NINA.Polaris.Services.Simulator.Gear.SimGearService());
+        var dso = new DsoCatalog(new CatalogTestEnv(), NullLogger<DsoCatalog>.Instance);
+        if (!dso.IsAvailable) Assert.Ignore("dso.db not present; the survey catalogues cannot be tested.");
+        return new TonightsBestService(new SkyCatalogService(dso), new AltitudeService(profile),
+            equip, profile, NullLogger<TonightsBestService>.Instance);
+    }
+
+    private class CatalogTestEnv : IWebHostEnvironment {
+        private static string RepoRoot([CallerFilePath] string thisFile = "") =>
+            Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", ".."));
+        public string WebRootPath { get; set; } =
+            Path.Combine(RepoRoot(), "src", "NINA.Polaris", "wwwroot");
+        public IFileProvider WebRootFileProvider { get; set; } = null!;
+        public string ApplicationName { get; set; } = "tests";
+        public IFileProvider ContentRootFileProvider { get; set; } = null!;
+        public string ContentRootPath { get; set; } = "";
+        public string EnvironmentName { get; set; } = "Test";
+    }
+
+    private static List<TonightCandidate> Dsos(TonightsBestService svc, int limit = 120)
+        => svc.Compute(limit).Items.Where(i => i.Category == "Dso").ToList();
+
+    private static int CountFrom(IEnumerable<TonightCandidate> items, string prefix)
+        => items.Count(i => i.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                            && (i.Name.Length == prefix.Length
+                                || !char.IsLetter(i.Name[prefix.Length])));
+
+    private static TonightCandidate Candidate(string name, int score)
+        => new("Dso", name, null, "Nebula", 5.0, 20.0, null, "60'", 60, null,
+               45, 180, 60, DateTime.UtcNow, score, null, null, null);
+
+    /// <summary>The cap itself, on a list built for the purpose, so this
+    /// answers regardless of what happens to be above the horizon.</summary>
+    [TestCase("Sh2")]
+    [TestCase("LBN")]
+    [TestCase("LDN")]
+    public void OnlyTheBestTenOfASurveyCatalogueSurvive(string prefix) {
+        var items = Enumerable.Range(1, 40)
+            .Select(i => Candidate($"{prefix} {i}", score: i))
+            .Concat(new[] { Candidate("M42", 5), Candidate("NGC 7000", 6) })
+            .ToList();
+
+        var capped = TonightsBestService.CapCatalogue(items, prefix, 10);
+
+        Assert.That(CountFrom(capped, prefix), Is.EqualTo(10));
+        Assert.That(capped.Where(c => c.Name.StartsWith(prefix)).Select(c => c.Score),
+            Is.EquivalentTo(Enumerable.Range(31, 10)), "the ten highest scores, not the first ten");
+        Assert.That(capped.Select(c => c.Name), Does.Contain("M42").And.Contain("NGC 7000"),
+            "a low-scoring Messier must not be dropped by another catalogue's cap");
+    }
+
+    /// <summary>Capping "Sh2" must not catch a catalogue that merely starts
+    /// with those characters, which is what the non-letter boundary is
+    /// for.</summary>
+    [Test]
+    public void ThePrefixMatchStopsAtALetterBoundary() {
+        var items = new List<TonightCandidate> {
+            Candidate("Sh2 27", 40), Candidate("Sh2 54", 39),
+            Candidate("Sh2b 1", 38), Candidate("Shk 16", 37),
+        };
+
+        var capped = TonightsBestService.CapCatalogue(items, "Sh2", 1);
+
+        Assert.That(capped.Select(c => c.Name),
+            Is.EquivalentTo(new[] { "Sh2 27", "Sh2b 1", "Shk 16" }));
+    }
+
+    /// <summary>And the caps are actually wired into Compute. This can only
+    /// FAIL, never pass vacuously: if nothing from a survey is above the
+    /// horizon in this window the case says so instead of claiming a pass.
+    /// </summary>
+    [TestCase("Sh2")]
+    [TestCase("LBN")]
+    public void ComputeAppliesTheCap(string prefix) {
+        var dsos = Dsos(MakeService(-5.18, -37.36));
+        var n = CountFrom(dsos, prefix);
+        if (n == 0)
+            Assert.Ignore($"no {prefix} object is above 30 deg in tonight's window here, "
+                          + "so this run does not exercise the cap");
+        Assert.That(n, Is.LessThanOrEqualTo(10));
+    }
+
+    /// <summary>What the caps are FOR: the list has to be mostly things an
+    /// observer would recognise, not survey rows with no name.</summary>
+    [Test]
+    public void TheListIsMostlyObjectsSomeoneWouldRecognise() {
+        var dsos = Dsos(MakeService(-5.18, -37.36));
+        if (dsos.Count < 20) Assert.Ignore("too few DSOs visible to judge the mix");
+
+        var surveys = CountFrom(dsos, "Sh2") + CountFrom(dsos, "LBN") + CountFrom(dsos, "LDN");
+        Assert.That(surveys, Is.LessThan(dsos.Count / 2),
+            $"the nameless surveys hold {surveys} of {dsos.Count} slots");
     }
 }
 

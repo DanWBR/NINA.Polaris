@@ -152,12 +152,21 @@ public class TonightsBestService {
                 minPeakAlt: 15, baseBoost: 0);
         }
 
-        // The Lynds catalogues (LBN bright + LDN dark nebulae) have thousands of
-        // magnitude-less, size-ranked entries that would otherwise crowd out
-        // everything else. Cap the POOL to the 10 highest-scored of each BEFORE
-        // the global cutoff so the freed slots go to other objects.
+        // Survey catalogues of nebulae with no magnitude, which the scorer has
+        // to rank by angular size instead, and the biggest of those out-score
+        // every Messier. Counting what clears the pool gate in the shipped
+        // catalogue: LBN 916 entries, Sh2 186, and not one of the 1102 carries
+        // a common name. Against NGC's 564 and Messier's 99 they simply bury
+        // the list. Before Sh2 was capped, the field host returned 58 Sh2 among
+        // 128 DSOs and only 17 entries in the whole list had a name at all.
+        //
+        // Cap the POOL to the highest-scored few of each BEFORE the global
+        // cutoff, so the freed slots go to other objects. LDN currently puts
+        // nothing through the gate at all; its cap is kept as insurance for a
+        // catalogue rebuild that starts carrying sizes for dark nebulae.
         items = CapCatalogue(items, "LBN", 10);
         items = CapCatalogue(items, "LDN", 10);
+        items = CapCatalogue(items, "Sh2", 10);
 
         // Cap DSOs + planets + Moon by score first…
         var byScore = items.OrderByDescending(i => i.Score).ToList();
@@ -218,7 +227,7 @@ public class TonightsBestService {
     /// followed by a non-letter (space/digit) so "LBN 552" matches but a
     /// hypothetical "LBNxyz" does not.
     /// </summary>
-    private static List<TonightCandidate> CapCatalogue(
+    internal static List<TonightCandidate> CapCatalogue(
             List<TonightCandidate> items, string prefix, int max) {
         bool IsMatch(TonightCandidate c) =>
             c.Category == "Dso" && c.Name != null
@@ -232,13 +241,6 @@ public class TonightsBestService {
         return items.Where(c => !IsMatch(c) || keep.Contains(c.Name!)).ToList();
     }
 
-    /// <summary>
-    /// Collapse DSO candidates that refer to the same physical object
-    /// (same sky position under different catalogue designations) to a
-    /// single entry. Non-DSO candidates pass through untouched. Among a
-    /// group the most familiar designation wins — Messier, then Caldwell,
-    /// then NGC, then IC, then everything else; ties break on higher score.
-    /// </summary>
     /// <summary>How far apart two rows may be and still be one object. Wide
     /// enough for catalogues that disagree on a galaxy's centre, far below the
     /// separation of any two objects worth listing separately.</summary>
