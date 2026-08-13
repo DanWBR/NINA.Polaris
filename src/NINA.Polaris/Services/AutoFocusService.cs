@@ -682,9 +682,16 @@ public class AutoFocusService {
         // 50%-enclosed-flux radius with local background subtracted so the
         // donut's true (large) radius is reported, and the size/HFR ceilings
         // are lifted so the shoulders of the V still register.
+        // FIELD9-1: MinStarSize is lowered too, not just the ceilings. The
+        // stock floor of 5 px is sized for live tracking, where a star that
+        // small is noise. A sweep is the opposite case: the whole point is to
+        // reach focus, and an IN-FOCUS star on a well-sampled rig covers very
+        // few pixels. The floor was therefore throwing away exactly the frames
+        // nearest the vertex, which is where the fit needs the most detail.
         var detector = new StarDetector {
             EightConnected   = true,
             CurveOfGrowthHfr = true,
+            MinStarSize = 3,
             MaxStarSize = 20000,
             MaxHfr      = 200
         };
@@ -717,6 +724,42 @@ public class AutoFocusService {
         }
 
         int frameW = image.Properties.Width, frameH = image.Properties.Height;
+
+        // FIELD9-1: a one-shot-colour sensor hands us a BAYER MOSAIC, and the
+        // detector was being run straight on it.
+        //
+        // On a mosaic a star's flux is split across its R/G/G/B sites, so each
+        // pixel holds a fraction of it, and same-colour pixels sit TWO apart —
+        // far enough that even the eight-connectivity above cannot join them.
+        // A small star therefore arrives as a scatter of single pixels, each
+        // below MinStarSize and each dimmer than the whole star would be
+        // against the 5-sigma cut.
+        //
+        // Board log (OPi5Pro + ASI585MC, 2026-08-13) confirms the SYMPTOM: a
+        // failed auto-focus plotted nothing on short focus subs, while the live
+        // stack read 200 stars per frame. That number is not a clean measure of
+        // the binning on its own — the live stack also runs 180 s subs against
+        // auto-focus's ~15 s, so it has far more star signal to begin with. What
+        // it does establish is that this rig genuinely produced empty sweeps.
+        // The binning's own contribution is isolated in the unit test, which
+        // holds the frame fixed and finds more stars after the collapse than
+        // before it; and the short-sub regime is precisely where it matters
+        // most, since a CFA-fragmented star has the least margin over the cut.
+        //
+        // Summing each 2x2 CFA quad addresses all three failures: the star's
+        // full flux lands in one pixel, the colour checkerboard disappears, and
+        // the area to scan drops fourfold, which makes the sweep quicker too.
+        // (LiveStackingService.BinFrame keeps its result a valid half-size
+        // MOSAIC because that output is debayered downstream; here we only need
+        // luminance, so collapsing the quad to a single pixel is both simpler
+        // and cleaner for detection.) A luminance proxy, not a debayer — nothing
+        // here needs colour, only where the light is and how spread out it is.
+        int detScale = 1;
+        if (image.Properties.IsBayered && width >= 4 && height >= 4) {
+            (data, width, height) = BinBayerQuads(data, width, height);
+            detScale = 2;
+        }
+
         var detected = detector.Detect(data, width, height);
 
         // The star-count gate asks "is this frame usable", so it counts what the
@@ -749,8 +792,13 @@ public class AutoFocusService {
         // The star the operator is watching: brightest of the tracked set, which
         // in the default single-star mode is the only one. Reported in the
         // relayed frame's own pixels.
+        // detScale converts back out of the binned detection grid. The tracker
+        // above is free to stay in that grid (it is built per run and only ever
+        // sees coordinates from here, so it is self-consistent), but everything
+        // past this point is in the full-resolution frame the browser is shown.
         var primary = stars.OrderByDescending(s => s.Flux).First();
-        double starX = primary.X + cropX, starY = primary.Y + cropY;
+        double starX = primary.X * detScale + cropX;
+        double starY = primary.Y * detScale + cropY;
 
         // Robust central HFR across stars. At a fixed focuser position every
         // real star is defocused by the SAME amount, so their HFRs cluster
@@ -762,7 +810,36 @@ public class AutoFocusService {
         // ASIAIR's curve uniform. The survivor stdev still feeds the 1/σ² fit
         // weights.
         var (mean, stdev, _) = RobustMeanHfr(stars.Select(s => (double)s.HFR).ToList());
-        return new FrameMeasurement(mean, stdev, detected.Count, starX, starY, frameW, frameH);
+        // Back to full-resolution pixels as well. The V-curve itself only needs
+        // HFR to be consistent across the sweep, but this number is also shown
+        // to the operator and compared against HFRs measured elsewhere (the
+        // refocus trigger's threshold, the previous run's result), and half-size
+        // pixels would quietly halve all of those on colour cameras only.
+        return new FrameMeasurement(mean * detScale, stdev * detScale,
+                                    detected.Count, starX, starY, frameW, frameH);
+    }
+
+    /// <summary>
+    /// Sum each 2x2 CFA quad into one pixel: a half-size luminance proxy of a
+    /// Bayer mosaic, whatever the pattern. Every 2x2 block of a Bayer grid holds
+    /// one of each filter (the pattern only decides which corner is which), so
+    /// the sum is the same quantity everywhere and no pattern argument is needed.
+    /// Saturates at ushort.MaxValue rather than wrapping, so a bright core stays
+    /// the brightest thing in the frame instead of folding back to near zero.
+    /// </summary>
+    internal static (ushort[] Data, int Width, int Height) BinBayerQuads(
+            ushort[] src, int width, int height) {
+        int w = width / 2, h = height / 2;
+        var dst = new ushort[w * h];
+        for (int y = 0; y < h; y++) {
+            int r0 = (y * 2) * width, r1 = r0 + width, o = y * w;
+            for (int x = 0; x < w; x++) {
+                int c = x * 2;
+                int sum = src[r0 + c] + src[r0 + c + 1] + src[r1 + c] + src[r1 + c + 1];
+                dst[o + x] = (ushort)Math.Min(sum, ushort.MaxValue);
+            }
+        }
+        return (dst, w, h);
     }
 
     /// <summary>One frame's contribution to a sweep point: the measured HFR, its
