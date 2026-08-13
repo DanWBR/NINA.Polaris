@@ -129,6 +129,20 @@ public class UserProfile {
     // nor exposed over the WebSocket status. Pushed files mirror the local
     // capture tree onto the target; the local copy is kept.
     public bool   StoragePushEnabled { get; set; } = false;
+
+    /// <summary>Share of the uplink the background push may take, as a percent.
+    /// 100 disables pacing.
+    ///
+    /// <para>The push used to write with no pacing at all, so every frame sent
+    /// to the NAS took the whole link and the operator's browser, sharing that
+    /// link, was told the connection had been lost or gone slow, several times
+    /// per pushed frame (field, 2026-08-12). A percentage rather than a MB/s
+    /// cap because it needs no calibration: it adapts to whatever the link
+    /// happens to be. Set 100 when the NAS has its own wired path and cannot
+    /// disturb anything.</para></summary>
+    public int    StoragePushLinkSharePercent { get; set; } =
+        NINA.Polaris.Services.Storage.TransferPacer.DefaultSharePercent;
+
     public string StorageKind { get; set; } = "smb";   // smb | sftp | local
     public string StorageHost { get; set; } = "";        // host or IP (smb/sftp)
     public int    StoragePort { get; set; } = 0;          // 0 => provider default (445 smb / 22 sftp)

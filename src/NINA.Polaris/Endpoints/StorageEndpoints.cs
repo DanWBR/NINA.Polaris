@@ -39,6 +39,7 @@ public static class StorageEndpoints {
                 domain         = p.StorageDomain,
                 username       = p.StorageUsername,
                 hasPassword    = !string.IsNullOrEmpty(p.StoragePassword),
+                linkSharePercent = p.StoragePushLinkSharePercent,
                 lastTestResult = p.StorageLastTestResult
             });
         });
@@ -56,6 +57,10 @@ public static class StorageEndpoints {
             p.StorageUsername = (req.Username ?? "").Trim();
             // Empty password = keep the stored one (the GET never sends it back).
             if (!string.IsNullOrEmpty(req.Password)) p.StoragePassword = req.Password;
+            // 0 from an older client means "field absent"; keep what is stored
+            // rather than reading it as "never transfer".
+            if (req.LinkSharePercent > 0)
+                p.StoragePushLinkSharePercent = Math.Clamp(req.LinkSharePercent, 10, 100);
             profiles.Save();
             return Results.Ok(new { ok = true });
         });
@@ -83,5 +88,6 @@ public static class StorageEndpoints {
 
     public record StorageConfigRequest(
         bool Enabled, string? Kind, string? Host, int Port, string? Share,
-        string? BasePath, string? Domain, string? Username, string? Password);
+        string? BasePath, string? Domain, string? Username, string? Password,
+        int LinkSharePercent = 0);
 }

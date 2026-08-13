@@ -27,6 +27,7 @@ namespace NINA.Polaris.Services.Storage;
 public sealed class SmbStorageTarget : IStorageTarget {
     private SMB2Client? _client;
     private ISMBFileStore? _store;
+    private int _linkShare = 100;
 
     public string Kind => "smb";
 
@@ -34,10 +35,11 @@ public sealed class SmbStorageTarget : IStorageTarget {
         var (client, store) = Open(cfg);
         _client = client;
         _store = store;
+        _linkShare = cfg.LinkSharePercent;
         return Task.CompletedTask;
     }
 
-    public Task UploadAsync(string localPath, string relPath, CancellationToken ct) {
+    public async Task UploadAsync(string localPath, string relPath, CancellationToken ct) {
         if (_client is null || _store is null) throw new InvalidOperationException("SMB not connected");
         var segs = StoragePath.Segments(relPath);
 
@@ -69,18 +71,26 @@ public sealed class SmbStorageTarget : IStorageTarget {
             var buffer = new byte[chunk];
             long offset = 0;
             int read;
-            while ((read = fs.Read(buffer, 0, buffer.Length)) > 0) {
+            // Paced, and asynchronous. This loop used to run flat out and
+            // synchronously: it took the whole uplink the operator's browser
+            // was on (the link watchdog then reported a lost connection several
+            // times per pushed frame) and it held a thread-pool thread for the
+            // entire upload. See TransferPacer.
+            while ((read = await fs.ReadAsync(buffer.AsMemory(0, buffer.Length), ct)) > 0) {
                 ct.ThrowIfCancellationRequested();
+                var started = System.Diagnostics.Stopwatch.StartNew();
                 var data = read == buffer.Length ? buffer : buffer[..read];
                 var ws = _store.WriteFile(out int written, handle, offset, data);
                 if (ws != NTStatus.STATUS_SUCCESS)
                     throw new IOException($"SMB write '{filePath}' failed: {ws}");
                 offset += written;
+
+                var idle = TransferPacer.DelayAfterChunk(started.Elapsed, _linkShare);
+                if (idle > TimeSpan.Zero) await Task.Delay(idle, ct);
             }
         } finally {
             _store.CloseFile(handle);
         }
-        return Task.CompletedTask;
     }
 
     public Task<(bool ok, string message)> TestAsync(StorageConfig cfg, CancellationToken ct) {

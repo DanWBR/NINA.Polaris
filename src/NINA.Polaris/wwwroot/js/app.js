@@ -1629,7 +1629,11 @@ function ninaApp() {
         storagePush: {
             enabled: false, kind: 'smb', host: '', port: 0, share: '',
             basePath: '', domain: '', username: '', password: '',
-            hasPassword: false, testing: false, testResult: '', testOk: false
+            hasPassword: false, testing: false, testResult: '', testOk: false,
+            // Share of the uplink the push may take. It used to take all of it,
+            // and the browser sharing that link was told the connection had
+            // dropped, several times per pushed frame.
+            linkSharePercent: 50
         },
         storagePushStatus: {
             enabled: false, kind: 'smb', connected: false, queued: 0,
@@ -26221,6 +26225,7 @@ function ninaApp() {
                 s.domain = d.domain || '';
                 s.username = d.username || '';
                 s.hasPassword = !!d.hasPassword;
+                s.linkSharePercent = d.linkSharePercent || 50;
                 s.password = '';   // never round-tripped; blank = keep stored
                 if (d.lastTestResult) { s.testResult = d.lastTestResult; }
             } catch (e) {
@@ -26233,7 +26238,8 @@ function ninaApp() {
                 const r = await (await this.apiPut('/api/storage/config', {
                     enabled: s.enabled, kind: s.kind, host: s.host, port: Number(s.port) || 0,
                     share: s.share, basePath: s.basePath, domain: s.domain,
-                    username: s.username, password: s.password
+                    username: s.username, password: s.password,
+                    linkSharePercent: Number(s.linkSharePercent) || 50
                 })).json();
                 if (r && r.ok) {
                     if (s.password) s.hasPassword = true;

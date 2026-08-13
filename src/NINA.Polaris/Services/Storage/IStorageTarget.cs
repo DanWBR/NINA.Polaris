@@ -27,7 +27,11 @@ public sealed record StorageConfig(
     string BasePath,    // SFTP base dir OR local/mounted path
     string Domain,      // SMB workgroup/domain (optional)
     string Username,
-    string Password) {
+    string Password,
+    /// <summary>Share of the uplink the push may take, as a percent; 100 means
+    /// no pacing. Carried on the config so a target paces itself without
+    /// reaching back into the profile mid-transfer.</summary>
+    int LinkSharePercent = 100) {
 
     public static StorageConfig FromProfile(UserProfile p) => new(
         Kind:     (p.StorageKind ?? "smb").Trim().ToLowerInvariant(),
@@ -37,7 +41,8 @@ public sealed record StorageConfig(
         BasePath: (p.StorageBasePath ?? "").Trim(),
         Domain:   (p.StorageDomain ?? "").Trim(),
         Username: (p.StorageUsername ?? "").Trim(),
-        Password: p.StoragePassword ?? "");
+        Password: p.StoragePassword ?? "",
+        LinkSharePercent: p.StoragePushLinkSharePercent);
 }
 
 /// <summary>

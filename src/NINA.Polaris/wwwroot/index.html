@@ -13090,6 +13090,20 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <label x-show="storagePush.kind !== 'local'"><span class="lbl">Port <span class="text-muted">(0 = default)</span></span>
                             <input class="input input-sm" type="number" min="0" max="65535" x-model.number="storagePush.port">
                         </label>
+                        <!-- The push and the browser share one uplink on a
+                             wireless rig. Unpaced, a frame on its way to the NAS
+                             took all of it and the link watchdog reported a lost
+                             connection several times per frame. -->
+                        <label x-show="storagePush.kind !== 'local'"
+                               title="How much of the network link the background upload may use. The browser is on the same link on a wireless rig, so an upload at full speed makes the live view stall and the connection warning appear. 100% removes the pacing, which is right when the storage has its own wired path.">
+                            <span class="lbl">Link share <span class="text-muted">(100% = no pacing)</span></span>
+                            <select class="input input-sm" x-model.number="storagePush.linkSharePercent">
+                                <option :value="25">25% (slow link, keep the view smooth)</option>
+                                <option :value="50">50% (default)</option>
+                                <option :value="75">75%</option>
+                                <option :value="100">100% (wired storage)</option>
+                            </select>
+                        </label>
                     </div>
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px">
                         <button class="btn btn-primary" @click="saveStorageConfig()">Save</button>

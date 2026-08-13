@@ -27,7 +27,10 @@ public sealed class SftpStorageTarget : IStorageTarget {
 
     public string Kind => "sftp";
 
+    private int _linkShare = 100;
+
     public Task ConnectAsync(StorageConfig cfg, CancellationToken ct) {
+        _linkShare = cfg.LinkSharePercent;
         var port = cfg.Port > 0 ? cfg.Port : 22;
         var client = new SftpClient(cfg.Host, port, cfg.Username, cfg.Password) {
             OperationTimeout = TimeSpan.FromSeconds(30)
@@ -49,7 +52,11 @@ public sealed class SftpStorageTarget : IStorageTarget {
         }
         var remote = _base + "/" + string.Join('/', segs);
         using var fs = File.OpenRead(localPath);
-        _client.UploadFile(fs, remote, canOverride: true);
+        // Paced through the source stream: SSH.NET does the transfer itself, so
+        // there is no loop of ours to slow down. Unpaced, this took the whole
+        // uplink the live view runs on. See PacedReadStream / TransferPacer.
+        using var paced = new PacedReadStream(fs, _linkShare);
+        _client.UploadFile(paced, remote, canOverride: true);
         return Task.CompletedTask;
     }
 
