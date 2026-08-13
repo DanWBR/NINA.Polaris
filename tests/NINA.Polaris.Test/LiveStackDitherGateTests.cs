@@ -78,8 +78,18 @@ public class LiveStackDitherGateTests {
         _triggers.Settings.RecenterEnabled = false;
     }
 
-    /// <summary>Frame 1 is the bootstrap frame and resets the trigger state, so
-    /// every scenario starts by delivering it.</summary>
+    /// <summary>
+    /// Scenarios start at frame 2, never frame 1.
+    ///
+    /// Frame 1 is the bootstrap frame, and all it does is ResetTriggerState()
+    /// plus a fire-and-forget reference solve. The reset is redundant here: a
+    /// freshly constructed service is already in exactly that state, field for
+    /// field. The solve is actively harmful: it runs on a Task.Run nobody
+    /// awaits, over this fixture's null frame, and its catch writes _lastError
+    /// at an unpredictable moment. Every LastError assertion below was racing
+    /// it, and roughly one run in five lost, reading "Reference solve crashed"
+    /// instead of the message the frame path had just written.
+    /// </summary>
     private async Task FrameAsync(int n) =>
         await _stack.RaiseFrameIntegratedAsync(new LiveStackFrameInfo(
             n, null!, MedianHfr: 1.5, StarCount: 80, At: DateTime.UtcNow,
@@ -92,7 +102,6 @@ public class LiveStackDitherGateTests {
     /// </summary>
     [Test]
     public async Task ASkippedDither_DoesNotConsumeTheSlot() {
-        await FrameAsync(1);
         for (int n = 2; n <= 12; n++) await FrameAsync(n);
 
         var st = _triggers.CurrentStatus;
@@ -108,7 +117,6 @@ public class LiveStackDitherGateTests {
     /// operator to different places.</summary>
     [Test]
     public async Task TheSkipNotice_SaysWhichProblemItIs() {
-        await FrameAsync(1);
         await FrameAsync(4);
 
         Assert.That(_triggers.CurrentStatus.LastError,
@@ -125,7 +133,6 @@ public class LiveStackDitherGateTests {
         _triggers.Settings.RecenterEnabled = true;
         _triggers.Settings.RecenterEveryNFrames = 2;
 
-        await FrameAsync(1);
         await FrameAsync(4);
 
         // No reference solve is possible here, so a recenter that is REACHED
@@ -140,7 +147,6 @@ public class LiveStackDitherGateTests {
     public async Task WithDitherDisabled_NothingIsReported() {
         _triggers.Settings.DitherEnabled = false;
 
-        await FrameAsync(1);
         for (int n = 2; n <= 8; n++) await FrameAsync(n);
 
         Assert.That(_triggers.CurrentStatus.LastError, Is.Null);
