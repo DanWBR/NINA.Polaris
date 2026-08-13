@@ -443,6 +443,35 @@ function ninaApp() {
         cameraPanel: { x: 24, y: 360 },
         _mountDrag: null,
 
+        // BOOT: has the app got its first payload yet.
+        //
+        // Auth clearing only means the SHELL can render. Every reading on it
+        // is still empty at that point, and the numbers arrive over the status
+        // socket a moment later. On a phone over WiFi that moment is long
+        // enough to watch: the field report is a UI that "starts with no
+        // information, frozen, and then everything appears at once".
+        //
+        // Nothing is actually frozen. It is an empty shell being shown before
+        // it has anything to show, so the honest fix is not to show it yet.
+        // The auth overlay already covers the pre-auth window; this carries
+        // the same curtain through to the first frame of real data.
+        bootReady: false,
+        _bootRevealTimer: null,
+
+        // One-way latch. Called from the first status frame, from the status
+        // socket giving up, and from a timer, because the curtain must never
+        // be able to outlive the thing it is waiting for: a server that never
+        // pushes (blocked upgrade, wrong certificate) would otherwise lock the
+        // operator out of the very banner that explains why.
+        _bootReveal() {
+            if (this._bootRevealTimer) {
+                clearTimeout(this._bootRevealTimer);
+                this._bootRevealTimer = null;
+            }
+            if (this.bootReady) return;
+            this.bootReady = true;
+        },
+
         // AUTH-3: shared-password gate for the local server.
         // Boot flow: init() calls _authBoot() which restores any
         // saved token, hits /api/auth/status, and either:
@@ -4502,6 +4531,14 @@ function ninaApp() {
 
         _initCore() {
 
+            // Safety net for the boot curtain. Six seconds is far longer than
+            // a healthy first status frame (the socket opens and pushes within
+            // a second or so, even on a Pi over WiFi) and short enough that a
+            // server which never pushes costs the operator one pause rather
+            // than a dead screen. _bootReveal is a latch, so whichever of the
+            // three triggers lands first wins and the others no-op.
+            this._bootRevealTimer = setTimeout(() => this._bootReveal(), 6000);
+
             // Tab-discard restore: if Chrome's Memory Saver discarded and
             // reloaded this tab, document.wasDiscarded is true — return to the
             // tab the user was on (persisted in sessionStorage) and replay its
@@ -7749,6 +7786,11 @@ function ninaApp() {
 
             ws.onclose = () => {
                 this.link.wsUp = false;
+                // No frame is coming from this socket, so stop waiting behind
+                // the boot curtain: whatever the operator needs to see about a
+                // refused upgrade (the certificate banner, most often) is
+                // underneath it.
+                this._bootReveal();
                 this.scheduleReconnect('status');
             };
 
@@ -22855,6 +22897,25 @@ function ninaApp() {
             return Math.max(0, Math.min(a.VBW, ((ms - a.fromMs) / a.span) * a.VBW));
         },
 
+        // Hourly gridlines, as markup rather than an x-for. Same reason as
+        // dustMoteCircles(): the x-for lived on a <template> nested in <svg>,
+        // which the HTML parser does not make a template element, so the loop
+        // variable was never in scope. These gridlines were therefore never
+        // drawn at all, and each chart that opened logged one error per
+        // binding on the <line>.
+        planAltTickLines(t) {
+            const a = this.planAlt[t?.id];
+            if (!a) return '';
+            const h = Number(a.VBH);
+            if (!isFinite(h)) return '';
+            return (a.ticks || []).map(tk => {
+                const x = Number(tk?.x);
+                if (!isFinite(x)) return '';
+                return '<line x1="' + x + '" y1="0" x2="' + x + '" y2="' + h
+                     + '" class="plan-alt-tick"></line>';
+            }).join('');
+        },
+
         // Drag a start/end handle: clientX → window fraction → UTC HH:mm.
         planAltHandleDown(ev, t, which) {
             ev.preventDefault();
@@ -34302,6 +34363,31 @@ function ninaApp() {
             }
         },
 
+        // The mote circles, as markup rather than an x-for.
+        //
+        // A <template> written inside <svg> is not a template element at all.
+        // The HTML parser is in foreign content there, so it builds an SVG
+        // element named "template" with no .content, and Alpine walks the
+        // children in the PARENT scope instead of the loop's. The loop
+        // variable therefore never exists: this is where the three
+        // "m is not defined" errors on every single page load came from, and
+        // why no circle was ever drawn. The same trap is called out for x-if
+        // on the AUTORUN shutter in index.html.
+        //
+        // innerHTML on an SVG element parses in the SVG namespace, so the
+        // markup below produces exactly the elements the template meant to.
+        // Every value is coerced to a number, so nothing from the wire can
+        // reach the parser as markup.
+        dustMoteCircles() {
+            return (this.dust.motes || []).map(m => {
+                const cx = Number(m?.x), cy = Number(m?.y), r = Number(m?.r);
+                if (!isFinite(cx) || !isFinite(cy) || !isFinite(r)) return '';
+                return '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '"'
+                     + ' fill="none" stroke="#5ad1ff" stroke-width="2.5"'
+                     + ' stroke-dasharray="7 5" vector-effect="non-scaling-stroke"></circle>';
+            }).join('');
+        },
+
         async dustApply() {
             if (!this.dust.framePath || this.dust.busy) return;
             this.dust.busy = true;
@@ -40410,6 +40496,12 @@ function ninaApp() {
             // Any status frame is proof the link delivered, which is the
             // measurement the whole link indicator is built on.
             this._noteStatusFrame();
+
+            // ...and the first one is the moment the shell stops being empty.
+            // Raised here rather than on ws.onopen: an open socket only means
+            // the upgrade succeeded, and the readings are still blank until a
+            // frame actually carries them.
+            if (!this.bootReady) this.$nextTick(() => this._bootReveal());
 
             // DBGLOG-6: absorb the debug log sub-object before anything
             // else. Cheap, side-effect-only, and the badge needs to

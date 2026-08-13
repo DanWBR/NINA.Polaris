@@ -1106,6 +1106,41 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
 }
+
+/* BOOT curtain: the same overlay, held from the moment auth clears until the
+   first status frame arrives.
+
+   Lighter than the auth veil on purpose. The auth states must not leak the UI
+   behind them, so they are all but opaque; here the operator is already
+   through the gate and the app is already there, just empty, so the blur is
+   the message: the shape of the thing is visible and settling, rather than a
+   separate screen that has to be got past. Bigger radius to make sure no
+   half-populated reading is legible through it. */
+.auth-overlay-boot {
+    background: rgba(2, 4, 10, 0.55);
+    backdrop-filter: blur(18px) saturate(0.85);
+    -webkit-backdrop-filter: blur(18px) saturate(0.85);
+}
+/* Fades out rather than cutting: the app is being revealed, not swapped in.
+   Only the exit is animated. The curtain is up from the first paint, so there
+   is nothing to animate in, and visibility is delayed by the length of the
+   fade so the layer stops taking clicks exactly when it stops being seen. */
+.auth-overlay-boot {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 280ms ease-out, visibility 0s linear 0s;
+}
+.auth-overlay-boot.boot-veil-gone {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 280ms ease-out, visibility 0s linear 280ms;
+}
+@media (prefers-reduced-motion: reduce) {
+    .auth-overlay-boot,
+    .auth-overlay-boot.boot-veil-gone { transition-duration: 1ms, 0s; }
+}
+
 /* Self-signed certificate help. Lives inside the auth modal (first run) and
    as a standalone banner + dialog once signed in. */
 .auth-cert {

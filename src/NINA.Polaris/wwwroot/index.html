@@ -263,6 +263,36 @@
         </div>
     </div>
 
+    <!-- BOOT: the curtain between "auth cleared" and "there is data".
+         The auth overlay above covers the page until the gate resolves; from
+         there the shell renders with every reading empty and fills in when the
+         first status frame lands, which on a phone over WiFi is long enough to
+         look like a frozen app (field report, Android). Same overlay, so the
+         two are one continuous hold rather than a curtain that lifts and drops.
+         Translucent instead of near-opaque, so the blurred UI shows through and
+         the wait reads as the app arriving rather than as a separate screen.
+         Never shown over the auth states: those own the screen while they last,
+         and bootReady is latched from three places so this cannot get stuck. -->
+    <!-- A class and a CSS transition, NOT x-show + x-transition. Two reasons.
+         It is up from the very first paint, before Alpine has parsed anything,
+         so there is no window at all in which the empty shell is on screen
+         (x-cloak would hide it, and then it would have to animate IN). And
+         Alpine sequences its transitions through requestAnimationFrame, which
+         made the appearance of the one thing that must never fail to appear
+         depend on frames arriving. Opacity is all this needs. -->
+    <div class="auth-overlay auth-overlay-boot"
+         :class="{ 'boot-veil-gone': bootReady || auth.booting
+                                     || auth.needSetup || auth.needLogin }">
+        <div class="auth-modal auth-modal-boot">
+            <div class="auth-brand">
+                <div class="auth-brand-spinner"></div>
+                <img src="/favicon-192.png" alt="" class="auth-brand-icon">
+            </div>
+            <h2>Polaris Astro Controller</h2>
+            <p class="auth-hint">Getting the rig status…</p>
+        </div>
+    </div>
+
     <!-- Certificate banner for an already-signed-in session: same detection,
          shown outside the auth overlay so a running session that loses the
          live feed to the same cause gets told why. -->
@@ -9975,9 +10005,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                                       :width="Math.max(0, planAlt[t.id].nightX1 - planAlt[t.id].nightX0)"
                                                                       :height="planAlt[t.id].VBH" class="plan-alt-night"></rect>
                                                                 <!-- hourly gridlines -->
-                                                                <template x-for="tk in (planAlt[t.id].ticks || [])" :key="'g'+tk.x">
-                                                                    <line :x1="tk.x" y1="0" :x2="tk.x" :y2="planAlt[t.id].VBH" class="plan-alt-tick"></line>
-                                                                </template>
+                                                                <!-- x-html, not <template x-for>: see dustMoteCircles().
+                                                                     A <template> in <svg> is not a template element, so
+                                                                     these gridlines never rendered and each chart logged
+                                                                     one "tk is not defined" per binding. -->
+                                                                <g x-html="planAltTickLines(t)"></g>
                                                                 <!-- 30° guide line -->
                                                                 <line x1="0" :y1="planAlt[t.id].y30" :x2="planAlt[t.id].VBW" :y2="planAlt[t.id].y30" class="plan-alt-guide"></line>
                                                                 <!-- selected window shading -->
@@ -19237,12 +19269,15 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                              x-show="!dust.showingOriginal && dust.motes.length"
                              :viewBox="'0 0 ' + dust.pw + ' ' + dust.ph"
                              preserveAspectRatio="none">
-                            <template x-for="(m, i) in dust.motes" :key="i">
-                                <circle :cx="m.x" :cy="m.y" :r="m.r"
-                                        fill="none" stroke="#5ad1ff" stroke-width="2.5"
-                                        stroke-dasharray="7 5"
-                                        vector-effect="non-scaling-stroke"></circle>
-                            </template>
+                            <!-- x-html (not <template x-for>): a <template>
+                                 nested in <svg> is parsed as an SVG element
+                                 with no .content, so Alpine evaluated the
+                                 circle's bindings in the outer scope, where
+                                 the loop variable does not exist. That is the
+                                 "m is not defined" trio in the debug log, and
+                                 no circle was ever drawn. Same trap as the
+                                 x-if on .shutter-svg. -->
+                            <g x-html="dustMoteCircles()"></g>
                         </svg>
                     </div>
                     <div class="wave-preview-empty" x-show="!dust.previewUrl"
