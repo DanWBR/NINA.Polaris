@@ -203,7 +203,15 @@ function ninaApp() {
         // re-arm during that window so the stop completes cleanly and the
         // next arm sees the retained stack (offering Continue/Restart).
         _liveSessionBusy: false,
-        stats: { starCount: '--', hfr: null, mean: null, snr: null, width: 0, height: 0 },
+        // width/height are the FRAME the camera returned, so they already carry
+        // the camera's bin. stackWidth/Height are the live stack's WORKING
+        // resolution, which carries the bin AND the 1:2 / 1:4 reduction. They
+        // are separate because the stack used to overwrite the frame size once
+        // a second, and the footer then showed 1920x1080 while the camera was
+        // handing over 3840x2160: two independent reducers, one unlabelled
+        // number.
+        stats: { starCount: '--', hfr: null, mean: null, snr: null, width: 0, height: 0,
+                 stackWidth: 0, stackHeight: 0 },
         currentTime: '--:--:--',
         // Battery of the CLIENT device (tablet/phone/laptop showing the
         // UI), via the browser Battery Status API. supported stays false
@@ -29051,6 +29059,27 @@ function ninaApp() {
                           { n, size: this.fmtDownloadSize(this.astrometryPickBytes()) });
         },
 
+        // What the stats footer prints next to "Res".
+        //
+        // Two things reduce the picture independently: the camera's bin and the
+        // live stack's working resolution. Printing one number without saying
+        // which it was left the operator reading 1920x1080 while the camera was
+        // returning 3840x2160, at exactly the 1:2 setting that has already cost
+        // a night of plate solving. So: the FRAME is the headline, and the
+        // stack is named when it differs. When no frame has arrived yet (a
+        // client that joined a session mid-flight) the stack size stands in,
+        // labelled, rather than the row going blank.
+        resolutionLabel() {
+            const w = this.stats.width, h = this.stats.height;
+            const sw = this.stats.stackWidth, sh = this.stats.stackHeight;
+            if (!(w > 0)) {
+                return sw > 0 ? this.$t('stack {w}×{h}', { w: sw, h: sh }) : '--';
+            }
+            const frame = w + '×' + h;
+            if (!(sw > 0) || (sw === w && sh === h)) return frame;
+            return frame + ' ' + this.$t('(stack {w}×{h})', { w: sw, h: sh });
+        },
+
         // MB below a gigabyte, GB above: "18218 MB" does not read as a warning
         // and "0.1 GB" does not read as cheap.
         fmtDownloadSize(bytes) {
@@ -41001,7 +41030,13 @@ function ninaApp() {
                         this.stats.mean = Math.round(ls.lastFrameMean);
                     if (typeof ls.lastFrameSnr === 'number' && ls.lastFrameSnr > 0)
                         this.stats.snr = ls.lastFrameSnr.toFixed(1);
-                    if (ls.width > 0) { this.stats.width = ls.width; this.stats.height = ls.height; }
+                    // The stack's working resolution goes in its OWN field. It
+                    // used to be written over stats.width, which meant the
+                    // per-frame value from _renderRawFrame survived for a
+                    // fraction of a second and was then replaced by a smaller
+                    // number every tick.
+                    if (ls.width > 0) { this.stats.stackWidth = ls.width; this.stats.stackHeight = ls.height; }
+                    if (!ls.isRunning) { this.stats.stackWidth = 0; this.stats.stackHeight = 0; }
                 }
             }
             if (msg.advSeq) {

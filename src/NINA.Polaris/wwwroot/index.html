@@ -2067,7 +2067,17 @@
                          √N) when stacking is active; fall back to the
                          single-frame SNR from the most recent capture. -->
                     <span>SNR: <strong x-text="(liveStackStatus?.cumulativeSnr > 0 ? liveStackStatus?.cumulativeSnr.toFixed(1) : (stats.snr || '--'))">--</strong></span>
-                    <span x-show="stats.width > 0">Res: <strong x-text="stats.width + '×' + stats.height">--</strong></span>
+                    <!-- Frame size first; the stack's working resolution is
+                         named only when it differs. Two things reduce the
+                         picture independently here (the camera's bin, and the
+                         live stack's 1:2 / 1:4), so one unlabelled number was
+                         ambiguous exactly where it mattered: the stack used to
+                         overwrite this once a second and the row read
+                         1920x1080 while the camera was returning 3840x2160. -->
+                    <span x-show="stats.width > 0 || stats.stackWidth > 0"
+                          :title="stats.stackWidth > 0 &amp;&amp; stats.stackWidth !== stats.width
+                                  ? $t('The camera returns this frame size; the live stack works at the reduced resolution in brackets.')
+                                  : ''">Res: <strong x-text="resolutionLabel()">--</strong></span>
                     <span x-show="filterWheel.connected" class="text-ok" x-text="filterWheel.currentFilter"></span>
                     <!-- Server-authoritative frame count. This read `sessionCaptures`,
                          which is incremented ONLY by the client-driven capture() loop —
