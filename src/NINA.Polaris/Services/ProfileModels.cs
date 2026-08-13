@@ -1095,6 +1095,21 @@ public class AutoFocusSettings {
 
     public double ExposureSeconds { get; set; } = 2.0;
 
+    /// <summary>Sensor binning for the sweep frames, 1 to 4.
+    ///
+    /// <para>An auto-focus frame is measured and thrown away, so the only
+    /// resolution that matters is the one that still resolves a star profile.
+    /// Binning 2 reads out a quarter of the pixels and lifts the per-pixel
+    /// signal, which on an SBC is the difference between a sweep that keeps up
+    /// with the sky and one that spends most of its time moving frames over
+    /// USB. It also rescues a short exposure on a faint field.</para>
+    ///
+    /// <para>1 by default: it is the only value every camera treats the same,
+    /// and a binned frame has fewer samples across the disc, so on a
+    /// small-pixel sensor the HFR measurement itself starts to coarsen past
+    /// 2.</para></summary>
+    public int Binning { get; set; } = 1;
+
     /// <summary>Exposures averaged per sweep point (desktop
     /// AutoFocusNumberOfFramesPerPoint). 1 = fastest.</summary>
     public int FramesPerPoint { get; set; } = 1;

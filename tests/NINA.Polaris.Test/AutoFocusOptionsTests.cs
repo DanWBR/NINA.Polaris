@@ -124,4 +124,53 @@ public class AutoFocusOptionsTests {
         var o = AutoFocusRunOptions.Resolve(new AutoFocusRequest { FocuserSource = " Guide " }, null);
         Assert.That(o.FocuserSource, Is.EqualTo("guide"));
     }
+
+    // ---- sweep binning ----
+
+    /// <summary>1x1 unless somebody asks otherwise. Binning changes what the
+    /// camera hands back, so a default that quietly binned would change the
+    /// focus run of every existing rig on upgrade.</summary>
+    [Test]
+    public void Resolve_Binning_DefaultsToOne() {
+        Assert.That(new AutoFocusSettings().Binning, Is.EqualTo(1));
+        Assert.That(AutoFocusRunOptions.Resolve(null, null).Binning, Is.EqualTo(1));
+        Assert.That(AutoFocusRunOptions.Resolve(null, new AutoFocusSettings()).Binning, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Resolve_Binning_TakesTheProfileThenTheRequest() {
+        var profile = new AutoFocusSettings { Binning = 2 };
+
+        Assert.That(AutoFocusRunOptions.Resolve(null, profile).Binning, Is.EqualTo(2),
+            "the rig setting applies when the request says nothing");
+        Assert.That(AutoFocusRunOptions.Resolve(new AutoFocusRequest(), profile).Binning,
+            Is.EqualTo(2), "a request that omits the field must not reset it to 1");
+        Assert.That(AutoFocusRunOptions.Resolve(new AutoFocusRequest { Binning = 4 }, profile).Binning,
+            Is.EqualTo(4), "an explicit request wins");
+    }
+
+    /// <summary>The panel offers 1 to 4; anything else arriving at the API is
+    /// clamped rather than handed to a driver, because "bin 0" and "bin 99"
+    /// fail in different and unhelpful ways on each backend.</summary>
+    [TestCase(0, 1)]
+    [TestCase(-3, 1)]
+    [TestCase(1, 1)]
+    [TestCase(4, 4)]
+    [TestCase(5, 4)]
+    [TestCase(99, 4)]
+    public void Resolve_Binning_IsClampedToOneThroughFour(int requested, int expected) {
+        var o = AutoFocusRunOptions.Resolve(new AutoFocusRequest { Binning = requested }, null);
+        Assert.That(o.Binning, Is.EqualTo(expected));
+    }
+
+    /// <summary>A rig persisted with a nonsense value (hand-edited profile, or
+    /// a later panel that widens the range) must not escape the clamp either.
+    /// </summary>
+    [Test]
+    public void Resolve_Binning_ClampsTheProfileToo() {
+        Assert.That(AutoFocusRunOptions.Resolve(null, new AutoFocusSettings { Binning = 0 }).Binning,
+            Is.EqualTo(1));
+        Assert.That(AutoFocusRunOptions.Resolve(null, new AutoFocusSettings { Binning = 16 }).Binning,
+            Is.EqualTo(4));
+    }
 }

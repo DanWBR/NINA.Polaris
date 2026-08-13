@@ -180,8 +180,38 @@ public class AutoFocusService {
         var (camera, focuser, source) = ResolveDevices(o.FocuserSource);
         int startPosition = focuser.Position;
         bool roiActive = false;
+        int restoreBinX = 0, restoreBinY = 0;
 
         try {
+            // Binning: set ONCE for the whole run, before the baseline frame,
+            // and put it back in finally. Once, for the same reason the ROI is
+            // set once: an INDI driver that gets CCD_BINNING rewritten per
+            // exposure wedges, and the AF sweep is the densest burst of
+            // captures Polaris ever issues. Before the baseline frame because
+            // the ROI below is sized from that frame's dimensions, so the two
+            // have to be measured in the same pixels.
+            if (o.Binning > 1) {
+                if (!camera.Capabilities.SupportsBinning) {
+                    _logger.LogInformation(
+                        "AF binning {Bin} requested but this camera reports no binning support; "
+                        + "sweeping at 1x1", o.Binning);
+                } else {
+                    try {
+                        restoreBinX = camera.BinX > 0 ? camera.BinX : 1;
+                        restoreBinY = camera.BinY > 0 ? camera.BinY : 1;
+                        await camera.SetBinningAsync(o.Binning, o.Binning, ct);
+                        _logger.LogInformation("AF binning: {Bin}x{Bin} (was {X}x{Y})",
+                            o.Binning, o.Binning, restoreBinX, restoreBinY);
+                    } catch (Exception ex) {
+                        // A camera that refuses the mode still has to be left
+                        // alone afterwards, so drop the restore we never made.
+                        restoreBinX = restoreBinY = 0;
+                        _logger.LogWarning(ex, "AF failed to set binning {Bin}, sweeping at the "
+                            + "camera's current mode", o.Binning);
+                    }
+                }
+            }
+
             var tracker = new AfStarTracker(o.UseBrightestStars);
             var backlash = new BacklashState();
 
@@ -416,6 +446,17 @@ public class AutoFocusService {
             if (roiActive) {
                 try { await camera.SetSubframeAsync(0, 0, 0, 0, CancellationToken.None); }
                 catch (Exception ex) { _logger.LogWarning(ex, "AF failed to clear ROI subframe"); }
+            }
+            // Put binning back before the ROI reset lands, and unconditionally:
+            // leaving the imaging camera in 2x2 after a focus run would silently
+            // halve the resolution of every light frame for the rest of the
+            // night, and nobody would connect that to the auto-focus.
+            if (restoreBinX > 0) {
+                try { await camera.SetBinningAsync(restoreBinX, restoreBinY, CancellationToken.None); }
+                catch (Exception ex) {
+                    _logger.LogError(ex, "AF could not restore binning {X}x{Y}; the camera may "
+                        + "still be binned", restoreBinX, restoreBinY);
+                }
             }
         }
     }
@@ -1028,6 +1069,9 @@ public class AutoFocusRequest {
     /// <summary>Distance in focuser units between consecutive samples.</summary>
     public int? StepSize { get; set; }
     public double? ExposureSeconds { get; set; }
+    /// <summary>Sensor binning for the sweep frames, 1 to 4. Null uses the rig
+    /// setting.</summary>
+    public int? Binning { get; set; }
     /// <summary>Soft-reject a sample as 'no stars' below this count.</summary>
     public int? MinStars { get; set; }
     /// <summary>LEGACY: single approach-from-below backlash. Mapped to
@@ -1086,6 +1130,9 @@ public sealed record AutoFocusRunOptions {
     public int StepSize { get; init; } = 50;
     public int OffsetSteps { get; init; } = 4;
     public double ExposureSeconds { get; init; } = 2.0;
+    /// <summary>Sensor binning for the sweep, 1 to 4. Applied once for the
+    /// whole run, never per frame.</summary>
+    public int Binning { get; init; } = 1;
     public int FramesPerPoint { get; init; } = 1;
     public AFCurveFittingMethod Method { get; init; } = AFCurveFittingMethod.TrendHyperbolic;
     public double RSquaredThreshold { get; init; } = 0.7;
@@ -1131,6 +1178,7 @@ public sealed record AutoFocusRunOptions {
             StepSize = Math.Max(1, req?.StepSize ?? p.StepSize),
             OffsetSteps = Math.Clamp(offsetSteps, 1, 10),
             ExposureSeconds = req?.ExposureSeconds ?? p.ExposureSeconds,
+            Binning = Math.Clamp(req?.Binning ?? p.Binning, 1, 4),
             FramesPerPoint = Math.Clamp(req?.FramesPerPoint ?? p.FramesPerPoint, 1, 10),
             Method = AutoFocusFitting.ParseMethod(req?.Method ?? p.Method),
             RSquaredThreshold = Math.Clamp(req?.RSquaredThreshold ?? p.RSquaredThreshold, 0, 1),

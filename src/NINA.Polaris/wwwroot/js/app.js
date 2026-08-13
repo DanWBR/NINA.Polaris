@@ -3998,6 +3998,11 @@ function ninaApp() {
             offsetSteps: 4,          // points per V-curve arm
             stepSize: 50,
             exposureSeconds: 2.0,
+            // Sweep binning, 1 to 4. An AF frame is measured and discarded, so
+            // binning buys readout and transfer time and per-pixel signal at
+            // the cost of samples across the star disc. 1 by default: it is
+            // the mode every camera treats the same.
+            binning: 1,
             framesPerPoint: 1,
             method: 'TRENDHYPERBOLIC',
             minStars: 5,
@@ -27751,6 +27756,7 @@ function ninaApp() {
             this.afParams.offsetSteps = af.offsetSteps ?? 4;
             this.afParams.stepSize = af.stepSize ?? 50;
             this.afParams.exposureSeconds = af.exposureSeconds ?? 2.0;
+            this.afParams.binning = af.binning ?? 1;
             this.afParams.framesPerPoint = af.framesPerPoint ?? 1;
             this.afParams.method = af.method || 'TRENDHYPERBOLIC';
             this.afParams.minStars = af.minStars ?? 5;
@@ -27769,6 +27775,7 @@ function ninaApp() {
                 offsetSteps: parseInt(this.afParams.offsetSteps) || 4,
                 stepSize: parseInt(this.afParams.stepSize) || 50,
                 exposureSeconds: parseFloat(this.afParams.exposureSeconds) || 2.0,
+                binning: Math.max(1, Math.min(4, parseInt(this.afParams.binning) || 1)),
                 framesPerPoint: parseInt(this.afParams.framesPerPoint) || 1,
                 method: this.afParams.method || 'TRENDHYPERBOLIC',
                 minStars: parseInt(this.afParams.minStars) || 5,

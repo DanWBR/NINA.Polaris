@@ -31,7 +31,8 @@
     "GHz": "GHz",
     "LM Studio": "LM Studio",
     "Ollama": "Ollama",
-    "Qwen3": "Qwen3"
+    "Qwen3": "Qwen3",
+    "Bin": "Bin"
   },
   "pt-BR": {
     "Start": "Iniciar",
@@ -281,7 +282,9 @@
     "Focus motor": "Motor de foco",
     "Target identified:": "Alvo identificado:",
     "SIRIL SCRIPTS": "SCRIPTS SIRIL",
-    "Siril scripts": "Scripts Siril"
+    "Siril scripts": "Scripts Siril",
+    "Exposure (s)": "Exposição (s)",
+    "Top stars": "Estrelas mais brilhantes"
   },
   "es": {
     "Start": "Iniciar",
@@ -529,7 +532,9 @@
     "Focus motor": "Motor de enfoque",
     "Target identified:": "Objetivo identificado:",
     "SIRIL SCRIPTS": "SCRIPTS SIRIL",
-    "Siril scripts": "Scripts de Siril"
+    "Siril scripts": "Scripts de Siril",
+    "Exposure (s)": "Exposición (s)",
+    "Top stars": "Estrellas más brillantes"
   },
   "fr": {
     "Start": "Démarrer",
@@ -777,7 +782,9 @@
     "Focus motor": "Moteur de mise au point",
     "Target identified:": "Cible identifiée :",
     "SIRIL SCRIPTS": "SCRIPTS SIRIL",
-    "Siril scripts": "Scripts Siril"
+    "Siril scripts": "Scripts Siril",
+    "Exposure (s)": "Exposition (s)",
+    "Top stars": "Étoiles les plus brillantes"
   },
   "de": {
     "Start": "Start",
@@ -1025,6 +1032,8 @@
     "Focus motor": "Fokusmotor",
     "Target identified:": "Ziel erkannt:",
     "SIRIL SCRIPTS": "SIRIL-SKRIPTE",
-    "Siril scripts": "Siril-Skripte"
+    "Siril scripts": "Siril-Skripte",
+    "Exposure (s)": "Belichtung (s)",
+    "Top stars": "Hellste Sterne"
   }
 }
