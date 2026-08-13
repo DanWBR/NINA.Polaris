@@ -255,7 +255,37 @@ public record CameraCapabilities(
     bool SupportsIso,
     bool SupportsBulb,
     bool SupportsVideoStream = false,
-    bool SupportsWhiteBalance = false) {
+    bool SupportsWhiteBalance = false,
+    IReadOnlyList<int>? SupportedBins = null) {
+
+    /// <summary>The binning factors this camera really accepts, ascending, or
+    /// EMPTY when the backend cannot find out.
+    ///
+    /// <para>Empty means "unknown", never "none". A UI that hid every option on
+    /// a camera it could not probe would be worse than one offering too many,
+    /// so only a non-empty list is authoritative.</para>
+    ///
+    /// <para>Why this exists: nothing asked. The panel offered 1/2/3/4 to every
+    /// camera on every backend, and both driver paths took the value without
+    /// checking it landed. Field, 2026-08-12: an ASI585 over INDI echoed
+    /// HOR_BIN=3 back as accepted and kept returning full-sensor frames, while
+    /// the same camera on the native SDK binned correctly at 2 and 3.</para>
+    /// </summary>
+    private readonly IReadOnlyList<int> _supportedBins = SupportedBins ?? Array.Empty<int>();
+
+    public IReadOnlyList<int> SupportedBins {
+        get => _supportedBins;
+        // Normalise in the ACCESSOR, not just the constructor default: a
+        // `with { SupportedBins = null }` assigns straight through the init
+        // and would hand every caller a null list to dereference.
+        init => _supportedBins = value ?? Array.Empty<int>();
+    }
+
+    /// <summary>Whether this camera is known to accept a bin. True when the
+    /// list is unknown, so an unprobeable backend behaves as it always did.</summary>
+    public bool AllowsBin(int bin) =>
+        bin >= 1 && (SupportedBins.Count == 0 || SupportedBins.Contains(bin));
+
     /// <summary>Typical astronomy-camera profile (INDI / Alpaca CCDs).</summary>
     public static readonly CameraCapabilities Astro = new(
         SupportsCooler: true, SupportsBinning: true, SupportsRoi: true,

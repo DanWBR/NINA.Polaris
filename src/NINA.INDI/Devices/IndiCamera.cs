@@ -258,9 +258,40 @@ public class IndiCamera : ICamera, IDisposable {
                 SupportsCooler = supportsCooler,
                 SupportsVideoStream = supportsStream,
                 SupportsWhiteBalance = supportsWb,
-                SupportsIso = supportsIso
+                SupportsIso = supportsIso,
+                SupportedBins = SupportedBinsFromDriver()
             };
         }
+    }
+
+    /// <summary>The bins CCD_BINNING says this driver takes, or EMPTY when it
+    /// declares no range.
+    ///
+    /// <para>INDI has no "list of supported bins": a driver publishes HOR_BIN
+    /// as a number with min/max/step and the client is expected to respect it.
+    /// Plenty of drivers fill that in properly. indi_asi_ccd on an ASI585
+    /// publishes <c>min=0 max=0 step=0</c>, i.e. nothing to validate against
+    /// (measured on the field board, 2026-08-12), which is why a bin of 3 could
+    /// be written, echoed back as accepted, and still produce full-sensor
+    /// frames with nobody the wiser.</para>
+    ///
+    /// <para>An empty list is reported as "unknown" rather than guessed at.
+    /// Inventing 1..4 here would recreate the original bug with extra
+    /// confidence behind it.</para></summary>
+    private IReadOnlyList<int> SupportedBinsFromDriver() {
+        if (_client.GetProperty(DeviceName, "CCD_BINNING") is not IndiNumberProperty p
+            || !p.Values.TryGetValue("HOR_BIN", out var hor))
+            return Array.Empty<int>();
+
+        int max = (int)hor.Max;
+        int step = (int)hor.Step;
+        if (max <= 1) return Array.Empty<int>();     // 0 = undeclared, 1 = no binning to offer
+
+        int min = Math.Max(1, (int)hor.Min);
+        if (step <= 0) step = 1;
+        var bins = new List<int>();
+        for (int b = min; b <= max && bins.Count < 16; b += step) bins.Add(b);
+        return bins;
     }
 
     /// <summary>Live WB_R reading; 50 (driver-typical neutral) when not exposed.</summary>
@@ -622,6 +653,17 @@ public class IndiCamera : ICamera, IDisposable {
     }
 
     public async Task SetBinningAsync(int binX, int binY, CancellationToken ct = default) {
+        // Refuse a bin the driver's own CCD_BINNING range excludes. Only bites
+        // on drivers that declare a range: indi_asi_ccd publishes min=max=0 and
+        // is therefore unvalidatable, which is exactly how a bin of 3 got
+        // through on the field board. See SupportedBinsFromDriver.
+        if (!Capabilities.AllowsBin(binX)) {
+            throw new NotSupportedException(
+                $"{DeviceName} declares binning up to "
+                + $"{Capabilities.SupportedBins.LastOrDefault()}x{Capabilities.SupportedBins.LastOrDefault()}"
+                + $", so bin {binX}x{binX} was refused rather than sent.");
+        }
+
         var wanted = new Dictionary<string, double> { ["HOR_BIN"] = binX, ["VER_BIN"] = binY };
         // Skip the write when the driver is already binned this way. CaptureAsync
         // calls this on EVERY frame, so on a guide camera at ~2.4s/frame this was

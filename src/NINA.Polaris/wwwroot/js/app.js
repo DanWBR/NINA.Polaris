@@ -1586,7 +1586,11 @@ function ninaApp() {
         cameraCaps: {
             cooler: false, binning: false, roi: false, iso: false,
             bulb: false, videoStream: false, whiteBalance: false,
-            maxX: 0, maxY: 0
+            maxX: 0, maxY: 0,
+            // Bins the backend confirmed with the camera itself. EMPTY means it
+            // could not ask (an INDI driver that declares no CCD_BINNING range,
+            // for one), and the presets then fall back to 1/2/3/4 as before.
+            supportedBins: []
         },
         // DSLR ISO list + selection (populated by loadCameraCapabilities from
         // the camera's CCD_ISO). Empty options => the camera uses analogue gain
@@ -25133,6 +25137,12 @@ function ninaApp() {
                     const prevMin = this.cameraCaps.minExposureSec;
                     const prevMax = this.cameraCaps.maxExposureSec;
                     this.cameraCaps = Object.assign({}, this.cameraCaps, r.capabilities);
+                    // Swapping to a camera with a shorter bin list leaves the
+                    // old choice selected but no longer offered: the preset row
+                    // highlights nothing and the auto-focus dropdown renders
+                    // blank. Pull each selection back to the nearest bin the new
+                    // camera does have.
+                    this._clampBinSelections();
                     // The driver's exposure limits bound the VIDEO wheel's
                     // ladder; rebuild it whenever they change (camera swap).
                     if (this.cameraCaps.minExposureSec !== prevMin
@@ -29022,6 +29032,37 @@ function ninaApp() {
             const usable = this.solverDbs.astrometry.usable || [];
             return (this.solverDbs.astrometry.scales || [])
                 .filter(b => b.series && usable.includes(b.scale));
+        },
+
+        // The BIN presets to render. The camera's own list when the backend
+        // managed to read one, otherwise the historical 1/2/3/4.
+        //
+        // Offering a bin the camera will not do is not a cosmetic problem: on
+        // the field board an ASI585 over INDI took bin 3, echoed it back as
+        // accepted, and kept returning full-sensor frames, so the panel, the
+        // FITS header and the status all agreed on a binning that never
+        // happened.
+        binPresets() {
+            const b = this.cameraCaps.supportedBins;
+            return (Array.isArray(b) && b.length) ? b.map(String) : ['1', '2', '3', '4'];
+        },
+
+        // Pull every bin selection into the list the current camera offers.
+        // Nearest-supported rather than reset-to-1: someone who chose 4 on a
+        // camera that stops at 2 wants the coarsest they can get, not the
+        // finest.
+        _clampBinSelections() {
+            const allowed = this.binPresets().map(Number);
+            if (!allowed.length) return;
+            const nearest = v => {
+                const n = Number(v) || 1;
+                if (allowed.includes(n)) return n;
+                return allowed.reduce((best, b) =>
+                    Math.abs(b - n) < Math.abs(best - n) ? b : best, allowed[0]);
+            };
+            this.binning = String(nearest(this.binning));
+            this.preview.binning = String(nearest(this.preview.binning));
+            this.afParams.binning = nearest(this.afParams.binning);
         },
 
         astrometryPicked(scale) { return this.astrometryPicks.includes(scale); },

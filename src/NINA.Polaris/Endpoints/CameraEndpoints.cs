@@ -395,6 +395,10 @@ public static class CameraEndpoints {
                 capabilities = new {
                     cooler = equip.Camera.Capabilities.SupportsCooler,
                     binning = equip.Camera.Capabilities.SupportsBinning,
+                    // The bins this camera really takes, or [] when the backend
+                    // cannot find out. Empty means UNKNOWN: the UI keeps its
+                    // 1/2/3/4 in that case rather than hiding everything.
+                    supportedBins = equip.Camera.Capabilities.SupportedBins,
                     roi = equip.Camera.Capabilities.SupportsRoi,
                     iso = equip.Camera.Capabilities.SupportsIso,
                     bulb = equip.Camera.Capabilities.SupportsBulb,

@@ -122,7 +122,26 @@ public sealed class AsiSdkCamera : ICamera {
         SupportsIso: false,
         SupportsBulb: false,
         SupportsVideoStream: true,
-        SupportsWhiteBalance: false);
+        SupportsWhiteBalance: false,
+        SupportedBins: _supportedBins);
+
+    /// <summary>Straight out of ASI_CAMERA_INFO.SupportedBins, which the SDK
+    /// hands over at connect and which nothing used to read.</summary>
+    private IReadOnlyList<int> _supportedBins = Array.Empty<int>();
+
+    /// <summary>Decode the SDK's supported-bin array: up to 16 ints, ascending,
+    /// terminated by a 0. Whatever follows the terminator is uninitialised
+    /// memory, which is how a naive read ends up offering bin 32.</summary>
+    public static IReadOnlyList<int> ParseSupportedBins(int[]? raw) {
+        if (raw == null) return Array.Empty<int>();
+        var bins = new List<int>();
+        foreach (var b in raw) {
+            if (b <= 0) break;                       // terminator
+            if (!bins.Contains(b)) bins.Add(b);
+        }
+        bins.Sort();
+        return bins;
+    }
 
     public Task ConnectAsync(CancellationToken ct = default) => Task.Run(() => {
         // Read the matching camera info (by CameraID) before opening.
@@ -154,6 +173,7 @@ public sealed class AsiSdkCamera : ICamera {
         _bayer = _isColor ? MapBayer((ASI_BAYER_PATTERN)info.BayerPattern) : BayerPatternEnum.None;
         _pixelSize = info.PixelSize;
         _supportsCooler = info.IsCoolerCam != 0;
+        _supportedBins = ParseSupportedBins(info.SupportedBins);
 
         _minExpSec = null; _maxExpSec = null;
         if (ASIGetNumOfControls(_cameraId, out var nCtrl) == ASI_ERROR_CODE.ASI_SUCCESS) {
@@ -201,7 +221,19 @@ public sealed class AsiSdkCamera : ICamera {
     }, ct);
 
     public Task SetBinningAsync(int binX, int binY, CancellationToken ct = default) {
-        _bin = Math.Max(1, binX); ApplyRoi(); return Task.CompletedTask;
+        var want = Math.Max(1, binX);
+        // Refuse a bin the SDK told us this model does not have, instead of
+        // setting it and hoping. ASISetROIFormat's return code used to be
+        // discarded, so an unsupported mode left the camera as it was while
+        // Polaris recorded the new bin and reported it upward: the UI, the FITS
+        // header and the status payload all claimed a binning the sensor never
+        // applied.
+        if (!Capabilities.AllowsBin(want)) {
+            throw new NotSupportedException(
+                $"{DeviceName} does not support bin {want}x{want}. Supported: "
+                + string.Join(", ", _supportedBins.Select(b => $"{b}x{b}")) + ".");
+        }
+        _bin = want; ApplyRoi(); return Task.CompletedTask;
     }
 
     public Task SetTemperatureAsync(double temperature, CancellationToken ct = default) {
@@ -269,9 +301,20 @@ public sealed class AsiSdkCamera : ICamera {
         if (_roiApplied && _lastRoiX == _roiX && _lastRoiY == _roiY
                 && _lastRoiW == w && _lastRoiH == h && _lastRoiBin == _bin
                 && _lastRoiImgType == _imgType) return;
+        ASI_ERROR_CODE roiErr;
         lock (_sdk) {
-            ASISetROIFormat(_cameraId, w, h, _bin, _imgType);
+            roiErr = ASISetROIFormat(_cameraId, w, h, _bin, _imgType);
             ASISetStartPos(_cameraId, _roiX / _bin, _roiY / _bin);
+        }
+        // The return code used to be thrown away. A rejected format left the
+        // camera on its previous geometry while everything downstream believed
+        // the new one, so a bin that never took hold looked exactly like a bin
+        // that did. Do NOT cache it as applied: the next call must retry rather
+        // than skip on the idempotency guard.
+        if (roiErr != ASI_ERROR_CODE.ASI_SUCCESS) {
+            _roiApplied = false;
+            throw new InvalidOperationException(
+                $"{DeviceName} refused {w}x{h} bin {_bin} (ASISetROIFormat: {roiErr}).");
         }
         _lastRoiX = _roiX; _lastRoiY = _roiY;
         _lastRoiW = w; _lastRoiH = h; _lastRoiBin = _bin;
