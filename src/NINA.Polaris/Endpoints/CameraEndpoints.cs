@@ -258,6 +258,23 @@ public static class CameraEndpoints {
                             imageData.Properties.Height, roiSize: 256);
                 } catch { /* defensive: never fail the capture for a
                              secondary stats field */ }
+                // What the camera ACTUALLY returned, beside what was asked for.
+                // The live stack logs its frame size; this path did not, so
+                // "I set BIN3 and the readout still says 3840x2160" could not
+                // be answered from the log at all: nothing distinguished a
+                // driver that ignored the binning from a UI showing the wrong
+                // number. The camera's own BinX is in there too, because a
+                // driver accepting the property is not the same as it applying
+                // it.
+                var sensorW = equip.Camera?.MaxX ?? -1;
+                capLogger.LogInformation(
+                    "Capture returned {W}x{H} for requested binning={Req} "
+                    + "(camera reports bin {BX}x{BY}){Note}",
+                    imageData.Properties.Width, imageData.Properties.Height,
+                    request.Binning, equip.Camera?.BinX ?? 0, equip.Camera?.BinY ?? 0,
+                    request.Binning > 1 && imageData.Properties.Width == sensorW
+                        ? "  <-- full sensor width: the driver did not apply the binning"
+                        : "");
                 return Results.Ok(new {
                     status = "complete",
                     width = imageData.Properties.Width,
