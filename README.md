@@ -82,7 +82,7 @@ welcome via an issue or PR.
 | Category | Tested devices |
 |---|---|
 | **Mounts** | ZWO AM3 · AM3N · AM5 · OnStep (LX200) |
-| **Cameras (OSC / DSLR)** | ZWO ASI585MC Pro · ASI678MC · ASI715MC · SVBony SV405CC · SV605CC · SV105 · Canon EOS Rebel T100 (4000D) · Canon EOS Rebel SL2 (200D) |
+| **Cameras (OSC / DSLR)** | ZWO ASI585MC Pro · ASI678MC · ASI715MC · ASI2600MC Pro · SVBony SV405CC · SV605CC · SV105 · ToupTek GPM462C · Canon EOS Rebel T100 (4000D) · Canon EOS Rebel SL2 (200D) |
 | **Focus motors** | ZWO EAF · Gemini Focusing Motor / Focuser Pro |
 | **Guide cameras** | ZWO ASI120MM |
 | **Filter wheels** | ZWO EFW Mini |
