@@ -1507,6 +1507,55 @@ function ninaApp() {
             } catch (_) { /* private mode: the session still works */ }
         },
 
+        // Host telemetry fold, as an explicit operator preference on top of
+        // the automatic rule.
+        //
+        // 'auto' folds the readouts away while activity chips are up and
+        // unfolds them when the last one clears. That was the whole of it
+        // until the field found the hole: a live stack keeps a chip on the
+        // bar for the entire session, so the numbers folded at dusk and were
+        // never seen again.
+        //
+        // The arrow at the end of the bar sets 'shown' or 'hidden', which
+        // outranks the automatic rule and sticks, across sessions and across
+        // reloads. Sticking is the point: an override that expired when the
+        // stack finished would fold the readouts away again on the next one,
+        // which is the complaint.
+        //
+        // The way back to 'auto' is the same arrow. A click that asks for
+        // what the automatic rule already wants records 'auto' rather than
+        // the equivalent override (see toggleActivityStats), so an override
+        // exists only while it is actually saying something, and nobody is
+        // stranded in a manual mode wondering why the bar stopped reacting.
+        activityStatsMode: (function () {
+            try {
+                var m = localStorage.getItem('polaris-activity-stats-mode');
+                return (m === 'shown' || m === 'hidden') ? m : 'auto';
+            } catch (_) { return 'auto'; }
+        })(),
+
+        // What the automatic rule asks for right now.
+        activityStatsAutoFolded() { return this.activityChips().length > 0; },
+
+        // What the bar actually does.
+        activityStatsFolded() {
+            if (this.activityStatsMode === 'shown') return false;
+            if (this.activityStatsMode === 'hidden') return true;
+            return this.activityStatsAutoFolded();
+        },
+
+        toggleActivityStats() {
+            // The arrow always does the thing it is pointing at, so the state
+            // it produces is simply the opposite of what is on screen.
+            const wantFolded = !this.activityStatsFolded();
+            const mode = wantFolded === this.activityStatsAutoFolded()
+                ? 'auto'
+                : (wantFolded ? 'hidden' : 'shown');
+            this.activityStatsMode = mode;
+            try { localStorage.setItem('polaris-activity-stats-mode', mode); }
+            catch (_) { /* private mode: the session still works */ }
+        },
+
         // Same for the header. Kept as its own flag rather than one "chrome
         // hidden" switch, because the two bars carry different things and an
         // operator may well want the badges and not the telemetry.

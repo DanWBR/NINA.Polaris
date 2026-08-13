@@ -1539,7 +1539,7 @@
        readouts are a stacked list, not competitors for the strip, and they are
        the reason the operator opened the panel: folding them away would answer
        a request to see them by hiding them. */
-    .activity-bar.has-activities .activity-bar-tray-items.activity-tray-open
+    .activity-bar.stats-folded .activity-bar-tray-items.activity-tray-open
         .activity-host-stat:not(.activity-host-device):not(.activity-host-clock) {
         max-width: 100%;
         margin-left: 0;
@@ -1547,6 +1547,10 @@
         transform: none;
         pointer-events: auto;
     }
+    /* The ••• panel already is the manual override on a phone, and it wins
+       over the fold (rule just above), so the arrow would be a second control
+       for the same thing pointing at readouts that are not in the strip. */
+    .activity-stats-toggle { display: none; }
 }
 
 /* Operations row: horizontally scrollable when chips overflow,
@@ -1890,7 +1894,7 @@
 /* Host metrics block on the right side.
    Spacing lives on the children rather than on the flex `gap`: a gap keeps
    reserving its space for a child that has collapsed to nothing, and these
-   children do collapse (see the has-activities rule further down). */
+   children do collapse (see the stats-folded rule further down). */
 .activity-bar-host {
     display: flex;
     gap: 0;
@@ -1941,6 +1945,13 @@
    board name (which says WHICH machine is talking) and the clock chip, which
    only ever appears when the server clock is actually wrong.
 
+   That rule alone was wrong for the case it mattered most in. A live stack
+   keeps a chip on the bar for the whole session, so the readouts folded when
+   stacking began and stayed folded all night — the operator lost CPU, RAM and
+   disk during the one activity that runs for hours and fills the disk. The
+   fold now keys off .stats-folded, which is the automatic rule OR whatever the
+   arrow at the end of the bar was last told (see activityStatsMode in app.js).
+
    The fold is a real animation rather than display:none because the bar is
    permanently on screen at the edge of vision: something vanishing there reads
    as a glitch, something folding reads as the interface making room. Each
@@ -1958,7 +1969,7 @@
         margin-left 260ms cubic-bezier(0.4, 0, 0.2, 1),
         transform  260ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-.activity-bar.has-activities
+.activity-bar.stats-folded
     .activity-host-stat:not(.activity-host-device):not(.activity-host-clock) {
     max-width: 0;
     margin-left: 0;
@@ -1974,11 +1985,11 @@
    2 device, 3 CPU, 4 RAM, 5 Client, 6 Disk, 7 Polaris. The clock and device
    spans are counted even while x-show has them display:none, so the numbering
    does not shift when the clock chip is absent, which it usually is. */
-.activity-bar.has-activities .activity-host-stat:nth-of-type(7) { transition-delay: 0ms; }
-.activity-bar.has-activities .activity-host-stat:nth-of-type(6) { transition-delay: 40ms; }
-.activity-bar.has-activities .activity-host-stat:nth-of-type(5) { transition-delay: 80ms; }
-.activity-bar.has-activities .activity-host-stat:nth-of-type(4) { transition-delay: 120ms; }
-.activity-bar.has-activities .activity-host-stat:nth-of-type(3) { transition-delay: 160ms; }
+.activity-bar.stats-folded .activity-host-stat:nth-of-type(7) { transition-delay: 0ms; }
+.activity-bar.stats-folded .activity-host-stat:nth-of-type(6) { transition-delay: 40ms; }
+.activity-bar.stats-folded .activity-host-stat:nth-of-type(5) { transition-delay: 80ms; }
+.activity-bar.stats-folded .activity-host-stat:nth-of-type(4) { transition-delay: 120ms; }
+.activity-bar.stats-folded .activity-host-stat:nth-of-type(3) { transition-delay: 160ms; }
 .activity-host-stat:nth-of-type(3) { transition-delay: 0ms; }
 .activity-host-stat:nth-of-type(4) { transition-delay: 40ms; }
 .activity-host-stat:nth-of-type(5) { transition-delay: 80ms; }
@@ -1987,11 +1998,47 @@
 
 @media (prefers-reduced-motion: reduce) {
     .activity-host-stat { transition-duration: 1ms; transition-delay: 0ms !important; }
-    .activity-bar.has-activities
+    .activity-bar.stats-folded
         .activity-host-stat:not(.activity-host-device):not(.activity-host-clock) {
         transform: none;
     }
+    .activity-stats-toggle svg { transition: none; }
 }
+
+/* The fold handle. Sits at the end of the bar, beside the collapse chevrons,
+   because it has to hold still: the readouts it controls are what moves, and a
+   button that travelled with them would be chasing its own effect.
+   Faint until hovered, like its neighbour. */
+.activity-stats-toggle {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 20px;
+    margin-left: 6px;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 4px;
+    color: var(--text-muted);
+    opacity: 0.55;
+    cursor: pointer;
+    transition: opacity 0.12s ease, color 0.12s ease;
+}
+.activity-stats-toggle:hover { opacity: 1; color: var(--accent); }
+.activity-stats-toggle:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+/* One glyph, turned around, rather than two that swap: the arrow is the same
+   object changing its mind, and the turn lands with the readouts it moved. */
+.activity-stats-toggle svg {
+    display: block;
+    transition: transform 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.activity-stats-toggle.is-open svg { transform: rotate(180deg); }
 
 /* Hardware identification chip, sits leftmost in the host group
    so the eye lands on "this is Polaris on a Pi 5" before the live

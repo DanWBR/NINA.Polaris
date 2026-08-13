@@ -16415,7 +16415,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
          someone who wants those rows for the sky map wants them every night,
          not once. -->
     <footer class="activity-bar" data-no-i18n
-            :class="{ 'has-activities': activityChips().length > 0,
+            :class="{ 'stats-folded': activityStatsFolded(),
                       'activity-bar-collapsed': activityBarHidden }"
             @click="if (activityBarHidden) setActivityBarHidden(false)"
             :title="activityBarHidden ? $t('Show the status bar') : ''">
@@ -16656,6 +16656,28 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
         </div>
         </div><!-- /.activity-bar-tray-items -->
         </div><!-- /.activity-tray -->
+        <!-- Fold handle for the host readouts. The automatic rule hides them
+             while chips are up, which a live stack keeps true all night, so
+             this is how the operator overrules it in either direction.
+             One arrow, always pointing at what the click will do: « opens the
+             numbers back up, » folds them away. It rotates rather than
+             swapping glyphs, so the direction change reads as the same object
+             turning around. -->
+        <button class="activity-stats-toggle" data-no-i18n
+                @click.stop="toggleActivityStats()"
+                :class="{ 'is-open': !activityStatsFolded() }"
+                :title="activityStatsFolded()
+                          ? $t('Show the host stats')
+                          : $t('Hide the host stats')"
+                :aria-label="activityStatsFolded()
+                          ? $t('Show the host stats')
+                          : $t('Hide the host stats')"
+                :aria-expanded="activityStatsFolded() ? 'false' : 'true'">
+            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+                <path d="M12 6l-5 6 5 6M18 6l-5 6 5 6" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
         <!-- Collapse handle. Deliberately faint: it is housekeeping, not a
              control anyone needs to find quickly. -->
         <button class="activity-collapse" data-i18n @click.stop="setActivityBarHidden(true)"
