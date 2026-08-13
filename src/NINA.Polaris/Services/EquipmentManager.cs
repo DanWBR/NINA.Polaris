@@ -486,8 +486,17 @@ public class EquipmentManager : IDisposable {
         }
         if (driver == "zwo-sdk") {
             try {
+                // A camera the SDK cannot see right now is still listed, with
+                // the reason in the detail line. It is masked because this
+                // process already holds another ZWO open, and the operator has
+                // to be told that rather than handed a short list: the guide
+                // picker came up without the second camera and no explanation
+                // at all (field, 2026-08-13). See ZwoDiscovery for the measurement.
                 return NINA.Camera.ZwoSdk.ZwoDiscovery.Enumerate()
-                    .Select(e => new DiscoveredCamera(e.Id, e.Model, e.Info))
+                    .Select(e => new DiscoveredCamera(
+                        e.Id, e.Model,
+                        e.Present ? e.Info
+                                  : "hidden by the SDK while another ZWO camera is open"))
                     .ToList();
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "ZWO SDK discovery failed");
