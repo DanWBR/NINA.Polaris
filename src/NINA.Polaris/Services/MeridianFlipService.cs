@@ -39,6 +39,7 @@ public class MeridianFlipService {
     private readonly SlewCenterService _slewCenter;
     private readonly AutoFocusService _autoFocus;
     private readonly ProfileService _profile;
+    private readonly CaptureProgressService _captureProgress;
     private readonly ILogger<MeridianFlipService> _logger;
 
     private readonly object _stateLock = new();
@@ -51,13 +52,43 @@ public class MeridianFlipService {
     public int FlipsCompleted { get; private set; }
 
     public MeridianFlipService(EquipmentManager equip, ActiveGuiderProvider guiders, SlewCenterService slewCenter,
-        AutoFocusService autoFocus, ProfileService profile, ILogger<MeridianFlipService> logger) {
+        AutoFocusService autoFocus, ProfileService profile, CaptureProgressService captureProgress,
+        ILogger<MeridianFlipService> logger) {
         _equip = equip;
         _guiders = guiders;
         _slewCenter = slewCenter;
         _autoFocus = autoFocus;
         _profile = profile;
+        _captureProgress = captureProgress;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Block until no exposure is integrating, so the flip's slew never fires
+    /// mid-frame — the mount will not move during a capture anyway, and a slew
+    /// then would ruin the sub. The caller has already set State away from Idle,
+    /// so the LIVE loop's ShouldPause() is holding off the NEXT exposure while
+    /// this waits out the current one. Bounded: a capture wedged in the driver
+    /// must not park the flip past the meridian limit forever, so after the cap
+    /// we proceed and let the frame be the price of a safe flip.
+    /// </summary>
+    internal async Task WaitForExposureIdleAsync(CancellationToken ct) {
+        var snap = _captureProgress.Snapshot();
+        if (!snap.Active) return;
+        // Wait at most a little longer than the exposure that is running, with a
+        // hard ceiling so a stuck capture can't block the flip indefinitely.
+        double expSec = snap.ExposureSeconds > 0 ? snap.ExposureSeconds : 30;
+        var deadline = DateTime.UtcNow.AddSeconds(Math.Min(expSec + 15, 300));
+        _logger.LogInformation(
+            "Meridian flip: waiting for the current {Exp:F0}s exposure to finish before slewing",
+            expSec);
+        while (_captureProgress.Snapshot().Active && DateTime.UtcNow < deadline) {
+            try { await Task.Delay(500, ct); } catch (OperationCanceledException) { return; }
+        }
+        if (_captureProgress.Snapshot().Active) {
+            _logger.LogWarning(
+                "Meridian flip: exposure still active after the wait cap — proceeding with the flip anyway");
+        }
     }
 
     public void UpdateSettings(MeridianFlipSettings settings) {
@@ -189,6 +220,12 @@ public class MeridianFlipService {
                     _logger.LogWarning(ex, "Guider pause failed (continuing)");
                 }
             }
+
+            // 1b. Never slew mid-exposure. The mount will not move while a capture
+            // is integrating anyway, and a slew then would waste the sub. State is
+            // already non-Idle, so the LIVE loop is holding off the next exposure;
+            // wait out the one still running before we move.
+            await WaitForExposureIdleAsync(_cts!.Token);
 
             // 2. Re-slew to target, mount firmware decides to flip based on its own
             // meridian-limit configuration. Most ASCOM/INDI mounts auto-flip on any

@@ -47,6 +47,7 @@ public sealed class LiveCaptureService {
     private readonly AutoFocusService _autoFocus;
     private readonly AuxCaptureService _aux;
     private readonly CameraReadyGate _cameraReady;
+    private readonly MeridianFlipService _meridian;
     private readonly ILogger<LiveCaptureService> _logger;
 
     private CancellationTokenSource? _cts;
@@ -64,6 +65,7 @@ public sealed class LiveCaptureService {
         ImageRelayService relay, CaptureProgressService captureProgress,
         ActiveGuiderProvider guiders, AutoFocusService autoFocus,
         AuxCaptureService aux, CameraReadyGate cameraReady,
+        MeridianFlipService meridian,
         ILogger<LiveCaptureService> logger) {
         _equip = equip;
         _liveStack = liveStack;
@@ -73,6 +75,7 @@ public sealed class LiveCaptureService {
         _autoFocus = autoFocus;
         _aux = aux;
         _cameraReady = cameraReady;
+        _meridian = meridian;
         _logger = logger;
     }
 
@@ -245,6 +248,14 @@ public sealed class LiveCaptureService {
             if (!_autoFocus.State.ToString().Equals("Idle", StringComparison.OrdinalIgnoreCase))
                 return true;
         } catch { /* autofocus not ready */ }
+        // A meridian flip owns the mount: hold the loop so it doesn't start a
+        // new exposure while the mount is (or is about to be) slewing. The flip
+        // itself waits for the CURRENT exposure to finish before it moves (see
+        // MeridianFlipService.WaitForExposureIdleAsync), so the two never fight
+        // over the camera. Covers auto-flip AND a manual "flip now" mid-session.
+        try {
+            if (_meridian.State != MeridianFlipState.Idle) return true;
+        } catch { /* flip service not ready */ }
         return false;
     }
 }

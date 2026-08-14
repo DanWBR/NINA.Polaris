@@ -40,7 +40,7 @@ public class SequenceEngineDitherTests {
         var guiders = new ActiveGuiderProvider(profile, phd2, native);
         var autoFocus = new AutoFocusService(equip, relay, guiders, profile, NullLogger<AutoFocusService>.Instance);
         var meridianFlip = new MeridianFlipService(equip, guiders, slewCenter, autoFocus, profile,
-            NullLogger<MeridianFlipService>.Instance);
+            new CaptureProgressService(), NullLogger<MeridianFlipService>.Instance);
         var imageWriter = new ImageWriterService(equip, profile, NullLogger<ImageWriterService>.Instance);
         var graXpert = new NINA.Polaris.Services.External.GraXpertService(emptyConfig, profile,
             NullLogger<NINA.Polaris.Services.External.GraXpertService>.Instance);
