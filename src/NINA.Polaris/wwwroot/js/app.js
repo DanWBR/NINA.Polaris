@@ -13548,6 +13548,12 @@ function ninaApp() {
                 switch (msg.type) {
                     case 'ready':
                         this._skyBridgeReady = true;
+                        // A fresh engine instance holds no overlays, so the cached
+                        // change-key from the previous instance is meaningless and
+                        // must not dedup the recovery pushes below. Wipe it here so
+                        // whatever brought the bridge back (reload, mobile
+                        // suspend/resume, WiFi reconnect) always re-sends the rects.
+                        this._lastFovOverlayKey = null;
                         clearTimeout(this._skyWatchdogTimer);   // it came up
                         this._skySyncViewport();
                         this._skyBridgeVersion = msg.version || 'unknown';
@@ -13626,18 +13632,21 @@ function ninaApp() {
                                     ra: c.raDeg / 15,
                                     dec: c.decDeg
                                 };
-                                this._pushSkyFovOverlays();
+                                this._pushSkyFovOverlays(true);
                             }
                         });
-                        this._pushSkyFovOverlays();
+                        this._pushSkyFovOverlays(true);
                         // FOV rects sporadically vanished after a reload: the
                         // mount/target overlay push can land before the engine
                         // has finished installing its overlay layer, so the
                         // rects get silently dropped. Re-push a couple of times
                         // as the engine settles (guarded, so a tab switch or
-                        // re-suspend in the meantime is a no-op).
+                        // re-suspend in the meantime is a no-op). force=true or
+                        // the dedup swallows the retry — the first push already
+                        // set the key, so an unforced retry after a dropped push
+                        // never actually re-sends.
                         [700, 2000].forEach(ms => setTimeout(() => {
-                            if (this.tab === 'sky' && this._skyBridgeReady) this._pushSkyFovOverlays();
+                            if (this.tab === 'sky' && this._skyBridgeReady) this._pushSkyFovOverlays(true);
                         }, ms));
                         // Forced re-sync after the engine has had time to
                         // settle its data-source pipeline. The first
@@ -18533,13 +18542,27 @@ function ninaApp() {
         _refreshSkyOverlaysOnOpen() {
             const push = () => {
                 if (this.tab !== 'sky' || !this._skyBridgeReady) return;
-                try { this._pushSkyFovOverlays(); } catch (_) { /* engine idle */ }
+                // force: returning to SKY without the mount having moved leaves
+                // the key unchanged, so an unforced push is deduped and the rects
+                // that the engine dropped never come back on tab re-entry.
+                try { this._pushSkyFovOverlays(true); } catch (_) { /* engine idle */ }
             };
             push();
             [250, 900].forEach(ms => setTimeout(push, ms));
         },
 
-        _pushSkyFovOverlays() {
+        // force=true bypasses the change-dedup below. The dedup exists to stop
+        // the several-per-second mount WS tick re-sending an unchanged overlay
+        // during a slew; it must NOT swallow a re-push that is recovering from a
+        // fresh engine. When the SKY iframe reloads (WiFi reconnect, mobile
+        // suspend/resume, engine recompose) the parent app.js keeps running, so
+        // _lastFovOverlayKey still holds the pre-reload key. The engine came back
+        // EMPTY, but mount/target haven't moved, so an un-forced re-push computes
+        // the same key and returns early — the rects stay gone until a slew moves
+        // the key or a page reload clears it. That is exactly the "FOV rectangles
+        // vanish and only come back on refresh or slew" field report. Every
+        // recovery path (bridge ready, tab open, the settle retries) passes force.
+        _pushSkyFovOverlays(force = false) {
             if (!this.aladinShowFov || !(this.fov?.width > 0)) {
                 this._skySendMessage({ type: 'set-fov-overlays',
                     mount: null, target: null });
@@ -18750,7 +18773,7 @@ function ninaApp() {
                         ).join('|')
                     : null
             });
-            if (key === this._lastFovOverlayKey) return;
+            if (!force && key === this._lastFovOverlayKey) return;
             this._lastFovOverlayKey = key;
 
             // Helpful diagnostic when "where's my FOV rectangle?" comes up:
