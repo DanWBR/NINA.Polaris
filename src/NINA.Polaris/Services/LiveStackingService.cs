@@ -108,6 +108,12 @@ public class LiveStackingService {
     private int _framesSavedToDisk;
     private List<DetectedStar>? _referenceStars;
 
+    // Only widen the alignment search (below) when both star lists carry at
+    // least this many: with a full field the offset-vote histogram has a clear
+    // winner even at 250 px, but a handful of stars widened would let an
+    // accidental alignment through.
+    private const int WideMatchMinStars = 8;
+
     // ---- Meridian flip (Part B) ---------------------------------
     // The accumulator stays in the REFERENCE orientation. After a GEM
     // meridian flip, incoming frames arrive ~180-deg rotated; we detect
@@ -1569,7 +1575,30 @@ public class LiveStackingService {
         var order = flippedFirst ? new[] { true, false } : new[] { false, true };
         foreach (var flip in order) {
             if (!flip) {
+                // Every frame matches against the FIRST frame's stars, so the
+                // offset to recover grows with the session: tracking drift and
+                // each dither walk the pointing away from where frame 1 sat.
+                // The 50 px default is the fast common case (consecutive frames
+                // barely move); when it fails on a frame that plainly has stars,
+                // the cause is almost always that the accumulated offset simply
+                // exceeded that window — a long pause and resume is the extreme
+                // of it (field, 2026-08-13: a resumed stack dropped frame after
+                // frame, each with 200 stars, until a reset re-anchored). So on
+                // failure, retry once with the wide radius the flip path uses,
+                // gated on enough stars that the vote histogram stays trustworthy
+                // (a sparse field widened would invite a false match).
                 var t = StarMatcher.Match(_referenceStars!, stars);
+                if (t == null
+                        && stars.Count >= WideMatchMinStars
+                        && (_referenceStars?.Count ?? 0) >= WideMatchMinStars) {
+                    t = StarMatcher.Match(_referenceStars!, stars, maxSearchRadius: 250.0);
+                    if (t != null) {
+                        _logger.LogInformation(
+                            "Frame aligned only at the wide radius: drift dx={Tx:F0} dy={Ty:F0} px "
+                            + "from the reference — the tight window would have dropped it",
+                            t.Tx, t.Ty);
+                    }
+                }
                 if (t != null) {
                     usedFlipped = false;
                     used = t;
