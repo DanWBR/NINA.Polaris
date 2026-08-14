@@ -65,6 +65,34 @@ public class MountSlewSafetyTests {
         Assert.IsFalse(MountSlewSafety.ShouldAbortForAltitude(-10, 0, isSlewing: true));
     }
 
+    /// <summary>
+    /// The flip floor lets a legitimate low transit through where the normal
+    /// floor would abort it. Field, lat -5°: a valid AM3 flip to a 62°-altitude
+    /// target dipped to 4°, and the 5° floor killed it mid-flip. Under the flip
+    /// floor (the horizon) that same 4° passes, while an OTA driven below the
+    /// horizon during a flip still trips.
+    /// </summary>
+    [Test]
+    public void FlipFloor_AllowsTheLowTransitButStillCatchesBelowHorizon() {
+        // The 4° field transit: the normal 5° floor aborts it (the bug), the
+        // flip floor (horizon) lets it continue.
+        Assert.IsTrue(
+            MountSlewSafety.ShouldAbortForAltitude(4, MountSlewSafety.AltitudeFloorDeg, isSlewing: true),
+            "the normal 5° floor aborts the 4° transit — the bug being fixed");
+        Assert.IsFalse(
+            MountSlewSafety.ShouldAbortForFlipTransit(4, MountSlewSafety.FlipTransitFloorDeg, isSlewing: true),
+            "the flip floor lets the legitimate 4° transit continue");
+
+        // Unlike the normal helper, a 0 flip floor means the horizon, NOT off:
+        // an OTA driven below the horizon during a flip still trips.
+        Assert.IsTrue(
+            MountSlewSafety.ShouldAbortForFlipTransit(-2, MountSlewSafety.FlipTransitFloorDeg, isSlewing: true),
+            "an OTA 2° below the horizon during a flip still aborts");
+        Assert.IsFalse(
+            MountSlewSafety.ShouldAbortForFlipTransit(-2, 0, isSlewing: false),
+            "a stationary mount never aborts, flip floor or not");
+    }
+
     [Test]
     public void AltAbort_NaNAltitude_DoesNotAbort() {
         Assert.IsFalse(MountSlewSafety.ShouldAbortForAltitude(double.NaN, 5, isSlewing: true));

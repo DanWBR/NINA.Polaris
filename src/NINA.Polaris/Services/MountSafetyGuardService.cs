@@ -74,6 +74,18 @@ public class MountSafetyGuardService : BackgroundService {
         }
     }
 
+    /// <summary>The floor to use for the live abort WHILE a meridian flip is
+    /// executing. A flip transit legitimately dips low at low latitude, so the
+    /// ordinary floor would abort a valid flip; this drops to the horizon (or a
+    /// per-rig override) for the duration of the flip only. Still gated on
+    /// SafetyStopEnabled, so 0 there disables the abort entirely as before.</summary>
+    public double FlipFloorDeg {
+        get {
+            if (!_meridian.Settings.SafetyStopEnabled) return 0;
+            return _profile.ActiveEquipmentProfile?.FlipFloorDeg ?? MountSlewSafety.FlipTransitFloorDeg;
+        }
+    }
+
     // ---- meridian-crossing tracking ----
     private double? _prevHa;
     private PierSide _pierAtCrossing = PierSide.pierUnknown;
@@ -192,20 +204,42 @@ public class MountSafetyGuardService : BackgroundService {
         // Per-rig floor via AltitudeFloorDeg (already gated on SafetyStopEnabled;
         // 0 = off). Keeps the abort backstop in step with the per-rig setting the
         // slew pre-check uses.
-        double floorDeg = AltitudeFloorDeg;
-        if (!Tripped && floorDeg > 0) {
+        // A flip in progress is a deliberate slew to a known-safe target, and at
+        // low latitude its transit legitimately dips near the horizon on the way
+        // there. Use the lower flip floor for the duration so the guard stops
+        // aborting valid flips (field, lat -5°: a valid AM3 flip to a 62° target
+        // dipped to 4° and the 5° floor killed it mid-flip) while a true
+        // below-horizon plunge still trips. Every non-flip slew keeps the normal
+        // floor.
+        // A flip uses the horizon-strict flip floor (0 ⇒ abort only below the
+        // horizon), so its check can't go through the normal `floor > 0` gate,
+        // which would treat 0 as "off". Branch: flips gate on SafetyStopEnabled
+        // and use ShouldAbortForFlipTransit; every other slew keeps the normal
+        // per-rig floor and helper (0 there still means off, as before).
+        bool flipping = _meridian.State != MeridianFlipState.Idle;
+        bool floorArmed = flipping
+            ? s.SafetyStopEnabled
+            : (!Tripped && AltitudeFloorDeg > 0);
+        if (!Tripped && floorArmed) {
             var scope = _equip.Telescope;
             if (scope is { IsConnected: true, IsSlewing: true }) {
                 double ra = scope.RightAscension, dec = scope.Declination;
                 if (!double.IsNaN(ra) && !double.IsNaN(dec)) {
                     var (altDeg, _) = AltitudeService.RaDecToAltAz(
                         ra, dec, DateTime.UtcNow, _profile.Active.Latitude, _profile.Active.Longitude);
-                    if (MountSlewSafety.ShouldAbortForAltitude(altDeg, floorDeg, true)) {
+                    double floorDeg = flipping ? FlipFloorDeg : AltitudeFloorDeg;
+                    bool abort = flipping
+                        ? MountSlewSafety.ShouldAbortForFlipTransit(altDeg, floorDeg, true)
+                        : MountSlewSafety.ShouldAbortForAltitude(altDeg, floorDeg, true);
+                    if (abort) {
                         try { await scope.AbortSlewAsync(ct); }
                         catch (Exception ex) { _logger.LogWarning(ex, "Safety: abort-slew (altitude) failed"); }
                         await TripAsync(
-                            $"Slew aborted: the OTA dropped to {altDeg:F0}° altitude, below the " +
-                            $"{floorDeg:F0}° floor — a wrong-way slew heading for the mount/tripod.",
+                            flipping
+                                ? $"Flip aborted: the OTA reached {altDeg:F0}° altitude, below the " +
+                                  $"{floorDeg:F0}° flip floor — below the horizon during a meridian flip."
+                                : $"Slew aborted: the OTA dropped to {altDeg:F0}° altitude, below the " +
+                                  $"{floorDeg:F0}° floor — a wrong-way slew heading for the mount/tripod.",
                             s, ct);
                         return;
                     }

@@ -418,6 +418,8 @@ public static class EquipmentEndpoints {
                     r.SlewConfirmDeg = Math.Clamp(update.SlewConfirmDeg.Value, 0, 180);
                 if (update.SlewFloorDeg.HasValue)
                     r.SlewFloorDeg = Math.Clamp(update.SlewFloorDeg.Value, 0, 90);
+                if (update.FlipFloorDeg.HasValue)
+                    r.FlipFloorDeg = Math.Clamp(update.FlipFloorDeg.Value, 0, 90);
                 // VIDEO tab FOV / ROI persistence. -1 leaves the field
                 // untouched (lets PUTs that only update other fields
                 // skip ROI), 0 clears, positive sets. Mirrors the

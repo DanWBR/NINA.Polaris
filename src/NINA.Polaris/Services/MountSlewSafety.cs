@@ -39,6 +39,21 @@ public static class MountSlewSafety {
     /// no per-rig override.</summary>
     public const double AltitudeFloorDeg = 5.0;
 
+    /// <summary>The altitude floor to apply WHILE a meridian flip is executing,
+    /// when a rig supplies no per-rig override.
+    ///
+    /// A meridian flip is a deliberate slew to a known-safe target, but the
+    /// transit gets there by swinging the OTA across the sky, and near the
+    /// equator (low |latitude|) the polar axis lies almost flat, so that transit
+    /// legitimately dips close to the horizon before rising to the target.
+    /// Field, lat -5°: a valid AM3 flip to a 62°-altitude target dipped to 4°,
+    /// and the normal 5° floor aborted it mid-flip. During a flip the floor
+    /// therefore drops to the horizon: a transit passing low is expected, while
+    /// the OTA actually going BELOW the horizon is never part of a real flip and
+    /// still trips. The floor returns to <see cref="AltitudeFloorDeg"/> the
+    /// instant the flip finishes, so every ordinary slew keeps full protection.</summary>
+    public const double FlipTransitFloorDeg = 0.0;
+
     /// <summary>A target within this many minutes of the meridian is flagged:
     /// a fresh GoTo can pick the un-flipped pier side and swing the long way.</summary>
     public const double NearMeridianMinutes = 10.0;
@@ -74,6 +89,20 @@ public static class MountSlewSafety {
         if (!isSlewing) return false;
         if (double.IsNaN(currentAltDeg)) return false;
         return currentAltDeg < minAltFloorDeg;
+    }
+
+    /// <summary>Should the altitude-floor guard abort a slew that is a meridian
+    /// flip in progress? Unlike <see cref="ShouldAbortForAltitude"/>, a floor of
+    /// 0 here means "the horizon" (abort below it), not "off": a flip's transit
+    /// legitimately dips low, so the floor is deliberately at/near the horizon and
+    /// must still catch the OTA actually going below it. The on/off switch for
+    /// flips is the caller's SafetyStopEnabled, checked before this. NaN altitude
+    /// or a stationary mount never aborts.</summary>
+    public static bool ShouldAbortForFlipTransit(double currentAltDeg, double floorDeg,
+            bool isSlewing) {
+        if (!isSlewing) return false;
+        if (double.IsNaN(currentAltDeg)) return false;
+        return currentAltDeg < floorDeg;
     }
 
     /// <summary>Evaluate a proposed GoTo before it is issued. <paramref name="mountRaHours"/>
