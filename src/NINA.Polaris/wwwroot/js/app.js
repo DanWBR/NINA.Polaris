@@ -17886,23 +17886,30 @@ function ninaApp() {
         // --- Studio root setter ---------------------------------------
 
         async filesSetStudioRoot() {
+            // Prefer an explicitly-selected folder; otherwise fall back to the
+            // folder currently OPEN in the browser (files.cwd) -- i.e. the folder
+            // one level above the items on screen. So "set as root" works with the
+            // current view even when no row is selected.
             const dir = this.filesSelectedDir();
-            if (!dir) {
-                this.toast('Select a single folder first', 'warn');
+            const target = dir ? dir.fullPath : (this.files.cwd || '');
+            if (!target) {
+                this.toast('Open a folder first', 'warn');
                 return;
             }
             if (!await this._confirmAsync(
-                    `Use this as the Studio root?\n\n${dir.fullPath}\n\n` +
-                    `Studio will rescan this tree on its next open.`,
+                    `Use this as the Studio root?\n\n${target}\n\n` +
+                    `Studio will rescan this tree.`,
                     { title: 'Set Studio root', okLabel: 'Set root' })) return;
             try {
                 const r = await this.apiPostJson('/api/files/studio-root', null, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ path: dir.fullPath })
+                    body: JSON.stringify({ path: target })
                 });
-                this.settings.imageOutputDir = r.imageOutputDir || dir.fullPath;
+                this.settings.imageOutputDir = r.imageOutputDir || target;
                 this.toast('Studio root set to ' + this.settings.imageOutputDir, 'ok');
+                // Reflect the new root now instead of only on Studio's next open.
+                this.apiPost('/api/studio/rescan').catch(() => { /* best-effort */ });
             } catch (e) {
                 this.toastFail('Could not set Studio root', e);
             }

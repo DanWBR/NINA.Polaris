@@ -11468,8 +11468,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </button>
                     <button class="btn btn-sm btn-icon btn-primary"
                             @click="filesSetStudioRoot()"
-                            :disabled="!filesSelectedDir()"
-                            :title="filesSelectedDir() ? 'Set this folder as the Studio scan root' : 'Set as Studio root (select a single folder first)'"
+                            :title="filesSelectedDir() ? 'Set the selected folder as the Studio scan root' : 'Set the current folder as the Studio scan root'"
                             aria-label="Set as Studio root">
                         <span class="files-icon">⭐</span>
                         <span class="files-icon-label">Studio root</span>
