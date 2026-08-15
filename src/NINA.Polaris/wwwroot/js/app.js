@@ -5776,13 +5776,27 @@ function ninaApp() {
                     window.parent.postMessage({ __polarisAuth: 'get' }, '*');
                 } catch (_) { finish(null); }
                 // Bounded: a plain page embedding us never answers, and boot
-                // must not wait on it.
-                setTimeout(() => finish(null), 700);
+                // must not wait on it. 1.5s tolerates a cold app launch whose
+                // native bridge isn't ready at 700ms (which left the relay
+                // origin unset for the whole session); a plain browser still
+                // falls through quickly enough.
+                setTimeout(() => finish(null), 1500);
             });
         },
 
-        _authPushToWrapper(token) {
-            if (!this._authWrapperOrigin) return;   // no shell answered at boot
+        async _authPushToWrapper(token) {
+            // AUTH-DEVICE-CONTRACT (#651, app-first): if the shell did not answer
+            // the boot-time ask (a slow cold launch can miss the 1.5 s window),
+            // _authWrapperOrigin was never set and every later push silently
+            // no-op'd — so a "remember me" login was never handed to the native
+            // store and the app re-prompted on the next launch. Re-establish the
+            // relay on demand before pushing so a login after a slow boot still
+            // persists. Genuinely-no-shell (a plain browser) still resolves to
+            // null and no-ops.
+            if (!this._authWrapperOrigin && window.parent !== window) {
+                await this._authAskWrapper();
+            }
+            if (!this._authWrapperOrigin) return;
             try {
                 window.parent.postMessage(
                     { __polarisAuth: 'set', token: token || null },
