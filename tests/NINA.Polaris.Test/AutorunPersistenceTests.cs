@@ -119,6 +119,39 @@ public class AutorunPersistenceTests {
     }
 
     [Test]
+    public void Schedule_IsPerRig_AndReloadsOnRigSwitch() {
+        var p = NewProfile();
+        var engine = MakeEngine(p);
+        var rigA = p.ActiveEquipmentProfile;            // the Default rig
+        engine.LoadSequence(new List<SequenceItem> {
+            new() { Name = "M31", Count = 20, Filter = "Ha" }
+        });
+
+        // Switch to a second rig: the engine reloads its (empty) schedule.
+        var rigB = p.CreateEquipmentProfile("Rig B");
+        Assert.That(p.ActivateEquipmentProfile(rigB.Id), Is.True);
+        Assert.That(engine.Items, Is.Empty, "a different rig starts with its own empty schedule");
+
+        engine.LoadSequence(new List<SequenceItem> {
+            new() { Name = "M42", Count = 5, Filter = "OIII" }
+        });
+
+        // Back to rig A: its own schedule comes back, unaffected by rig B.
+        Assert.That(p.ActivateEquipmentProfile(rigA.Id), Is.True);
+        Assert.That(engine.Items.Count, Is.EqualTo(1));
+        Assert.That(engine.Items[0].Name, Is.EqualTo("M31"));
+        Assert.That(engine.Items[0].Filter, Is.EqualTo("Ha"));
+
+        // And rig B still has its own.
+        Assert.That(p.ActivateEquipmentProfile(rigB.Id), Is.True);
+        Assert.That(engine.Items.Single().Name, Is.EqualTo("M42"));
+
+        // Both survive a restart, each tied to its rig.
+        var engine2 = MakeEngine(NewProfile());   // active rig is rig B (last activated)
+        Assert.That(engine2.Items.Single().Name, Is.EqualTo("M42"));
+    }
+
+    [Test]
     public void EndActions_Persist() {
         var p1 = NewProfile();
         var engine1 = MakeEngine(p1);

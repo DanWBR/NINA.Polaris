@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using NINA.Polaris.Services;
@@ -43,7 +44,15 @@ public class SequenceEngineResumeTests {
         var phd2 = new PHD2Client(NullLogger<PHD2Client>.Instance);
         var emptyConfig = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
         var plateSolve = new PlateSolveService(emptyConfig, NullLogger<PlateSolveService>.Instance);
-        var profile = new ProfileService(emptyConfig, NullLogger<ProfileService>.Instance);
+        // Isolate the profile in a throwaway temp dir: the engine persists +
+        // restores its schedule per rig, so sharing %LOCALAPPDATA% would leak
+        // state between tests (and the real machine's profile).
+        var profileDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "polaris-seqengine-test-" + System.Guid.NewGuid().ToString("N"));
+        var profileConfig = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Profiles:Directory"] = profileDir })
+            .Build();
+        var profile = new ProfileService(profileConfig, NullLogger<ProfileService>.Instance);
         // No output dir → ImageWriterService.SaveImage no-ops, keeping the
         // test off the filesystem entirely.
         profile.Active.ImageOutputDir = "";

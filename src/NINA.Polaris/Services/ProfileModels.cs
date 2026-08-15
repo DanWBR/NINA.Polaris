@@ -1058,6 +1058,15 @@ public class EquipmentProfile {
     public int? LastVideoRoiY { get; set; }
     public int? LastVideoRoiSize { get; set; }
     public string? LastVideoRoiAspect { get; set; }
+
+    /// <summary>Per-rig AUTORUN schedule: the simple-sequencer item list plus its
+    /// dither and end-of-run settings. Persisted here (not globally) so each rig
+    /// keeps its own schedule and it survives a host restart. Null = never saved
+    /// for this rig; the engine then starts empty. Run progress is not persisted.
+    /// Not copied by the rig PUT handler, so a rig save never clobbers it.</summary>
+    public List<SequenceItem>? AutorunSequence { get; set; }
+    public DitherSettings? AutorunDither { get; set; }
+    public SequenceEndActions? AutorunEndActions { get; set; }
 }
 
 public class ProfileSummary {

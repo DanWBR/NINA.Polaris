@@ -116,30 +116,70 @@ public class SequenceEngine {
         _cameraReady = cameraReady;
         _logger = logger;
 
-        // Restore the schedule saved by a previous run so it survives a host
-        // restart. Progress is not restored: a restart always starts from the
-        // top (the previous process is gone, nothing is mid-exposure).
+        // Restore the ACTIVE rig's schedule so it survives a host restart, and
+        // reload whenever the active rig changes so each rig keeps its own
+        // schedule. Progress is not restored: a restart (or a rig switch) always
+        // starts from the top.
+        LoadScheduleForActiveRig();
+        _profile.EquipmentProfileActivated += OnRigActivated;
+    }
+
+    private void OnRigActivated(EquipmentProfile rig) {
+        // Never swap the schedule out from under a running sequence.
+        if (State == SequenceState.Running) return;
+        LoadScheduleForActiveRig();
+        _logger.LogInformation("Autorun schedule switched to rig '{Rig}': {Count} item(s)",
+            rig.Name, Items.Count);
+    }
+
+    /// <summary>Load the active rig's persisted schedule into the engine, one-time
+    /// migrating the old global (UserProfile) schedule into the active rig if this
+    /// rig has none yet. Resets run progress.</summary>
+    private void LoadScheduleForActiveRig() {
         try {
-            var p = _profile.Active;
-            if (p.AutorunSequence is { Count: > 0 }) Items = p.AutorunSequence;
-            if (p.AutorunDither != null) Dither = p.AutorunDither;
-            if (p.AutorunEndActions != null) EndActions = p.AutorunEndActions;
+            var rig = _profile.ActiveEquipmentProfile;
+            var global = _profile.Active;
+            // Migration from the previous global schedule (AUTORUN-PERSIST) into
+            // the active rig, once: only when this rig has nothing saved yet.
+            if (rig.AutorunSequence == null && global.AutorunSequence is { Count: > 0 }) {
+                Items = global.AutorunSequence;
+                Dither = global.AutorunDither ?? new();
+                EndActions = global.AutorunEndActions ?? new();
+                _profile.UpdateSettings(p => {
+                    p.AutorunSequence = new();
+                    p.AutorunDither = null;
+                    p.AutorunEndActions = null;
+                });
+                SaveSchedule();   // writes into the active rig
+                _logger.LogInformation("Migrated global autorun schedule into rig '{Rig}'", rig.Name);
+            } else {
+                Items = rig.AutorunSequence ?? [];
+                Dither = rig.AutorunDither ?? new();
+                EndActions = rig.AutorunEndActions ?? new();
+            }
+            CurrentItemIndex = -1;
+            CurrentFrameInItem = 0;
+            TotalFramesCompleted = 0;
+            LastError = null;
+            State = SequenceState.Idle;
             if (Items.Count > 0)
-                _logger.LogInformation("Restored persisted autorun schedule: {Count} item(s)", Items.Count);
+                _logger.LogInformation("Restored autorun schedule for rig '{Rig}': {Count} item(s)",
+                    rig.Name, Items.Count);
         } catch (Exception ex) {
-            _logger.LogWarning(ex, "Could not restore persisted autorun schedule");
+            _logger.LogWarning(ex, "Could not load the per-rig autorun schedule");
         }
     }
 
-    /// <summary>Persist the current schedule (items + dither + end-actions) to
-    /// the profile so it survives a host restart. Best-effort; a failure to
-    /// save must never break editing the sequence.</summary>
+    /// <summary>Persist the current schedule (items + dither + end-actions) to the
+    /// ACTIVE rig so it survives a host restart and stays tied to that rig.
+    /// Best-effort; a failure to save must never break editing the sequence.</summary>
     public void SaveSchedule() {
         try {
-            _profile.UpdateSettings(p => {
-                p.AutorunSequence = Items;
-                p.AutorunDither = Dither;
-                p.AutorunEndActions = EndActions;
+            var rigId = _profile.ActiveEquipmentProfile.Id;
+            _profile.UpdateEquipmentProfile(rigId, r => {
+                r.AutorunSequence = Items;
+                r.AutorunDither = Dither;
+                r.AutorunEndActions = EndActions;
             });
         } catch (Exception ex) {
             _logger.LogWarning(ex, "Could not persist autorun schedule");
