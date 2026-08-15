@@ -60,7 +60,8 @@ public class CameraReadyGate {
     /// the log line with the caller (AUTORUN / ADV / LIVE).</summary>
     public async Task<ICamera?> WaitAsync(string context, CancellationToken ct,
                                           Action<string>? onWaiting = null,
-                                          Action? onReady = null) {
+                                          Action? onReady = null,
+                                          TimeSpan? timeout = null) {
         var cam = _camera();
         if (IsReady(cam)) return cam;
 
@@ -69,7 +70,20 @@ public class CameraReadyGate {
             context, state);
         onWaiting?.Invoke(state);
 
+        // AUTORUN-BLOB-STUCK (#635): an optional deadline. LIVE waits forever (an
+        // EAA stack should resume whenever the camera returns), but AUTORUN passes
+        // a finite budget: a driver restart + reconnect is tens of seconds, so if
+        // the camera is not back well past that the outage is not transient. The
+        // caller then skips the frame and keeps the run alive instead of freezing
+        // the whole night on one wedged frame. null return + a non-cancelled token
+        // means "timed out", which the caller distinguishes from a user stop.
+        var deadline = timeout.HasValue ? DateTime.UtcNow + timeout.Value : (DateTime?)null;
         while (!ct.IsCancellationRequested) {
+            if (deadline.HasValue && DateTime.UtcNow >= deadline.Value) {
+                _logger.LogWarning("{Context}: camera still not ready after {Sec:F0}s; giving up the wait",
+                    context, timeout!.Value.TotalSeconds);
+                return null;
+            }
             try { await Task.Delay(1000, ct); } catch (OperationCanceledException) { return null; }
             cam = _camera();
             if (IsReady(cam)) {

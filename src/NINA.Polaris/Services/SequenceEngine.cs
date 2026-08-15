@@ -59,6 +59,13 @@ public class SequenceEngine {
     /// <summary>Counter of frames captured since last dither (across all items).</summary>
     private int _framesSinceDither;
 
+    /// <summary>AUTORUN-BLOB-STUCK (#635): how long a capture path waits for a
+    /// disconnected camera to come back (driver restart + reconnect by the
+    /// watchdog is tens of seconds) before it gives up on the frame and moves on,
+    /// rather than freezing the whole run on one wedged frame. Generous, but
+    /// finite.</summary>
+    private static readonly TimeSpan CameraRecoveryBudget = TimeSpan.FromSeconds(180);
+
     /// <summary>Tracks the loaded filter + applied focuser offset so filter
     /// changes move the wheel and apply the offset as a delta (see FilterSwitcher).</summary>
     private readonly FilterState _filterState = new();
@@ -493,11 +500,22 @@ public class SequenceEngine {
                     // re-resolved here every frame, so a reconnect that swaps the
                     // instance can't leave us on a dead one. ct cancels on user stop.
                     var cam = await _cameraReady.WaitAsync("AUTORUN", ct,
-                        onWaiting: _ => LastError = "Waiting for the camera to reconnect…");
-                    // The gate returns null only on cancellation — throw OCE so the
-                    // one cancellation handler below runs (RunOnStop end actions, etc)
-                    // instead of a bespoke exit path here.
-                    if (cam == null) { ct.ThrowIfCancellationRequested(); return; }
+                        onWaiting: _ => LastError = "Waiting for the camera to reconnect…",
+                        timeout: CameraRecoveryBudget);
+                    // AUTORUN-BLOB-STUCK (#635): null means either a user stop OR the
+                    // camera did not come back within the recovery budget. On a stop,
+                    // throw OCE so the one cancellation handler runs. Otherwise the
+                    // driver is wedged past a normal restart+reconnect — SKIP this
+                    // frame and keep the run alive (the field report was the whole
+                    // night frozen on one BLOB-timed-out frame), so a later recovery
+                    // resumes it instead of the run hanging forever.
+                    if (cam == null) {
+                        ct.ThrowIfCancellationRequested();
+                        LastError = $"Frame {f + 1} of {item.Name} skipped: camera did not recover";
+                        _logger.LogWarning("AUTORUN: camera not back within {Sec:F0}s budget; skipping frame {Frame}",
+                            CameraRecoveryBudget.TotalSeconds, f + 1);
+                        continue;
+                    }
                     if (LastError != null && LastError.StartsWith("Waiting for the camera")) LastError = null;
 
                     _logger.LogDebug("Capturing frame {Frame}/{Total} for {Name}",
@@ -612,22 +630,32 @@ public class SequenceEngine {
                         // re-resolves cam, so the retry never uses a stale instance.
                         try {
                             await Task.Delay(2000, ct);
-                            var retryCam = await _cameraReady.WaitAsync("AUTORUN retry", ct);
-                            if (retryCam == null) { ct.ThrowIfCancellationRequested(); return; }
-                            NINA.Image.Interfaces.IImageData imageData;
-                            using (_captureProgress.Begin("autorun", item.Exposure))
-                                imageData = await CameraCaptureGate.RunAsync(
-                            () => retryCam.CaptureAsync(item.Exposure, capOpts, ct), ct);
+                            // Bounded wait (#635): give the watchdog's driver
+                            // restart + reconnect time to land, but never block the
+                            // run forever. null + non-cancelled token = timed out ->
+                            // skip and move on.
+                            var retryCam = await _cameraReady.WaitAsync("AUTORUN retry", ct,
+                                timeout: CameraRecoveryBudget);
+                            if (retryCam == null) {
+                                ct.ThrowIfCancellationRequested();
+                                LastError = $"Frame {f + 1} of {item.Name} skipped: camera did not recover";
+                                _logger.LogWarning("AUTORUN retry: camera not back within budget; skipping frame {Frame}", f + 1);
+                            } else {
+                                NINA.Image.Interfaces.IImageData imageData;
+                                using (_captureProgress.Begin("autorun", item.Exposure))
+                                    imageData = await CameraCaptureGate.RunAsync(
+                                () => retryCam.CaptureAsync(item.Exposure, capOpts, ct), ct);
 
-                            // Preview only (see note above): AUTORUN never feeds
-                            // the LIVE-tab stacking accumulator, and routes to the
-                            // AUTORUN preview canvas (FrameKind.Autorun), not LIVE.
-                            await _relay.RelayImageAsync(imageData, FrameKind.Autorun, ct);
+                                // Preview only (see note above): AUTORUN never feeds
+                                // the LIVE-tab stacking accumulator, and routes to the
+                                // AUTORUN preview canvas (FrameKind.Autorun), not LIVE.
+                                await _relay.RelayImageAsync(imageData, FrameKind.Autorun, ct);
 
-                            CurrentFrameInItem = f + 1;
-                            TotalFramesCompleted++;
-                            frameOk = true;
-                            LastError = null;
+                                CurrentFrameInItem = f + 1;
+                                TotalFramesCompleted++;
+                                frameOk = true;
+                                LastError = null;
+                            }
                         } catch (OperationCanceledException) { throw; }
                         catch (Exception retryEx) {
                             _logger.LogError(retryEx, "Retry also failed for frame {Frame}, skipping", f + 1);

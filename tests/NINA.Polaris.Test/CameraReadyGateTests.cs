@@ -133,6 +133,27 @@ public class CameraReadyGateTests {
         Assert.That(await wait, Is.SameAs(fresh), "must return the reconnected instance, not the dead one");
     }
 
+    /// <summary>AUTORUN-BLOB-STUCK (#635): with a finite timeout, a camera that
+    /// never comes back returns null once the budget elapses (not a hang), and the
+    /// token is NOT cancelled — so the caller can tell "timed out, skip the frame"
+    /// apart from a user stop. LIVE keeps the no-timeout overload (waits forever).</summary>
+    [Test]
+    public async Task WaitAsync_Timeout_ReturnsNullWithoutCancelling() {
+        var cam = new FlipCamera { Connected = false };
+        var gate = new CameraReadyGate(() => cam, NullLogger<CameraReadyGate>.Instance);
+        using var cts = new CancellationTokenSource();
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var result = await gate.WaitAsync("test", cts.Token, timeout: TimeSpan.FromSeconds(2));
+        sw.Stop();
+
+        Assert.That(result, Is.Null, "a timed-out wait returns null");
+        Assert.That(cts.IsCancellationRequested, Is.False, "timeout must not be a cancellation");
+        Assert.That(sw.Elapsed, Is.GreaterThanOrEqualTo(TimeSpan.FromSeconds(1.5)),
+            "must actually wait roughly the budget before giving up");
+        Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(8)), "but not hang past it");
+    }
+
     /// <summary>onWaiting fires once when it starts blocking; onReady once when it
     /// resumes. LIVE uses these for the WS status line.</summary>
     [Test]
