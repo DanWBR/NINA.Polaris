@@ -5639,6 +5639,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <strong x-text="devices.length"></strong> devices
                     </span>
                     <span style="flex:1"></span>
+                    <!-- INDI-SERIAL-ASSIGN discoverability: the per-device serial
+                         port picker already lives in the INDI Control Panel, but
+                         operators with two USB-serial devices (a power box + the
+                         mount) never found it. Surface a direct jump here. -->
+                    <button class="btn btn-sm" @click="equipTab = 'indi-cp'; indiPropsLoad()"
+                            title="Assign each USB-serial device (mount, focuser, power box) to its stable by-id port, so two serial devices never swap at reboot">⚙ Serial ports</button>
                     <button class="btn btn-sm" @click="refreshDevices()"
                             title="Re-enumerate INDI devices">⟳ Refresh</button>
                     <button class="btn btn-sm btn-danger" @click="disconnectIndi()">Disconnect</button>
