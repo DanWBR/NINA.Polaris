@@ -10679,9 +10679,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                            @change="syncSequenceToServer()"
                                            title="Enable or disable this item (disabled items are skipped)">
                                     <span class="seq-num" x-text="i + 1"></span>
-                                    <input type="text" class="seq-input seq-input-name" x-model="item.name"
+                                    <!-- A LIGHT frame is named after the object in the FOV, once, for
+                                         the whole run (like live) — there is no per-item target name.
+                                         The editable name stays only as a calibration set label. -->
+                                    <div class="seq-input seq-input-name seq-name-auto"
+                                         x-show="(item.imageType || 'LIGHT') === 'LIGHT'"
+                                         title="The target name is detected automatically from the most relevant object in the field of view, one name for the whole run, the same way live stacking names its output.">
+                                        🎯 <span>Auto (object in the FOV)</span>
+                                    </div>
+                                    <input type="text" class="seq-input seq-input-name"
+                                           x-show="(item.imageType || 'LIGHT') !== 'LIGHT'"
+                                           x-model="item.name"
                                            :disabled="seqState === 'running'"
-                                           :placeholder="item.imageType === 'LIGHT' ? 'Target name' : (item.imageType || 'LIGHT').toLowerCase() + ' set'">
+                                           :placeholder="(item.imageType || 'LIGHT').toLowerCase() + ' set'">
                                     <button class="btn btn-sm btn-icon-only" @click="removeSequenceItem(i)"
                                             :disabled="seqState === 'running'" title="Remove">&times;</button>
                                 </div>

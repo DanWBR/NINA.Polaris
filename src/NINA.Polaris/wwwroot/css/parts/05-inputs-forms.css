@@ -629,6 +629,21 @@ body.link-offline .preview-pane::after {
     font-weight: 600;
     font-size: 13px;
 }
+/* The LIGHT target name is auto-derived from the FOV, shown read-only in the
+   place the per-item name input used to sit. Muted so it reads as a status,
+   not an editable field. */
+.seq-name-auto {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: default;
+}
 
 .seq-input-num {
     /* Bumped 60 → 80 px because the wider padding shrinks the inner

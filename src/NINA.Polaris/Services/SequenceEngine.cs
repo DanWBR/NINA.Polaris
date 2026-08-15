@@ -439,6 +439,16 @@ public class SequenceEngine {
                     // left wall of the histogram. Sent on every frame alongside
                     // gain so the camera isn't left on a stale/zero offset.
                     var rigOffset = _profile.ActiveEquipmentProfile?.DefaultOffset ?? 0;
+                    // AUTORUN-TARGET-NAME: a LIGHT frame never takes a per-item
+                    // name. The target does not change across a run, so every
+                    // light is named after the most relevant object in the FOV —
+                    // resolved once by ImageWriterService.ResolveTargetName from
+                    // the mount/solve pointing, exactly as LIVE names its output.
+                    // A blank name here is what lets that resolver run. item.Name
+                    // stays meaningful ONLY as a calibration SET label.
+                    string? effectiveTargetName = isCalibration && !string.IsNullOrWhiteSpace(item.Name)
+                        ? item.Name.Trim()
+                        : null;
                     var capOpts = new NINA.Image.Interfaces.CaptureOptions(
                         Gain: item.Gain > 0 ? item.Gain : (int?)null,
                         Offset: rigOffset > 0 ? rigOffset : (int?)null,
@@ -446,7 +456,7 @@ public class SequenceEngine {
                         BinY: item.Binning > 0 ? item.Binning : (int?)null,
                         ImageType: imageType,
                         Filter: string.IsNullOrEmpty(item.Filter) ? null : item.Filter,
-                        TargetName: string.IsNullOrEmpty(item.Name) ? null : item.Name);
+                        TargetName: effectiveTargetName);
 
                     bool frameOk = false;
                     try {
@@ -459,14 +469,17 @@ public class SequenceEngine {
                         imageData.MetaData.Exposure.ExposureTime = item.Exposure;
                         if (!string.IsNullOrEmpty(item.Filter))
                             imageData.MetaData.Exposure.Filter = item.Filter;
-                        if (!string.IsNullOrEmpty(item.Name))
-                            imageData.MetaData.Target.Name = item.Name;
+                        // Leave a LIGHT frame's target name UNSET so SaveImage's
+                        // FOV resolver fills it; a per-item name here would win over
+                        // the resolver and re-introduce the per-item naming.
+                        if (effectiveTargetName != null)
+                            imageData.MetaData.Target.Name = effectiveTargetName;
                         if (item.Ra.HasValue) imageData.MetaData.Target.RightAscension = item.Ra.Value;
                         if (item.Dec.HasValue) imageData.MetaData.Target.Declination = item.Dec.Value;
 
                         // Persist to disk with extended FITS headers (no-op if no output dir).
                         // imageType controls the calibration/light subfolder split in BuildSubDir.
-                        var savedPath = _imageWriter.SaveImage(imageData, targetName: item.Name,
+                        var savedPath = _imageWriter.SaveImage(imageData, targetName: effectiveTargetName,
                             imageType: imageType, gain: item.Gain);
 
                         // Auto-GraXpert BGE hook. Fire-and-forget so the
