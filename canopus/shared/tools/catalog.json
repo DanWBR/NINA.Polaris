@@ -872,6 +872,152 @@
         "method": "POST",
         "path": "/api/sequence/stop"
       }
+    },
+    {
+      "name": "read_logs",
+      "description": "Read the Polaris application log (newest entries) to diagnose a problem. Filter by minimum level (info|warn|error), source, or a text search. Use this FIRST when the user reports something broke, a device misbehaved, or the app crashed.",
+      "category": "debug",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "max": {
+            "type": "integer",
+            "description": "Max entries to return (1-1000).",
+            "default": 200
+          },
+          "level": {
+            "type": "string",
+            "description": "Minimum level: info, warn, or error."
+          },
+          "source": {
+            "type": "string",
+            "description": "Filter by log source, e.g. server, http, link."
+          },
+          "search": {
+            "type": "string",
+            "description": "Only entries whose message contains this text."
+          }
+        },
+        "required": []
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/logs",
+        "query": {
+          "max": "$args.max",
+          "level": "$args.level",
+          "source": "$args.source",
+          "search": "$args.search"
+        }
+      }
+    },
+    {
+      "name": "get_studio_root",
+      "description": "Get the Studio root (base image directory) so you know where captures live before browsing with list_dir.",
+      "category": "debug",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/files/studio-root"
+      }
+    },
+    {
+      "name": "list_dir",
+      "description": "List the files and folders in a directory on the Polaris host, to find logs, config or image files to inspect. Use get_studio_root first to find where captures live.",
+      "category": "debug",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute directory path on the host."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Include hidden entries.",
+            "default": false
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/files/list",
+        "query": {
+          "path": "$args.path",
+          "hidden": "$args.hidden"
+        }
+      }
+    },
+    {
+      "name": "read_file",
+      "description": "Read a text file (config, log, script) on the Polaris host, up to a size cap. Binary files and files holding secrets (profiles, passwords, certificates) are refused. Use to inspect configuration or on-disk logs during debugging.",
+      "category": "debug",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute file path on the host."
+          },
+          "maxBytes": {
+            "type": "integer",
+            "description": "Max bytes to read (1024-1048576).",
+            "default": 262144
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/files/read-text",
+        "query": {
+          "path": "$args.path",
+          "maxBytes": "$args.maxBytes"
+        }
+      }
+    },
+    {
+      "name": "get_fits_headers",
+      "description": "Read the FITS header cards of an image file (exposure, gain, filter, temperature, WCS, etc.) to diagnose capture or plate-solve issues.",
+      "category": "debug",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to a .fits/.fit file on the host."
+          }
+        },
+        "required": [
+          "path"
+        ]
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/files/fits-headers",
+        "query": {
+          "path": "$args.path"
+        }
+      }
     }
   ]
 }

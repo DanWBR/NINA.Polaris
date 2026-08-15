@@ -19,6 +19,46 @@
       }
     },
     {
+      "name": "read_logs",
+      "description": "Read the Polaris application log (newest entries) to diagnose a problem. Filter by minimum level (info|warn|error), source, or a text search. Use this FIRST when the user reports something broke, a device misbehaved, or the app crashed.",
+      "category": "debug",
+      "mutates": false,
+      "requiresApproval": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "max": {
+            "type": "integer",
+            "description": "Max entries to return (1-1000).",
+            "default": 200
+          },
+          "level": {
+            "type": "string",
+            "description": "Minimum level: info, warn, or error."
+          },
+          "source": {
+            "type": "string",
+            "description": "Filter by log source, e.g. server, http, link."
+          },
+          "search": {
+            "type": "string",
+            "description": "Only entries whose message contains this text."
+          }
+        },
+        "required": []
+      },
+      "polaris": {
+        "method": "GET",
+        "path": "/api/logs",
+        "query": {
+          "max": "$args.max",
+          "level": "$args.level",
+          "source": "$args.source",
+          "search": "$args.search"
+        }
+      }
+    },
+    {
       "name": "get_tonights_best",
       "description": "List tonight's best deep-sky targets (plus Moon/planets/comets) observable from the user's location and time window, ranked. Use when the user asks what to shoot.",
       "category": "planning",

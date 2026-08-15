@@ -50,6 +50,31 @@ public static class FilesEndpoints {
         finally { _renderGate.Release(); }
     }
 
+    // Extra secret guard for /read-text, on top of FileBrowserService.IsBlocked
+    // (which covers OS dirs + ~/.ssh etc. but NOT Polaris's own profile store).
+    // Blocks the profile dir (active.json / named profiles / auth-sessions.json:
+    // SMB password + auth tokens), certificate/key material, appsettings (Relay
+    // tokens), and anything obviously named for a secret.
+    private static bool IsSecretFile(string full, string? dataDir) {
+        if (!string.IsNullOrEmpty(dataDir)) {
+            var d = Path.GetFullPath(dataDir);
+            if (full.Equals(d, StringComparison.OrdinalIgnoreCase)
+                || full.StartsWith(d + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                || full.StartsWith(d + "/", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        var name = Path.GetFileName(full);
+        var ext = Path.GetExtension(full).ToLowerInvariant();
+        if (ext is ".pem" or ".key" or ".pfx" or ".p12" or ".crt" or ".cer") return true;
+        if (name.Equals("auth-sessions.json", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.StartsWith("appsettings", StringComparison.OrdinalIgnoreCase) && ext == ".json") return true;
+        if (name.Contains("password", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("secret", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("credential", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
+
     public static void MapFilesEndpoints(this WebApplication app) {
         var g = app.MapGroup("/api/files");
 
@@ -177,6 +202,49 @@ public static class FilesEndpoints {
                 var name = Path.GetFileName(path);
                 var mime = FileBrowserService.GuessMime(Path.GetExtension(path));
                 return Results.File(stream, mime, fileDownloadName: name);
+            } catch (UnauthorizedAccessException ex) {
+                return Results.Json(new { error = ex.Message },
+                    statusCode: StatusCodes.Status403Forbidden);
+            } catch (FileNotFoundException ex) {
+                return Results.NotFound(new { error = ex.Message });
+            }
+        });
+
+        // --- Read text (Canopus read-only debug) -------------------
+
+        // Bounded, safe-path text read for the assistant's debug tools. Refuses
+        // binary files and Polaris's OWN secret files (the profile store holds
+        // the SMB password + auth tokens, which the generic FileBrowserService
+        // blocklist does not cover). Returns { path, text, bytes, size, truncated }.
+        g.MapGet("/read-text", (FileBrowserService svc, ProfileService profiles,
+                                string path, int? maxBytes) => {
+            try {
+                var full = svc.ResolveSafe(path, mustExist: true);
+                if (!File.Exists(full))
+                    return Results.NotFound(new { error = "Not a file" });
+                if (IsSecretFile(full, profiles.DataDir))
+                    return Results.Json(new { error = "This file holds secrets and cannot be read." },
+                        statusCode: StatusCodes.Status403Forbidden);
+                long cap = Math.Clamp(maxBytes ?? 262144, 1024, 1024 * 1024);
+                var info = new FileInfo(full);
+                var toRead = (int)Math.Min(cap, info.Length);
+                var buf = new byte[toRead];
+                using (var fs = File.OpenRead(full)) {
+                    int off = 0, n;
+                    while (off < toRead && (n = fs.Read(buf, off, toRead - off)) > 0) off += n;
+                }
+                // A NUL byte in the sample means "not text" -> don't hand the
+                // model a blob of binary.
+                if (Array.IndexOf(buf, (byte)0) >= 0)
+                    return Results.Json(new { error = "Binary file; use download instead." },
+                        statusCode: StatusCodes.Status415UnsupportedMediaType);
+                return Results.Ok(new {
+                    path = full,
+                    text = Encoding.UTF8.GetString(buf),
+                    bytes = toRead,
+                    size = info.Length,
+                    truncated = info.Length > toRead
+                });
             } catch (UnauthorizedAccessException ex) {
                 return Results.Json(new { error = ex.Message },
                     statusCode: StatusCodes.Status403Forbidden);
