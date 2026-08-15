@@ -26353,7 +26353,7 @@ function ninaApp() {
         },
 
         // ---- Auto-push to network storage (Settings card) ----
-        async loadStorageConfig() {
+        async loadStorageConfig(attempt = 0) {
             try {
                 const d = await this.apiGet('/api/storage/config');
                 const s = this.storagePush;
@@ -26369,11 +26369,27 @@ function ninaApp() {
                 s.linkSharePercent = d.linkSharePercent || 50;
                 s.password = '';   // never round-tripped; blank = keep stored
                 if (d.lastTestResult) { s.testResult = d.lastTestResult; }
+                // PERSIST (#638): the form now reflects the server; saves may fire.
+                this._storageLoaded = true;
             } catch (e) {
                 console.warn('[storage] load config failed', e);
+                // A dropped first-load (init burst / iOS WKWebView cert race) left
+                // the form blank; a later enable-toggle then PUT the blanks and
+                // wiped the stored host/share/username — the "re-enter the network
+                // share every time" report. Retry like loadRigs so the form always
+                // ends up reflecting the stored config.
+                if (attempt < 5) setTimeout(() => this.loadStorageConfig(attempt + 1), 800 * (attempt + 1));
             }
         },
         async saveStorageConfig() {
+            // PERSIST (#638): never persist a form that has not loaded from the
+            // server yet. Without this, a save firing during the startup burst
+            // (e.g. the "enable auto-push" checkbox @change) sent an empty form
+            // and the server overwrote host/share/username with blanks.
+            if (!this._storageLoaded) {
+                console.warn('[storage] save skipped: config not loaded yet');
+                return;
+            }
             const s = this.storagePush;
             try {
                 const r = await (await this.apiPut('/api/storage/config', {
