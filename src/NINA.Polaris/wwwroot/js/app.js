@@ -21678,6 +21678,38 @@ function ninaApp() {
             }, 400);
         },
 
+        // PERSIST-RESET (#638): persist ONLY the changed fields, never the whole
+        // rig. A whole-rig PUT ships every field's current client value, and
+        // during the init race some of those still read JS defaults — which is
+        // how touching one control could reset unrelated per-rig settings. The
+        // server's RigPatch.Merge fills every absent field from the STORED rig,
+        // so a minimal patch can only ever change what the user actually touched.
+        // Patches accumulate + debounce per rig so a burst of edits is one PUT.
+        _rigPatchPending: {},
+        _rigPatchTimers: {},
+        saveRigPatch(rigId, patch) {
+            if (!rigId || !patch) return;
+            this._rigPatchPending[rigId] = Object.assign(this._rigPatchPending[rigId] || {}, patch);
+            if (this._rigPatchTimers[rigId]) clearTimeout(this._rigPatchTimers[rigId]);
+            this._rigPatchTimers[rigId] = setTimeout(async () => {
+                const body = this._rigPatchPending[rigId] || {};
+                this._rigPatchPending[rigId] = null;
+                try {
+                    await this.apiPost(`/api/equipment/rigs/${rigId}`, null, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    if (rigId === this.activeRigId && body.focalLengthMm != null) {
+                        this.settings.focalLength = body.focalLengthMm;
+                        this.updateFov();
+                    }
+                } catch (e) {
+                    this.toastFail('Failed to save rig', e);
+                }
+            }, 400);
+        },
+
         // ---- Telescope + accessory catalogues ----
         // Loaded once on first open of the Manage Rigs modal.
         // wwwroot/data/{telescopes,optical-accessories}.json are
@@ -28984,8 +29016,11 @@ function ninaApp() {
             // refresh.
             const rig = this.rigs?.find(x => x.id === this.activeRigId);
             if (!rig) return;
-            Object.assign(rig, patch);
-            this.saveRig(rig);
+            Object.assign(rig, patch);          // keep local UI state in sync
+            // PERSIST-RESET (#638): PUT only the changed fields, not the whole rig,
+            // so persisting a device/driver pick can never clobber an unrelated
+            // per-rig setting that happens to read a default mid-load.
+            this.saveRigPatch(rig.id, patch);
         },
 
         // Load the list of camera-driver kinds offered by this host
