@@ -10773,11 +10773,21 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             </template>
                                         </span>
                                         <label x-show="filterWheel.connected && filterWheel.filters.length > 0">
-                                            Filter<select class="seq-input" x-model="item.filter"
+                                            <!-- :value + per-option :selected instead of x-model so the
+                                                 saved filter still displays when the item list loads
+                                                 (from GET /api/sequence) BEFORE the filter-wheel names
+                                                 arrive over the WS. With x-model the select rendered
+                                                 with no matching option, fell back to "(current)", and
+                                                 never re-synced once the options appeared, even though
+                                                 item.filter kept the value and frames captured on the
+                                                 right filter (#642). :selected re-evaluates as each
+                                                 option renders, so the match is restored. -->
+                                            Filter<select class="seq-input" :value="item.filter || ''"
+                                                @change="item.filter = $event.target.value"
                                                 :disabled="seqState === 'running'">
-                                                <option value="">(current)</option>
+                                                <option value="" :selected="!item.filter">(current)</option>
                                                 <template x-for="f in filterWheel.filters" :key="f">
-                                                    <option :value="f" x-text="f"></option>
+                                                    <option :value="f" x-text="f" :selected="f === item.filter"></option>
                                                 </template>
                                             </select>
                                         </label>
