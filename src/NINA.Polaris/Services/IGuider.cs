@@ -102,6 +102,16 @@ public interface IGuider {
     /// GUIDE panel's exposure field. 0 when not reported by the backend.</summary>
     int ExposureMs => 0;
 
+    /// <summary>Short-lived activity phase for the GUIDE UI so Loop / Auto-select
+    /// aren't a silent wait: "Exposing" while a guide frame downloads,
+    /// "Selecting" while star detection runs. Null when idle between phases.
+    /// Native backend only; PHD2 renders its own progress in its GUI.</summary>
+    string? Activity => null;
+
+    /// <summary>Exposure (ms) the current <see cref="Activity"/> phase is waiting
+    /// on, for a client-side countdown. 0 when not exposing.</summary>
+    int ActivityExposureMs => 0;
+
     // Rolling guiding metrics (arcsec).
     double RmsRA { get; }
     double RmsDec { get; }

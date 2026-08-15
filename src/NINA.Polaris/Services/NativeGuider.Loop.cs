@@ -54,6 +54,7 @@ public sealed partial class NativeGuider {
         IsSettling = false;
         IsDithering = false;
         _settleActive = false;
+        SetActivity(null);
         if (AppState is "Guiding" or "Looping" or "Paused" or "LostLock") SetAppState("Stopped");
         // MEMOPT2: guiding retains almost nothing but churns ~2-3 full guide
         // frames + a preview JPEG per capture; under Workstation GC those freed
@@ -79,7 +80,7 @@ public sealed partial class NativeGuider {
                 long iterStart = NowMs();
                 try {
                     if (mode == LoopMode.Loop) {
-                        var limg = await CaptureFullAsync(cam, ct);
+                        var limg = await CaptureFullAsync(cam, ct, "Exposing");
                         if (limg != null) {
                             _lastFrame = limg; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
                             BuildView(double.NaN, double.NaN, 0, false);
@@ -324,7 +325,7 @@ public sealed partial class NativeGuider {
         }
     }
 
-    private async Task<IImageData?> CaptureFullAsync(ICamera cam, CancellationToken ct) {
+    private async Task<IImageData?> CaptureFullAsync(ICamera cam, CancellationToken ct, string? phase = null) {
         int expMs = Math.Max(50, Rig.NativeGuideExposureMs);
         int bin = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4);
         // Gain comes from the single resolver (EffectiveGuideGain) so the
@@ -342,6 +343,8 @@ public sealed partial class NativeGuider {
         int budgetMs = expMs + GuideCaptureCushionMs;
         using var capCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         capCts.CancelAfter(budgetMs);
+        // Surface the wait to the GUIDE UI so Loop / Auto-select aren't silent.
+        if (phase != null) SetActivity(phase, expMs);
         try {
             var img = await cam.CaptureAsync(expMs / 1000.0, opts, capCts.Token);
             // Apply the dark library / bad-pixel map (per NativeGuideCalibrationMode)
@@ -372,6 +375,10 @@ public sealed partial class NativeGuider {
         } catch (Exception ex) {
             _logger.LogWarning(ex, "Guide capture failed");
             return null;
+        } finally {
+            // The capture wait is over; the caller sets the next phase
+            // ("Selecting", etc.) if there is one.
+            if (phase != null) SetActivity(null);
         }
     }
 
@@ -483,9 +490,10 @@ public sealed partial class NativeGuider {
 
         var cam = _equipment.GuideCamera!;
         try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
-        var img = await CaptureFullAsync(cam, ct);
+        var img = await CaptureFullAsync(cam, ct, "Exposing");
         if (img == null) return;
 
+        SetActivity("Selecting");
         int w = img.Properties.Width, h = img.Properties.Height;
         var detector = new NINA.Image.ImageAnalysis.StarDetector();
         var stars = detector.Detect(img.Data, w, h);
@@ -513,6 +521,7 @@ public sealed partial class NativeGuider {
         } else {
             _logger.LogInformation("Native multi-star: only the primary star found; single-star guiding");
         }
+        SetActivity(null);
     }
 
     private async Task<(double x, double y, bool found)> FindStarAsync(ICamera cam, CancellationToken ct,

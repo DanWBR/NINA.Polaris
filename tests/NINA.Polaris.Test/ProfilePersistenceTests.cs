@@ -97,6 +97,89 @@ public class ProfilePersistenceTests {
             "rigs should be recovered from the backup, not wiped");
     }
 
+    // ----- BACKUP-RESTORE (#637): export/import to a user file -----
+
+    [Test]
+    public void ImportEquipmentProfiles_RestoresLostRig_WithoutTouchingOthers() {
+        var svc = NewService();
+        var a = svc.CreateEquipmentProfile("Rig A");
+        var b = svc.CreateEquipmentProfile("Rig B");
+        svc.UpdateEquipmentProfile(b.Id, r => r.Camera = "ASI533");
+        // Snapshot the set as a "backup file" would capture it.
+        var backup = svc.ListEquipmentProfiles();
+        var savedB = backup.First(r => r.Id == b.Id);
+
+        // The user loses Rig B.
+        Assert.That(svc.DeleteEquipmentProfile(b.Id), Is.True);
+        Assert.That(svc.ListEquipmentProfiles().Any(r => r.Id == b.Id), Is.False);
+
+        // Restoring the backup brings B back and leaves A alone.
+        var applied = svc.ImportEquipmentProfiles(new[] { savedB }, activeId: null);
+        Assert.That(applied, Is.EqualTo(1));
+        var rigs = svc.ListEquipmentProfiles();
+        Assert.That(rigs.Any(r => r.Id == a.Id), "Rig A must be untouched by the restore");
+        var restored = rigs.FirstOrDefault(r => r.Id == b.Id);
+        Assert.That(restored, Is.Not.Null, "Rig B must be restored");
+        Assert.That(restored!.Camera, Is.EqualTo("ASI533"), "restored rig keeps its settings");
+
+        // And it survives a reload from disk.
+        Assert.That(NewService().ListEquipmentProfiles().Any(r => r.Id == b.Id), Is.True);
+    }
+
+    [Test]
+    public void ImportEquipmentProfiles_MergesByIdInsteadOfDuplicating() {
+        var svc = NewService();
+        var a = svc.CreateEquipmentProfile("Rig A");
+        int before = svc.ListEquipmentProfiles().Count;
+
+        // Re-importing the same Id updates in place, does not add a duplicate.
+        var edited = svc.ListEquipmentProfiles().First(r => r.Id == a.Id);
+        edited.FocalLengthMm = 2000;
+        svc.ImportEquipmentProfiles(new[] { edited }, activeId: a.Id);
+
+        var rigs = svc.ListEquipmentProfiles();
+        Assert.That(rigs.Count(r => r.Id == a.Id), Is.EqualTo(1), "no duplicate rig by Id");
+        Assert.That(rigs.Count, Is.EqualTo(before));
+        Assert.That(rigs.First(r => r.Id == a.Id).FocalLengthMm, Is.EqualTo(2000));
+    }
+
+    [Test]
+    public void ExportImportProfile_FullRoundTrip_RestoresEverything() {
+        var svc = NewService();
+        svc.CreateEquipmentProfile("Backyard SCT");
+        svc.CreateEquipmentProfile("Travel APO");
+        var json = svc.ExportActiveJson();
+
+        // A different, empty install restores from the exported file.
+        var otherDir = Path.Combine(Path.GetTempPath(), "polaris-profile-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(otherDir);
+        try {
+            var cfg = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?> { ["Profiles:Directory"] = otherDir })
+                .Build();
+            var svc2 = new ProfileService(cfg, NullLogger<ProfileService>.Instance);
+            svc2.ImportProfile(json);
+
+            Assert.That(svc2.ListEquipmentProfiles().Any(r => r.Name == "Backyard SCT"));
+            Assert.That(svc2.ListEquipmentProfiles().Any(r => r.Name == "Travel APO"));
+
+            // Persisted: a reload of the second install still has them.
+            var svc2Reload = new ProfileService(cfg, NullLogger<ProfileService>.Instance);
+            Assert.That(svc2Reload.ListEquipmentProfiles().Any(r => r.Name == "Travel APO"), Is.True);
+        } finally {
+            try { Directory.Delete(otherDir, recursive: true); } catch { }
+        }
+    }
+
+    [Test]
+    public void ImportProfile_RejectsGarbage_WithoutWipingCurrent() {
+        var svc = NewService();
+        svc.CreateEquipmentProfile("Keep Me");
+        Assert.Throws<System.Text.Json.JsonException>(() => svc.ImportProfile("not a profile"));
+        Assert.That(svc.ListEquipmentProfiles().Any(r => r.Name == "Keep Me"), Is.True,
+            "a bad import file must not destroy the current profile");
+    }
+
     [Test]
     public void Load_PreservesCorruptFile_WhenNoBackup() {
         // Hand-craft a profile dir with only a corrupt main, no .bak.

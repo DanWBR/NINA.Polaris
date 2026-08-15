@@ -5339,9 +5339,19 @@
                         <span class="text-muted" x-show="guideFrameMB() >= 4"
                               x-text="'~' + guideFrameMB() + ' MB/frame'"></span>
                     </label>
-                    <button class="btn btn-sm" @click="guiderLoop()" :disabled="guider.looping">Loop</button>
+                    <button class="btn btn-sm" @click="guiderLoop()" :disabled="guider.looping || guider.calibrating">Loop</button>
                     <button class="btn btn-sm btn-primary" @click="guiderStart()" :disabled="guider.guiding || guider.calibrating">Start Guiding</button>
-                    <button class="btn btn-sm" @click="guiderFindStar()" :disabled="guider.guiding">Auto-select Star</button>
+                    <button class="btn btn-sm" @click="guiderFindStar()" :disabled="guider.guiding || guider.calibrating">Auto-select Star</button>
+                    <!-- Activity phase: what the guider is doing right now, so
+                         Loop / Auto-select aren't a silent wait on the guide
+                         frame. Only shows while a phase is set (native backend). -->
+                    <span class="guide-activity" x-show="guider.activity">
+                        <span class="guide-activity-dot"></span>
+                        <span x-show="guider.activity === 'Exposing'">Exposing…</span>
+                        <span x-show="guider.activity === 'Selecting'">Selecting star…</span>
+                        <span class="guide-activity-exp" x-show="guider.activity === 'Exposing' && guider.activityExposureMs > 0"
+                              x-text="'(' + (guider.activityExposureMs/1000).toFixed(1) + ' s)'"></span>
+                    </span>
                     <button class="btn btn-sm" @click="guiderPause()" x-show="guider.guiding && !guider.paused">Pause</button>
                     <button class="btn btn-sm" @click="guiderResume()" x-show="guider.paused">Resume</button>
                     <button class="btn btn-sm btn-danger" @click="guiderStop()">Stop</button>
@@ -10647,7 +10657,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </div>
                         </div>
                         <div class="seq-error" x-show="seqStatus?.lastError">
-                            <span x-text="seqStatus?.lastError"></span>
+                            <span class="seq-error-text" x-text="seqStatus?.lastError"></span>
+                            <button type="button" class="seq-error-dismiss" @click="dismissSeqError()"
+                                    :title="t('Dismiss')" :aria-label="t('Dismiss')">&times;</button>
                         </div>
                     </div>
                 </div>
@@ -15720,6 +15732,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </template>
                 </div>
 
+                <div class="settings-section settings-section--wide">
+                    <h3><span class="settings-card-icon">💾</span>Backup &amp; restore</h3>
+                    <p class="hint" style="margin-top:0">
+                        Save every setting and rig to a file you keep, then restore
+                        it any time. Use this so a rig or your network-share login
+                        is never lost for good, and to copy your setup to another
+                        Polaris.
+                    </p>
+                    <p class="hint">
+                        <strong>The backup file holds your saved passwords</strong>
+                        (including the network-share credentials), so keep it
+                        somewhere safe.
+                    </p>
+                    <div class="control-row actions" style="margin-top:6px">
+                        <button class="btn btn-sm" @click="exportSettings()">⬇ Save all settings to file…</button>
+                        <button class="btn btn-sm" @click="importSettings()">⬆ Restore all settings from file…</button>
+                        <input type="file" x-ref="settingsImportFile" accept=".json,application/json" style="display:none">
+                    </div>
+                </div>
+
                 <div class="settings-section settings-section--wide danger-section">
                     <h3 data-tour="set-reset"><span class="settings-card-icon">⚠️</span>Reset everything to factory defaults</h3>
                     <p class="hint" style="margin-top:0">
@@ -18903,6 +18935,15 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         :disabled="!newRigName">+ New empty rig</button>
                 <button class="btn" @click="cloneActiveRig()">Duplicate active</button>
                 <button class="btn btn-sm" @click="rigModalOpen = false" style="margin-left: auto;">Close</button>
+            </div>
+
+            <!-- Back up / restore the whole rig set to a file the user names, so
+                 a rig that gets reset is never lost for good (#637). -->
+            <div class="control-row actions" style="margin-top: 8px; border-top: 1px solid var(--border, #2a3550); padding-top: 10px;">
+                <span class="text-muted" style="align-self:center; margin-right:auto;">Save your rigs to a file so you never lose them:</span>
+                <button class="btn btn-sm" @click="exportRigs()" title="Save every rig to a file">⬇ Save rigs to file…</button>
+                <button class="btn btn-sm" @click="importRigs()" title="Restore rigs from a file">⬆ Load rigs from file…</button>
+                <input type="file" x-ref="rigImportFile" accept=".json,application/json" style="display:none">
             </div>
         </div>
     </div>

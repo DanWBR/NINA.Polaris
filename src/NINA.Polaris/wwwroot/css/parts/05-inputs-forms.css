@@ -266,6 +266,33 @@ body.link-offline .preview-pane::after {
     margin-top: 6px;
     font-size: 12px;
     color: var(--danger);
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.seq-error-text {
+    flex: 1;
+    max-height: 4.5em;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.seq-error-dismiss {
+    flex: 0 0 auto;
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 2px;
+    cursor: pointer;
+    opacity: 0.8;
+}
+
+.seq-error-dismiss:hover {
+    opacity: 1;
 }
 
 .sequence-empty {

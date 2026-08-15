@@ -71,6 +71,40 @@ public static class EquipmentEndpoints {
             return Results.Ok(profiles.ActiveEquipmentProfile);
         });
 
+        // ---- Rig-set backup / restore (BACKUP-RESTORE) ----
+        // Export every rig as a self-describing JSON the user downloads and
+        // keeps. Restore merges by Id (see ImportEquipmentProfiles), so a lost
+        // rig can be brought back without disturbing the others.
+        group.MapGet("/rigs/export", (ProfileService profiles) => {
+            return Results.Ok(new {
+                format = "polaris-rigs",
+                version = 1,
+                exportedAt = DateTime.UtcNow.ToString("o"),
+                activeId = profiles.ActiveEquipmentProfile.Id,
+                rigs = profiles.ListEquipmentProfiles()
+            });
+        });
+
+        group.MapPost("/rigs/import", async (HttpRequest request, ProfileService profiles) => {
+            JsonNode? root;
+            try { root = await request.ReadFromJsonAsync<JsonNode>(); }
+            catch (JsonException ex) { return Results.BadRequest(new { error = "Invalid rig file: " + ex.Message }); }
+            if (root == null) return Results.BadRequest(new { error = "Empty file" });
+            // Accept the wrapped export {format, rigs, activeId} or a bare array.
+            var arr = root as JsonArray ?? root["rigs"] as JsonArray;
+            if (arr == null) return Results.BadRequest(new { error = "No rigs found in file" });
+            var opts = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+            var rigs = new List<EquipmentProfile>();
+            foreach (var node in arr) {
+                try { if (node.Deserialize<EquipmentProfile>(opts) is { } rig) rigs.Add(rig); }
+                catch { /* skip a malformed entry rather than failing the whole restore */ }
+            }
+            if (rigs.Count == 0) return Results.BadRequest(new { error = "No valid rigs in file" });
+            var activeId = root["activeId"]?.GetValue<string>();
+            var applied = profiles.ImportEquipmentProfiles(rigs, activeId);
+            return Results.Ok(new { imported = applied });
+        });
+
         group.MapPost("/rigs", (CreateRigRequest req, ProfileService profiles) => {
             if (string.IsNullOrWhiteSpace(req.Name))
                 return Results.BadRequest(new { error = "Name required" });

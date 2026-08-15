@@ -312,6 +312,32 @@ public static class SystemEndpoints {
             return Results.NotFound(new { error = "Profile not found" });
         });
 
+        // ---- Full-settings backup / restore (BACKUP-RESTORE) ----
+        // Export the active profile verbatim (same shape as active.json) so the
+        // user keeps a complete backup and never has to re-enter a whole rig or
+        // the network-share credentials again. NOTE: this file contains saved
+        // secrets (e.g. the SMB password) so the operator is told to keep it
+        // safe; the whole point is that a restore brings those back.
+        group.MapGet("/profile/export", (ProfileService profiles) => {
+            return Results.Text(profiles.ExportActiveJson(), "application/json");
+        });
+
+        group.MapPost("/profile/import", async (HttpRequest request, ProfileService profiles,
+                ILogger<ProfileService> logger) => {
+            string json;
+            using (var reader = new StreamReader(request.Body))
+                json = await reader.ReadToEndAsync();
+            if (string.IsNullOrWhiteSpace(json))
+                return Results.BadRequest(new { error = "Empty settings file" });
+            try {
+                profiles.ImportProfile(json);
+            } catch (Exception ex) {
+                logger.LogWarning(ex, "Settings import failed");
+                return Results.BadRequest(new { error = "Not a valid Polaris settings file: " + ex.Message });
+            }
+            return Results.Ok(new { message = "Settings restored", name = profiles.Active.Name });
+        });
+
         // Factory reset: wipe ALL configuration back to a fresh
         // install so the operator can ship a clean distribution image
         // with none of their rigs, location, password, camera quirks,

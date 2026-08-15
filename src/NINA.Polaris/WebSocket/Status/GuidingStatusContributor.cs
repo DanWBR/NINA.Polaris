@@ -146,6 +146,8 @@ public sealed class GuidingStatusContributor : IStatusContributor {
                 calProgress = activeGuider.CalibrationProgress,
                 calDetails = activeGuider.CalibrationDetails,
                 exposureMs = activeGuider.ExposureMs,
+                activity = activeGuider.Activity,
+                activityExposureMs = activeGuider.ActivityExposureMs,
                 recentSteps = tail.Select(s => new {
                     t = ((DateTimeOffset)s.Timestamp).ToUnixTimeMilliseconds(),
                     ra = s.RaArcsec,

@@ -697,6 +697,23 @@ app.Use(async (ctx, next) => {
             return Task.CompletedTask;
         });
     }
+    // PH2X-9: xpra's HTML5 client emits its own framing headers
+    // (X-Frame-Options: SAMEORIGIN / DENY, a CSP with frame-ancestors, and
+    // Cross-Origin-Resource-Policy: same-origin). HttpTransformer.Default
+    // forwards them verbatim, so the embedded /phd2-gui iframe dies with
+    // net::ERR_BLOCKED_BY_RESPONSE and the Relaunch/Restart buttons look
+    // like no-ops (they work, but the reloaded iframe can never render).
+    // Strip all three so the same-origin iframe can embed. The proxy already
+    // sits behind Polaris auth and xpra binds to 127.0.0.1 only.
+    else if (ctx.Request.Path.StartsWithSegments("/phd2-gui")) {
+        ctx.Response.OnStarting(() => {
+            ctx.Response.Headers.Remove("X-Frame-Options");
+            ctx.Response.Headers.Remove("Content-Security-Policy");
+            ctx.Response.Headers.Remove("Content-Security-Policy-Report-Only");
+            ctx.Response.Headers.Remove("Cross-Origin-Resource-Policy");
+            return Task.CompletedTask;
+        });
+    }
     await next();
 });
 

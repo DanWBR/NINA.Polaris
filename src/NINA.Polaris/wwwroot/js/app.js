@@ -2000,6 +2000,7 @@ function ninaApp() {
             raAggression: 0.7, decAggression: 0.7,
             lastAlert: null, lastAlertSeverity: 'warn', lastSettleStatus: null, calProgress: null, calDetails: null,
             darkCalibration: null,
+            activity: null, activityExposureMs: 0,
             recentSteps: []
         },
         // Local mirror of the native guide dark-library mode + frame count, so
@@ -30708,6 +30709,128 @@ function ninaApp() {
                 'Reload the page once it responds.', 'warn', 8000);
         },
 
+        // ----- BACKUP-RESTORE (#637) -----
+        // Save a JS object (or JSON string) to a file the user names. Uses the
+        // native Save dialog where the browser supports it (Chromium desktop --
+        // this is the "Windows file picker" the operator asked for), and falls
+        // back to a plain download (Firefox / iOS / older browsers). Returns
+        // false only when the user cancels the native dialog.
+        async _saveJsonFile(suggestedName, data) {
+            const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+            if (window.showSaveFilePicker) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName,
+                        types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }]
+                    });
+                    const w = await handle.createWritable();
+                    await w.write(text);
+                    await w.close();
+                    return true;
+                } catch (e) {
+                    if (e && e.name === 'AbortError') return false; // user cancelled
+                    // any other picker error -> fall through to the download path
+                }
+            }
+            const blob = new Blob([text], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = suggestedName;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            return true;
+        },
+
+        // Pick a JSON file via the native Open dialog where supported, else fall
+        // back to a hidden <input type=file> (works on iOS / Firefox). Returns
+        // the file's text, or null if the user cancelled.
+        async _pickJsonFileText(inputRef) {
+            if (window.showOpenFilePicker) {
+                try {
+                    const [handle] = await window.showOpenFilePicker({
+                        types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }],
+                        multiple: false
+                    });
+                    const file = await handle.getFile();
+                    return await file.text();
+                } catch (e) {
+                    if (e && e.name === 'AbortError') return null;
+                    // fall through to the hidden input on any other error
+                }
+            }
+            return await new Promise((resolve) => {
+                const el = this.$refs[inputRef];
+                if (!el) { resolve(null); return; }
+                const onChange = async () => {
+                    el.removeEventListener('change', onChange);
+                    const f = el.files && el.files[0];
+                    el.value = ''; // allow re-picking the same file
+                    resolve(f ? await f.text() : null);
+                };
+                el.addEventListener('change', onChange);
+                el.click();
+            });
+        },
+
+        // Save every rig to a file. The server returns the authoritative set.
+        async exportRigs() {
+            try {
+                const data = await this.apiGet('/api/equipment/rigs/export');
+                const stamp = new Date().toISOString().slice(0, 10);
+                if (await this._saveJsonFile('polaris-rigs-' + stamp + '.json', data))
+                    this.toast('Rig set saved to file', 'ok');
+            } catch (e) { this.toastFail('Save rig set failed', e); }
+        },
+
+        // Load a rig-set file and restore it (merge by id -- see the server).
+        async importRigs() {
+            try {
+                const text = await this._pickJsonFileText('rigImportFile');
+                if (text == null) return;
+                const obj = JSON.parse(text);
+                const res = await this.apiPostJson('/api/equipment/rigs/import', obj);
+                await this.loadRigs();
+                this.toast('Restored ' + (res.imported || 0) + ' rig(s) from file', 'ok');
+            } catch (e) { this.toastFail('Restore rig set failed', e); }
+        },
+
+        // Save the whole profile (every rig + all settings, including the saved
+        // network-share credentials) verbatim, so the operator never has to
+        // re-enter a lost rig or the SMB password again.
+        async exportSettings() {
+            try {
+                const resp = await this.apiFetch('/api/system/profile/export');
+                const text = await resp.text();
+                const stamp = new Date().toISOString().slice(0, 10);
+                if (await this._saveJsonFile('polaris-settings-' + stamp + '.json', text))
+                    this.toast('All settings saved to file', 'ok');
+            } catch (e) { this.toastFail('Save settings failed', e); }
+        },
+
+        // Restore the whole profile from a backup file. Destructive (replaces
+        // everything), so confirm first, then reload so all settings re-read.
+        async importSettings() {
+            try {
+                const text = await this._pickJsonFileText('settingsImportFile');
+                if (text == null) return;
+                // Validate it's JSON before the destructive confirm.
+                JSON.parse(text);
+                const ok = await this._confirmAsync(
+                    'Restoring replaces ALL of your current settings and rigs with ' +
+                    'the contents of this file. Anything not in the file is lost. ' +
+                    'The page will reload afterwards.',
+                    { title: 'Restore all settings', okLabel: 'Restore', danger: true });
+                if (!ok) return;
+                await this.apiFetch('/api/system/profile/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: text
+                });
+                this.toast('Settings restored. Reloading…', 'ok');
+                setTimeout(() => window.location.reload(), 800);
+            } catch (e) { this.toastFail('Restore settings failed', e); }
+        },
+
         async factoryReset() {
             if (this.factoryResetting) return;
             const ok = await this._confirmAsync(
@@ -37624,6 +37747,19 @@ function ninaApp() {
             }
         },
 
+        // Dismiss the autorun error banner. The run itself is unaffected: it
+        // already continued past the failed frame; this only clears the message
+        // (and it reappears if another frame later fails).
+        async dismissSeqError() {
+            if (this.seqStatus) this.seqStatus.lastError = null;
+            try {
+                await this.apiPost('/api/sequence/clear-error');
+            } catch (e) {
+                // Best-effort: the banner is already cleared locally, and the
+                // server clears it on the next successful frame anyway.
+            }
+        },
+
         // Global panic button (status bar). Hard-aborts whatever sequence is
         // running, from any tab. Confirms first since it kills the night's
         // run. Reuses the /stop endpoint; kept separate so the wording and
@@ -41094,6 +41230,7 @@ function ninaApp() {
                         this.guider.connected = false;
                         this.guider.appState = 'Stopped';
                         this.guider.guiding = false;
+                        this.guider.activity = null;
                         this.guider.recentSteps = [];
                     }
                 } else {
@@ -41141,6 +41278,11 @@ function ninaApp() {
                         lastSettleStatus: g.lastSettleStatus || null,
                         calProgress: g.calProgress || null,
                         calDetails: g.calDetails || null,
+                        // Short-lived Loop/Auto-select phase ("Exposing"/"Selecting")
+                        // so the buttons aren't a silent wait. Rebuilt every tick,
+                        // so it must be copied here or it drops out.
+                        activity: g.activity || null,
+                        activityExposureMs: g.activityExposureMs || 0,
                         // Carry the guide-camera connection through the rebuild --
                         // otherwise once the native guider auto-connects (g.connected
                         // true) this object replaces the field set above with

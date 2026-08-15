@@ -357,6 +357,27 @@
 
 /* ASIAIR-style settle readout (GUIDE tab). Shows live error vs tolerance and
    a bar that fills as the error stays within tolerance toward the settle time. */
+/* Guider activity pill: what Loop / Auto-select is doing right now, so the
+   operator sees "Exposing…" / "Selecting star…" instead of a silent wait. */
+.guide-activity {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+    color: var(--accent, #4f8cff);
+    background: color-mix(in srgb, var(--accent, #4f8cff) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent, #4f8cff) 35%, transparent);
+}
+.guide-activity-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent, #4f8cff);
+    animation: guide-activity-pulse 1s ease-in-out infinite;
+}
+.guide-activity-exp { opacity: 0.8; font-weight: 500; }
+@keyframes guide-activity-pulse {
+    0%, 100% { opacity: 0.35; transform: scale(0.85); }
+    50%      { opacity: 1;    transform: scale(1.15); }
+}
+
 .settle-readout {
     margin: 6px 0; padding: 8px 10px; border-radius: 8px;
     background: color-mix(in srgb, var(--warn, #e0a52b) 12%, transparent);

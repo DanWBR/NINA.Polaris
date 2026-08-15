@@ -218,6 +218,10 @@ public class SequenceEngine {
         _logger.LogInformation("Sequence stopped");
     }
 
+    /// <summary>Dismiss the last per-frame error banner. The run keeps going
+    /// regardless; this only clears the surfaced message.</summary>
+    public void ClearLastError() => LastError = null;
+
     public SequenceStatus GetStatus() {
         // Disabled items are skipped at run time, so they don't count
         // toward the total / progress / ETA either.
@@ -523,6 +527,9 @@ public class SequenceEngine {
                         CurrentFrameInItem = f + 1;
                         TotalFramesCompleted++;
                         frameOk = true;
+                        // A good frame supersedes any earlier per-frame error so
+                        // the banner clears itself once the run recovers.
+                        LastError = null;
                     } catch (OperationCanceledException) { throw; }
                     catch (Exception ex) {
                         _logger.LogWarning(ex, "Frame {Frame} capture failed for {Name}, retrying once",
@@ -550,6 +557,7 @@ public class SequenceEngine {
                             CurrentFrameInItem = f + 1;
                             TotalFramesCompleted++;
                             frameOk = true;
+                            LastError = null;
                         } catch (OperationCanceledException) { throw; }
                         catch (Exception retryEx) {
                             _logger.LogError(retryEx, "Retry also failed for frame {Frame}, skipping", f + 1);

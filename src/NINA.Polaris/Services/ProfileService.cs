@@ -328,6 +328,49 @@ public class ProfileService {
         Save();
     }
 
+    /// <summary>Serialise the active profile exactly as it is persisted, for a
+    /// user-downloadable backup. Uses the same options as <see cref="Save"/> so
+    /// a round-trip re-imports byte-for-byte.</summary>
+    public string ExportActiveJson() => JsonSerializer.Serialize(_activeProfile, JsonOpts);
+
+    /// <summary>Replace the entire active profile from a restored backup and
+    /// persist it. This is the "restore all settings" counterpart to
+    /// <see cref="ExportActiveJson"/>. The name is preserved from the file.
+    /// Throws on unparseable input so the endpoint can return 400 instead of
+    /// silently wiping the profile.</summary>
+    public void ImportProfile(string json) {
+        var p = JsonSerializer.Deserialize<UserProfile>(json, JsonOpts)
+            ?? throw new InvalidDataException("The settings file is empty or not a Polaris profile.");
+        _activeProfile = p;
+        Save();
+        _logger.LogWarning("Imported full settings backup: {Name} ({Rigs} rig(s))",
+            _activeProfile.Name, _activeProfile.EquipmentProfiles.Count);
+    }
+
+    /// <summary>Restore a set of rigs from a backup file, merging by Id: an
+    /// incoming rig whose Id already exists overwrites that rig, otherwise it is
+    /// added. Non-destructive to rigs not present in the file, so restoring a
+    /// single lost rig never wipes the others. Sets the active rig when the
+    /// backup names one that survives the merge. Returns how many were applied.</summary>
+    public int ImportEquipmentProfiles(IEnumerable<EquipmentProfile> incoming, string? activeId) {
+        EnsureMigratedToEquipmentProfiles();
+        int applied = 0;
+        foreach (var rig in incoming) {
+            if (rig == null) continue;
+            if (string.IsNullOrWhiteSpace(rig.Id)) rig.Id = Guid.NewGuid().ToString("N");
+            var idx = _activeProfile.EquipmentProfiles.FindIndex(e => e.Id == rig.Id);
+            if (idx >= 0) _activeProfile.EquipmentProfiles[idx] = rig;
+            else _activeProfile.EquipmentProfiles.Add(rig);
+            applied++;
+        }
+        if (!string.IsNullOrWhiteSpace(activeId) &&
+            _activeProfile.EquipmentProfiles.Any(e => e.Id == activeId))
+            _activeProfile.ActiveEquipmentProfileId = activeId;
+        Save();
+        _logger.LogInformation("Imported {Count} rig(s) from backup", applied);
+        return applied;
+    }
+
     // ----- Equipment profile (rig) management -----
 
     /// <summary>The currently-active equipment rig, creating a "Default" rig

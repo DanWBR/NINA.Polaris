@@ -82,6 +82,11 @@ public static class SequenceEndpoints {
             return Results.Ok(new { state = engine.State.ToString().ToLowerInvariant() });
         });
 
+        group.MapPost("/clear-error", (SequenceEngine engine) => {
+            engine.ClearLastError();
+            return Results.Ok();
+        });
+
         group.MapGet("/status", (SequenceEngine engine) => {
             return Results.Ok(engine.GetStatus());
         });

@@ -95,6 +95,13 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // Snapshot of the last completed calibration (rates, angles, steps, plot
     // points) for the "Review Calibration" panel. Null until one completes.
     private object? _calDetails;
+    // Short-lived activity phase surfaced to the GUIDE UI so Loop / Auto-select
+    // aren't a silent wait: "Exposing" while a guide frame is downloading,
+    // "Selecting" while star detection runs, etc. Null when idle between phases.
+    // The exposure the current phase is waiting on (ms), for a client-side
+    // countdown; 0 when not exposing.
+    private volatile string? _activity;
+    private volatile int _activityExposureMs;
 
     // Multi-star field tracker (primary + secondaries). Engaged only when the
     // rig enables it and more than one star was locked; otherwise the single
@@ -156,6 +163,8 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     public bool IsCalibrating => AppState == "Calibrating";
     public string? CalibrationProgress => _calProgress;
     public object? CalibrationDetails => _calDetails;
+    public string? Activity => _activity;
+    public int ActivityExposureMs => _activityExposureMs;
     // Fall back to 1 s (not the 50 ms floor) when the rig has no stored
     // exposure yet (legacy rig / unset → 0). Reporting 50 ms made the GUIDE
     // panel's dropdown snap to its smallest option (0.1 s) and look like the
@@ -221,6 +230,13 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         if (AppState == s) return;
         AppState = s;
         AppStateChanged?.Invoke(s);
+    }
+
+    // Set (or clear, with null) the short-lived activity phase shown in the
+    // GUIDE UI. exposureMs feeds a client-side countdown while "Exposing".
+    private void SetActivity(string? phase, int exposureMs = 0) {
+        _activity = phase;
+        _activityExposureMs = phase == null ? 0 : exposureMs;
     }
 
     // Severity of the most recent alert ("info" | "warn" | "error"), surfaced
@@ -485,35 +501,40 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         var cam = _equipment.GuideCamera!;
         // Clear any ROI so detection sees the full sensor.
         try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
-        var img = await CaptureFullAsync(cam, ct);
+        var img = await CaptureFullAsync(cam, ct, "Exposing");
         if (img == null) {
             RaiseAlert("Auto-select failed: no guide frame.");
             return;
         }
-        int w = img.Properties.Width, h = img.Properties.Height;
-        var detector = new NINA.Image.ImageAnalysis.StarDetector();
-        var stars = detector.Detect(img.Data, w, h);
+        SetActivity("Selecting");
+        try {
+            int w = img.Properties.Width, h = img.Properties.Height;
+            var detector = new NINA.Image.ImageAnalysis.StarDetector();
+            var stars = detector.Detect(img.Data, w, h);
 
-        // Pick the brightest, non-saturated, interior star (away from
-        // edges so the search window stays in-frame).
-        int margin = SearchRegion + 5;
-        double satGuard = (1 << Math.Max(1, img.Properties.BitDepth)) - 1;
-        NINA.Image.ImageAnalysis.DetectedStar? best = null;
-        double bestFlux = -1;
-        foreach (var s in stars) {
-            if (s.X < margin || s.Y < margin || s.X > w - margin || s.Y > h - margin) continue;
-            if (satGuard > 1 && s.Peak >= satGuard * 0.95) continue;
-            if (s.Flux > bestFlux) { bestFlux = s.Flux; best = s; }
+            // Pick the brightest, non-saturated, interior star (away from
+            // edges so the search window stays in-frame).
+            int margin = SearchRegion + 5;
+            double satGuard = (1 << Math.Max(1, img.Properties.BitDepth)) - 1;
+            NINA.Image.ImageAnalysis.DetectedStar? best = null;
+            double bestFlux = -1;
+            foreach (var s in stars) {
+                if (s.X < margin || s.Y < margin || s.X > w - margin || s.Y > h - margin) continue;
+                if (satGuard > 1 && s.Peak >= satGuard * 0.95) continue;
+                if (s.Flux > bestFlux) { bestFlux = s.Flux; best = s; }
+            }
+            if (best == null) {
+                RaiseAlert("Auto-select failed: no suitable guide star.");
+                return;
+            }
+            _lockX = best.X;
+            _lockY = best.Y;
+            _haveLock = true;
+            SetAppState("Selected");
+            _logger.LogInformation("Native guide star locked at ({X:F1},{Y:F1})", _lockX, _lockY);
+        } finally {
+            SetActivity(null);
         }
-        if (best == null) {
-            RaiseAlert("Auto-select failed: no suitable guide star.");
-            return;
-        }
-        _lockX = best.X;
-        _lockY = best.Y;
-        _haveLock = true;
-        SetAppState("Selected");
-        _logger.LogInformation("Native guide star locked at ({X:F1},{Y:F1})", _lockX, _lockY);
     }
 
     /// <summary>Lock the detected star nearest to a clicked full-sensor point.
