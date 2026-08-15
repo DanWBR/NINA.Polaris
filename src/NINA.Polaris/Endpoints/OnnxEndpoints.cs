@@ -112,6 +112,57 @@ public static class OnnxEndpoints {
         // Poll for progress of the current/last download.
         g.MapGet("/download-status", (ModelDownloadService dl) => Results.Ok(dl.Status));
 
+        // ─── client-proxy upload ─────────────────────────────────────
+        // For a host with NO internet: the browser fetches the model bytes
+        // from the public bucket itself, then POSTs them here so the host
+        // can serve + run them. multipart/form-data with fields: dir,
+        // version, sha256 (optional) + file part `model`. The dir must be a
+        // known AI-model family directory and the version must match the
+        // accepted grammar, so a caller cannot write outside the models tree.
+        g.MapPost("/upload-model", async (HttpRequest http, OnnxModelRegistry reg,
+                                          CancellationToken ct) => {
+            if (!http.HasFormContentType)
+                return Results.BadRequest(new { error = "Multipart form expected." });
+            var form = await http.ReadFormAsync(ct);
+            string dir = (form["dir"].ToString() ?? "").Trim();
+            string version = (form["version"].ToString() ?? "").Trim();
+            string? sha = form["sha256"].ToString()?.Trim();
+            if (!OnnxModelRegistry.IsKnownFamilyDir(dir))
+                return Results.BadRequest(new { error = "Unknown model family directory." });
+            if (!OnnxModelRegistry.IsValidVersion(version))
+                return Results.BadRequest(new { error = "Invalid model version." });
+            if (form.Files.Count == 0 || form.Files[0].Length == 0)
+                return Results.BadRequest(new { error = "Missing 'model' file part." });
+
+            var destDir = Path.Combine(reg.ResolveDownloadTargetDir(), dir, version);
+            Directory.CreateDirectory(destDir);
+            var dest = Path.Combine(destDir, "model.onnx");
+            var tmp = dest + ".part";
+            try {
+                await using (var fs = File.Create(tmp)) {
+                    await form.Files[0].CopyToAsync(fs, ct);
+                }
+                if (!string.IsNullOrWhiteSpace(sha)) {
+                    await using var v = File.OpenRead(tmp);
+                    var hash = Convert.ToHexString(
+                        await System.Security.Cryptography.SHA256.HashDataAsync(v, ct))
+                        .ToLowerInvariant();
+                    if (!string.Equals(hash, sha!.ToLowerInvariant(), StringComparison.Ordinal)) {
+                        File.Delete(tmp);
+                        return Results.BadRequest(new {
+                            error = $"SHA-256 mismatch (expected {sha}, got {hash})." });
+                    }
+                }
+                if (File.Exists(dest)) File.Delete(dest);
+                File.Move(tmp, dest);
+                await reg.RescanAsync(ct);
+                return Results.Ok(new { path = dest });
+            } catch (Exception ex) {
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { /* best-effort */ }
+                return Results.Problem($"Upload failed: {ex.Message}");
+            }
+        }).DisableAntiforgery();
+
         // ─── serve model bytes ───────────────────────────────────────
         // ETag-based conditional GET. The browser sends If-None-Match
         // on the second + Nth load; we return 304 when the hash matches.

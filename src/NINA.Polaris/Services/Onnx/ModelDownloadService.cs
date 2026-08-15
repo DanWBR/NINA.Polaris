@@ -88,8 +88,26 @@ public sealed class ModelDownloadService {
             .Where(e => !string.IsNullOrWhiteSpace(e.Dir) && !string.IsNullOrWhiteSpace(e.Version))
             .Select(e => new CatalogEntry(
                 e.Dir!, e.Version!, e.Label ?? e.Dir!, e.Bytes,
-                _registry.IsInstalled(e.Dir!, e.Version!)))
+                _registry.IsInstalled(e.Dir!, e.Version!),
+                // Canonical manifest family so the browser can merge a
+                // downloadable entry into the matching model dropdown.
+                OnnxModelRegistry.FamilyForDir(e.Dir!),
+                e.Sha256,
+                // Absolute URL for the client-proxy path (browser fetches the
+                // bytes when the host itself has no internet). Bundled index
+                // entries carry an explicit url; a bucket derives it.
+                ResolveUrl(e)))
             .ToList();
+    }
+
+    /// <summary>Absolute download URL for a catalogue entry: the explicit
+    /// <c>url</c> when present (bundled SourceForge index), else the flat
+    /// <c>{base}/{dir}/{version}/model.onnx</c> bucket layout.</summary>
+    private string? ResolveUrl(IndexEntry e) {
+        if (!string.IsNullOrWhiteSpace(e.Url)) return e.Url;
+        if (!string.IsNullOrWhiteSpace(BaseUrl))
+            return $"{BaseUrl}/{e.Dir}/{e.Version}/model.onnx";
+        return null;
     }
 
     /// <summary>Start a download in the background. Returns false if one is
@@ -187,7 +205,9 @@ public sealed class ModelDownloadService {
     }
 }
 
-public sealed record CatalogEntry(string Dir, string Version, string Label, long Bytes, bool Installed);
+public sealed record CatalogEntry(
+    string Dir, string Version, string Label, long Bytes, bool Installed,
+    string? Family, string? Sha256, string? Url);
 
 public sealed record DownloadState(
     string? Dir, string? Version, long ReceivedBytes, long TotalBytes,

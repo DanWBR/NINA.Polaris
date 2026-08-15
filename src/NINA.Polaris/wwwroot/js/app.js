@@ -3604,6 +3604,16 @@ function ninaApp() {
             cacheSize: 0,
             licenseAcknowledged: false,
             backends: null,        // ['webgpu', 'wasm'] after first probe
+            // AI-TOOLS-DISCOVERY: downloadable catalogue (from
+            // /api/onnx/catalog), merged into modelChoices so every tool
+            // lists its models whether or not they're on the host yet.
+            // Each: {dir, version, label, bytes, installed, family, sha256, url}.
+            catalog: [],
+            catalogLoaded: false,
+            // On-demand download progress for a tool model. active gates the
+            // inline "Downloading…" strip in the tool modals.
+            dl: { active: false, family: '', version: '', phase: '',
+                  pct: 0, error: '', via: '' },
         },
         // GX-6: consent modal state. _onnxLicenseResolver is the Promise
         // resolver awaited by `_ensureOnnxLicenseAccepted`; the
@@ -30607,6 +30617,182 @@ function ninaApp() {
             // Cache size probe, non-fatal if IDB unavailable.
             try { this.onnx.cacheSize = await OnnxRegistry.idbTotalSize(); }
             catch { this.onnx.cacheSize = 0; }
+            // AI-TOOLS-DISCOVERY: pull the downloadable catalogue so tool
+            // dropdowns can offer models the host doesn't have yet. Non-fatal
+            // (offline / no bucket → tools still show installed models + RL).
+            this.loadOnnxCatalog();
+        },
+
+        // AI-TOOLS-DISCOVERY: fetch the on-demand model catalogue and merge
+        // its installed flags. Cheap; safe to call repeatedly (after a
+        // download to refresh the installed markers).
+        async loadOnnxCatalog() {
+            try {
+                const r = await this.apiGet('/api/onnx/catalog');
+                this.onnx.catalog = (r && r.models) || [];
+            } catch {
+                this.onnx.catalog = [];
+            } finally {
+                this.onnx.catalogLoaded = true;
+            }
+        },
+
+        // Canonical model family backing each STUDIO AI operation. Mirrors the
+        // server's FamilyAliases; used to look up catalogue entries by op.
+        _familyForOp(op) {
+            switch (op) {
+                case 'background-extraction': return 'bge';
+                case 'denoising':             return 'denoise';
+                case 'halo-removal':          return 'halo';
+                case 'upscaling':             return 'upscale';
+                default:                      return null;   // decon is multi-family
+            }
+        },
+
+        // True when a family/version pair is present in the live manifest
+        // (i.e. installed on the host and servable to the browser).
+        onnxModelInstalled(family, version) {
+            if (!family || !version) return false;
+            return (this.onnx?.manifest?.models || [])
+                .some(m => m.family === family && m.version === version);
+        },
+
+        // The catalogue entry (downloadable model) for a family/version, or
+        // null. Carries {dir, version, bytes, sha256, url, installed}.
+        onnxCatalogEntry(family, version) {
+            if (!family || !version) return null;
+            return (this.onnx?.catalog || [])
+                .find(c => c.family === family && c.version === version) || null;
+        },
+
+        // Ensure a model is on the host before an in-browser / NPU run that
+        // fetches its bytes from the server. Tries the host-side downloader
+        // first (host has internet); on failure falls back to the client
+        // proxy (this browser fetches the public bytes and uploads them to
+        // an offline host). Returns true once the model is installed.
+        async ensureModelInstalled(family, version) {
+            if (this.onnxModelInstalled(family, version)) return true;
+            const entry = this.onnxCatalogEntry(family, version);
+            if (!entry) {
+                this.toast(this.$t('This model is not available for download.'), 'error', 6000);
+                return false;
+            }
+            const dl = this.onnx.dl;
+            dl.active = true; dl.family = family; dl.version = version;
+            dl.pct = 0; dl.error = ''; dl.via = 'host';
+            dl.phase = this.$t('Downloading on the host…');
+            try {
+                // 1) Host-side download (server reaches the bucket).
+                const hostOk = await this._ensureViaHost(entry);
+                if (hostOk) { await this._refreshOnnxAfterDownload(); return true; }
+                // 2) Client-proxy fallback (host offline): fetch here, push up.
+                dl.via = 'client';
+                dl.phase = this.$t('Downloading via this device…');
+                const clientOk = await this._ensureViaClient(entry);
+                if (clientOk) { await this._refreshOnnxAfterDownload(); return true; }
+                if (!dl.error) dl.error = this.$t('Download failed.');
+                this.toast(dl.error, 'error', 7000);
+                return false;
+            } catch (e) {
+                dl.error = (e && e.message) ? e.message : String(e);
+                this.toast(this.$t('Model download failed:') + ' ' + dl.error, 'error', 7000);
+                return false;
+            } finally {
+                dl.active = false;
+            }
+        },
+
+        // Host-side download: kick /api/onnx/download and poll status. Returns
+        // true on 'done', false on 'failed' (so the caller can try the client
+        // proxy). A 409 (busy) is polled to completion too.
+        async _ensureViaHost(entry) {
+            const dl = this.onnx.dl;
+            try {
+                // 400 ("no bucket configured") and 409 ("already downloading")
+                // are normal answers here, not faults: on 400 the client proxy
+                // takes over; on 409 we just poll the running job to completion.
+                const resp = await this.apiPost('/api/onnx/download',
+                    { dir: entry.dir, version: entry.version },
+                    { expectStatuses: [400, 409] });
+                if (resp.status === 400) return false;   // host can't fetch → proxy
+            } catch (e) {
+                return false;
+            }
+            for (;;) {
+                await new Promise(r => setTimeout(r, 700));
+                let s;
+                try { s = await this.apiGet('/api/onnx/download-status'); }
+                catch { continue; }
+                if (s && s.totalBytes)
+                    dl.pct = Math.min(100, Math.round((s.receivedBytes / s.totalBytes) * 100));
+                if (s && s.state === 'verifying') dl.phase = this.$t('Verifying…');
+                if (!s || s.state === 'downloading' || s.state === 'verifying') continue;
+                if (s.state === 'done') return true;
+                // failed / idle → fall back to the client proxy.
+                if (s.state === 'failed' && s.error) dl.error = s.error;
+                return false;
+            }
+        },
+
+        // Client-proxy download: fetch the public model bytes in this browser
+        // (progress from the streamed response) and upload them to the host.
+        // The bucket must allow cross-origin GET for this to work.
+        async _ensureViaClient(entry) {
+            const dl = this.onnx.dl;
+            if (!entry.url) { dl.error = this.$t('No download URL for this model.'); return false; }
+            let blob;
+            try {
+                const resp = await fetch(entry.url, { mode: 'cors' });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const total = Number(resp.headers.get('content-length')) || entry.bytes || 0;
+                if (resp.body && total) {
+                    const reader = resp.body.getReader();
+                    const chunks = []; let got = 0;
+                    for (;;) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value); got += value.length;
+                        dl.pct = Math.min(100, Math.round((got / total) * 100));
+                    }
+                    blob = new Blob(chunks, { type: 'application/octet-stream' });
+                } else {
+                    blob = await resp.blob();
+                }
+            } catch (e) {
+                dl.error = this.$t('This device could not fetch the model:') + ' '
+                    + ((e && e.message) ? e.message : String(e));
+                return false;
+            }
+            dl.phase = this.$t('Sending to the host…');
+            try {
+                const fd = new FormData();
+                fd.append('dir', entry.dir);
+                fd.append('version', entry.version);
+                if (entry.sha256) fd.append('sha256', entry.sha256);
+                fd.append('model', blob, 'model.onnx');
+                // A model is 40-500 MB; the default 15s apiFetch timeout would
+                // abort mid-upload. dedup:false skips teeing the body.
+                const resp = await this.apiFetch('/api/onnx/upload-model',
+                    { method: 'POST', body: fd, timeout: 3600000, dedup: false });
+                if (!resp.ok) {
+                    let msg = 'HTTP ' + resp.status;
+                    try { const j = await resp.json(); if (j && j.error) msg = j.error; } catch {}
+                    dl.error = msg;
+                    return false;
+                }
+                return true;
+            } catch (e) {
+                dl.error = (e && e.message) ? e.message : String(e);
+                return false;
+            }
+        },
+
+        // After any successful model install: rescan the server registry,
+        // reload the manifest (so onnxModelInstalled sees it) and refresh the
+        // catalogue installed markers.
+        async _refreshOnnxAfterDownload() {
+            try { await this.apiPost('/api/onnx/rescan'); } catch {}
+            await this.loadOnnxManifest();
         },
 
         async onnxRescan() {
@@ -31006,9 +31192,12 @@ function ninaApp() {
         graxpertOpenModal(operation, pathOverride) {
             // GX-7: open the modal if either path is viable, CLI
             // installed OR the matching ONNX model is in the registry.
-            // Block only when both are unavailable.
+            // AI-TOOLS-DISCOVERY: a downloadable model also counts as viable —
+            // the tool pulls it on demand at Start — so the tools are always
+            // offered instead of hidden until a model happens to be present.
             const cliOk     = !!this.graxpert.status?.available;
-            const browserOk = this.onnxAvailableForOp(operation);
+            const browserOk = this.onnxAvailableForOp(operation)
+                           || this._opHasDownloadable(operation);
             // Deconvolution is always runnable via the server-side classical
             // RL path, even with no AI model / CLI installed.
             const serverOk  = operation === 'deconvolution';
@@ -31576,23 +31765,38 @@ function ninaApp() {
         // Two families ship: 'starrem2k13' (U2NETP, MIT — the bundled
         // default) and 'starnet' (StarNet++, NonCommercial — opt-in).
         onnxStarnetAvailable() {
+            // AI-TOOLS-DISCOVERY: offered when any star model is installed or
+            // downloadable. Before the catalogue loads, stay visible so a slow
+            // /catalog fetch never hides the button.
+            if (!this.onnx.catalogLoaded) return true;
             return this.starRemovalModels().length > 0;
         },
-        // The installed star-removal models, for the Remove-stars "Model"
-        // dropdown. Label + license note per family; ordered with the
-        // recommended/MIT default first.
+        // Star-removal models for the Remove-stars "Model" dropdown. Label +
+        // license note per family; ordered with the recommended/MIT default
+        // first. AI-TOOLS-DISCOVERY: a family counts as offered when it is
+        // installed OR downloadable, so every star model is listed and pulled
+        // on demand at run time.
         starRemovalModels() {
-            const models = this.onnx?.manifest?.models || [];
-            const fams = new Set(models.map(m => m.family));
+            const offered = fam => this._starFamilyOffered(fam);
             const out = [];
-            // nox (StarNet-like, MIT) — needs the colour and/or gray model.
-            if (fams.has('nox-color') || fams.has('nox-gray'))
-                out.push({ value: 'nox', label: 'nox (StarNet-like · MIT)' });
-            if (fams.has('starrem2k13'))
+            // starrem2k13 (U-Net, MIT) first: lightest model + smallest
+            // download, so it stays the sensible default now that every model
+            // is always listed (installed or downloadable).
+            if (offered('starrem2k13'))
                 out.push({ value: 'starrem2k13', label: 'starrem2k13 (U-Net · MIT)' });
-            if (fams.has('starnet'))
+            // nox (StarNet-like, MIT) — needs the colour and/or gray model.
+            if (offered('nox-color') || offered('nox-gray'))
+                out.push({ value: 'nox', label: 'nox (StarNet-like · MIT)' });
+            if (offered('starnet'))
                 out.push({ value: 'starnet', label: 'StarNet++ (NonCommercial)' });
             return out;
+        },
+        // A star-removal family is offered when it's on the host already OR
+        // available to download from the catalogue.
+        _starFamilyOffered(family) {
+            const inst = (this.onnx?.manifest?.models || []).some(m => m.family === family);
+            if (inst) return true;
+            return (this.onnx?.catalog || []).some(c => c.family === family);
         },
         // The on-disk families backing each star-removal model value.
         _starRemovalFamilies(model) {
@@ -31600,18 +31804,67 @@ function ninaApp() {
             if (model === 'starrem2k13') return ['starrem2k13'];
             return ['starnet'];
         },
-        // Which precisions are installed for the selected model: FP16
-        // (1.0.0-fp16, the lighter default) and/or FP32 (1.0.0, max quality).
-        // Only lists a precision when at least one backing family has it, so
-        // the dropdown never offers a version that would 404 on load.
+        // Which precisions are offered for the selected model: FP16 (1.0.0-fp16,
+        // the lighter default) and/or FP32 (1.0.0, max quality). A precision is
+        // offered when at least one backing family has it installed OR listed in
+        // the download catalogue.
         starRemovalPrecisions() {
-            const models = this.onnx?.manifest?.models || [];
             const fams = this._starRemovalFamilies(this.starRemoval.options.model);
-            const has = ver => models.some(m => fams.includes(m.family) && m.version === ver);
+            const models = this.onnx?.manifest?.models || [];
+            const catalog = this.onnx?.catalog || [];
+            const has = ver =>
+                   models.some(m => fams.includes(m.family) && m.version === ver)
+                || catalog.some(c => fams.includes(c.family) && c.version === ver);
             const out = [];
             if (has('1.0.0-fp16')) out.push({ value: 'fp16', label: 'FP16 (lighter · default)' });
             if (has('1.0.0'))      out.push({ value: 'fp32', label: 'FP32 (max quality)' });
             return out;
+        },
+        // The star-removal model version implied by the current precision pick.
+        _starRemovalSelectedVersion() {
+            const o = this.starRemoval.options;
+            const precs = this.starRemovalPrecisions();
+            if (precs.length > 1) return o.precision === 'fp32' ? '1.0.0' : '1.0.0-fp16';
+            const only = precs[0] && precs[0].value;
+            return only === 'fp32' ? '1.0.0' : '1.0.0-fp16';
+        },
+        // AI-TOOLS-DISCOVERY: true when the selected star model needs a download
+        // before it can run (a backing family is catalogued but not installed).
+        starRemovalNeedsDownload() {
+            const fams = this._starRemovalFamilies(this.starRemoval.options.model);
+            const ver = this._starRemovalSelectedVersion();
+            return fams.some(f => !this.onnxModelInstalled(f, ver)
+                                  && this.onnxCatalogEntry(f, ver));
+        },
+        // Total download size (MB) for the star model's not-yet-installed
+        // backing families at the selected precision.
+        starRemovalDownloadMb() {
+            const fams = this._starRemovalFamilies(this.starRemoval.options.model);
+            const ver = this._starRemovalSelectedVersion();
+            let bytes = 0;
+            for (const f of fams) {
+                if (this.onnxModelInstalled(f, ver)) continue;
+                const c = this.onnxCatalogEntry(f, ver);
+                if (c) bytes += c.bytes || 0;
+            }
+            return Math.round(bytes / 1048576);
+        },
+        // AI-TOOLS-DISCOVERY: install every backing family of the chosen star
+        // model at the chosen precision before running (host download, else
+        // client proxy). Returns true once all are on the host.
+        async _ensureStarModel(model, version) {
+            const fams = this._starRemovalFamilies(model);
+            const ver = version || '1.0.0-fp16';
+            for (const fam of fams) {
+                // A backing family may legitimately be missing from the catalogue
+                // (e.g. nox ships colour+gray but a build lists only one); skip a
+                // family that is neither installed nor downloadable rather than
+                // failing the whole run.
+                if (this.onnxModelInstalled(fam, ver)) continue;
+                if (!this.onnxCatalogEntry(fam, ver)) continue;
+                if (!(await this.ensureModelInstalled(fam, ver))) return false;
+            }
+            return true;
         },
         // ── model downloader (Settings → AI) ─────────────────────────
         async modelDlLoad() {
@@ -31704,8 +31957,13 @@ function ninaApp() {
             const precs = this.starRemovalPrecisions();
             let version;
             if (precs.length > 1) version = o.precision === 'fp32' ? '1.0.0' : '1.0.0-fp16';
+            // AI-TOOLS-DISCOVERY: pull the model on demand if it isn't on the
+            // host yet (host download, else client proxy). Aborts the run if the
+            // download fails so the pipeline never 404s fetching model bytes.
+            const model = o.model || 'starrem2k13';
+            if (!(await this._ensureStarModel(model, version))) return;
             await this.starRemovalRun(path, {
-                model: o.model || 'starrem2k13',
+                model,
                 version,
                 autoStretch: o.autoStretch,
                 stretchTarget: Number(o.stretchTarget) || 0.15,
@@ -32514,6 +32772,7 @@ function ninaApp() {
                 key: 'rl::measured',
                 label: 'Classical RL: measured PSF (server)',
                 sizeBytes: 0, isQuantized: false,
+                installed: true, downloadable: false,
             });
             // Field-varying PSF: a PSF per region (corner ≠ centre). The
             // headline differentiator — corrects coma / field curvature / tilt.
@@ -32522,6 +32781,7 @@ function ninaApp() {
                 key: 'rl::field',
                 label: 'Classical RL: field PSF, per-region (server)',
                 sizeBytes: 0, isQuantized: false,
+                installed: true, downloadable: false,
             });
             return out;
         },
@@ -32646,23 +32906,47 @@ function ninaApp() {
         modelChoices(family) {
             const models = (this.onnx?.manifest?.models || [])
                 .filter(m => m.family === family);
+            const quantTag = (v) =>
+                  v.endsWith('-fp16')  ? ' (FP16)'
+                : v.endsWith('-int16') ? ' (INT16)'
+                : v.endsWith('-w8a16') ? ' (W8A16, NPU)'
+                : v.endsWith('-int8')  ? ' (INT8)'
+                : '';
             // Build label: "<Provider Product vX> — <sizeMB> MB [(FP16)]"
             const choices = models.map(m => {
                 const mb = m.sizeBytes
                     ? (m.sizeBytes / (1024 * 1024)).toFixed(0)
                     : '?';
-                let tag = '';
-                if (m.version.endsWith('-fp16'))   tag = ' (FP16)';
-                else if (m.version.endsWith('-int16')) tag = ' (INT16)';
-                else if (m.version.endsWith('-w8a16')) tag = ' (W8A16, NPU)';
-                else if (m.version.endsWith('-int8'))  tag = ' (INT8)';
+                const tag = quantTag(m.version);
                 return {
                     version: m.version,
                     label: `${this._modelDisplayName(family, m.version)}: ${mb} MB${tag}`,
                     sizeBytes: m.sizeBytes || 0,
                     isQuantized: tag !== '',
+                    installed: true,
+                    downloadable: false,
                 };
             });
+            // AI-TOOLS-DISCOVERY: merge downloadable catalogue models the host
+            // doesn't have yet, so every tool lists its full model line-up and
+            // the user can pull one on demand. Installed versions win (skipped
+            // here); a ⬇ prefix marks the not-yet-downloaded ones.
+            const haveVer = new Set(choices.map(c => c.version));
+            for (const c of (this.onnx?.catalog || [])) {
+                if (c.family !== family || c.installed || haveVer.has(c.version)) continue;
+                haveVer.add(c.version);
+                const mb = c.bytes ? (c.bytes / (1024 * 1024)).toFixed(0) : '?';
+                const tag = quantTag(c.version);
+                choices.push({
+                    version: c.version,
+                    label: `⬇ ${this._modelDisplayName(family, c.version)}: ${mb} MB${tag}`,
+                    sizeBytes: c.bytes || 0,
+                    isQuantized: tag !== '',
+                    installed: false,
+                    downloadable: true,
+                    dir: c.dir, url: c.url, sha256: c.sha256,
+                });
+            }
             // GX-12n2: Sort priority on iOS is NOT just "smallest first".
             // Order matters because ORT Web's WASM execution provider
             // (the only backend we use on iOS, WebGPU is force-disabled
@@ -32688,6 +32972,10 @@ function ninaApp() {
                 return 2;   // unsuffixed FP32
             };
             choices.sort((a, b) => {
+                // AI-TOOLS-DISCOVERY: installed models first, so the modal's
+                // default pick ([0]) never forces a download when a usable
+                // model is already on the host.
+                if (!!a.installed !== !!b.installed) return a.installed ? -1 : 1;
                 if (iOS) {
                     const pa = tagPriority(a.version);
                     const pb = tagPriority(b.version);
@@ -32720,6 +33008,8 @@ function ninaApp() {
                     label: `${this._modelDisplayName(family, c.version)}: ~${(c.sizeBytes / 1e6).toFixed(0)} MB`,
                     sizeBytes: c.sizeBytes,
                     isQuantized: false,
+                    installed: false,
+                    downloadable: false,
                 }));
             }
             return choices;
@@ -32926,10 +33216,64 @@ function ninaApp() {
             }
         },
 
+        // AI-TOOLS-DISCOVERY: the model choice currently selected in the modal
+        // for the active op, with its family attached. Returns null for ops
+        // with no model dropdown or when nothing matches.
+        graxpertSelectedChoice() {
+            const op = this.graxpert.modalOp;
+            if (op === 'deconvolution') {
+                const key = this.graxpert.modalDeconModel;
+                return this.deconModelChoices().find(c => c.key === key) || null;
+            }
+            const family = this._familyForOp(op);
+            if (!family) return null;
+            let version;
+            switch (op) {
+                case 'background-extraction': version = this.graxpert.modalBgeVersion; break;
+                case 'denoising':             version = this.graxpert.modalDenoiseVersion; break;
+                case 'halo-removal':          version = this.graxpert.modalHaloVersion; break;
+                case 'upscaling':             version = this.graxpert.modalUpscaleVersion; break;
+                default: return null;
+            }
+            const c = this.modelChoices(family).find(x => x.version === version);
+            return c ? Object.assign({ family }, c) : null;
+        },
+
+        // The selected model when it is downloadable but not yet on the host,
+        // else null. Drives the inline "Download" strip + the Start-time pull.
+        graxpertModelNeedsDownload() {
+            const c = this.graxpertSelectedChoice();
+            return (c && c.downloadable && !c.installed) ? c : null;
+        },
+
+        // Explicit "Download model" button in the modal.
+        async graxpertDownloadSelectedModel() {
+            const c = this.graxpertSelectedChoice();
+            if (!c || !c.downloadable) return;
+            await this.ensureModelInstalled(c.family, c.version);
+        },
+
         async graxpertStartRun() {
             if (this.graxpert.modalPaths.length === 0) {
                 this.toast('No files selected', 'warn');
                 return;
+            }
+            // AI-TOOLS-DISCOVERY: if the selected model isn't on the host yet,
+            // pull it on demand (host download, else client proxy) before the
+            // in-browser / NPU run fetches its bytes. Only for paths that
+            // actually load the ONNX model in the browser — when the user has
+            // chosen the host GraXpert CLI it stages its own model, so we don't
+            // download a redundant copy. RL / server paths report installed:true.
+            const need = this.graxpertModelNeedsDownload();
+            if (need) {
+                const alwaysBrowser = this.graxpert.modalOp === 'halo-removal'
+                    || this.graxpert.modalOp === 'upscaling'
+                    || (this.graxpert.modalOp === 'deconvolution'
+                        && this._deconSelection().family === 'detail');
+                if (this.graxpert.modalRunInBrowser || alwaysBrowser) {
+                    const ok = await this.ensureModelInstalled(need.family, need.version);
+                    if (!ok) return;
+                }
             }
             // Classical RL (measured PSF): field mode is always server-side
             // (multiple kernels per tile). Global mode defaults to browser RL
@@ -33051,6 +33395,30 @@ function ninaApp() {
                 default:
                     return false;
             }
+        },
+
+        // AI-TOOLS-DISCOVERY: true when the op has at least one model in the
+        // downloadable catalogue that isn't installed yet — i.e. the tool can
+        // be made to work on demand even though nothing is on the host now.
+        _opHasDownloadable(op) {
+            if (op === 'deconvolution')
+                return this.deconModelChoices().some(c => c.downloadable);
+            const family = this._familyForOp(op);
+            if (!family) return false;
+            return this.modelChoices(family).some(c => c.downloadable);
+        },
+
+        // AI-TOOLS-DISCOVERY: whether to OFFER a tool button in the STUDIO AI
+        // toolbar. Every AI tool is offered whenever it is installed, has a
+        // downloadable model, or (decon) has the always-available server RL
+        // path — so the buttons no longer vanish just because a model hasn't
+        // been downloaded yet. Falls back to true before the catalogue loads
+        // so a slow /catalog fetch never hides the whole toolbar.
+        onnxToolOffered(op) {
+            if (op === 'deconvolution') return true;   // server RL always works
+            if (this.onnxAvailableForOp(op)) return true;
+            if (!this.onnx.catalogLoaded) return true; // don't hide during load
+            return this._opHasDownloadable(op);
         },
 
         // ─── GX-2: in-browser GraXpert runner ──────────────────────────

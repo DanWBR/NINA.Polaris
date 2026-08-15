@@ -173,6 +173,46 @@ public class OnnxModelRegistryTests {
         Assert.That(await reg.GetHashAsync("nope", "9.9.9"), Is.Null);
     }
 
+    // ─── AI-TOOLS-DISCOVERY: family/version validators ──────────────────
+    // These guard the client-proxy upload (/api/onnx/upload-model) against a
+    // caller writing outside the models tree, and map a catalogue dir to the
+    // manifest family the browser dropdowns key on.
+
+    [TestCase("bge-ai-models", "bge")]
+    [TestCase("deconvolution-object-ai-models", "decon-objects")]
+    [TestCase("nox-color-ai-models", "nox-color")]
+    [TestCase("upscale-ai-models", "upscale")]
+    public void FamilyForDir_KnownDir_MapsToCanonicalFamily(string dir, string family) {
+        Assert.That(OnnxModelRegistry.FamilyForDir(dir), Is.EqualTo(family));
+        Assert.That(OnnxModelRegistry.IsKnownFamilyDir(dir), Is.True);
+    }
+
+    [TestCase("../../etc")]
+    [TestCase("bge")]
+    [TestCase("random-models")]
+    [TestCase("")]
+    public void FamilyForDir_UnknownDir_IsRejected(string dir) {
+        Assert.That(OnnxModelRegistry.FamilyForDir(dir), Is.Null);
+        Assert.That(OnnxModelRegistry.IsKnownFamilyDir(dir), Is.False);
+    }
+
+    [TestCase("1.0.1")]
+    [TestCase("polaris-1.0.0")]
+    [TestCase("1.0.0-fp16")]
+    [TestCase("1.2-w8a16")]
+    [TestCase("2.0.0-512-fp16")]
+    public void IsValidVersion_AcceptsGrammar(string version) {
+        Assert.That(OnnxModelRegistry.IsValidVersion(version), Is.True);
+    }
+
+    [TestCase("latest")]
+    [TestCase("../1.0.0")]
+    [TestCase("1.0.0/../..")]
+    [TestCase("")]
+    public void IsValidVersion_RejectsBadSegments(string version) {
+        Assert.That(OnnxModelRegistry.IsValidVersion(version), Is.False);
+    }
+
     // ─── helpers ────────────────────────────────────────────────────
 
     /// <summary>

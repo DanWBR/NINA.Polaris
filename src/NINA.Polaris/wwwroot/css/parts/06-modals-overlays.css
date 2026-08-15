@@ -1087,6 +1087,25 @@
     font-variant-numeric: tabular-nums;
 }
 
+/* AI-TOOLS-DISCOVERY: on-demand model download strip inside the AI tool
+   modals. Shown when the selected model isn't on the host yet, or while a
+   download is running (host fetch, or this device fetching for an offline
+   host). Reuses .siril-modal-progress-* for the bar. */
+.onnx-model-dl {
+    margin: 10px 0 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-elev, rgba(255, 255, 255, 0.03));
+}
+.onnx-model-dl-offer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.onnx-model-dl-offer .hint { flex: 1 1 220px; }
+
 /* Live Siril console — the stdout/stderr stream rendered as a
    terminal-style block inside the run modal so the user can watch
    the job progress instead of staring at an opaque progress bar.

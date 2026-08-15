@@ -11497,21 +11497,18 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </button>
                 </div>
 
-                <!-- AI Tools — dedicated second toolbar grouping every
-                     in-browser ONNX model tool: StarNet remove-stars,
-                     GraXpert BGE / deconvolution / denoise, and Polaris's
-                     own halo removal + upscaling. Each button stays hidden
-                     until its model is installed (onnxAvailableForOp /
-                     onnxStarnetAvailable), so the whole bar only appears
-                     once at least one AI model is present. -->
+                <!-- AI Tools — dedicated second toolbar grouping the editing
+                     tools plus every in-browser ONNX model tool: StarNet
+                     remove-stars, GraXpert BGE / deconvolution / denoise, and
+                     Polaris's own halo removal + upscaling. AI-TOOLS-DISCOVERY:
+                     the AI buttons are always offered (onnxToolOffered /
+                     onnxStarnetAvailable now count downloadable models too) and
+                     pull their model on demand, so nothing hides just because a
+                     model hasn't been downloaded yet. The bar is always shown —
+                     it also carries the non-AI editing tools (Blend/Edit/Crop/
+                     Analyze/Solve/…) which must never depend on a model. -->
                 <div class="files-actions files-actions-icons files-ai-toolbar"
-                     x-show="onnxStarnetAvailable()
-                             || graxpert.status?.available
-                             || onnxAvailableForOp('background-extraction')
-                             || onnxAvailableForOp('denoising')
-                             || deconAvailable()
-                             || onnxAvailableForOp('halo-removal')
-                             || onnxAvailableForOp('upscaling')">
+                     x-show="true">
                     <span class="files-ai-label" aria-hidden="true">PROCESSING TOOLS</span>
                     <!-- Edit / analysis tools (moved off the file bar). -->
                     <button class="btn btn-sm btn-icon"
@@ -11630,7 +11627,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <!-- GraXpert ONNX/CLI ops: BGE / decon / denoise. -->
                     <button class="btn btn-sm btn-icon"
                             x-show="graxpert.status?.available
-                                   || onnxAvailableForOp('background-extraction')"
+                                   || onnxToolOffered('background-extraction')"
                             :disabled="files.selectedPaths.length === 0"
                             @click="graxpertOpenModal('background-extraction')"
                             data-tour="studio-bge"
@@ -11651,7 +11648,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </button>
                     <button class="btn btn-sm btn-icon"
                             x-show="graxpert.status?.supportsDenoising
-                                   || onnxAvailableForOp('denoising')"
+                                   || onnxToolOffered('denoising')"
                             :disabled="files.selectedPaths.length === 0"
                             @click="graxpertOpenModal('denoising')"
                             data-tour="studio-denoise"
@@ -11661,11 +11658,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon-label">Denoise</span>
                     </button>
                     <span class="files-actions-sep" aria-hidden="true"
-                          x-show="onnxAvailableForOp('halo-removal')
-                                  || onnxAvailableForOp('upscaling')"></span>
+                          x-show="onnxToolOffered('halo-removal')
+                                  || onnxToolOffered('upscaling')"></span>
                     <!-- Polaris's own models (polaris-ai): halo removal + upscale. -->
                     <button class="btn btn-sm btn-icon"
-                            x-show="onnxAvailableForOp('halo-removal')"
+                            x-show="onnxToolOffered('halo-removal')"
                             :disabled="files.selectedPaths.length === 0"
                             @click="graxpertOpenModal('halo-removal')"
                             data-tour="studio-halo"
@@ -11675,7 +11672,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon-label">Halo</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
-                            x-show="onnxAvailableForOp('upscaling')"
+                            x-show="onnxToolOffered('upscaling')"
                             :disabled="files.selectedPaths.length === 0"
                             @click="graxpertOpenModal('upscaling')"
                             data-tour="studio-upscale"
@@ -17651,6 +17648,40 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 </label>
             </div>
 
+            <!-- AI-TOOLS-DISCOVERY: on-demand model download. The tool is always
+                 offered; if the selected model isn't on the host yet this strip
+                 explains it and lets the user pull it now (Start pulls it too).
+                 During a download it shows progress + whether the host or this
+                 device is fetching (client proxy for an offline host). -->
+            <div class="onnx-model-dl" x-show="graxpertModelNeedsDownload() || onnx.dl.active">
+                <template x-if="!onnx.dl.active && graxpertModelNeedsDownload()">
+                    <div class="onnx-model-dl-offer">
+                        <span class="hint">
+                            This AI model is not on the host yet. It downloads
+                            automatically when you press Start, or get it now:
+                        </span>
+                        <button class="btn btn-sm" type="button"
+                                @click="graxpertDownloadSelectedModel()">
+                            ⬇ <span>Download model</span>
+                            (<span x-text="Math.round((graxpertModelNeedsDownload().sizeBytes||0)/1048576)"></span> MB)
+                        </button>
+                    </div>
+                </template>
+                <template x-if="onnx.dl.active">
+                    <div class="onnx-model-dl-progress">
+                        <div class="siril-modal-progress-bar">
+                            <div class="siril-modal-progress-fill"
+                                 :style="'width: ' + (onnx.dl.pct || 0) + '%'"></div>
+                        </div>
+                        <div class="siril-modal-progress-meta">
+                            <span x-text="onnx.dl.phase"></span>
+                            <span x-text="(onnx.dl.pct || 0) + '%'"></span>
+                        </div>
+                    </div>
+                </template>
+                <p class="hint text-warn" x-show="onnx.dl.error" x-text="onnx.dl.error"></p>
+            </div>
+
             <!-- Live progress -->
             <div class="siril-modal-progress" x-show="graxpert.currentJob">
                 <div class="siril-modal-progress-bar">
@@ -17895,9 +17926,34 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 The removed flux goes into the <code>_stars</code> layer.
             </p>
 
+            <!-- AI-TOOLS-DISCOVERY: on-demand model download for star removal.
+                 The tool is always available; the chosen model is pulled when
+                 you press Remove stars. This strip surfaces the size + progress
+                 (host download, else this device fetches for an offline host). -->
+            <div class="onnx-model-dl" x-show="starRemovalNeedsDownload() || onnx.dl.active"
+                 style="margin-top:10px">
+                <p class="hint" x-show="!onnx.dl.active && starRemovalNeedsDownload()"
+                   x-text="$t('This star-removal model is not on the host yet ({mb} MB). It downloads automatically when you press Remove stars.', { mb: starRemovalDownloadMb() })"></p>
+                <template x-if="onnx.dl.active">
+                    <div class="onnx-model-dl-progress">
+                        <div class="siril-modal-progress-bar">
+                            <div class="siril-modal-progress-fill"
+                                 :style="'width: ' + (onnx.dl.pct || 0) + '%'"></div>
+                        </div>
+                        <div class="siril-modal-progress-meta">
+                            <span x-text="onnx.dl.phase"></span>
+                            <span x-text="(onnx.dl.pct || 0) + '%'"></span>
+                        </div>
+                    </div>
+                </template>
+                <p class="hint text-warn" x-show="onnx.dl.error" x-text="onnx.dl.error"></p>
+            </div>
+
             <div class="siril-modal-actions">
-                <button class="btn" @click="starRemovalCloseOptions()">Cancel</button>
-                <button class="btn btn-primary" @click="starRemovalConfirm()">Remove stars</button>
+                <button class="btn" @click="starRemovalCloseOptions()"
+                        :disabled="onnx.dl.active">Cancel</button>
+                <button class="btn btn-primary" @click="starRemovalConfirm()"
+                        :disabled="onnx.dl.active">Remove stars</button>
             </div>
         </div>
     </div>

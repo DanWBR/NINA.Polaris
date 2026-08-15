@@ -200,6 +200,26 @@ public class OnnxModelRegistry {
         return target;
     }
 
+    /// <summary>Canonical family id for an on-disk family directory name
+    /// (e.g. "bge-ai-models" → "bge"), or null when the dir isn't a known
+    /// AI-model family. The download / upload endpoints use this to map a
+    /// catalogue <c>dir</c> to the manifest <c>family</c> and to reject an
+    /// unknown/traversal dir before touching the filesystem.</summary>
+    public static string? FamilyForDir(string familyDir)
+        => familyDir != null && FamilyAliases.TryGetValue(familyDir, out var f) ? f : null;
+
+    /// <summary>True when <paramref name="familyDir"/> is a known AI-model
+    /// family directory. Guards the client-proxy upload against a caller
+    /// inventing a directory name (path traversal / arbitrary write).</summary>
+    public static bool IsKnownFamilyDir(string familyDir)
+        => familyDir != null && FamilyAliases.ContainsKey(familyDir);
+
+    /// <summary>True when <paramref name="version"/> matches the accepted
+    /// version-folder grammar (semver-ish + optional source prefix + optional
+    /// quant/tile tags). Guards the client-proxy upload's version segment.</summary>
+    public static bool IsValidVersion(string version)
+        => version != null && VersionRegex.IsMatch(version);
+
     /// <summary>True when {family-dir}/{version}/model.onnx exists in any of
     /// the resolved model paths. <paramref name="familyDir"/> is the on-disk
     /// directory name, e.g. "nox-color-ai-models".</summary>
