@@ -96,6 +96,7 @@ public static class SequenceEndpoints {
                 return Results.Conflict(new { error = "Cannot modify sequence while running" });
 
             engine.Items.Add(item);
+            engine.SaveSchedule();
             return Results.Ok(new { message = "Item added", itemCount = engine.Items.Count });
         });
 
@@ -107,6 +108,7 @@ public static class SequenceEndpoints {
                 return Results.NotFound(new { error = "Item index out of range" });
 
             engine.Items.RemoveAt(index);
+            engine.SaveSchedule();
             return Results.Ok(new { message = "Item removed", itemCount = engine.Items.Count });
         });
 
@@ -122,6 +124,7 @@ public static class SequenceEndpoints {
 
         group.MapPut("/end-actions", (SequenceEndActions actions, SequenceEngine engine) => {
             engine.EndActions = actions ?? new SequenceEndActions();
+            engine.SaveSchedule();
             return Results.Ok(engine.EndActions);
         });
 
@@ -133,6 +136,7 @@ public static class SequenceEndpoints {
             if (settings.SettleTime < 0) settings.SettleTime = 0;
             if (settings.SettleTimeout < 1) settings.SettleTimeout = 1;
             engine.Dither = settings;
+            engine.SaveSchedule();
             return Results.Ok(engine.Dither);
         });
 

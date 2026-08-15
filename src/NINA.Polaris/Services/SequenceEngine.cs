@@ -115,6 +115,35 @@ public class SequenceEngine {
         _aux = aux;
         _cameraReady = cameraReady;
         _logger = logger;
+
+        // Restore the schedule saved by a previous run so it survives a host
+        // restart. Progress is not restored: a restart always starts from the
+        // top (the previous process is gone, nothing is mid-exposure).
+        try {
+            var p = _profile.Active;
+            if (p.AutorunSequence is { Count: > 0 }) Items = p.AutorunSequence;
+            if (p.AutorunDither != null) Dither = p.AutorunDither;
+            if (p.AutorunEndActions != null) EndActions = p.AutorunEndActions;
+            if (Items.Count > 0)
+                _logger.LogInformation("Restored persisted autorun schedule: {Count} item(s)", Items.Count);
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Could not restore persisted autorun schedule");
+        }
+    }
+
+    /// <summary>Persist the current schedule (items + dither + end-actions) to
+    /// the profile so it survives a host restart. Best-effort; a failure to
+    /// save must never break editing the sequence.</summary>
+    public void SaveSchedule() {
+        try {
+            _profile.UpdateSettings(p => {
+                p.AutorunSequence = Items;
+                p.AutorunDither = Dither;
+                p.AutorunEndActions = EndActions;
+            });
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Could not persist autorun schedule");
+        }
     }
 
     public void LoadSequence(List<SequenceItem> items) {
@@ -129,6 +158,7 @@ public class SequenceEngine {
         State = SequenceState.Idle;
         _logger.LogInformation("Sequence loaded: {Count} items, {Frames} total frames",
             items.Count, items.Sum(i => i.Count));
+        SaveSchedule();
     }
 
     /// <summary>Reset run progress to the start WITHOUT touching the loaded

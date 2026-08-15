@@ -67,6 +67,15 @@ public class UserProfile {
     // can be run with whatever rig is active.
     public List<NINA.Polaris.Services.Plan.ImagingPlan> Plans { get; set; } = new();
 
+    // AUTORUN schedule: the simple-sequencer item list plus its dither and
+    // end-of-run settings, persisted so the schedule survives a host restart.
+    // The SequenceEngine loads this on startup and rewrites it whenever the
+    // schedule changes. Run PROGRESS is intentionally not persisted; a restart
+    // always starts the schedule from the top.
+    public List<SequenceItem> AutorunSequence { get; set; } = new();
+    public DitherSettings? AutorunDither { get; set; }
+    public SequenceEndActions? AutorunEndActions { get; set; }
+
     // Plate solver
     public string? AstapPath { get; set; }
     public double SolveToleranceArcsec { get; set; } = 30;
