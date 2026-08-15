@@ -148,7 +148,13 @@ public class LiveStackTriggersService : IDisposable {
         // for 5-10 seconds while ASTAP runs).
         if (info.FrameCount == 1) {
             ResetTriggerState();    // clear state from previous session
-            _ = Task.Run(() => SolveReferenceAsync(info.Frame));
+            // REFSOLVE (#633): the reference solve exists ONLY to give the
+            // recenter trigger a coordinate baseline to measure drift against
+            // (see ComputeDriftAsync / ExecuteRecenterAsync). With recenter off
+            // it was pure waste — a 5-10 s ASTAP run per session that can fail
+            // intermittently and spam the log — so only solve when recenter is on.
+            if (Settings.RecenterEnabled)
+                _ = Task.Run(() => SolveReferenceAsync(info.Frame));
             return;
         }
 
