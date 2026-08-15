@@ -175,8 +175,19 @@ public class MountSafetyGuardService : BackgroundService {
             catch (Exception ex) { _logger.LogDebug(ex, "Safety-guard tick failed (non-fatal)"); }
             // Poll fast while the mount is slewing so the anti-crash altitude
             // floor can abort a wrong-way slew in ~1 s instead of up to 15 s.
-            var scope = _equip.Telescope;
-            var delay = (scope is { IsConnected: true, IsSlewing: true }) ? FastPollInterval : PollInterval;
+            // WINEXIT: guard the COM reads. A concurrent disconnect/re-select can
+            // dispose the driver between ticks, and IsConnected/IsSlewing then
+            // throw synchronously (ObjectDisposedException). This sits OUTSIDE
+            // TickAsync's try, so before this guard the throw escaped ExecuteAsync
+            // and took the whole host down. Fall back to the normal cadence.
+            TimeSpan delay;
+            try {
+                var scope = _equip.Telescope;
+                delay = (scope is { IsConnected: true, IsSlewing: true }) ? FastPollInterval : PollInterval;
+            } catch (Exception ex) {
+                _logger.LogDebug(ex, "Safety-guard poll-cadence read failed (non-fatal)");
+                delay = PollInterval;
+            }
             try { await Task.Delay(delay, stoppingToken); }
             catch (OperationCanceledException) { break; }
         }

@@ -34,6 +34,35 @@ CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo("en-US");
 Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
 Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
 
+// WINEXIT: capture a process-fatal crash SYNCHRONOUSLY. The normal JSONL log is
+// flushed asynchronously (~2 s) by LogRotatorService, so a hard teardown -- e.g.
+// a corrupted-state exception (AccessViolationException / SEHException) raised by
+// a flaky ASCOM COM driver during in-process polling, which .NET tears the
+// process down for regardless of try/catch -- loses the last buffered lines and
+// leaves the user's log ending with no error ("Polaris just closed after a
+// minute"). These handlers write the reason to a crash file the moment it
+// happens, so a field crash the user can't reproduce for us is still
+// diagnosable (and Canopus's read_logs/read_file can surface it).
+{
+    var crashDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "NINA.Polaris", "logs");
+    void WriteCrash(string kind, Exception? ex, bool terminating) {
+        try {
+            Directory.CreateDirectory(crashDir);
+            var file = Path.Combine(crashDir, $"polaris_crash_{DateTime.Now:yyyy-MM-dd_HHmmss}.log");
+            File.AppendAllText(file,
+                $"[{DateTimeOffset.Now:o}] {kind} (terminating={terminating})\n{ex}\n\n");
+            Console.Error.WriteLine($"[FATAL] {kind}: {ex?.Message}");
+            Console.Error.Flush();
+        } catch { /* last-ditch; a crash handler must never throw */ }
+    }
+    AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        WriteCrash("UnhandledException", e.ExceptionObject as Exception, e.IsTerminating);
+    TaskScheduler.UnobservedTaskException += (_, e) =>
+        WriteCrash("UnobservedTaskException", e.Exception, false);
+}
+
 // Sub-process entry: when the parent server spawns us with
 // `--ascom-setup <ProgID>` we run the ASCOM SetupDialog and exit,
 // skipping all of the HTTP/Kestrel boot. See AscomSetupRunner +
@@ -142,6 +171,18 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.Converters.Add(new NINA.Polaris.Json.NonFiniteFloatConverter());
     o.SerializerOptions.Converters.Add(new NINA.Polaris.Json.NullableNonFiniteFloatConverter());
 });
+
+// WINEXIT: never let one BackgroundService take the whole host down. The .NET
+// default (BackgroundServiceExceptionBehavior.StopHost) turns any exception that
+// escapes a service's ExecuteAsync into a graceful whole-process shutdown -- the
+// "Polaris just closed after a minute" field report. A degraded host with one
+// service down (and the failure logged) beats a dead one mid-session. The
+// escape is still logged by the framework + the crash handler above; the known
+// one (the mount-guard COM race) is fixed at its site. NOTE: this does NOT stop
+// a native corrupted-state exception, which tears the process down before any
+// managed handler runs -- that needs driver-process isolation (see WINEXIT-2).
+builder.Services.Configure<HostOptions>(o =>
+    o.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
 
 // Services
 // DBGLOG-1/2: ring buffer + ILogger provider that mirrors every
