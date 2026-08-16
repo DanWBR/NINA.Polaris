@@ -12,56 +12,58 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using NINA.Image.Interfaces;
 
 namespace NINA.Ascom.Com;
 
 /// <summary>
-/// ASCOM Platform FilterWheel (IFilterWheelV2) adapter exposed through
-/// <see cref="IFilterWheel"/>. Late-binds via IDispatch (see
-/// <see cref="ComMember"/>) — same rationale as
-/// <see cref="AscomComFocuser"/>, some drivers don't surface
-/// <c>Connected</c> on the default <c>dynamic</c> dispatch interface.
+/// ASCOM Platform FilterWheel adapter built on <see cref="ASCOM.Com.DriverAccess.FilterWheel"/>,
+/// the ASCOM Platform 7 library's COM DriverAccess wrapper — the same path NINA
+/// uses. Going through DriverAccess (instead of raw
+/// <c>Type.GetTypeFromProgID</c> + <c>IDispatch</c> + a hand-rolled STA message
+/// pump) is what lets a .NET AnyCPU driver such as a DIY MilkyWheel load and
+/// connect in the 64-bit host; the raw path fast-failed those drivers
+/// (0xC0000409) on activate/connect.
 ///
-/// <para>Position semantics: ASCOM uses -1 as the "still moving"
-/// sentinel for the Position property. We translate that to the
-/// previous known position so callers polling don't see a transient
-/// negative value; <see cref="IsMoving"/> is true while the wheel
-/// settles.</para>
+/// <para>DriverAccess manages the COM apartment/threading itself, so no
+/// per-driver STA dispatcher is needed here; calls run on the thread pool via
+/// <see cref="Task.Run(System.Action)"/>, matching NINA. Position semantics
+/// follow the ASCOM spec: -1 means "still moving", folded to the last known
+/// slot so pollers never see the transient negative.</para>
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class AscomComFilterWheel : IFilterWheel, IDisposable {
     private readonly string _progId;
-    private readonly AscomComStaDispatcher _disp;
-    private object? _driver;
+    private ASCOM.Com.DriverAccess.FilterWheel? _fw;
     private string _deviceName = "ASCOM Filter Wheel";
     private string[] _names = Array.Empty<string>();
     private int _lastPosition;
 
     public AscomComFilterWheel(string progId) {
         _progId = progId ?? throw new ArgumentNullException(nameof(progId));
-        _disp = new AscomComStaDispatcher($"ASCOM-FilterWheel-{progId}");
     }
 
     public string DeviceName => _deviceName;
-    public bool IsConnected => _driver != null
-        && _disp.Invoke(() => SafeGet(() => ComMember.Get<bool>(_driver!, "Connected"))).Result;
+
+    public bool IsConnected {
+        get { try { return _fw?.Connected ?? false; } catch { return false; } }
+    }
 
     public int Position {
         get {
-            // Position is VT_I2 (short) per the ASCOM spec; ComMember
-            // converts to int. -1 sentinel means "still settling".
-            var raw = Read(() => ComMember.Get<int>(_driver!, "Position"), -1);
-            if (raw < 0) return _lastPosition;
-            _lastPosition = raw;
-            return raw;
+            try {
+                int raw = _fw?.Position ?? -1;
+                if (raw < 0) return _lastPosition;
+                _lastPosition = raw;
+                return raw;
+            } catch { return _lastPosition; }
         }
     }
 
-    public bool IsMoving =>
-        Read(() => ComMember.Get<int>(_driver!, "Position"), -1) < 0;
+    public bool IsMoving {
+        get { try { return (_fw?.Position ?? -1) < 0; } catch { return false; } }
+    }
 
     public string[] FilterNames => _names;
     public int FilterCount => _names.Length;
@@ -72,45 +74,40 @@ public sealed class AscomComFilterWheel : IFilterWheel, IDisposable {
         }
     }
 
-    public Task ConnectAsync(CancellationToken ct = default) => _disp.Invoke(() => {
-        // WINEXIT-3: activate through the diagnostic choke point (bitness refusal
-        // + synchronously-flushed breadcrumb around activation and Connect).
-        _driver = AscomComActivation.Create(_progId);
-        AscomComActivation.Note($"filterwheel about to set Connected=true progId={_progId}");
-        try { ComMember.Set(_driver!, "Connected", true); }
-        catch (Exception ex) { throw AscomComActivation.ConnectFailed(_progId, ex); }
-        AscomComActivation.Note($"filterwheel Connected=true OK progId={_progId}");
-        try { _deviceName = ComMember.Get<string>(_driver!, "Name"); }
-        catch { _deviceName = _progId; }
-        // Names is an ASCOM SAFEARRAY of strings; IDispatch hands it
-        // back as a System.Array of strings underneath.
+    public Task ConnectAsync(CancellationToken ct = default) => Task.Run(() => {
+        var fw = new ASCOM.Com.DriverAccess.FilterWheel(_progId);
+        AscomComActivation.Note($"driveraccess filterwheel about to set Connected=true progId={_progId}");
         try {
-            var arr = (Array)ComMember.Get<object>(_driver!, "Names");
-            _names = new string[arr.Length];
-            for (int i = 0; i < arr.Length; i++)
-                _names[i] = arr.GetValue(i)?.ToString() ?? $"Slot {i + 1}";
-        } catch {
-            _names = Array.Empty<string>();
+            fw.Connected = true;
+        } catch (Exception ex) {
+            try { fw.Dispose(); } catch { }
+            throw AscomComActivation.ConnectFailed(_progId, ex);
         }
-        _lastPosition = SafeGet(() => ComMember.Get<int>(_driver!, "Position"), 0);
-        if (_lastPosition < 0) _lastPosition = 0;
-    });
+        AscomComActivation.Note($"driveraccess filterwheel Connected=true OK progId={_progId}");
+        _fw = fw;
 
-    public Task DisconnectAsync(CancellationToken ct = default) => _disp.Invoke(() => {
-        if (_driver == null) return;
-        try { ComMember.Set(_driver!, "Connected", false); } catch { }
-        try { Marshal.FinalReleaseComObject(_driver); } catch { }
-        _driver = null;
-    });
+        try { _deviceName = fw.Name; } catch { _deviceName = _progId; }
+        try { _names = fw.Names ?? Array.Empty<string>(); } catch { _names = Array.Empty<string>(); }
+        try {
+            int p = fw.Position;
+            _lastPosition = p < 0 ? 0 : p;
+        } catch { _lastPosition = 0; }
+    }, ct);
 
-    public Task SetPositionAsync(int position, CancellationToken ct = default)
-        => _disp.Invoke(() => {
-            if (_driver == null) return;
-            var slot = Math.Clamp(position, 0, Math.Max(0, _names.Length - 1));
-            // ASCOM expects a VT_I2 — pass it as short so IDispatch
-            // doesn't reject the call with DISP_E_BADVARTYPE.
-            ComMember.Set(_driver!, "Position", (short)slot);
-        });
+    public Task DisconnectAsync(CancellationToken ct = default) => Task.Run(() => {
+        var fw = _fw;
+        if (fw == null) return;
+        try { fw.Connected = false; } catch { }
+        try { fw.Dispose(); } catch { }
+        _fw = null;
+    }, ct);
+
+    public Task SetPositionAsync(int position, CancellationToken ct = default) => Task.Run(() => {
+        var fw = _fw;
+        if (fw == null) return;
+        var slot = Math.Clamp(position, 0, Math.Max(0, _names.Length - 1));
+        fw.Position = (short)slot;
+    }, ct);
 
     public Task SetFilterByNameAsync(string filterName, CancellationToken ct = default) {
         if (string.IsNullOrEmpty(filterName)) return Task.CompletedTask;
@@ -125,14 +122,5 @@ public sealed class AscomComFilterWheel : IFilterWheel, IDisposable {
 
     public void Dispose() {
         try { DisconnectAsync().GetAwaiter().GetResult(); } catch { }
-        _disp.Dispose();
-    }
-
-    private T Read<T>(Func<T> read, T fallback = default!) =>
-        _driver == null ? fallback
-        : _disp.Invoke(() => SafeGet(read, fallback)).GetAwaiter().GetResult();
-
-    private static T SafeGet<T>(Func<T> read, T fallback = default!) {
-        try { return read(); } catch { return fallback; }
     }
 }

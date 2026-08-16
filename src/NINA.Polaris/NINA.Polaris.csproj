@@ -166,61 +166,6 @@
     </None>
   </ItemGroup>
 
-  <!-- WINEXIT-2 (#650): stage the out-of-process ASCOM driver host (win-x86,
-       self-contained single file) into {output}/ascom-host/win-x86 so the app
-       can launch a 32-bit-only ASCOM filter-wheel driver the 64-bit host
-       cannot load in-process. Same Windows-x64-target guard as the camera
-       SDKs above; ASCOM is Windows-only, so it never ships on linux/arm.
-       The publish is incremental (keyed on the host's own sources) so a
-       repeat build/F5 does not re-pay the ~30 s self-contained publish. -->
-  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')">
-    <AscomHostProj>$(MSBuildThisFileDirectory)..\NINA.Ascom.Host\NINA.Ascom.Host.csproj</AscomHostProj>
-    <!-- BaseIntermediateOutputPath (obj\) is set in the SDK props imported at
-         the top, so it is resolved here; IntermediateOutputPath (obj\Debug\
-         net10.0\) is only set in the bottom targets and would evaluate empty. -->
-    <AscomHostStageDir>$(BaseIntermediateOutputPath)$(Configuration)\ascom-host-x86\</AscomHostStageDir>
-    <AscomHostStagedExe>$(AscomHostStageDir)NINA.Ascom.Host.exe</AscomHostStagedExe>
-  </PropertyGroup>
-  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')">
-    <AscomHostSrc Include="$(MSBuildThisFileDirectory)..\NINA.Ascom.Host\**\*.cs;$(AscomHostProj)"
-                  Exclude="$(MSBuildThisFileDirectory)..\NINA.Ascom.Host\bin\**;$(MSBuildThisFileDirectory)..\NINA.Ascom.Host\obj\**" />
-  </ItemGroup>
-  <!-- Publish the child once (incremental on its own sources). Called by the
-       stage targets below rather than hooked to Build/Publish directly, so the
-       exe is guaranteed produced before it is copied. -->
-  <Target Name="_PublishAscomHostX86"
-          Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')"
-          Inputs="@(AscomHostSrc)"
-          Outputs="$(AscomHostStagedExe)">
-    <Message Importance="high"
-             Text="WINEXIT-2: publishing NINA.Ascom.Host (win-x86, self-contained) -> $(AscomHostStageDir)" />
-    <RemoveDir Directories="$(AscomHostStageDir)" />
-    <Exec Command="dotnet publish &quot;$(AscomHostProj)&quot; -c $(Configuration) -r win-x86 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --nologo -o &quot;$(AscomHostStageDir)&quot;" />
-    <Error Condition="!Exists('$(AscomHostStagedExe)')"
-           Text="WINEXIT-2: NINA.Ascom.Host publish did not produce $(AscomHostStagedExe)." />
-  </Target>
-  <!-- Copy the staged exe into the build output ({OutDir}/ascom-host/win-x86)
-       AFTER the build so a plain `dotnet build` / F5 run finds it, and into the
-       publish output AFTER publish so the release zip includes it. AfterTargets
-       avoids the copy-ordering trap that a <None> + BeforeTargets hit under
-       `dotnet publish` (the publish copy ran before the producing target). -->
-  <Target Name="StageAscomHostX86Build"
-          AfterTargets="Build"
-          DependsOnTargets="_PublishAscomHostX86"
-          Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')">
-    <Copy SourceFiles="$(AscomHostStagedExe)"
-          DestinationFolder="$(OutDir)ascom-host\win-x86"
-          SkipUnchangedFiles="true" />
-  </Target>
-  <Target Name="StageAscomHostX86Publish"
-          AfterTargets="Publish"
-          DependsOnTargets="_PublishAscomHostX86"
-          Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')">
-    <Copy SourceFiles="$(AscomHostStagedExe)"
-          DestinationFolder="$(PublishDir)ascom-host\win-x86"
-          SkipUnchangedFiles="true" />
-  </Target>
-
   <ItemGroup>
     <!-- OpenCL GPU compute backend (NINA.Polaris.Services.OpenCl). Managed
          bindings to the board's OpenCL ICD loader; classic image kernels

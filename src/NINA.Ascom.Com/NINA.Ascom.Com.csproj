@@ -27,6 +27,12 @@
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <!-- Registry walk for the driver enumeration. -->
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
+    <!-- ASCOM Platform 7 library. Its ASCOM.Com.DriverAccess wrappers do COM
+         activation + IDispatch marshaling the way the Platform intends, which
+         is what lets a .NET AnyCPU driver (e.g. a MilkyWheel filter wheel) load
+         in a 64-bit host — the same path NINA uses. Restores cross-platform
+         (net10.0 / netstandard2.0); COM calls are Windows-guarded at call sites. -->
+    <PackageReference Include="ASCOM.Com.Components" Version="3.0.0" />
   </ItemGroup>
 
 </Project>

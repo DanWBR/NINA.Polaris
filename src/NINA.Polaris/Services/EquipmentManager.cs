@@ -847,17 +847,12 @@ public class EquipmentManager : IDisposable {
     private static IFilterWheel CreateAscomFilterWheel(string progId) {
         if (!OperatingSystem.IsWindows())
             throw new NotSupportedException("ASCOM COM drivers only run on Windows.");
-        // WINEXIT-2 (#650): run the ASCOM wheel driver out-of-process whenever a
-        // host of the right bitness can be launched. A 32-bit-only driver needs
-        // the packaged win-x86 child; everything else uses the x64 self-host
-        // (this app re-launched with --ascom-com-host). Hosting even 64-bit
-        // drivers is deliberate: a driver registered 64-bit can still hard-exit
-        // the host on CreateInstance/Connected (a .NET AnyCPU MilkyWheel did),
-        // and out-of-process that crash takes down only the child.
-        var (has64, has32) = NINA.Ascom.Com.AscomComActivation.RegisteredBitness(progId);
-        bool wantX86 = has32 && !has64;
-        if (NINA.Ascom.Com.AscomHostChannel.IsAvailable(wantX86))
-            return new NINA.Ascom.Com.AscomComFilterWheelHosted(progId, wantX86);
+        // The in-process adapter now goes through the ASCOM Platform's
+        // ASCOM.Com.DriverAccess (the same path NINA uses), which activates a
+        // .NET AnyCPU driver like the MilkyWheel correctly in the 64-bit host —
+        // the raw-COM path fast-failed it. The out-of-process host (WINEXIT-2)
+        // stays available as a fallback for a driver that still misbehaves, but
+        // it is not the default: DriverAccess makes the common case just work.
         return new NINA.Ascom.Com.AscomComFilterWheel(progId);
     }
 

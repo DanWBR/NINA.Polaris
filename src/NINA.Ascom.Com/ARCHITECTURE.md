@@ -11,10 +11,13 @@ hardware via Alpaca, either by routing through ASCOM Remote Server
 or by using the Alpaca Omni Simulator. Both work but add a hop
 (HTTP localhost → COM) and require a separate process to be running.
 
-This adapter eliminates that hop by late-binding to the ASCOM
-drivers directly through COM. No reference to the ASCOM Platform
-assemblies; Polaris ships without any ASCOM bits and starts fine on
-machines that have never installed the Platform.
+This adapter eliminates that hop by talking to the ASCOM drivers
+directly. The filter wheel goes through the ASCOM Platform 7 library
+(`ASCOM.Com.DriverAccess`, the same path NINA uses); the other devices
+still late-bind through raw `IDispatch`. The `ASCOM.Com.Components`
+package restores cross-platform and its COM calls are Windows-guarded,
+so Polaris still builds for Linux and starts fine on machines that never
+installed the Platform (the Windows COM paths simply stay dormant).
 
 ## Files
 
@@ -33,19 +36,19 @@ machines that have never installed the Platform.
 - `AscomComCamera.cs`: `ICamera` adapter for ICameraV3 drivers.
   Supports connect/disconnect, sensor metadata, cooler, binning,
   gain (numeric range only), single-frame capture, abort, subframe.
-- `AscomComActivation.cs`: single activation choke point. Refuses a
-  32-bit-only driver in the 64-bit host with a clear message, logs a
-  synchronously-flushed breadcrumb around `CreateInstance`, and turns a
-  failing `Connected = true` into an HRESULT-tagged error
-  (`ConnectFailed`). `RegisteredBitness` exposes the driver's registered
-  in-proc bitness so a factory can decide whether to host it out-of-process.
-- `AscomHostChannel.cs`: app-side transport for the out-of-process driver
-  host (see below). Launches the host (x64 self-relaunch or the packaged
-  x86 exe) and marshals ASCOM member access over newline-delimited JSON.
-- `AscomComHostRunner.cs`: the driver-side of that host — the JSON protocol
-  loop running the COM object on an STA pump. Shared by both host processes.
-- `AscomComFilterWheelHosted.cs`: `IFilterWheel` adapter that drives the
-  wheel through an `AscomHostChannel` instead of an in-process COM object.
+- `AscomComActivation.cs`: single activation choke point for the raw-COM
+  adapters (camera / focuser / telescope / switch). Refuses a 32-bit-only
+  driver in the 64-bit host with a clear message, logs a synchronously-flushed
+  breadcrumb around `CreateInstance`, and turns a failing `Connected = true`
+  into an HRESULT-tagged error (`ConnectFailed`, reused by the DriverAccess
+  filter wheel too).
+- `AscomComFilterWheel.cs`: `IFilterWheel` adapter built on
+  `ASCOM.Com.DriverAccess.FilterWheel`. Going through the Platform's
+  DriverAccess (instead of raw `IDispatch` + a hand-rolled STA message pump)
+  is what lets a .NET AnyCPU driver such as a DIY MilkyWheel load and connect
+  in the 64-bit host — the raw path fast-failed those drivers (0xC0000409).
+  DriverAccess manages the COM apartment itself, so this adapter needs no STA
+  dispatcher; it calls on the thread pool via `Task.Run`, matching NINA.
 
 ## Out of scope (for now)
 
@@ -62,44 +65,29 @@ machines that have never installed the Platform.
   but the RIGS UI cards still default to the INDI device dropdown.
   Follow-up.
 
-## Out-of-process driver host (WINEXIT-2)
+## Why DriverAccess, not raw COM (WINEXIT-2 history)
 
-Polaris is 64-bit. A 32-bit-only in-proc ASCOM driver (e.g. a DIY
-MilkyWheel filter wheel) cannot load in a 64-bit process, and a driver
-that dies with a native corrupted-state exception a managed `try/catch`
-can't see would take the whole host down. Both are solved by running the
-driver in a separate process:
+An earlier attempt (#650) isolated the driver in a separate process to stop
+a crashing driver from taking the host down. It worked as isolation, but the
+child still activated the driver through the same raw `IDispatch` + STA-pump
+path — so the real fix was never the process boundary, it was the activation
+method. NINA loads the very same drivers in a 64-bit process with no
+isolation, because it uses `ASCOM.Com.DriverAccess`. Adopting DriverAccess
+made the driver simply work in-process, so the out-of-process host, its x86
+child, and the `--ascom-com-host` self-relaunch were all removed. If a driver
+ever crashes even through DriverAccess, re-introducing isolation would mean a
+child that *also* uses DriverAccess — not the old raw-COM host.
 
-- The driver-side protocol loop is `AscomComHostRunner` (activate / get /
-  set / call / setup / dispose over newline-delimited JSON on stdin/stdout),
-  running the driver on an `AscomComStaDispatcher` (STA + message pump).
-- There are two host processes, both running that same loop:
-  - **x64** is the main Polaris exe re-launched with `--ascom-com-host`
-    (`Program.cs` intercepts it before starting Kestrel). Zero extra
-    packaging, and it covers 64-bit-registered drivers that still crash the
-    host — a .NET AnyCPU MilkyWheel registers `inproc64=True` yet hard-exits
-    the 64-bit app on activate.
-  - **x86** is `NINA.Ascom.Host.exe`, a thin entry point that calls the same
-    `AscomComHostRunner`, published self-contained for win-x86 and staged
-    into `{output}/ascom-host/win-x86` by `NINA.Polaris.csproj`. It exists
-    because a 32-bit-only in-proc driver cannot load in the 64-bit app.
-- The app side is `AscomHostChannel`: it launches the right host (self for
-  x64, packaged exe for x86), marshals member access, and turns a child
-  crash (OS process exit) into a clean `AscomHostException` — the app
-  survives.
-- `EquipmentManager.CreateAscomFilterWheel` sends a 32-bit-only wheel to the
-  x86 host and everything else to the x64 self-host, hosting out-of-process
-  whenever a host can be launched. Scope today is the filter wheel; the same
-  channel generalises to the other small-payload devices (focuser / mount /
-  switch). ASCOM cameras stay in-process (their `ImageArray` needs a binary
-  side-channel, not JSON).
+The remaining raw-COM adapters (camera / focuser / telescope / switch) have
+the same latent risk and should migrate to DriverAccess too; the filter wheel
+is the first.
 
 ## Threading model
 
-Each in-process driver instance gets its own `AscomComStaDispatcher`.
-Cost: ~1 MB stack + a kernel thread per connected device. A typical rig
-(camera + mount + focuser + filter-wheel) uses 4 threads. An
-out-of-process driver moves that STA into the child process instead.
+The raw-COM adapters each get their own `AscomComStaDispatcher` (~1 MB stack
++ a kernel thread per connected device). The DriverAccess filter wheel needs
+none — DriverAccess owns the COM apartment, so its calls run on the thread
+pool via `Task.Run`, as in NINA.
 
 ## Licensing
 

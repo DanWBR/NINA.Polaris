@@ -408,8 +408,8 @@ jobs:
             ASI, SVBony and Player One SDK DLLs, so those native drivers appear
             without a separate install (you still need the camera's USB device
             driver from the vendor). ASCOM and INDI cameras need none of that.
-            A 32-bit-only ASCOM driver (some DIY filter wheels) is hosted in a
-            bundled 32-bit child process, so the 64-bit app can still drive it.
+            ASCOM filter wheels connect through the ASCOM Platform library, so a
+            .NET AnyCPU driver (many DIY wheels) works in the 64-bit app.
 
             For unattended Windows installs see the optional NSSM /
             scheduled-task recipes in
