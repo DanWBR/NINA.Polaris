@@ -13180,6 +13180,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span x-show="storagePush.testResult" x-cloak
                               :class="storagePush.testOk ? 'status-pill status-pill-ok' : 'status-pill status-pill-error'"
                               x-text="storagePush.testResult"></span>
+                        <!-- SHARESYNC: one-way backfill. Push past-session files
+                             captured while the share was off/unreachable; the
+                             host skips anything already there (same size). -->
+                        <button class="btn" @click="backfillStoragePush()"
+                                x-show="storagePush.enabled" x-cloak
+                                :disabled="_storageBackfilling"
+                                title="Copy past-session files to the share that were captured while it was off or unreachable. Files already on the share are skipped.">
+                            <span x-show="!_storageBackfilling">⟳ Sync past sessions</span>
+                            <span x-show="_storageBackfilling" x-cloak>Starting…</span>
+                        </button>
                     </div>
                     <!-- Live push counters from /ws/status. -->
                     <div class="text-muted" style="font-size:11px; margin-top:12px" x-show="storagePush.enabled" x-cloak>

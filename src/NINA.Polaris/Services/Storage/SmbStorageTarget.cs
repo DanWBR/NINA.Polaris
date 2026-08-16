@@ -57,6 +57,19 @@ public sealed class SmbStorageTarget : IStorageTarget {
         }
 
         var filePath = string.Join('\\', segs);
+
+        // One-way-sync idempotency: skip when the destination already exists with
+        // the same size. Without this, a backfill (or a retry) would re-copy the
+        // whole tree, because the create below opens with FILE_OVERWRITE_IF.
+        // Size-only is the right check for capture files — FITS/SER are written
+        // once and never edited in place — and it keeps the normal push path
+        // one cheap metadata round-trip away from its previous behaviour (a new
+        // file simply isn't found and uploads as before).
+        long localLen;
+        try { localLen = new FileInfo(localPath).Length; } catch { localLen = -1; }
+        if (localLen >= 0 && TryGetRemoteLength(filePath, out var remoteLen) && remoteLen == localLen)
+            return;
+
         var status = _store.CreateFile(out var handle, out _, filePath,
             AccessMask.GENERIC_WRITE | AccessMask.SYNCHRONIZE, SMBLibrary.FileAttributes.Normal,
             ShareAccess.None, CreateDisposition.FILE_OVERWRITE_IF,
@@ -90,6 +103,33 @@ public sealed class SmbStorageTarget : IStorageTarget {
             }
         } finally {
             _store.CloseFile(handle);
+        }
+    }
+
+    /// <summary>Best-effort remote file size, for the one-way-sync skip. Opens
+    /// the file read-only and reads FileStandardInformation. Returns false when
+    /// the file doesn't exist (the common case on a normal push) or the query
+    /// fails, so the caller falls through to a normal upload.</summary>
+    private bool TryGetRemoteLength(string filePath, out long length) {
+        length = -1;
+        if (_store is null) return false;
+        var st = _store.CreateFile(out var handle, out _, filePath,
+            AccessMask.GENERIC_READ | AccessMask.SYNCHRONIZE, SMBLibrary.FileAttributes.Normal,
+            ShareAccess.Read, CreateDisposition.FILE_OPEN,
+            CreateOptions.FILE_NON_DIRECTORY_FILE | CreateOptions.FILE_SYNCHRONOUS_IO_NONALERT, null);
+        if (st != NTStatus.STATUS_SUCCESS || handle == null) return false;
+        try {
+            var info = _store.GetFileInformation(out var result, handle,
+                FileInformationClass.FileStandardInformation);
+            if (info == NTStatus.STATUS_SUCCESS && result is FileStandardInformation std) {
+                length = std.EndOfFile;
+                return true;
+            }
+            return false;
+        } catch {
+            return false;
+        } finally {
+            try { _store.CloseFile(handle); } catch { }
         }
     }
 

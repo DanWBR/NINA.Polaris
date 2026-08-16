@@ -68,16 +68,20 @@
   "(what modern browsers show, copy this and Cmd/Ctrl+F it in your browser's cert-details dialog):": "",
   "(writer can't keep up with stream cadence)": "",
   "(your script)": "",
+  "Copy past-session files to the share that were captured while it was off or unreachable. Files already on the share are skipped.": "",
   "Download failed.": "",
   "Downloading on the host…": "",
   "Downloading via this device…": "",
   "Model download failed:": "",
   "No download URL for this model.": "",
+  "Nothing to sync.": "",
   "Sending to the host…": "",
+  "Syncing {n} file(s) to the share…": "",
   "This AI model is not on the host yet. It downloads automatically when you press Start, or get it now:": "",
   "This device could not fetch the model:": "",
   "This model is not available for download.": "",
   "This star-removal model is not on the host yet ({mb} MB). It downloads automatically when you press Remove stars.": "",
+  "Turn on Auto-push first, then sync.": "",
   "{disk} (new disk, needs setting up)": "{disk} (new disk, needs setting up)",
   "{disk} currently holds: {contents}. All of it will be lost.": "{disk} currently holds: {contents}. All of it will be lost.",
   "{n} frame(s) already stacked. Continue adds to them; restart clears them and begins a fresh stack.": "",
@@ -3623,5 +3627,6 @@
   "ZWO ASI SDK": "",
   "ZWO preset gains": "",
   "ZWO preset gains, L=": "",
-  "⚙ Serial ports": ""
+  "⚙ Serial ports": "",
+  "⟳ Sync past sessions": ""
 }

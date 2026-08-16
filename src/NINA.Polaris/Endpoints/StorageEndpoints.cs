@@ -77,6 +77,18 @@ public static class StorageEndpoints {
             var n = push.RetryFailed();
             return Results.Ok(new { ok = true, requeued = n });
         });
+
+        // One-way backfill: enqueue the whole capture tree so files captured
+        // while the share was off / unreachable get pushed now. The targets skip
+        // anything already present with the same size, so it only copies what's
+        // missing. Enumeration runs off the request thread (a large archive can
+        // take a moment to walk); the paced lanes handle the actual transfer.
+        group.MapPost("/backfill", async (StoragePushService push) => {
+            if (!push.Enabled)
+                return Results.BadRequest(new { error = "Auto-push is disabled." });
+            var n = await Task.Run(() => push.Backfill());
+            return Results.Ok(new { ok = true, queued = n });
+        });
     }
 
     private static string NormalizeKind(string? kind) =>

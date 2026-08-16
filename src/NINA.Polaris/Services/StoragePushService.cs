@@ -99,6 +99,45 @@ public sealed class StoragePushService : BackgroundService {
     /// button). Each item goes back to the lane it failed in.</summary>
     public int RetryFailed() => _images.RetryFailed() + _videos.RetryFailed();
 
+    /// <summary>One-way backfill (the "Sync past sessions" button): walk the
+    /// whole capture tree and enqueue every file so anything captured while the
+    /// share was disabled or unreachable gets pushed now. Reuses the normal
+    /// lanes, so uploads stay paced (LinkSharePercent) and the targets skip
+    /// files already present with the same size — the sync only copies what is
+    /// missing. Returns how many files were queued. No-op when disabled or the
+    /// capture root doesn't exist.</summary>
+    public int Backfill() {
+        if (!Enabled) return 0;
+        var root = _profile.Active.ImageOutputDir;
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) return 0;
+        int n = 0;
+        IEnumerable<string> files;
+        try { files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories); }
+        catch (Exception ex) {
+            _logger.LogWarning(ex, "Backfill: could not enumerate {Root}", root);
+            return 0;
+        }
+        foreach (var file in files) {
+            try {
+                if (IsVideoFile(file)) _videos.Enqueue(file);
+                else _images.Enqueue(file);
+                n++;
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Backfill: could not queue {File}", file);
+            }
+        }
+        _logger.LogInformation("Backfill queued {Count} file(s) from {Root}", n, root);
+        return n;
+    }
+
+    /// <summary>Recordings go through the video lane so a multi-GB .ser can't sit
+    /// in front of the night's subs; everything else is an image. Public + static
+    /// so the routing decision is unit-testable without standing up the service.</summary>
+    public static bool IsVideoFile(string path) {
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        return ext is ".ser" or ".avi" or ".mp4" or ".mov";
+    }
+
     public async Task<(bool ok, string message)> TestConnectionAsync(StorageConfig cfg, CancellationToken ct) {
         using var target = _factory.Create(cfg.Kind);
         return await target.TestAsync(cfg, ct);

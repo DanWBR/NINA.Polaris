@@ -26499,6 +26499,31 @@ function ninaApp() {
             }
         },
 
+        // SHARESYNC: one-way backfill. Enqueue the whole capture tree so files
+        // captured while the share was off / unreachable get pushed now. The
+        // host skips anything already on the share (same size), so it only
+        // copies what's missing; progress shows in the queued/uploaded counters.
+        _storageBackfilling: false,
+        async backfillStoragePush() {
+            if (this._storageBackfilling) return;
+            if (!this.storagePush.enabled) {
+                this.toast(this.$t('Turn on Auto-push first, then sync.'), 'warn');
+                return;
+            }
+            this._storageBackfilling = true;
+            try {
+                const r = await (await this.apiPost('/api/storage/backfill', {})).json();
+                const n = r.queued || 0;
+                this.toast(n > 0
+                    ? this.$t('Syncing {n} file(s) to the share…', { n })
+                    : this.$t('Nothing to sync.'), 'ok');
+            } catch (e) {
+                this.toastFail('Sync failed', e, 'warn');
+            } finally {
+                this._storageBackfilling = false;
+            }
+        },
+
         // ESC-key safety net: closes any open floating panel
         // (Mount + Camera) regardless of what's happening with the
         // X buttons. Wired in init() via a global keydown listener.

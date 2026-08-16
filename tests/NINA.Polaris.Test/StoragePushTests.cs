@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Polaris.Services;
 using NINA.Polaris.Services.Storage;
 using NUnit.Framework;
 
@@ -19,6 +20,23 @@ namespace NINA.Polaris.Test;
 
 [TestFixture]
 public class StoragePushTests {
+    // ---- SHARESYNC: backfill routes recordings to the video lane ----
+    // The one branchy bit of the backfill: a .ser/.avi/etc. must go to the
+    // video lane (so a multi-GB clip can't head-of-line-block the night's subs),
+    // everything else is an image.
+
+    [TestCase("rig/target/planetary/jup_2026.ser", true)]
+    [TestCase("clip.AVI", true)]
+    [TestCase("timelapse.mp4", true)]
+    [TestCase("pan.mov", true)]
+    [TestCase("rig/target/lights/2026-06-19/light_1.fits", false)]
+    [TestCase("master.xisf", false)]
+    [TestCase("result.tif", false)]
+    [TestCase("noext", false)]
+    public void IsVideoFile_RoutesRecordingsToTheVideoLane(string path, bool expected) {
+        Assert.That(StoragePushService.IsVideoFile(path), Is.EqualTo(expected));
+    }
+
     // ---- StoragePath.Segments ----
 
     [Test]
