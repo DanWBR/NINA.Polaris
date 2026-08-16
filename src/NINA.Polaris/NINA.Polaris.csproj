@@ -137,6 +137,35 @@
     </Content>
   </ItemGroup>
 
+  <!-- WINDBGSDK: native vendor camera SDK DLLs for a Windows x64 target.
+       The managed SDK projects deliberately carry no <Content> for the native
+       lib (content from a ProjectReference does not flow to the app output),
+       so a plain `dotnet build` / F5 debug run dropped nothing next to the
+       exe and the native SVBony / ZWO / Player One drivers never appeared —
+       SvbonyRegistry / ZwoRegistry / PlayerOneRegistry could not resolve the
+       lib. The app project's own Content DOES reach the output, so bundle the
+       x64 DLLs here. Fires for a plain build/debug on a Windows host (empty
+       RID) or an explicit win-x64 publish; it must NOT fire for a linux-* /
+       win-arm64 cross-publish done from a Windows host, hence the RID guard
+       rather than a bare '$(OS)' == 'Windows_NT'. -->
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')">
+    <None Include="$(MSBuildThisFileDirectory)..\..\camera_sdk\SVBony\SVBony_Windows\SVBONY\lib\x64\SVBCameraSDK.dll"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\camera_sdk\SVBony\SVBony_Windows\SVBONY\lib\x64\SVBCameraSDK.dll')">
+      <Link>SVBCameraSDK.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(MSBuildThisFileDirectory)..\..\camera_sdk\ZWO\ASI_Windows_SDK_V1.41\ASI SDK\lib\x64\ASICamera2.dll"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\camera_sdk\ZWO\ASI_Windows_SDK_V1.41\ASI SDK\lib\x64\ASICamera2.dll')">
+      <Link>ASICamera2.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(MSBuildThisFileDirectory)..\..\camera_sdk\PlayerOne\Windows_v3.10.1\lib\x64\PlayerOneCamera.dll"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\camera_sdk\PlayerOne\Windows_v3.10.1\lib\x64\PlayerOneCamera.dll')">
+      <Link>PlayerOneCamera.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <ItemGroup>
     <!-- OpenCL GPU compute backend (NINA.Polaris.Services.OpenCl). Managed
          bindings to the board's OpenCL ICD loader; classic image kernels
