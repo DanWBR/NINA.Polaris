@@ -177,14 +177,14 @@ public sealed class AscomComCamera : ICamera, IDisposable {
         // a clear HRESULT when the COM server can't be launched —
         // surface that to the caller verbatim so the toast shows the
         // real reason.
-        var t = Type.GetTypeFromProgID(_progId)
-            ?? throw new InvalidOperationException(
-                $"ASCOM driver '{_progId}' is not registered. " +
-                "Install or re-register the driver via the ASCOM Platform.");
-        _driver = Activator.CreateInstance(t)
-            ?? throw new InvalidOperationException(
-                $"ASCOM driver '{_progId}' failed to instantiate.");
+        // WINEXIT-3: activate through the diagnostic choke point — it refuses a
+        // 32-bit-only driver in this 64-bit host with a clean error instead of a
+        // crash, and leaves a synchronously-flushed breadcrumb around the two
+        // calls a real driver can die in (activation, then Connected=true).
+        _driver = AscomComActivation.Create(_progId);
+        AscomComActivation.Note($"camera about to set Connected=true progId={_progId}");
         _driver!.Connected = true;
+        AscomComActivation.Note($"camera Connected=true OK progId={_progId}");
         try { _deviceName = (string)_driver.Name; } catch { _deviceName = _progId; }
         // Cache the immutable sensor / capability metadata so the
         // status loop never round-trips into the driver for these.

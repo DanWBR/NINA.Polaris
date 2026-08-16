@@ -73,13 +73,12 @@ public sealed class AscomComFilterWheel : IFilterWheel, IDisposable {
     }
 
     public Task ConnectAsync(CancellationToken ct = default) => _disp.Invoke(() => {
-        var t = Type.GetTypeFromProgID(_progId)
-            ?? throw new InvalidOperationException(
-                $"ASCOM driver '{_progId}' is not registered.");
-        _driver = Activator.CreateInstance(t)
-            ?? throw new InvalidOperationException(
-                $"ASCOM driver '{_progId}' failed to instantiate.");
+        // WINEXIT-3: activate through the diagnostic choke point (bitness refusal
+        // + synchronously-flushed breadcrumb around activation and Connect).
+        _driver = AscomComActivation.Create(_progId);
+        AscomComActivation.Note($"filterwheel about to set Connected=true progId={_progId}");
         ComMember.Set(_driver!, "Connected", true);
+        AscomComActivation.Note($"filterwheel Connected=true OK progId={_progId}");
         try { _deviceName = ComMember.Get<string>(_driver!, "Name"); }
         catch { _deviceName = _progId; }
         // Names is an ASCOM SAFEARRAY of strings; IDispatch hands it
