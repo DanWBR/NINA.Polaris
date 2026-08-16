@@ -99,6 +99,53 @@ public class StoragePushTests {
         Assert.Throws<NotSupportedException>(() => f.Create("ftp"));
     }
 
+    // SHARESYNC-2: ListAsync backs the backfill pre-scan (enqueue only missing).
+    [Test]
+    public async Task LocalTarget_List_ReturnsRelPathsAndSizes() {
+        var dst = Directory.CreateTempSubdirectory("polaris_list_");
+        try {
+            Directory.CreateDirectory(Path.Combine(dst.FullName, "rig", "lights", "M31"));
+            await File.WriteAllTextAsync(Path.Combine(dst.FullName, "rig", "lights", "M31", "a.fits"), "abcde");
+            await File.WriteAllTextAsync(Path.Combine(dst.FullName, "rig", "b.fits"), "xy");
+
+            using var target = new LocalStorageTarget();
+            var cfg = new StorageConfig("local", "", 0, "", dst.FullName, "", "", "");
+            await target.ConnectAsync(cfg, CancellationToken.None);
+            var map = await target.ListAsync(CancellationToken.None);
+
+            Assert.That(map, Is.Not.Null);
+            Assert.That(map!["rig/lights/M31/a.fits"], Is.EqualTo(5));
+            Assert.That(map["rig/b.fits"], Is.EqualTo(2));
+            Assert.That(map.Count, Is.EqualTo(2));
+        } finally { dst.Delete(true); }
+    }
+
+    // SHARESYNC-2: the current-transfer progress bar is fed by UploadAsync's
+    // IProgress; the local copy reports the whole file once at the end.
+    [Test]
+    public async Task LocalTarget_Upload_ReportsProgress() {
+        var src = Directory.CreateTempSubdirectory("polaris_p_src_");
+        var dst = Directory.CreateTempSubdirectory("polaris_p_dst_");
+        try {
+            var srcFile = Path.Combine(src.FullName, "f.fits");
+            await File.WriteAllTextAsync(srcFile, "0123456789");   // 10 bytes
+            using var target = new LocalStorageTarget();
+            var cfg = new StorageConfig("local", "", 0, "", dst.FullName, "", "", "");
+            await target.ConnectAsync(cfg, CancellationToken.None);
+
+            long last = -1;
+            var progress = new TestProgress(v => last = v);
+            await target.UploadAsync(srcFile, "f.fits", CancellationToken.None, progress);
+            Assert.That(last, Is.EqualTo(10));
+        } finally { src.Delete(true); dst.Delete(true); }
+    }
+
+    private sealed class TestProgress : IProgress<long> {
+        private readonly Action<long> _on;
+        public TestProgress(Action<long> on) => _on = on;
+        public void Report(long value) => _on(value);
+    }
+
     [Test]
     public void LocalTarget_SkipsIdenticalLengthReupload() {
         // Re-pushing the same file is a no-op (no exception, content preserved).

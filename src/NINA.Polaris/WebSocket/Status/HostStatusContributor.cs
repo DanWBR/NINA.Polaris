@@ -71,6 +71,9 @@ public sealed class HostStatusContributor : IStatusContributor {
                 uploaded      = storagePush.Uploaded,
                 failed        = storagePush.Failed,
                 currentFile   = storagePush.CurrentFile,
+                // SHARESYNC-2: byte progress of the active transfer (0/0 idle).
+                currentBytes      = storagePush.CurrentBytes,
+                currentTotalBytes = storagePush.CurrentTotalBytes,
                 lastError     = storagePush.LastError,
                 lastUploadUtc = storagePush.LastUploadUtc?.ToString("o"),
                 // Recordings upload on their own lane. Reported

@@ -34,7 +34,8 @@ public sealed class LocalStorageTarget : IStorageTarget {
         return Task.CompletedTask;
     }
 
-    public Task UploadAsync(string localPath, string relPath, CancellationToken ct) {
+    public Task UploadAsync(string localPath, string relPath, CancellationToken ct,
+                            IProgress<long>? progress = null) {
         var dest = Path.Combine(new[] { _base }.Concat(StoragePath.Segments(relPath)).ToArray());
         var dir = Path.GetDirectoryName(dest);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
@@ -42,7 +43,23 @@ public sealed class LocalStorageTarget : IStorageTarget {
         if (File.Exists(dest) && new FileInfo(dest).Length == new FileInfo(localPath).Length)
             return Task.CompletedTask;
         File.Copy(localPath, dest, overwrite: true);
+        // Local copy is atomic; report the whole file at the end.
+        try { progress?.Report(new FileInfo(dest).Length); } catch { }
         return Task.CompletedTask;
+    }
+
+    /// <summary>SHARESYNC: enumerate the mirrored tree under the base path so
+    /// the backfill can skip files already present with the same size.</summary>
+    public Task<IReadOnlyDictionary<string, long>?> ListAsync(CancellationToken ct) {
+        var map = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrEmpty(_base) && Directory.Exists(_base)) {
+            foreach (var f in Directory.EnumerateFiles(_base, "*", SearchOption.AllDirectories)) {
+                ct.ThrowIfCancellationRequested();
+                var rel = Path.GetRelativePath(_base, f).Replace('\\', '/');
+                try { map[rel] = new FileInfo(f).Length; } catch { }
+            }
+        }
+        return Task.FromResult<IReadOnlyDictionary<string, long>?>(map);
     }
 
     public Task<(bool ok, string message)> TestAsync(StorageConfig cfg, CancellationToken ct) {

@@ -89,6 +89,18 @@ public static class StorageEndpoints {
             var n = await Task.Run(() => push.Backfill());
             return Results.Ok(new { ok = true, queued = n });
         });
+
+        // SHARESYNC-2: stop the file currently transferring (keeps the queue).
+        group.MapPost("/abort", (StoragePushService push) => {
+            push.AbortCurrent();
+            return Results.Ok(new { ok = true });
+        });
+
+        // SHARESYNC-2: drop everything still queued (and the in-flight file).
+        group.MapPost("/clear", (StoragePushService push) => {
+            push.ClearQueue();
+            return Results.Ok(new { ok = true });
+        });
     }
 
     private static string NormalizeKind(string? kind) =>

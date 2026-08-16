@@ -13212,6 +13212,23 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         · failed <span x-text="storagePushStatus.failed || 0"></span>
                         <button class="btn btn-sm" style="margin-left:8px" x-show="(storagePushStatus.failed || 0) > 0"
                                 @click="retryStoragePush()">Retry failed</button>
+                        <!-- SHARESYNC-2: clear the whole pending queue. -->
+                        <button class="btn btn-sm" style="margin-left:8px" x-show="(storagePushStatus.queued || 0) > 0"
+                                @click="clearStoragePush()">Clear queue</button>
+
+                        <!-- SHARESYNC-2: live progress bar for the file currently
+                             transferring, with an Abort for just this file. -->
+                        <div x-show="storagePushStatus.currentFile" x-cloak style="margin-top:8px">
+                            <div style="display:flex; align-items:center; gap:8px">
+                                <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap"
+                                      x-text="(storagePushStatus.currentFile || '').split(/[\\/]/).pop()"></span>
+                                <span style="font-variant-numeric:tabular-nums" x-text="storagePushPct() + '%'"></span>
+                                <button class="btn btn-sm" @click="abortStoragePush()">Abort</button>
+                            </div>
+                            <div class="siril-modal-progress-bar" style="margin-top:4px">
+                                <div class="siril-modal-progress-fill" :style="'width:' + storagePushPct() + '%'"></div>
+                            </div>
+                        </div>
                         <!-- Recordings ride their own lane (see
                              StoragePushService). Shown apart because a
                              multi-GB .ser sits in the counters for a long

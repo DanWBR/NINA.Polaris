@@ -26524,6 +26524,32 @@ function ninaApp() {
             }
         },
 
+        // SHARESYNC-2: stop the file currently transferring (keeps the queue).
+        async abortStoragePush() {
+            try {
+                await this.apiPost('/api/storage/abort', {});
+                this.toast(this.$t('Transfer aborted'), 'ok');
+            } catch (e) { this.toastFail('Abort failed', e, 'warn'); }
+        },
+
+        // SHARESYNC-2: drop everything still queued (and the in-flight file).
+        async clearStoragePush() {
+            if (!await this._confirmAsync(
+                    this.$t('Clear the upload queue? Files not yet sent stay on the host and can be synced again later.'))) return;
+            try {
+                await this.apiPost('/api/storage/clear', {});
+                this.toast(this.$t('Upload queue cleared'), 'ok');
+            } catch (e) { this.toastFail('Clear failed', e, 'warn'); }
+        },
+
+        // Percent of the current transfer (0..100), for the sharing progress bar.
+        storagePushPct() {
+            const s = this.storagePushStatus || {};
+            const t = s.currentTotalBytes || 0;
+            if (!t) return 0;
+            return Math.min(100, Math.round((s.currentBytes || 0) / t * 100));
+        },
+
         // ESC-key safety net: closes any open floating panel
         // (Mount + Camera) regardless of what's happening with the
         // X buttons. Wired in init() via a global keydown listener.

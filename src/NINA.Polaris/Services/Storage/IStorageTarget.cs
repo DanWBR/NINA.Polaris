@@ -60,12 +60,25 @@ public interface IStorageTarget : IDisposable {
     /// <summary>Copy <paramref name="localPath"/> to the target at
     /// <paramref name="relPath"/> (relative to the capture root, OS-separated),
     /// creating intermediate directories. Skips when the destination already
-    /// exists with the same length (idempotent re-push).</summary>
-    Task UploadAsync(string localPath, string relPath, CancellationToken ct);
+    /// exists with the same length (idempotent re-push). <paramref name="progress"/>,
+    /// when given, reports cumulative bytes written so the UI can show a live
+    /// progress bar for the current transfer.</summary>
+    Task UploadAsync(string localPath, string relPath, CancellationToken ct,
+                     IProgress<long>? progress = null);
 
     /// <summary>Best-effort connectivity probe used by the "Test connection"
     /// button — never throws, returns a human-readable message.</summary>
     Task<(bool ok, string message)> TestAsync(StorageConfig cfg, CancellationToken ct);
+
+    /// <summary>SHARESYNC: one-shot map of every file already on the target,
+    /// keyed by its capture-relative path (forward-slash separated) to its size
+    /// in bytes. Lets the backfill enqueue ONLY the files that are missing or a
+    /// different size, instead of queueing the whole tree and paying a
+    /// per-file round-trip to discover each one is already there. Returns null
+    /// when the backend can't enumerate cheaply (the caller then falls back to
+    /// enqueue-all, and the per-file upload skip still prevents re-copies).</summary>
+    Task<IReadOnlyDictionary<string, long>?> ListAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyDictionary<string, long>?>(null);
 
     void Disconnect();
 }

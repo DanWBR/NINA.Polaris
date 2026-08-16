@@ -39,7 +39,8 @@ public sealed class SmbStorageTarget : IStorageTarget {
         return Task.CompletedTask;
     }
 
-    public async Task UploadAsync(string localPath, string relPath, CancellationToken ct) {
+    public async Task UploadAsync(string localPath, string relPath, CancellationToken ct,
+                                  IProgress<long>? progress = null) {
         if (_client is null || _store is null) throw new InvalidOperationException("SMB not connected");
         var segs = StoragePath.Segments(relPath);
 
@@ -97,6 +98,7 @@ public sealed class SmbStorageTarget : IStorageTarget {
                 if (ws != NTStatus.STATUS_SUCCESS)
                     throw new IOException($"SMB write '{filePath}' failed: {ws}");
                 offset += written;
+                progress?.Report(offset);
 
                 var idle = TransferPacer.DelayAfterChunk(started.Elapsed, _linkShare);
                 if (idle > TimeSpan.Zero) await Task.Delay(idle, ct);
@@ -132,6 +134,49 @@ public sealed class SmbStorageTarget : IStorageTarget {
             try { _store.CloseFile(handle); } catch { }
         }
     }
+
+    /// <summary>SHARESYNC: recursively enumerate the share so the backfill can
+    /// skip files already present with the same size — one directory walk
+    /// instead of a per-file round-trip for every local file. Keys are the
+    /// forward-slash relative path; values are sizes. Best-effort: returns null
+    /// on any failure so the caller falls back to enqueue-all.</summary>
+    public Task<IReadOnlyDictionary<string, long>?> ListAsync(CancellationToken ct) => Task.Run(() => {
+        if (_store is null) return (IReadOnlyDictionary<string, long>?)null;
+        var map = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var stack = new Stack<string>();
+        stack.Push("");   // "" = share root, matching the upload layout (no BasePath prefix)
+        try {
+            while (stack.Count > 0) {
+                ct.ThrowIfCancellationRequested();
+                var dir = stack.Pop();
+                var st = _store.CreateFile(out var handle, out _, dir,
+                    AccessMask.GENERIC_READ | AccessMask.SYNCHRONIZE, SMBLibrary.FileAttributes.Directory,
+                    ShareAccess.Read | ShareAccess.Write, CreateDisposition.FILE_OPEN,
+                    CreateOptions.FILE_DIRECTORY_FILE | CreateOptions.FILE_SYNCHRONOUS_IO_NONALERT, null);
+                if (st != NTStatus.STATUS_SUCCESS || handle == null) continue;
+                try {
+                    _store.QueryDirectory(out var entries, handle, "*",
+                        FileInformationClass.FileDirectoryInformation);
+                    if (entries == null) continue;
+                    foreach (var e in entries) {
+                        if (e is not FileDirectoryInformation f) continue;
+                        var name = f.FileName;
+                        if (name is "." or "..") continue;
+                        var rel = dir.Length == 0 ? name : dir + "\\" + name;
+                        if ((f.FileAttributes & SMBLibrary.FileAttributes.Directory) != 0)
+                            stack.Push(rel);
+                        else
+                            map[rel.Replace('\\', '/')] = f.EndOfFile;
+                    }
+                } finally {
+                    try { _store.CloseFile(handle); } catch { }
+                }
+            }
+        } catch {
+            return null;   // partial/failed walk → let the caller enqueue-all
+        }
+        return (IReadOnlyDictionary<string, long>?)map;
+    }, ct);
 
     public Task<(bool ok, string message)> TestAsync(StorageConfig cfg, CancellationToken ct) {
         SMB2Client? client = null;

@@ -41,7 +41,8 @@ public sealed class SftpStorageTarget : IStorageTarget {
         return Task.CompletedTask;
     }
 
-    public Task UploadAsync(string localPath, string relPath, CancellationToken ct) {
+    public Task UploadAsync(string localPath, string relPath, CancellationToken ct,
+                            IProgress<long>? progress = null) {
         if (_client is not { IsConnected: true }) throw new InvalidOperationException("SFTP not connected");
         var segs = StoragePath.Segments(relPath);
         // Ensure each directory level exists (SFTP has no recursive mkdir).
@@ -56,7 +57,8 @@ public sealed class SftpStorageTarget : IStorageTarget {
         // there is no loop of ours to slow down. Unpaced, this took the whole
         // uplink the live view runs on. See PacedReadStream / TransferPacer.
         using var paced = new PacedReadStream(fs, _linkShare);
-        _client.UploadFile(paced, remote, canOverride: true);
+        _client.UploadFile(paced, remote, canOverride: true,
+            uploaded => { try { progress?.Report((long)uploaded); } catch { } });
         return Task.CompletedTask;
     }
 
