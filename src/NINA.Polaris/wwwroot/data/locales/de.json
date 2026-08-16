@@ -1,4 +1,6 @@
 {
+  "Use my location": "Meinen Standort verwenden",
+  "Set the observatory location from GPS on this device": "Sternwartenstandort per GPS dieses Geräts festlegen",
   "(including the network-share credentials), so keep it somewhere safe.": "(einschließlich der Zugangsdaten für die Netzwerkfreigabe), bewahren Sie sie daher sicher auf.",
   "(stack {w}×{h})": "(Stack {w}×{h})",
   ", which is fixed per device and is what the certificate covers.": ", die pro Gerät feststeht und die das Zertifikat abdeckt.",

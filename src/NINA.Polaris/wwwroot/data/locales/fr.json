@@ -1,4 +1,6 @@
 {
+  "Use my location": "Utiliser ma position",
+  "Set the observatory location from GPS on this device": "Définir l'emplacement de l'observatoire via le GPS de cet appareil",
   "(including the network-share credentials), so keep it somewhere safe.": "(y compris les identifiants du partage réseau), gardez-le donc en lieu sûr.",
   "(stack {w}×{h})": "(empilement {w}×{h})",
   ", which is fixed per device and is what the certificate covers.": ", qui est fixe pour chaque appareil et c'est ce que couvre le certificat.",
