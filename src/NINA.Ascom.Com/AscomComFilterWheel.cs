@@ -77,7 +77,8 @@ public sealed class AscomComFilterWheel : IFilterWheel, IDisposable {
         // + synchronously-flushed breadcrumb around activation and Connect).
         _driver = AscomComActivation.Create(_progId);
         AscomComActivation.Note($"filterwheel about to set Connected=true progId={_progId}");
-        ComMember.Set(_driver!, "Connected", true);
+        try { ComMember.Set(_driver!, "Connected", true); }
+        catch (Exception ex) { throw AscomComActivation.ConnectFailed(_progId, ex); }
         AscomComActivation.Note($"filterwheel Connected=true OK progId={_progId}");
         try { _deviceName = ComMember.Get<string>(_driver!, "Name"); }
         catch { _deviceName = _progId; }

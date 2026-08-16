@@ -183,7 +183,8 @@ public sealed class AscomComCamera : ICamera, IDisposable {
         // calls a real driver can die in (activation, then Connected=true).
         _driver = AscomComActivation.Create(_progId);
         AscomComActivation.Note($"camera about to set Connected=true progId={_progId}");
-        _driver!.Connected = true;
+        try { _driver!.Connected = true; }
+        catch (Exception ex) { throw AscomComActivation.ConnectFailed(_progId, ex); }
         AscomComActivation.Note($"camera Connected=true OK progId={_progId}");
         try { _deviceName = (string)_driver.Name; } catch { _deviceName = _progId; }
         // Cache the immutable sensor / capability metadata so the

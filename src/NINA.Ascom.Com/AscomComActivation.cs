@@ -67,6 +67,21 @@ public static class AscomComActivation {
     /// <c>Connected = true</c> — the other place a real driver can die.</summary>
     public static void Note(string message) => Log(message);
 
+    /// <summary>Turn a failure from the driver's <c>Connected = true</c> into a
+    /// clear, HRESULT-tagged message. A failing COM property set surfaces through
+    /// the C# dynamic binder as an unhelpful <c>NullReferenceException</c>
+    /// ("Object reference not set…"); this preserves the real HRESULT (e.g.
+    /// 0x80004003 E_POINTER when the driver has no device selected) and points
+    /// the operator at the driver's own setup, instead of a raw null-ref.</summary>
+    public static Exception ConnectFailed(string progId, Exception inner) {
+        var hr = inner.HResult;
+        Log($"connect FAILED progId={progId} hr=0x{hr:X8} {inner.GetType().Name}: {inner.Message}");
+        var msg = $"The ASCOM driver '{progId}' refused to connect (HRESULT 0x{hr:X8}). " +
+                  "Check that a device is selected and available in the driver's own Setup dialog, " +
+                  "and that no other program is holding it.";
+        return new InvalidOperationException(msg, inner);
+    }
+
     /// <summary>Which registry views carry the ProgID's InprocServer32.</summary>
     private static (bool has64, bool has32, string clsid) ProbeBitness(string progId) {
         string clsid = "";
