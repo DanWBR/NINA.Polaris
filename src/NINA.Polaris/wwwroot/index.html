@@ -6668,6 +6668,18 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         Sync Time
                                     </button>
                                 </div>
+                                <!-- What "Sync Site" will push: the observatory
+                                     location (from Settings) and the host's
+                                     current clock (the UTC the mount receives).
+                                     Shown so the operator can confirm both are
+                                     right before syncing. -->
+                                <div class="hint mount-site-preview" x-show="mount.connected" x-cloak
+                                     style="margin-top:6px; display:flex; gap:14px; flex-wrap:wrap; align-items:center">
+                                    <span :class="(settings.latitude || settings.longitude) ? '' : 'text-warn'">
+                                        📍 <span x-text="mountSiteLocationText()"></span>
+                                    </span>
+                                    <span>🕐 <span x-text="mountSiteClockText()"></span></span>
+                                </div>
                             </div>
                             <!-- Safety trip banner stays OUTSIDE the collapsible
                                  panel so an active safety stop is always visible,

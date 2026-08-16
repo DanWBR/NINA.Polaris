@@ -28880,6 +28880,30 @@ function ninaApp() {
         // accepts location but rejects TIME_UTC (or vice versa)
         // surfaces the partial-success state to the toast instead
         // of hiding it.
+        // Mount-card preview of what "Sync Site" pushes: the observatory
+        // location (from Settings) so the operator can confirm it before syncing.
+        mountSiteLocationText() {
+            const la = Number(this.settings.latitude) || 0;
+            const lo = Number(this.settings.longitude) || 0;
+            if (!la && !lo) return this.$t('Location not set (set it in Settings)');
+            const ns = la >= 0 ? 'N' : 'S';
+            const ew = lo >= 0 ? 'E' : 'W';
+            return `${Math.abs(la).toFixed(4)}° ${ns}, ${Math.abs(lo).toFixed(4)}° ${ew}`;
+        },
+        // The clock "Sync Site"/"Sync Time" pushes is the HOST's, not this
+        // browser's. Show the host UTC (from the status feed, updates each tick)
+        // plus this device's local rendering of that same instant, so a wrong
+        // host clock is visible before it lands on the mount.
+        mountSiteClockText() {
+            let d = null;
+            if (this.clockSync.serverUtc) d = new Date(this.clockSync.serverUtc);
+            else d = new Date(Date.now() + (this.clockSync.skewSeconds | 0) * 1000);
+            if (!d || isNaN(d.getTime())) return this.$t('unknown');
+            const utc = d.toISOString().replace('T', ' ').replace(/\..*$/, '');
+            const local = d.toLocaleTimeString();
+            return `${utc} UTC (${local} ${this.$t('here')})`;
+        },
+
         async telescopeSyncSite() {
             let locOk = false, timeOk = false, locMsg = '', timeMsg = '', errMsg = '';
             // Location push first because every mount driver exposes
