@@ -75,6 +75,7 @@
   "here": "",
   "Location not set (set it in Settings)": "",
   "Model download failed:": "",
+  "Names are saved on this rig and applied to every image and filter menu, whatever the driver reports. When the driver accepts names (INDI) they are written into it too.": "",
   "No download URL for this model.": "",
   "Nothing to sync.": "",
   "Sending to the host…": "",

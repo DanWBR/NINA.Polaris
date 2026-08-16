@@ -24,7 +24,6 @@ public static class FilterWheelEndpoints {
             if (equip.FilterWheel == null)
                 return Results.Ok(new { connected = false });
 
-            var caps = equip.FilterWheel.Capabilities;
             return Results.Ok(new {
                 connected = true,
                 name = equip.FilterWheel.DeviceName,
@@ -33,7 +32,9 @@ public static class FilterWheelEndpoints {
                 filters = equip.FilterWheel.FilterNames,
                 moving = equip.FilterWheel.IsMoving,
                 capabilities = new {
-                    editNames = caps.SupportsEditNames
+                    // FILTERNAME: renaming is profile-side now (EffectiveFilterWheel),
+                    // so it's offered for every driver, not just INDI.
+                    editNames = true
                 }
             });
         });

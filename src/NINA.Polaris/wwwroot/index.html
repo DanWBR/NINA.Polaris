@@ -7469,8 +7469,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                          x-show="filterNamesEdit.open"
                                          x-transition>
                                         <p class="equip-driver-hint">
-                                            Names are stored in the INDI driver and persist across
-                                            reconnects.
+                                            Names are saved on this rig and applied to every image and
+                                            filter menu, whatever the driver reports. When the driver
+                                            accepts names (INDI) they are written into it too.
                                         </p>
                                         <template x-for="(_, idx) in filterNamesEdit.names" :key="'fn-'+idx">
                                             <div class="equip-driver-row">

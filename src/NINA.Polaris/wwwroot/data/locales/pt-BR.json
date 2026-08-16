@@ -97,6 +97,7 @@
   "Link share": "Uso do link",
   "Location not set (set it in Settings)": "Localização não definida (defina em Configurações)",
   "Model download failed:": "Falha ao baixar o modelo:",
+  "Names are saved on this rig and applied to every image and filter menu, whatever the driver reports. When the driver accepts names (INDI) they are written into it too.": "Os nomes são salvos neste rig e aplicados a todas as imagens e ao menu de filtros, independentemente do que o driver reporta. Quando o driver aceita nomes (INDI), eles também são gravados nele.",
   "No download URL for this model.": "Sem URL de download para este modelo.",
   "Nothing to sync.": "Nada para sincronizar.",
   "Open a folder first": "Abra uma pasta primeiro",

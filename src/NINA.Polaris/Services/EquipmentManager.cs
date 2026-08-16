@@ -78,12 +78,20 @@ public class EquipmentManager : IDisposable {
     /// <c>EquipmentProfile.SwitchDriver</c>. Null when none is selected.</summary>
     public string? SwitchDriver { get; private set; }
 
+    // FILTERNAME: optional so the 15 test call-sites that construct EquipmentManager
+    // directly keep compiling; DI supplies it in the running app. When present, the
+    // selected filter wheel is wrapped in EffectiveFilterWheel so the rig's saved
+    // filter names overlay the driver's for every consumer.
+    private readonly ProfileService? _profiles;
+
     public EquipmentManager(IndiClient indiClient, ILogger<EquipmentManager> logger,
-                            AlpacaDiscoveryCache alpacaCache, SimGearService simGear) {
+                            AlpacaDiscoveryCache alpacaCache, SimGearService simGear,
+                            ProfileService? profiles = null) {
         _indiClient = indiClient;
         _logger = logger;
         _alpacaCache = alpacaCache;
         _simGear = simGear;
+        _profiles = profiles;
         _indiClient.DeviceFound += OnDeviceFound;
     }
 
@@ -819,7 +827,7 @@ public class EquipmentManager : IDisposable {
 
     public IFilterWheel SelectFilterWheel(string driver, string deviceId) {
         driver = (driver ?? "indi").Trim().ToLowerInvariant();
-        FilterWheel = driver switch {
+        IFilterWheel adapter = driver switch {
             "indi" => new IndiFilterWheel(_indiClient, deviceId),
             "ascom-com" => CreateAscomFilterWheel(deviceId),
             "alpaca" => AlpacaFilterWheel.FromDeviceId(deviceId),
@@ -827,6 +835,9 @@ public class EquipmentManager : IDisposable {
                 $"Filter wheel driver '{driver}' is not implemented yet. " +
                 "Use 'indi', 'alpaca', or 'ascom-com'."),
         };
+        // FILTERNAME: overlay the rig's saved filter names on top of the driver's
+        // so read-only wheels (ASCOM/Alpaca) can still be renamed in Polaris.
+        FilterWheel = _profiles != null ? new EffectiveFilterWheel(adapter, _profiles) : adapter;
         FilterWheelDriver = driver;
         _logger.LogInformation("Filter wheel selected: driver={Driver}, id={DeviceId}",
             driver, deviceId);
@@ -1098,9 +1109,11 @@ public class EquipmentManager : IDisposable {
         }
 
         if (FilterWheel != null) {
-            // Capabilities -> drives whether "Edit filter names"
-            // surface is rendered (INDI: yes, Alpaca/ASCOM: no).
-            var fwcaps = FilterWheel.Capabilities;
+            // FILTERNAME: editNames now means "the operator can rename filters",
+            // which Polaris supports for EVERY driver by storing names on the rig
+            // (EffectiveFilterWheel) and only pushing into the driver when it
+            // accepts them. So the edit surface is offered whenever a wheel is
+            // connected, not just for INDI's writable FILTER_NAME vector.
             status["filterWheel"] = new {
                 name = FilterWheel.DeviceName,
                 connected = FilterWheel.IsConnected,
@@ -1109,7 +1122,7 @@ public class EquipmentManager : IDisposable {
                 filters = FilterWheel.FilterNames,
                 moving = FilterWheel.IsMoving,
                 capabilities = new {
-                    editNames = fwcaps.SupportsEditNames
+                    editNames = true
                 }
             };
         }

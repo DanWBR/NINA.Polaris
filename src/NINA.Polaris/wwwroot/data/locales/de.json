@@ -97,6 +97,7 @@
   "Link share": "Anteil der Verbindung",
   "Location not set (set it in Settings)": "Standort nicht festgelegt (in den Einstellungen festlegen)",
   "Model download failed:": "Modell-Download fehlgeschlagen:",
+  "Names are saved on this rig and applied to every image and filter menu, whatever the driver reports. When the driver accepts names (INDI) they are written into it too.": "Die Namen werden an diesem Rig gespeichert und auf jedes Bild und das Filtermenü angewendet, unabhängig davon, was der Treiber meldet. Wenn der Treiber Namen akzeptiert (INDI), werden sie auch in ihn geschrieben.",
   "No download URL for this model.": "Keine Download-URL für dieses Modell.",
   "Nothing to sync.": "Nichts zu synchronisieren.",
   "Open a folder first": "Öffnen Sie zuerst einen Ordner",

@@ -27483,6 +27483,9 @@ function ninaApp() {
             // dropdown stays readable.
             const cleaned = this.filterNamesEdit.names.map(
                 (n, i) => (n || '').trim() || `Slot ${i + 1}`);
+            // Snapshot the names being replaced, to remap the local per-filter
+            // offsets by slot (the server does the same on its copy).
+            const before = [...(this.filterWheel.filters || [])];
             this.filterNamesEdit.busy = true;
             this.filterNamesEdit.lastError = null;
             this.filterNamesEdit.lastMessage = null;
@@ -27501,15 +27504,28 @@ function ninaApp() {
                 // Mirror the saved names locally so the buttons
                 // update immediately rather than waiting for the
                 // next WS tick.
-                this.filterWheel.filters = body?.names ? [...body.names] : cleaned;
-                // Persist the names on the active rig too, so they
-                // survive a driver reset (some drivers revert
-                // FILTER_NAME to "Filter N" on reconnect). On the next
-                // (re)connect _maybeRestoreFilterNames re-pushes them.
+                const saved = body?.names ? [...body.names] : cleaned;
+                this.filterWheel.filters = saved;
+                // The PUT /names endpoint already persisted the names on the
+                // active rig (EffectiveFilterWheel) AND remapped the per-filter
+                // focus offsets by slot. Mirror both locally so the RIGS card
+                // reflects it without a reload — and do NOT saveRig() here: a
+                // whole-rig PUT would ship the stale, old-key offsets and undo
+                // the server's remap.
                 const arig = this.rigs.find(r => r.id === this.activeRigId);
                 if (arig) {
-                    arig.filterNames = [...this.filterWheel.filters];
-                    this.saveRig(arig);
+                    arig.filterNames = [...saved];
+                    if (arig.filterOffsets && Object.keys(arig.filterOffsets).length) {
+                        const remapped = { ...arig.filterOffsets };
+                        for (let i = 0; i < saved.length && i < before.length; i++) {
+                            if (before[i] !== saved[i]
+                                && Object.prototype.hasOwnProperty.call(remapped, before[i])) {
+                                remapped[saved[i]] = remapped[before[i]];
+                                delete remapped[before[i]];
+                            }
+                        }
+                        arig.filterOffsets = remapped;
+                    }
                 }
                 this.filterNamesEdit.open = false;
             } catch (e) {

@@ -97,6 +97,7 @@
   "Link share": "Part du lien",
   "Location not set (set it in Settings)": "Emplacement non défini (définissez-le dans les Réglages)",
   "Model download failed:": "Échec du téléchargement du modèle :",
+  "Names are saved on this rig and applied to every image and filter menu, whatever the driver reports. When the driver accepts names (INDI) they are written into it too.": "Les noms sont enregistrés sur ce rig et appliqués à chaque image et au menu des filtres, quel que soit ce que le pilote signale. Quand le pilote accepte les noms (INDI), ils y sont aussi écrits.",
   "No download URL for this model.": "Aucune URL de téléchargement pour ce modèle.",
   "Nothing to sync.": "Rien à synchroniser.",
   "Open a folder first": "Ouvrez d'abord un dossier",

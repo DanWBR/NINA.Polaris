@@ -522,6 +522,10 @@ public class ProfileService {
             PHD2AutoSyncOnRigSwitch = src.PHD2AutoSyncOnRigSwitch,
             PHD2CustomAlgoParams = new Dictionary<string, double>(src.PHD2CustomAlgoParams),
             FilterOffsets = new Dictionary<string, int>(src.FilterOffsets),
+            // FILTERNAME: a cloned rig keeps the operator's filter labels too,
+            // not just the offsets — otherwise the copy comes up with the
+            // driver's raw names and the offsets (keyed by the saved names) miss.
+            FilterNames = (string[])(src.FilterNames ?? System.Array.Empty<string>()).Clone(),
             // Live-stack triggers, clone the whole shape so the new rig
             // gets the same refocus/recenter policy as the source. Reset
             // counters live on the orchestrator, not the settings.
