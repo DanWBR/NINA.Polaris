@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
 namespace NINA.Ascom.Com;
@@ -45,10 +46,17 @@ namespace NINA.Ascom.Com;
 [SupportedOSPlatform("windows")]
 public sealed class AscomComStaDispatcher : IDisposable {
     private readonly Thread _thread;
-    private readonly BlockingCollection<Action> _queue = new();
+    // WINEXIT-3: a plain ConcurrentQueue + a wake event, NOT a BlockingCollection.
+    // The pump must ALSO service the Windows message queue (see Pump), so it
+    // cannot sit blocked inside BlockingCollection.Take — it waits on
+    // MsgWaitForMultipleObjectsEx, which wakes on either queued work OR an input
+    // message.
+    private readonly ConcurrentQueue<Action> _queue = new();
+    private readonly AutoResetEvent _wake = new(false);
     private readonly TaskCompletionSource _ready =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private bool _disposed;
+    private volatile bool _disposed;
+    private volatile bool _shutdown;
 
     public AscomComStaDispatcher(string name) {
         _thread = new Thread(Pump) {
@@ -69,23 +77,45 @@ public sealed class AscomComStaDispatcher : IDisposable {
         // signal readiness before the first dequeue so awaiters on
         // ReadyAsync don't race the first queued work.
         _ready.TrySetResult();
-        try {
-            foreach (var action in _queue.GetConsumingEnumerable()) {
+
+        // WINEXIT-3: a real STA COM host has to PUMP THE WINDOWS MESSAGE LOOP,
+        // not just consume a work queue. Real ASCOM camera / filter-wheel
+        // drivers (VB6 / WinForms lineage) create a hidden window on Connect and
+        // deliver their events — image-ready, cooler, position callbacks — as
+        // window messages; COM itself marshals cross-apartment calls the same
+        // way. A thread that blocks on a queue and never pumps starves those
+        // messages, and a real driver crashes the process on connect. The ASCOM
+        // simulators and simple drivers like EQMOD don't post to their own
+        // window, which is exactly why sims + the mount worked while real
+        // cameras / wheels took the host down (field report).
+        //
+        // MsgWaitForMultipleObjectsEx wakes on EITHER the work event OR an input
+        // message, so we drain both without a busy-loop.
+        var handle = _wake.SafeWaitHandle.DangerousGetHandle();
+        var handles = new[] { handle };
+        while (!_shutdown) {
+            // Run everything queued so far.
+            while (_queue.TryDequeue(out var action)) {
                 try { action(); }
                 catch {
-                    // Per-call exceptions are propagated through the
-                    // per-call TaskCompletionSource by Invoke* helpers,
-                    // anything that escapes here is bookkeeping noise we
-                    // swallow to keep the pump alive.
+                    // Per-call exceptions are propagated through the per-call
+                    // TaskCompletionSource by the Invoke* helpers; anything that
+                    // escapes there is bookkeeping noise, swallow it to keep the
+                    // pump (and the driver's message loop) alive.
                 }
             }
-        } catch (ObjectDisposedException) {
-            // Race-safe shutdown signal: Dispose() can race the pump's
-            // internal TryTake call (the foreach lowers to a
-            // TryTakeWithNoTimeValidation that can throw if the
-            // BlockingCollection is disposed mid-take). Treat the
-            // exception as the legitimate "queue is gone, exit"
-            // signal — the pump is shutting down either way.
+            if (_shutdown) break;
+
+            // Wait for new work or a window message, then service the messages.
+            uint r = MsgWaitForMultipleObjectsEx(
+                1, handles, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+            if (r == WAIT_OBJECT_0 + 1) {
+                while (PeekMessage(out var msg, IntPtr.Zero, 0, 0, PM_REMOVE)) {
+                    TranslateMessage(ref msg);
+                    DispatchMessage(ref msg);
+                }
+            }
+            // r == WAIT_OBJECT_0 (work event) just loops back to drain the queue.
         }
     }
 
@@ -96,10 +126,11 @@ public sealed class AscomComStaDispatcher : IDisposable {
         if (_disposed) throw new ObjectDisposedException(nameof(AscomComStaDispatcher));
         var tcs = new TaskCompletionSource<T>(
             TaskCreationOptions.RunContinuationsAsynchronously);
-        _queue.Add(() => {
+        _queue.Enqueue(() => {
             try { tcs.SetResult(work()); }
             catch (Exception ex) { tcs.SetException(ex); }
         });
+        _wake.Set();
         return tcs.Task;
     }
 
@@ -108,31 +139,57 @@ public sealed class AscomComStaDispatcher : IDisposable {
         if (_disposed) throw new ObjectDisposedException(nameof(AscomComStaDispatcher));
         var tcs = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
-        _queue.Add(() => {
+        _queue.Enqueue(() => {
             try { work(); tcs.SetResult(); }
             catch (Exception ex) { tcs.SetException(ex); }
         });
+        _wake.Set();
         return tcs.Task;
     }
 
     public void Dispose() {
         if (_disposed) return;
         _disposed = true;
-        // CompleteAdding lets the pump's foreach exit cleanly: the
-        // next TryTake sees IsAddingCompleted + empty, MoveNext
-        // returns false, foreach exits, thread terminates.
-        try { _queue.CompleteAdding(); } catch { }
-        // Best-effort join so the COM teardown on the STA thread
-        // (driver Disconnect + ReleaseComObject) actually runs before
-        // the process moves on. 2 s ceiling, hung drivers shouldn't
-        // wedge shutdown.
+        _shutdown = true;
+        _wake.Set();   // wake the pump so it sees _shutdown and exits
+        // Best-effort join so the COM teardown on the STA thread (driver
+        // Disconnect + ReleaseComObject) actually runs before the process moves
+        // on. 2 s ceiling, hung drivers shouldn't wedge shutdown.
         try { _thread.Join(TimeSpan.FromSeconds(2)); } catch { }
-        // Deliberately NOT calling _queue.Dispose() here.
-        // BlockingCollection.Dispose races with any pump iteration
-        // that's currently inside its internal TryTake (the foreach
-        // body in Pump), producing ObjectDisposedException on the
-        // pump thread. CompleteAdding + Join is enough to drain the
-        // queue cleanly; the BlockingCollection itself becomes GC-
-        // unreachable as soon as this dispatcher is collected.
+        try { _wake.Dispose(); } catch { }
     }
+
+    // ── Win32 message pump ───────────────────────────────────────────
+    private const uint INFINITE = 0xFFFFFFFF;
+    private const uint QS_ALLINPUT = 0x04FF;
+    private const uint MWMO_INPUTAVAILABLE = 0x0004;
+    private const uint WAIT_OBJECT_0 = 0;
+    private const uint PM_REMOVE = 0x0001;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MSG {
+        public IntPtr hwnd;
+        public uint message;
+        public IntPtr wParam;
+        public IntPtr lParam;
+        public uint time;
+        public int pt_x;
+        public int pt_y;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint MsgWaitForMultipleObjectsEx(
+        uint nCount, IntPtr[] pHandles, uint dwMilliseconds, uint dwWakeMask, uint dwFlags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool PeekMessage(
+        out MSG lpMsg, IntPtr hWnd, uint wMsgFilterMin, uint wMsgFilterMax, uint wRemoveMsg);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool TranslateMessage(ref MSG lpMsg);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr DispatchMessage(ref MSG lpMsg);
 }
