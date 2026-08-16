@@ -33,6 +33,17 @@ machines that have never installed the Platform.
 - `AscomComCamera.cs`: `ICamera` adapter for ICameraV3 drivers.
   Supports connect/disconnect, sensor metadata, cooler, binning,
   gain (numeric range only), single-frame capture, abort, subframe.
+- `AscomComActivation.cs`: single activation choke point. Refuses a
+  32-bit-only driver in the 64-bit host with a clear message, logs a
+  synchronously-flushed breadcrumb around `CreateInstance`, and turns a
+  failing `Connected = true` into an HRESULT-tagged error
+  (`ConnectFailed`). `RegisteredBitness` exposes the driver's registered
+  in-proc bitness so a factory can decide whether to host it out-of-process.
+- `AscomHostChannel.cs`: parent-side transport for the out-of-process
+  driver host (see below). Launches `NINA.Ascom.Host.exe` and marshals
+  ASCOM member access to it over newline-delimited JSON on stdin/stdout.
+- `AscomComFilterWheelHosted.cs`: `IFilterWheel` adapter that drives the
+  wheel through an `AscomHostChannel` instead of an in-process COM object.
 
 ## Out of scope (for now)
 
@@ -49,11 +60,37 @@ machines that have never installed the Platform.
   but the RIGS UI cards still default to the INDI device dropdown.
   Follow-up.
 
+## Out-of-process driver host (WINEXIT-2)
+
+Polaris is 64-bit. A 32-bit-only in-proc ASCOM driver (e.g. a DIY
+MilkyWheel filter wheel) cannot load in a 64-bit process, and a driver
+that dies with a native corrupted-state exception a managed `try/catch`
+can't see would take the whole host down. Both are solved by running the
+driver in a separate process:
+
+- `NINA.Ascom.Host` (its own project) is a tiny console exe published
+  self-contained for **win-x86** and hosts exactly one driver on its own
+  STA + message pump (a copy of `AscomComStaDispatcher`).
+- The parent talks to it through `AscomHostChannel` over a
+  newline-delimited JSON protocol (`activate` / `get` / `set` / `call` /
+  `setup` / `dispose`). The child owns the COM object; a child crash is
+  an OS process exit the parent's reader turns into a clean
+  `AscomHostException`, so the host survives.
+- `NINA.Polaris.csproj` publishes the x86 host into
+  `{output}/ascom-host/win-x86` (incremental, Windows-x64 targets only).
+  `EquipmentManager.CreateAscomFilterWheel` routes a 32-bit-only wheel to
+  `AscomComFilterWheelHosted` when that child is packaged; 64-bit wheels
+  stay in-process. Scope today is the filter wheel; the same channel
+  generalises to the other small-payload devices (focuser / mount /
+  switch). ASCOM cameras stay in-process (their `ImageArray` needs a
+  binary side-channel, not JSON).
+
 ## Threading model
 
-Each driver instance gets its own `AscomComStaDispatcher`. Cost:
-~1 MB stack + a kernel thread per connected device. A typical rig
-(camera + mount + focuser + filter-wheel) uses 4 threads.
+Each in-process driver instance gets its own `AscomComStaDispatcher`.
+Cost: ~1 MB stack + a kernel thread per connected device. A typical rig
+(camera + mount + focuser + filter-wheel) uses 4 threads. An
+out-of-process driver moves that STA into the child process instead.
 
 ## Licensing
 

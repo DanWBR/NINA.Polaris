@@ -9,6 +9,7 @@
     <Project Path="src/NINA.Image.Portable/NINA.Image.Portable.csproj" />
     <Project Path="src/NINA.INDI/NINA.INDI.csproj" />
     <Project Path="src/NINA.Ascom.Com/NINA.Ascom.Com.csproj" />
+    <Project Path="src/NINA.Ascom.Host/NINA.Ascom.Host.csproj" />
     <Project Path="src/NINA.Guider.Portable/NINA.Guider.Portable.csproj" />
     <Project Path="src/NINA.Mount.SynScanWifi/NINA.Mount.SynScanWifi.csproj" />
     <Project Path="src/NINA.Camera.CanonEdsdk/NINA.Camera.CanonEdsdk.csproj" />

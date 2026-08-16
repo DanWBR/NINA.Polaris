@@ -166,6 +166,41 @@
     </None>
   </ItemGroup>
 
+  <!-- WINEXIT-2 (#650): stage the out-of-process ASCOM driver host (win-x86,
+       self-contained single file) into {output}/ascom-host/win-x86 so the app
+       can launch a 32-bit-only ASCOM filter-wheel driver the 64-bit host
+       cannot load in-process. Same Windows-x64-target guard as the camera
+       SDKs above; ASCOM is Windows-only, so it never ships on linux/arm.
+       The publish is incremental (keyed on the host's own sources) so a
+       repeat build/F5 does not re-pay the ~30 s self-contained publish. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')">
+    <AscomHostProj>$(MSBuildThisFileDirectory)..\NINA.Ascom.Host\NINA.Ascom.Host.csproj</AscomHostProj>
+    <!-- BaseIntermediateOutputPath (obj\) is set in the SDK props imported at
+         the top, so it is resolved here; IntermediateOutputPath (obj\Debug\
+         net10.0\) is only set in the bottom targets and would evaluate empty. -->
+    <AscomHostStageDir>$(BaseIntermediateOutputPath)$(Configuration)\ascom-host-x86\</AscomHostStageDir>
+    <AscomHostStagedExe>$(AscomHostStageDir)NINA.Ascom.Host.exe</AscomHostStagedExe>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')">
+    <AscomHostSrc Include="$(MSBuildThisFileDirectory)..\NINA.Ascom.Host\**\*.cs;$(AscomHostProj)"
+                  Exclude="$(MSBuildThisFileDirectory)..\NINA.Ascom.Host\bin\**;$(MSBuildThisFileDirectory)..\NINA.Ascom.Host\obj\**" />
+    <None Include="$(AscomHostStagedExe)">
+      <Link>ascom-host\win-x86\NINA.Ascom.Host.exe</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+  <Target Name="PublishAscomHostX86"
+          BeforeTargets="Build;Publish"
+          Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')"
+          Inputs="@(AscomHostSrc)"
+          Outputs="$(AscomHostStagedExe)">
+    <Message Importance="high"
+             Text="WINEXIT-2: publishing NINA.Ascom.Host (win-x86, self-contained) -> $(AscomHostStageDir)" />
+    <RemoveDir Directories="$(AscomHostStageDir)" />
+    <Exec Command="dotnet publish &quot;$(AscomHostProj)&quot; -c $(Configuration) -r win-x86 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --nologo -o &quot;$(AscomHostStageDir)&quot;" />
+  </Target>
+
   <ItemGroup>
     <!-- OpenCL GPU compute backend (NINA.Polaris.Services.OpenCl). Managed
          bindings to the board's OpenCL ICD loader; classic image kernels

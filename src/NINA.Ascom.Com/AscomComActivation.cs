@@ -67,6 +67,15 @@ public static class AscomComActivation {
     /// <c>Connected = true</c> — the other place a real driver can die.</summary>
     public static void Note(string message) => Log(message);
 
+    /// <summary>Public view of a driver's registered in-proc bitness, so a
+    /// factory can decide whether to host it out-of-process. <c>has32 &amp;&amp;
+    /// !has64</c> means a 32-bit-only in-proc driver the 64-bit host cannot
+    /// load directly (route it through the win-x86 <see cref="AscomHostChannel"/>).</summary>
+    public static (bool has64, bool has32) RegisteredBitness(string progId) {
+        var (h64, h32, _) = ProbeBitness(progId);
+        return (h64, h32);
+    }
+
     /// <summary>Turn a failure from the driver's <c>Connected = true</c> into a
     /// clear, HRESULT-tagged message. A failing COM property set surfaces through
     /// the C# dynamic binder as an unhelpful <c>NullReferenceException</c>

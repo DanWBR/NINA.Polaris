@@ -847,6 +847,14 @@ public class EquipmentManager : IDisposable {
     private static IFilterWheel CreateAscomFilterWheel(string progId) {
         if (!OperatingSystem.IsWindows())
             throw new NotSupportedException("ASCOM COM drivers only run on Windows.");
+        // WINEXIT-2 (#650): a 32-bit-only in-proc wheel (e.g. a DIY MilkyWheel)
+        // cannot load in the 64-bit host. When the win-x86 driver host is
+        // packaged, run it out-of-process there; otherwise fall through to the
+        // in-proc adapter, which refuses 32-bit with a clear message.
+        var (has64, has32) = NINA.Ascom.Com.AscomComActivation.RegisteredBitness(progId);
+        bool needsX86 = has32 && !has64;
+        if (needsX86 && NINA.Ascom.Com.AscomHostChannel.IsAvailable(wantX86: true))
+            return new NINA.Ascom.Com.AscomComFilterWheelHosted(progId, x86: true);
         return new NINA.Ascom.Com.AscomComFilterWheel(progId);
     }
 
