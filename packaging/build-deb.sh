@@ -93,6 +93,14 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 cp -r "$SRC_DEB/." "$BUILD_DIR/"
 
+# Ship the self-install tool (image USB -> internal disk) in the .deb, from its
+# single source under packaging/img so it cannot drift from the copy build-img.sh
+# bakes into the image payload and the one install-polaris-linux.sh fetches. The
+# postinst chmods it and symlinks it onto PATH, so a host flashed from an image
+# that predates the tool gets `polaris-install-to-disk` on the next update.
+install -Dm0755 "$REPO_ROOT/packaging/img/polaris-install-to-disk.sh" \
+    "$BUILD_DIR/opt/polaris/bin/polaris-install-to-disk"
+
 # 1b. Build the browser-wasm live-stack bundle into wwwroot/js/wasm so the
 #     main publish below picks it up. wwwroot/js/wasm/ is a .gitignored
 #     derived artifact (deploy/build-wasm.ps1 does the same on Windows), so a

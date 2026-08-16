@@ -51,6 +51,11 @@ case "$1" in
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload >/dev/null 2>&1 || true
         fi
+        # Drop the PATH symlink postinst created for the self-install tool; its
+        # target under /opt/polaris is removed with the package, so leaving the
+        # symlink would dangle.
+        [ -L /usr/local/sbin/polaris-install-to-disk ] && \
+            rm -f /usr/local/sbin/polaris-install-to-disk
         ;;
 
     upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)

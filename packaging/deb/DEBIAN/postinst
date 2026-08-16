@@ -124,6 +124,16 @@ case "$1" in
         chmod 0755 /opt/polaris/bin/polaris-diagnostics-dump.sh 2>/dev/null || true
         chmod 0755 /opt/polaris/bin/polaris-solverdb-install.sh 2>/dev/null || true
         chmod 0755 /opt/polaris/bin/polaris-storage-prep.sh 2>/dev/null || true
+        # polaris-install-to-disk clones a running USB system onto an internal
+        # disk. Ship it in the .deb and symlink it onto PATH so an image flashed
+        # before the tool existed gets `sudo polaris-install-to-disk` (the very
+        # command the website documents) on the next update. It self-guards:
+        # UEFI-only, refuses the disk it booted from, asks before erasing.
+        if [ -f /opt/polaris/bin/polaris-install-to-disk ]; then
+            chmod 0755 /opt/polaris/bin/polaris-install-to-disk 2>/dev/null || true
+            ln -sf /opt/polaris/bin/polaris-install-to-disk \
+                   /usr/local/sbin/polaris-install-to-disk 2>/dev/null || true
+        fi
         # Drop the pre-.deb copy. A unit in /etc/systemd/system SHADOWS the
         # one we ship in /lib, so leaving it there would keep running the old
         # script, which marked itself done even when the resize never
