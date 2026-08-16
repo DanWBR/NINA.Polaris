@@ -22315,8 +22315,17 @@ function ninaApp() {
             // Also skip while _resyncOpticsSelects is mid-toggle (settings.*
             // are transiently blank); the restored values save afterwards.
             if (this._resyncingOptics) return;
-            const updated = {
-                ...rig,
+            // PERSIST-RESET (#638): send a PATCH of only the fields this form
+            // owns, never the whole rig. Spreading ...rig used to ship every
+            // field's current value, so a save that fired while the local rig
+            // copy was stale (or before a field hydrated) could wipe unrelated
+            // per-rig settings — filter offsets, per-connect delays, the autorun
+            // sequence, cooler ramp, per-camera quirks. The server's
+            // RigPatch.Merge fills every ABSENT field from the STORED rig, so an
+            // omitted field is preserved rather than reset. Every value below is
+            // hydrated before _rigChoicesHydrated flips true, so the patch never
+            // carries a pre-hydration default.
+            const patch = {
                 camera: this.equipCameraChoice || rig.camera,
                 cameraDriver: this.cameraDriver || rig.cameraDriver || 'indi',
                 // Guider backend + native guide-camera selection.
@@ -22376,11 +22385,11 @@ function ninaApp() {
                 await this.apiPost(`/api/equipment/rigs/${rig.id}`, null, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(updated)
+                    body: JSON.stringify(patch)
                 });
                 this._accessoryCleared = false;
                 // The local copy keeps the cleared state, not the sentinel.
-                Object.assign(rig, updated, { accessoryType: this.settings.accessoryType });
+                Object.assign(rig, patch, { accessoryType: this.settings.accessoryType });
                 this.toast(`Saved selections to "${rig.name}"`, 'ok');
             } catch (e) { this.toastFail('Save failed', e); }
         },

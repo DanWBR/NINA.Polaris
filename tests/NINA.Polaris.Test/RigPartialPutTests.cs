@@ -271,6 +271,54 @@ public class RigPartialPutTests {
         });
     }
 
+    // PERSIST-RESET (#638): saveCurrentSelectionsToRig used to PUT the WHOLE rig
+    // (spread ...rig + the form fields). If the local rig copy was stale, that
+    // shipped stale values for per-rig data the optics/device form doesn't own,
+    // and the reported symptom was a rig "losing all settings" on open. It now
+    // sends only the fields the form owns; these pin that the per-rig data the
+    // patch OMITS survives the merge, sourced from the stored rig.
+    [Test]
+    public void Merge_OpticsDevicePatch_PreservesOmittedPerRigData() {
+        var stored = StoredRig();
+        stored.FilterOffsets = new Dictionary<string, int> { ["Ha"] = -30, ["OIII"] = 10 };
+        stored.PreConnectDelayMsByDevice = new Dictionary<string, int> { ["ZWO AM3"] = 1500 };
+        stored.CoolerRampDegPerMinute = 1.5;
+        stored.NativeBacklashComp = true;
+
+        // The exact shape saveCurrentSelectionsToRig now sends: device selections
+        // + OTA/optics + guidescope. None of the per-rig maps / ramp / backlash
+        // fields above are present in the body.
+        var body = JsonNode.Parse("""
+            {
+              "camera": "0", "cameraDriver": "zwo-sdk",
+              "telescope": "ZWO AM3 USB", "telescopeDriver": "indi",
+              "focuser": "", "filterWheel": "",
+              "focalLengthMm": 478, "apertureMm": 80,
+              "telescopeBrand": "William Optics", "telescopeModel": "ZenithStar 81",
+              "attachedFilter": "Ha",
+              "guiderFocalLengthMm": 200, "guiderApertureMm": 50,
+              "coolerTargetTemperature": -10, "focuserStepSize": 50,
+              "phd2Host": "localhost", "phd2Port": 4400
+            }
+            """)!.AsObject();
+
+        var merged = RigPatch.Merge(stored, body);
+
+        Assert.Multiple(() => {
+            // Omitted per-rig data survives (the #638 guarantee).
+            Assert.That(merged.FilterOffsets, Is.EquivalentTo(stored.FilterOffsets),
+                "filter offsets were not in the body ⇒ must come from the stored rig");
+            Assert.That(merged.PreConnectDelayMsByDevice["ZWO AM3"], Is.EqualTo(1500));
+            Assert.That(merged.CoolerRampDegPerMinute, Is.EqualTo(1.5));
+            Assert.That(merged.NativeBacklashComp, Is.True);
+            Assert.That(merged.Name, Is.EqualTo("SV503"), "name omitted ⇒ preserved");
+            // The fields the form DID send still apply.
+            Assert.That(merged.AttachedFilter, Is.EqualTo("Ha"));
+            Assert.That(merged.FocalLengthMm, Is.EqualTo(478));
+            Assert.That(merged.TelescopeModel, Is.EqualTo("ZenithStar 81"));
+        });
+    }
+
     [Test]
     public void Merge_BodyReadWithWebDefaults_DoesNotThrow() {
         // The endpoint reads the body with ReadFromJsonAsync, whose web
