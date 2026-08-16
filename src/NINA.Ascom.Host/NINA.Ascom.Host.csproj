@@ -1,18 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- WINEXIT-2 (#650): out-of-process host for a single ASCOM COM driver.
-       Polaris runs 64-bit; a 32-bit-only in-proc ASCOM driver (e.g. a DIY
-       MilkyWheel filter wheel) cannot load in the 64-bit host, and a badly
-       behaved driver can take a whole process down with a corrupted-state
-       exception a managed try/catch can't see. Isolating the driver in this
-       tiny child process fixes both: the child is published for BOTH win-x86
-       and win-x64, the parent launches the bitness that matches the driver's
-       registration, and a driver crash kills only the child.
-
-       Deliberately lean — no NINA.Core / NINA.Image reference — so the
-       self-contained single-file publish for each RID stays small. The STA
-       pump and the COM member access are copied (not shared) from
-       NINA.Ascom.Com for exactly that reason; keep them in sync. -->
+  <!-- WINEXIT-2 (#650): the win-x86 out-of-process host for a single ASCOM COM
+       driver. Polaris runs 64-bit; a 32-bit-only in-proc ASCOM driver cannot
+       load in the 64-bit app, so it runs here instead. The protocol loop is
+       shared (NINA.Ascom.Com.AscomComHostRunner) with the x64 self-host path
+       — this project is just the thin x86 entry point, published self-contained
+       for win-x86 and staged next to the app by the Polaris csproj. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -21,14 +14,13 @@
     <RootNamespace>NINA.Ascom.Host</RootNamespace>
     <AssemblyName>NINA.Ascom.Host</AssemblyName>
     <SupportedOSPlatform>windows</SupportedOSPlatform>
-    <!-- The two bitnesses the parent may launch. The self-contained
-         single-file publish for each is driven by the Polaris csproj. -->
-    <RuntimeIdentifiers>win-x86;win-x64</RuntimeIdentifiers>
-    <!-- Not referenced by any other project; it ships as a standalone exe
-         copied next to the app. Building it with the solution just
-         compile-checks it (framework-dependent AnyCPU). -->
+    <RuntimeIdentifiers>win-x86</RuntimeIdentifiers>
     <InvariantGlobalization>true</InvariantGlobalization>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NINA.Ascom.Com\NINA.Ascom.Com.csproj" />
+  </ItemGroup>
 
 </Project>

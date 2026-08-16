@@ -39,9 +39,11 @@ machines that have never installed the Platform.
   failing `Connected = true` into an HRESULT-tagged error
   (`ConnectFailed`). `RegisteredBitness` exposes the driver's registered
   in-proc bitness so a factory can decide whether to host it out-of-process.
-- `AscomHostChannel.cs`: parent-side transport for the out-of-process
-  driver host (see below). Launches `NINA.Ascom.Host.exe` and marshals
-  ASCOM member access to it over newline-delimited JSON on stdin/stdout.
+- `AscomHostChannel.cs`: app-side transport for the out-of-process driver
+  host (see below). Launches the host (x64 self-relaunch or the packaged
+  x86 exe) and marshals ASCOM member access over newline-delimited JSON.
+- `AscomComHostRunner.cs`: the driver-side of that host — the JSON protocol
+  loop running the COM object on an STA pump. Shared by both host processes.
 - `AscomComFilterWheelHosted.cs`: `IFilterWheel` adapter that drives the
   wheel through an `AscomHostChannel` instead of an in-process COM object.
 
@@ -68,22 +70,29 @@ that dies with a native corrupted-state exception a managed `try/catch`
 can't see would take the whole host down. Both are solved by running the
 driver in a separate process:
 
-- `NINA.Ascom.Host` (its own project) is a tiny console exe published
-  self-contained for **win-x86** and hosts exactly one driver on its own
-  STA + message pump (a copy of `AscomComStaDispatcher`).
-- The parent talks to it through `AscomHostChannel` over a
-  newline-delimited JSON protocol (`activate` / `get` / `set` / `call` /
-  `setup` / `dispose`). The child owns the COM object; a child crash is
-  an OS process exit the parent's reader turns into a clean
-  `AscomHostException`, so the host survives.
-- `NINA.Polaris.csproj` publishes the x86 host into
-  `{output}/ascom-host/win-x86` (incremental, Windows-x64 targets only).
-  `EquipmentManager.CreateAscomFilterWheel` routes a 32-bit-only wheel to
-  `AscomComFilterWheelHosted` when that child is packaged; 64-bit wheels
-  stay in-process. Scope today is the filter wheel; the same channel
-  generalises to the other small-payload devices (focuser / mount /
-  switch). ASCOM cameras stay in-process (their `ImageArray` needs a
-  binary side-channel, not JSON).
+- The driver-side protocol loop is `AscomComHostRunner` (activate / get /
+  set / call / setup / dispose over newline-delimited JSON on stdin/stdout),
+  running the driver on an `AscomComStaDispatcher` (STA + message pump).
+- There are two host processes, both running that same loop:
+  - **x64** is the main Polaris exe re-launched with `--ascom-com-host`
+    (`Program.cs` intercepts it before starting Kestrel). Zero extra
+    packaging, and it covers 64-bit-registered drivers that still crash the
+    host — a .NET AnyCPU MilkyWheel registers `inproc64=True` yet hard-exits
+    the 64-bit app on activate.
+  - **x86** is `NINA.Ascom.Host.exe`, a thin entry point that calls the same
+    `AscomComHostRunner`, published self-contained for win-x86 and staged
+    into `{output}/ascom-host/win-x86` by `NINA.Polaris.csproj`. It exists
+    because a 32-bit-only in-proc driver cannot load in the 64-bit app.
+- The app side is `AscomHostChannel`: it launches the right host (self for
+  x64, packaged exe for x86), marshals member access, and turns a child
+  crash (OS process exit) into a clean `AscomHostException` — the app
+  survives.
+- `EquipmentManager.CreateAscomFilterWheel` sends a 32-bit-only wheel to the
+  x86 host and everything else to the x64 self-host, hosting out-of-process
+  whenever a host can be launched. Scope today is the filter wheel; the same
+  channel generalises to the other small-payload devices (focuser / mount /
+  switch). ASCOM cameras stay in-process (their `ImageArray` needs a binary
+  side-channel, not JSON).
 
 ## Threading model
 

@@ -71,34 +71,54 @@ public sealed class AscomHostChannel : IDisposable {
         _ = Task.Run(ErrLoopAsync);
     }
 
-    /// <summary>Path to the packaged child exe for the wanted bitness, or null
-    /// when it is not present (e.g. a build that didn't stage it).</summary>
-    public static string? ExePath(bool wantX86) {
-        var rid = wantX86 ? "win-x86" : "win-x64";
-        var p = Path.Combine(AppContext.BaseDirectory, "ascom-host", rid, "NINA.Ascom.Host.exe");
+    /// <summary>Path to the packaged win-x86 child exe, or null when it is not
+    /// present. The x64 host has no packaged exe: it is the main Polaris app
+    /// re-launched with <c>--ascom-com-host</c>.</summary>
+    public static string? X86ExePath() {
+        var p = Path.Combine(AppContext.BaseDirectory, "ascom-host", "win-x86", "NINA.Ascom.Host.exe");
         return File.Exists(p) ? p : null;
     }
 
-    /// <summary>True when the child exe for the wanted bitness is available.</summary>
-    public static bool IsAvailable(bool wantX86) => ExePath(wantX86) != null;
+    /// <summary>Whether a host of the wanted bitness can be launched: the win-x86
+    /// child must be packaged; the x64 host only needs a resolvable process path
+    /// (we re-launch ourselves), so it is available on any normal Windows run.</summary>
+    public static bool IsAvailable(bool wantX86) =>
+        wantX86 ? X86ExePath() != null : !string.IsNullOrEmpty(Environment.ProcessPath);
 
-    /// <summary>Spawn the child host for the wanted bitness. Throws when the
-    /// exe is missing (caller should have checked <see cref="IsAvailable"/>).</summary>
+    /// <summary>Spawn the host for the wanted bitness. x86 runs the packaged
+    /// child exe; x64 re-launches this Polaris process with
+    /// <c>--ascom-com-host</c> (handles both the published single-file exe and a
+    /// <c>dotnet &lt;dll&gt;</c> debug launch).</summary>
     public static AscomHostChannel Start(bool wantX86) {
-        var exe = ExePath(wantX86)
-            ?? throw new FileNotFoundException(
-                $"ASCOM driver host ({(wantX86 ? "win-x86" : "win-x64")}) is not packaged.");
         var psi = new ProcessStartInfo {
-            FileName = exe,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardInputEncoding = Utf8,
             StandardOutputEncoding = Utf8,
             StandardErrorEncoding = Utf8,
         };
-        AscomComActivation.Note($"host launch {Path.GetFileName(exe)} ({(wantX86 ? "x86" : "x64")})");
+        if (wantX86) {
+            var exe = X86ExePath()
+                ?? throw new FileNotFoundException("ASCOM driver host (win-x86) is not packaged.");
+            psi.FileName = exe;
+            AscomComActivation.Note($"host launch {Path.GetFileName(exe)} (x86)");
+        } else {
+            var procPath = Environment.ProcessPath
+                ?? throw new InvalidOperationException("cannot resolve the process path to self-host the ASCOM driver.");
+            if (Path.GetFileNameWithoutExtension(procPath).Equals("dotnet", StringComparison.OrdinalIgnoreCase)) {
+                // Debug / `dotnet NINA.Polaris.dll`: relaunch dotnet with the dll.
+                psi.FileName = procPath;
+                psi.ArgumentList.Add(Path.Combine(AppContext.BaseDirectory, "NINA.Polaris.dll"));
+            } else {
+                // Published single-file exe: relaunch it directly.
+                psi.FileName = procPath;
+            }
+            psi.ArgumentList.Add("--ascom-com-host");
+            AscomComActivation.Note($"host launch self {Path.GetFileName(psi.FileName)} --ascom-com-host (x64)");
+        }
         var proc = Process.Start(psi)
             ?? throw new InvalidOperationException("failed to start the ASCOM driver host process.");
         return new AscomHostChannel(proc);

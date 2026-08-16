@@ -20,6 +20,16 @@ using NINA.Polaris.WebSocket;
 using NINA.INDI.Client;
 using Yarp.ReverseProxy.Forwarder;
 
+// WINEXIT-2 (#650): when this exe is re-launched as the out-of-process ASCOM
+// driver host (by AscomHostChannel, for a 64-bit-registered driver that can
+// still crash the host), run ONLY the stdin/stdout host loop and never start
+// the web host. Intercept first, before any startup side effects.
+if (args.Contains("--ascom-com-host")) {
+    if (OperatingSystem.IsWindows())
+        return await NINA.Ascom.Com.AscomComHostRunner.RunAsync();
+    return 0;
+}
+
 // Force English exception messages + invariant number/date formatting
 // regardless of the host's locale. The rest of the UI is English-only,
 // so localized SocketException / IOException strings (e.g. "Nenhuma
