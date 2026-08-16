@@ -184,14 +184,11 @@
   <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')">
     <AscomHostSrc Include="$(MSBuildThisFileDirectory)..\NINA.Ascom.Host\**\*.cs;$(AscomHostProj)"
                   Exclude="$(MSBuildThisFileDirectory)..\NINA.Ascom.Host\bin\**;$(MSBuildThisFileDirectory)..\NINA.Ascom.Host\obj\**" />
-    <None Include="$(AscomHostStagedExe)">
-      <Link>ascom-host\win-x86\NINA.Ascom.Host.exe</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </None>
   </ItemGroup>
-  <Target Name="PublishAscomHostX86"
-          BeforeTargets="Build;Publish"
+  <!-- Publish the child once (incremental on its own sources). Called by the
+       stage targets below rather than hooked to Build/Publish directly, so the
+       exe is guaranteed produced before it is copied. -->
+  <Target Name="_PublishAscomHostX86"
           Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')"
           Inputs="@(AscomHostSrc)"
           Outputs="$(AscomHostStagedExe)">
@@ -199,6 +196,29 @@
              Text="WINEXIT-2: publishing NINA.Ascom.Host (win-x86, self-contained) -> $(AscomHostStageDir)" />
     <RemoveDir Directories="$(AscomHostStageDir)" />
     <Exec Command="dotnet publish &quot;$(AscomHostProj)&quot; -c $(Configuration) -r win-x86 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true --nologo -o &quot;$(AscomHostStageDir)&quot;" />
+    <Error Condition="!Exists('$(AscomHostStagedExe)')"
+           Text="WINEXIT-2: NINA.Ascom.Host publish did not produce $(AscomHostStagedExe)." />
+  </Target>
+  <!-- Copy the staged exe into the build output ({OutDir}/ascom-host/win-x86)
+       AFTER the build so a plain `dotnet build` / F5 run finds it, and into the
+       publish output AFTER publish so the release zip includes it. AfterTargets
+       avoids the copy-ordering trap that a <None> + BeforeTargets hit under
+       `dotnet publish` (the publish copy ran before the producing target). -->
+  <Target Name="StageAscomHostX86Build"
+          AfterTargets="Build"
+          DependsOnTargets="_PublishAscomHostX86"
+          Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')">
+    <Copy SourceFiles="$(AscomHostStagedExe)"
+          DestinationFolder="$(OutDir)ascom-host\win-x86"
+          SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="StageAscomHostX86Publish"
+          AfterTargets="Publish"
+          DependsOnTargets="_PublishAscomHostX86"
+          Condition="'$(RuntimeIdentifier)' == 'win-x64' Or ('$(RuntimeIdentifier)' == '' And '$(OS)' == 'Windows_NT')">
+    <Copy SourceFiles="$(AscomHostStagedExe)"
+          DestinationFolder="$(PublishDir)ascom-host\win-x86"
+          SkipUnchangedFiles="true" />
   </Target>
 
   <ItemGroup>
