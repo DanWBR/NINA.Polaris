@@ -256,7 +256,15 @@ public static class SystemEndpoints {
                 p.AutoConnectOnStartup = update.AutoConnectOnStartup;
                 p.AstapPath = update.AstapPath;
                 p.SolveToleranceArcsec = update.SolveToleranceArcsec;
-                p.ImageOutputDir = update.ImageOutputDir;
+                // The Studio root (ImageOutputDir) is set through its own
+                // endpoint (/api/files/studio-root) and is HOST hardware state,
+                // not part of the settings form. A general settings save must
+                // never reset it: a client that PUTs the profile without a
+                // fresh value (empty/stale) would otherwise clobber a configured
+                // NVMe path back to the ~/files default. Preserve on empty, the
+                // same guard the GraXpert / ONNX fields already use.
+                if (!string.IsNullOrWhiteSpace(update.ImageOutputDir))
+                    p.ImageOutputDir = update.ImageOutputDir;
                 p.ImageNamePattern = update.ImageNamePattern;
                 p.ImageFormat = update.ImageFormat;
                 p.PreferAdvancedSequencer = update.PreferAdvancedSequencer;
