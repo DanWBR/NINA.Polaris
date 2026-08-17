@@ -866,6 +866,22 @@ public class IndiCamera : ICamera, IDisposable {
         await _client.SetNumberAsync(DeviceName, "CCD_INFO", payload, ct);
     }
 
+    /// <summary>Push the telescope focal length + aperture (mm) into the driver's
+    /// SCOPE_INFO. The INDI CCD Simulator reads SCOPE_INFO to size the GSC
+    /// star-field radius; if Polaris never sets it (and no mount is snooped) the
+    /// simulator calls <c>gsc … -r nan</c> and renders a starless frame. Real
+    /// cameras normally have no writable SCOPE_INFO and just ignore this, so it
+    /// is best-effort. Pass focalLengthMm &lt;= 0 to no-op.</summary>
+    public async Task TrySetScopeInfoAsync(double focalLengthMm, double apertureMm,
+                                           CancellationToken ct = default) {
+        if (focalLengthMm <= 0) return;
+        var payload = new Dictionary<string, double> {
+            ["FOCAL_LENGTH"] = focalLengthMm
+        };
+        if (apertureMm > 0) payload["APERTURE"] = apertureMm;
+        await _client.SetNumberAsync(DeviceName, "SCOPE_INFO", payload, ct);
+    }
+
     /// <summary>Writes CCD_FRAME (X, Y, WIDTH, HEIGHT). Passing w=0 OR
     /// h=0 resets to the full sensor (Max X/Y).</summary>
     public async Task SetSubframeAsync(int x, int y, int width, int height, CancellationToken ct = default) {

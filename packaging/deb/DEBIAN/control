@@ -6,8 +6,8 @@ Section: science
 Priority: optional
 Homepage: https://github.com/DanWBR/NINA.Polaris
 Depends: libfontconfig1, libssl3, libicu72 | libicu73 | libicu74 | libicu75 | libicu76 | libicu77 | libicu78 | libicu70 | libicu67 | libicu66 | libicu63, python3-venv, python3-pip, adduser, systemd, network-manager, policykit-1 | polkitd, unzip
-Recommends: cloud-guest-utils, indi-bin, indi-full, astap, phd2, siril, xpra, xserver-xorg-video-dummy, dphys-swapfile, lsof, libraw23 | libraw20 | libraw19, gphoto2, cifs-utils, smbclient, avahi-daemon, libnss-mdns, ntfs-3g, exfatprogs | exfat-fuse, dosfstools, python3-numpy, python3-astropy, python3-scipy, python3-pil, python3-opencv, libtoupcam, libaltaircam, libasi, libsvbony, libplayerone
-Suggests: graxpert
+Recommends: cloud-guest-utils, indi-bin, astap-cli, astap, phd2, siril, xpra, xserver-xorg-video-dummy, dphys-swapfile, lsof, libraw23 | libraw20 | libraw19, gphoto2, cifs-utils, smbclient, avahi-daemon, libnss-mdns, ntfs-3g, exfatprogs | exfat-fuse, dosfstools, python3-numpy, python3-astropy, python3-scipy, python3-pil, python3-opencv, libtoupcam, libaltaircam, libasi, libsvbony, libplayerone
+Suggests: graxpert, indi-full
 Description: N.I.N.A. Polaris astrophotography server
  Browser-controlled astrophotography controller for Raspberry Pi,
  mini-PCs, and other small Linux hosts. Provides full equipment +

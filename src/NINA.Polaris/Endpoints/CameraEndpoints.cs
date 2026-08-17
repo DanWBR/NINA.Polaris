@@ -574,6 +574,26 @@ public static class CameraEndpoints {
                 loggerFactory.CreateLogger("Polaris.Camera")
                     .LogDebug(ex, "CCD_INFO push on connect skipped (non-fatal)");
             }
+            // INDI CCD Simulator: feed it the rig's focal length + aperture via
+            // SCOPE_INFO. The simulator sizes its GSC star field from SCOPE_INFO,
+            // and Polaris doesn't wire up telescope snooping (ACTIVE_DEVICES), so
+            // without this it runs `gsc … -r nan` and renders a starless frame.
+            // Scoped to the Simulator by name — real cameras have no writable
+            // SCOPE_INFO and would just no-op anyway.
+            try {
+                var rig = profileSvc.ActiveEquipmentProfile;
+                if (rig != null && rig.FocalLengthMm > 0
+                    && equip.Camera is NINA.INDI.Devices.IndiCamera simCam
+                    && equip.Camera.DeviceName.Contains("Simulator", StringComparison.OrdinalIgnoreCase)) {
+                    await simCam.TrySetScopeInfoAsync(rig.FocalLengthMm, rig.ApertureMm);
+                    loggerFactory.CreateLogger("Polaris.Camera")
+                        .LogInformation("Pushed SCOPE_INFO into {Dev}: {F}mm f/{Ap} (CCD Simulator GSC radius)",
+                            equip.Camera.DeviceName, rig.FocalLengthMm, rig.ApertureMm);
+                }
+            } catch (Exception ex) {
+                loggerFactory.CreateLogger("Polaris.Camera")
+                    .LogDebug(ex, "SCOPE_INFO push on connect skipped (non-fatal)");
+            }
             // The camera's ROI (CCD_FRAME for INDI) is retained by the driver
             // across browser sessions and even reconnects — the INDI server on
             // the SBC keeps running. So a planetary ROI set in a prior VIDEO
