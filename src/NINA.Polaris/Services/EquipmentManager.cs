@@ -847,13 +847,13 @@ public class EquipmentManager : IDisposable {
     private static IFilterWheel CreateAscomFilterWheel(string progId) {
         if (!OperatingSystem.IsWindows())
             throw new NotSupportedException("ASCOM COM drivers only run on Windows.");
-        // The in-process adapter now goes through the ASCOM Platform's
-        // ASCOM.Com.DriverAccess (the same path NINA uses), which activates a
-        // .NET AnyCPU driver like the MilkyWheel correctly in the 64-bit host —
-        // the raw-COM path fast-failed it. The out-of-process host (WINEXIT-2)
-        // stays available as a fallback for a driver that still misbehaves, but
-        // it is not the default: DriverAccess makes the common case just work.
-        return new NINA.Ascom.Com.AscomComFilterWheel(progId);
+        // WINEXIT-2: run the ASCOM wheel driver out-of-process, in a minimal
+        // self-relaunched child (DriverAccess on an STA + message pump). An old
+        // WinForms/.NET driver that fast-fails on connect inside the loaded
+        // server process connects fine in the clean child, and if it crashes
+        // anyway only the child dies — the server surfaces a clean error and
+        // stays up. Zero extra packaging (the child is this same exe).
+        return new NINA.Ascom.Com.AscomComFilterWheelHosted(progId);
     }
 
     /// <summary>Select a power box / switch hub by driver kind +

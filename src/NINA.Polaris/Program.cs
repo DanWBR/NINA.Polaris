@@ -74,6 +74,17 @@ if (args.Length >= 2
     return NINA.Polaris.AscomSetupRunner.Run(args[1]);
 }
 
+// Sub-process entry: `--ascom-com-host` runs one ASCOM filter-wheel driver in
+// this minimal child (no Kestrel/DI) and serves it over a stdin/stdout JSON
+// protocol. The driver misbehaves in the loaded server process but works in a
+// clean child, so the app hosts it here and marshals every call. A driver
+// crash kills only this child; the API server survives. See AscomComHostRunner.
+if (args.Length >= 1
+    && args[0] == "--ascom-com-host"
+    && OperatingSystem.IsWindows()) {
+    return await NINA.Ascom.Com.AscomComHostRunner.RunAsync();
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // GX-10: HTTPS self-signed cert. Constructed eagerly here (not via DI)
