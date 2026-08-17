@@ -326,6 +326,8 @@ builder.Services.AddSingleton<PHD2Client>();
 // Native in-process autoguider (drop-in alternative to PHD2, per-rig).
 builder.Services.AddSingleton<NativeGuider>();
 builder.Services.AddSingleton<ActiveGuiderProvider>();
+// Multi-camera synchronized dither coordinator (main + aux on one mount).
+builder.Services.AddSingleton<DitherBarrier>();
 builder.Services.AddSingleton<PHD2ProcessManager>();
 builder.Services.AddHostedService<PHD2AutoStartService>();
 

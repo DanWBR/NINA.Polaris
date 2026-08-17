@@ -69,12 +69,13 @@ public class SequenceEngineResumeTests {
             NullLogger<NINA.Polaris.Services.External.GraXpertService>.Instance);
         var flatWizard = new FlatWizardService(equip, imageWriter, profile,
             NullLogger<FlatWizardService>.Instance, emptyConfig);
+        var barrier = new DitherBarrier(guiders, NullLogger<DitherBarrier>.Instance);
         var aux = new AuxCaptureService(equip, imageWriter, profile, guiders, autoFocus, meridianFlip,
-            NullLogger<AuxCaptureService>.Instance);
+            barrier, NullLogger<AuxCaptureService>.Instance);
         var engine = new SequenceEngine(equip, relay, liveStack, phd2, guiders, meridianFlip, imageWriter,
             graXpert, flatWizard, profile, new CaptureProgressService(), aux,
             new NINA.Polaris.Services.CameraReadyGate(() => equip.Camera, Microsoft.Extensions.Logging.Abstractions.NullLogger<NINA.Polaris.Services.CameraReadyGate>.Instance),
-            NullLogger<SequenceEngine>.Instance);
+            barrier, NullLogger<SequenceEngine>.Instance);
         return (engine, equip);
     }
 

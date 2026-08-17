@@ -38,6 +38,7 @@ public sealed class AuxCaptureService {
     private readonly ActiveGuiderProvider _guiders;
     private readonly AutoFocusService _autoFocus;
     private readonly MeridianFlipService _meridian;
+    private readonly DitherBarrier _barrier;
     private readonly ILogger<AuxCaptureService> _logger;
 
     private readonly object _lock = new();
@@ -57,13 +58,14 @@ public sealed class AuxCaptureService {
 
     public AuxCaptureService(EquipmentManager equip, ImageWriterService writer,
         ProfileService profiles, ActiveGuiderProvider guiders, AutoFocusService autoFocus,
-        MeridianFlipService meridian, ILogger<AuxCaptureService> logger) {
+        MeridianFlipService meridian, DitherBarrier barrier, ILogger<AuxCaptureService> logger) {
         _equip = equip;
         _writer = writer;
         _profiles = profiles;
         _guiders = guiders;
         _autoFocus = autoFocus;
         _meridian = meridian;
+        _barrier = barrier;
         _logger = logger;
     }
 
@@ -99,6 +101,9 @@ public sealed class AuxCaptureService {
         FrameCount = 0;
         LastError = null;
         IsRunning = true;
+        // Blocking barrier participant (the mount must not dither mid aux-sub),
+        // never primary so it only owns the cadence when it is the slowest cam.
+        _barrier.Register("aux", blocking: true, isPrimary: false);
         _loopTask = Task.Run(() => RunLoop(ct));
         _logger.LogInformation("Aux capture loop started");
     }
@@ -106,6 +111,7 @@ public sealed class AuxCaptureService {
     private void StopLoop() {
         IsRunning = false;
         try { _cts?.Cancel(); } catch { }
+        _barrier.Deregister("aux");
         _cts = null;
         _loopTask = null;
         _logger.LogInformation("Aux capture loop stopped after {Count} frames", FrameCount);
@@ -125,6 +131,11 @@ public sealed class AuxCaptureService {
                 while (!ct.IsCancellationRequested && MountBusy()) {
                     try { await Task.Delay(250, ct); } catch { return; }
                 }
+                if (ct.IsCancellationRequested) break;
+
+                // Synchronized-dither barrier: park here if a dither round is in
+                // flight so the mount never moves while this sub is exposing.
+                await _barrier.BeforeSubAsync("aux", ct);
                 if (ct.IsCancellationRequested) break;
 
                 double expSec = Math.Max(0.05, (Rig?.AuxExposureMs ?? 5000) / 1000.0);
@@ -155,6 +166,13 @@ public sealed class AuxCaptureService {
                         LastError = ex.Message;
                     }
                 }
+
+                // Sub finished: report to the barrier. When the aux is the
+                // slowest camera it owns the dither cadence and this call runs
+                // (and awaits) the synchronized dither round; otherwise it is a
+                // cheap no-op.
+                try { await _barrier.AfterSubAsync("aux", expSec, ct); }
+                catch (OperationCanceledException) { break; }
             }
         } catch (OperationCanceledException) {
             /* normal stop */

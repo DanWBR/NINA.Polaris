@@ -92,6 +92,7 @@ public class SequenceEngine {
     private readonly CaptureProgressService _captureProgress;
     private readonly AuxCaptureService _aux;
     private readonly CameraReadyGate _cameraReady;
+    private readonly DitherBarrier _barrier;
 
     public SequenceEngine(EquipmentManager equip, ImageRelayService relay,
         LiveStackingService liveStack, PHD2Client phd2, ActiveGuiderProvider guiders,
@@ -103,6 +104,7 @@ public class SequenceEngine {
         CaptureProgressService captureProgress,
         AuxCaptureService aux,
         CameraReadyGate cameraReady,
+        DitherBarrier barrier,
         ILogger<SequenceEngine> logger,
         GuideRunawayGuard? guideGuard = null,
         NotificationService? notify = null) {
@@ -121,6 +123,7 @@ public class SequenceEngine {
         _captureProgress = captureProgress;
         _aux = aux;
         _cameraReady = cameraReady;
+        _barrier = barrier;
         _logger = logger;
 
         // Restore the ACTIVE rig's schedule so it survives a host restart, and
@@ -338,6 +341,9 @@ public class SequenceEngine {
     private async Task RunAsync(CancellationToken ct) {
         // Run the auxiliary camera capture loop alongside the sequence.
         try { _aux.NotifySessionActive(true); } catch { }
+        // Main imaging camera joins the synchronized-dither barrier (primary, so
+        // it wins the cadence tie; blocking, so the mount waits for it).
+        try { _barrier.Register("main", blocking: true, isPrimary: true); } catch { }
         try {
             // Resume point captured ONCE up front. CurrentItemIndex is rewritten
             // on every iteration below, so the per-item start-frame check must
@@ -550,6 +556,10 @@ public class SequenceEngine {
                         Filter: string.IsNullOrEmpty(item.Filter) ? null : item.Filter,
                         TargetName: effectiveTargetName);
 
+                    // Park here if a synchronized dither round is in flight, so
+                    // the mount never moves mid-sub on this (or the aux) camera.
+                    await _barrier.BeforeSubAsync("main", ct);
+
                     bool frameOk = false;
                     try {
                         NINA.Image.Interfaces.IImageData imageData;
@@ -671,6 +681,11 @@ public class SequenceEngine {
                         _framesSinceDither++;
                         bool moreFramesComing = (f + 1 < item.Count) || (i + 1 < Items.Count);
                         if (moreFramesComing) {
+                            // Report the finished sub to the barrier. When >=2
+                            // imaging cameras are active it owns the cadence and
+                            // (if this is the slowest camera) runs the round here;
+                            // otherwise MaybeDitherAsync does the single-cam dither.
+                            await _barrier.AfterSubAsync("main", item.Exposure, ct);
                             await MaybeDitherAsync(ct);
                         }
                     }
@@ -701,6 +716,7 @@ public class SequenceEngine {
             await RunEndActionsAsync(triggeredByStop: true);
         } finally {
             try { _aux.NotifySessionActive(false); } catch { }
+            try { _barrier.Deregister("main"); } catch { }
             ReportGuidingForSession();
         }
     }
@@ -789,6 +805,12 @@ public class SequenceEngine {
     private async Task MaybeDitherAsync(CancellationToken ct) {
         if (!Dither.Enabled) return;
         if (Dither.EveryNFrames <= 0) return;
+        // Multi-camera: the barrier owns the cadence (driven by the slowest cam)
+        // and dithers for everyone in AfterSubAsync. Hand it our config and let
+        // it run the round; the per-loop dither below is single-camera only.
+        _barrier.ConfigureCadence(Dither.EveryNFrames, new DitherParams(
+            Dither.Pixels, Dither.RaOnly, Dither.SettlePixels, Dither.SettleTime, Dither.SettleTimeout));
+        if (_barrier.OwnsDither) return;
         if (_framesSinceDither < Dither.EveryNFrames) return;
 
         // Route through the active guider (native or external PHD2) so the
