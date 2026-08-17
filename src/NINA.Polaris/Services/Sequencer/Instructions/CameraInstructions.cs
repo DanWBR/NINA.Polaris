@@ -389,19 +389,38 @@ public class TakeAuxExposureInstruction : SequenceInstruction {
         var opts = new NINA.Image.Interfaces.CaptureOptions(
             Gain: gain, BinX: bin, BinY: bin, ImageType: "LIGHT");
 
-        for (int i = 0; i < Count; i++) {
-            ct.ThrowIfCancellationRequested();
-            NINA.Image.Interfaces.IImageData image;
-            using (ctx.CaptureProgress.Begin("sequencer-aux", expSec))
-                image = await AuxCameraCaptureGate.RunAsync(
-                    () => cam.CaptureAsync(expSec, opts, ct), ct,
-                    acquireTimeout: TimeSpan.FromSeconds(expSec + 60));
+        // Join the synchronized-dither barrier for the duration of this aux
+        // capture run. With the main camera also participating (>=2 imaging
+        // cameras), the barrier engages: a dither never fires mid aux-sub, and
+        // if the aux is the slowest camera it drives the cadence. Registered
+        // only while actually capturing, so the mount dithers freely when this
+        // instruction is not running.
+        ctx.Barrier.Register("aux", blocking: true, isPrimary: false);
+        try {
+            for (int i = 0; i < Count; i++) {
+                ct.ThrowIfCancellationRequested();
 
-            image.MetaData.Exposure.ExposureTime = expSec;
-            ctx.ImageWriter.SaveImage(image, imageType: "AUX",
-                gain: gain ?? 0, focalLengthMmOverride: rig?.AuxFocalLengthMm);
-            ctx.Logger.LogInformation("Aux frame {N}/{Count} captured ({Exp:0.##}s, gain {Gain}, bin {Bin})",
-                i + 1, Count, expSec, gain?.ToString() ?? "default", bin);
+                // Park here if a synchronized dither round is in flight.
+                await ctx.Barrier.BeforeSubAsync("aux", ct);
+
+                NINA.Image.Interfaces.IImageData image;
+                using (ctx.CaptureProgress.Begin("sequencer-aux", expSec))
+                    image = await AuxCameraCaptureGate.RunAsync(
+                        () => cam.CaptureAsync(expSec, opts, ct), ct,
+                        acquireTimeout: TimeSpan.FromSeconds(expSec + 60));
+
+                image.MetaData.Exposure.ExposureTime = expSec;
+                ctx.ImageWriter.SaveImage(image, imageType: "AUX",
+                    gain: gain ?? 0, focalLengthMmOverride: rig?.AuxFocalLengthMm);
+                ctx.Logger.LogInformation("Aux frame {N}/{Count} captured ({Exp:0.##}s, gain {Gain}, bin {Bin})",
+                    i + 1, Count, expSec, gain?.ToString() ?? "default", bin);
+
+                // Report the finished sub; when the aux is the slowest of the
+                // active imaging cameras it runs the synchronized dither here.
+                await ctx.Barrier.AfterSubAsync("aux", expSec, ct);
+            }
+        } finally {
+            ctx.Barrier.Deregister("aux");
         }
     }
 }
