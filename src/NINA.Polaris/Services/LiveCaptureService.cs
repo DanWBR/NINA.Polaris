@@ -48,6 +48,7 @@ public sealed class LiveCaptureService {
     private readonly AuxCaptureService _aux;
     private readonly CameraReadyGate _cameraReady;
     private readonly MeridianFlipService _meridian;
+    private readonly DitherBarrier _barrier;
     private readonly ILogger<LiveCaptureService> _logger;
 
     private CancellationTokenSource? _cts;
@@ -65,7 +66,7 @@ public sealed class LiveCaptureService {
         ImageRelayService relay, CaptureProgressService captureProgress,
         ActiveGuiderProvider guiders, AutoFocusService autoFocus,
         AuxCaptureService aux, CameraReadyGate cameraReady,
-        MeridianFlipService meridian,
+        MeridianFlipService meridian, DitherBarrier barrier,
         ILogger<LiveCaptureService> logger) {
         _equip = equip;
         _liveStack = liveStack;
@@ -76,6 +77,7 @@ public sealed class LiveCaptureService {
         _aux = aux;
         _cameraReady = cameraReady;
         _meridian = meridian;
+        _barrier = barrier;
         _logger = logger;
     }
 
@@ -99,6 +101,7 @@ public sealed class LiveCaptureService {
             _loopTask = Task.Run(() => RunLoop(ct));
             // Kick off the auxiliary camera loop alongside the main session.
             try { _aux.NotifySessionActive(true); } catch { }
+            try { _barrier.Register("main", blocking: true, isPrimary: true); } catch { }
             _logger.LogInformation(
                 "Server LIVE loop started: exp={Exp}s gain={Gain} bin={Bin}",
                 ExposureSeconds, Gain, BinX);
@@ -186,6 +189,10 @@ public sealed class LiveCaptureService {
                 var cam = await WaitForCameraReadyAsync(ct);
                 if (cam == null) break;
 
+                // Park here if a synchronized dither round is in flight.
+                await _barrier.BeforeSubAsync("main", ct);
+                if (ct.IsCancellationRequested) break;
+
                 IImageData image;
                 try {
                     var opts = new CaptureOptions(
@@ -224,6 +231,11 @@ public sealed class LiveCaptureService {
                     LastError = ex.Message;
                 }
 
+                // Report the finished sub to the barrier; when this is the
+                // slowest of >=2 imaging cameras it runs the synchronized dither.
+                try { await _barrier.AfterSubAsync("main", ExposureSeconds, ct); }
+                catch (OperationCanceledException) { break; }
+
                 // Honour the live-stack duration cap so the server loop ends
                 // when the session's max duration is reached.
                 if (_liveStack.IsRunning && _liveStack.DurationCapReached) {
@@ -234,6 +246,7 @@ public sealed class LiveCaptureService {
         } finally {
             lock (_lock) { IsRunning = false; }
             try { _aux.NotifySessionActive(false); } catch { }
+            try { _barrier.Deregister("main"); } catch { }
         }
     }
 

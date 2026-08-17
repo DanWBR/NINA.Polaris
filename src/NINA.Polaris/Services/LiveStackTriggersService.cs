@@ -40,6 +40,7 @@ public class LiveStackTriggersService : IDisposable {
     private readonly SlewCenterService _slewCenter;
     private readonly PlateSolveService _solver;
     private readonly ActiveGuiderProvider _guiders;
+    private readonly DitherBarrier _barrier;
     private readonly ILogger<LiveStackTriggersService> _logger;
 
     private readonly IDisposable _frameSub;
@@ -103,6 +104,7 @@ public class LiveStackTriggersService : IDisposable {
                                     SlewCenterService slewCenter,
                                     PlateSolveService solver,
                                     ActiveGuiderProvider guiders,
+                                    DitherBarrier barrier,
                                     ILogger<LiveStackTriggersService> logger) {
         _stack = stack;
         _profiles = profiles;
@@ -111,6 +113,7 @@ public class LiveStackTriggersService : IDisposable {
         _slewCenter = slewCenter;
         _solver = solver;
         _guiders = guiders;
+        _barrier = barrier;
         _logger = logger;
         _frameSub = _stack.SubscribeFrameIntegrated(OnFrameIntegratedAsync);
         // Reset trigger state when the user switches rigs, they get a
@@ -173,9 +176,18 @@ public class LiveStackTriggersService : IDisposable {
         // has to fall through: the dither gate no longer advances on a skip, so
         // returning here would take the same branch on every frame and an
         // unguided session would never recenter again.
-        if (cfg.DitherEnabled && cfg.DitherEveryNFrames > 0
-            && info.FrameCount - _lastDitherFrame >= cfg.DitherEveryNFrames) {
-            if (await ExecuteDitherAsync(info, cfg)) return;
+        if (cfg.DitherEnabled && cfg.DitherEveryNFrames > 0) {
+            // Multi-camera: the barrier owns the cadence (driven by the slowest
+            // camera) and dithers for everyone from the capture loop, so hand it
+            // our config and skip the per-loop dither here. Single-camera keeps
+            // the existing every-N behavior.
+            _barrier.ConfigureCadence(cfg.DitherEveryNFrames, new DitherParams(
+                cfg.DitherPixels, cfg.DitherRaOnly, cfg.DitherSettlePixels,
+                cfg.DitherSettleTime, cfg.DitherSettleTimeout));
+            if (!_barrier.OwnsDither
+                && info.FrameCount - _lastDitherFrame >= cfg.DitherEveryNFrames) {
+                if (await ExecuteDitherAsync(info, cfg)) return;
+            }
         }
 
         // Optional per-frame drift solve. Only run when the user has

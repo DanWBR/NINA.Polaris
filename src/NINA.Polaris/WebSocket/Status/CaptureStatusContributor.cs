@@ -29,8 +29,9 @@ public sealed class CaptureStatusContributor : IStatusContributor {
     private readonly SlewPreviewService _slewPreview;
     private readonly NINA.Polaris.Services.Planetary.VideoRecordingService _videoRecording;
     private readonly NINA.Polaris.Services.Planetary.PlanetaryStackerService _videoStacker;
+    private readonly DitherBarrier _ditherBarrier;
 
-    public CaptureStatusContributor(AuxCaptureService auxCapture, CaptureProgressService captureProgress, CoolingRampService coolingRamp, LiveCaptureService liveCapture, SlewPreviewService slewPreview, NINA.Polaris.Services.Planetary.VideoRecordingService videoRecording, NINA.Polaris.Services.Planetary.PlanetaryStackerService videoStacker) {
+    public CaptureStatusContributor(AuxCaptureService auxCapture, CaptureProgressService captureProgress, CoolingRampService coolingRamp, LiveCaptureService liveCapture, SlewPreviewService slewPreview, NINA.Polaris.Services.Planetary.VideoRecordingService videoRecording, NINA.Polaris.Services.Planetary.PlanetaryStackerService videoStacker, DitherBarrier ditherBarrier) {
         _auxCapture = auxCapture;
         _captureProgress = captureProgress;
         _coolingRamp = coolingRamp;
@@ -38,9 +39,10 @@ public sealed class CaptureStatusContributor : IStatusContributor {
         _slewPreview = slewPreview;
         _videoRecording = videoRecording;
         _videoStacker = videoStacker;
+        _ditherBarrier = ditherBarrier;
     }
 
-    public IReadOnlyCollection<string> Keys { get; } = new[] { "capture", "liveCapture", "auxCapture", "cooling", "videoRecording", "videoStack", "slewPreview" };
+    public IReadOnlyCollection<string> Keys { get; } = new[] { "capture", "liveCapture", "auxCapture", "cooling", "videoRecording", "videoStack", "slewPreview", "ditherSync" };
 
     public void Contribute(StatusTick tick) {
         var auxCapture = _auxCapture;
@@ -72,6 +74,15 @@ public sealed class CaptureStatusContributor : IStatusContributor {
                 frameCount = auxCapture.FrameCount,
                 lastError = auxCapture.LastError,
                 noOutputDir = auxCapture.NoOutputDir
+            };
+
+            // Multi-camera synchronized dither: whether the barrier is
+            // coordinating (>=2 imaging cameras active), and whether a
+            // synchronized dither round is in flight right now.
+            tick.Blocks["ditherSync"] = new {
+                active = _ditherBarrier.OwnsDither,
+                waiting = _ditherBarrier.RoundActive,
+                dithering = _ditherBarrier.Dithering
             };
 
             // Stack status + triggers (LSTR-4). Triggers sub-object

@@ -70,7 +70,8 @@ public class LiveStackDitherGateTests {
         var af = new AutoFocusService(equip, relay, guiders, profiles,
             NullLogger<AutoFocusService>.Instance);
         _triggers = new LiveStackTriggersService(_stack, profiles, equip, af, slew, solver,
-            guiders, NullLogger<LiveStackTriggersService>.Instance);
+            guiders, new DitherBarrier(guiders, NullLogger<DitherBarrier>.Instance),
+            NullLogger<LiveStackTriggersService>.Instance);
 
         _triggers.Settings.DitherEnabled = true;
         _triggers.Settings.DitherEveryNFrames = 3;
