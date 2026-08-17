@@ -56,7 +56,7 @@ public static class AscomEndpoints {
         //
         // Blocks until the helper exits (user dismisses the dialog OR
         // the driver crashes). UI shows a spinner while in-flight.
-        group.MapPost("/setup/{progId}", async (string progId) => {
+        group.MapPost("/setup/{progId}", async (string progId, HttpContext ctx) => {
             if (!OperatingSystem.IsWindows())
                 return Results.BadRequest(new { error = "ASCOM is Windows-only." });
             if (!IsLegalProgId(progId))
@@ -64,6 +64,22 @@ public static class AscomEndpoints {
                     progId,
                     error = "ProgID contains invalid characters."
                 });
+            // An ASCOM SetupDialog is a native Windows window: it opens on the
+            // screen of the machine RUNNING Polaris, never on a remote browser
+            // or phone. A remote client would just watch the request hang, so
+            // say so plainly instead of spawning a dialog nobody at that end can
+            // see (or close). Loopback = the operator is at the host itself.
+            var ip = ctx.Connection.RemoteIpAddress;
+            if (ip != null && !System.Net.IPAddress.IsLoopback(ip)) {
+                return Results.BadRequest(new {
+                    progId,
+                    remote = true,
+                    error = "This ASCOM driver's Setup window opens on the screen of the machine "
+                          + "running Polaris — not on this device. Configure it there with the "
+                          + "ASCOM Platform's Profile Explorer, or connect the device over Alpaca "
+                          + "(ASCOM Remote), which has a browser-based setup you can reach from here."
+                });
+            }
             try {
                 var (exitCode, stderr) = await RunSetupHelperAsync(progId);
                 if (exitCode == 0)
@@ -143,7 +159,19 @@ public static class AscomEndpoints {
         // buffer (4 KB on Windows by default).
         var stderrTask = p.StandardError.ReadToEndAsync();
         var stdoutTask = p.StandardOutput.ReadToEndAsync();
-        await p.WaitForExitAsync();
+        // Kill a hung setup child so it can't leak a process forever. Some serial
+        // drivers hang while their SetupDialog enumerates COM ports and the dialog
+        // never appears; without this the helper waits indefinitely. A real modal
+        // dialog the operator is filling in on the host closes well under the ceiling.
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        try {
+            await p.WaitForExitAsync(cts.Token);
+        } catch (OperationCanceledException) {
+            try { p.Kill(entireProcessTree: true); } catch { }
+            return (-1, "The driver's Setup dialog did not open (it hung, likely enumerating "
+                      + "serial ports). Polaris is still running. Configure the driver with the "
+                      + "ASCOM Platform's Profile Explorer on the host instead.");
+        }
         var stderr = await stderrTask;
         _ = await stdoutTask;
         return (p.ExitCode, stderr);
