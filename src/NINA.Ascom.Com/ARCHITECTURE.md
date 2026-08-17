@@ -42,13 +42,9 @@ installed the Platform (the Windows COM paths simply stay dormant).
   breadcrumb around `CreateInstance`, and turns a failing `Connected = true`
   into an HRESULT-tagged error (`ConnectFailed`, reused by the DriverAccess
   filter wheel too).
-- `AscomComFilterWheel.cs`: `IFilterWheel` adapter built on
-  `ASCOM.Com.DriverAccess.FilterWheel`. Going through the Platform's
-  DriverAccess (instead of raw `IDispatch` + a hand-rolled STA message pump)
-  is what lets a .NET AnyCPU driver such as a DIY MilkyWheel load and connect
-  in the 64-bit host — the raw path fast-failed those drivers (0xC0000409).
-  DriverAccess manages the COM apartment itself, so this adapter needs no STA
-  dispatcher; it calls on the thread pool via `Task.Run`, matching NINA.
+- `AscomComFilterWheelHosted.cs` / `AscomHostChannel.cs` /
+  `AscomComHostRunner.cs`: the ASCOM COM `IFilterWheel`, run out-of-process.
+  See "Out-of-process filter wheel" below.
 
 ## Out of scope (for now)
 
@@ -65,29 +61,38 @@ installed the Platform (the Windows COM paths simply stay dormant).
   but the RIGS UI cards still default to the INDI device dropdown.
   Follow-up.
 
-## Why DriverAccess, not raw COM (WINEXIT-2 history)
+## Out-of-process filter wheel (WINEXIT-2)
 
-An earlier attempt (#650) isolated the driver in a separate process to stop
-a crashing driver from taking the host down. It worked as isolation, but the
-child still activated the driver through the same raw `IDispatch` + STA-pump
-path — so the real fix was never the process boundary, it was the activation
-method. NINA loads the very same drivers in a 64-bit process with no
-isolation, because it uses `ASCOM.Com.DriverAccess`. Adopting DriverAccess
-made the driver simply work in-process, so the out-of-process host, its x86
-child, and the `--ascom-com-host` self-relaunch were all removed. If a driver
-ever crashes even through DriverAccess, re-introducing isolation would mean a
-child that *also* uses DriverAccess — not the old raw-COM host.
+Two things had to be true for a DIY WinForms/.NET driver (e.g. a MilkyWheel
+filter wheel) to work; each was learned the hard way against a real driver:
 
-The remaining raw-COM adapters (camera / focuser / telescope / switch) have
-the same latent risk and should migrate to DriverAccess too; the filter wheel
-is the first.
+1. **DriverAccess, not raw `IDispatch`.** Raw `Type.GetTypeFromProgID` +
+   `Activator.CreateInstance` + a hand-rolled STA pump fast-fails (0xC0000409)
+   at *construction*. The ASCOM Platform's `ASCOM.Com.DriverAccess` (the
+   wrapper NINA uses) constructs the driver cleanly.
+2. **A minimal process, not the loaded server.** Even through DriverAccess, the
+   driver's `Connected = true` (opening a serial port via
+   `ASCOM.Utilities.Serial`) fast-fails inside the loaded Kestrel process, yet
+   throws a clean error — or connects — in a minimal child. Proven by running
+   the exact same connect both ways.
+
+So the wheel runs in a minimal child: the Polaris exe re-launched with
+`--ascom-com-host` (`AscomComHostRunner`), hosting a DriverAccess FilterWheel on
+an STA pump and serving it over stdin/stdout JSON. `AscomHostChannel` (parent)
+marshals member access and turns a child crash into a clean
+`AscomHostException`; `AscomComFilterWheelHosted` is the `IFilterWheel` over it.
+Self-relaunch means zero extra packaging, and a crashing driver takes down only
+its child — the API server surfaces a clean error with an Alpaca hint.
+
+The remaining raw-COM adapters (camera / focuser / telescope / switch) still
+activate in-process; native drivers (ZWO etc.) are fine there, but a WinForms
+.NET one would hit the same wall and should move to this host too.
 
 ## Threading model
 
-The raw-COM adapters each get their own `AscomComStaDispatcher` (~1 MB stack
-+ a kernel thread per connected device). The DriverAccess filter wheel needs
-none — DriverAccess owns the COM apartment, so its calls run on the thread
-pool via `Task.Run`, as in NINA.
+The in-process raw-COM adapters each get their own `AscomComStaDispatcher`
+(~1 MB stack + a kernel thread per connected device). The filter wheel's STA
+pump lives in its child process instead.
 
 ## Licensing
 
