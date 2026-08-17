@@ -695,6 +695,7 @@ public class EquipmentProfile {
                     BitDepth = CameraBitDepth,
                     TelescopeBrand = TelescopeBrand, TelescopeModel = TelescopeModel,
                     Focuser = Focuser, FocuserDriver = FocuserDriver,
+                    FilterWheel = FilterWheel, FilterWheelDriver = FilterWheelDriver, FilterNames = FilterNames,
                 },
                 new ImagerConfig {
                     Role = "aux", DeviceId = AuxCamera, Driver = AuxCameraDriver, Enabled = AuxEnabled,
@@ -1310,9 +1311,20 @@ public class ImagerConfig {
     public string TelescopeBrand { get; set; } = "";
     public string TelescopeModel { get; set; } = "";
 
-    /// <summary>Focuser bound to this imager (optional).</summary>
+    /// <summary>Focuser bound to this imager (optional). Each imaging train can
+    /// carry its own focuser.</summary>
     public string? Focuser { get; set; }
     public string FocuserDriver { get; set; } = "indi";
+
+    /// <summary>Filter wheel bound to this imager (optional). Each imaging train
+    /// can carry its own filter wheel.</summary>
+    public string? FilterWheel { get; set; }
+    public string FilterWheelDriver { get; set; } = "indi";
+
+    /// <summary>Last-known filter slot names for this imager's wheel, in slot
+    /// order (mirrors <see cref="EquipmentProfile.FilterNames"/> so read-only
+    /// wheels keep their labels across a driver reset). Empty when never edited.</summary>
+    public string[] FilterNames { get; set; } = System.Array.Empty<string>();
 
     /// <summary>Stable role id used for status/UI and as the DitherBarrier
     /// participant id ("main", "aux", "imager-3", …). Assigned by

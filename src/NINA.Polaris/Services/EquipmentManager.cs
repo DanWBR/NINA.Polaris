@@ -232,6 +232,72 @@ public class EquipmentManager : IDisposable {
         return AuxCamera;
     }
 
+    // ----- STAGE2: additional imaging cameras (main=0, aux=1, extras=2+) -----
+    // Runtime counterpart of EquipmentProfile.ExtraImagers. The main and aux
+    // slots keep their dedicated properties above; new imagers live in this list
+    // and are addressed by an imager index so N-camera code stays uniform.
+
+    private sealed class ImagerSlot {
+        public ICamera? Camera;
+        public string? Driver;
+        public string? DeviceId;
+    }
+    private readonly List<ImagerSlot> _extraImagers = new();
+
+    /// <summary>Number of extra imaging cameras bound beyond the main+aux pair.</summary>
+    public int ExtraImagerCount => _extraImagers.Count;
+
+    /// <summary>The imaging camera at slot <paramref name="index"/>: 0 = main
+    /// <see cref="Camera"/>, 1 = <see cref="AuxCamera"/>, 2+ = an extra imager.
+    /// Null when nothing is bound to that slot.</summary>
+    public ICamera? GetImager(int index) {
+        if (index <= 0) return Camera;
+        if (index == 1) return AuxCamera;
+        var i = index - 2;
+        return i >= 0 && i < _extraImagers.Count ? _extraImagers[i].Camera : null;
+    }
+
+    /// <summary>Select the imaging camera for slot <paramref name="index"/>.
+    /// Slots 0 and 1 delegate to <see cref="SelectCamera(string,string)"/> and
+    /// <see cref="SelectAuxCamera"/> so their existing behavior is preserved;
+    /// 2+ bind an extra imager (growing the list). Rejects sharing the connected
+    /// main camera's device, same rule as the aux slot.</summary>
+    public ICamera SelectImager(int index, string driver, string deviceId) {
+        if (index <= 0) return SelectCamera(driver, deviceId);
+        if (index == 1) return SelectAuxCamera(driver, deviceId);
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        if (Camera != null && Camera.IsConnected && CameraDriver == driver &&
+            string.Equals(Camera.DeviceName, deviceId, StringComparison.OrdinalIgnoreCase)) {
+            throw new InvalidOperationException(
+                "An imaging camera must differ from the main camera while it is connected.");
+        }
+        var i = index - 2;
+        while (_extraImagers.Count <= i) _extraImagers.Add(new ImagerSlot());
+        var slot = _extraImagers[i];
+        var previous = slot.Camera;
+        slot.Camera = CreateCamera(driver, deviceId);
+        ReleaseReplacedDevice(previous);
+        slot.Driver = driver;
+        slot.DeviceId = deviceId;
+        _logger.LogInformation("Imager {Index} selected: driver={Driver}, id={DeviceId}", index, driver, deviceId);
+        return slot.Camera!;
+    }
+
+    /// <summary>Ordered runtime view over every imaging-camera slot: main (0),
+    /// aux (1), then extras. Roles match <c>EquipmentProfile.Imagers</c>
+    /// ("main"/"aux"/"imager-N") and double as the DitherBarrier participant ids.</summary>
+    public IReadOnlyList<ImagerSlotInfo> EnumerateImagers() {
+        var list = new List<ImagerSlotInfo> {
+            new(0, "main", Camera, CameraDriver, CameraDeviceId),
+            new(1, "aux", AuxCamera, AuxCameraDriver, AuxCameraDeviceId),
+        };
+        for (int i = 0; i < _extraImagers.Count; i++) {
+            var s = _extraImagers[i];
+            list.Add(new(i + 2, $"imager-{i + 3}", s.Camera, s.Driver, s.DeviceId));
+        }
+        return list;
+    }
+
     private static ICamera CreateCanonCamera(string deviceId) {
         if (!OperatingSystem.IsWindows()) {
             throw new NotSupportedException(
@@ -1226,6 +1292,7 @@ public class EquipmentManager : IDisposable {
         if (ReferenceEquals(previous, Camera)
             || ReferenceEquals(previous, GuideCamera)
             || ReferenceEquals(previous, AuxCamera)
+            || _extraImagers.Any(s => ReferenceEquals(previous, s.Camera))
             || ReferenceEquals(previous, Rotator)
             || ReferenceEquals(previous, FlatDevice)
             || ReferenceEquals(previous, Dome)
@@ -1244,8 +1311,15 @@ public class EquipmentManager : IDisposable {
 
     public void Dispose() {
         _indiClient.DeviceFound -= OnDeviceFound;
+        foreach (var s in _extraImagers)
+            if (s.Camera is IDisposable d) { try { d.Dispose(); } catch { } }
     }
 }
+
+/// <summary>STAGE2: one imaging-camera slot in <see cref="EquipmentManager.EnumerateImagers"/>.
+/// Index 0 = main, 1 = aux, 2+ = extras; Role is the stable id ("main"/"aux"/
+/// "imager-N") shared with the profile and the DitherBarrier.</summary>
+public record ImagerSlotInfo(int Index, string Role, NINA.Image.Interfaces.ICamera? Camera, string? Driver, string? DeviceId);
 
 /// <summary>Describes one camera-driver kind exposed by the host.
 /// Used by <c>GET /api/camera/drivers</c> so the UI can populate the

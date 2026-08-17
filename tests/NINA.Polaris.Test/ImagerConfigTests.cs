@@ -40,6 +40,9 @@ public class ImagerConfigTests {
             FocalLengthMm = 530, ApertureMm = 106,
             CameraPixelSizeUm = 3.76, CameraMaxX = 6248, CameraMaxY = 4176, CameraBitDepth = 16,
             TelescopeBrand = "WO", TelescopeModel = "RedCat",
+            Focuser = "foc0", FocuserDriver = "asi",
+            FilterWheel = "efw0", FilterWheelDriver = "asi",
+            FilterNames = new[] { "L", "R", "G", "B" },
         };
         var main = rig.Imagers[0];
         Assert.That(main.DeviceId, Is.EqualTo("cam0"));
@@ -49,6 +52,10 @@ public class ImagerConfigTests {
         Assert.That(main.ApertureMm, Is.EqualTo(106));
         Assert.That(main.MaxX, Is.EqualTo(6248));
         Assert.That(main.TelescopeModel, Is.EqualTo("RedCat"));
+        // Each imager carries its own focuser + filter wheel.
+        Assert.That(main.Focuser, Is.EqualTo("foc0"));
+        Assert.That(main.FilterWheel, Is.EqualTo("efw0"));
+        Assert.That(main.FilterNames, Is.EqualTo(new[] { "L", "R", "G", "B" }));
     }
 
     [Test]
