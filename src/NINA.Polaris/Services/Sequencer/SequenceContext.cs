@@ -70,6 +70,12 @@ public class SequenceContext {
 
     public ILogger Logger { get; }
 
+    /// <summary>Multi-camera synchronized-dither coordinator. Capture
+    /// instructions park on it before a sub and report finished subs; the
+    /// dither trigger/instruction defer to it when it owns dithering
+    /// (>=2 imaging cameras active).</summary>
+    public DitherBarrier Barrier { get; }
+
     /// <summary>
     /// Per-run scratch space. Triggers use this to remember their last fired
     /// timestamp, the dither trigger uses it to count frames, etc. Keys are
@@ -134,6 +140,7 @@ public class SequenceContext {
         CaptureProgressService captureProgress,
         CoolingRampService coolingRamp,
         CameraReadyGate cameraReady,
+        DitherBarrier barrier,
         ILogger logger) {
         Equipment = equipment;
         Relay = relay;
@@ -149,6 +156,7 @@ public class SequenceContext {
         CaptureProgress = captureProgress;
         CoolingRamp = coolingRamp;
         CameraReady = cameraReady;
+        Barrier = barrier;
         Logger = logger;
         RunStartedAt = DateTime.UtcNow;
     }

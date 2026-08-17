@@ -248,6 +248,7 @@ public class AdvancedSequencerTests {
 
     private static SequenceContext TestCtx() => new SequenceContext(
         null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!,
+        new NINA.Polaris.Services.DitherBarrier(null!, NullLogger<NINA.Polaris.Services.DitherBarrier>.Instance),
         NullLogger.Instance);
 
     /// <summary>Test instruction: counts runs, optionally throws on the first N.</summary>

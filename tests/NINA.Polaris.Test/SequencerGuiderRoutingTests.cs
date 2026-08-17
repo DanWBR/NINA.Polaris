@@ -54,7 +54,9 @@ public class SequencerGuiderRoutingTests {
 
         var ctx = new SequenceContext(
             equipment, null!, null!, phd2, guiders, null!, null!, null!, null!,
-            null!, profiles, null!, null!, null!, NullLogger.Instance);
+            null!, profiles, null!, null!, null!,
+            new NINA.Polaris.Services.DitherBarrier(guiders, NullLogger<NINA.Polaris.Services.DitherBarrier>.Instance),
+            NullLogger.Instance);
         return (ctx, phd2, native);
     }
 

@@ -184,6 +184,10 @@ public class AdvancedSequenceEngine {
             return;
         }
 
+        // Main imaging camera joins the synchronized-dither barrier for the run.
+        // (The barrier only engages when a second imaging camera also registers;
+        // that aux-instruction participation is a follow-up.)
+        try { ctx.Barrier.Register("main", blocking: true, isPrimary: true); } catch { }
         try {
             Document.Root.Status = SequenceEntityStatus.Running;
             Document.Root.StartedAt = DateTime.UtcNow;
@@ -199,6 +203,7 @@ public class AdvancedSequenceEngine {
             LastError = ex.Message;
             _logger.LogError(ex, "Sequence failed");
         } finally {
+            try { ctx.Barrier.Deregister("main"); } catch { }
             Document.Root.FinishedAt = DateTime.UtcNow;
             FinishedAt = DateTime.UtcNow;
             State = AdvancedSequenceState.Idle;
@@ -221,6 +226,7 @@ public class AdvancedSequenceEngine {
             captureProgress: _services.GetRequiredService<CaptureProgressService>(),
             coolingRamp: _services.GetRequiredService<CoolingRampService>(),
             cameraReady: _services.GetRequiredService<CameraReadyGate>(),
+            barrier: _services.GetRequiredService<DitherBarrier>(),
             logger: _logger);
     }
 

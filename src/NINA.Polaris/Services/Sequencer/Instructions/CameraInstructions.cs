@@ -129,6 +129,9 @@ public class TakeExposureInstruction : SequenceInstruction {
             // restart is recoverable in tens of seconds; the run just has to wait
             // for the watchdog. CaptureFrameWithRetryAsync does exactly that, and
             // CompletedCount (below) already makes a resumed frame idempotent.
+            // Park here if a synchronized dither round is in flight (multi-cam).
+            await ctx.Barrier.BeforeSubAsync("main", ct);
+
             NINA.Image.Interfaces.IImageData image =
                 await CaptureFrameWithRetryAsync(ctx, capOpts, ct);
 
@@ -163,6 +166,9 @@ public class TakeExposureInstruction : SequenceInstruction {
             }
 
             ctx.IncrementFramesCompleted();
+            // Report the finished sub to the barrier; when this is the slowest of
+            // >=2 imaging cameras it runs the synchronized dither round here.
+            await ctx.Barrier.AfterSubAsync("main", ExposureSeconds, ct);
             // Persist per-instruction progress AFTER the frame is fully
             // handled (saved + relayed): a stop/crash between frames resumes
             // at the first frame that didn't complete.

@@ -61,6 +61,13 @@ public class DitherAfterNExposuresTrigger : SequenceTrigger {
     }
 
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
+        // Multi-camera: the barrier owns the dither cadence (driven by the
+        // slowest camera) and dithers for every camera; hand it our params and
+        // skip here so we don't dither twice or move the mount mid-sub on
+        // another camera. Single-camera keeps the direct dither.
+        ctx.Barrier.ConfigureCadence(EveryNFrames, new NINA.Polaris.Services.DitherParams(
+            Pixels, RaOnly, SettlePixels, SettleTimeSeconds, SettleTimeoutSeconds));
+        if (ctx.Barrier.OwnsDither) return;
         await ctx.Guider.DitherAsync(Pixels, RaOnly, SettlePixels, SettleTimeSeconds, SettleTimeoutSeconds);
     }
 }
