@@ -666,6 +666,54 @@ public class EquipmentProfile {
     /// main session (LIVE or AUTORUN) is active. Default off.</summary>
     public bool AuxEnabled { get; set; }
 
+    // ----- STAGE2: additional imaging cameras (beyond main + aux) -----
+    // The main and aux cameras keep their legacy fields above (untouched for
+    // backward compatibility); a third-and-beyond imaging camera is stored in
+    // ExtraImagers, and the read-only Imagers view projects main + aux + extras
+    // into one uniform list so new code can iterate every imager the same way.
+
+    /// <summary>Additional imaging cameras beyond the main+aux pair — index 0
+    /// here is the 3rd camera on the mount. Persisted with the rig; empty on
+    /// legacy rigs, so the on-disk shape and behavior are unchanged until a
+    /// third camera is actually added.</summary>
+    public List<ImagerConfig> ExtraImagers { get; set; } = new();
+
+    /// <summary>Unified, read-only view over every imaging camera on this rig:
+    /// [0] is the main camera (projected from the legacy top-level fields),
+    /// [1] is the aux camera (from the Aux* fields), and 2+ are
+    /// <see cref="ExtraImagers"/>. New code iterates this instead of
+    /// special-casing main vs aux. Not serialized — the legacy fields and
+    /// ExtraImagers remain the storage of record.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<ImagerConfig> Imagers {
+        get {
+            var list = new List<ImagerConfig> {
+                new ImagerConfig {
+                    Role = "main", DeviceId = Camera, Driver = CameraDriver, Enabled = true,
+                    FocalLengthMm = FocalLengthMm, ApertureMm = ApertureMm,
+                    PixelSizeUm = CameraPixelSizeUm, MaxX = CameraMaxX, MaxY = CameraMaxY,
+                    BitDepth = CameraBitDepth,
+                    TelescopeBrand = TelescopeBrand, TelescopeModel = TelescopeModel,
+                    Focuser = Focuser, FocuserDriver = FocuserDriver,
+                },
+                new ImagerConfig {
+                    Role = "aux", DeviceId = AuxCamera, Driver = AuxCameraDriver, Enabled = AuxEnabled,
+                    FocalLengthMm = AuxFocalLengthMm, ApertureMm = AuxApertureMm,
+                    PixelSizeUm = AuxCameraPixelSizeUm, MaxX = AuxCameraMaxX, MaxY = AuxCameraMaxY,
+                    BitDepth = AuxCameraBitDepth, ExposureMs = AuxExposureMs, Gain = AuxGain, Binning = AuxBinning,
+                    TelescopeBrand = AuxTelescopeBrand ?? "", TelescopeModel = AuxTelescopeModel ?? "",
+                    Focuser = AuxFocuser, FocuserDriver = AuxFocuserDriver,
+                },
+            };
+            for (int i = 0; i < ExtraImagers.Count; i++) {
+                var e = ExtraImagers[i];
+                if (string.IsNullOrEmpty(e.Role)) e.Role = $"imager-{i + 3}";
+                list.Add(e);
+            }
+            return list;
+        }
+    }
+
     /// <summary>Aux focuser device id (same addressing scheme as
     /// <see cref="Focuser"/>). Optional; enables manual focusing of the aux
     /// camera from the FOCUS tab. Null = no aux focuser.</summary>
@@ -1217,4 +1265,57 @@ public class AutoFocusSettings {
     /// <summary>A sample below this star count is soft-rejected (measure 0,
     /// huge error) instead of feeding a bogus HFR into the fit.</summary>
     public int MinStars { get; set; } = 5;
+}
+
+/// <summary>STAGE2: per-imaging-camera configuration. The canonical shape for a
+/// third-and-beyond imaging camera on a rig (<see cref="EquipmentProfile.ExtraImagers"/>);
+/// the main and aux cameras are projected into this shape by
+/// <see cref="EquipmentProfile.Imagers"/> so N-camera code treats every imager
+/// uniformly. Field roles mirror the legacy per-camera fields.</summary>
+public class ImagerConfig {
+    /// <summary>Device id (same addressing scheme as <see cref="EquipmentProfile.Camera"/>).
+    /// Null = no camera selected for this slot.</summary>
+    public string? DeviceId { get; set; }
+
+    /// <summary>Backend kind (same enum as <see cref="EquipmentProfile.CameraDriver"/>).</summary>
+    public string Driver { get; set; } = "indi";
+
+    /// <summary>When true, this imager captures during a session.</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Effective focal length of this imager's optics (mm).</summary>
+    public double FocalLengthMm { get; set; } = 200;
+
+    /// <summary>Aperture (mm). Optional; for f-ratio display.</summary>
+    public double ApertureMm { get; set; }
+
+    /// <summary>Pixel size fallback (µm) for backends that report 0 (DSLRs).</summary>
+    public double PixelSizeUm { get; set; }
+
+    /// <summary>Sensor resolution + bit depth fallback (DSLR CCD_INFO bootstrap).</summary>
+    public int MaxX { get; set; }
+    public int MaxY { get; set; }
+    public int BitDepth { get; set; }
+
+    /// <summary>Exposure per frame (ms).</summary>
+    public int ExposureMs { get; set; } = 5000;
+
+    /// <summary>Gain in native units; 0 = leave the driver default.</summary>
+    public int Gain { get; set; }
+
+    /// <summary>Binning; default 1.</summary>
+    public int Binning { get; set; } = 1;
+
+    /// <summary>Telescope/lens brand + model. Optional, free-form.</summary>
+    public string TelescopeBrand { get; set; } = "";
+    public string TelescopeModel { get; set; } = "";
+
+    /// <summary>Focuser bound to this imager (optional).</summary>
+    public string? Focuser { get; set; }
+    public string FocuserDriver { get; set; } = "indi";
+
+    /// <summary>Stable role id used for status/UI and as the DitherBarrier
+    /// participant id ("main", "aux", "imager-3", …). Assigned by
+    /// <see cref="EquipmentProfile.Imagers"/> for the projected/extra imagers.</summary>
+    public string Role { get; set; } = "";
 }
