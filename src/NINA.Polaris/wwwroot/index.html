@@ -11397,6 +11397,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      so the toolbar stays scannable at a glance. -->
                 <div class="files-actions files-actions-icons">
                     <span class="files-ai-label" aria-hidden="true">FILE TOOLS</span>
+                    <!-- Set the current/selected folder as the Studio scan root.
+                         First in the toolbar: it's the primary action here. -->
+                    <button class="btn btn-sm btn-icon btn-primary"
+                            @click="filesSetStudioRoot()"
+                            :title="filesSelectedDir() ? 'Set the selected folder as the Studio scan root' : 'Set the current folder as the Studio scan root'"
+                            aria-label="Set as Studio root">
+                        <span class="files-icon">⭐</span>
+                        <span class="files-icon-label">Studio root</span>
+                    </button>
+                    <span class="files-actions-sep" aria-hidden="true"></span>
                     <!-- File ops -->
                     <button class="btn btn-sm btn-icon"
                             @click="filesMkdir()"
@@ -11497,13 +11507,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             aria-label="Delete">
                         <span class="files-icon">🗑</span>
                         <span class="files-icon-label">Delete</span>
-                    </button>
-                    <button class="btn btn-sm btn-icon btn-primary"
-                            @click="filesSetStudioRoot()"
-                            :title="filesSelectedDir() ? 'Set the selected folder as the Studio scan root' : 'Set the current folder as the Studio scan root'"
-                            aria-label="Set as Studio root">
-                        <span class="files-icon">⭐</span>
-                        <span class="files-icon-label">Studio root</span>
                     </button>
                     <span class="files-actions-sep" aria-hidden="true"></span>
                     <!-- Edit ops. GX-12d: arbitrary two-file before/after
