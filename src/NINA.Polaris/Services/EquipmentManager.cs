@@ -241,6 +241,11 @@ public class EquipmentManager : IDisposable {
         public ICamera? Camera;
         public string? Driver;
         public string? DeviceId;
+        // Each imaging train can carry its own focuser + filter wheel.
+        public IFocuser? Focuser;
+        public string? FocuserDriver;
+        public IFilterWheel? FilterWheel;
+        public string? FilterWheelDriver;
     }
     private readonly List<ImagerSlot> _extraImagers = new();
 
@@ -296,6 +301,65 @@ public class EquipmentManager : IDisposable {
             list.Add(new(i + 2, $"imager-{i + 3}", s.Camera, s.Driver, s.DeviceId));
         }
         return list;
+    }
+
+    /// <summary>Focuser bound to imager slot <paramref name="index"/>: 0 = main
+    /// <see cref="Focuser"/>, 1 = <see cref="AuxFocuser"/>, 2+ = an extra
+    /// imager's focuser. Null when none is bound.</summary>
+    public IFocuser? GetImagerFocuser(int index) {
+        if (index <= 0) return Focuser;
+        if (index == 1) return AuxFocuser;
+        var i = index - 2;
+        return i >= 0 && i < _extraImagers.Count ? _extraImagers[i].Focuser : null;
+    }
+
+    /// <summary>Bind a focuser to imager slot <paramref name="index"/>. Slots 0/1
+    /// delegate to the main/aux focuser selectors; 2+ bind an extra imager's
+    /// focuser (growing the list).</summary>
+    public IFocuser SelectImagerFocuser(int index, string driver, string deviceId) {
+        if (index <= 0) return SelectFocuser(driver, deviceId);
+        if (index == 1) return SelectAuxFocuser(driver, deviceId);
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        var i = index - 2;
+        while (_extraImagers.Count <= i) _extraImagers.Add(new ImagerSlot());
+        var slot = _extraImagers[i];
+        var previous = slot.Focuser;
+        slot.Focuser = CreateFocuser(driver, deviceId);
+        ReleaseReplacedDevice(previous);
+        slot.FocuserDriver = driver;
+        _logger.LogInformation("Imager {Index} focuser selected: driver={Driver}, id={DeviceId}", index, driver, deviceId);
+        return slot.Focuser;
+    }
+
+    /// <summary>Filter wheel bound to imager slot <paramref name="index"/>:
+    /// 0 = main <see cref="FilterWheel"/>, 2+ = an extra imager's wheel. Null
+    /// when none. (The aux slot has no filter wheel yet — today the aux is
+    /// filter-less.)</summary>
+    public IFilterWheel? GetImagerFilterWheel(int index) {
+        if (index <= 0) return FilterWheel;
+        var i = index - 2;
+        return i >= 0 && i < _extraImagers.Count ? _extraImagers[i].FilterWheel : null;
+    }
+
+    /// <summary>Bind a filter wheel to imager slot <paramref name="index"/>.
+    /// Slot 0 delegates to the main <see cref="SelectFilterWheel(string,string)"/>
+    /// (applying the rig's saved filter names); 2+ bind an extra imager's wheel
+    /// with the raw adapter.</summary>
+    public IFilterWheel SelectImagerFilterWheel(int index, string driver, string deviceId) {
+        if (index <= 0) return SelectFilterWheel(driver, deviceId);
+        if (index == 1)
+            throw new NotSupportedException(
+                "The aux camera has no filter wheel slot yet; use the main camera or an extra imager.");
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        var i = index - 2;
+        while (_extraImagers.Count <= i) _extraImagers.Add(new ImagerSlot());
+        var slot = _extraImagers[i];
+        var previous = slot.FilterWheel;
+        slot.FilterWheel = CreateFilterWheelAdapter(driver, deviceId);
+        ReleaseReplacedDevice(previous);
+        slot.FilterWheelDriver = driver;
+        _logger.LogInformation("Imager {Index} filter wheel selected: driver={Driver}, id={DeviceId}", index, driver, deviceId);
+        return slot.FilterWheel;
     }
 
     private static ICamera CreateCanonCamera(string deviceId) {
@@ -893,14 +957,7 @@ public class EquipmentManager : IDisposable {
 
     public IFilterWheel SelectFilterWheel(string driver, string deviceId) {
         driver = (driver ?? "indi").Trim().ToLowerInvariant();
-        IFilterWheel adapter = driver switch {
-            "indi" => new IndiFilterWheel(_indiClient, deviceId),
-            "ascom-com" => CreateAscomFilterWheel(deviceId),
-            "alpaca" => AlpacaFilterWheel.FromDeviceId(deviceId),
-            _ => throw new NotSupportedException(
-                $"Filter wheel driver '{driver}' is not implemented yet. " +
-                "Use 'indi', 'alpaca', or 'ascom-com'."),
-        };
+        var adapter = CreateFilterWheelAdapter(driver, deviceId);
         // FILTERNAME: overlay the rig's saved filter names on top of the driver's
         // so read-only wheels (ASCOM/Alpaca) can still be renamed in Polaris.
         FilterWheel = _profiles != null ? new EffectiveFilterWheel(adapter, _profiles) : adapter;
@@ -909,6 +966,19 @@ public class EquipmentManager : IDisposable {
             driver, deviceId);
         return FilterWheel;
     }
+
+    /// <summary>Build a raw filter-wheel adapter for a driver+id (no name
+    /// overlay). Shared by the main <see cref="SelectFilterWheel(string,string)"/>
+    /// (which wraps it in an <see cref="EffectiveFilterWheel"/>) and the
+    /// per-imager filter wheels. Caller normalises <paramref name="driver"/>.</summary>
+    private IFilterWheel CreateFilterWheelAdapter(string driver, string deviceId) => driver switch {
+        "indi" => new IndiFilterWheel(_indiClient, deviceId),
+        "ascom-com" => CreateAscomFilterWheel(deviceId),
+        "alpaca" => AlpacaFilterWheel.FromDeviceId(deviceId),
+        _ => throw new NotSupportedException(
+            $"Filter wheel driver '{driver}' is not implemented yet. " +
+            "Use 'indi', 'alpaca', or 'ascom-com'."),
+    };
 
     private static IFilterWheel CreateAscomFilterWheel(string progId) {
         if (!OperatingSystem.IsWindows())
@@ -1292,7 +1362,8 @@ public class EquipmentManager : IDisposable {
         if (ReferenceEquals(previous, Camera)
             || ReferenceEquals(previous, GuideCamera)
             || ReferenceEquals(previous, AuxCamera)
-            || _extraImagers.Any(s => ReferenceEquals(previous, s.Camera))
+            || _extraImagers.Any(s => ReferenceEquals(previous, s.Camera)
+                || ReferenceEquals(previous, s.Focuser) || ReferenceEquals(previous, s.FilterWheel))
             || ReferenceEquals(previous, Rotator)
             || ReferenceEquals(previous, FlatDevice)
             || ReferenceEquals(previous, Dome)
@@ -1311,8 +1382,11 @@ public class EquipmentManager : IDisposable {
 
     public void Dispose() {
         _indiClient.DeviceFound -= OnDeviceFound;
-        foreach (var s in _extraImagers)
-            if (s.Camera is IDisposable d) { try { d.Dispose(); } catch { } }
+        foreach (var s in _extraImagers) {
+            if (s.Camera is IDisposable dc) { try { dc.Dispose(); } catch { } }
+            if (s.Focuser is IDisposable df) { try { df.Dispose(); } catch { } }
+            if (s.FilterWheel is IDisposable dw) { try { dw.Dispose(); } catch { } }
+        }
     }
 }
 

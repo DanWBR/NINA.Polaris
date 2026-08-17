@@ -70,4 +70,37 @@ public class EquipmentManagerImagerTests {
         Assert.That(second, Is.Not.SameAs(first));
         Assert.That(equip.EnumerateImagers()[2].DeviceId, Is.EqualTo("CCD B"));
     }
+
+    [Test]
+    public void ExtraImager_HasOwnFocuserAndFilterWheel() {
+        var equip = Make();
+        var foc = equip.SelectImagerFocuser(2, "indi", "Focuser Three");
+        var fw = equip.SelectImagerFilterWheel(2, "indi", "EFW Three");
+
+        Assert.That(foc, Is.Not.Null);
+        Assert.That(fw, Is.Not.Null);
+        Assert.That(equip.GetImagerFocuser(2), Is.SameAs(foc));
+        Assert.That(equip.GetImagerFilterWheel(2), Is.SameAs(fw));
+        // Binding a focuser/wheel to the extra slot did not spawn a second slot.
+        Assert.That(equip.ExtraImagerCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ImagerFocuser_Slots0And1_DelegateToMainAndAux() {
+        var equip = Make();
+        equip.SelectImagerFocuser(0, "indi", "Foc Main");
+        equip.SelectImagerFocuser(1, "indi", "Foc Aux");
+        Assert.That(equip.GetImagerFocuser(0), Is.SameAs(equip.Focuser));
+        Assert.That(equip.GetImagerFocuser(1), Is.SameAs(equip.AuxFocuser));
+        // No extra imager slots were created by binding the main/aux focusers.
+        Assert.That(equip.ExtraImagerCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ImagerFilterWheel_AuxSlot_IsNotSupportedYet() {
+        var equip = Make();
+        Assert.That(equip.GetImagerFilterWheel(1), Is.Null);
+        Assert.Throws<System.NotSupportedException>(
+            () => equip.SelectImagerFilterWheel(1, "indi", "EFW Aux"));
+    }
 }
