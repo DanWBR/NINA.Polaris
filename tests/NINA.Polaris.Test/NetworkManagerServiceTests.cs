@@ -190,4 +190,68 @@ public class NetworkManagerServiceTests {
             WifiMode.Disconnected, null, Now, Grace, enabled: true, suppressUntil: DateTime.MinValue),
             Is.False);
     }
+
+    // ----- ShouldAttemptStationReconnect (auto hotspot -> station watchdog) -----
+
+    private static readonly TimeSpan RetryGrace = TimeSpan.FromSeconds(60);
+
+    [Test]
+    public void Reconnect_AutoFallbackAp_PastCadence_Attempts() {
+        // We are on the AP only because the station was unreachable; a full
+        // retry interval has elapsed => probe for the station coming back.
+        var lastRetry = Now - TimeSpan.FromSeconds(90);
+        Assert.That(NetworkManagerService.ShouldAttemptStationReconnect(
+            enabled: true, hotspotFallbackEngaged: true, WifiMode.Hotspot,
+            Now, lastRetry, RetryGrace, suppressUntil: DateTime.MinValue),
+            Is.True);
+    }
+
+    [Test]
+    public void Reconnect_WithinCadence_WaitsItOut() {
+        // Retried recently => do not blip the radio again yet.
+        var lastRetry = Now - TimeSpan.FromSeconds(15);
+        Assert.That(NetworkManagerService.ShouldAttemptStationReconnect(
+            enabled: true, hotspotFallbackEngaged: true, WifiMode.Hotspot,
+            Now, lastRetry, RetryGrace, suppressUntil: DateTime.MinValue),
+            Is.False);
+    }
+
+    [Test]
+    public void Reconnect_UserChoseHotspot_NeverAttempts() {
+        // Hotspot up by the user's explicit choice (fallback flag clear) =>
+        // never yank them back to station.
+        var lastRetry = Now - TimeSpan.FromSeconds(600);
+        Assert.That(NetworkManagerService.ShouldAttemptStationReconnect(
+            enabled: true, hotspotFallbackEngaged: false, WifiMode.Hotspot,
+            Now, lastRetry, RetryGrace, suppressUntil: DateTime.MinValue),
+            Is.False);
+    }
+
+    [Test]
+    public void Reconnect_AlreadyOnStation_NeverAttempts() {
+        var lastRetry = Now - TimeSpan.FromSeconds(600);
+        Assert.That(NetworkManagerService.ShouldAttemptStationReconnect(
+            enabled: true, hotspotFallbackEngaged: true, WifiMode.Station,
+            Now, lastRetry, RetryGrace, suppressUntil: DateTime.MinValue),
+            Is.False);
+    }
+
+    [Test]
+    public void Reconnect_Disabled_NeverAttempts() {
+        var lastRetry = Now - TimeSpan.FromSeconds(600);
+        Assert.That(NetworkManagerService.ShouldAttemptStationReconnect(
+            enabled: false, hotspotFallbackEngaged: true, WifiMode.Hotspot,
+            Now, lastRetry, RetryGrace, suppressUntil: DateTime.MinValue),
+            Is.False);
+    }
+
+    [Test]
+    public void Reconnect_SuppressedByManualSwitch_DoesNotAttempt() {
+        var lastRetry = Now - TimeSpan.FromSeconds(600);
+        var suppressUntil = Now + TimeSpan.FromSeconds(20);
+        Assert.That(NetworkManagerService.ShouldAttemptStationReconnect(
+            enabled: true, hotspotFallbackEngaged: true, WifiMode.Hotspot,
+            Now, lastRetry, RetryGrace, suppressUntil: suppressUntil),
+            Is.False);
+    }
 }
