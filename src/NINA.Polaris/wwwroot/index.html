@@ -4405,7 +4405,7 @@
                         <p class="text-muted" style="font-size:12px;margin:0 0 14px"
                            x-text="$t('One dither configuration shared by LIVE, AUTORUN, the Advanced Sequencer and every camera on the mount.')"></p>
 
-                        <div style="display:grid;grid-template-columns:1fr;gap:12px;max-width:340px">
+                        <div style="display:grid;grid-template-columns:1fr;gap:7px;max-width:340px">
                             <label class="checkbox-label" style="display:flex;align-items:center;gap:10px">
                                 <input type="checkbox" x-model="dither.enabled" @change="saveDither()">
                                 <span x-text="$t('Enable dithering')"></span>
@@ -4424,27 +4424,30 @@
                                 <input type="checkbox" x-model="dither.raOnly" @change="saveDither()">
                                 <span x-text="$t('RA only (skip Dec)')"></span>
                             </label>
-                            <label style="display:flex;flex-direction:column;gap:4px">
-                                <span x-text="$t('Multi-camera strategy')"></span>
-                                <select class="input" x-model="dither.cadenceStrategy" @change="saveDither()">
-                                    <option value="slowest" x-text="$t('Slowest camera drives (recommended)')"></option>
-                                    <option value="main" x-text="$t('Main camera drives')"></option>
-                                    <option value="independent" x-text="$t('Independent (each camera on its own)')"></option>
-                                </select>
-                                <span class="text-muted" style="font-size:11px"
+                            <div style="display:flex;flex-direction:column;gap:4px">
+                                <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                                    <span x-text="$t('Multi-camera strategy')"></span>
+                                    <select class="input" style="flex:1;min-width:0;max-width:210px"
+                                            x-model="dither.cadenceStrategy" @change="saveDither()">
+                                        <option value="slowest" x-text="$t('Slowest camera drives (recommended)')"></option>
+                                        <option value="main" x-text="$t('Main camera drives')"></option>
+                                        <option value="independent" x-text="$t('Independent (each camera on its own)')"></option>
+                                    </select>
+                                </label>
+                                <span class="text-muted" style="font-size:11px;text-align:left"
                                       x-text="dither.cadenceStrategy === 'independent'
                                           ? $t('No sync: a dither may trail another camera\'s frame.')
                                           : (dither.cadenceStrategy === 'main'
                                               ? $t('The main camera sets the dither cadence; the others wait for it.')
                                               : $t('The slowest camera sets the cadence; the others wait for it.'))"></span>
-                            </label>
+                            </div>
                         </div>
 
-                        <div style="border-top:1px solid var(--border);margin:8px 0 12px;padding-top:10px;
+                        <div style="border-top:1px solid var(--border);margin:6px 0 8px;padding-top:8px;
                                     font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)"
                              x-text="$t('Settling')"></div>
 
-                        <div style="display:grid;grid-template-columns:1fr;gap:12px;max-width:340px">
+                        <div style="display:grid;grid-template-columns:1fr;gap:7px;max-width:340px">
                             <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
                                 <span x-text="$t('Settle within (px)')"></span>
                                 <input type="number" class="input" style="width:110px;flex:none" x-model.number="dither.settlePixels"
