@@ -130,7 +130,8 @@ public class ImageWriterService {
         string imageType = "LIGHT",
         int gain = 0,
         bool stacked = false,
-        double? focalLengthMmOverride = null) {
+        double? focalLengthMmOverride = null,
+        string? cameraName = null) {
 
         var profile = _profile.Active;
         var dir = profile.ImageOutputDir;
@@ -142,6 +143,13 @@ public class ImageWriterService {
 
         try {
             Directory.CreateDirectory(dir);
+
+            // Multi-camera: stamp the CAPTURING camera's name on the frame (aux /
+            // extra imagers know their own device) so both the FITS header
+            // (CAMERAID / INSTRUME) and the per-camera output folder are correct,
+            // not the main camera the metadata fallback would otherwise fill in.
+            if (!string.IsNullOrWhiteSpace(cameraName))
+                imageData.MetaData.Camera.Name = cameraName;
 
             // When the caller didn't supply a meaningful target name (LIVE
             // "(unnamed)", a blank AUTORUN target, etc.), auto-resolve the
@@ -190,13 +198,18 @@ public class ImageWriterService {
             // without scanning every header. Frames also bucketed under the
             // active rig and the astronomical session date.
             var rigName = _profile.ActiveEquipmentProfile?.Name ?? "Default";
+            // Multi-camera rig => bucket each camera's frames under its own name.
+            // A single-camera rig keeps the existing {rig}/{target}/... layout.
+            var activeRig = _profile.ActiveEquipmentProfile;
+            var multiCamera = activeRig != null
+                && (activeRig.AuxEnabled || activeRig.ExtraImagers.Any(i => i.Enabled));
             var sessionDate = SessionDateForLocal(imageData.MetaData.CreationTime.ToLocalTime());
             // User-requested stacked saves go into their own "stacked" folder
             // ({rig}/{target}/stacked/{session}) so the integrated master sits
             // beside that target's subs without being mixed in with them.
             var subDir = stacked
                 ? BuildStackedSubDir(imageData, rigName, sessionDate)
-                : BuildSubDir(imageType, imageData, profile, rigName, sessionDate);
+                : BuildSubDir(imageType, imageData, profile, rigName, sessionDate, multiCamera);
             var targetDir = string.IsNullOrEmpty(subDir) ? dir : Path.Combine(dir, subDir);
             Directory.CreateDirectory(targetDir);
             var fullPath = Path.Combine(targetDir, fileName);
@@ -569,7 +582,7 @@ public class ImageWriterService {
     /// path segments.</para>
     /// </summary>
     public static string BuildSubDir(string imageType, IImageData img, UserProfile profile,
-                                     string rigName, DateTime sessionDate) {
+                                     string rigName, DateTime sessionDate, bool multiCamera = false) {
         var m = img.MetaData;
         var typeUpper = (imageType ?? "LIGHT").Trim().ToUpperInvariant();
         var rig      = SanitizeFolder(string.IsNullOrEmpty(rigName) ? "Default" : rigName);
@@ -608,6 +621,12 @@ public class ImageWriterService {
                             sessionDate.ToString("yyyy-MM-dd",
                                 System.Globalization.CultureInfo.InvariantCulture))
         };
+        // Multi-camera rig: give each camera its own tree under the rig
+        // ({rig}/{camera}/{target}/...) so frames from different cameras never
+        // collide and the camera is obvious from the path. Single-camera rigs
+        // keep the flat {rig}/{target}/... layout.
+        if (multiCamera && !string.IsNullOrWhiteSpace(m.Camera.Name))
+            return Path.Combine(rig, SanitizeFolder(m.Camera.Name), subPath);
         return Path.Combine(rig, subPath);
     }
 

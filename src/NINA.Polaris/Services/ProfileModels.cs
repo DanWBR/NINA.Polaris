@@ -44,10 +44,12 @@ public class UserProfile {
 
     /// <summary>Master toggle for HardwareAutoConnectService, when on,
     /// app startup tries INDI, runs Alpaca discovery, and then
-    /// re-connects every device saved on the active rig. Default off
-    /// so a fresh install never silently dials hardware that isn't
-    /// powered up yet.</summary>
-    public bool AutoConnectOnStartup { get; set; } = false;
+    /// re-connects every device saved on the active rig. Default ON so
+    /// the rig comes up ready after a host boot; the connect attempts are
+    /// bounded + non-fatal (a device that isn't powered yet is just
+    /// skipped with a notification), and the operator can turn it off in
+    /// Settings.</summary>
+    public bool AutoConnectOnStartup { get; set; } = true;
 
     /// <summary>Self-update channel: "stable" (default; GitHub's latest
     /// non-prerelease) or "preview" (opts into pre-releases — the Insider-style
@@ -671,6 +673,57 @@ public class EquipmentProfile {
     /// main session (LIVE or AUTORUN) is active. Default off.</summary>
     public bool AuxEnabled { get; set; }
 
+    // ----- STAGE2: additional imaging cameras (beyond main + aux) -----
+    // The main and aux cameras keep their legacy fields above (untouched for
+    // backward compatibility); a third-and-beyond imaging camera is stored in
+    // ExtraImagers, and the read-only Imagers view projects main + aux + extras
+    // into one uniform list so new code can iterate every imager the same way.
+
+    /// <summary>Additional imaging cameras beyond the main+aux pair — index 0
+    /// here is the 3rd camera on the mount. Persisted with the rig; empty on
+    /// legacy rigs, so the on-disk shape and behavior are unchanged until a
+    /// third camera is actually added.</summary>
+    public List<ImagerConfig> ExtraImagers { get; set; } = new();
+
+    /// <summary>Unified, read-only view over every imaging camera on this rig:
+    /// [0] is the main camera (projected from the legacy top-level fields),
+    /// [1] is the aux camera (from the Aux* fields), and 2+ are
+    /// <see cref="ExtraImagers"/>. New code iterates this instead of
+    /// special-casing main vs aux. Not serialized — the legacy fields and
+    /// ExtraImagers remain the storage of record.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<ImagerConfig> Imagers {
+        get {
+            var list = new List<ImagerConfig> {
+                new ImagerConfig {
+                    Role = "main", DeviceId = Camera, Driver = CameraDriver, Enabled = true,
+                    FocalLengthMm = FocalLengthMm, ApertureMm = ApertureMm,
+                    PixelSizeUm = CameraPixelSizeUm, MaxX = CameraMaxX, MaxY = CameraMaxY,
+                    BitDepth = CameraBitDepth,
+                    TelescopeBrand = TelescopeBrand, TelescopeModel = TelescopeModel,
+                    Focuser = Focuser, FocuserDriver = FocuserDriver,
+                    FilterWheel = FilterWheel, FilterWheelDriver = FilterWheelDriver, FilterNames = FilterNames,
+                    CoolerTargetTemperature = CoolerTargetTemperature, CoolerRampDegPerMinute = CoolerRampDegPerMinute,
+                },
+                new ImagerConfig {
+                    Role = "aux", DeviceId = AuxCamera, Driver = AuxCameraDriver, Enabled = AuxEnabled,
+                    FocalLengthMm = AuxFocalLengthMm, ApertureMm = AuxApertureMm,
+                    PixelSizeUm = AuxCameraPixelSizeUm, MaxX = AuxCameraMaxX, MaxY = AuxCameraMaxY,
+                    BitDepth = AuxCameraBitDepth, ExposureMs = AuxExposureMs, Gain = AuxGain, Binning = AuxBinning,
+                    TelescopeBrand = AuxTelescopeBrand ?? "", TelescopeModel = AuxTelescopeModel ?? "",
+                    Focuser = AuxFocuser, FocuserDriver = AuxFocuserDriver,
+                    CoolerTargetTemperature = CoolerTargetTemperature, CoolerRampDegPerMinute = CoolerRampDegPerMinute,
+                },
+            };
+            for (int i = 0; i < ExtraImagers.Count; i++) {
+                var e = ExtraImagers[i];
+                if (string.IsNullOrEmpty(e.Role)) e.Role = $"imager-{i + 3}";
+                list.Add(e);
+            }
+            return list;
+        }
+    }
+
     /// <summary>Aux focuser device id (same addressing scheme as
     /// <see cref="Focuser"/>). Optional; enables manual focusing of the aux
     /// camera from the FOCUS tab. Null = no aux focuser.</summary>
@@ -1024,6 +1077,15 @@ public class EquipmentProfile {
     /// <summary>Rejection threshold in sigmas (default 3.0).</summary>
     public double LiveStackSigmaKappa { get; set; } = 3.0;
 
+    /// <summary>Per-sub cosmetic correction on the live stack: remove fixed
+    /// hot/cold sensor pixels at the SOURCE (before debayer + warp) so a single
+    /// hot site never becomes a wandering trail that per-pixel sigma rejection
+    /// structurally cannot catch. CFA-aware on an OSC mosaic. Complements sigma
+    /// rejection (fixed defects here; transients there). Default ON for EAA;
+    /// works from frame 1, with or without dithering, no master dark needed.
+    /// Per-rig.</summary>
+    public bool LiveStackCosmetic { get; set; } = true;
+
     /// <summary>Auto-pause the live stack after this many seconds
     /// of integration. 0 (default) = no cap, runs until the user
     /// resets or stops. Per-rig so different setups (planetary
@@ -1072,6 +1134,26 @@ public class EquipmentProfile {
     public List<SequenceItem>? AutorunSequence { get; set; }
     public DitherSettings? AutorunDither { get; set; }
     public SequenceEndActions? AutorunEndActions { get; set; }
+
+    /// <summary>Per-rig GLOBAL dither configuration — the single source of truth
+    /// for LIVE, AUTORUN, ADV and the multi-camera barrier. Reuses the
+    /// <see cref="DitherSettings"/> shape (Enabled/Pixels/EveryNFrames/RaOnly/
+    /// Settle*). Null = not migrated yet; <see cref="EffectiveDither"/> seeds it
+    /// from the legacy per-mode config on first read. Not clobbered by the rig PUT
+    /// handler (like the other Autorun* fields), so a rig save never resets it.</summary>
+    public DitherSettings? DitherProfile { get; set; }
+
+    /// <summary>The global dither config, migrating the legacy settings on first
+    /// access: the stored global if set, else the AUTORUN dither (which, like the
+    /// unified default, is opt-in / disabled), else clean defaults (disabled, 5px
+    /// amplitude, every 3 frames, settle 3px/3s/60s). The LIVE trigger's dither
+    /// fields are deliberately NOT used as a fallback: they default to ENABLED, so
+    /// pulling them in would turn dithering on for a rig that never asked for it.
+    /// Idempotent — callers should assign the result back to
+    /// <see cref="DitherProfile"/> and persist so the migration runs once.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public DitherSettings EffectiveDither =>
+        DitherProfile ?? AutorunDither ?? new DitherSettings();
 }
 
 public class ProfileSummary {
@@ -1222,4 +1304,80 @@ public class AutoFocusSettings {
     /// <summary>A sample below this star count is soft-rejected (measure 0,
     /// huge error) instead of feeding a bogus HFR into the fit.</summary>
     public int MinStars { get; set; } = 5;
+}
+
+/// <summary>STAGE2: per-imaging-camera configuration. The canonical shape for a
+/// third-and-beyond imaging camera on a rig (<see cref="EquipmentProfile.ExtraImagers"/>);
+/// the main and aux cameras are projected into this shape by
+/// <see cref="EquipmentProfile.Imagers"/> so N-camera code treats every imager
+/// uniformly. Field roles mirror the legacy per-camera fields.</summary>
+public class ImagerConfig {
+    /// <summary>Device id (same addressing scheme as <see cref="EquipmentProfile.Camera"/>).
+    /// Null = no camera selected for this slot.</summary>
+    public string? DeviceId { get; set; }
+
+    /// <summary>Backend kind (same enum as <see cref="EquipmentProfile.CameraDriver"/>).</summary>
+    public string Driver { get; set; } = "indi";
+
+    /// <summary>When true, this imager captures during a session.</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Effective focal length of this imager's optics (mm).</summary>
+    public double FocalLengthMm { get; set; } = 200;
+
+    /// <summary>Aperture (mm). Optional; for f-ratio display.</summary>
+    public double ApertureMm { get; set; }
+
+    /// <summary>Pixel size fallback (µm) for backends that report 0 (DSLRs).</summary>
+    public double PixelSizeUm { get; set; }
+
+    /// <summary>Sensor resolution + bit depth fallback (DSLR CCD_INFO bootstrap).</summary>
+    public int MaxX { get; set; }
+    public int MaxY { get; set; }
+    public int BitDepth { get; set; }
+
+    /// <summary>Exposure per frame (ms).</summary>
+    public int ExposureMs { get; set; } = 5000;
+
+    /// <summary>Gain in native units; 0 = leave the driver default.</summary>
+    public int Gain { get; set; }
+
+    /// <summary>Binning; default 1.</summary>
+    public int Binning { get; set; } = 1;
+
+    /// <summary>Telescope/lens brand + model. Optional, free-form.</summary>
+    public string TelescopeBrand { get; set; } = "";
+    public string TelescopeModel { get; set; } = "";
+
+    /// <summary>Focuser bound to this imager (optional). Each imaging train can
+    /// carry its own focuser.</summary>
+    public string? Focuser { get; set; }
+    public string FocuserDriver { get; set; } = "indi";
+
+    /// <summary>Filter wheel bound to this imager (optional). Each imaging train
+    /// can carry its own filter wheel.</summary>
+    public string? FilterWheel { get; set; }
+    public string FilterWheelDriver { get; set; } = "indi";
+
+    /// <summary>Last-known filter slot names for this imager's wheel, in slot
+    /// order (mirrors <see cref="EquipmentProfile.FilterNames"/> so read-only
+    /// wheels keep their labels across a driver reset). Empty when never edited.</summary>
+    public string[] FilterNames { get; set; } = System.Array.Empty<string>();
+
+    /// <summary>Cooler setpoint (°C) for this imager's own cooled sensor. Null ⇒
+    /// no target set (the PLAN auto-cool skips this camera). Each imaging train
+    /// controls its own cooling, mirroring the main camera's
+    /// <see cref="EquipmentProfile.CoolerTargetTemperature"/>. Ignored for
+    /// uncooled cameras (guide scopes, lenses, DSLRs).</summary>
+    public double? CoolerTargetTemperature { get; set; }
+
+    /// <summary>Max rate this imager's cooler setpoint may move, in °C/min (both
+    /// cooldown and warm-up). Null ⇒ 2.0°C/min; 0 disables ramping. Same meaning
+    /// as <see cref="EquipmentProfile.CoolerRampDegPerMinute"/>.</summary>
+    public double? CoolerRampDegPerMinute { get; set; }
+
+    /// <summary>Stable role id used for status/UI and as the DitherBarrier
+    /// participant id ("main", "aux", "imager-3", …). Assigned by
+    /// <see cref="EquipmentProfile.Imagers"/> for the projected/extra imagers.</summary>
+    public string Role { get; set; } = "";
 }

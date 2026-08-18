@@ -36,15 +36,21 @@ public class MeridianFlipTrigger : SequenceTrigger {
     }
 }
 
-/// <summary>Dither via PHD2 every N frames captured.</summary>
+/// <summary>Dither via the active guider every N frames captured. The node owns
+/// only the "where" (its presence in the tree) and the cadence
+/// (<see cref="EveryNFrames"/>); the dither AMOUNT and settle parameters come from
+/// the global dither config (<c>EquipmentProfile.DitherProfile</c>), so there is
+/// one place to tune dither for LIVE, AUTORUN and the sequencer. The legacy
+/// per-node Pixels/Settle* fields are kept for serialization back-compat but are
+/// no longer read.</summary>
 public class DitherAfterNExposuresTrigger : SequenceTrigger {
     public override string Type => "DitherAfterNExposures";
     public int EveryNFrames { get; set; } = 3;
-    public double Pixels { get; set; } = 5.0;
-    public bool RaOnly { get; set; } = false;
-    public double SettlePixels { get; set; } = 1.5;
-    public int SettleTimeSeconds { get; set; } = 10;
-    public int SettleTimeoutSeconds { get; set; } = 40;
+    [System.Text.Json.Serialization.JsonIgnore] public double Pixels { get; set; } = 5.0;
+    [System.Text.Json.Serialization.JsonIgnore] public bool RaOnly { get; set; } = false;
+    [System.Text.Json.Serialization.JsonIgnore] public double SettlePixels { get; set; } = 1.5;
+    [System.Text.Json.Serialization.JsonIgnore] public int SettleTimeSeconds { get; set; } = 10;
+    [System.Text.Json.Serialization.JsonIgnore] public int SettleTimeoutSeconds { get; set; } = 40;
 
     public override Task<bool> ShouldFireAsync(SequenceContext ctx, CancellationToken ct) {
         // Reads the ACTIVE guider. Testing PHD2 here meant a native-guider rig
@@ -61,14 +67,18 @@ public class DitherAfterNExposuresTrigger : SequenceTrigger {
     }
 
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
+        // Dither AMOUNT + settle come from the global dither config; this node
+        // contributes only the cadence (EveryNFrames).
+        var g = ctx.Profiles.ActiveEquipmentProfile?.EffectiveDither
+                ?? new NINA.Polaris.Services.DitherSettings();
         // Multi-camera: the barrier owns the dither cadence (driven by the
         // slowest camera) and dithers for every camera; hand it our params and
         // skip here so we don't dither twice or move the mount mid-sub on
         // another camera. Single-camera keeps the direct dither.
         ctx.Barrier.ConfigureCadence(EveryNFrames, new NINA.Polaris.Services.DitherParams(
-            Pixels, RaOnly, SettlePixels, SettleTimeSeconds, SettleTimeoutSeconds));
+            g.Pixels, g.RaOnly, g.SettlePixels, g.SettleTime, g.SettleTimeout));
         if (ctx.Barrier.OwnsDither) return;
-        await ctx.Guider.DitherAsync(Pixels, RaOnly, SettlePixels, SettleTimeSeconds, SettleTimeoutSeconds);
+        await ctx.Guider.DitherAsync(g.Pixels, g.RaOnly, g.SettlePixels, g.SettleTime, g.SettleTimeout);
     }
 }
 

@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Linq;
 using Microsoft.Extensions.Logging;
 
 namespace NINA.Polaris.Services;
@@ -48,6 +49,7 @@ public sealed record DitherParams(
 /// </summary>
 public sealed class DitherBarrier {
     private readonly ActiveGuiderProvider _guiders;
+    private readonly ProfileService _profiles;
     private readonly ILogger<DitherBarrier> _logger;
 
     /// <summary>Master switch. Defaults on; only ever engages with >= 2 imaging
@@ -76,16 +78,41 @@ public sealed class DitherBarrier {
     public bool RoundActive { get { lock (_lock) return _roundActive; } }
     public bool Dithering { get; private set; }
 
-    public DitherBarrier(ActiveGuiderProvider guiders, ILogger<DitherBarrier> logger) {
+    /// <summary>Number of imaging cameras currently registered as active barrier
+    /// participants (dither status / technical panel).</summary>
+    public int ActiveParticipants { get { lock (_lock) return ActiveImagingCount(); } }
+
+    /// <summary>Id of the camera that currently owns the dither cadence — the
+    /// slowest active imaging camera, main breaking ties. Null when nothing is
+    /// participating.</summary>
+    public string? CadenceOwner { get { lock (_lock) return CadenceOwnerIdLocked(); } }
+
+    public DitherBarrier(ActiveGuiderProvider guiders, ProfileService profiles,
+        ILogger<DitherBarrier> logger) {
         _guiders = guiders;
+        _profiles = profiles;
         _logger = logger;
     }
 
-    /// <summary>True when the barrier is the one that drives dithering: enabled
-    /// and at least two imaging cameras are currently active participants. When
-    /// false, capture loops must keep doing their own per-loop dither.</summary>
+    /// <summary>The active rig's multi-camera cadence strategy
+    /// (<c>slowest</c> / <c>main</c> / <c>independent</c>), from the global
+    /// dither config. Defaults to <c>slowest</c>.</summary>
+    private string Strategy() =>
+        _profiles.ActiveEquipmentProfile?.EffectiveDither.CadenceStrategy ?? "slowest";
+
+    /// <summary>The active cadence strategy (for the status/technical panel).</summary>
+    public string CurrentStrategy => Strategy();
+
+    /// <summary>True when the barrier is the one that drives dithering: enabled,
+    /// at least two imaging cameras are currently active participants, AND the
+    /// strategy is a synchronized one (not <c>independent</c>). When false, capture
+    /// loops must keep doing their own per-loop dither.</summary>
     public bool OwnsDither {
-        get { lock (_lock) return Enabled && ActiveImagingCount() >= 2; }
+        get {
+            lock (_lock)
+                return Enabled && ActiveImagingCount() >= 2
+                    && !string.Equals(Strategy(), "independent", StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     private int ActiveImagingCount() {
@@ -171,6 +198,51 @@ public sealed class DitherBarrier {
         if (runRound) await RunDitherRoundAsync(id, ct).ConfigureAwait(false);
     }
 
+    /// <summary>Fire a MANUAL dither ("Dither now") through the barrier: open a
+    /// round so every active imaging camera parks at its next between-subs
+    /// boundary (i.e. finishes the sub it is currently exposing), then dither once
+    /// and release. This is the multi-camera-safe replacement for hitting the
+    /// guider directly, which would dither mid-sub on the other cameras. When no
+    /// capture loop is active it dithers immediately (nothing to wait for).
+    /// Returns false when a round is already in flight or the guider isn't guiding.</summary>
+    public async Task<bool> RequestManualDitherAsync(CancellationToken ct = default) {
+        lock (_lock) {
+            if (_roundActive) return false;   // an automatic/other round already owns the mount
+            _roundActive = true;
+            _release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+        DitherParams p;
+        double maxSub;
+        lock (_lock) {
+            p = _params;
+            maxSub = 0;
+            foreach (var kv in _parts)
+                if (kv.Value.RefCount > 0 && kv.Value.Blocking)
+                    maxSub = Math.Max(maxSub, kv.Value.SubSeconds);
+        }
+        var rendezvous = TimeSpan.FromSeconds(Math.Clamp(maxSub + p.SettleTimeout + 15, 30, 300));
+        bool dithered = false;
+        try {
+            // Null owner → wait for EVERY active blocking camera to park; with no
+            // active participants this returns at once.
+            await WaitOthersParkedAsync(null, rendezvous, ct).ConfigureAwait(false);
+            dithered = await DoGuiderDitherAsync(p, ct).ConfigureAwait(false);
+            lock (_lock) { if (dithered) _roundsSinceDither = 0; }
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "DitherBarrier: manual dither round failed");
+        } finally {
+            TaskCompletionSource<bool>? release;
+            lock (_lock) {
+                _roundActive = false;
+                release = _release;
+                _release = null;
+                foreach (var pp in _parts.Values) pp.Parked = false;
+            }
+            release?.TrySetResult(true);
+        }
+        return dithered;
+    }
+
     private async Task RunDitherRoundAsync(string ownerId, CancellationToken ct) {
         DitherParams p;
         double maxOtherSub;
@@ -207,7 +279,7 @@ public sealed class DitherBarrier {
         }
     }
 
-    private async Task WaitOthersParkedAsync(string ownerId, TimeSpan max, CancellationToken ct) {
+    private async Task WaitOthersParkedAsync(string? ownerId, TimeSpan max, CancellationToken ct) {
         var deadline = DateTime.UtcNow + max;
         while (DateTime.UtcNow < deadline && !ct.IsCancellationRequested) {
             bool allParked = true;
@@ -267,7 +339,7 @@ public sealed class DitherBarrier {
         var rows = new List<CadenceRow>(_parts.Count);
         foreach (var kv in _parts)
             rows.Add(new CadenceRow(kv.Key, kv.Value.RefCount, kv.Value.IsPrimary, kv.Value.SubSeconds));
-        return SelectCadenceOwner(rows);
+        return SelectCadenceOwner(rows, Strategy());
     }
 
     // ----- pure decision helpers (unit-tested) -----
@@ -276,11 +348,31 @@ public sealed class DitherBarrier {
     /// mutable participant so the cadence-owner rule is unit-testable.</summary>
     internal readonly record struct CadenceRow(string Id, int RefCount, bool Primary, double SubSeconds);
 
-    /// <summary>The slowest active participant owns the cadence; ties break in
-    /// favor of the primary (main) camera, then by id for determinism.</summary>
-    internal static string? SelectCadenceOwner(IEnumerable<CadenceRow> rows) {
+    /// <summary>Who owns the dither cadence, per strategy:
+    /// <list type="bullet">
+    /// <item><c>main</c>: the active PRIMARY (main) participant, if any; otherwise
+    /// it falls through to the slowest rule.</item>
+    /// <item><c>slowest</c> (default): the slowest active participant, ties broken
+    /// in favor of the primary camera, then by id for determinism.</item>
+    /// </list>
+    /// <c>independent</c> never reaches here (OwnsDither is false), but is treated
+    /// as "no owner" defensively.</summary>
+    internal static string? SelectCadenceOwner(IEnumerable<CadenceRow> rows, string strategy = "slowest") {
+        var rowList = rows as ICollection<CadenceRow> ?? rows.ToList();
+        if (string.Equals(strategy, "independent", StringComparison.OrdinalIgnoreCase))
+            return null;
+        if (string.Equals(strategy, "main", StringComparison.OrdinalIgnoreCase)) {
+            // Lowest-id active primary (there is normally exactly one).
+            string? primary = null;
+            foreach (var r in rowList) {
+                if (r.RefCount == 0 || !r.Primary) continue;
+                if (primary == null || string.CompareOrdinal(r.Id, primary) < 0) primary = r.Id;
+            }
+            if (primary != null) return primary;
+        }
+        // Default: slowest wins; primary breaks ties; id breaks the rest.
         string? best = null; double bestSub = -1; bool bestPrimary = false;
-        foreach (var r in rows) {
+        foreach (var r in rowList) {
             if (r.RefCount == 0) continue;
             var better = r.SubSeconds > bestSub
                 || (r.SubSeconds == bestSub && r.Primary && !bestPrimary)

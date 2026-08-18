@@ -52,6 +52,26 @@ public class PlanCompilerService {
     private const int PlateSolveSeconds = 20;
     private const int PerFrameOverheadSeconds = 5;
 
+    private readonly ProfileService? _profiles;
+
+    public PlanCompilerService(ProfileService? profiles = null) {
+        _profiles = profiles;
+    }
+
+    /// <summary>Enabled extra imagers (slot 2+) that carry a cooling setpoint, as
+    /// (index, targetC) pairs. Empty when there's no active rig or none are
+    /// cooled. Used to fan PLAN auto-cool / warm out to every cooled camera.</summary>
+    private IEnumerable<(int Index, double TargetC)> CooledExtraImagers() {
+        var rig = _profiles?.ActiveEquipmentProfile;
+        if (rig == null) yield break;
+        var imagers = rig.Imagers;
+        for (int i = 2; i < imagers.Count; i++) {
+            var im = imagers[i];
+            if (im.Enabled && im.CoolerTargetTemperature is double t)
+                yield return (i, t);
+        }
+    }
+
     public SequenceDocument Compile(ImagingPlan plan) {
         var root = new SequentialContainer { Name = string.IsNullOrWhiteSpace(plan.Name) ? "Plan" : plan.Name };
 
@@ -67,6 +87,15 @@ public class PlanCompilerService {
                 Name = "Cool camera",
                 TargetTempC = plan.CoolTargetC
             });
+            // Fan the cooldown out to every enabled, cooled extra imager, each on
+            // its own setpoint and slot so they cool in parallel with the main cam.
+            foreach (var (index, targetC) in CooledExtraImagers()) {
+                root.Items.Add(new CoolImagerInstruction {
+                    Name = $"Cool imaging camera {index}",
+                    ImagerIndex = index,
+                    TargetTempC = targetC
+                });
+            }
         }
         if (plan.AutoGuiding) {
             root.Items.Add(new StartGuidingInstruction { Name = "Start guiding" });
@@ -171,7 +200,17 @@ public class PlanCompilerService {
     public SequenceDocument? CompileEndActions(ImagingPlan plan) {
         var root = new SequentialContainer { Name = "End of session" };
         if (plan.AutoGuiding) root.Items.Add(new StopGuidingInstruction { Name = "Stop guiding" });
-        if (plan.EndWarmCoolerOff) root.Items.Add(new WarmCameraInstruction { Name = "Warm camera + cooler off" });
+        if (plan.EndWarmCoolerOff) {
+            root.Items.Add(new WarmCameraInstruction { Name = "Warm camera + cooler off" });
+            // Warm every cooled extra imager too, so no camera is left cold with
+            // its cooler cut at the end of the session.
+            foreach (var (index, _) in CooledExtraImagers()) {
+                root.Items.Add(new WarmImagerInstruction {
+                    Name = $"Warm imaging camera {index} + cooler off",
+                    ImagerIndex = index
+                });
+            }
+        }
         if (plan.EndGoHome) root.Items.Add(new ParkMountInstruction { Name = "Park mount" });
         if (plan.EndEafZero) root.Items.Add(new MoveFocuserInstruction { Name = "Focuser → 0", Position = 0 });
 

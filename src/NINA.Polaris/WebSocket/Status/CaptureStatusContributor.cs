@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Linq;
 using NINA.Polaris.Services;
 
 namespace NINA.Polaris.WebSocket.Status;
@@ -30,8 +31,9 @@ public sealed class CaptureStatusContributor : IStatusContributor {
     private readonly NINA.Polaris.Services.Planetary.VideoRecordingService _videoRecording;
     private readonly NINA.Polaris.Services.Planetary.PlanetaryStackerService _videoStacker;
     private readonly DitherBarrier _ditherBarrier;
+    private readonly MultiImagerCaptureService _multiImager;
 
-    public CaptureStatusContributor(AuxCaptureService auxCapture, CaptureProgressService captureProgress, CoolingRampService coolingRamp, LiveCaptureService liveCapture, SlewPreviewService slewPreview, NINA.Polaris.Services.Planetary.VideoRecordingService videoRecording, NINA.Polaris.Services.Planetary.PlanetaryStackerService videoStacker, DitherBarrier ditherBarrier) {
+    public CaptureStatusContributor(AuxCaptureService auxCapture, CaptureProgressService captureProgress, CoolingRampService coolingRamp, LiveCaptureService liveCapture, SlewPreviewService slewPreview, NINA.Polaris.Services.Planetary.VideoRecordingService videoRecording, NINA.Polaris.Services.Planetary.PlanetaryStackerService videoStacker, DitherBarrier ditherBarrier, MultiImagerCaptureService multiImager) {
         _auxCapture = auxCapture;
         _captureProgress = captureProgress;
         _coolingRamp = coolingRamp;
@@ -40,9 +42,10 @@ public sealed class CaptureStatusContributor : IStatusContributor {
         _videoRecording = videoRecording;
         _videoStacker = videoStacker;
         _ditherBarrier = ditherBarrier;
+        _multiImager = multiImager;
     }
 
-    public IReadOnlyCollection<string> Keys { get; } = new[] { "capture", "liveCapture", "auxCapture", "cooling", "videoRecording", "videoStack", "slewPreview", "ditherSync" };
+    public IReadOnlyCollection<string> Keys { get; } = new[] { "capture", "liveCapture", "auxCapture", "cooling", "videoRecording", "videoStack", "slewPreview", "ditherSync", "multiImager" };
 
     public void Contribute(StatusTick tick) {
         var auxCapture = _auxCapture;
@@ -82,8 +85,23 @@ public sealed class CaptureStatusContributor : IStatusContributor {
             tick.Blocks["ditherSync"] = new {
                 active = _ditherBarrier.OwnsDither,
                 waiting = _ditherBarrier.RoundActive,
-                dithering = _ditherBarrier.Dithering
+                dithering = _ditherBarrier.Dithering,
+                enabled = _ditherBarrier.Enabled,
+                participants = _ditherBarrier.ActiveParticipants,
+                owner = _ditherBarrier.CadenceOwner,
+                strategy = _ditherBarrier.CurrentStrategy
             };
+
+            // STAGE2: per-extra-imager capture loops (index 2+). Empty list when
+            // no additional imaging cameras are running, so the UI can hide the
+            // section. The main + aux slots stay on "capture"/"auxCapture".
+            tick.Blocks["multiImager"] = _multiImager.Snapshot()
+                .Select(s => new {
+                    index = s.Index,
+                    role = s.Role,
+                    frameCount = s.FrameCount,
+                    lastError = s.LastError
+                }).ToList();
 
             // Stack status + triggers (LSTR-4). Triggers sub-object
             // carries last-action timestamps + reference RA/Dec +

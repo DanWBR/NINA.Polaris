@@ -120,6 +120,28 @@ public static class LiveStackEndpoints {
             return Results.Ok(new { status = "reset" });
         });
 
+        // Select which imaging camera feeds the live stack (0 = main, 2+ = an
+        // extra imager). All enabled cameras keep capturing; this only picks which
+        // one the single stack integrates + displays. Switching cameras discards
+        // the current stack (different framing / registration reference).
+        group.MapPost("/source", (LiveStackingService stack, LiveStackTriggersService triggers,
+                                  RefocusSuggestionService refocusSuggest, EquipmentManager equip,
+                                  LiveSourceRequest req) => {
+            var idx = Math.Max(0, req.Index);
+            if (idx != 0) {
+                var cam = equip.GetImager(idx);
+                if (cam == null || !cam.IsConnected)
+                    return Results.BadRequest(new { error = $"No imaging camera connected at slot {idx}" });
+            }
+            bool changed = idx != stack.SourceIndex;
+            stack.SetSource(idx);   // resets the stack when the source changes
+            if (changed) {
+                triggers.ResetTriggerState();
+                refocusSuggest.Reset();
+            }
+            return Results.Ok(new { sourceIndex = stack.SourceIndex });
+        });
+
         group.MapGet("/status", (LiveStackingService stack) => {
             return Results.Ok(stack.GetStatus());
         });
@@ -266,6 +288,16 @@ public static class LiveStackEndpoints {
             return Results.Ok(new { saved = true, enabled = req.Enabled, kappa = k });
         });
 
+        // Per-sub cosmetic correction (fixed hot/cold pixel removal). Per-rig,
+        // read live by the stacker each frame, so it takes effect immediately
+        // (no Reset needed) and complements sigma rejection.
+        group.MapPut("/cosmetic", (CosmeticRequest req, ProfileService profiles) => {
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig != null)
+                profiles.UpdateEquipmentProfile(rig.Id, r => r.LiveStackCosmetic = req.Enabled);
+            return Results.Ok(new { saved = true, enabled = req.Enabled });
+        });
+
         // SNR-3: session-only target SNR override. The active rig's
         // TargetSnr is the persisted default; the LIVE tab can push
         // a different number here for one session without touching
@@ -376,6 +408,9 @@ public static class LiveStackEndpoints {
     /// tab kappa-sigma toggle + threshold. Kappa null keeps the default (3).</summary>
     public record SigmaRejectionRequest(bool Enabled, double? Kappa = null);
 
+    /// <summary>Body of PUT /api/livestack/cosmetic: per-sub hot/cold pixel removal.</summary>
+    public record CosmeticRequest(bool Enabled);
+
     /// <summary>Body of PUT /api/livestack/max-duration. 0 =
     /// unlimited. The LIVE tab posts the user's "stack for N
     /// minutes" input here, converted to seconds.</summary>
@@ -391,4 +426,8 @@ public static class LiveStackEndpoints {
     /// <summary>Body of POST /api/livecapture/start: the LIVE shutter's
     /// exposure/gain/binning for the server-owned loop.</summary>
     public record LiveStartRequest(double Exposure = 1.0, int Gain = 0, int Binning = 1);
+
+    /// <summary>Body for POST /api/livestack/source: imaging-camera slot to feed
+    /// the live stack (0 = main, 2+ = an extra imager).</summary>
+    public record LiveSourceRequest(int Index = 0);
 }

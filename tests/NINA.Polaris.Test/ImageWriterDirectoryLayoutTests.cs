@@ -58,6 +58,29 @@ public class ImageWriterDirectoryLayoutTests {
     }
 
     [Test]
+    public void MultiCamera_InsertsTheCameraNameUnderTheRig() {
+        // On a multi-camera rig each camera gets its own tree
+        // ({rig}/{camera}/{target}/lights/{session}) so frames never collide.
+        var img = Frame("L", 120, 100, "M42", "LIGHT",
+            new DateTime(2026, 5, 21, 22, 0, 0, DateTimeKind.Local));
+        img.MetaData.Camera.Name = "ASI 2600MC";
+        var sub = ImageWriterService.BuildSubDir("LIGHT", img, EmptyProfile(),
+            "Dual Rig", Session(2026, 5, 21), multiCamera: true);
+        Assert.That(sub, Is.EqualTo(Path.Combine("Dual_Rig",
+            "ASI_2600MC", "M42", "lights", "2026-05-21")));
+    }
+
+    [Test]
+    public void SingleCamera_DoesNotInsertTheCameraName() {
+        var img = Frame("L", 120, 100, "M42", "LIGHT",
+            new DateTime(2026, 5, 21, 22, 0, 0, DateTimeKind.Local));
+        img.MetaData.Camera.Name = "ASI 2600MC";
+        var sub = ImageWriterService.BuildSubDir("LIGHT", img, EmptyProfile(),
+            "Solo Rig", Session(2026, 5, 21), multiCamera: false);
+        Assert.That(sub, Is.EqualTo(Path.Combine("Solo_Rig", "M42", "lights", "2026-05-21")));
+    }
+
+    [Test]
     public void Light_WithSpacesInTargetName_NormalisedToUnderscores() {
         var img = Frame("L", 60, 0, "Veil Nebula", "LIGHT",
             new DateTime(2026, 5, 21, 22, 0, 0, DateTimeKind.Local));

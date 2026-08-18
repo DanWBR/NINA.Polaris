@@ -78,8 +78,16 @@ public class SequenceEngine {
     public string? LastError { get; private set; }
     public DateTime? StartedAt { get; private set; }
 
-    /// <summary>Dither configuration. Default: disabled.</summary>
-    public DitherSettings Dither { get; set; } = new();
+    /// <summary>Dither configuration. Now the GLOBAL per-rig config (the single
+    /// source of truth shared with LIVE, ADV and the multi-camera barrier), not a
+    /// per-schedule field — reads/writes the active rig's DitherProfile. The old
+    /// per-rig AutorunDither is only consulted once, for migration, via
+    /// EffectiveDither.</summary>
+    public DitherSettings Dither {
+        get => _profile.ActiveEquipmentProfile.EffectiveDither;
+        set => _profile.UpdateEquipmentProfile(_profile.ActiveEquipmentProfile.Id,
+            r => r.DitherProfile = value);
+    }
 
     /// <summary>How many dithers were issued in the current run (diagnostic).</summary>
     public int DithersIssued { get; private set; }
@@ -153,7 +161,9 @@ public class SequenceEngine {
             // the active rig, once: only when this rig has nothing saved yet.
             if (rig.AutorunSequence == null && global.AutorunSequence is { Count: > 0 }) {
                 Items = global.AutorunSequence;
-                Dither = global.AutorunDither ?? new();
+                // Carry the legacy global dither into the new global DitherProfile
+                // (the setter persists it on the rig).
+                if (global.AutorunDither != null) Dither = global.AutorunDither;
                 EndActions = global.AutorunEndActions ?? new();
                 _profile.UpdateSettings(p => {
                     p.AutorunSequence = new();
@@ -164,7 +174,8 @@ public class SequenceEngine {
                 _logger.LogInformation("Migrated global autorun schedule into rig '{Rig}'", rig.Name);
             } else {
                 Items = rig.AutorunSequence ?? [];
-                Dither = rig.AutorunDither ?? new();
+                // Dither is no longer per-schedule: it comes from the global
+                // DitherProfile (EffectiveDither migrates the old AutorunDither).
                 EndActions = rig.AutorunEndActions ?? new();
             }
             CurrentItemIndex = -1;
@@ -188,7 +199,8 @@ public class SequenceEngine {
             var rigId = _profile.ActiveEquipmentProfile.Id;
             _profile.UpdateEquipmentProfile(rigId, r => {
                 r.AutorunSequence = Items;
-                r.AutorunDither = Dither;
+                // Dither is persisted separately as the global DitherProfile
+                // (via the Dither setter / PUT /api/dither), not with the schedule.
                 r.AutorunEndActions = EndActions;
             });
         } catch (Exception ex) {

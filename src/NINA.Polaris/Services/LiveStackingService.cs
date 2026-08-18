@@ -268,6 +268,7 @@ public class LiveStackingService {
     }
 
     private ushort[]? _scratchCal;
+    private ushort[]? _scratchCosmetic;
     private ushort[]? _dbR, _dbG, _dbB;
     private ushort[]? _warpR, _warpG, _warpB, _warpMono;
     private ushort[]? _scratchSnr;
@@ -551,6 +552,22 @@ public class LiveStackingService {
     public int FrameCount => _frameCount;
     public int Width => _width;
     public int Height => _height;
+
+    /// <summary>Imaging-camera slot whose frames feed this stack: 0 = main
+    /// (default), 1 = aux, 2+ = an extra imager. In the parallel multi-camera
+    /// model every enabled camera keeps capturing; this only selects which one's
+    /// frames the single live stack integrates and displays.</summary>
+    public int SourceIndex { get; private set; } = 0;
+
+    /// <summary>Switch the live-stack source camera. A different camera means a
+    /// different framing and registration reference, so the current stack is
+    /// discarded. No-op when the source is unchanged.</summary>
+    public void SetSource(int index) {
+        if (index < 0) index = 0;
+        if (index == SourceIndex) return;
+        SourceIndex = index;
+        Reset();
+    }
 
     /// <summary>True while a frame is actively being detected / aligned /
     /// integrated (the stacking math is running). Surfaced so the UI can show a
@@ -846,6 +863,7 @@ public class LiveStackingService {
             _m2Buffer = null;
             _lumSumBuffer = null;
             _scratchCal = null;
+            _scratchCosmetic = null;
             _dbR = null; _dbG = null; _dbB = null;
             _warpR = null; _warpG = null; _warpB = null; _warpMono = null;
             _scratchSnr = null;
@@ -1134,6 +1152,44 @@ public class LiveStackingService {
         if (preProcSettings.BgeEnabled
                 && _graxpert != null && !_serverBgeUnavailable) {
             data = await ApplyServerBgeAsync(data, props, imageData.MetaData, preProcSettings, ct);
+        }
+
+        // HOTPX: per-sub cosmetic correction. Kill fixed hot/cold sensor pixels
+        // at the SOURCE — full-res, sensor orientation, BEFORE debayer + warp.
+        // Debayer (bilinear) + warp (bilinear) smear a single hot Bayer site into
+        // a sub-pixel-wandering fractional cloud, so per-pixel sigma rejection
+        // never sees any one contribution exceed kappa*sigma yet the sum builds a
+        // visible (usually green) trail. Removing it here fixes that from frame 1,
+        // with or without dithering, no master dark required. CFA-aware on an OSC
+        // mosaic so it samples same-Bayer neighbours instead of smearing it.
+        // Complements sigma rejection (fixed defects here; transients there).
+        // Binning happens AFTER this (masters + the mosaic must be full-res).
+        if (_profiles?.ActiveEquipmentProfile?.LiveStackCosmetic ?? true) {
+            // Never mutate the RAW frame the relay + writer retain; SaveFrameIfEnabled
+            // already archived it above. Copy to scratch only when no earlier stage
+            // (calibration / BGE) already handed us a private buffer.
+            if (ReferenceEquals(data, imageData.Data)) {
+                EnsureScratch(ref _scratchCosmetic, data.Length);
+                Array.Copy(data, _scratchCosmetic!, data.Length);
+                data = _scratchCosmetic!;
+            }
+            // Prefer the frame's own pattern; fall back to the last good one so a
+            // transient CCD_CFA drop doesn't flip us to a non-CFA pass mid-session.
+            var cfaPat = props.BayerPattern != BayerPatternEnum.None
+                         && props.BayerPattern != BayerPatternEnum.Auto
+                         ? props.BayerPattern : _lastGoodBayer;
+            bool cosmeticCfa = cfaPat != BayerPatternEnum.None && cfaPat != BayerPatternEnum.Auto;
+            try {
+                var (cold, hot) = NINA.Image.ImageAnalysis.CosmeticCorrection.Apply(
+                    data, props.Width, props.Height, 1,
+                    sigmaCold: 5.0, sigmaHot: 3.0, amount: 1.0, cfa: cosmeticCfa);
+                if ((cold + hot) > 0 && (_frameCount % 20) == 0)
+                    _logger.LogInformation(
+                        "Live stack cosmetic: {Hot} hot / {Cold} cold px removed (cfa={Cfa})",
+                        hot, cold, cosmeticCfa);
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Live-stack cosmetic correction failed; feeding the uncorrected frame");
+            }
         }
 
         // MEMOPT3: reduce the WORKING resolution of the stack. Every per-pixel

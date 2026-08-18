@@ -222,6 +222,7 @@ builder.Services.AddSingleton<CameraStreamService>();
 // always starts/stops this; the browser never drives repeated captures).
 builder.Services.AddSingleton<LiveCaptureService>();
 // Auxiliary (second) camera capture+save loop, runs alongside LIVE/AUTORUN.
+builder.Services.AddSingleton<MultiImagerCaptureService>();
 builder.Services.AddSingleton<AuxCaptureService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.VideoRecordingService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.PlanetaryStackerService>();
@@ -1322,6 +1323,8 @@ app.MapVideoEndpoints();
 app.MapTelescopeEndpoints();
 app.MapFocuserEndpoints();
 app.MapAuxEndpoints();
+app.MapImagerEndpoints();
+app.MapDitherEndpoints();
 app.MapFilterWheelEndpoints();
 // ASCOM Platform-specific (SetupDialog, platform-presence probe).
 // Per-device select/connect/discover are already handled by the

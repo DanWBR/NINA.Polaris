@@ -112,6 +112,45 @@ public static class CameraEndpoints {
                 }
             }
 
+            // Extra-imaging-camera capture (Preview / FOCUS-manual on an imager at
+            // slot index 2+). Mirrors the aux branch: capture through this imager's
+            // own gate (serializes against its MultiImagerCaptureService loop),
+            // relay to the requested canvas, save to its own tree carrying its
+            // optics' focal length. Never feeds the main live stack.
+            if (!string.IsNullOrEmpty(request.CameraSource)
+                && request.CameraSource.StartsWith("imager:", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(request.CameraSource.AsSpan("imager:".Length), out var imagerIndex)
+                && imagerIndex >= 2) {
+                var icam = equip.GetImager(imagerIndex);
+                if (icam == null || !icam.IsConnected)
+                    return Results.BadRequest(new { error = $"No imaging camera connected at slot {imagerIndex}" });
+                try {
+                    if (request.Binning > 0)
+                        await icam.SetBinningAsync(request.Binning, request.Binning);
+                    var iImg = await ImagerCaptureGate.RunAsync(imagerIndex, async () => {
+                        using (captureProgress.Begin($"imager-{imagerIndex}", request.Exposure))
+                            return await icam.CaptureAsync(request.Exposure,
+                                new NINA.Image.Interfaces.CaptureOptions(
+                                    Gain: request.Gain > 0 ? request.Gain : null, ImageType: "SNAP"));
+                    }, acquireTimeout: TimeSpan.FromSeconds(Math.Max(request.Exposure, 1) + 60));
+                    await relay.RelayImageAsync(iImg!,
+                        string.IsNullOrEmpty(request.Kind) ? FrameKind.Focus : ParseFrameKind(request.Kind));
+                    var st = ComputeFocusStats(iImg!);
+                    bool imagerSaved = false;
+                    if (request.SaveToDisk && iImg != null) {
+                        var cfg = profileSvc.ActiveEquipmentProfile?.Imagers.ElementAtOrDefault(imagerIndex);
+                        var saved = imageWriter.SaveImage(iImg, targetName: request.TargetName ?? "snap",
+                            imageType: "SNAP", gain: request.Gain,
+                            focalLengthMmOverride: cfg?.FocalLengthMm,
+                            cameraName: icam.DeviceName);
+                        imagerSaved = saved != null;
+                    }
+                    return Results.Ok(new { status = "captured", stats = st, saved = imagerSaved });
+                } catch (Exception ex) {
+                    return Results.Json(new { error = ex.Message }, statusCode: 500);
+                }
+            }
+
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected" });
 

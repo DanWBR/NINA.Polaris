@@ -124,7 +124,7 @@ public class LiveStackTriggersServiceTests {
         var guiders = new ActiveGuiderProvider(profiles, phd2, native);
         var autoFocus = new AutoFocusService(equip, relay, guiders, profiles, NullLogger<AutoFocusService>.Instance);
         return new LiveStackTriggersService(stack, profiles, equip, autoFocus, slew, solver,
-            guiders, new DitherBarrier(guiders, NullLogger<DitherBarrier>.Instance),
+            guiders, new DitherBarrier(guiders, profiles, NullLogger<DitherBarrier>.Instance),
             NullLogger<LiveStackTriggersService>.Instance);
     }
 }

@@ -176,17 +176,21 @@ public class LiveStackTriggersService : IDisposable {
         // has to fall through: the dither gate no longer advances on a skip, so
         // returning here would take the same branch on every frame and an
         // unguided session would never recenter again.
-        if (cfg.DitherEnabled && cfg.DitherEveryNFrames > 0) {
+        // Dither config is now the GLOBAL per-rig DitherProfile (shared with
+        // AUTORUN, ADV and the multi-camera barrier), not the LIVE-specific
+        // LiveStackTriggers.Dither* fields.
+        var dg = _profiles.ActiveEquipmentProfile.EffectiveDither;
+        if (dg.Enabled && dg.EveryNFrames > 0) {
             // Multi-camera: the barrier owns the cadence (driven by the slowest
             // camera) and dithers for everyone from the capture loop, so hand it
             // our config and skip the per-loop dither here. Single-camera keeps
             // the existing every-N behavior.
-            _barrier.ConfigureCadence(cfg.DitherEveryNFrames, new DitherParams(
-                cfg.DitherPixels, cfg.DitherRaOnly, cfg.DitherSettlePixels,
-                cfg.DitherSettleTime, cfg.DitherSettleTimeout));
+            _barrier.ConfigureCadence(dg.EveryNFrames, new DitherParams(
+                dg.Pixels, dg.RaOnly, dg.SettlePixels,
+                dg.SettleTime, dg.SettleTimeout));
             if (!_barrier.OwnsDither
-                && info.FrameCount - _lastDitherFrame >= cfg.DitherEveryNFrames) {
-                if (await ExecuteDitherAsync(info, cfg)) return;
+                && info.FrameCount - _lastDitherFrame >= dg.EveryNFrames) {
+                if (await ExecuteDitherAsync(info, dg)) return;
             }
         }
 
@@ -325,7 +329,7 @@ public class LiveStackTriggersService : IDisposable {
     }
 
     /// <summary>Returns true when a dither was actually issued.</summary>
-    private async Task<bool> ExecuteDitherAsync(LiveStackFrameInfo info, LiveStackTriggers cfg) {
+    private async Task<bool> ExecuteDitherAsync(LiveStackFrameInfo info, DitherSettings dg) {
         var g = _guiders.Active;
         // Nothing to dither with. The gate is deliberately NOT advanced: a skip
         // is not a dither, and treating it as one turns a momentary blip into
@@ -372,15 +376,15 @@ public class LiveStackTriggersService : IDisposable {
         g.Settled += OnSettled;
         try {
             _logger.LogInformation("Live-stack dither: {Px}px at frame {N} (raOnly={Ra}, backend={Backend})",
-                cfg.DitherPixels, info.FrameCount, cfg.DitherRaOnly, g.Backend);
+                dg.Pixels, info.FrameCount, dg.RaOnly, g.Backend);
             await g.DitherAsync(
-                pixels: cfg.DitherPixels,
-                raOnly: cfg.DitherRaOnly,
-                settlePixels: cfg.DitherSettlePixels,
-                settleTime: cfg.DitherSettleTime,
-                settleTimeout: cfg.DitherSettleTimeout);
+                pixels: dg.Pixels,
+                raOnly: dg.RaOnly,
+                settlePixels: dg.SettlePixels,
+                settleTime: dg.SettleTime,
+                settleTimeout: dg.SettleTimeout);
             using var cts = new CancellationTokenSource(
-                TimeSpan.FromSeconds(cfg.DitherSettleTimeout + 5));
+                TimeSpan.FromSeconds(dg.SettleTimeout + 5));
             try {
                 var r = await settled.Task.WaitAsync(cts.Token);
                 if (r.Status != 0)

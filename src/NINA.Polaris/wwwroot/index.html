@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260731-edpan">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260807-hostnet">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260801-selectwidth">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260818-dithersplit">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260801-hscroll">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260728-slimaddr">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -805,6 +805,11 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,2 15,10 23,10 17,15 19,23 12,18 5,23 7,15 1,10 9,10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Guide</span>
             </button>
+            <button class="nav-btn" :class="{ active: tab === 'dither' }"
+                    @click="tab = 'dither'; loadDither()" :title="$t('Dither')">
+                <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="6" cy="7" r="1.6" fill="currentColor"/><circle cx="13" cy="5" r="1.6" fill="currentColor"/><circle cx="18" cy="9" r="1.6" fill="currentColor"/><circle cx="8" cy="14" r="1.6" fill="currentColor"/><circle cx="16" cy="16" r="1.6" fill="currentColor"/><circle cx="11" cy="19" r="1.6" fill="currentColor"/></svg>
+                <span class="nav-label" x-text="$t('Dither')"></span>
+            </button>
             <button class="nav-btn" :class="{ active: tab === 'preview' }" @click="tab = 'preview'; loadCameraCapabilities()" title="Preview (snap test shots)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Preview</span>
@@ -1359,6 +1364,17 @@
                         </span>
                         <span class="hcg-badge" x-show="isHcgActive(gain)" x-cloak
                               :title="'High Conversion Gain active (gain >= ' + hcgThreshold() + ')'">HCG</span>
+                        <!-- LIVE-stack source camera: which imaging camera feeds
+                             the live stack. Only shown when an extra imager is
+                             enabled + connected; Main is the default. All cameras
+                             keep capturing; this only picks which one stacks. -->
+                        <label x-show="extraImagers.some(c => c.enabled && c.cameraConnected)" x-cloak>Source<select
+                            class="input-sm" x-model.number="liveSourceIndex" @change="setLiveSource(liveSourceIndex)">
+                            <option :value="0" x-text="$t('Main')"></option>
+                            <template x-for="c in extraImagers.filter(c => c.enabled && c.cameraConnected)" :key="c.index">
+                                <option :value="c.index" x-text="c.camera || ($t('Imaging Camera') + ' ' + c.index)"></option>
+                            </template>
+                        </select></label>
                         <!-- Filter selector: shown below Gain and above the BIN
                              buttons whenever a filter wheel is connected. -->
                         <label x-show="filterWheel.connected">Filter<select class="input-sm"
@@ -1572,6 +1588,17 @@
                                            @change="saveLiveStackSigma()">
                                 </span>
                             </template>
+                        </label>
+                        <!-- Per-sub cosmetic correction: kills fixed hot/cold
+                             sensor pixels at the source, before debayer + warp
+                             smear a hot Bayer site into a wandering (green) trail
+                             that sigma rejection can't catch. Default ON for EAA. -->
+                        <label class="livestack-save-frames-label"
+                               :title="$t('Remove fixed hot and cold sensor pixels from every sub before stacking (CFA-aware for OSC). Works from the first frame with or without dithering, no master dark needed. Complements outlier rejection, which handles transients like cosmic rays and satellite trails.')">
+                            <input type="checkbox"
+                                   x-model="liveStackCosmetic"
+                                   @change="saveLiveStackCosmetic()">
+                            🔥 <span x-text="$t('Remove hot pixels')"></span>
                         </label>
                         <!-- Save-frames is on but no image output folder is set,
                              so every frame is silently dropped. Tell the user
@@ -1884,60 +1911,27 @@
                         <!-- Auto dither: dither every N integrated frames,
                              routed through the active guider (native or PHD2). -->
                         <fieldset class="livestack-triggers-block" x-show="trigTab === 'dither'">
-                            <legend>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" x-model="liveStackTriggers.ditherEnabled"
-                                           @change="saveLiveStackTriggers()">
-                                    Auto dither
-                                </label>
-                            </legend>
-                            <div class="livestack-triggers-row">
-                                <label>Every
-                                    <input type="number" min="1" step="1"
-                                           x-model.number="liveStackTriggers.ditherEveryNFrames"
-                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
-                                    frames
-                                </label>
-                                <label>Amount
-                                    <input type="number" min="0.5" step="0.5"
-                                           x-model.number="liveStackTriggers.ditherPixels"
-                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
-                                    px
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" x-model="liveStackTriggers.ditherRaOnly"
-                                           @change="saveLiveStackTriggers()">
-                                    RA only
-                                </label>
+                            <!-- Dither is a single GLOBAL config now; this reflects
+                                 it and links to the dedicated Dither panel. -->
+                            <legend x-text="$t('Dither')"></legend>
+                            <div class="livestack-triggers-row" style="font-size:13px">
+                                <strong :class="dither.enabled ? 'text-ok' : 'text-muted'"
+                                        x-text="dither.enabled ? $t('On') : $t('Off')"></strong>
+                                <template x-if="dither.enabled">
+                                    <span class="text-muted"><span x-text="dither.pixels"></span>px ·
+                                        <span x-text="$t('every {n} frames', { n: dither.everyNFrames })"></span><span
+                                              x-show="dither.raOnly" x-text="' · ' + $t('RA only')"></span></span>
+                                </template>
                             </div>
                             <div class="livestack-triggers-row">
-                                <label>Settle
-                                    <input type="number" min="0.1" step="0.1"
-                                           x-model.number="liveStackTriggers.ditherSettlePixels"
-                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:60px">
-                                    px
-                                </label>
-                                <label>for
-                                    <input type="number" min="0" step="1"
-                                           x-model.number="liveStackTriggers.ditherSettleTime"
-                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:60px">
-                                    s
-                                </label>
-                                <label>timeout
-                                    <input type="number" min="5" step="5"
-                                           x-model.number="liveStackTriggers.ditherSettleTimeout"
-                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:60px">
-                                    s
-                                </label>
+                                <button class="btn btn-sm" @click="tab = 'dither'; loadDither()"
+                                        x-text="$t('Open the Dither panel')"></button>
                             </div>
-                            <div class="livestack-triggers-row text-muted" style="font-size:11px">
-                                Needs the guider actively guiding (native or PHD2). Dithered
-                                frames wait to settle before stacking.
-                            </div>
-                            <div class="livestack-triggers-row text-muted"
-                                 x-show="liveStackStatus?.triggers?.executingKind === 'dither'">
-                                Dithering…
-                            </div>
+                            <div class="livestack-triggers-row text-muted" style="font-size:11px"
+                                 x-text="$t('Dither is configured globally now (shared with AUTORUN, the Advanced Sequencer and every camera).')"></div>
+                            <div class="livestack-triggers-row text-warn"
+                                 x-show="ditherSync.dithering || liveStackStatus?.triggers?.executingKind === 'dither'"
+                                 x-text="$t('Dithering…')"></div>
                         </fieldset>
                         </div><!-- /tab control wrapper (trigTab) -->
                     </details>
@@ -2838,18 +2832,19 @@
                                        :disabled="manualFocus.running"
                                        title="Frames with fewer detected stars than this report HFR=NaN">
                             </label>
-                            <!-- Aux / guide camera support: focus the primary,
-                                 the auxiliary, or the guide camera + drive its
-                                 own focuser. Shown when an aux or guide camera
-                                 is configured. -->
+                            <!-- Multi-camera support: focus the primary, an extra
+                                 imaging camera, or the guide camera. Shown when an
+                                 extra imager or guide camera is connected. -->
                             <label style="display:flex; align-items:center; gap:6px"
-                                   x-show="auxCameraConnected || (guider && guider.guideCameraConnected)" x-cloak>
+                                   x-show="extraImagers.some(c => c.enabled && c.cameraConnected) || (guider && guider.guideCameraConnected)" x-cloak>
                                 Camera
                                 <select class="input-sm" x-model="focusCameraSource"
                                         x-effect="focusGuardCameraSource()"
                                         :disabled="manualFocus.running" style="width:auto">
                                     <option value="main">Primary</option>
-                                    <option value="aux" x-show="auxCameraConnected">Auxiliary</option>
+                                    <template x-for="c in extraImagers.filter(c => c.enabled && c.cameraConnected)" :key="c.index">
+                                        <option :value="'imager:' + c.index" x-text="c.camera || ($t('Imaging Camera') + ' ' + c.index)"></option>
+                                    </template>
                                     <option value="guide" x-show="guider && guider.guideCameraConnected">Guide</option>
                                 </select>
                             </label>
@@ -3351,18 +3346,21 @@
                          (.shutter-inputs / .shutter-wrap / .shutter-secondary). -->
                     <div class="shutter-inputs">
                     <div class="control-row">
-                        <!-- Camera source: snap from the main, guide or aux
-                             camera. Only shown when a secondary camera is
-                             connected (otherwise it's always the main cam). -->
-                        <label x-show="(guider && guider.guideCameraConnected) || auxCameraConnected">
+                        <!-- Camera source: snap from the main camera, an extra
+                             imaging camera, or the guide camera. Only shown when a
+                             secondary camera is connected (otherwise it's always
+                             the main cam). -->
+                        <label x-show="(guider && guider.guideCameraConnected) || extraImagers.some(c => c.enabled && c.cameraConnected)">
                             Camera
                             <select x-model="preview.cameraSource" class="input-sm"
                                     @change="previewApplyCameraSource()"
                                     x-effect="previewGuardCameraSource()"
                                     :disabled="preview.busy || preview.looping">
                                 <option value="main">Main</option>
+                                <template x-for="c in extraImagers.filter(c => c.enabled && c.cameraConnected)" :key="c.index">
+                                    <option :value="'imager:' + c.index" x-text="c.camera || ($t('Imaging Camera') + ' ' + c.index)"></option>
+                                </template>
                                 <option value="guide" x-show="guider && guider.guideCameraConnected">Guide</option>
-                                <option value="aux" x-show="auxCameraConnected">Aux</option>
                             </select>
                         </label>
                         <!-- Exp / ISO / Gain / Offset as a real table, same as
@@ -4407,6 +4405,203 @@
                         <span class="text-err">✗ <span x-text="videoStack?.error"></span></span>
                     </div>
                 </div>
+            </div>
+
+            <!-- DITHER (unified global config — one source of truth for LIVE,
+                 AUTORUN, ADV and every camera on the mount). -->
+            <div x-show="tab === 'dither'" class="tab-panel" style="padding:16px;overflow-y:auto">
+                <div class="panel-header">
+                    <span x-text="$t('Dither')"></span>
+                    <span class="status-indicator-sm"
+                          :class="ditherSync.dithering ? 'warn' : (dither.enabled ? 'ok' : '')"
+                          x-text="ditherSync.dithering ? $t('Dithering…') : (dither.enabled ? $t('On') : $t('Off'))"></span>
+                    <span class="status-indicator-sm ok" x-show="ditherSync.active" x-cloak
+                          x-text="$t('Multi-camera sync')"></span>
+                </div>
+
+                <div class="dither-layout">
+                <!-- Global config -->
+                <div class="settings-section">
+                    <h3><span class="settings-card-icon">&#x1F3AF;</span><span x-text="$t('Global dither')"></span></h3>
+                    <div style="padding:12px 14px">
+                        <p class="text-muted" style="font-size:12px;margin:0 0 14px"
+                           x-text="$t('One dither configuration shared by LIVE, AUTORUN, the Advanced Sequencer and every camera on the mount.')"></p>
+
+                        <div style="display:grid;grid-template-columns:1fr;gap:7px;max-width:340px">
+                            <label class="checkbox-label" style="display:flex;align-items:center;gap:10px">
+                                <input type="checkbox" x-model="dither.enabled" @change="saveDither()">
+                                <span x-text="$t('Enable dithering')"></span>
+                            </label>
+                            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                                <span x-text="$t('Amount (px)')"></span>
+                                <input type="number" class="input" style="width:110px;flex:none" x-model.number="dither.pixels"
+                                       @change="saveDitherDebounced()" step="0.5" min="0.1">
+                            </label>
+                            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                                <span x-text="$t('Every N frames')"></span>
+                                <input type="number" class="input" style="width:110px;flex:none" x-model.number="dither.everyNFrames"
+                                       @change="saveDitherDebounced()" min="1">
+                            </label>
+                            <label class="checkbox-label" style="display:flex;align-items:center;gap:10px">
+                                <input type="checkbox" x-model="dither.raOnly" @change="saveDither()">
+                                <span x-text="$t('RA only (skip Dec)')"></span>
+                            </label>
+                        </div>
+
+                        <!-- Strategy sits outside the 340px group so the dropdown
+                             can use the full card width (option labels are long). -->
+                        <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
+                            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                                <span style="flex:none" x-text="$t('Multi-camera strategy')"></span>
+                                <select class="input" style="flex:1;min-width:0"
+                                        x-model="dither.cadenceStrategy" @change="saveDither()">
+                                    <option value="slowest" x-text="$t('Slowest camera drives (recommended)')"></option>
+                                    <option value="main" x-text="$t('Main camera drives')"></option>
+                                    <option value="independent" x-text="$t('Independent (each camera on its own)')"></option>
+                                </select>
+                            </label>
+                            <span class="text-muted" style="font-size:11px;text-align:left"
+                                  x-text="dither.cadenceStrategy === 'independent'
+                                      ? $t('No sync: a dither may trail another camera\'s frame.')
+                                      : (dither.cadenceStrategy === 'main'
+                                          ? $t('The main camera sets the dither cadence; the others wait for it.')
+                                          : $t('The slowest camera sets the cadence; the others wait for it.'))"></span>
+                        </div>
+
+                        <div style="border-top:1px solid var(--border);margin:6px 0 8px;padding-top:8px;
+                                    font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)"
+                             x-text="$t('Settling')"></div>
+
+                        <div style="display:grid;grid-template-columns:1fr;gap:7px;max-width:340px">
+                            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                                <span x-text="$t('Settle within (px)')"></span>
+                                <input type="number" class="input" style="width:110px;flex:none" x-model.number="dither.settlePixels"
+                                       @change="saveDitherDebounced()" step="0.5" min="0.1">
+                            </label>
+                            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                                <span x-text="$t('Settle time (s)')"></span>
+                                <input type="number" class="input" style="width:110px;flex:none" x-model.number="dither.settleTime"
+                                       @change="saveDitherDebounced()" min="0">
+                            </label>
+                            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                                <span x-text="$t('Timeout (s)')"></span>
+                                <input type="number" class="input" style="width:110px;flex:none" x-model.number="dither.settleTimeout"
+                                       @change="saveDitherDebounced()" min="1">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manual + Technical share the right column -->
+                <div class="dither-side">
+                <!-- Manual one-shot -->
+                <div class="settings-section">
+                    <h3><span class="settings-card-icon">&#x270B;</span><span x-text="$t('Manual dither')"></span></h3>
+                    <div style="padding:12px 14px">
+                        <p class="text-muted" style="font-size:12px;margin:0 0 12px"
+                           x-text="$t('Fire a single dither now with the settings above (needs the guider connected and guiding).')"></p>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <button class="btn btn-sm btn-primary" :disabled="!guider.connected || guider.dithering"
+                                    @click="ditherNow()" x-text="$t('Dither now')"></button>
+                            <span class="text-muted" style="font-size:12px" x-show="!guider.connected"
+                                  x-text="$t('Guider not connected')"></span>
+                            <span class="text-warn" style="font-size:12px" x-show="guider.dithering"
+                                  x-text="$t('Dithering…')"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Technical / live statistics -->
+                <div class="settings-section">
+                    <h3><span class="settings-card-icon">&#x1F4CA;</span><span x-text="$t('Technical')"></span></h3>
+                    <div style="padding:12px 14px">
+                        <div class="dither-tech-grid"
+                             style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:12px;align-items:baseline">
+                            <span class="text-muted" x-text="$t('State')"></span>
+                            <strong :class="ditherSync.dithering ? 'text-warn' : (dither.enabled ? 'text-ok' : 'text-muted')"
+                                    x-text="ditherSync.dithering ? $t('Dithering…') : (dither.enabled ? $t('Enabled') : $t('Disabled'))"></strong>
+
+                            <span class="text-muted" x-text="$t('Effective amount')"></span>
+                            <strong style="font-variant-numeric:tabular-nums"
+                                    x-text="dither.pixels + ' px' + (dither.raOnly ? ' · ' + $t('RA only') : '')"></strong>
+
+                            <span class="text-muted" x-text="$t('Cadence')"></span>
+                            <strong x-text="$t('every {n} frames', { n: dither.everyNFrames })"></strong>
+
+                            <span class="text-muted" x-text="$t('Settle')"></span>
+                            <strong style="font-variant-numeric:tabular-nums"
+                                    x-text="dither.settlePixels + ' px · ' + dither.settleTime + ' s · ' + $t('timeout {n}s', { n: dither.settleTimeout })"></strong>
+
+                            <span class="dither-tech-sep" style="grid-column:1/-1;border-top:1px solid var(--border);margin:2px 0"></span>
+
+                            <span class="text-muted" x-text="$t('Strategy')"></span>
+                            <strong x-text="dither.cadenceStrategy === 'main' ? $t('Main camera')
+                                        : (dither.cadenceStrategy === 'independent' ? $t('Independent') : $t('Slowest camera'))"></strong>
+
+                            <span class="text-muted" x-text="$t('Multi-camera sync')"></span>
+                            <strong :class="ditherSync.active ? 'text-ok' : 'text-muted'"
+                                    x-text="ditherSync.active ? ($t('On') + ' · ' + $t('{n} cameras', { n: ditherSync.participants })) : $t('Off')"></strong>
+
+                            <span class="text-muted" x-text="$t('Cadence owner')"></span>
+                            <strong x-text="ditherSync.owner || '—'"></strong>
+
+                            <span class="text-muted" x-text="$t('Round in flight')"></span>
+                            <strong :class="ditherSync.waiting ? 'text-warn' : 'text-muted'"
+                                    x-text="ditherSync.waiting ? $t('Yes') : $t('No')"></strong>
+
+                            <span class="dither-tech-sep" style="grid-column:1/-1;border-top:1px solid var(--border);margin:2px 0"></span>
+
+                            <span class="text-muted" x-text="$t('Dithers issued (autorun)')"></span>
+                            <strong style="font-variant-numeric:tabular-nums" x-text="seqStatus?.dithersIssued ?? 0"></strong>
+
+                            <span class="text-muted" x-text="$t('Frames since dither')"></span>
+                            <strong style="font-variant-numeric:tabular-nums" x-text="seqStatus?.framesSinceDither ?? 0"></strong>
+
+                            <span class="text-muted" x-text="$t('Next dither in')"></span>
+                            <strong style="font-variant-numeric:tabular-nums"
+                                    x-text="$t('{n} frames', { n: Math.max(0, (dither.everyNFrames || 1) - (seqStatus?.framesSinceDither || 0)) })"></strong>
+
+                            <span class="text-muted" x-text="$t('Guider')"></span>
+                            <strong :class="guider.guiding ? 'text-ok' : 'text-muted'"
+                                    x-text="guider.connected ? (guider.guiding ? ($t('Guiding') + (guider.backend ? ' (' + guider.backend + ')' : '')) : $t('Not guiding')) : $t('Not connected')"></strong>
+                        </div>
+                    </div>
+                </div>
+                </div><!-- /right column -->
+
+                <!-- Educational explainer: fills the third column in landscape. -->
+                <div class="settings-section dither-edu">
+                    <h3><span class="settings-card-icon">&#x1F4A1;</span><span x-text="$t('What is dithering?')"></span></h3>
+                    <div style="padding:12px 14px">
+                        <p class="edu-lead" x-text="$t('In astrophotography, dithering means shifting your telescope\'s aim by a few random pixels between exposures. This tiny random movement lets your stacking software tell real sky objects apart from camera flaws, for a cleaner, sharper final image.')"></p>
+                        <p class="edu-sub" x-text="$t('Why dithering is used')"></p>
+
+                        <div class="edu-item">
+                            <div class="edu-ico">&#x1F525;</div>
+                            <div class="edu-item-body">
+                                <p class="edu-item-title" x-text="$t('Removes hot pixels')"></p>
+                                <p class="edu-item-desc" x-text="$t('Dead or overly bright pixels stay in the exact same spot on the sensor, but the stars move when you dither. Stacking software sees the stuck pixels as errors and rejects them.')"></p>
+                            </div>
+                        </div>
+
+                        <div class="edu-item">
+                            <div class="edu-ico">&#x1F41B;</div>
+                            <div class="edu-item-body">
+                                <p class="edu-item-title" x-text="$t('Stops walking noise')"></p>
+                                <p class="edu-item-desc" x-text="$t('Without dithering, thermal noise can line up into ugly vertical or diagonal streaks (worm-like patterns) across the stacked image.')"></p>
+                            </div>
+                        </div>
+
+                        <div class="edu-item">
+                            <div class="edu-ico">&#x1F50D;</div>
+                            <div class="edu-item-body">
+                                <p class="edu-item-title" x-text="$t('Improves clarity')"></p>
+                                <p class="edu-item-desc" x-text="$t('Shifting the sensor across many frames lets the computer average out small differences in pixel sensitivity.')"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                </div><!-- /dither 3-column grid -->
             </div>
 
             <!-- GUIDER (PHD2) -->
@@ -6973,209 +7168,335 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
                     </div>
 
-                    <!-- Auxiliary (second) camera: rides the same mount with
-                         different optics, captures on its own cadence and only
-                         saves frames (aux/ tree). Viewable/focusable in FOCUS. -->
+                    <!-- Auxiliary camera retired: it is now just an Imaging Camera in the collection below; its FOV moved to the per-imager overlays in SKY. -->
+
+                    <!-- STAGE2: additional imaging cameras (slot 2+). One card per
+                         extra imager, each with its own camera + focuser + filter
+                         wheel + capture settings. All ride the same mount and share
+                         the synchronized-dither barrier so a dither never fires
+                         mid-sub on any of them. -->
+                    <template x-for="card in extraImagers" :key="'imgr-'+card.index">
                     <div class="equip-card equip-card-metadata">
                         <div class="equip-card-header">
-                            <span class="equip-card-icon">&#x1F4F7;</span>
-                            <span class="equip-card-title">Auxiliary Camera System</span>
+                            <span class="equip-card-icon">&#x1F52D;</span>
+                            <span class="equip-card-title"
+                                  x-text="$t('Imaging Camera') + ' ' + card.index"></span>
                             <span class="equip-status-dot"
-                                  :class="auxCameraConnected ? 'connected' : (auxCamera ? 'configured' : 'disconnected')"></span>
+                                  :class="card.cameraConnected ? 'connected' : (card.camera ? 'configured' : 'disconnected')"></span>
+                            <!-- Enable/disable this camera's participation in the
+                                 simultaneous LIVE / AUTORUN capture. -->
+                            <span class="text-muted" style="margin-left:auto;font-size:11px"
+                                  x-text="card.enabled ? $t('Active') : $t('Off')"></span>
+                            <label class="equip-toggle"
+                                   :title="card.enabled ? $t('Capturing during LIVE / AUTORUN') : $t('Not capturing')">
+                                <input type="checkbox" x-model="card.enabled" @change="toggleImagerEnabled(card)">
+                                <span class="equip-toggle-track"></span>
+                                <span class="equip-toggle-thumb"></span>
+                            </label>
+                            <button class="btn btn-sm btn-ghost"
+                                    @click="removeImager(card)"
+                                    :title="$t('Remove this imaging camera')">&#x1F5D1;</button>
                         </div>
                         <div class="equip-card-body">
-                            <!-- Group 1: Camera + Lens/Scope (driver + device +
-                                 connect, aux optics + capture settings). -->
+                            <!-- Group 1: Camera + Lens/Scope -->
                             <div class="equip-group">
-                            <div class="equip-group-title">Camera + Lens/Scope</div>
-                            <!-- Driver + device + connect (mirrors the guide cam). -->
+                            <div class="equip-group-title" x-text="$t('Camera + Lens/Scope')"></div>
                             <div class="equip-driver-row" x-show="cameraDrivers.length > 1">
-                                <label class="equip-driver-label">Cam driver</label>
+                                <label class="equip-driver-label" x-text="$t('Cam driver')"></label>
                                 <select class="equip-select equip-driver-select"
-                                        @change="setAuxCameraDriver($event.target.value)">
-                                    <template x-for="d in cameraDrivers" :key="'acd-'+d.id">
+                                        x-model="card.cameraDriver"
+                                        @change="setImagerCameraDriver(card, card.cameraDriver)">
+                                    <template x-for="d in cameraDrivers" :key="'imcd-'+card.index+'-'+d.id">
                                         <option :value="d.id" :disabled="!d.available"
-                                                :selected="auxCameraDriver === d.id"
                                                 x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
                                     </template>
                                 </select>
                             </div>
                             <div class="equip-select-row" style="margin-top:6px">
-                                <select class="equip-select"
-                                        x-show="auxCameraDriver === 'indi'"
-                                        @change="setAuxCamera($event.target.value)">
-                                    <option value="">Select aux camera</option>
-                                    <template x-for="dev in devices" :key="'acam-'+dev.name">
+                                <select class="equip-select" x-show="card.cameraDriver === 'indi'"
+                                        x-model="card.camera">
+                                    <option value="" x-text="$t('Select camera')"></option>
+                                    <template x-for="dev in devices" :key="'imcam-'+card.index+'-'+dev.name">
                                         <option :value="dev.name"
-                                                :selected="auxCamera === dev.name"
                                                 x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
-                                <select class="equip-select"
-                                        x-show="auxCameraDriver !== 'indi'"
-                                        :disabled="auxCameraDiscovering"
-                                        @change="setAuxCamera($event.target.value)">
-                                    <option value="" x-text="auxCameraDiscovering ? 'Detecting…' : 'Select aux camera'"></option>
-                                    <template x-for="c in auxCameraVendorDevices" :key="'acv-'+c.id">
-                                        <option :value="c.id"
-                                                :selected="auxCamera === c.id"
-                                                x-text="c.model + ' (' + c.detail + ')'"></option>
+                                <select class="equip-select" x-show="card.cameraDriver !== 'indi'"
+                                        x-model="card.camera">
+                                    <option value="" x-text="$t('Select camera')"></option>
+                                    <template x-for="c in card.cameraVendorDevices" :key="'imcv-'+card.index+'-'+c.id">
+                                        <option :value="c.id" x-text="c.model + ' (' + c.detail + ')'"></option>
                                     </template>
                                 </select>
                                 <label class="equip-toggle"
-                                       :aria-disabled="(!auxCamera && !auxCameraConnected).toString()"
-                                       :title="auxCameraConnected ? 'Disconnect aux camera' : 'Connect aux camera'">
-                                    <input type="checkbox"
-                                           :checked="auxCameraConnected"
-                                           :disabled="!auxCamera && !auxCameraConnected"
-                                           @change="$event.target.checked ? equipConnectAuxCamera() : equipDisconnectAuxCamera()">
+                                       :aria-disabled="(!card.camera && !card.cameraConnected).toString()"
+                                       :title="card.cameraConnected ? $t('Disconnect camera') : $t('Connect camera')">
+                                    <input type="checkbox" :checked="card.cameraConnected"
+                                           :disabled="!card.camera && !card.cameraConnected"
+                                           @change="$event.target.checked ? connectImagerCamera(card) : disconnectImagerCamera(card)">
                                     <span class="equip-toggle-track"></span>
                                     <span class="equip-toggle-thumb"></span>
                                 </label>
                             </div>
-
-                            <!-- Aux optics + capture settings. -->
+                            <!-- Connected-camera readout: sensor resolution + temp. -->
+                            <div class="equip-detail" x-show="card.cameraConnected" x-cloak>
+                                <div class="equip-detail-name" x-text="card.camera"></div>
+                                <div class="equip-detail-props">
+                                    <span x-show="card.maxX > 0"><span x-text="$t('Resolution')"></span>:
+                                        <strong x-text="card.maxX + ' × ' + card.maxY"></strong></span>
+                                    <span x-show="card.temperature !== null && card.temperature !== undefined">
+                                        <span x-text="$t('Temp')"></span>:
+                                        <strong x-text="(card.temperature?.toFixed(1) ?? '--') + ' °C'"></strong></span>
+                                </div>
+                            </div>
                             <div class="equip-meta-row" style="margin-top:8px">
-                                <label>Focal length (mm)
-                                    <input type="number" x-model.number="aux.focalLengthMm"
-                                           @change="saveAuxDebounced()" step="10" min="0"
+                                <label><span x-text="$t('Focal length (mm)')"></span>
+                                    <input type="number" x-model.number="card.focalLengthMm"
+                                           @change="saveImagerDebounced(card)" step="10" min="0"
                                            class="input-sm" style="width:90px">
                                 </label>
-                                <label>Exposure (s)
-                                    <input type="number" x-model.number="aux.exposureSec"
-                                           @change="saveAuxDebounced()" step="0.5" min="0.05"
+                                <label><span x-text="$t('Exposure (s)')"></span>
+                                    <input type="number" x-model.number="card.exposureSec"
+                                           @change="saveImagerDebounced(card)" step="0.5" min="0.05"
                                            class="input-sm" style="width:80px">
                                 </label>
                             </div>
-                            <!-- Aux pixel size + DSLR picker. Same purpose as the
-                                 main camera: a DSLR on the aux port (gphoto)
-                                 reports pixel size 0, so set it here and Polaris
-                                 pushes it into the aux driver on connect. Only
-                                 shown when a DSLR is actually on the aux port
-                                 (gphoto exposes ISO) — never for an astro cam
-                                 like the SV605CC, which reports its own pixel. -->
-                            <div class="equip-meta-row" x-show="auxIsDslr" x-cloak>
-                                <label>Pixel size (µm)
-                                    <input type="number" x-model.number="aux.pixelSizeUm"
-                                           @change="saveAuxDebounced()" step="0.01" min="0"
-                                           class="input-sm" style="width:90px">
-                                </label>
-                                <label>Camera brand
-                                    <select x-model="dslrPick.auxBrand" class="input-sm"
-                                            @change="dslrPick.auxModel = ''">
-                                        <option value="">Pick a brand</option>
-                                        <template x-for="b in dslrBrands" :key="'acb'+b">
-                                            <option :value="b" x-text="b"></option>
-                                        </template>
-                                    </select>
-                                </label>
-                                <label>Model
-                                    <select x-model="dslrPick.auxModel" class="input-sm"
-                                            :disabled="!dslrPick.auxBrand"
-                                            @change="applyDslrPixel('aux')">
-                                        <option value="">Pick a model</option>
-                                        <template x-for="c in dslrModelsForBrand(dslrPick.auxBrand)" :key="'acm'+c.model">
-                                            <option :value="c.model"
-                                                x-text="c.model + ' (' + c.pixelSizeUm.toFixed(2) + ' µm)'"></option>
-                                        </template>
-                                    </select>
-                                </label>
-                            </div>
                             <div class="equip-meta-row">
-                                <label>Gain
-                                    <input type="number" x-model.number="aux.gain"
-                                           @change="saveAuxDebounced()" min="0"
+                                <label><span x-text="$t('Gain')"></span>
+                                    <input type="number" x-model.number="card.gain"
+                                           @change="saveImagerDebounced(card)" min="0"
                                            class="input-sm" style="width:70px">
                                 </label>
-                                <label>Bin
-                                    <input type="number" x-model.number="aux.binning"
-                                           @change="saveAuxDebounced()" min="1" max="4"
-                                           class="input-sm" style="width:60px">
+                                <label><span x-text="$t('Bin')"></span>
+                                    <select class="input-sm" style="width:72px"
+                                            x-model.number="card.binning" @change="saveImagerDebounced(card)">
+                                        <option :value="1">1x1</option>
+                                        <option :value="2">2x2</option>
+                                        <option :value="3">3x3</option>
+                                        <option :value="4">4x4</option>
+                                    </select>
                                 </label>
                             </div>
-                            <!-- Cooler controls for a cooled astro cam on the
-                                 aux port (SV605CC etc.). Shown only when the aux
-                                 camera actually exposes a cooler. -->
-                            <div class="equip-meta-row" x-show="auxCameraConnected && auxSupportsCooler" x-cloak>
-                                <span class="text-muted" style="font-size:12px"
-                                      x-show="auxTemp !== null">Temp:
-                                    <strong x-text="(auxTemp?.toFixed(1) ?? '--') + ' °C'"></strong></span>
-                                <label class="equip-toggle"
-                                       :title="auxCoolerOn ? 'Turn aux cooler OFF' : 'Turn aux cooler ON'">
-                                    <input type="checkbox" :checked="auxCoolerOn"
-                                           @change="setAuxCooler($event.target.checked, auxCoolerTarget)">
-                                    <span class="equip-toggle-track"></span>
-                                    <span class="equip-toggle-thumb"></span>
+                            <!-- Per-imager cooling: only for cooled sensors. Each
+                                 imager controls its own setpoint + ramp; PLAN auto-
+                                 cool/warm drives every enabled cooled imager too. -->
+                            <div class="equip-meta-row" x-show="card.supportsCooler" x-cloak
+                                 style="align-items:center">
+                                <label><span x-text="$t('Cool to (°C)')"></span>
+                                    <input type="number" x-model.number="card.coolerTargetC"
+                                           @change="saveImagerCoolerConfig(card)" step="1"
+                                           class="input-sm" style="width:64px">
                                 </label>
-                                <span class="text-muted" style="font-size:11px">Cooler</span>
-                                <label class="equip-temp-label">Target
-                                    <input type="number" x-model.number="auxCoolerTarget" step="1" min="-40" max="30" class="input-sm" style="width:64px">
-                                    <span>&deg;C</span>
+                                <label><span x-text="$t('Ramp (°C/min)')"></span>
+                                    <input type="number" x-model.number="card.coolerRampDegPerMinute"
+                                           @change="saveImagerCoolerConfig(card)" step="0.5" min="0"
+                                           class="input-sm" style="width:64px">
                                 </label>
-                                <button class="btn btn-sm" @click="setAuxCooler(true, auxCoolerTarget)">Set</button>
+                                <button class="btn btn-sm" :class="card.coolerOn ? 'btn-warn' : 'btn-primary'"
+                                        :disabled="card.coolerBusy || !card.cameraConnected"
+                                        @click="toggleImagerCooler(card)"
+                                        x-text="card.coolerOn ? $t('Warm up') : $t('Cool')"></button>
+                                <span class="text-muted" style="font-size:11px"
+                                      x-show="card.temperature !== null"
+                                      x-text="(card.temperature ?? 0).toFixed(1) + '°C' + (card.coolerOn ? ' • ' + $t('cooling') : '')"></span>
                             </div>
-                            <label style="margin-top:6px;display:flex;gap:8px;align-items:center;font-size:12px">
-                                <input type="checkbox" x-model="aux.enabled" @change="toggleAuxEnabled()">
-                                <span>Capture aux frames during LIVE / AUTORUN</span>
-                            </label>
+                            <p class="text-muted" style="margin:6px 0 0;font-size:11px"
+                               x-text="card.enabled
+                                   ? $t('Captures simultaneously during LIVE / AUTORUN (toggle in the header).')
+                                   : $t('Disabled: this camera will not capture during LIVE / AUTORUN.')"></p>
                             <p class="hint" style="margin:4px 0 0;font-size:11px"
-                               x-show="aux.enabled && auxCapture.running">
-                                Aux capturing: <strong x-text="auxCapture.frameCount"></strong> saved this session.
+                               x-show="card.enabled && card.running">
+                                <span x-text="$t('Capturing:')"></span>
+                                <strong x-text="card.frameCount"></strong>
+                                <span x-text="$t('saved this session.')"></span>
                             </p>
                             <p class="text-warn" style="margin:4px 0 0;font-size:11px"
-                               x-show="aux.enabled && auxCapture.noOutputDir">
-                                ⚠ No output folder set: aux frames are NOT being saved. Set one in FILES.
-                            </p>
+                               x-show="card.lastError" x-text="card.lastError"></p>
                             </div><!-- /Camera + Lens/Scope group -->
 
-                            <!-- Group 2: Focus Motor (optional motor on the aux
-                                 train, for manual focusing from the FOCUS tab). -->
+                            <!-- Group 2: Focus Motor -->
                             <div class="equip-group">
-                                <div class="equip-group-title">Focus Motor</div>
-                                <div class="equip-driver-row">
-                                    <label class="equip-driver-label">Aux focuser</label>
+                                <div class="equip-group-title" x-text="$t('Focus Motor')"></div>
+                                <div class="equip-driver-row" x-show="focuserDrivers.length > 1">
+                                    <label class="equip-driver-label" x-text="$t('Focuser')"></label>
                                     <select class="equip-select equip-driver-select"
-                                            @change="setAuxFocuserDriver($event.target.value)">
-                                        <template x-for="d in focuserDrivers" :key="'afd-'+d.id">
+                                            x-model="card.focuserDriver"
+                                            @change="setImagerFocuserDriver(card, card.focuserDriver)">
+                                        <template x-for="d in focuserDrivers" :key="'imfd-'+card.index+'-'+d.id">
                                             <option :value="d.id" :disabled="!d.available"
-                                                    :selected="auxFocuserDriver === d.id"
                                                     x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
                                         </template>
                                     </select>
                                 </div>
                                 <div class="equip-select-row" style="margin-top:6px">
-                                    <select class="equip-select"
-                                            x-show="auxFocuserDriver === 'indi'"
-                                            @change="setAuxFocuser($event.target.value)">
-                                        <option value="">Select aux focuser</option>
-                                        <template x-for="dev in devices" :key="'afoc-'+dev.name">
-                                            <option :value="dev.name"
-                                                    :selected="auxFocuser === dev.name"
-                                                    x-text="dev.name"></option>
+                                    <select class="equip-select" x-show="card.focuserDriver === 'indi'"
+                                            x-model="card.focuser">
+                                        <option value="" x-text="$t('Select focuser')"></option>
+                                        <template x-for="dev in devices" :key="'imfoc-'+card.index+'-'+dev.name">
+                                            <option :value="dev.name" x-text="dev.name"></option>
                                         </template>
                                     </select>
-                                    <select class="equip-select"
-                                            x-show="auxFocuserDriver !== 'indi'"
-                                            @change="setAuxFocuser($event.target.value)">
-                                        <option value="" x-text="'Select aux focuser'"></option>
-                                        <template x-for="c in auxFocuserVendorDevices" :key="'afv-'+c.id">
-                                            <option :value="c.id"
-                                                    :selected="auxFocuser === c.id"
-                                                    x-text="c.model || c.id"></option>
+                                    <select class="equip-select" x-show="card.focuserDriver !== 'indi'"
+                                            x-model="card.focuser">
+                                        <option value="" x-text="$t('Select focuser')"></option>
+                                        <template x-for="c in card.focuserVendorDevices" :key="'imfv-'+card.index+'-'+c.id">
+                                            <option :value="c.id" x-text="c.model || c.id"></option>
                                         </template>
                                     </select>
                                     <label class="equip-toggle"
-                                           :title="auxFocuserConnected ? 'Disconnect aux focuser' : 'Connect aux focuser'">
-                                        <input type="checkbox"
-                                               :checked="auxFocuserConnected"
-                                               :disabled="!auxFocuser && !auxFocuserConnected"
-                                               @change="$event.target.checked ? equipConnectAuxFocuser() : equipDisconnectAuxFocuser()">
+                                           :title="card.focuserConnected ? $t('Disconnect focuser') : $t('Connect focuser')">
+                                        <input type="checkbox" :checked="card.focuserConnected"
+                                               :disabled="!card.focuser && !card.focuserConnected"
+                                               @change="$event.target.checked ? connectImagerFocuser(card) : disconnectImagerFocuser(card)">
                                         <span class="equip-toggle-track"></span>
                                         <span class="equip-toggle-thumb"></span>
                                     </label>
                                 </div>
+                                <!-- Position + temp readout + manual jog (In/Out by step, Stop). -->
+                                <div class="equip-detail" x-show="card.focuserConnected" x-cloak>
+                                    <div class="equip-detail-props" style="align-items:center;gap:8px;flex-wrap:wrap">
+                                        <span><span x-text="$t('Position')"></span>:
+                                            <strong x-text="card.focuserPosition"></strong></span>
+                                        <span x-show="card.focuserTemperature !== null && card.focuserTemperature !== undefined">
+                                            <span x-text="$t('Temp')"></span>:
+                                            <strong x-text="(card.focuserTemperature?.toFixed(1) ?? '--') + ' °C'"></strong></span>
+                                        <input type="number" x-model.number="card.focuserStep" min="1"
+                                               class="input-sm" style="width:70px"
+                                               :title="$t('Step size')">
+                                        <button class="btn btn-sm" :disabled="card.focuserMoving"
+                                                @click="jogImagerFocuser(card, -Math.abs(card.focuserStep || 100))"
+                                                x-text="'◀ ' + $t('In')"></button>
+                                        <button class="btn btn-sm" :disabled="card.focuserMoving"
+                                                @click="jogImagerFocuser(card, Math.abs(card.focuserStep || 100))"
+                                                x-text="$t('Out') + ' ▶'"></button>
+                                        <button class="btn btn-sm" @click="abortImagerFocuser(card)"
+                                                x-text="$t('Stop')"></button>
+                                    </div>
+                                    <!-- Driver settings: sync / reverse / backlash (per capabilities). -->
+                                    <div x-show="card.focuserSupportsSync || card.focuserSupportsReverse || card.focuserSupportsBacklash"
+                                         style="margin-top:6px">
+                                        <button class="btn btn-sm"
+                                                @click="card.focuserSettingsOpen = !card.focuserSettingsOpen"
+                                                x-text="(card.focuserSettingsOpen ? '▾ ' : '▸ ') + $t('Driver settings')"></button>
+                                        <div x-show="card.focuserSettingsOpen" x-cloak
+                                             style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
+                                            <div x-show="card.focuserSupportsSync"
+                                                 style="display:flex;gap:6px;align-items:center;font-size:12px;flex-wrap:wrap">
+                                                <span x-text="$t('Sync to position')"></span>
+                                                <input type="number" min="0" class="input-sm" style="width:90px"
+                                                       x-model.number="card.focuserSyncPosition">
+                                                <button class="btn btn-sm" @click="syncImagerFocuser(card)"
+                                                        x-text="$t('Sync')"></button>
+                                            </div>
+                                            <label x-show="card.focuserSupportsReverse"
+                                                   style="display:flex;gap:8px;align-items:center;font-size:12px">
+                                                <input type="checkbox" x-model="card.focuserReverse"
+                                                       @change="reverseImagerFocuser(card)">
+                                                <span x-text="$t('Reverse motor direction')"></span>
+                                            </label>
+                                            <div x-show="card.focuserSupportsBacklash"
+                                                 style="display:flex;gap:6px;align-items:center;font-size:12px;flex-wrap:wrap">
+                                                <input type="checkbox" x-model="card.focuserBacklashEnabled">
+                                                <span x-text="$t('Backlash comp')"></span>
+                                                <input type="number" min="0" max="500" class="input-sm" style="width:70px"
+                                                       x-model.number="card.focuserBacklashSteps">
+                                                <button class="btn btn-sm" @click="applyImagerBacklash(card)"
+                                                        x-text="$t('Apply')"></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div><!-- /Focus Motor group -->
+
+                            <!-- Group 3: Filter Wheel -->
+                            <div class="equip-group">
+                                <div class="equip-group-title" x-text="$t('Filter Wheel')"></div>
+                                <div class="equip-driver-row" x-show="filterWheelDrivers.length > 1">
+                                    <label class="equip-driver-label" x-text="$t('Filter wheel')"></label>
+                                    <select class="equip-select equip-driver-select"
+                                            x-model="card.filterWheelDriver"
+                                            @change="setImagerFilterWheelDriver(card, card.filterWheelDriver)">
+                                        <template x-for="d in filterWheelDrivers" :key="'imwd-'+card.index+'-'+d.id">
+                                            <option :value="d.id" :disabled="!d.available"
+                                                    x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div class="equip-select-row" style="margin-top:6px">
+                                    <select class="equip-select" x-show="card.filterWheelDriver === 'indi'"
+                                            x-model="card.filterWheel">
+                                        <option value="" x-text="$t('Select filter wheel')"></option>
+                                        <template x-for="dev in devices" :key="'imfw-'+card.index+'-'+dev.name">
+                                            <option :value="dev.name" x-text="dev.name"></option>
+                                        </template>
+                                    </select>
+                                    <select class="equip-select" x-show="card.filterWheelDriver !== 'indi'"
+                                            x-model="card.filterWheel">
+                                        <option value="" x-text="$t('Select filter wheel')"></option>
+                                        <template x-for="c in card.filterWheelVendorDevices" :key="'imwv-'+card.index+'-'+c.id">
+                                            <option :value="c.id" x-text="c.model || c.id"></option>
+                                        </template>
+                                    </select>
+                                    <label class="equip-toggle"
+                                           :title="card.filterWheelConnected ? $t('Disconnect filter wheel') : $t('Connect filter wheel')">
+                                        <input type="checkbox" :checked="card.filterWheelConnected"
+                                               :disabled="!card.filterWheel && !card.filterWheelConnected"
+                                               @change="$event.target.checked ? connectImagerFilterWheel(card) : disconnectImagerFilterWheel(card)">
+                                        <span class="equip-toggle-track"></span>
+                                        <span class="equip-toggle-thumb"></span>
+                                    </label>
+                                </div>
+                                <!-- Current filter selector (by position, showing names). -->
+                                <div class="equip-detail" x-show="card.filterWheelConnected && card.filterNames.length" x-cloak>
+                                    <label style="display:flex;gap:8px;align-items:center;font-size:12px">
+                                        <span x-text="$t('Filter')"></span>
+                                        <select class="input-sm" x-model.number="card.filterPosition"
+                                                :disabled="card.filterMoving"
+                                                @change="setImagerFilter(card, card.filterPosition)">
+                                            <template x-for="(name, i) in card.filterNames" :key="'imflt-'+card.index+'-'+i">
+                                                <option :value="i" x-text="(i + 1) + ': ' + name"></option>
+                                            </template>
+                                        </select>
+                                        <span class="text-muted" style="font-size:11px"
+                                              x-show="card.filterMoving" x-text="$t('moving…')"></span>
+                                    </label>
+                                    <!-- Rename slots (drivers that support it) + save onto the rig. -->
+                                    <div x-show="card.filterEditNames" style="margin-top:6px">
+                                        <button class="btn btn-sm"
+                                                @click="card.filterNamesEditOpen ? cancelImagerFilterNames(card) : openImagerFilterNames(card)"
+                                                x-text="(card.filterNamesEditOpen ? '▾ ' : '✎ ') + (card.filterNamesEditOpen ? $t('Cancel') : $t('Edit filter names'))"></button>
+                                        <div x-show="card.filterNamesEditOpen" x-cloak
+                                             style="margin-top:6px;display:flex;flex-direction:column;gap:4px">
+                                            <template x-for="(_, idx) in card.filterNamesDraft" :key="'imfn-'+card.index+'-'+idx">
+                                                <div style="display:flex;gap:6px;align-items:center;font-size:12px">
+                                                    <span class="text-muted" style="width:1.6em;text-align:right"
+                                                          x-text="(idx + 1) + ':'"></span>
+                                                    <input type="text" class="input-sm" style="flex:1;min-width:120px"
+                                                           x-model="card.filterNamesDraft[idx]"
+                                                           :disabled="card.filterNamesBusy">
+                                                </div>
+                                            </template>
+                                            <div style="display:flex;gap:6px;margin-top:2px">
+                                                <button class="btn btn-sm" @click="saveImagerFilterNames(card)"
+                                                        :disabled="card.filterNamesBusy">
+                                                    <span x-show="!card.filterNamesBusy" x-text="$t('Save names')"></span>
+                                                    <span x-show="card.filterNamesBusy" x-text="$t('Saving…')"></span>
+                                                </button>
+                                                <button class="btn btn-sm" @click="cancelImagerFilterNames(card)"
+                                                        :disabled="card.filterNamesBusy" x-text="$t('Cancel')"></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div><!-- /Filter Wheel group -->
                         </div>
+                    </div>
+                    </template>
+
+                    <!-- Add another imaging camera (grows rig.extraImagers). -->
+                    <div style="margin:2px 0 10px">
+                        <button class="btn btn-sm" @click="addImager()"
+                                x-text="'＋ ' + $t('Add imaging camera')"></button>
                     </div>
 
                     <!-- Focuser -->
@@ -10451,64 +10772,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <!-- Dither settings panel.
                      Header lives in the .autorun-options-bar chip above. -->
                 <div class="seq-dither-panel" x-show="seqOptTab === 'dither'">
-                    <div class="autorun-option-body-head">
-                        <label class="seq-dither-toggle">
-                            <input type="checkbox" x-model="ditherSettings.enabled" @change="saveDitherSettings()"
-                                   :disabled="seqState === 'running'">
-                            <span :class="ditherSettings.enabled ? 'text-ok' : 'text-muted'"
-                                  x-text="ditherSettings.enabled ? 'Enabled' : 'Disabled'"></span>
-                        </label>
-                        <span class="text-muted" style="font-size: 11px;" x-show="seqStatus?.dithersIssued >= 0">
-                            <span x-text="seqStatus?.dithersIssued || 0"></span> dithered · next in
-                            <span x-text="Math.max(0, (ditherSettings.everyNFrames || 1) - (seqStatus?.framesSinceDither || 0))"></span>
-                        </span>
-                    </div>
+                    <!-- Dither is a single GLOBAL config now (shared with LIVE, ADV
+                         and every camera). This tab just reflects it + links out. -->
                     <div class="seq-dither-body">
-                        <div class="seq-dither-row">
-                            <label>Pixels
-                                <input type="number" x-model.number="ditherSettings.pixels"
-                                       step="0.5" min="0.5" max="50" class="input-sm"
-                                       @change="saveDitherSettings()"
-                                       :disabled="seqState === 'running'">
-                            </label>
-                            <label>Every N frames
-                                <input type="number" x-model.number="ditherSettings.everyNFrames"
-                                       step="1" min="1" max="100" class="input-sm"
-                                       @change="saveDitherSettings()"
-                                       :disabled="seqState === 'running'">
-                            </label>
-                            <label class="seq-dither-checkbox">
-                                <input type="checkbox" x-model="ditherSettings.raOnly"
-                                       @change="saveDitherSettings()"
-                                       :disabled="seqState === 'running'">
-                                RA only
-                            </label>
-                        </div>
-                        <div class="seq-dither-row">
-                            <label>Settle px
-                                <input type="number" x-model.number="ditherSettings.settlePixels"
-                                       step="0.1" min="0.1" max="20" class="input-sm"
-                                       @change="saveDitherSettings()"
-                                       :disabled="seqState === 'running'">
-                            </label>
-                            <label>Settle time (s)
-                                <input type="number" x-model.number="ditherSettings.settleTime"
-                                       step="1" min="0" max="300" class="input-sm"
-                                       @change="saveDitherSettings()"
-                                       :disabled="seqState === 'running'">
-                            </label>
-                            <label>Timeout (s)
-                                <input type="number" x-model.number="ditherSettings.settleTimeout"
-                                       step="5" min="5" max="600" class="input-sm"
-                                       @change="saveDitherSettings()"
-                                       :disabled="seqState === 'running'">
-                            </label>
-                        </div>
-                        <p class="seq-dither-hint text-muted" x-show="ditherSettings.enabled && !guider.connected">
-                            ⚠ PHD2 not connected, dither will be silently skipped during the run.
+                        <p style="margin-top:0;font-size:13px">
+                            <strong :class="dither.enabled ? 'text-ok' : 'text-muted'"
+                                    x-text="dither.enabled ? $t('On') : $t('Off')"></strong>
+                            <template x-if="dither.enabled">
+                                <span class="text-muted"> · <span x-text="dither.pixels"></span>px ·
+                                    <span x-text="$t('every {n} frames', { n: dither.everyNFrames })"></span><span
+                                          x-show="dither.raOnly" x-text="' · ' + $t('RA only')"></span></span>
+                            </template>
                         </p>
-                        <p class="seq-dither-hint text-muted" x-show="ditherSettings.enabled && guider.connected && !guider.guiding">
-                            ⚠ PHD2 connected but not guiding, start guiding before launching the sequence.
+                        <p class="text-muted" style="font-size:11px" x-show="seqStatus?.dithersIssued >= 0">
+                            <span x-text="seqStatus?.dithersIssued || 0"></span>
+                            <span x-text="$t('dithered this run')"></span>
+                        </p>
+                        <button class="btn btn-sm" @click="tab = 'dither'; loadDither()"
+                                x-text="$t('Open the Dither panel')"></button>
+                        <p class="seq-dither-hint text-muted" x-show="dither.enabled && !guider.connected">
+                            ⚠ <span x-text="$t('Guider not connected, dither will be silently skipped during the run.')"></span>
                         </p>
                     </div>
                 </div>

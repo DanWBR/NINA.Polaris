@@ -232,6 +232,157 @@ public class EquipmentManager : IDisposable {
         return AuxCamera;
     }
 
+    // ----- STAGE2: additional imaging cameras (main=0, aux=1, extras=2+) -----
+    // Runtime counterpart of EquipmentProfile.ExtraImagers. The main and aux
+    // slots keep their dedicated properties above; new imagers live in this list
+    // and are addressed by an imager index so N-camera code stays uniform.
+
+    private sealed class ImagerSlot {
+        public ICamera? Camera;
+        public string? Driver;
+        public string? DeviceId;
+        // Each imaging train can carry its own focuser + filter wheel.
+        public IFocuser? Focuser;
+        public string? FocuserDriver;
+        public IFilterWheel? FilterWheel;
+        public string? FilterWheelDriver;
+    }
+    private readonly List<ImagerSlot> _extraImagers = new();
+
+    /// <summary>Number of extra imaging cameras bound beyond the main+aux pair.</summary>
+    public int ExtraImagerCount => _extraImagers.Count;
+
+    /// <summary>The imaging camera at slot <paramref name="index"/>: 0 = main
+    /// <see cref="Camera"/>, 1 = <see cref="AuxCamera"/>, 2+ = an extra imager.
+    /// Null when nothing is bound to that slot.</summary>
+    public ICamera? GetImager(int index) {
+        if (index <= 0) return Camera;
+        if (index == 1) return AuxCamera;
+        var i = index - 2;
+        return i >= 0 && i < _extraImagers.Count ? _extraImagers[i].Camera : null;
+    }
+
+    /// <summary>Select the imaging camera for slot <paramref name="index"/>.
+    /// Slots 0 and 1 delegate to <see cref="SelectCamera(string,string)"/> and
+    /// <see cref="SelectAuxCamera"/> so their existing behavior is preserved;
+    /// 2+ bind an extra imager (growing the list). Rejects sharing the connected
+    /// main camera's device, same rule as the aux slot.</summary>
+    public ICamera SelectImager(int index, string driver, string deviceId) {
+        if (index <= 0) return SelectCamera(driver, deviceId);
+        if (index == 1) return SelectAuxCamera(driver, deviceId);
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        if (Camera != null && Camera.IsConnected && CameraDriver == driver &&
+            string.Equals(Camera.DeviceName, deviceId, StringComparison.OrdinalIgnoreCase)) {
+            throw new InvalidOperationException(
+                "An imaging camera must differ from the main camera while it is connected.");
+        }
+        var i = index - 2;
+        while (_extraImagers.Count <= i) _extraImagers.Add(new ImagerSlot());
+        var slot = _extraImagers[i];
+        var previous = slot.Camera;
+        slot.Camera = CreateCamera(driver, deviceId);
+        ReleaseReplacedDevice(previous);
+        slot.Driver = driver;
+        slot.DeviceId = deviceId;
+        _logger.LogInformation("Imager {Index} selected: driver={Driver}, id={DeviceId}", index, driver, deviceId);
+        return slot.Camera!;
+    }
+
+    /// <summary>Ordered runtime view over every imaging-camera slot: main (0),
+    /// aux (1), then extras. Roles match <c>EquipmentProfile.Imagers</c>
+    /// ("main"/"aux"/"imager-N") and double as the DitherBarrier participant ids.</summary>
+    public IReadOnlyList<ImagerSlotInfo> EnumerateImagers() {
+        var list = new List<ImagerSlotInfo> {
+            new(0, "main", Camera, CameraDriver, CameraDeviceId),
+            new(1, "aux", AuxCamera, AuxCameraDriver, AuxCameraDeviceId),
+        };
+        for (int i = 0; i < _extraImagers.Count; i++) {
+            var s = _extraImagers[i];
+            list.Add(new(i + 2, $"imager-{i + 3}", s.Camera, s.Driver, s.DeviceId));
+        }
+        return list;
+    }
+
+    /// <summary>Focuser bound to imager slot <paramref name="index"/>: 0 = main
+    /// <see cref="Focuser"/>, 1 = <see cref="AuxFocuser"/>, 2+ = an extra
+    /// imager's focuser. Null when none is bound.</summary>
+    public IFocuser? GetImagerFocuser(int index) {
+        if (index <= 0) return Focuser;
+        if (index == 1) return AuxFocuser;
+        var i = index - 2;
+        return i >= 0 && i < _extraImagers.Count ? _extraImagers[i].Focuser : null;
+    }
+
+    /// <summary>Bind a focuser to imager slot <paramref name="index"/>. Slots 0/1
+    /// delegate to the main/aux focuser selectors; 2+ bind an extra imager's
+    /// focuser (growing the list).</summary>
+    public IFocuser SelectImagerFocuser(int index, string driver, string deviceId) {
+        if (index <= 0) return SelectFocuser(driver, deviceId);
+        if (index == 1) return SelectAuxFocuser(driver, deviceId);
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        var i = index - 2;
+        while (_extraImagers.Count <= i) _extraImagers.Add(new ImagerSlot());
+        var slot = _extraImagers[i];
+        var previous = slot.Focuser;
+        slot.Focuser = CreateFocuser(driver, deviceId);
+        ReleaseReplacedDevice(previous);
+        slot.FocuserDriver = driver;
+        _logger.LogInformation("Imager {Index} focuser selected: driver={Driver}, id={DeviceId}", index, driver, deviceId);
+        return slot.Focuser;
+    }
+
+    /// <summary>Filter wheel bound to imager slot <paramref name="index"/>:
+    /// 0 = main <see cref="FilterWheel"/>, 2+ = an extra imager's wheel. Null
+    /// when none. (The aux slot has no filter wheel yet — today the aux is
+    /// filter-less.)</summary>
+    public IFilterWheel? GetImagerFilterWheel(int index) {
+        if (index <= 0) return FilterWheel;
+        var i = index - 2;
+        return i >= 0 && i < _extraImagers.Count ? _extraImagers[i].FilterWheel : null;
+    }
+
+    /// <summary>Bind a filter wheel to imager slot <paramref name="index"/>.
+    /// Slot 0 delegates to the main <see cref="SelectFilterWheel(string,string)"/>
+    /// (applying the rig's saved filter names); 2+ bind an extra imager's wheel
+    /// with the raw adapter.</summary>
+    public IFilterWheel SelectImagerFilterWheel(int index, string driver, string deviceId) {
+        if (index <= 0) return SelectFilterWheel(driver, deviceId);
+        if (index == 1)
+            throw new NotSupportedException(
+                "The aux camera has no filter wheel slot yet; use the main camera or an extra imager.");
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        var i = index - 2;
+        while (_extraImagers.Count <= i) _extraImagers.Add(new ImagerSlot());
+        var slot = _extraImagers[i];
+        var previous = slot.FilterWheel;
+        slot.FilterWheel = CreateFilterWheelAdapter(driver, deviceId);
+        ReleaseReplacedDevice(previous);
+        slot.FilterWheelDriver = driver;
+        _logger.LogInformation("Imager {Index} filter wheel selected: driver={Driver}, id={DeviceId}", index, driver, deviceId);
+        return slot.FilterWheel;
+    }
+
+    /// <summary>Remove the extra imager at slot <paramref name="index"/> (2+):
+    /// drop the slot and dispose its camera/focuser/filter wheel. Higher slots
+    /// shift down by one, so the caller must remove the matching config entry
+    /// (<c>ExtraImagers[index-2]</c>) in the same operation to keep the runtime
+    /// list and the persisted config index-aligned. Callers should disconnect the
+    /// devices first (this only releases them). No-op for an out-of-range slot.</summary>
+    public void RemoveImager(int index) {
+        if (index < 2)
+            throw new InvalidOperationException("Only extra imagers (index >= 2) can be removed.");
+        var i = index - 2;
+        if (i < 0 || i >= _extraImagers.Count) return;
+        var slot = _extraImagers[i];
+        // Remove from the list BEFORE releasing so the ReleaseReplacedDevice
+        // "still referenced by a slot" guard lets these actually dispose.
+        _extraImagers.RemoveAt(i);
+        ReleaseReplacedDevice(slot.Camera);
+        ReleaseReplacedDevice(slot.Focuser);
+        ReleaseReplacedDevice(slot.FilterWheel);
+        _logger.LogInformation("Imager {Index} removed", index);
+    }
+
     private static ICamera CreateCanonCamera(string deviceId) {
         if (!OperatingSystem.IsWindows()) {
             throw new NotSupportedException(
@@ -438,7 +589,17 @@ public class EquipmentManager : IDisposable {
         // selected with, so the dropdown's :selected match and the saved rig
         // selection still line up. INDI/Alpaca/sim don't open a USB handle, so
         // they fall through to their normal (non-destructive) discovery.
-        if (driver != "indi" && driver != "alpaca" && driver != "sim") {
+        //
+        // ascom-com is EXCLUDED too: its discovery reads the Windows registry
+        // (DiscoverAscomDrivers, no COM instantiation, no USB), so it is
+        // non-destructive. Leaving it in the guard meant that with the MAIN
+        // camera connected as a COM driver, every COM discovery — including the
+        // aux and extra-imager cards — short-circuited to only that one
+        // connected camera instead of the full registered-driver list, so a
+        // second imager could not pick a different ASCOM COM camera. The
+        // connected camera still appears via the registry, so its saved
+        // selection still lines up.
+        if (driver != "indi" && driver != "alpaca" && driver != "sim" && driver != "ascom-com") {
             var live = new List<DiscoveredCamera>();
             if (Camera != null && Camera.IsConnected && CameraDriver == driver
                 && !string.IsNullOrEmpty(CameraDeviceId)) {
@@ -827,14 +988,7 @@ public class EquipmentManager : IDisposable {
 
     public IFilterWheel SelectFilterWheel(string driver, string deviceId) {
         driver = (driver ?? "indi").Trim().ToLowerInvariant();
-        IFilterWheel adapter = driver switch {
-            "indi" => new IndiFilterWheel(_indiClient, deviceId),
-            "ascom-com" => CreateAscomFilterWheel(deviceId),
-            "alpaca" => AlpacaFilterWheel.FromDeviceId(deviceId),
-            _ => throw new NotSupportedException(
-                $"Filter wheel driver '{driver}' is not implemented yet. " +
-                "Use 'indi', 'alpaca', or 'ascom-com'."),
-        };
+        var adapter = CreateFilterWheelAdapter(driver, deviceId);
         // FILTERNAME: overlay the rig's saved filter names on top of the driver's
         // so read-only wheels (ASCOM/Alpaca) can still be renamed in Polaris.
         FilterWheel = _profiles != null ? new EffectiveFilterWheel(adapter, _profiles) : adapter;
@@ -843,6 +997,19 @@ public class EquipmentManager : IDisposable {
             driver, deviceId);
         return FilterWheel;
     }
+
+    /// <summary>Build a raw filter-wheel adapter for a driver+id (no name
+    /// overlay). Shared by the main <see cref="SelectFilterWheel(string,string)"/>
+    /// (which wraps it in an <see cref="EffectiveFilterWheel"/>) and the
+    /// per-imager filter wheels. Caller normalises <paramref name="driver"/>.</summary>
+    private IFilterWheel CreateFilterWheelAdapter(string driver, string deviceId) => driver switch {
+        "indi" => new IndiFilterWheel(_indiClient, deviceId),
+        "ascom-com" => CreateAscomFilterWheel(deviceId),
+        "alpaca" => AlpacaFilterWheel.FromDeviceId(deviceId),
+        _ => throw new NotSupportedException(
+            $"Filter wheel driver '{driver}' is not implemented yet. " +
+            "Use 'indi', 'alpaca', or 'ascom-com'."),
+    };
 
     private static IFilterWheel CreateAscomFilterWheel(string progId) {
         if (!OperatingSystem.IsWindows())
@@ -1226,6 +1393,8 @@ public class EquipmentManager : IDisposable {
         if (ReferenceEquals(previous, Camera)
             || ReferenceEquals(previous, GuideCamera)
             || ReferenceEquals(previous, AuxCamera)
+            || _extraImagers.Any(s => ReferenceEquals(previous, s.Camera)
+                || ReferenceEquals(previous, s.Focuser) || ReferenceEquals(previous, s.FilterWheel))
             || ReferenceEquals(previous, Rotator)
             || ReferenceEquals(previous, FlatDevice)
             || ReferenceEquals(previous, Dome)
@@ -1244,8 +1413,18 @@ public class EquipmentManager : IDisposable {
 
     public void Dispose() {
         _indiClient.DeviceFound -= OnDeviceFound;
+        foreach (var s in _extraImagers) {
+            if (s.Camera is IDisposable dc) { try { dc.Dispose(); } catch { } }
+            if (s.Focuser is IDisposable df) { try { df.Dispose(); } catch { } }
+            if (s.FilterWheel is IDisposable dw) { try { dw.Dispose(); } catch { } }
+        }
     }
 }
+
+/// <summary>STAGE2: one imaging-camera slot in <see cref="EquipmentManager.EnumerateImagers"/>.
+/// Index 0 = main, 1 = aux, 2+ = extras; Role is the stable id ("main"/"aux"/
+/// "imager-N") shared with the profile and the DitherBarrier.</summary>
+public record ImagerSlotInfo(int Index, string Role, NINA.Image.Interfaces.ICamera? Camera, string? Driver, string? DeviceId);
 
 /// <summary>Describes one camera-driver kind exposed by the host.
 /// Used by <c>GET /api/camera/drivers</c> so the UI can populate the

@@ -285,6 +285,9 @@ function ninaApp() {
         // from the WS status payload on first connect so what the
         // browser shows matches the server's actual state.
         liveStackEnabled: false,
+        // Which imaging camera feeds the live stack (0 = main, 2+ = an imager).
+        liveSourceIndex: 0,
+        _liveSourceChangedAt: 0,
 
         // Collapse state for the LIVE / PREVIEW / VIDEO right-side
         // floating control panels. true = panel slid out to the right,
@@ -365,6 +368,7 @@ function ninaApp() {
         // running flag + the active rig's LiveStackSigmaRejection/Kappa fields.
         // OFF by default; pays off most WITH dithering.
         liveStackSigmaRejection: false,
+        liveStackCosmetic: true,
         liveStackSigmaKappa: 3.0,
 
         // LSTR-5: live-stack auto-refocus + auto-recenter triggers.
@@ -1050,7 +1054,9 @@ function ninaApp() {
             saveGuideLogs: true,
             // Boot-time auto-connect, INDI + Alpaca discovery +
             // active-rig device bind. Pushed by HardwareAutoConnectService.
-            autoConnectOnStartup: false,
+            // Default ON (matches the profile default); the server value
+            // overwrites this on load.
+            autoConnectOnStartup: true,
             // Self-update channel: 'stable' or 'preview' (early-access).
             updateChannel: 'stable',
             // External tools, see ExternalTools section in Settings.
@@ -1326,6 +1332,12 @@ function ninaApp() {
         auxSolvedFrame: null,
         auxCapture: { running: false, frameCount: 0, noOutputDir: false },
         _auxSaveTimer: null,
+        // STAGE2: additional imaging cameras (slot index 2+), each with its own
+        // camera + focuser + filter wheel + capture settings. Hydrated from
+        // rig.extraImagers in _applyRigToChoices; runtime frame counts merged from
+        // the WS "multiImager" block. Each card carries a debounce timer.
+        extraImagers: [],
+        _imagerSaveTimers: {},
         // FOCUS tab source switches: which camera the manual-focus loop
         // captures from, and which focuser the manual jog drives.
         focusCameraSource: 'main',
@@ -4143,6 +4155,18 @@ function ninaApp() {
         seqDitherExpanded: false,
         _ditherSaveTimer: null,
 
+        // Unified GLOBAL dither config (the dedicated Dither panel). One source of
+        // truth for LIVE / AUTORUN / ADV / multicam — GET/PUT /api/dither.
+        dither: {
+            enabled: false, pixels: 5.0, everyNFrames: 3, raOnly: false,
+            settlePixels: 3.0, settleTime: 3, settleTimeout: 60,
+            cadenceStrategy: 'slowest'
+        },
+        _ditherGlobalSaveTimer: null,
+        // Multi-camera dither barrier live status (WS "ditherSync" block).
+        ditherSync: { active: false, waiting: false, dithering: false,
+                      enabled: false, participants: 0, owner: null },
+
         // Meridian flip
         mfSettings: {
             enabled: false,
@@ -4899,6 +4923,7 @@ function ninaApp() {
             setTimeout(() => this.indiDetectMaybeOffer(), 6000);
             this.loadSettingsFromServer();
             this.loadDitherSettings();
+            this.loadDither();          // unified global dither (panel + summaries)
             this.loadMfSettings();
             this.loadEndActions();
             this.loadSirilStatus();
@@ -6744,17 +6769,35 @@ function ninaApp() {
         previewApplyCameraSource() {
             const src = this.preview.cameraSource || 'main';
             this.preview._activeSource = src;
+            // First time on an extra imager, seed its remembered exp/gain/bin
+            // from that imager's own card config so the picker starts sensible.
+            if (!this.preview.bySource[src] && src.startsWith('imager:')) {
+                const c = this._imagerBySource(src);
+                if (c) this.preview.bySource[src] = {
+                    exposure: c.exposureSec || 2.0, gain: c.gain || 0, binning: c.binning || 1
+                };
+            }
             const s = this.preview.bySource[src] || {};
             if (s.exposure != null) this.preview.exposure = s.exposure;
             if (s.gain != null) this.preview.gain = s.gain;
             if (s.binning != null) this.preview.binning = s.binning;
         },
-        // True when the named camera source (main/aux/guide) is actually
+        // The extra-imager card behind an 'imager:N' source token, or null.
+        _imagerBySource(src) {
+            if (typeof src !== 'string' || !src.startsWith('imager:')) return null;
+            const idx = parseInt(src.slice('imager:'.length), 10);
+            return (this.extraImagers || []).find(c => c.index === idx) || null;
+        },
+        // True when the named camera source (main/imager:N/guide) is actually
         // connected and usable as a capture source right now. Main is always
         // assumed available (it's the imaging camera the whole UI centres on).
         _cameraSourceAvailable(src) {
-            if (src === 'aux') return !!this.auxCameraConnected;
+            if (src === 'aux') return false; // aux retired: snap stale selections back to main
             if (src === 'guide') return !!(this.guider && this.guider.guideCameraConnected);
+            if (typeof src === 'string' && src.startsWith('imager:')) {
+                const c = this._imagerBySource(src);
+                return !!(c && c.enabled && c.cameraConnected);
+            }
             return true; // 'main' (or anything unknown) falls back to main
         },
         // Guard the PREVIEW/FOCUS camera pickers: if the previously-selected
@@ -10374,6 +10417,26 @@ function ninaApp() {
             }
         },
 
+        // LIVE tab "Remove hot pixels" toggle. Per-rig; the stacker reads it live
+        // each frame, so it takes effect immediately (no Reset needed).
+        async saveLiveStackCosmetic() {
+            try {
+                await this.apiPost('/api/livestack/cosmetic', null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: this.liveStackCosmetic })
+                });
+                const rig = this.rigs.find(r => r.id === this.activeRigId);
+                if (rig) rig.liveStackCosmetic = this.liveStackCosmetic;
+                this.toast(this.liveStackCosmetic
+                    ? this.$t('Hot-pixel removal on')
+                    : this.$t('Hot-pixel removal off'), 'ok');
+            } catch (e) {
+                this.liveStackCosmetic = !this.liveStackCosmetic;
+                this.toastFail(this.$t('Save failed'), e);
+            }
+        },
+
         // LIVE tab "Colour stacking (OSC)" toggle. Same dual-write as
         // saveLiveStackSaveFrames: runtime flag + persisted per-rig
         // LiveStackColor. Colour takes full effect on the next Reset
@@ -12710,7 +12773,9 @@ function ninaApp() {
             }
         },
         async _canopusDeviceDelete(tag) {
-            if (!confirm('Delete ' + tag + ' from Ollama? You can download it again later.')) return;
+            if (!await this._confirmAsync(
+                    'Delete ' + tag + ' from Ollama? You can download it again later.',
+                    { title: 'Delete model', okLabel: 'Delete', danger: true })) return;
             try {
                 const r = await fetch(this._canopusDeviceBaseOllama() + '/api/delete', {
                     method: 'DELETE', headers: { 'Content-Type': 'application/json' },
@@ -12793,9 +12858,10 @@ function ninaApp() {
             // RAM gate: warn before the OS can kill the app for overcommitting.
             if (!this.asst.mobileRamOk) {
                 const gb = (b) => (b / 1e9).toFixed(1);
-                const ok = confirm('This device has ' + gb(this.asst.mobileTotalMem) +
+                const ok = await this._confirmAsync('This device has ' + gb(this.asst.mobileTotalMem) +
                     ' GB RAM, but the model needs about ' + gb(this.asst.mobileNeedMem) +
-                    ' GB resident. The system may kill the app under memory pressure. Start anyway?');
+                    ' GB resident. The system may kill the app under memory pressure. Start anyway?',
+                    { title: 'Low memory', okLabel: 'Start anyway', danger: true });
                 if (!ok) return;
             }
             // Keep Doze / OEM power managers from reaping the model's foreground
@@ -12825,7 +12891,8 @@ function ninaApp() {
         async _canopusMobileDelete() {
             const p = this._canopusMobilePlugin();
             if (!p) return;
-            if (!confirm('Delete the downloaded model from this device?')) return;
+            if (!await this._confirmAsync('Delete the downloaded model from this device?',
+                    { title: 'Delete model', okLabel: 'Delete', danger: true })) return;
             try { await p.stop(); await p.deleteModel(); await this._canopusMobileRefresh(); this.toast?.('Model deleted.', 'success'); }
             catch (e) { this.toast?.('Delete failed: ' + ((e && e.message) || e), 'error'); }
         },
@@ -18711,56 +18778,38 @@ function ninaApp() {
             //      while imaging, else screen-anchored (no raDeg) so the
             //      bridge draws it as a pink CSS box nested inside the
             //      red drag-to-frame box at the viewport centre.
+            // Aux camera retired: the extra imaging cameras ride the same mount,
+            // so each ENABLED imager gets its own celestial FOV rect anchored
+            // concentric with the imaging target (or the mount pointing when
+            // there's no recent solve). Geometry comes from each card's focal
+            // length + sensor size (maxX/maxY x pixel pitch).
             let aux = null;
-            const afl = this.aux?.focalLengthMm;
-            let asw = this.auxSensorWidthMm, ash = this.auxSensorHeightMm;
-            if (!(asw > 0 && ash > 0) && (this.aux?.enabled || this.auxCamera)) {
-                // Live dims missing: DSLRs on the aux port (indi_gphoto)
-                // don't publish CCD_INFO — their geometry lives in the rig's
-                // per-aux overrides (DSLR picker, or learned from the last
-                // connected aux camera in the status ingest). Derive the
-                // footprint from those so the pink rect shows for a
-                // configured-but-quiet (or not-yet-connected) aux camera.
-                // Gated on an aux camera being selected on the rig (or the
-                // capture loop enabled) so leftover fields on a rig whose
-                // aux was removed don't draw it.
-                const ax = Number(this.aux?.maxX) || 0;
-                const ay = Number(this.aux?.maxY) || 0;
-                const ap = Number(this.aux?.pixelSizeUm) || 0;
-                if (ax > 0 && ay > 0 && ap > 0) {
-                    asw = ax * ap / 1000;
-                    ash = ay * ap / 1000;
+            const imagers = [];
+            (this.extraImagers || []).forEach(card => {
+                if (!card || !card.enabled) return;
+                const fl = Number(card.focalLengthMm) || 0;
+                const px = Number(card.pixelSizeUm) || 0;
+                const cx = Number(card.maxX) || 0;
+                const cy = Number(card.maxY) || 0;
+                if (!(fl > 0 && px > 0 && cx > 0 && cy > 0)) return;
+                const wDeg = 2 * Math.atan((cx * px / 1000) / (2 * fl)) * (180 / Math.PI);
+                const hDeg = 2 * Math.atan((cy * px / 1000) / (2 * fl)) * (180 / Math.PI);
+                let ra = null, dec = null, rot = targetRot;
+                if (Number.isFinite(target.raDeg)) {
+                    ra = target.raDeg; dec = target.decDeg;
+                    rot = Number.isFinite(target.rotationDeg) ? target.rotationDeg : targetRot;
+                } else if (mount && Number.isFinite(mount.raDeg)) {
+                    ra = mount.raDeg; dec = mount.decDeg;
+                    rot = Number.isFinite(mount.rotationDeg) ? mount.rotationDeg : mountRot;
                 }
-            }
-            if (afl > 0 && asw > 0 && ash > 0) {
-                const auxW = 2 * Math.atan(asw / (2 * afl)) * (180 / Math.PI);
-                const auxH = 2 * Math.atan(ash / (2 * afl)) * (180 / Math.PI);
-                const asf = this.auxSolvedFrame;
-                if (asf && Number.isFinite(asf.raDeg) && Number.isFinite(asf.decDeg)) {
-                    // Real aux footprint from its own plate solve.
-                    aux = {
-                        raDeg: asf.raDeg, decDeg: asf.decDeg,
-                        widthDeg: auxW, heightDeg: auxH,
-                        rotationDeg: Number.isFinite(asf.rotationDeg) ? asf.rotationDeg : mountRot,
-                        flipV: false
-                    };
-                } else if (Number.isFinite(target.raDeg)) {
-                    // No aux solve yet: concentric with the celestial-
-                    // anchored red target (imaging + recent solve).
-                    aux = {
-                        raDeg: target.raDeg, decDeg: target.decDeg,
-                        widthDeg: auxW, heightDeg: auxH,
-                        rotationDeg: targetRot, flipV: false
-                    };
-                } else {
-                    // No aux solve, idle: concentric with the screen-
-                    // anchored red box (no raDeg → CSS box in the bridge).
-                    aux = {
-                        widthDeg: auxW, heightDeg: auxH,
-                        rotationDeg: targetRot, flipV: false
-                    };
-                }
-            }
+                if (ra == null) return;
+                imagers.push({
+                    raDeg: ra, decDeg: dec,
+                    widthDeg: wDeg, heightDeg: hDeg,
+                    rotationDeg: rot, flipV: false,
+                    name: card.camera || ('Cam ' + card.index)
+                });
+            });
 
             // Skip when nothing actually changed since last push.
             // The mount status WS push fires several times per second
@@ -18780,10 +18829,13 @@ function ninaApp() {
                               // refreshed silent solve re-pushes the red rect.
                               r: Number.isFinite(target.raDeg) ? target.raDeg.toFixed(3) : null,
                               d: Number.isFinite(target.decDeg) ? target.decDeg.toFixed(3) : null },
-                a: aux && { r: Number.isFinite(aux.raDeg) ? aux.raDeg.toFixed(3) : null,
-                            d: Number.isFinite(aux.decDeg) ? aux.decDeg.toFixed(3) : null,
-                            w: aux.widthDeg.toFixed(3), h: aux.heightDeg.toFixed(3),
-                            rot: (aux.rotationDeg||0).toFixed(2) },
+                // One signature per enabled imager FOV rect, so adding/
+                // removing an imager or a fresh solve re-pushes them.
+                im: imagers.length
+                    ? imagers.map(i => `${(i.raDeg||0).toFixed(3)},${(i.decDeg||0).toFixed(3)},`
+                        + `${i.widthDeg.toFixed(3)}x${i.heightDeg.toFixed(3)},`
+                        + `${(i.rotationDeg||0).toFixed(2)}`).join('|')
+                    : null,
                 // FIELD3-4: include solveRotationDeg in the key so a
                 // post-solve rotation update re-pushes the mount
                 // rectangle even when ra/dec haven't moved.
@@ -18820,13 +18872,10 @@ function ninaApp() {
                     ? `${target.raDeg.toFixed(2)}°/${target.decDeg.toFixed(2)}° (solved)`
                     : 'screen-centred',
                 'fov=', w.toFixed(2) + '°×' + h.toFixed(2) + '°',
-                // Aux diagnostic: say WHY the pink rect isn't being sent so
-                // "where's my aux FOV?" is answerable from the console.
-                'aux=', aux
-                    ? `${aux.widthDeg.toFixed(2)}°×${aux.heightDeg.toFixed(2)}°`
-                        + (Number.isFinite(aux.raDeg) ? ' (celestial)' : ' (concentric with target)')
-                    : (!(afl > 0) ? 'null (no aux focal length)'
-                        : 'null (no aux sensor size: connect the aux camera once or set the DSLR pixel/size fields)'));
+                // Imager diagnostic: how many enabled extra-imager FOV rects
+                // are being sent (0 when none are enabled or geometry is
+                // missing: connect the camera once or set its focal length).
+                'imagers=', imagers.length);
 
             // mosaicTiles is an Alpine reactive array (a Proxy); postMessage
             // can't structured-clone a Proxy and throws DataCloneError, which
@@ -18841,7 +18890,7 @@ function ninaApp() {
                     })) }
                 : null;
             this._skySendMessage({ type: 'set-fov-overlays', mount, target,
-                mosaic: mosaicMsg, aux });
+                mosaic: mosaicMsg, aux, imagers });
         },
 
         // Pixel readout: convert mouse event coords to source-image coords +
@@ -21430,6 +21479,9 @@ function ninaApp() {
             this.liveStackSigmaRejection = rig.liveStackSigmaRejection === true;
             this.liveStackSigmaKappa = (rig.liveStackSigmaKappa > 0)
                 ? rig.liveStackSigmaKappa : 3.0;
+            // Per-sub cosmetic (hot/cold pixel) correction. Default ON for EAA —
+            // absent on an old rig means the C# initializer (true) applied.
+            this.liveStackCosmetic = rig.liveStackCosmetic !== false;
             // Auto-pause cap in MINUTES (UI unit). Backend stores
             // seconds. 0 = unlimited (default).
             this.liveStackMaxMinutes = Math.round(
@@ -21504,6 +21556,9 @@ function ninaApp() {
             this.aux.gain = rig.auxGain || 0;
             this.aux.binning = rig.auxBinning || 1;
             this.aux.enabled = !!rig.auxEnabled;
+            // STAGE2: additional imaging cameras. Preserve runtime connected flags
+            // + frame counts already merged from the WS by matching on slot index.
+            this._hydrateExtraImagers(rig.extraImagers || []);
             this.nativeRaAlgorithm = rig.nativeRaAlgorithm || 'hysteresis';
             // Predictive is RA-only now (worm-gear PE has no Dec analogue), so a
             // rig saved with it on Dec reads back as the default, matching what
@@ -23370,6 +23425,38 @@ function ninaApp() {
             }, 400);
         },
 
+        // ---- Unified GLOBAL dither panel (/api/dither) ----
+        async loadDither() {
+            try {
+                const d = await this.apiGet('/api/dither');
+                if (d) this.dither = {
+                    enabled: !!d.enabled, pixels: d.pixels ?? 5.0,
+                    everyNFrames: d.everyNFrames ?? 3, raOnly: !!d.raOnly,
+                    settlePixels: d.settlePixels ?? 3.0, settleTime: d.settleTime ?? 3,
+                    settleTimeout: d.settleTimeout ?? 60,
+                    cadenceStrategy: d.cadenceStrategy || 'slowest'
+                };
+            } catch (e) { /* keep defaults */ }
+        },
+        saveDitherDebounced() {
+            clearTimeout(this._ditherGlobalSaveTimer);
+            this._ditherGlobalSaveTimer = setTimeout(() => this.saveDither(), 500);
+        },
+        async saveDither() {
+            try { await this.apiPut('/api/dither', this.dither); }
+            catch (e) { this.toastFail(this.$t('Failed to save dither settings'), e); }
+        },
+        async ditherNow() {
+            try {
+                // Route through the barrier so it waits for every active imaging
+                // camera to finish its current sub before dithering the mount.
+                this.toast(this.$t('Waiting for frames to finish…'), 'ok');
+                const r = await this.apiPostJson('/api/dither/now', {});
+                this.toast(r && r.dithered ? this.$t('Dithering…') : this.$t('Dither skipped'),
+                    r && r.dithered ? 'ok' : 'warn');
+            } catch (e) { this.toastFail(this.$t('Dither failed'), e); }
+        },
+
         async saveSettingsToServer() {
             try {
                 await this.apiPost('/api/system/profile', null, {
@@ -24459,30 +24546,35 @@ function ninaApp() {
         // _mirrorLiveToPreviewCanvas.
         // Is the camera the PREVIEW selector points at actually connected?
         previewSourceReady(src) {
-            switch (src || this.preview.cameraSource || 'main') {
-                case 'guide': return !!(this.guider && this.guider.guideCameraConnected);
-                case 'aux': return !!this.auxCameraConnected;
-                default: return !!this.selectedCamera;
+            const s = src || this.preview.cameraSource || 'main';
+            if (s === 'guide') return !!(this.guider && this.guider.guideCameraConnected);
+            if (typeof s === 'string' && s.startsWith('imager:')) {
+                const c = this._imagerBySource(s);
+                return !!(c && c.enabled && c.cameraConnected);
             }
+            return !!this.selectedCamera;
         },
         previewSourceLabel(src) {
-            switch (src || this.preview.cameraSource || 'main') {
-                case 'guide': return 'guide';
-                case 'aux': return 'aux';
-                default: return 'main';
+            const s = src || this.preview.cameraSource || 'main';
+            if (s === 'guide') return 'guide';
+            if (typeof s === 'string' && s.startsWith('imager:')) {
+                const c = this._imagerBySource(s);
+                return c ? (c.camera || ('imager ' + c.index)) : 'imager';
             }
+            return 'main';
         },
         // Device name of the camera the PREVIEW will snap from, reflecting the
-        // Main/Guide/Aux source selector (the badge in the PREVIEW header).
+        // Main / imager / Guide source selector (the badge in the PREVIEW header).
         // Returns null when that source isn't connected.
         previewActiveCameraName(src) {
-            switch (src || this.preview.cameraSource || 'main') {
-                case 'guide': return (this.guider && this.guider.guideCameraConnected)
-                    ? (this.guider.guideCameraName || this.guideCamera || 'Guide camera') : null;
-                case 'aux': return this.auxCameraConnected
-                    ? (this.auxCamera || 'Aux camera') : null;
-                default: return this.selectedCamera || null;
+            const s = src || this.preview.cameraSource || 'main';
+            if (s === 'guide') return (this.guider && this.guider.guideCameraConnected)
+                ? (this.guider.guideCameraName || this.guideCamera || 'Guide camera') : null;
+            if (typeof s === 'string' && s.startsWith('imager:')) {
+                const c = this._imagerBySource(s);
+                return (c && c.cameraConnected) ? (c.camera || ('Imaging Camera ' + c.index)) : null;
             }
+            return this.selectedCamera || null;
         },
         async previewTakeSnap() {
             if (this.preview.busy) return;
@@ -28719,6 +28811,21 @@ function ninaApp() {
             }
         },
 
+        // Pick which imaging camera feeds the live stack. Switching cameras
+        // discards the current stack server-side (different framing/reference).
+        async setLiveSource(index) {
+            const idx = Number(index) || 0;
+            this._liveSourceChangedAt = Date.now();
+            try {
+                const r = await this.apiPostJson('/api/livestack/source', { index: idx });
+                if (r && typeof r.sourceIndex === 'number') this.liveSourceIndex = r.sourceIndex;
+                this.toast(idx === 0 ? this.$t('Live stacking the Main camera')
+                    : this.$t('Live stacking an extra camera'), 'ok');
+            } catch (e) {
+                this.liveSourceIndex = 0;   // reject → fall back to Main
+                this.toastFail(this.$t('Could not switch the live source'), e);
+            }
+        },
         async setFilter(filterName) {
             // Immediate ack so the user gets feedback that the click
             // registered; the server-side wait can take a few seconds
@@ -30251,6 +30358,379 @@ function ninaApp() {
                 auxBinning: Math.max(1, Number(this.aux.binning) || 1),
                 auxEnabled: !!this.aux.enabled
             });
+        },
+
+        // ============ STAGE2: additional imaging cameras (slot index 2+) ============
+        // Each card owns a camera + optional focuser + filter wheel and its own
+        // capture settings, persisted in rig.extraImagers and driven through the
+        // /api/imager/{index} endpoints. Frame counts arrive on the WS
+        // "multiImager" block and are merged onto the cards by slot index.
+
+        // Rebuild the card list from the rig's stored config, preserving any live
+        // runtime flags already merged from the WS so a rig re-hydrate doesn't
+        // blank a running camera's counters.
+        _hydrateExtraImagers(list) {
+            const prev = {};
+            for (const c of this.extraImagers) prev[c.index] = c;
+            this.extraImagers = (list || []).map((cfg, i) => {
+                const index = i + 2;
+                const was = prev[index] || {};
+                return {
+                    index,
+                    camera: cfg.deviceId || '', cameraDriver: cfg.driver || 'indi',
+                    cameraConnected: !!was.cameraConnected, cameraVendorDevices: was.cameraVendorDevices || [],
+                    focuser: cfg.focuser || '', focuserDriver: cfg.focuserDriver || 'indi',
+                    focuserConnected: !!was.focuserConnected, focuserVendorDevices: was.focuserVendorDevices || [],
+                    filterWheel: cfg.filterWheel || '', filterWheelDriver: cfg.filterWheelDriver || 'indi',
+                    filterWheelConnected: !!was.filterWheelConnected, filterWheelVendorDevices: was.filterWheelVendorDevices || [],
+                    focalLengthMm: cfg.focalLengthMm || 200,
+                    exposureSec: (cfg.exposureMs || 5000) / 1000,
+                    gain: cfg.gain || 0,
+                    binning: cfg.binning || 1,
+                    enabled: !!cfg.enabled,
+                    running: !!was.running, frameCount: was.frameCount || 0, lastError: was.lastError || '',
+                    // Sensor geometry: prefer the live runtime value, fall back to
+                    // the persisted config so the SKY FOV rect still draws for a
+                    // configured-but-offline imager (mirrors the old aux fallback).
+                    maxX: was.maxX || cfg.maxX || 0, maxY: was.maxY || cfg.maxY || 0,
+                    bitDepth: was.bitDepth || cfg.bitDepth || 0,
+                    pixelSizeUm: was.pixelSizeUm || cfg.pixelSizeUm || 0,
+                    temperature: (was.temperature ?? null),
+                    // Per-imager cooling (each cooled sensor controls its own).
+                    supportsCooler: !!was.supportsCooler, coolerOn: !!was.coolerOn,
+                    coolerTargetC: (cfg.coolerTargetTemperature ?? was.coolerTargetC ?? -10),
+                    coolerRampDegPerMinute: (cfg.coolerRampDegPerMinute ?? was.coolerRampDegPerMinute ?? 2.0),
+                    coolerBusy: false,
+                    // Focuser jog + driver-settings runtime state.
+                    focuserPosition: was.focuserPosition || 0, focuserMoving: false,
+                    focuserStep: was.focuserStep || 100,
+                    focuserTemperature: (was.focuserTemperature ?? null),
+                    focuserSupportsSync: !!was.focuserSupportsSync,
+                    focuserSupportsReverse: !!was.focuserSupportsReverse,
+                    focuserSupportsBacklash: !!was.focuserSupportsBacklash,
+                    focuserSettingsOpen: !!was.focuserSettingsOpen,
+                    focuserSyncPosition: was.focuserSyncPosition || 0,
+                    focuserReverse: !!was.focuserReverse,
+                    focuserBacklashEnabled: !!was.focuserBacklashEnabled,
+                    focuserBacklashSteps: was.focuserBacklashSteps || 0,
+                    // Filter-wheel selection + rename runtime state.
+                    filterNames: was.filterNames || [], filterPosition: was.filterPosition || 0,
+                    filterMoving: false, filterEditNames: !!was.filterEditNames,
+                    filterNamesEditOpen: false, filterNamesDraft: [], filterNamesBusy: false,
+                };
+                // Kick off vendor discovery for non-INDI drivers.
+            }).map(card => {
+                if (card.cameraDriver !== 'indi') { try { this.detectImagerCameras(card); } catch (e) {} }
+                if (card.focuserDriver !== 'indi') { try { this.detectImagerFocusers(card); } catch (e) {} }
+                if (card.filterWheelDriver !== 'indi') { try { this.detectImagerFilterWheels(card); } catch (e) {} }
+                return card;
+            });
+        },
+
+        async addImager() {
+            try {
+                const r = await this.apiPostJson('/api/imager/add');
+                await this.loadRigs();   // re-hydrate cards from the persisted config
+                this.toast(this.$t('Imaging camera added'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Failed to add imaging camera'), e); }
+        },
+        async removeImager(card) {
+            if (!await this._confirmAsync(
+                    this.$t('Remove this imaging camera and its settings?'),
+                    { title: this.$t('Remove imaging camera'),
+                      okLabel: this.$t('Remove'), danger: true })) return;
+            try {
+                await this.apiFetch('/api/imager/' + card.index, { method: 'DELETE' });
+                await this.loadRigs();   // indices shift down; re-hydrate from scratch
+                this.toast(this.$t('Imaging camera removed'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Failed to remove imaging camera'), e); }
+        },
+
+        // ----- Camera on an extra imager -----
+        setImagerCameraDriver(card, driver) {
+            card.cameraDriver = driver || 'indi';
+            card.cameraVendorDevices = []; card.camera = '';
+            if (card.cameraDriver !== 'indi') this.detectImagerCameras(card);
+            // Persist the driver choice so it survives a reload, and clear the
+            // now-stale device from the previous driver.
+            this._persistImagerConfig(card, { driver: card.cameraDriver, deviceId: '' });
+        },
+        async detectImagerCameras(card) {
+            try {
+                card.cameraVendorDevices = await this.apiGet(
+                    '/api/camera/discover?driver=' + encodeURIComponent(card.cameraDriver)) || [];
+            } catch (e) { card.cameraVendorDevices = []; }
+        },
+        async connectImagerCamera(card) {
+            if (!card.camera) { this.toast(this.$t('Select a camera first'), 'warn'); return; }
+            try {
+                const qs = card.cameraDriver && card.cameraDriver !== 'indi'
+                    ? '?driver=' + encodeURIComponent(card.cameraDriver) : '';
+                await this.apiPost('/api/imager/' + card.index + '/camera/select/' + encodeURIComponent(card.camera) + qs);
+                await this.apiPost('/api/imager/' + card.index + '/camera/connect');
+                card.cameraConnected = true;
+                this.refreshImagerCameraStatus(card);
+                this.toast(this.$t('Camera connected') + ': ' + card.camera, 'ok');
+            } catch (e) { this.toastFail(this.$t('Camera connection failed'), e); }
+        },
+        // Pull the connected camera's sensor resolution + temperature so the card
+        // can show them (the WS multiImager block only carries capture counters).
+        async refreshImagerCameraStatus(card) {
+            try {
+                const s = await this.apiGet('/api/imager/' + card.index + '/camera/status');
+                // Keep last-known geometry when the driver reports 0 (disconnected
+                // or not-yet-reporting) so the SKY FOV rect doesn't blink out.
+                if (s.maxX > 0) card.maxX = s.maxX;
+                if (s.maxY > 0) card.maxY = s.maxY;
+                if (s.pixelSize > 0) card.pixelSizeUm = s.pixelSize;
+                if (s.bitDepth > 0) card.bitDepth = s.bitDepth;
+                card.temperature = (s.temperature ?? null);
+                card.supportsCooler = !!s.supportsCooler;
+                card.coolerOn = !!s.coolerOn;
+                // Persist the reported geometry so it survives a page reload and a
+                // disconnect (the FOV rect and the DSLR CCD_INFO bootstrap read it).
+                if (s.maxX > 0 && s.maxY > 0 &&
+                    (card._savedMaxX !== s.maxX || card._savedMaxY !== s.maxY ||
+                     card._savedPx !== card.pixelSizeUm)) {
+                    card._savedMaxX = s.maxX; card._savedMaxY = s.maxY;
+                    card._savedPx = card.pixelSizeUm;
+                    this._persistImagerConfig(card, {
+                        maxX: s.maxX, maxY: s.maxY,
+                        pixelSizeUm: card.pixelSizeUm || 0,
+                        bitDepth: card.bitDepth || 0
+                    });
+                }
+                this._pushSkyFovOverlays && this._pushSkyFovOverlays();
+            } catch (e) { /* non-fatal */ }
+        },
+        // Persist this imager's cooling setpoint + ramp (debounced with the rest).
+        saveImagerCoolerConfig(card) {
+            this._persistImagerConfig(card, {
+                coolerTargetTemperature: Number(card.coolerTargetC),
+                coolerRampDegPerMinute: Number(card.coolerRampDegPerMinute)
+            });
+        },
+        // Start a cooldown / warm-up on this imager's own cooler slot.
+        async toggleImagerCooler(card) {
+            if (card.coolerBusy) return;
+            card.coolerBusy = true;
+            const enable = !card.coolerOn;
+            try {
+                await this.apiPostJson('/api/imager/' + card.index + '/camera/cooler', {
+                    enabled: enable,
+                    targetTemperature: enable ? Number(card.coolerTargetC) : null,
+                    rampDegPerMinute: Number(card.coolerRampDegPerMinute)
+                });
+                card.coolerOn = enable;
+                this.toast(enable ? this.$t('Cooling started') : this.$t('Warm-up started'), 'ok');
+                setTimeout(() => this.refreshImagerCameraStatus(card), 1500);
+            } catch (e) {
+                this.toastFail(this.$t('Cooler command failed'), e);
+            } finally { card.coolerBusy = false; }
+        },
+        async disconnectImagerCamera(card) {
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/camera/disconnect');
+                card.cameraConnected = false;
+                // Keep maxX/maxY/pixelSizeUm as last-known so the SKY FOV rect
+                // stays drawn while the camera is offline; only the live
+                // temperature is meaningless once disconnected.
+                card.temperature = null;
+                this.toast(this.$t('Camera disconnected'), 'ok');
+                this._pushSkyFovOverlays && this._pushSkyFovOverlays();
+            } catch (e) { this.toastFail(this.$t('Camera disconnect failed'), e); }
+        },
+
+        // ----- Focuser on an extra imager -----
+        setImagerFocuserDriver(card, driver) {
+            card.focuserDriver = driver || 'indi';
+            card.focuserVendorDevices = []; card.focuser = '';
+            if (card.focuserDriver !== 'indi') this.detectImagerFocusers(card);
+            this._persistImagerConfig(card, { focuserDriver: card.focuserDriver, focuser: '' });
+        },
+        async detectImagerFocusers(card) {
+            try {
+                card.focuserVendorDevices = await this.apiGet(
+                    '/api/focuser/discover?driver=' + encodeURIComponent(card.focuserDriver)) || [];
+            } catch (e) { card.focuserVendorDevices = []; }
+        },
+        async connectImagerFocuser(card) {
+            if (!card.focuser) { this.toast(this.$t('Select a focuser first'), 'warn'); return; }
+            try {
+                const qs = card.focuserDriver && card.focuserDriver !== 'indi'
+                    ? '?driver=' + encodeURIComponent(card.focuserDriver) : '';
+                await this.apiPost('/api/imager/' + card.index + '/focuser/select/' + encodeURIComponent(card.focuser) + qs);
+                await this.apiPost('/api/imager/' + card.index + '/focuser/connect');
+                card.focuserConnected = true;
+                this.refreshImagerFocuserStatus(card);
+                this.toast(this.$t('Focuser connected'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Focuser connection failed'), e); }
+        },
+        async refreshImagerFocuserStatus(card) {
+            try {
+                const s = await this.apiGet('/api/imager/' + card.index + '/focuser/status');
+                card.focuserPosition = s.position || 0;
+                card.focuserMoving = !!s.isMoving;
+                card.focuserTemperature = (s.temperature ?? null);
+                card.focuserSupportsSync = !!s.supportsSync;
+                card.focuserSupportsReverse = !!s.supportsReverse;
+                card.focuserSupportsBacklash = !!s.supportsBacklash;
+            } catch (e) { /* non-fatal */ }
+        },
+        async syncImagerFocuser(card) {
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/focuser/sync', { position: Number(card.focuserSyncPosition) || 0 });
+                this.toast(this.$t('Focuser synced'), 'ok');
+                this.refreshImagerFocuserStatus(card);
+            } catch (e) { this.toastFail(this.$t('Focuser sync failed'), e); }
+        },
+        async reverseImagerFocuser(card) {
+            try { await this.apiPost('/api/imager/' + card.index + '/focuser/reverse', { reversed: !!card.focuserReverse }); }
+            catch (e) { this.toastFail(this.$t('Focuser reverse failed'), e); }
+        },
+        async applyImagerBacklash(card) {
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/focuser/backlash', {
+                    enabled: !!card.focuserBacklashEnabled, steps: Math.max(0, Number(card.focuserBacklashSteps) || 0)
+                });
+                this.toast(this.$t('Backlash applied'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Backlash apply failed'), e); }
+        },
+        async jogImagerFocuser(card, steps) {
+            card.focuserMoving = true;
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/focuser/move/relative', { steps });
+            } catch (e) { this.toastFail(this.$t('Focuser move failed'), e); }
+            // Poll to settle the position + moving flag (INDI moves are async).
+            for (let i = 0; i < 20; i++) {
+                await new Promise(r => setTimeout(r, 500));
+                await this.refreshImagerFocuserStatus(card);
+                if (!card.focuserMoving) break;
+            }
+        },
+        async abortImagerFocuser(card) {
+            try { await this.apiPost('/api/imager/' + card.index + '/focuser/abort'); }
+            catch (e) { this.toastFail(this.$t('Focuser abort failed'), e); }
+            card.focuserMoving = false;
+            this.refreshImagerFocuserStatus(card);
+        },
+        async disconnectImagerFocuser(card) {
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/focuser/disconnect');
+                card.focuserConnected = false;
+                card.focuserMoving = false;
+                this.toast(this.$t('Focuser disconnected'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Focuser disconnect failed'), e); }
+        },
+
+        // ----- Filter wheel on an extra imager -----
+        setImagerFilterWheelDriver(card, driver) {
+            card.filterWheelDriver = driver || 'indi';
+            card.filterWheelVendorDevices = []; card.filterWheel = '';
+            if (card.filterWheelDriver !== 'indi') this.detectImagerFilterWheels(card);
+            this._persistImagerConfig(card, { filterWheelDriver: card.filterWheelDriver, filterWheel: '' });
+        },
+        // Persist a partial config patch for one imager (fire-and-forget); the
+        // PUT re-evaluates the loop, which is harmless for a driver-only change.
+        async _persistImagerConfig(card, patch) {
+            try { await this.apiPut('/api/imager/' + card.index + '/config', patch); }
+            catch (e) { /* non-fatal: the select/connect path persists too */ }
+        },
+        async detectImagerFilterWheels(card) {
+            try {
+                card.filterWheelVendorDevices = await this.apiGet(
+                    '/api/filterwheel/discover?driver=' + encodeURIComponent(card.filterWheelDriver)) || [];
+            } catch (e) { card.filterWheelVendorDevices = []; }
+        },
+        async connectImagerFilterWheel(card) {
+            if (!card.filterWheel) { this.toast(this.$t('Select a filter wheel first'), 'warn'); return; }
+            try {
+                const qs = card.filterWheelDriver && card.filterWheelDriver !== 'indi'
+                    ? '?driver=' + encodeURIComponent(card.filterWheelDriver) : '';
+                await this.apiPost('/api/imager/' + card.index + '/filterwheel/select/' + encodeURIComponent(card.filterWheel) + qs);
+                await this.apiPost('/api/imager/' + card.index + '/filterwheel/connect');
+                card.filterWheelConnected = true;
+                this.refreshImagerFilterWheelStatus(card);
+                this.toast(this.$t('Filter wheel connected'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Filter wheel connection failed'), e); }
+        },
+        async refreshImagerFilterWheelStatus(card) {
+            try {
+                const s = await this.apiGet('/api/imager/' + card.index + '/filterwheel/status');
+                card.filterNames = s.filterNames || [];
+                card.filterPosition = s.position || 0;
+                card.filterMoving = !!s.isMoving;
+                card.filterEditNames = !!s.editNames;
+            } catch (e) { /* non-fatal */ }
+        },
+        openImagerFilterNames(card) {
+            if (!card.filterEditNames) {
+                this.toast(this.$t('This filter wheel driver does not support renaming slots'), 'warn');
+                return;
+            }
+            card.filterNamesDraft = [...(card.filterNames || [])];
+            card.filterNamesEditOpen = true;
+        },
+        cancelImagerFilterNames(card) {
+            card.filterNamesEditOpen = false;
+            card.filterNamesDraft = [];
+        },
+        async saveImagerFilterNames(card) {
+            const slots = (card.filterNames || []).length;
+            if (card.filterNamesDraft.length !== slots) {
+                this.toast(this.$t('Filter name count mismatch'), 'warn');
+                return;
+            }
+            const cleaned = card.filterNamesDraft.map((n, i) => (n || '').trim() || ('Slot ' + (i + 1)));
+            card.filterNamesBusy = true;
+            try {
+                const resp = await this.apiPut('/api/imager/' + card.index + '/filterwheel/names', { names: cleaned });
+                const body = await resp.json().catch(() => ({}));
+                card.filterNames = body?.names ? [...body.names] : cleaned;
+                card.filterNamesEditOpen = false;
+                this.toast(this.$t('Filter names saved'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Saving filter names failed'), e); }
+            finally { card.filterNamesBusy = false; }
+        },
+        async setImagerFilter(card, position) {
+            card.filterMoving = true;
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/filterwheel/position', { position: Number(position) });
+            } catch (e) { this.toastFail(this.$t('Filter change failed'), e); }
+            for (let i = 0; i < 20; i++) {
+                await new Promise(r => setTimeout(r, 500));
+                await this.refreshImagerFilterWheelStatus(card);
+                if (!card.filterMoving) break;
+            }
+        },
+        async disconnectImagerFilterWheel(card) {
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/filterwheel/disconnect');
+                card.filterWheelConnected = false;
+                card.filterMoving = false; card.filterNames = [];
+                this.toast(this.$t('Filter wheel disconnected'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Filter wheel disconnect failed'), e); }
+        },
+
+        // ----- Capture config (enable toggle + optics/exposure/gain/binning) -----
+        async toggleImagerEnabled(card) {
+            card.enabled = !!card.enabled;
+            await this.saveImager(card);
+        },
+        saveImagerDebounced(card) {
+            clearTimeout(this._imagerSaveTimers[card.index]);
+            this._imagerSaveTimers[card.index] = setTimeout(() => this.saveImager(card), 600);
+        },
+        async saveImager(card) {
+            try {
+                await this.apiPut('/api/imager/' + card.index + '/config', {
+                    enabled: !!card.enabled,
+                    exposureMs: Math.max(50, Math.round((Number(card.exposureSec) || 0) * 1000)),
+                    gain: Math.max(0, Number(card.gain) || 0),
+                    binning: Math.max(1, Math.min(4, Number(card.binning) || 1)),
+                    focalLengthMm: Math.max(0, Number(card.focalLengthMm) || 0),
+                });
+            } catch (e) { this.toastFail(this.$t('Failed to save imaging camera'), e); }
         },
 
         // Compute the currently-selected driver descriptor for UI
@@ -41467,6 +41947,28 @@ function ninaApp() {
                 this.auxCapture.frameCount = msg.auxCapture.frameCount || 0;
                 this.auxCapture.noOutputDir = !!msg.auxCapture.noOutputDir;
             }
+            // Multi-camera dither barrier status (drives the Dither panel chip).
+            if (msg.ditherSync) {
+                this.ditherSync.active = !!msg.ditherSync.active;
+                this.ditherSync.waiting = !!msg.ditherSync.waiting;
+                this.ditherSync.dithering = !!msg.ditherSync.dithering;
+                this.ditherSync.enabled = !!msg.ditherSync.enabled;
+                this.ditherSync.participants = msg.ditherSync.participants || 0;
+                this.ditherSync.owner = msg.ditherSync.owner || null;
+            }
+            // STAGE2: per-extra-imager capture status (frame counts + last error),
+            // matched onto the cards by slot index. Absent entry => that loop
+            // isn't running, so reset its live counters.
+            if (Array.isArray(msg.multiImager)) {
+                const byIndex = {};
+                for (const s of msg.multiImager) byIndex[s.index] = s;
+                for (const card of this.extraImagers) {
+                    const s = byIndex[card.index];
+                    card.running = !!s;
+                    card.frameCount = s ? (s.frameCount || 0) : 0;
+                    card.lastError = s ? (s.lastError || '') : '';
+                }
+            }
             if (eq.telescope) {
                 const prevRa = this.mount.ra, prevDec = this.mount.dec;
                 Object.assign(this.mount, {
@@ -41897,6 +42399,12 @@ function ninaApp() {
             if (msg.liveStack) {
                 this.liveStackEnabled = msg.liveStack.isRunning;
                 this.liveStackFrames = msg.liveStack.frameCount;
+                // Sync the LIVE source selector from the server, unless the user
+                // just changed it locally (avoid a flicker back to the old value
+                // before the server echoes the new one).
+                if (typeof msg.liveStack.sourceIndex === 'number'
+                    && Date.now() - (this._liveSourceChangedAt || 0) > 1500)
+                    this.liveSourceIndex = msg.liveStack.sourceIndex;
                 // Whole payload kept around so the triggers panel can
                 // read .triggers + per-frame HFR / star count without
                 // a second source of truth.

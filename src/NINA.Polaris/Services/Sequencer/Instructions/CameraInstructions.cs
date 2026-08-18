@@ -347,6 +347,69 @@ public class WarmAuxCameraInstruction : SequenceInstruction {
 }
 
 /// <summary>
+/// Cool an EXTRA imaging camera (slot index 2+) to a setpoint — same ramp +
+/// wait/tolerance behaviour as <see cref="CoolCameraInstruction"/> but on
+/// <c>ctx.Equipment.GetImager(ImagerIndex)</c>, ramping on that imager's own
+/// "imager-N" slot so the main/aux cooldowns are untouched.
+/// </summary>
+public class CoolImagerInstruction : SequenceInstruction {
+    public override string Type => "CoolImager";
+    public int ImagerIndex { get; set; } = 2;
+    public double TargetTempC { get; set; } = -10;
+    public double ToleranceDegC { get; set; } = 1.0;
+    public int TimeoutSeconds { get; set; } = 600;
+    public double? RateDegPerMinute { get; set; }
+
+    public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
+        var cam = ctx.Equipment.GetImager(ImagerIndex)
+            ?? throw new InvalidOperationException($"No imaging camera at slot {ImagerIndex}");
+        var rate = RateDegPerMinute ?? ctx.CoolerRampDegPerMinute;
+        var slot = $"imager-{ImagerIndex}";
+
+        ctx.CoolingRamp.Start(cam, TargetTempC, rate,
+                              coolerOnFirst: true, coolerOffWhenDone: false,
+                              source: $"Sequencer imager {ImagerIndex} cooldown", slot: slot);
+        await ctx.CoolingRamp.WaitAsync(ct, slot);
+
+        var deadline = DateTime.UtcNow.AddSeconds(TimeoutSeconds);
+        while (DateTime.UtcNow < deadline) {
+            ct.ThrowIfCancellationRequested();
+            if (Math.Abs(cam.Temperature - TargetTempC) <= ToleranceDegC) {
+                ctx.Logger.LogInformation("Imager {Index} cooler reached {Target}°C (now {Now:0.0}°C)", ImagerIndex, TargetTempC, cam.Temperature);
+                return;
+            }
+            await Task.Delay(2000, ct);
+        }
+        throw new TimeoutException($"Imager {ImagerIndex} cooler did not reach {TargetTempC}°C ±{ToleranceDegC} within {TimeoutSeconds}s (last reading {cam.Temperature:0.0}°C)");
+    }
+}
+
+/// <summary>
+/// Warm an EXTRA imaging camera back to ambient and power off its cooler — same
+/// ramp as <see cref="WarmCameraInstruction"/> but on
+/// <c>ctx.Equipment.GetImager(ImagerIndex)</c> and its own "imager-N" slot.
+/// </summary>
+public class WarmImagerInstruction : SequenceInstruction {
+    public override string Type => "WarmImager";
+    public int ImagerIndex { get; set; } = 2;
+    public double TargetTempC { get; set; } = 20;
+    public double RateDegPerMinute { get; set; } = 2.0;
+
+    public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
+        var cam = ctx.Equipment.GetImager(ImagerIndex)
+            ?? throw new InvalidOperationException($"No imaging camera at slot {ImagerIndex}");
+        var start = cam.Temperature;
+        var slot = $"imager-{ImagerIndex}";
+        ctx.CoolingRamp.Start(cam, TargetTempC, RateDegPerMinute,
+                              coolerOnFirst: false, coolerOffWhenDone: true,
+                              source: $"Sequencer imager {ImagerIndex} warm-up", slot: slot);
+        await ctx.CoolingRamp.WaitAsync(ct, slot);
+        ct.ThrowIfCancellationRequested();
+        ctx.Logger.LogInformation("Imager {Index} cooler ramped from {Start:0.0}°C to {Target}°C and powered off", ImagerIndex, start, TargetTempC);
+    }
+}
+
+/// <summary>
 /// Capture one or more frames with the AUX camera and save them to the
 /// <c>aux/</c> subtree, mirroring <see cref="AuxCaptureService"/>. Routes through
 /// <see cref="AuxCameraCaptureGate"/> so it never collides with the background
@@ -411,7 +474,8 @@ public class TakeAuxExposureInstruction : SequenceInstruction {
 
                 image.MetaData.Exposure.ExposureTime = expSec;
                 ctx.ImageWriter.SaveImage(image, imageType: "AUX",
-                    gain: gain ?? 0, focalLengthMmOverride: rig?.AuxFocalLengthMm);
+                    gain: gain ?? 0, focalLengthMmOverride: rig?.AuxFocalLengthMm,
+                    cameraName: cam.DeviceName);
                 ctx.Logger.LogInformation("Aux frame {N}/{Count} captured ({Exp:0.##}s, gain {Gain}, bin {Bin})",
                     i + 1, Count, expSec, gain?.ToString() ?? "default", bin);
 

@@ -532,6 +532,49 @@
         __skyMosaicObjs = [];
     }
 
+    // Extra imaging cameras (retired aux): one celestial geojson rect per
+    // enabled imager, each a distinct colour with a "Cam N" label, held in an
+    // array so all can be removed (like the mosaic tiles).
+    var __skyImagerObjs = [];
+    var __lastImagerFovs = [];
+    var __imagerColors = ['#f59e0b', '#a855f7', '#06b6d4', '#84cc16', '#f43f5e', '#ec4899'];
+
+    function skyRemoveImagers() {
+        if (__skyFovLayer) {
+            __skyImagerObjs.forEach(function (o) {
+                try { if (typeof __skyFovLayer.remove === 'function') __skyFovLayer.remove(o); }
+                catch (e) { /* swallow */ }
+            });
+        }
+        __skyImagerObjs = [];
+    }
+
+    // Rebuild the imager rects from the last received list (called on pan so
+    // labels stay glued, mirroring the mount/target/aux rebuilds).
+    function skyRebuildImagerGeoJson() {
+        var stel = window.__stel;
+        if (!stel || !__skyFovLayer) return;
+        skyRemoveImagers();
+        (__lastImagerFovs || []).forEach(function (im, i) {
+            if (!im || !(im.widthDeg > 0)) return;
+            if (typeof im.raDeg !== 'number' || !isFinite(im.raDeg)) return;
+            if (typeof im.decDeg !== 'number' || !isFinite(im.decDeg)) return;
+            try {
+                var color = __imagerColors[i % __imagerColors.length];
+                var label = (im.name || ('Cam ' + (i + 2))) + '  '
+                    + im.widthDeg.toFixed(2) + 'x' + im.heightDeg.toFixed(2);
+                var o = stel.createObj('geojson', { data: skyFovGeoJson(im, color, true, label) });
+                __skyFovLayer.add(o);
+                __skyImagerObjs.push(o);
+            } catch (e) { console.warn('[Sky] imager geojson build failed:', e); }
+        });
+    }
+
+    function skyUpdateImagerFovs(imagers) {
+        __lastImagerFovs = Array.isArray(imagers) ? imagers : [];
+        skyRebuildImagerGeoJson();
+    }
+
     function skyEnsureFovLayer() {
         if (__skyFovLayer || !window.__stel) return __skyFovLayer;
         try {
@@ -1077,7 +1120,7 @@
             + aux.heightDeg.toFixed(2) + '°';
     }
 
-    function skySetFovOverlays(mount, target, mosaic, aux) {
+    function skySetFovOverlays(mount, target, mosaic, aux, imagers) {
         var stel = window.__stel;
         if (!stel) return;
         skyEnsureFovLayer();
@@ -1104,6 +1147,8 @@
             }
             // Aux camera FOV (pink): celestial geojson or CSS box.
             skyUpdateAuxFovBox(aux);
+            // Extra imaging cameras (retired aux): a celestial rect each.
+            skyUpdateImagerFovs(imagers);
             // Update the screen-anchored target FOV CSS box.
             skyUpdateTargetFovBox(target);
         } catch (e) {
@@ -1293,6 +1338,8 @@
                     && isFinite(__lastAuxFov.raDeg)) {
                     skyRebuildAuxGeoJson();
                 }
+                // Extra imaging cameras: re-glue their labels on pan too.
+                if (__lastImagerFovs && __lastImagerFovs.length) skyRebuildImagerGeoJson();
                 // Same reasoning as the mount: a celestial-anchored red
                 // target needs its label re-rotated for the new centre
                 // parallactic on pan. Throttled with the mount rebuild.
@@ -1456,7 +1503,7 @@
                 // SWE-5: mount FOV (blue), target FOV (red dashed),
                 // optional mosaic grid (yellow). Each side is null to
                 // clear that overlay.
-                skySetFovOverlays(msg.mount || null, msg.target || null, msg.mosaic || null, msg.aux || null);
+                skySetFovOverlays(msg.mount || null, msg.target || null, msg.mosaic || null, msg.aux || null, msg.imagers || null);
                 break;
             case 'set-alignment-markers':
                 // RDPA-3: target (green) + actual (red) point markers
