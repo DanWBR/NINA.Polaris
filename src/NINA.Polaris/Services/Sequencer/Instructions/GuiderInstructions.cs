@@ -37,17 +37,23 @@ public class StopGuidingInstruction : SequenceInstruction {
     }
 }
 
+/// <summary>One-shot dither. A pure marker now — the amount + settle parameters
+/// come from the global dither config (<c>EquipmentProfile.DitherProfile</c>), so
+/// dither is tuned in one place. Legacy per-node fields are kept for
+/// serialization back-compat but are no longer read.</summary>
 public class DitherInstruction : SequenceInstruction {
     public override string Type => "Dither";
-    public double Pixels { get; set; } = 5.0;
-    public bool RaOnly { get; set; } = false;
-    public double SettlePixels { get; set; } = 1.5;
-    public int SettleTimeSeconds { get; set; } = 10;
-    public int SettleTimeoutSeconds { get; set; } = 40;
+    [System.Text.Json.Serialization.JsonIgnore] public double Pixels { get; set; } = 5.0;
+    [System.Text.Json.Serialization.JsonIgnore] public bool RaOnly { get; set; } = false;
+    [System.Text.Json.Serialization.JsonIgnore] public double SettlePixels { get; set; } = 1.5;
+    [System.Text.Json.Serialization.JsonIgnore] public int SettleTimeSeconds { get; set; } = 10;
+    [System.Text.Json.Serialization.JsonIgnore] public int SettleTimeoutSeconds { get; set; } = 40;
 
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
         if (!ctx.Guider.IsConnected) throw new InvalidOperationException("Guider not connected");
-        await ctx.Guider.DitherAsync(Pixels, RaOnly, SettlePixels, SettleTimeSeconds, SettleTimeoutSeconds);
+        var g = ctx.Profiles.ActiveEquipmentProfile?.EffectiveDither
+                ?? new NINA.Polaris.Services.DitherSettings();
+        await ctx.Guider.DitherAsync(g.Pixels, g.RaOnly, g.SettlePixels, g.SettleTime, g.SettleTimeout);
     }
 }
 
