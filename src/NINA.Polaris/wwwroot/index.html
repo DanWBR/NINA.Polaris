@@ -2810,18 +2810,19 @@
                                        :disabled="manualFocus.running"
                                        title="Frames with fewer detected stars than this report HFR=NaN">
                             </label>
-                            <!-- Aux / guide camera support: focus the primary,
-                                 the auxiliary, or the guide camera + drive its
-                                 own focuser. Shown when an aux or guide camera
-                                 is configured. -->
+                            <!-- Multi-camera support: focus the primary, an extra
+                                 imaging camera, or the guide camera. Shown when an
+                                 extra imager or guide camera is connected. -->
                             <label style="display:flex; align-items:center; gap:6px"
-                                   x-show="auxCameraConnected || (guider && guider.guideCameraConnected)" x-cloak>
+                                   x-show="extraImagers.some(c => c.enabled && c.cameraConnected) || (guider && guider.guideCameraConnected)" x-cloak>
                                 Camera
                                 <select class="input-sm" x-model="focusCameraSource"
                                         x-effect="focusGuardCameraSource()"
                                         :disabled="manualFocus.running" style="width:auto">
                                     <option value="main">Primary</option>
-                                    <option value="aux" x-show="auxCameraConnected">Auxiliary</option>
+                                    <template x-for="c in extraImagers.filter(c => c.enabled && c.cameraConnected)" :key="c.index">
+                                        <option :value="'imager:' + c.index" x-text="c.camera || ($t('Imaging Camera') + ' ' + c.index)"></option>
+                                    </template>
                                     <option value="guide" x-show="guider && guider.guideCameraConnected">Guide</option>
                                 </select>
                             </label>
@@ -3323,18 +3324,21 @@
                          (.shutter-inputs / .shutter-wrap / .shutter-secondary). -->
                     <div class="shutter-inputs">
                     <div class="control-row">
-                        <!-- Camera source: snap from the main, guide or aux
-                             camera. Only shown when a secondary camera is
-                             connected (otherwise it's always the main cam). -->
-                        <label x-show="(guider && guider.guideCameraConnected) || auxCameraConnected">
+                        <!-- Camera source: snap from the main camera, an extra
+                             imaging camera, or the guide camera. Only shown when a
+                             secondary camera is connected (otherwise it's always
+                             the main cam). -->
+                        <label x-show="(guider && guider.guideCameraConnected) || extraImagers.some(c => c.enabled && c.cameraConnected)">
                             Camera
                             <select x-model="preview.cameraSource" class="input-sm"
                                     @change="previewApplyCameraSource()"
                                     x-effect="previewGuardCameraSource()"
                                     :disabled="preview.busy || preview.looping">
                                 <option value="main">Main</option>
+                                <template x-for="c in extraImagers.filter(c => c.enabled && c.cameraConnected)" :key="c.index">
+                                    <option :value="'imager:' + c.index" x-text="c.camera || ($t('Imaging Camera') + ' ' + c.index)"></option>
+                                </template>
                                 <option value="guide" x-show="guider && guider.guideCameraConnected">Guide</option>
-                                <option value="aux" x-show="auxCameraConnected">Aux</option>
                             </select>
                         </label>
                         <!-- Exp / ISO / Gain / Offset as a real table, same as

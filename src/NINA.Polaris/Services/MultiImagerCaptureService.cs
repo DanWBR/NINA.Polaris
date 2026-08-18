@@ -146,7 +146,12 @@ public sealed class MultiImagerCaptureService {
                 IImageData? image;
                 try {
                     var opts = new CaptureOptions(Gain: gain, BinX: bin, BinY: bin, ImageType: "LIGHT");
-                    image = await cam.CaptureAsync(expSec, opts, ct);
+                    // Serialize against a one-shot Preview/Focus/Solve capture the
+                    // user may fire on this same imager mid-session — concurrent
+                    // CaptureAsync on one handle crashes the driver.
+                    image = await ImagerCaptureGate.RunAsync(index,
+                        () => cam.CaptureAsync(expSec, opts, ct),
+                        ct, acquireTimeout: TimeSpan.FromSeconds(expSec + 60));
                 } catch (OperationCanceledException) {
                     break;
                 } catch (Exception ex) {

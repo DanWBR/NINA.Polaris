@@ -6761,17 +6761,35 @@ function ninaApp() {
         previewApplyCameraSource() {
             const src = this.preview.cameraSource || 'main';
             this.preview._activeSource = src;
+            // First time on an extra imager, seed its remembered exp/gain/bin
+            // from that imager's own card config so the picker starts sensible.
+            if (!this.preview.bySource[src] && src.startsWith('imager:')) {
+                const c = this._imagerBySource(src);
+                if (c) this.preview.bySource[src] = {
+                    exposure: c.exposureSec || 2.0, gain: c.gain || 0, binning: c.binning || 1
+                };
+            }
             const s = this.preview.bySource[src] || {};
             if (s.exposure != null) this.preview.exposure = s.exposure;
             if (s.gain != null) this.preview.gain = s.gain;
             if (s.binning != null) this.preview.binning = s.binning;
         },
-        // True when the named camera source (main/aux/guide) is actually
+        // The extra-imager card behind an 'imager:N' source token, or null.
+        _imagerBySource(src) {
+            if (typeof src !== 'string' || !src.startsWith('imager:')) return null;
+            const idx = parseInt(src.slice('imager:'.length), 10);
+            return (this.extraImagers || []).find(c => c.index === idx) || null;
+        },
+        // True when the named camera source (main/imager:N/guide) is actually
         // connected and usable as a capture source right now. Main is always
         // assumed available (it's the imaging camera the whole UI centres on).
         _cameraSourceAvailable(src) {
-            if (src === 'aux') return !!this.auxCameraConnected;
+            if (src === 'aux') return false; // aux retired: snap stale selections back to main
             if (src === 'guide') return !!(this.guider && this.guider.guideCameraConnected);
+            if (typeof src === 'string' && src.startsWith('imager:')) {
+                const c = this._imagerBySource(src);
+                return !!(c && c.enabled && c.cameraConnected);
+            }
             return true; // 'main' (or anything unknown) falls back to main
         },
         // Guard the PREVIEW/FOCUS camera pickers: if the previously-selected
@@ -24497,30 +24515,35 @@ function ninaApp() {
         // _mirrorLiveToPreviewCanvas.
         // Is the camera the PREVIEW selector points at actually connected?
         previewSourceReady(src) {
-            switch (src || this.preview.cameraSource || 'main') {
-                case 'guide': return !!(this.guider && this.guider.guideCameraConnected);
-                case 'aux': return !!this.auxCameraConnected;
-                default: return !!this.selectedCamera;
+            const s = src || this.preview.cameraSource || 'main';
+            if (s === 'guide') return !!(this.guider && this.guider.guideCameraConnected);
+            if (typeof s === 'string' && s.startsWith('imager:')) {
+                const c = this._imagerBySource(s);
+                return !!(c && c.enabled && c.cameraConnected);
             }
+            return !!this.selectedCamera;
         },
         previewSourceLabel(src) {
-            switch (src || this.preview.cameraSource || 'main') {
-                case 'guide': return 'guide';
-                case 'aux': return 'aux';
-                default: return 'main';
+            const s = src || this.preview.cameraSource || 'main';
+            if (s === 'guide') return 'guide';
+            if (typeof s === 'string' && s.startsWith('imager:')) {
+                const c = this._imagerBySource(s);
+                return c ? (c.camera || ('imager ' + c.index)) : 'imager';
             }
+            return 'main';
         },
         // Device name of the camera the PREVIEW will snap from, reflecting the
-        // Main/Guide/Aux source selector (the badge in the PREVIEW header).
+        // Main / imager / Guide source selector (the badge in the PREVIEW header).
         // Returns null when that source isn't connected.
         previewActiveCameraName(src) {
-            switch (src || this.preview.cameraSource || 'main') {
-                case 'guide': return (this.guider && this.guider.guideCameraConnected)
-                    ? (this.guider.guideCameraName || this.guideCamera || 'Guide camera') : null;
-                case 'aux': return this.auxCameraConnected
-                    ? (this.auxCamera || 'Aux camera') : null;
-                default: return this.selectedCamera || null;
+            const s = src || this.preview.cameraSource || 'main';
+            if (s === 'guide') return (this.guider && this.guider.guideCameraConnected)
+                ? (this.guider.guideCameraName || this.guideCamera || 'Guide camera') : null;
+            if (typeof s === 'string' && s.startsWith('imager:')) {
+                const c = this._imagerBySource(s);
+                return (c && c.cameraConnected) ? (c.camera || ('Imaging Camera ' + c.index)) : null;
             }
+            return this.selectedCamera || null;
         },
         async previewTakeSnap() {
             if (this.preview.busy) return;
