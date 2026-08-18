@@ -4383,7 +4383,7 @@
 
             <!-- DITHER (unified global config — one source of truth for LIVE,
                  AUTORUN, ADV and every camera on the mount). -->
-            <div x-show="tab === 'dither'" class="tab-panel">
+            <div x-show="tab === 'dither'" class="tab-panel" style="padding:16px">
                 <div class="panel-header">
                     <span x-text="$t('Dither')"></span>
                     <span class="status-indicator-sm"
@@ -4393,72 +4393,125 @@
                           x-text="$t('Multi-camera sync')"></span>
                 </div>
 
-                <div class="settings-section" style="max-width:560px">
-                    <h4 style="margin-top:0" x-text="$t('Global dither')"></h4>
-                    <p class="hint" style="margin-top:0"
-                       x-text="$t('One dither configuration shared by LIVE, AUTORUN, the Advanced Sequencer and every camera on the mount.')"></p>
+                <!-- Global config -->
+                <div class="settings-section" style="max-width:600px;margin-bottom:16px">
+                    <h3><span class="settings-card-icon">&#x1F3AF;</span><span x-text="$t('Global dither')"></span></h3>
+                    <div style="padding:12px 14px">
+                        <p class="text-muted" style="font-size:12px;margin:0 0 14px"
+                           x-text="$t('One dither configuration shared by LIVE, AUTORUN, the Advanced Sequencer and every camera on the mount.')"></p>
 
-                    <label style="display:flex;gap:8px;align-items:center;margin:8px 0">
-                        <input type="checkbox" x-model="dither.enabled" @change="saveDither()">
-                        <span x-text="$t('Enable dithering')"></span>
-                    </label>
+                        <div style="display:grid;grid-template-columns:1fr;max-width:340px">
+                            <label class="checkbox-label" style="display:flex;align-items:center;gap:10px;padding-bottom:14px">
+                                <input type="checkbox" x-model="dither.enabled" @change="saveDither()">
+                                <span x-text="$t('Enable dithering')"></span>
+                            </label>
+                            <label style="display:flex;flex-direction:column;gap:4px;padding-bottom:14px">
+                                <span x-text="$t('Amount (px)')"></span>
+                                <input type="number" class="input" x-model.number="dither.pixels"
+                                       @change="saveDitherDebounced()" step="0.5" min="0.1">
+                            </label>
+                            <label style="display:flex;flex-direction:column;gap:4px;padding-bottom:14px">
+                                <span x-text="$t('Every N frames')"></span>
+                                <input type="number" class="input" x-model.number="dither.everyNFrames"
+                                       @change="saveDitherDebounced()" min="1">
+                            </label>
+                            <label class="checkbox-label" style="display:flex;align-items:center;gap:10px;padding-bottom:6px">
+                                <input type="checkbox" x-model="dither.raOnly" @change="saveDither()">
+                                <span x-text="$t('RA only (skip Dec)')"></span>
+                            </label>
+                        </div>
 
-                    <div class="equip-meta-row">
-                        <label><span x-text="$t('Amount (px)')"></span>
-                            <input type="number" x-model.number="dither.pixels" @change="saveDitherDebounced()"
-                                   step="0.5" min="0.1" class="input-sm" style="width:80px">
-                        </label>
-                        <label><span x-text="$t('Every N frames')"></span>
-                            <input type="number" x-model.number="dither.everyNFrames" @change="saveDitherDebounced()"
-                                   min="1" class="input-sm" style="width:80px">
-                        </label>
-                    </div>
+                        <div style="border-top:1px solid var(--border);margin:8px 0 12px;padding-top:10px;
+                                    font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)"
+                             x-text="$t('Settling')"></div>
 
-                    <label style="display:flex;gap:8px;align-items:center;margin:8px 0">
-                        <input type="checkbox" x-model="dither.raOnly" @change="saveDither()">
-                        <span x-text="$t('RA only (skip Dec)')"></span>
-                    </label>
-
-                    <h4 x-text="$t('Settling')"></h4>
-                    <div class="equip-meta-row">
-                        <label><span x-text="$t('Settle within (px)')"></span>
-                            <input type="number" x-model.number="dither.settlePixels" @change="saveDitherDebounced()"
-                                   step="0.5" min="0.1" class="input-sm" style="width:80px">
-                        </label>
-                        <label><span x-text="$t('Settle time (s)')"></span>
-                            <input type="number" x-model.number="dither.settleTime" @change="saveDitherDebounced()"
-                                   min="0" class="input-sm" style="width:80px">
-                        </label>
-                        <label><span x-text="$t('Timeout (s)')"></span>
-                            <input type="number" x-model.number="dither.settleTimeout" @change="saveDitherDebounced()"
-                                   min="1" class="input-sm" style="width:80px">
-                        </label>
+                        <div style="display:grid;grid-template-columns:1fr;max-width:340px">
+                            <label style="display:flex;flex-direction:column;gap:4px;padding-bottom:14px">
+                                <span x-text="$t('Settle within (px)')"></span>
+                                <input type="number" class="input" x-model.number="dither.settlePixels"
+                                       @change="saveDitherDebounced()" step="0.5" min="0.1">
+                            </label>
+                            <label style="display:flex;flex-direction:column;gap:4px;padding-bottom:14px">
+                                <span x-text="$t('Settle time (s)')"></span>
+                                <input type="number" class="input" x-model.number="dither.settleTime"
+                                       @change="saveDitherDebounced()" min="0">
+                            </label>
+                            <label style="display:flex;flex-direction:column;gap:4px">
+                                <span x-text="$t('Timeout (s)')"></span>
+                                <input type="number" class="input" x-model.number="dither.settleTimeout"
+                                       @change="saveDitherDebounced()" min="1">
+                            </label>
+                        </div>
                     </div>
                 </div>
 
-                <div class="settings-section" style="max-width:560px">
-                    <h4 style="margin-top:0" x-text="$t('Manual dither')"></h4>
-                    <p class="hint" style="margin-top:0"
-                       x-text="$t('Fire a single dither now with the settings above (needs the guider connected and guiding).')"></p>
-                    <button class="btn" :disabled="!guider.connected || guider.dithering" @click="ditherNow()">
-                        <span x-text="$t('Dither now')"></span>
-                    </button>
-                    <span class="text-muted" style="margin-left:8px" x-show="!guider.connected"
-                          x-text="$t('Guider not connected')"></span>
+                <!-- Manual one-shot -->
+                <div class="settings-section" style="max-width:600px;margin-bottom:16px">
+                    <h3><span class="settings-card-icon">&#x270B;</span><span x-text="$t('Manual dither')"></span></h3>
+                    <div style="padding:12px 14px">
+                        <p class="text-muted" style="font-size:12px;margin:0 0 12px"
+                           x-text="$t('Fire a single dither now with the settings above (needs the guider connected and guiding).')"></p>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <button class="btn btn-sm btn-primary" :disabled="!guider.connected || guider.dithering"
+                                    @click="ditherNow()" x-text="$t('Dither now')"></button>
+                            <span class="text-muted" style="font-size:12px" x-show="!guider.connected"
+                                  x-text="$t('Guider not connected')"></span>
+                            <span class="text-warn" style="font-size:12px" x-show="guider.dithering"
+                                  x-text="$t('Dithering…')"></span>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="settings-section" style="max-width:560px">
-                    <h4 style="margin-top:0" x-text="$t('Status')"></h4>
-                    <div class="equip-detail-props" style="gap:16px">
-                        <span><span x-text="$t('Multi-camera sync')"></span>:
-                            <strong x-text="ditherSync.active ? $t('On') : $t('Off')"></strong></span>
-                        <span class="text-warn" x-show="ditherSync.dithering" x-text="$t('Dithering…')"></span>
-                    </div>
-                    <div class="equip-detail-props" style="gap:16px;margin-top:4px">
-                        <span><span x-text="$t('Dithers issued (autorun)')"></span>:
-                            <strong x-text="seqStatus?.dithersIssued ?? 0"></strong></span>
-                        <span><span x-text="$t('Frames since dither')"></span>:
-                            <strong x-text="seqStatus?.framesSinceDither ?? 0"></strong></span>
+                <!-- Technical / live statistics -->
+                <div class="settings-section" style="max-width:600px">
+                    <h3><span class="settings-card-icon">&#x1F4CA;</span><span x-text="$t('Technical')"></span></h3>
+                    <div style="padding:12px 14px">
+                        <div class="dither-tech-grid"
+                             style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:12px;align-items:baseline">
+                            <span class="text-muted" x-text="$t('State')"></span>
+                            <strong :class="ditherSync.dithering ? 'text-warn' : (dither.enabled ? 'text-ok' : 'text-muted')"
+                                    x-text="ditherSync.dithering ? $t('Dithering…') : (dither.enabled ? $t('Enabled') : $t('Disabled'))"></strong>
+
+                            <span class="text-muted" x-text="$t('Effective amount')"></span>
+                            <strong style="font-variant-numeric:tabular-nums"
+                                    x-text="dither.pixels + ' px' + (dither.raOnly ? ' · ' + $t('RA only') : '')"></strong>
+
+                            <span class="text-muted" x-text="$t('Cadence')"></span>
+                            <strong x-text="$t('every {n} frames', { n: dither.everyNFrames })"></strong>
+
+                            <span class="text-muted" x-text="$t('Settle')"></span>
+                            <strong style="font-variant-numeric:tabular-nums"
+                                    x-text="dither.settlePixels + ' px · ' + dither.settleTime + ' s · ' + $t('timeout {n}s', { n: dither.settleTimeout })"></strong>
+
+                            <span class="dither-tech-sep" style="grid-column:1/-1;border-top:1px solid var(--border);margin:2px 0"></span>
+
+                            <span class="text-muted" x-text="$t('Multi-camera sync')"></span>
+                            <strong :class="ditherSync.active ? 'text-ok' : 'text-muted'"
+                                    x-text="ditherSync.active ? ($t('On') + ' · ' + $t('{n} cameras', { n: ditherSync.participants })) : $t('Off')"></strong>
+
+                            <span class="text-muted" x-text="$t('Cadence owner')"></span>
+                            <strong x-text="ditherSync.owner || '—'"></strong>
+
+                            <span class="text-muted" x-text="$t('Round in flight')"></span>
+                            <strong :class="ditherSync.waiting ? 'text-warn' : 'text-muted'"
+                                    x-text="ditherSync.waiting ? $t('Yes') : $t('No')"></strong>
+
+                            <span class="dither-tech-sep" style="grid-column:1/-1;border-top:1px solid var(--border);margin:2px 0"></span>
+
+                            <span class="text-muted" x-text="$t('Dithers issued (autorun)')"></span>
+                            <strong style="font-variant-numeric:tabular-nums" x-text="seqStatus?.dithersIssued ?? 0"></strong>
+
+                            <span class="text-muted" x-text="$t('Frames since dither')"></span>
+                            <strong style="font-variant-numeric:tabular-nums" x-text="seqStatus?.framesSinceDither ?? 0"></strong>
+
+                            <span class="text-muted" x-text="$t('Next dither in')"></span>
+                            <strong style="font-variant-numeric:tabular-nums"
+                                    x-text="$t('{n} frames', { n: Math.max(0, (dither.everyNFrames || 1) - (seqStatus?.framesSinceDither || 0)) })"></strong>
+
+                            <span class="text-muted" x-text="$t('Guider')"></span>
+                            <strong :class="guider.guiding ? 'text-ok' : 'text-muted'"
+                                    x-text="guider.connected ? (guider.guiding ? ($t('Guiding') + (guider.backend ? ' (' + guider.backend + ')' : '')) : $t('Not guiding')) : $t('Not connected')"></strong>
+                        </div>
                     </div>
                 </div>
             </div>

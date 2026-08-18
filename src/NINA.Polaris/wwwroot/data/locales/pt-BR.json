@@ -4321,5 +4321,15 @@
   "dithered this run": "ditherados nesta execução",
   "Open the Dither panel": "Abrir o painel de Dither",
   "Guider not connected, dither will be silently skipped during the run.": "Guider não conectado, o dither será ignorado silenciosamente durante a execução.",
-  "Dither is configured globally now (shared with AUTORUN, the Advanced Sequencer and every camera).": "O dither é configurado globalmente agora (compartilhado com AUTORUN, o Sequenciador Avançado e todas as câmeras)."
+  "Dither is configured globally now (shared with AUTORUN, the Advanced Sequencer and every camera).": "O dither é configurado globalmente agora (compartilhado com AUTORUN, o Sequenciador Avançado e todas as câmeras).",
+  "Technical": "Técnico",
+  "State": "Estado",
+  "Effective amount": "Amplitude efetiva",
+  "Cadence": "Cadência",
+  "timeout {n}s": "timeout {n}s",
+  "Cadence owner": "Dono da cadência",
+  "Round in flight": "Rodada em andamento",
+  "Next dither in": "Próximo dither em",
+  "{n} frames": "{n} frames",
+  "{n} cameras": "{n} câmeras"
 }

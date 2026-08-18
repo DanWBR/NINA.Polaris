@@ -76,6 +76,15 @@ public sealed class DitherBarrier {
     public bool RoundActive { get { lock (_lock) return _roundActive; } }
     public bool Dithering { get; private set; }
 
+    /// <summary>Number of imaging cameras currently registered as active barrier
+    /// participants (dither status / technical panel).</summary>
+    public int ActiveParticipants { get { lock (_lock) return ActiveImagingCount(); } }
+
+    /// <summary>Id of the camera that currently owns the dither cadence — the
+    /// slowest active imaging camera, main breaking ties. Null when nothing is
+    /// participating.</summary>
+    public string? CadenceOwner { get { lock (_lock) return CadenceOwnerIdLocked(); } }
+
     public DitherBarrier(ActiveGuiderProvider guiders, ILogger<DitherBarrier> logger) {
         _guiders = guiders;
         _logger = logger;

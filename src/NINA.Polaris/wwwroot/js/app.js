@@ -4155,7 +4155,8 @@ function ninaApp() {
         },
         _ditherGlobalSaveTimer: null,
         // Multi-camera dither barrier live status (WS "ditherSync" block).
-        ditherSync: { active: false, waiting: false, dithering: false },
+        ditherSync: { active: false, waiting: false, dithering: false,
+                      enabled: false, participants: 0, owner: null },
 
         // Meridian flip
         mfSettings: {
@@ -41832,6 +41833,9 @@ function ninaApp() {
                 this.ditherSync.active = !!msg.ditherSync.active;
                 this.ditherSync.waiting = !!msg.ditherSync.waiting;
                 this.ditherSync.dithering = !!msg.ditherSync.dithering;
+                this.ditherSync.enabled = !!msg.ditherSync.enabled;
+                this.ditherSync.participants = msg.ditherSync.participants || 0;
+                this.ditherSync.owner = msg.ditherSync.owner || null;
             }
             // STAGE2: per-extra-imager capture status (frame counts + last error),
             // matched onto the cards by slot index. Absent entry => that loop

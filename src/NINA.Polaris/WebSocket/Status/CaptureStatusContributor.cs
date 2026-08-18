@@ -85,7 +85,10 @@ public sealed class CaptureStatusContributor : IStatusContributor {
             tick.Blocks["ditherSync"] = new {
                 active = _ditherBarrier.OwnsDither,
                 waiting = _ditherBarrier.RoundActive,
-                dithering = _ditherBarrier.Dithering
+                dithering = _ditherBarrier.Dithering,
+                enabled = _ditherBarrier.Enabled,
+                participants = _ditherBarrier.ActiveParticipants,
+                owner = _ditherBarrier.CadenceOwner
             };
 
             // STAGE2: per-extra-imager capture loops (index 2+). Empty list when
