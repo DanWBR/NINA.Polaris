@@ -3662,5 +3662,10 @@
   "Filter wheel disconnect failed": "Filter wheel disconnect failed",
   "Capture frames during LIVE / AUTORUN": "Capture frames during LIVE / AUTORUN",
   "Capturing:": "Capturing:",
-  "Resolution": "Resolution"
+  "Resolution": "Resolution",
+  "Position": "Position",
+  "moving…": "moving…",
+  "Focuser move failed": "Focuser move failed",
+  "Focuser abort failed": "Focuser abort failed",
+  "Filter change failed": "Filter change failed"
 }

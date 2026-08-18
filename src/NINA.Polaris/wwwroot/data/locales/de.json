@@ -4287,5 +4287,10 @@
   "Filter wheel disconnect failed": "Trennen des Filterrads fehlgeschlagen",
   "Capture frames during LIVE / AUTORUN": "Frames während LIVE / AUTORUN aufnehmen",
   "Capturing:": "Aufnahme:",
-  "Resolution": "Auflösung"
+  "Resolution": "Auflösung",
+  "Position": "Position",
+  "moving…": "bewegt…",
+  "Focuser move failed": "Bewegen des Fokussierers fehlgeschlagen",
+  "Focuser abort failed": "Abbrechen des Fokussierers fehlgeschlagen",
+  "Filter change failed": "Filterwechsel fehlgeschlagen"
 }

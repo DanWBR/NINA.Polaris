@@ -7323,6 +7323,24 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <span class="equip-toggle-thumb"></span>
                                     </label>
                                 </div>
+                                <!-- Position readout + manual jog (In/Out by step, Stop). -->
+                                <div class="equip-detail" x-show="card.focuserConnected" x-cloak>
+                                    <div class="equip-detail-props" style="align-items:center;gap:8px;flex-wrap:wrap">
+                                        <span><span x-text="$t('Position')"></span>:
+                                            <strong x-text="card.focuserPosition"></strong></span>
+                                        <input type="number" x-model.number="card.focuserStep" min="1"
+                                               class="input-sm" style="width:70px"
+                                               :title="$t('Step size')">
+                                        <button class="btn btn-sm" :disabled="card.focuserMoving"
+                                                @click="jogImagerFocuser(card, -Math.abs(card.focuserStep || 100))"
+                                                x-text="'◀ ' + $t('In')"></button>
+                                        <button class="btn btn-sm" :disabled="card.focuserMoving"
+                                                @click="jogImagerFocuser(card, Math.abs(card.focuserStep || 100))"
+                                                x-text="$t('Out') + ' ▶'"></button>
+                                        <button class="btn btn-sm" @click="abortImagerFocuser(card)"
+                                                x-text="$t('Stop')"></button>
+                                    </div>
+                                </div>
                             </div><!-- /Focus Motor group -->
 
                             <!-- Group 3: Filter Wheel -->
@@ -7361,6 +7379,21 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                @change="$event.target.checked ? connectImagerFilterWheel(card) : disconnectImagerFilterWheel(card)">
                                         <span class="equip-toggle-track"></span>
                                         <span class="equip-toggle-thumb"></span>
+                                    </label>
+                                </div>
+                                <!-- Current filter selector (by position, showing names). -->
+                                <div class="equip-detail" x-show="card.filterWheelConnected && card.filterNames.length" x-cloak>
+                                    <label style="display:flex;gap:8px;align-items:center;font-size:12px">
+                                        <span x-text="$t('Filter')"></span>
+                                        <select class="input-sm" x-model.number="card.filterPosition"
+                                                :disabled="card.filterMoving"
+                                                @change="setImagerFilter(card, card.filterPosition)">
+                                            <template x-for="(name, i) in card.filterNames" :key="'imflt-'+card.index+'-'+i">
+                                                <option :value="i" x-text="(i + 1) + ': ' + name"></option>
+                                            </template>
+                                        </select>
+                                        <span class="text-muted" style="font-size:11px"
+                                              x-show="card.filterMoving" x-text="$t('moving…')"></span>
                                     </label>
                                 </div>
                             </div><!-- /Filter Wheel group -->

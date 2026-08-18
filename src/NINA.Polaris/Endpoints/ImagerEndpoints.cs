@@ -197,6 +197,40 @@ public static class ImagerEndpoints {
             return Results.Ok(new { index, status = "disconnected" });
         });
 
+        // Per-imager focuser position + manual jog (mirrors /api/aux/focuser/*).
+        group.MapGet("/{index:int}/focuser/status", (EquipmentManager equip, int index) => {
+            var foc = equip.GetImagerFocuser(index);
+            if (foc == null) return Results.Ok(new { index, connected = false });
+            return Results.Ok(new {
+                index, connected = foc.IsConnected, position = foc.Position,
+                maxPosition = foc.MaxPosition, isMoving = foc.IsMoving,
+                temperature = double.IsNaN(foc.Temperature) ? (double?)null : foc.Temperature,
+            });
+        });
+
+        group.MapPost("/{index:int}/focuser/move/relative", async (EquipmentManager equip,
+                int index, FocuserEndpoints.MoveRelativeRequest req) => {
+            var foc = equip.GetImagerFocuser(index);
+            if (foc == null) return Results.BadRequest(new { error = $"No focuser selected for imager {index}." });
+            await foc.MoveRelativeAsync(req.Steps);
+            return Results.Ok(new { index, status = "moving", steps = req.Steps });
+        });
+
+        group.MapPost("/{index:int}/focuser/move/absolute", async (EquipmentManager equip,
+                int index, FocuserEndpoints.MoveAbsoluteRequest req) => {
+            var foc = equip.GetImagerFocuser(index);
+            if (foc == null) return Results.BadRequest(new { error = $"No focuser selected for imager {index}." });
+            await foc.MoveAbsoluteAsync(req.Position);
+            return Results.Ok(new { index, status = "moving", target = req.Position });
+        });
+
+        group.MapPost("/{index:int}/focuser/abort", async (EquipmentManager equip, int index) => {
+            var foc = equip.GetImagerFocuser(index);
+            if (foc == null) return Results.BadRequest(new { error = $"No focuser selected for imager {index}." });
+            await foc.AbortAsync();
+            return Results.Ok(new { index, status = "stopped" });
+        });
+
         // ----- Per-imager filter wheel select / connect / disconnect -----
         group.MapPost("/{index:int}/filterwheel/select/{deviceName}", (EquipmentManager equip,
                 ProfileService profiles, int index, string deviceName, string? driver) => {
@@ -223,6 +257,25 @@ public static class ImagerEndpoints {
             await fw.DisconnectAsync();
             return Results.Ok(new { index, status = "disconnected" });
         });
+
+        // Per-imager filter wheel position + filter list (mirrors /api/filterwheel/*).
+        group.MapGet("/{index:int}/filterwheel/status", (EquipmentManager equip, int index) => {
+            var fw = equip.GetImagerFilterWheel(index);
+            if (fw == null) return Results.Ok(new { index, connected = false });
+            return Results.Ok(new {
+                index, connected = fw.IsConnected, position = fw.Position,
+                isMoving = fw.IsMoving, filterNames = fw.FilterNames,
+                filterCount = fw.FilterCount, currentFilterName = fw.CurrentFilterName,
+            });
+        });
+
+        group.MapPost("/{index:int}/filterwheel/position", async (EquipmentManager equip,
+                int index, FilterPositionRequest req) => {
+            var fw = equip.GetImagerFilterWheel(index);
+            if (fw == null) return Results.BadRequest(new { error = $"No filter wheel selected for imager {index}." });
+            await fw.SetPositionAsync(req.Position);
+            return Results.Ok(new { index, status = "moving", position = req.Position });
+        });
     }
 
     /// <summary>Persist a device binding onto the extra imager's stored config,
@@ -247,4 +300,7 @@ public static class ImagerEndpoints {
         bool? Enabled = null, int? ExposureMs = null, int? Gain = null, int? Binning = null,
         double? FocalLengthMm = null, double? ApertureMm = null, double? PixelSizeUm = null,
         string? TelescopeBrand = null, string? TelescopeModel = null);
+
+    /// <summary>Body for POST /api/imager/{index}/filterwheel/position.</summary>
+    public record FilterPositionRequest(int Position);
 }

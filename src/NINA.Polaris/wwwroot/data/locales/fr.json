@@ -4287,5 +4287,10 @@
   "Filter wheel disconnect failed": "Échec de la déconnexion de la roue à filtres",
   "Capture frames during LIVE / AUTORUN": "Capturer des images pendant LIVE / AUTORUN",
   "Capturing:": "Capture :",
-  "Resolution": "Résolution"
+  "Resolution": "Résolution",
+  "Position": "Position",
+  "moving…": "déplacement…",
+  "Focuser move failed": "Échec du déplacement du focuser",
+  "Focuser abort failed": "Échec de l'arrêt du focuser",
+  "Filter change failed": "Échec du changement de filtre"
 }

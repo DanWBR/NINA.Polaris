@@ -30289,6 +30289,11 @@ function ninaApp() {
                     running: !!was.running, frameCount: was.frameCount || 0, lastError: was.lastError || '',
                     maxX: was.maxX || 0, maxY: was.maxY || 0,
                     temperature: (was.temperature ?? null),
+                    // Focuser jog + filter-wheel selection runtime state.
+                    focuserPosition: was.focuserPosition || 0, focuserMoving: false,
+                    focuserStep: was.focuserStep || 100,
+                    filterNames: was.filterNames || [], filterPosition: was.filterPosition || 0,
+                    filterMoving: false,
                 };
                 // Kick off vendor discovery for non-INDI drivers.
             }).map(card => {
@@ -30378,13 +30383,40 @@ function ninaApp() {
                 await this.apiPost('/api/imager/' + card.index + '/focuser/select/' + encodeURIComponent(card.focuser) + qs);
                 await this.apiPost('/api/imager/' + card.index + '/focuser/connect');
                 card.focuserConnected = true;
+                this.refreshImagerFocuserStatus(card);
                 this.toast(this.$t('Focuser connected'), 'ok');
             } catch (e) { this.toastFail(this.$t('Focuser connection failed'), e); }
+        },
+        async refreshImagerFocuserStatus(card) {
+            try {
+                const s = await this.apiGet('/api/imager/' + card.index + '/focuser/status');
+                card.focuserPosition = s.position || 0;
+                card.focuserMoving = !!s.isMoving;
+            } catch (e) { /* non-fatal */ }
+        },
+        async jogImagerFocuser(card, steps) {
+            card.focuserMoving = true;
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/focuser/move/relative', { steps });
+            } catch (e) { this.toastFail(this.$t('Focuser move failed'), e); }
+            // Poll to settle the position + moving flag (INDI moves are async).
+            for (let i = 0; i < 20; i++) {
+                await new Promise(r => setTimeout(r, 500));
+                await this.refreshImagerFocuserStatus(card);
+                if (!card.focuserMoving) break;
+            }
+        },
+        async abortImagerFocuser(card) {
+            try { await this.apiPost('/api/imager/' + card.index + '/focuser/abort'); }
+            catch (e) { this.toastFail(this.$t('Focuser abort failed'), e); }
+            card.focuserMoving = false;
+            this.refreshImagerFocuserStatus(card);
         },
         async disconnectImagerFocuser(card) {
             try {
                 await this.apiPost('/api/imager/' + card.index + '/focuser/disconnect');
                 card.focuserConnected = false;
+                card.focuserMoving = false;
                 this.toast(this.$t('Focuser disconnected'), 'ok');
             } catch (e) { this.toastFail(this.$t('Focuser disconnect failed'), e); }
         },
@@ -30409,13 +30441,34 @@ function ninaApp() {
                 await this.apiPost('/api/imager/' + card.index + '/filterwheel/select/' + encodeURIComponent(card.filterWheel) + qs);
                 await this.apiPost('/api/imager/' + card.index + '/filterwheel/connect');
                 card.filterWheelConnected = true;
+                this.refreshImagerFilterWheelStatus(card);
                 this.toast(this.$t('Filter wheel connected'), 'ok');
             } catch (e) { this.toastFail(this.$t('Filter wheel connection failed'), e); }
+        },
+        async refreshImagerFilterWheelStatus(card) {
+            try {
+                const s = await this.apiGet('/api/imager/' + card.index + '/filterwheel/status');
+                card.filterNames = s.filterNames || [];
+                card.filterPosition = s.position || 0;
+                card.filterMoving = !!s.isMoving;
+            } catch (e) { /* non-fatal */ }
+        },
+        async setImagerFilter(card, position) {
+            card.filterMoving = true;
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/filterwheel/position', { position: Number(position) });
+            } catch (e) { this.toastFail(this.$t('Filter change failed'), e); }
+            for (let i = 0; i < 20; i++) {
+                await new Promise(r => setTimeout(r, 500));
+                await this.refreshImagerFilterWheelStatus(card);
+                if (!card.filterMoving) break;
+            }
         },
         async disconnectImagerFilterWheel(card) {
             try {
                 await this.apiPost('/api/imager/' + card.index + '/filterwheel/disconnect');
                 card.filterWheelConnected = false;
+                card.filterMoving = false; card.filterNames = [];
                 this.toast(this.$t('Filter wheel disconnected'), 'ok');
             } catch (e) { this.toastFail(this.$t('Filter wheel disconnect failed'), e); }
         },
