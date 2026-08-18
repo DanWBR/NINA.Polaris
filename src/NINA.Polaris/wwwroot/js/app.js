@@ -23416,14 +23416,12 @@ function ninaApp() {
         },
         async ditherNow() {
             try {
-                await this.apiPost('/api/guider/dither', {
-                    pixels: Number(this.dither.pixels) || 5,
-                    raOnly: !!this.dither.raOnly,
-                    settlePixels: Number(this.dither.settlePixels) || 3,
-                    settleTime: Number(this.dither.settleTime) || 3,
-                    settleTimeout: Number(this.dither.settleTimeout) || 60
-                });
-                this.toast(this.$t('Dithering…'), 'ok');
+                // Route through the barrier so it waits for every active imaging
+                // camera to finish its current sub before dithering the mount.
+                this.toast(this.$t('Waiting for frames to finish…'), 'ok');
+                const r = await this.apiPostJson('/api/dither/now', {});
+                this.toast(r && r.dithered ? this.$t('Dithering…') : this.$t('Dither skipped'),
+                    r && r.dithered ? 'ok' : 'warn');
             } catch (e) { this.toastFail(this.$t('Dither failed'), e); }
         },
 

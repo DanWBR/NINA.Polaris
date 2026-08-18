@@ -59,5 +59,16 @@ public static class DitherEndpoints {
             profiles.UpdateEquipmentProfile(rig.Id, r => r.DitherProfile = clean);
             return Results.Ok(clean);
         });
+
+        // Manual one-off dither, routed through the multi-camera barrier so it
+        // waits for every active imaging camera to finish the sub it is currently
+        // exposing before dithering the shared mount (never mid-sub). Replaces the
+        // old direct hit on the guider for the "Dither now" button.
+        group.MapPost("/now", async (DitherBarrier barrier) => {
+            var dithered = await barrier.RequestManualDitherAsync();
+            return dithered
+                ? Results.Ok(new { dithered = true })
+                : Results.Ok(new { dithered = false, reason = "guider not guiding or a dither is already in flight" });
+        });
     }
 }

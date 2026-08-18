@@ -198,6 +198,51 @@ public sealed class DitherBarrier {
         if (runRound) await RunDitherRoundAsync(id, ct).ConfigureAwait(false);
     }
 
+    /// <summary>Fire a MANUAL dither ("Dither now") through the barrier: open a
+    /// round so every active imaging camera parks at its next between-subs
+    /// boundary (i.e. finishes the sub it is currently exposing), then dither once
+    /// and release. This is the multi-camera-safe replacement for hitting the
+    /// guider directly, which would dither mid-sub on the other cameras. When no
+    /// capture loop is active it dithers immediately (nothing to wait for).
+    /// Returns false when a round is already in flight or the guider isn't guiding.</summary>
+    public async Task<bool> RequestManualDitherAsync(CancellationToken ct = default) {
+        lock (_lock) {
+            if (_roundActive) return false;   // an automatic/other round already owns the mount
+            _roundActive = true;
+            _release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+        DitherParams p;
+        double maxSub;
+        lock (_lock) {
+            p = _params;
+            maxSub = 0;
+            foreach (var kv in _parts)
+                if (kv.Value.RefCount > 0 && kv.Value.Blocking)
+                    maxSub = Math.Max(maxSub, kv.Value.SubSeconds);
+        }
+        var rendezvous = TimeSpan.FromSeconds(Math.Clamp(maxSub + p.SettleTimeout + 15, 30, 300));
+        bool dithered = false;
+        try {
+            // Null owner → wait for EVERY active blocking camera to park; with no
+            // active participants this returns at once.
+            await WaitOthersParkedAsync(null, rendezvous, ct).ConfigureAwait(false);
+            dithered = await DoGuiderDitherAsync(p, ct).ConfigureAwait(false);
+            lock (_lock) { if (dithered) _roundsSinceDither = 0; }
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "DitherBarrier: manual dither round failed");
+        } finally {
+            TaskCompletionSource<bool>? release;
+            lock (_lock) {
+                _roundActive = false;
+                release = _release;
+                _release = null;
+                foreach (var pp in _parts.Values) pp.Parked = false;
+            }
+            release?.TrySetResult(true);
+        }
+        return dithered;
+    }
+
     private async Task RunDitherRoundAsync(string ownerId, CancellationToken ct) {
         DitherParams p;
         double maxOtherSub;
@@ -234,7 +279,7 @@ public sealed class DitherBarrier {
         }
     }
 
-    private async Task WaitOthersParkedAsync(string ownerId, TimeSpan max, CancellationToken ct) {
+    private async Task WaitOthersParkedAsync(string? ownerId, TimeSpan max, CancellationToken ct) {
         var deadline = DateTime.UtcNow + max;
         while (DateTime.UtcNow < deadline && !ct.IsCancellationRequested) {
             bool allParked = true;

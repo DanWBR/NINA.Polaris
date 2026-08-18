@@ -4278,6 +4278,8 @@
   "cooling": "resfriando",
   "Cooling started": "Resfriamento iniciado",
   "Warm-up started": "Aquecimento iniciado",
+  "Waiting for frames to finish…": "Aguardando os frames terminarem…",
+  "Dither skipped": "Dither ignorado",
   "What is dithering?": "O que é dithering?",
   "In astrophotography, dithering means shifting your telescope's aim by a few random pixels between exposures. This tiny random movement lets your stacking software tell real sky objects apart from camera flaws, for a cleaner, sharper final image.": "Na astrofotografia, dithering é deslocar a mira do telescópio em alguns pixels aleatórios entre as exposições. Esse pequeno movimento aleatório permite que o software de empilhamento distinga objetos reais do céu de defeitos da câmera, gerando uma imagem final mais limpa e nítida.",
   "Why dithering is used": "Por que usar dithering",

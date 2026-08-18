@@ -3653,6 +3653,8 @@
   "cooling": "cooling",
   "Cooling started": "Cooling started",
   "Warm-up started": "Warm-up started",
+  "Waiting for frames to finish…": "Waiting for frames to finish…",
+  "Dither skipped": "Dither skipped",
   "What is dithering?": "What is dithering?",
   "In astrophotography, dithering means shifting your telescope's aim by a few random pixels between exposures. This tiny random movement lets your stacking software tell real sky objects apart from camera flaws, for a cleaner, sharper final image.": "In astrophotography, dithering means shifting your telescope's aim by a few random pixels between exposures. This tiny random movement lets your stacking software tell real sky objects apart from camera flaws, for a cleaner, sharper final image.",
   "Why dithering is used": "Why dithering is used",
