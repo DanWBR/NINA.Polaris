@@ -3717,5 +3717,10 @@
   "The slowest camera sets the cadence; the others wait for it.": "The slowest camera sets the cadence; the others wait for it.",
   "Strategy": "Strategy",
   "Independent": "Independent",
-  "Slowest camera": "Slowest camera"
+  "Slowest camera": "Slowest camera",
+  "Active": "Active",
+  "Capturing during LIVE / AUTORUN": "Capturing during LIVE / AUTORUN",
+  "Not capturing": "Not capturing",
+  "Captures simultaneously during LIVE / AUTORUN (toggle in the header).": "Captures simultaneously during LIVE / AUTORUN (toggle in the header).",
+  "Disabled: this camera will not capture during LIVE / AUTORUN.": "Disabled: this camera will not capture during LIVE / AUTORUN."
 }

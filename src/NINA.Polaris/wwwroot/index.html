@@ -7321,7 +7321,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                   x-text="$t('Imaging Camera') + ' ' + (card.index + 1)"></span>
                             <span class="equip-status-dot"
                                   :class="card.cameraConnected ? 'connected' : (card.camera ? 'configured' : 'disconnected')"></span>
-                            <button class="btn btn-sm btn-ghost" style="margin-left:auto"
+                            <!-- Enable/disable this camera's participation in the
+                                 simultaneous LIVE / AUTORUN capture. -->
+                            <span class="text-muted" style="margin-left:auto;font-size:11px"
+                                  x-text="card.enabled ? $t('Active') : $t('Off')"></span>
+                            <label class="equip-toggle"
+                                   :title="card.enabled ? $t('Capturing during LIVE / AUTORUN') : $t('Not capturing')">
+                                <input type="checkbox" x-model="card.enabled" @change="toggleImagerEnabled(card)">
+                                <span class="equip-toggle-track"></span>
+                                <span class="equip-toggle-thumb"></span>
+                            </label>
+                            <button class="btn btn-sm btn-ghost"
                                     @click="removeImager(card)"
                                     :title="$t('Remove this imaging camera')">&#x1F5D1;</button>
                         </div>
@@ -7405,10 +7415,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     </select>
                                 </label>
                             </div>
-                            <label style="margin-top:6px;display:flex;gap:8px;align-items:center;font-size:12px">
-                                <input type="checkbox" x-model="card.enabled" @change="toggleImagerEnabled(card)">
-                                <span x-text="$t('Capture frames during LIVE / AUTORUN')"></span>
-                            </label>
+                            <p class="text-muted" style="margin:6px 0 0;font-size:11px"
+                               x-text="card.enabled
+                                   ? $t('Captures simultaneously during LIVE / AUTORUN (toggle in the header).')
+                                   : $t('Disabled: this camera will not capture during LIVE / AUTORUN.')"></p>
                             <p class="hint" style="margin:4px 0 0;font-size:11px"
                                x-show="card.enabled && card.running">
                                 <span x-text="$t('Capturing:')"></span>

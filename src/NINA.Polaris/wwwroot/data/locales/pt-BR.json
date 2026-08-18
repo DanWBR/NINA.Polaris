@@ -4341,5 +4341,10 @@
   "The slowest camera sets the cadence; the others wait for it.": "A câmera mais lenta define a cadência; as outras esperam por ela.",
   "Strategy": "Estratégia",
   "Independent": "Independente",
-  "Slowest camera": "Câmera mais lenta"
+  "Slowest camera": "Câmera mais lenta",
+  "Active": "Ativa",
+  "Capturing during LIVE / AUTORUN": "Capturando durante LIVE / AUTORUN",
+  "Not capturing": "Não capturando",
+  "Captures simultaneously during LIVE / AUTORUN (toggle in the header).": "Captura simultaneamente durante LIVE / AUTORUN (liga/desliga no cabeçalho).",
+  "Disabled: this camera will not capture during LIVE / AUTORUN.": "Desativada: esta câmera não vai capturar durante LIVE / AUTORUN."
 }
