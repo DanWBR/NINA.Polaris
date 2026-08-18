@@ -44,10 +44,12 @@ public class UserProfile {
 
     /// <summary>Master toggle for HardwareAutoConnectService, when on,
     /// app startup tries INDI, runs Alpaca discovery, and then
-    /// re-connects every device saved on the active rig. Default off
-    /// so a fresh install never silently dials hardware that isn't
-    /// powered up yet.</summary>
-    public bool AutoConnectOnStartup { get; set; } = false;
+    /// re-connects every device saved on the active rig. Default ON so
+    /// the rig comes up ready after a host boot; the connect attempts are
+    /// bounded + non-fatal (a device that isn't powered yet is just
+    /// skipped with a notification), and the operator can turn it off in
+    /// Settings.</summary>
+    public bool AutoConnectOnStartup { get; set; } = true;
 
     // Legacy single-rig equipment selection (still serialised for
     // backward-compat; new code uses EquipmentProfiles below).

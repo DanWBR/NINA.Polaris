@@ -1054,7 +1054,9 @@ function ninaApp() {
             saveGuideLogs: true,
             // Boot-time auto-connect, INDI + Alpaca discovery +
             // active-rig device bind. Pushed by HardwareAutoConnectService.
-            autoConnectOnStartup: false,
+            // Default ON (matches the profile default); the server value
+            // overwrites this on load.
+            autoConnectOnStartup: true,
             // External tools, see ExternalTools section in Settings.
             // Empty = auto-detect (BinaryLocator on the server picks
             // the right path for the host OS).
