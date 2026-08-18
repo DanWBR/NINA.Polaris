@@ -43,10 +43,11 @@ public static class ImagerEndpoints {
 
         // ----- Camera select / connect / disconnect / status -----
         group.MapPost("/{index:int}/camera/select/{deviceName}", (EquipmentManager equip,
-                int index, string deviceName, string? driver) => {
+                MultiImagerCaptureService multiImager, int index, string deviceName, string? driver) => {
             if (index < 0) return Results.BadRequest(new { error = "index must be >= 0" });
             try {
                 equip.SelectImager(index, driver ?? "indi", deviceName);
+                multiImager.Sync();
                 return Results.Ok(new { index, selected = deviceName, driver = driver ?? "indi" });
             } catch (Exception ex) {
                 return Results.BadRequest(new { error = ex.Message });
@@ -54,7 +55,8 @@ public static class ImagerEndpoints {
         });
 
         group.MapPost("/{index:int}/camera/connect", async (EquipmentManager equip,
-                ProfileService profileSvc, ILoggerFactory loggerFactory, int index) => {
+                ProfileService profileSvc, MultiImagerCaptureService multiImager,
+                ILoggerFactory loggerFactory, int index) => {
             var cam = equip.GetImager(index);
             if (cam == null)
                 return Results.BadRequest(new { error = $"No camera selected for imager {index}. Select one first." });
@@ -73,13 +75,16 @@ public static class ImagerEndpoints {
             } catch (Exception ex) {
                 loggerFactory.CreateLogger("Polaris.Imager").LogDebug(ex, "Imager CCD_INFO push skipped (non-fatal)");
             }
+            multiImager.Sync();   // start this imager's capture loop if a session is active
             return Results.Ok(new { index, status = "connected", device = cam.DeviceName });
         });
 
-        group.MapPost("/{index:int}/camera/disconnect", async (EquipmentManager equip, int index) => {
+        group.MapPost("/{index:int}/camera/disconnect", async (EquipmentManager equip,
+                MultiImagerCaptureService multiImager, int index) => {
             var cam = equip.GetImager(index);
             if (cam == null) return Results.Ok(new { index, status = "disconnected" });
             await cam.DisconnectAsync();
+            multiImager.Sync();   // stop this imager's capture loop
             return Results.Ok(new { index, status = "disconnected" });
         });
 

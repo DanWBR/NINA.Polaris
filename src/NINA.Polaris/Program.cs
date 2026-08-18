@@ -222,6 +222,7 @@ builder.Services.AddSingleton<CameraStreamService>();
 // always starts/stops this; the browser never drives repeated captures).
 builder.Services.AddSingleton<LiveCaptureService>();
 // Auxiliary (second) camera capture+save loop, runs alongside LIVE/AUTORUN.
+builder.Services.AddSingleton<MultiImagerCaptureService>();
 builder.Services.AddSingleton<AuxCaptureService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.VideoRecordingService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.PlanetaryStackerService>();

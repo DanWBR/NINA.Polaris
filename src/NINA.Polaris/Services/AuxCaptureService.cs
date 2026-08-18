@@ -39,6 +39,7 @@ public sealed class AuxCaptureService {
     private readonly AutoFocusService _autoFocus;
     private readonly MeridianFlipService _meridian;
     private readonly DitherBarrier _barrier;
+    private readonly MultiImagerCaptureService _multiImager;
     private readonly ILogger<AuxCaptureService> _logger;
 
     private readonly object _lock = new();
@@ -58,7 +59,8 @@ public sealed class AuxCaptureService {
 
     public AuxCaptureService(EquipmentManager equip, ImageWriterService writer,
         ProfileService profiles, ActiveGuiderProvider guiders, AutoFocusService autoFocus,
-        MeridianFlipService meridian, DitherBarrier barrier, ILogger<AuxCaptureService> logger) {
+        MeridianFlipService meridian, DitherBarrier barrier,
+        MultiImagerCaptureService multiImager, ILogger<AuxCaptureService> logger) {
         _equip = equip;
         _writer = writer;
         _profiles = profiles;
@@ -66,6 +68,7 @@ public sealed class AuxCaptureService {
         _autoFocus = autoFocus;
         _meridian = meridian;
         _barrier = barrier;
+        _multiImager = multiImager;
         _logger = logger;
     }
 
@@ -80,11 +83,13 @@ public sealed class AuxCaptureService {
             else _sessionRefCount = Math.Max(0, _sessionRefCount - 1);
             Reevaluate();
         }
+        // STAGE2: the extra imagers (index 2+) share the same session lifecycle.
+        _multiImager.NotifySessionActive(active);
     }
 
     /// <summary>Re-check whether the loop should be running (call after the user
     /// toggles AuxEnabled or connects/disconnects the aux camera).</summary>
-    public void Sync() { lock (_lock) Reevaluate(); }
+    public void Sync() { lock (_lock) Reevaluate(); _multiImager.Sync(); }
 
     private void Reevaluate() {
         bool shouldRun = _sessionRefCount > 0

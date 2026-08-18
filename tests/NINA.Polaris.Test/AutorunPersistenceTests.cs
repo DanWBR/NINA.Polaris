@@ -75,8 +75,9 @@ public class AutorunPersistenceTests {
         var flatWizard = new FlatWizardService(equip, imageWriter, profile,
             NullLogger<FlatWizardService>.Instance, cfg);
         var barrier = new DitherBarrier(guiders, NullLogger<DitherBarrier>.Instance);
+        var multiImager = new MultiImagerCaptureService(equip, imageWriter, profile, guiders, autoFocus, meridianFlip, barrier, NullLogger<MultiImagerCaptureService>.Instance);
         var aux = new AuxCaptureService(equip, imageWriter, profile, guiders, autoFocus, meridianFlip,
-            barrier, NullLogger<AuxCaptureService>.Instance);
+            barrier, multiImager, NullLogger<AuxCaptureService>.Instance);
         return new SequenceEngine(equip, relay, liveStack, phd2, guiders, meridianFlip, imageWriter,
             graXpert, flatWizard, profile, new CaptureProgressService(), aux,
             new CameraReadyGate(() => equip.Camera, NullLogger<CameraReadyGate>.Instance),
