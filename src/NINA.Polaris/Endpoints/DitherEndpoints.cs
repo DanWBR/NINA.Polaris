@@ -50,6 +50,11 @@ public static class DitherEndpoints {
                 SettlePixels = Math.Clamp(body.SettlePixels, 0.1, 100),
                 SettleTime = Math.Max(0, body.SettleTime),
                 SettleTimeout = Math.Max(1, body.SettleTimeout),
+                CadenceStrategy = (body.CadenceStrategy ?? "slowest").Trim().ToLowerInvariant() switch {
+                    "main" => "main",
+                    "independent" => "independent",
+                    _ => "slowest",
+                },
             };
             profiles.UpdateEquipmentProfile(rig.Id, r => r.DitherProfile = clean);
             return Results.Ok(clean);

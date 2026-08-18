@@ -4420,6 +4420,20 @@
                                 <input type="checkbox" x-model="dither.raOnly" @change="saveDither()">
                                 <span x-text="$t('RA only (skip Dec)')"></span>
                             </label>
+                            <label style="display:flex;flex-direction:column;gap:4px">
+                                <span x-text="$t('Multi-camera strategy')"></span>
+                                <select class="input" x-model="dither.cadenceStrategy" @change="saveDither()">
+                                    <option value="slowest" x-text="$t('Slowest camera drives (recommended)')"></option>
+                                    <option value="main" x-text="$t('Main camera drives')"></option>
+                                    <option value="independent" x-text="$t('Independent (each camera on its own)')"></option>
+                                </select>
+                                <span class="text-muted" style="font-size:11px"
+                                      x-text="dither.cadenceStrategy === 'independent'
+                                          ? $t('No sync: a dither may trail another camera\'s frame.')
+                                          : (dither.cadenceStrategy === 'main'
+                                              ? $t('The main camera sets the dither cadence; the others wait for it.')
+                                              : $t('The slowest camera sets the cadence; the others wait for it.'))"></span>
+                            </label>
                         </div>
 
                         <div style="border-top:1px solid var(--border);margin:8px 0 12px;padding-top:10px;
@@ -4487,6 +4501,10 @@
                                     x-text="dither.settlePixels + ' px · ' + dither.settleTime + ' s · ' + $t('timeout {n}s', { n: dither.settleTimeout })"></strong>
 
                             <span class="dither-tech-sep" style="grid-column:1/-1;border-top:1px solid var(--border);margin:2px 0"></span>
+
+                            <span class="text-muted" x-text="$t('Strategy')"></span>
+                            <strong x-text="dither.cadenceStrategy === 'main' ? $t('Main camera')
+                                        : (dither.cadenceStrategy === 'independent' ? $t('Independent') : $t('Slowest camera'))"></strong>
 
                             <span class="text-muted" x-text="$t('Multi-camera sync')"></span>
                             <strong :class="ditherSync.active ? 'text-ok' : 'text-muted'"

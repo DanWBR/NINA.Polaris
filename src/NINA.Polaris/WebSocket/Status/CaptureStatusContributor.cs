@@ -88,7 +88,8 @@ public sealed class CaptureStatusContributor : IStatusContributor {
                 dithering = _ditherBarrier.Dithering,
                 enabled = _ditherBarrier.Enabled,
                 participants = _ditherBarrier.ActiveParticipants,
-                owner = _ditherBarrier.CadenceOwner
+                owner = _ditherBarrier.CadenceOwner,
+                strategy = _ditherBarrier.CurrentStrategy
             };
 
             // STAGE2: per-extra-imager capture loops (index 2+). Empty list when

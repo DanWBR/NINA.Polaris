@@ -3707,5 +3707,15 @@
   "Round in flight": "Round in flight",
   "Next dither in": "Next dither in",
   "{n} frames": "{n} frames",
-  "{n} cameras": "{n} cameras"
+  "{n} cameras": "{n} cameras",
+  "Multi-camera strategy": "Multi-camera strategy",
+  "Slowest camera drives (recommended)": "Slowest camera drives (recommended)",
+  "Main camera drives": "Main camera drives",
+  "Independent (each camera on its own)": "Independent (each camera on its own)",
+  "No sync: a dither may trail another camera's frame.": "No sync: a dither may trail another camera's frame.",
+  "The main camera sets the dither cadence; the others wait for it.": "The main camera sets the dither cadence; the others wait for it.",
+  "The slowest camera sets the cadence; the others wait for it.": "The slowest camera sets the cadence; the others wait for it.",
+  "Strategy": "Strategy",
+  "Independent": "Independent",
+  "Slowest camera": "Slowest camera"
 }

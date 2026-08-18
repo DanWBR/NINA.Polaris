@@ -4151,7 +4151,8 @@ function ninaApp() {
         // truth for LIVE / AUTORUN / ADV / multicam — GET/PUT /api/dither.
         dither: {
             enabled: false, pixels: 5.0, everyNFrames: 3, raOnly: false,
-            settlePixels: 3.0, settleTime: 3, settleTimeout: 60
+            settlePixels: 3.0, settleTime: 3, settleTimeout: 60,
+            cadenceStrategy: 'slowest'
         },
         _ditherGlobalSaveTimer: null,
         // Multi-camera dither barrier live status (WS "ditherSync" block).
@@ -23396,7 +23397,8 @@ function ninaApp() {
                     enabled: !!d.enabled, pixels: d.pixels ?? 5.0,
                     everyNFrames: d.everyNFrames ?? 3, raOnly: !!d.raOnly,
                     settlePixels: d.settlePixels ?? 3.0, settleTime: d.settleTime ?? 3,
-                    settleTimeout: d.settleTimeout ?? 60
+                    settleTimeout: d.settleTimeout ?? 60,
+                    cadenceStrategy: d.cadenceStrategy || 'slowest'
                 };
             } catch (e) { /* keep defaults */ }
         },

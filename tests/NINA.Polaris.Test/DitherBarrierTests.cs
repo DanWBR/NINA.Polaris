@@ -75,6 +75,38 @@ public class DitherBarrierTests {
         Assert.That(owner, Is.Null);
     }
 
+    // ----- SelectCadenceOwner: the "main"/"independent" strategies -----
+
+    [Test]
+    public void CadenceOwner_MainStrategy_PicksPrimaryEvenWhenFaster() {
+        // Strategy "main": the primary drives the cadence regardless of exposure,
+        // so the fast main camera owns it even though aux has a much longer sub.
+        var owner = DitherBarrier.SelectCadenceOwner(new[] {
+            new Row("main", 1, true, 30),
+            new Row("aux",  1, false, 300),
+        }, "main");
+        Assert.That(owner, Is.EqualTo("main"));
+    }
+
+    [Test]
+    public void CadenceOwner_MainStrategy_NoPrimary_FallsBackToSlowest() {
+        var owner = DitherBarrier.SelectCadenceOwner(new[] {
+            new Row("imager-3", 1, false, 120),
+            new Row("imager-4", 1, false, 300),
+        }, "main");
+        Assert.That(owner, Is.EqualTo("imager-4"));   // slowest, no primary present
+    }
+
+    [Test]
+    public void CadenceOwner_IndependentStrategy_ReturnsNull() {
+        // Independent = no synchronization; the barrier owns nothing.
+        var owner = DitherBarrier.SelectCadenceOwner(new[] {
+            new Row("main", 1, true, 30),
+            new Row("aux",  1, false, 300),
+        }, "independent");
+        Assert.That(owner, Is.Null);
+    }
+
     // ----- IsDitherDue: every-N with the round-in-flight guard -----
 
     [Test]

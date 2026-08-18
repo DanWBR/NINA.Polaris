@@ -35,7 +35,7 @@ public class SequencerResumeTests {
     private static SequenceContext BareCtx(bool isResume = false) {
         var ctx = new SequenceContext(
             null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!,
-            new NINA.Polaris.Services.DitherBarrier(null!, NullLogger<NINA.Polaris.Services.DitherBarrier>.Instance),
+            new NINA.Polaris.Services.DitherBarrier(null!, null!, NullLogger<NINA.Polaris.Services.DitherBarrier>.Instance),
             NullLogger.Instance);
         ctx.IsResume = isResume;
         return ctx;
@@ -133,7 +133,7 @@ public class SequencerResumeTests {
         var ctx = new SequenceContext(
             equip, relay, liveStack, null!, null!, null!, null!, null!, null!,
             imageWriter, profile, new CaptureProgressService(), null!, gate,
-            new NINA.Polaris.Services.DitherBarrier(null!, NullLogger<NINA.Polaris.Services.DitherBarrier>.Instance),
+            new NINA.Polaris.Services.DitherBarrier(null!, null!, NullLogger<NINA.Polaris.Services.DitherBarrier>.Instance),
             NullLogger.Instance);
         return (ctx, equip);
     }

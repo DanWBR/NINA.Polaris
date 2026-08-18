@@ -130,4 +130,18 @@ public class DitherSettings {
     public int SettleTime { get; set; } = 3;
     /// <summary>Hard timeout for settling, in seconds.</summary>
     public int SettleTimeout { get; set; } = 60;
+
+    /// <summary>Multi-camera cadence strategy (only meaningful on the global
+    /// DitherProfile, ignored on the legacy AUTORUN copy). Decides WHO drives the
+    /// synchronized dither when several imaging cameras run at once:
+    /// <list type="bullet">
+    /// <item><c>slowest</c> (default): the slowest active imaging camera owns the
+    /// cadence; the others park at their between-subs boundary and dither with it.</item>
+    /// <item><c>main</c>: the main (primary) imaging camera owns the cadence
+    /// regardless of exposure length; the others park and dither with it.</item>
+    /// <item><c>independent</c>: no synchronization — each camera dithers on its
+    /// own every-N, accepting that a dither may trail another camera's in-flight
+    /// sub (the pre-barrier behavior).</item>
+    /// </list></summary>
+    public string CadenceStrategy { get; set; } = "slowest";
 }

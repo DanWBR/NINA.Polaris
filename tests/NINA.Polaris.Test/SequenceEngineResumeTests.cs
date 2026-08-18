@@ -69,7 +69,7 @@ public class SequenceEngineResumeTests {
             NullLogger<NINA.Polaris.Services.External.GraXpertService>.Instance);
         var flatWizard = new FlatWizardService(equip, imageWriter, profile,
             NullLogger<FlatWizardService>.Instance, emptyConfig);
-        var barrier = new DitherBarrier(guiders, NullLogger<DitherBarrier>.Instance);
+        var barrier = new DitherBarrier(guiders, profile, NullLogger<DitherBarrier>.Instance);
         var multiImager = new MultiImagerCaptureService(equip, imageWriter, profile, guiders, autoFocus, meridianFlip, barrier, NullLogger<MultiImagerCaptureService>.Instance);
         var aux = new AuxCaptureService(equip, imageWriter, profile, guiders, autoFocus, meridianFlip,
             barrier, multiImager, NullLogger<AuxCaptureService>.Instance);

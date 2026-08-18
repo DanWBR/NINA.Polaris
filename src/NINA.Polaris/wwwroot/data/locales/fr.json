@@ -4331,5 +4331,15 @@
   "Round in flight": "Cycle en cours",
   "Next dither in": "Prochain dither dans",
   "{n} frames": "{n} images",
-  "{n} cameras": "{n} caméras"
+  "{n} cameras": "{n} caméras",
+  "Multi-camera strategy": "Stratégie multi-caméra",
+  "Slowest camera drives (recommended)": "La caméra la plus lente donne le rythme (recommandé)",
+  "Main camera drives": "La caméra principale donne le rythme",
+  "Independent (each camera on its own)": "Indépendant (chaque caméra pour soi)",
+  "No sync: a dither may trail another camera's frame.": "Sans sync : un dither peut filer l'image d'une autre caméra.",
+  "The main camera sets the dither cadence; the others wait for it.": "La caméra principale fixe la cadence du dither ; les autres l'attendent.",
+  "The slowest camera sets the cadence; the others wait for it.": "La caméra la plus lente fixe la cadence ; les autres l'attendent.",
+  "Strategy": "Stratégie",
+  "Independent": "Indépendant",
+  "Slowest camera": "Caméra la plus lente"
 }

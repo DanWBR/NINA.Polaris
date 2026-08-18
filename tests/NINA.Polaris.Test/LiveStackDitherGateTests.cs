@@ -72,7 +72,7 @@ public class LiveStackDitherGateTests {
         var af = new AutoFocusService(equip, relay, guiders, profiles,
             NullLogger<AutoFocusService>.Instance);
         _triggers = new LiveStackTriggersService(_stack, profiles, equip, af, slew, solver,
-            guiders, new DitherBarrier(guiders, NullLogger<DitherBarrier>.Instance),
+            guiders, new DitherBarrier(guiders, profiles, NullLogger<DitherBarrier>.Instance),
             NullLogger<LiveStackTriggersService>.Instance);
 
         // Dither is now the GLOBAL DitherProfile, not the LIVE trigger fields.
