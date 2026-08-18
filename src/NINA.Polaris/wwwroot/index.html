@@ -7202,10 +7202,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <div class="equip-driver-row" x-show="cameraDrivers.length > 1">
                                 <label class="equip-driver-label" x-text="$t('Cam driver')"></label>
                                 <select class="equip-select equip-driver-select"
-                                        @change="setImagerCameraDriver(card, $event.target.value)">
+                                        x-model="card.cameraDriver"
+                                        @change="setImagerCameraDriver(card, card.cameraDriver)">
                                     <template x-for="d in cameraDrivers" :key="'imcd-'+card.index+'-'+d.id">
                                         <option :value="d.id" :disabled="!d.available"
-                                                :selected="card.cameraDriver === d.id"
                                                 x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
                                     </template>
                                 </select>
@@ -7295,10 +7295,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <div class="equip-driver-row" x-show="focuserDrivers.length > 1">
                                     <label class="equip-driver-label" x-text="$t('Focuser')"></label>
                                     <select class="equip-select equip-driver-select"
-                                            @change="setImagerFocuserDriver(card, $event.target.value)">
+                                            x-model="card.focuserDriver"
+                                            @change="setImagerFocuserDriver(card, card.focuserDriver)">
                                         <template x-for="d in focuserDrivers" :key="'imfd-'+card.index+'-'+d.id">
                                             <option :value="d.id" :disabled="!d.available"
-                                                    :selected="card.focuserDriver === d.id"
                                                     x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
                                         </template>
                                     </select>
@@ -7389,10 +7389,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <div class="equip-driver-row" x-show="filterWheelDrivers.length > 1">
                                     <label class="equip-driver-label" x-text="$t('Filter wheel')"></label>
                                     <select class="equip-select equip-driver-select"
-                                            @change="setImagerFilterWheelDriver(card, $event.target.value)">
+                                            x-model="card.filterWheelDriver"
+                                            @change="setImagerFilterWheelDriver(card, card.filterWheelDriver)">
                                         <template x-for="d in filterWheelDrivers" :key="'imwd-'+card.index+'-'+d.id">
                                             <option :value="d.id" :disabled="!d.available"
-                                                    :selected="card.filterWheelDriver === d.id"
                                                     x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
                                         </template>
                                     </select>

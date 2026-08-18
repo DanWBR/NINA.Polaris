@@ -98,6 +98,15 @@ public static class ImagerEndpoints {
                 if (body.PixelSizeUm is double px) c.PixelSizeUm = Math.Max(0, px);
                 if (body.TelescopeBrand != null) c.TelescopeBrand = body.TelescopeBrand;
                 if (body.TelescopeModel != null) c.TelescopeModel = body.TelescopeModel;
+                // Driver selections (persist a chosen driver even before a device
+                // is bound, so it survives a reload; an empty string clears a
+                // stale device that belonged to the previous driver).
+                if (body.Driver != null) c.Driver = body.Driver;
+                if (body.DeviceId != null) c.DeviceId = body.DeviceId.Length == 0 ? null : body.DeviceId;
+                if (body.FocuserDriver != null) c.FocuserDriver = body.FocuserDriver;
+                if (body.Focuser != null) c.Focuser = body.Focuser.Length == 0 ? null : body.Focuser;
+                if (body.FilterWheelDriver != null) c.FilterWheelDriver = body.FilterWheelDriver;
+                if (body.FilterWheel != null) c.FilterWheel = body.FilterWheel.Length == 0 ? null : body.FilterWheel;
             });
             multiImager.Sync();
             return Results.Ok(new { index, saved = true });
@@ -356,7 +365,10 @@ public static class ImagerEndpoints {
     public record ImagerConfigPatch(
         bool? Enabled = null, int? ExposureMs = null, int? Gain = null, int? Binning = null,
         double? FocalLengthMm = null, double? ApertureMm = null, double? PixelSizeUm = null,
-        string? TelescopeBrand = null, string? TelescopeModel = null);
+        string? TelescopeBrand = null, string? TelescopeModel = null,
+        string? Driver = null, string? DeviceId = null,
+        string? FocuserDriver = null, string? Focuser = null,
+        string? FilterWheelDriver = null, string? FilterWheel = null);
 
     /// <summary>Body for POST /api/imager/{index}/filterwheel/position.</summary>
     public record FilterPositionRequest(int Position);

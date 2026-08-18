@@ -30336,6 +30336,9 @@ function ninaApp() {
             card.cameraDriver = driver || 'indi';
             card.cameraVendorDevices = []; card.camera = '';
             if (card.cameraDriver !== 'indi') this.detectImagerCameras(card);
+            // Persist the driver choice so it survives a reload, and clear the
+            // now-stale device from the previous driver.
+            this._persistImagerConfig(card, { driver: card.cameraDriver, deviceId: '' });
         },
         async detectImagerCameras(card) {
             try {
@@ -30379,6 +30382,7 @@ function ninaApp() {
             card.focuserDriver = driver || 'indi';
             card.focuserVendorDevices = []; card.focuser = '';
             if (card.focuserDriver !== 'indi') this.detectImagerFocusers(card);
+            this._persistImagerConfig(card, { focuserDriver: card.focuserDriver, focuser: '' });
         },
         async detectImagerFocusers(card) {
             try {
@@ -30460,6 +30464,13 @@ function ninaApp() {
             card.filterWheelDriver = driver || 'indi';
             card.filterWheelVendorDevices = []; card.filterWheel = '';
             if (card.filterWheelDriver !== 'indi') this.detectImagerFilterWheels(card);
+            this._persistImagerConfig(card, { filterWheelDriver: card.filterWheelDriver, filterWheel: '' });
+        },
+        // Persist a partial config patch for one imager (fire-and-forget); the
+        // PUT re-evaluates the loop, which is harmless for a driver-only change.
+        async _persistImagerConfig(card, patch) {
+            try { await this.apiPut('/api/imager/' + card.index + '/config', patch); }
+            catch (e) { /* non-fatal: the select/connect path persists too */ }
         },
         async detectImagerFilterWheels(card) {
             try {
