@@ -204,6 +204,8 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
         "TakeAuxExposure" => typeof(TakeAuxExposureInstruction),
         "CoolAuxCamera"   => typeof(CoolAuxCameraInstruction),
         "WarmAuxCamera"   => typeof(WarmAuxCameraInstruction),
+        "CoolImager"      => typeof(CoolImagerInstruction),
+        "WarmImager"      => typeof(WarmImagerInstruction),
 
         // Focuser
         "MoveFocuser"        => typeof(MoveFocuserInstruction),
@@ -337,6 +339,8 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
         ("TakeAuxExposure", "Camera", "Instruction"),
         ("CoolAuxCamera", "Camera", "Instruction"),
         ("WarmAuxCamera", "Camera", "Instruction"),
+        ("CoolImager", "Camera", "Instruction"),
+        ("WarmImager", "Camera", "Instruction"),
 
         ("MoveFocuser", "Focuser", "Instruction"),
         ("AutoFocus", "Focuser", "Instruction"),

@@ -7216,6 +7216,29 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     </select>
                                 </label>
                             </div>
+                            <!-- Per-imager cooling: only for cooled sensors. Each
+                                 imager controls its own setpoint + ramp; PLAN auto-
+                                 cool/warm drives every enabled cooled imager too. -->
+                            <div class="equip-meta-row" x-show="card.supportsCooler" x-cloak
+                                 style="align-items:center">
+                                <label><span x-text="$t('Cool to (°C)')"></span>
+                                    <input type="number" x-model.number="card.coolerTargetC"
+                                           @change="saveImagerCoolerConfig(card)" step="1"
+                                           class="input-sm" style="width:64px">
+                                </label>
+                                <label><span x-text="$t('Ramp (°C/min)')"></span>
+                                    <input type="number" x-model.number="card.coolerRampDegPerMinute"
+                                           @change="saveImagerCoolerConfig(card)" step="0.5" min="0"
+                                           class="input-sm" style="width:64px">
+                                </label>
+                                <button class="btn btn-sm" :class="card.coolerOn ? 'btn-warn' : 'btn-primary'"
+                                        :disabled="card.coolerBusy || !card.cameraConnected"
+                                        @click="toggleImagerCooler(card)"
+                                        x-text="card.coolerOn ? $t('Warm up') : $t('Cool')"></button>
+                                <span class="text-muted" style="font-size:11px"
+                                      x-show="card.temperature !== null"
+                                      x-text="(card.temperature ?? 0).toFixed(1) + '°C' + (card.coolerOn ? ' • ' + $t('cooling') : '')"></span>
+                            </div>
                             <p class="text-muted" style="margin:6px 0 0;font-size:11px"
                                x-text="card.enabled
                                    ? $t('Captures simultaneously during LIVE / AUTORUN (toggle in the header).')

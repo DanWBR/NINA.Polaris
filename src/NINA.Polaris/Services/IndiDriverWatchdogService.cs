@@ -364,6 +364,12 @@ public class IndiDriverWatchdogService : IHostedService {
             return (equip.Camera, CoolingRampService.Main);
         if (equip.AuxCamera != null && equip.AuxCamera.DeviceName == device)
             return (equip.AuxCamera, CoolingRampService.Aux);
+        // Extra imaging cameras (slot 2+) cool on their own "imager-N" slot.
+        for (int i = 2; i < 2 + equip.ExtraImagerCount; i++) {
+            var cam = equip.GetImager(i);
+            if (cam != null && cam.DeviceName == device)
+                return (cam, $"imager-{i}");
+        }
         return null;
     }
 
@@ -402,8 +408,16 @@ public class IndiDriverWatchdogService : IHostedService {
             if (ramp == null) return;
 
             var rig = profiles?.ActiveEquipmentProfile;
-            var target = rig?.CoolerTargetTemperature ?? -10;
-            var rate = rig?.CoolerRampDegPerMinute ?? 2.0;
+            // Per-imager slot ("imager-N") reads that imager's own setpoint; main
+            // and aux share the rig-level target.
+            double? imagerTarget = null, imagerRate = null;
+            if (slot.StartsWith("imager-") && int.TryParse(slot.AsSpan("imager-".Length), out var slotIdx)) {
+                var im = rig?.Imagers.ElementAtOrDefault(slotIdx);
+                imagerTarget = im?.CoolerTargetTemperature;
+                imagerRate = im?.CoolerRampDegPerMinute;
+            }
+            var target = imagerTarget ?? rig?.CoolerTargetTemperature ?? -10;
+            var rate = imagerRate ?? rig?.CoolerRampDegPerMinute ?? 2.0;
 
             _logger.LogInformation(
                 "INDI watchdog: restoring cooler on {Device} → {Target:0.0}°C at {Rate:0.#}°C/min " +

@@ -101,6 +101,13 @@ public static class ImagerEndpoints {
                 if (body.MaxX is int mx) c.MaxX = Math.Max(0, mx);
                 if (body.MaxY is int my) c.MaxY = Math.Max(0, my);
                 if (body.BitDepth is int bd) c.BitDepth = Math.Max(0, bd);
+                // Per-imager cooling. -273 is the "clear the target" sentinel
+                // (below absolute zero → no cooled setpoint); negative ramp clamps
+                // to 0 (no ramp). Mirrors the main camera's cooling fields.
+                if (body.CoolerTargetTemperature is double ct)
+                    c.CoolerTargetTemperature = ct <= -273 ? (double?)null : ct;
+                if (body.CoolerRampDegPerMinute is double cr)
+                    c.CoolerRampDegPerMinute = Math.Max(0, cr);
                 if (body.TelescopeBrand != null) c.TelescopeBrand = body.TelescopeBrand;
                 if (body.TelescopeModel != null) c.TelescopeModel = body.TelescopeModel;
                 // Driver selections (persist a chosen driver even before a device
@@ -183,7 +190,32 @@ public static class ImagerEndpoints {
                 gain = cam.Gain,
                 temperature = double.IsNaN(cam.Temperature) ? (double?)null : cam.Temperature,
                 coolerOn = cam.CoolerOn,
+                supportsCooler = cam.Capabilities.SupportsCooler,
             });
+        });
+
+        // Cool / warm this imager's own cooled sensor via the shared ramp service,
+        // on its own slot ("imager-N") so it never disturbs the main/aux cooldown.
+        // Mirrors POST /api/camera/cooler; a no-op for uncooled cameras.
+        group.MapPost("/{index:int}/camera/cooler", (EquipmentManager equip, ProfileService profiles,
+                CoolingRampService ramp, int index, CameraEndpoints.CoolerRequest request) => {
+            var cam = equip.GetImager(index);
+            if (cam == null || !cam.IsConnected)
+                return Results.BadRequest(new { error = $"No imaging camera connected at slot {index}" });
+            var cfg = profiles.ActiveEquipmentProfile?.Imagers.ElementAtOrDefault(index);
+            var rate = request.RampDegPerMinute ?? cfg?.CoolerRampDegPerMinute ?? 2.0;
+            var slot = $"imager-{index}";
+            if (request.Enabled) {
+                var target = request.TargetTemperature ?? cfg?.CoolerTargetTemperature ?? -10;
+                ramp.Start(cam, target, rate, coolerOnFirst: true, coolerOffWhenDone: false,
+                           source: $"UI cooldown (imager {index})", slot: slot);
+                return Results.Ok(new { coolerOn = true, target, ramping = rate > 0, rate });
+            } else {
+                var warmTo = request.WarmTargetC ?? 20;
+                ramp.Start(cam, warmTo, rate, coolerOnFirst: false, coolerOffWhenDone: true,
+                           source: $"UI warm-up (imager {index})", slot: slot);
+                return Results.Ok(new { coolerOn = false, target = warmTo, ramping = rate > 0, rate });
+            }
         });
 
         // ----- Per-imager focuser select / connect / disconnect -----
@@ -373,6 +405,7 @@ public static class ImagerEndpoints {
         bool? Enabled = null, int? ExposureMs = null, int? Gain = null, int? Binning = null,
         double? FocalLengthMm = null, double? ApertureMm = null, double? PixelSizeUm = null,
         int? MaxX = null, int? MaxY = null, int? BitDepth = null,
+        double? CoolerTargetTemperature = null, double? CoolerRampDegPerMinute = null,
         string? TelescopeBrand = null, string? TelescopeModel = null,
         string? Driver = null, string? DeviceId = null,
         string? FocuserDriver = null, string? Focuser = null,

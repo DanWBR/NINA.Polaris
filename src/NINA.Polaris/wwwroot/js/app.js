@@ -30350,6 +30350,11 @@ function ninaApp() {
                     bitDepth: was.bitDepth || cfg.bitDepth || 0,
                     pixelSizeUm: was.pixelSizeUm || cfg.pixelSizeUm || 0,
                     temperature: (was.temperature ?? null),
+                    // Per-imager cooling (each cooled sensor controls its own).
+                    supportsCooler: !!was.supportsCooler, coolerOn: !!was.coolerOn,
+                    coolerTargetC: (cfg.coolerTargetTemperature ?? was.coolerTargetC ?? -10),
+                    coolerRampDegPerMinute: (cfg.coolerRampDegPerMinute ?? was.coolerRampDegPerMinute ?? 2.0),
+                    coolerBusy: false,
                     // Focuser jog + driver-settings runtime state.
                     focuserPosition: was.focuserPosition || 0, focuserMoving: false,
                     focuserStep: was.focuserStep || 100,
@@ -30434,6 +30439,8 @@ function ninaApp() {
                 if (s.pixelSize > 0) card.pixelSizeUm = s.pixelSize;
                 if (s.bitDepth > 0) card.bitDepth = s.bitDepth;
                 card.temperature = (s.temperature ?? null);
+                card.supportsCooler = !!s.supportsCooler;
+                card.coolerOn = !!s.coolerOn;
                 // Persist the reported geometry so it survives a page reload and a
                 // disconnect (the FOV rect and the DSLR CCD_INFO bootstrap read it).
                 if (s.maxX > 0 && s.maxY > 0 &&
@@ -30449,6 +30456,31 @@ function ninaApp() {
                 }
                 this._pushSkyFovOverlays && this._pushSkyFovOverlays();
             } catch (e) { /* non-fatal */ }
+        },
+        // Persist this imager's cooling setpoint + ramp (debounced with the rest).
+        saveImagerCoolerConfig(card) {
+            this._persistImagerConfig(card, {
+                coolerTargetTemperature: Number(card.coolerTargetC),
+                coolerRampDegPerMinute: Number(card.coolerRampDegPerMinute)
+            });
+        },
+        // Start a cooldown / warm-up on this imager's own cooler slot.
+        async toggleImagerCooler(card) {
+            if (card.coolerBusy) return;
+            card.coolerBusy = true;
+            const enable = !card.coolerOn;
+            try {
+                await this.apiPostJson('/api/imager/' + card.index + '/camera/cooler', {
+                    enabled: enable,
+                    targetTemperature: enable ? Number(card.coolerTargetC) : null,
+                    rampDegPerMinute: Number(card.coolerRampDegPerMinute)
+                });
+                card.coolerOn = enable;
+                this.toast(enable ? this.$t('Cooling started') : this.$t('Warm-up started'), 'ok');
+                setTimeout(() => this.refreshImagerCameraStatus(card), 1500);
+            } catch (e) {
+                this.toastFail(this.$t('Cooler command failed'), e);
+            } finally { card.coolerBusy = false; }
         },
         async disconnectImagerCamera(card) {
             try {

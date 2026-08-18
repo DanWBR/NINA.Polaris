@@ -696,6 +696,7 @@ public class EquipmentProfile {
                     TelescopeBrand = TelescopeBrand, TelescopeModel = TelescopeModel,
                     Focuser = Focuser, FocuserDriver = FocuserDriver,
                     FilterWheel = FilterWheel, FilterWheelDriver = FilterWheelDriver, FilterNames = FilterNames,
+                    CoolerTargetTemperature = CoolerTargetTemperature, CoolerRampDegPerMinute = CoolerRampDegPerMinute,
                 },
                 new ImagerConfig {
                     Role = "aux", DeviceId = AuxCamera, Driver = AuxCameraDriver, Enabled = AuxEnabled,
@@ -704,6 +705,7 @@ public class EquipmentProfile {
                     BitDepth = AuxCameraBitDepth, ExposureMs = AuxExposureMs, Gain = AuxGain, Binning = AuxBinning,
                     TelescopeBrand = AuxTelescopeBrand ?? "", TelescopeModel = AuxTelescopeModel ?? "",
                     Focuser = AuxFocuser, FocuserDriver = AuxFocuserDriver,
+                    CoolerTargetTemperature = CoolerTargetTemperature, CoolerRampDegPerMinute = CoolerRampDegPerMinute,
                 },
             };
             for (int i = 0; i < ExtraImagers.Count; i++) {
@@ -1345,6 +1347,18 @@ public class ImagerConfig {
     /// order (mirrors <see cref="EquipmentProfile.FilterNames"/> so read-only
     /// wheels keep their labels across a driver reset). Empty when never edited.</summary>
     public string[] FilterNames { get; set; } = System.Array.Empty<string>();
+
+    /// <summary>Cooler setpoint (°C) for this imager's own cooled sensor. Null ⇒
+    /// no target set (the PLAN auto-cool skips this camera). Each imaging train
+    /// controls its own cooling, mirroring the main camera's
+    /// <see cref="EquipmentProfile.CoolerTargetTemperature"/>. Ignored for
+    /// uncooled cameras (guide scopes, lenses, DSLRs).</summary>
+    public double? CoolerTargetTemperature { get; set; }
+
+    /// <summary>Max rate this imager's cooler setpoint may move, in °C/min (both
+    /// cooldown and warm-up). Null ⇒ 2.0°C/min; 0 disables ramping. Same meaning
+    /// as <see cref="EquipmentProfile.CoolerRampDegPerMinute"/>.</summary>
+    public double? CoolerRampDegPerMinute { get; set; }
 
     /// <summary>Stable role id used for status/UI and as the DitherBarrier
     /// participant id ("main", "aux", "imager-3", …). Assigned by
