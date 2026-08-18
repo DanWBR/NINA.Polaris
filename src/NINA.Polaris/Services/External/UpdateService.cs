@@ -182,7 +182,7 @@ public class UpdateService {
             result.AssetSize = assetSize;
 
             result.UpdateAvailable =
-                Version.TryParse(result.LatestVersion, out var latest)
+                TryParseTagVersion(result.LatestVersion, out var latest)
                 && latest > CurrentVersion
                 && !string.IsNullOrEmpty(result.AssetUrl);
 
@@ -214,6 +214,19 @@ public class UpdateService {
     private static string? NormalizeTag(string? tag) =>
         string.IsNullOrEmpty(tag) ? tag
         : (tag.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? tag[1..] : tag);
+
+    /// <summary>Parse a release tag into a numeric <see cref="Version"/>, tolerating a
+    /// leading 'v' and a SemVer-style pre-release suffix (v0.99.0-preview1 → 0.99.0).
+    /// The suffix is dropped because .deb/AssemblyVersion carries only the numeric
+    /// part, so a Preview host still recognises a pre-release tag as newer.</summary>
+    private static bool TryParseTagVersion(string? tag, out Version version) {
+        version = new Version(0, 0, 0, 0);
+        if (string.IsNullOrEmpty(tag)) return false;
+        var s = tag!.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? tag[1..] : tag;
+        var dash = s.IndexOf('-');
+        if (dash >= 0) s = s[..dash];
+        return Version.TryParse(s, out version!);
+    }
 
     /// <summary>Pick the architecture-matched .deb asset (polaris_*_&lt;arch&gt;.deb)
     /// from a GitHub release JSON element. Returns (null,null,0) when none.
@@ -278,7 +291,7 @@ public class UpdateService {
 
                 string relation = "older";
                 bool isCurrent = false;
-                if (Version.TryParse(tag, out var v)) {
+                if (TryParseTagVersion(tag, out var v)) {
                     var cmp = v.CompareTo(current);
                     isCurrent = cmp == 0;
                     relation = cmp > 0 ? "newer" : (cmp == 0 ? "current" : "older");
