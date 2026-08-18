@@ -31,6 +31,7 @@ public sealed partial class NativeGuider {
         _loopCts = new CancellationTokenSource();
         var token = _loopCts.Token;
         _paused = false;
+        _slewHold = false;
         _starLostCount = 0;
         _warned8Bit = false;
         SetAppState(mode == LoopMode.Guide ? "Guiding" : "Looping");
@@ -87,6 +88,38 @@ public sealed partial class NativeGuider {
                         }
                     } else if (_paused) {
                         await SettleAfterPulse(200, ct);
+                    } else if (MountIsSlewing(mount)) {
+                        // A GoTo / slew-and-center is moving the mount under the
+                        // guide loop: the locked star is leaving the frame. Hold —
+                        // never pulse on a moving star — and remember a slew
+                        // happened so we re-acquire once it stops.
+                        if (!_slewHold) {
+                            _slewHold = true;
+                            SetAppState("Slewing");
+                            _logger.LogInformation("Native guiding: mount slewing, holding");
+                        }
+                        await SettleAfterPulse(300, ct);
+                    } else if (_slewHold) {
+                        // Slew finished: settle mechanically, drop the stale lock,
+                        // pick a FRESH star on the new field and resume guiding —
+                        // exactly what the operator expects after any slew.
+                        _slewHold = false;
+                        try {
+                            await Task.Delay(TimeSpan.FromSeconds(2), ct);
+                            _haveLock = false;
+                            await AutoSelectStarAsync(ct);
+                            if (_haveLock) {
+                                _raAlgo?.Reset(); _decAlgo?.Reset();
+                                await BuildMultiStarAsync(ct);
+                                SetAppState("Guiding");
+                                _logger.LogInformation("Native guiding re-acquired a star after the slew");
+                            } else {
+                                RaiseAlert("Guiding paused after slew: no guide star found; select one manually.");
+                            }
+                        } catch (OperationCanceledException) { throw; }
+                        catch (Exception ex) {
+                            _logger.LogWarning(ex, "Post-slew guide re-acquire failed");
+                        }
                     } else {
                         await GuideOnceAsync(cam, mount, ct);
                     }
@@ -115,6 +148,15 @@ public sealed partial class NativeGuider {
         } finally {
             _logger.LogInformation("Native guide loop exited");
         }
+    }
+
+    /// <summary>True when the mount reports it is slewing. Guarded: a driver that
+    /// throws on the IsSlewing read must never break the guide loop (it just means
+    /// "not slewing" for this frame).</summary>
+    private static bool MountIsSlewing(ITelescope? mount) {
+        if (mount == null || !mount.IsConnected) return false;
+        try { return mount.IsSlewing; }
+        catch { return false; }
     }
 
     private async Task GuideOnceAsync(ICamera cam, ITelescope? mount, CancellationToken ct) {

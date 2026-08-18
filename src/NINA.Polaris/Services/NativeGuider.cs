@@ -143,6 +143,10 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
 
     // Dither bookkeeping.
     private volatile bool _paused;
+    // True while the guide loop is holding because the mount is slewing (a GoTo /
+    // slew-and-center under an active guide loop). On the slew's completion the
+    // loop drops the stale lock, auto-selects a NEW star and resumes guiding.
+    private volatile bool _slewHold;
     private GuidingSettler? _settler;
     private double _settleThresholdPx = 1.5;
     private double _settleTimeSec = 10;
