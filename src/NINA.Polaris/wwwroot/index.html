@@ -4424,23 +4424,26 @@
                                 <input type="checkbox" x-model="dither.raOnly" @change="saveDither()">
                                 <span x-text="$t('RA only (skip Dec)')"></span>
                             </label>
-                            <div style="display:flex;flex-direction:column;gap:4px">
-                                <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-                                    <span x-text="$t('Multi-camera strategy')"></span>
-                                    <select class="input" style="flex:1;min-width:0;max-width:210px"
-                                            x-model="dither.cadenceStrategy" @change="saveDither()">
-                                        <option value="slowest" x-text="$t('Slowest camera drives (recommended)')"></option>
-                                        <option value="main" x-text="$t('Main camera drives')"></option>
-                                        <option value="independent" x-text="$t('Independent (each camera on its own)')"></option>
-                                    </select>
-                                </label>
-                                <span class="text-muted" style="font-size:11px;text-align:left"
-                                      x-text="dither.cadenceStrategy === 'independent'
-                                          ? $t('No sync: a dither may trail another camera\'s frame.')
-                                          : (dither.cadenceStrategy === 'main'
-                                              ? $t('The main camera sets the dither cadence; the others wait for it.')
-                                              : $t('The slowest camera sets the cadence; the others wait for it.'))"></span>
-                            </div>
+                        </div>
+
+                        <!-- Strategy sits outside the 340px group so the dropdown
+                             can use the full card width (option labels are long). -->
+                        <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
+                            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                                <span style="flex:none" x-text="$t('Multi-camera strategy')"></span>
+                                <select class="input" style="flex:1;min-width:0"
+                                        x-model="dither.cadenceStrategy" @change="saveDither()">
+                                    <option value="slowest" x-text="$t('Slowest camera drives (recommended)')"></option>
+                                    <option value="main" x-text="$t('Main camera drives')"></option>
+                                    <option value="independent" x-text="$t('Independent (each camera on its own)')"></option>
+                                </select>
+                            </label>
+                            <span class="text-muted" style="font-size:11px;text-align:left"
+                                  x-text="dither.cadenceStrategy === 'independent'
+                                      ? $t('No sync: a dither may trail another camera\'s frame.')
+                                      : (dither.cadenceStrategy === 'main'
+                                          ? $t('The main camera sets the dither cadence; the others wait for it.')
+                                          : $t('The slowest camera sets the cadence; the others wait for it.'))"></span>
                         </div>
 
                         <div style="border-top:1px solid var(--border);margin:6px 0 8px;padding-top:8px;
