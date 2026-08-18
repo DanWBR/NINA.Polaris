@@ -4147,6 +4147,16 @@ function ninaApp() {
         seqDitherExpanded: false,
         _ditherSaveTimer: null,
 
+        // Unified GLOBAL dither config (the dedicated Dither panel). One source of
+        // truth for LIVE / AUTORUN / ADV / multicam — GET/PUT /api/dither.
+        dither: {
+            enabled: false, pixels: 5.0, everyNFrames: 3, raOnly: false,
+            settlePixels: 3.0, settleTime: 3, settleTimeout: 60
+        },
+        _ditherGlobalSaveTimer: null,
+        // Multi-camera dither barrier live status (WS "ditherSync" block).
+        ditherSync: { active: false, waiting: false, dithering: false },
+
         // Meridian flip
         mfSettings: {
             enabled: false,
@@ -4903,6 +4913,7 @@ function ninaApp() {
             setTimeout(() => this.indiDetectMaybeOffer(), 6000);
             this.loadSettingsFromServer();
             this.loadDitherSettings();
+            this.loadDither();          // unified global dither (panel + summaries)
             this.loadMfSettings();
             this.loadEndActions();
             this.loadSirilStatus();
@@ -23376,6 +23387,39 @@ function ninaApp() {
             }, 400);
         },
 
+        // ---- Unified GLOBAL dither panel (/api/dither) ----
+        async loadDither() {
+            try {
+                const d = await this.apiGet('/api/dither');
+                if (d) this.dither = {
+                    enabled: !!d.enabled, pixels: d.pixels ?? 5.0,
+                    everyNFrames: d.everyNFrames ?? 3, raOnly: !!d.raOnly,
+                    settlePixels: d.settlePixels ?? 3.0, settleTime: d.settleTime ?? 3,
+                    settleTimeout: d.settleTimeout ?? 60
+                };
+            } catch (e) { /* keep defaults */ }
+        },
+        saveDitherDebounced() {
+            clearTimeout(this._ditherGlobalSaveTimer);
+            this._ditherGlobalSaveTimer = setTimeout(() => this.saveDither(), 500);
+        },
+        async saveDither() {
+            try { await this.apiPut('/api/dither', this.dither); }
+            catch (e) { this.toastFail(this.$t('Failed to save dither settings'), e); }
+        },
+        async ditherNow() {
+            try {
+                await this.apiPost('/api/guider/dither', {
+                    pixels: Number(this.dither.pixels) || 5,
+                    raOnly: !!this.dither.raOnly,
+                    settlePixels: Number(this.dither.settlePixels) || 3,
+                    settleTime: Number(this.dither.settleTime) || 3,
+                    settleTimeout: Number(this.dither.settleTimeout) || 60
+                });
+                this.toast(this.$t('Dithering…'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Dither failed'), e); }
+        },
+
         async saveSettingsToServer() {
             try {
                 await this.apiPost('/api/system/profile', null, {
@@ -41782,6 +41826,12 @@ function ninaApp() {
                 this.auxCapture.running = !!msg.auxCapture.running;
                 this.auxCapture.frameCount = msg.auxCapture.frameCount || 0;
                 this.auxCapture.noOutputDir = !!msg.auxCapture.noOutputDir;
+            }
+            // Multi-camera dither barrier status (drives the Dither panel chip).
+            if (msg.ditherSync) {
+                this.ditherSync.active = !!msg.ditherSync.active;
+                this.ditherSync.waiting = !!msg.ditherSync.waiting;
+                this.ditherSync.dithering = !!msg.ditherSync.dithering;
             }
             // STAGE2: per-extra-imager capture status (frame counts + last error),
             // matched onto the cards by slot index. Absent entry => that loop

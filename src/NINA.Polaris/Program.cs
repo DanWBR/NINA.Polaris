@@ -1324,6 +1324,7 @@ app.MapTelescopeEndpoints();
 app.MapFocuserEndpoints();
 app.MapAuxEndpoints();
 app.MapImagerEndpoints();
+app.MapDitherEndpoints();
 app.MapFilterWheelEndpoints();
 // ASCOM Platform-specific (SetupDialog, platform-presence probe).
 // Per-device select/connect/discover are already handled by the

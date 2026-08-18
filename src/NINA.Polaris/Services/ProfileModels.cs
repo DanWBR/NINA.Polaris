@@ -1116,6 +1116,26 @@ public class EquipmentProfile {
     public List<SequenceItem>? AutorunSequence { get; set; }
     public DitherSettings? AutorunDither { get; set; }
     public SequenceEndActions? AutorunEndActions { get; set; }
+
+    /// <summary>Per-rig GLOBAL dither configuration — the single source of truth
+    /// for LIVE, AUTORUN, ADV and the multi-camera barrier. Reuses the
+    /// <see cref="DitherSettings"/> shape (Enabled/Pixels/EveryNFrames/RaOnly/
+    /// Settle*). Null = not migrated yet; <see cref="EffectiveDither"/> seeds it
+    /// from the legacy per-mode config on first read. Not clobbered by the rig PUT
+    /// handler (like the other Autorun* fields), so a rig save never resets it.</summary>
+    public DitherSettings? DitherProfile { get; set; }
+
+    /// <summary>The global dither config, migrating the legacy settings on first
+    /// access: the stored global if set, else the AUTORUN dither (which, like the
+    /// unified default, is opt-in / disabled), else clean defaults (disabled, 5px
+    /// amplitude, every 3 frames, settle 3px/3s/60s). The LIVE trigger's dither
+    /// fields are deliberately NOT used as a fallback: they default to ENABLED, so
+    /// pulling them in would turn dithering on for a rig that never asked for it.
+    /// Idempotent — callers should assign the result back to
+    /// <see cref="DitherProfile"/> and persist so the migration runs once.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public DitherSettings EffectiveDither =>
+        DitherProfile ?? AutorunDither ?? new DitherSettings();
 }
 
 public class ProfileSummary {

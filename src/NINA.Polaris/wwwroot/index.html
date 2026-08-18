@@ -805,6 +805,11 @@
                 <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,2 15,10 23,10 17,15 19,23 12,18 5,23 7,15 1,10 9,10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Guide</span>
             </button>
+            <button class="nav-btn" :class="{ active: tab === 'dither' }"
+                    @click="tab = 'dither'; loadDither()" :title="$t('Dither')">
+                <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="6" cy="7" r="1.6" fill="currentColor"/><circle cx="13" cy="5" r="1.6" fill="currentColor"/><circle cx="18" cy="9" r="1.6" fill="currentColor"/><circle cx="8" cy="14" r="1.6" fill="currentColor"/><circle cx="16" cy="16" r="1.6" fill="currentColor"/><circle cx="11" cy="19" r="1.6" fill="currentColor"/></svg>
+                <span class="nav-label" x-text="$t('Dither')"></span>
+            </button>
             <button class="nav-btn" :class="{ active: tab === 'preview' }" @click="tab = 'preview'; loadCameraCapabilities()" title="Preview (snap test shots)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Preview</span>
@@ -1884,60 +1889,27 @@
                         <!-- Auto dither: dither every N integrated frames,
                              routed through the active guider (native or PHD2). -->
                         <fieldset class="livestack-triggers-block" x-show="trigTab === 'dither'">
-                            <legend>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" x-model="liveStackTriggers.ditherEnabled"
-                                           @change="saveLiveStackTriggers()">
-                                    Auto dither
-                                </label>
-                            </legend>
-                            <div class="livestack-triggers-row">
-                                <label>Every
-                                    <input type="number" min="1" step="1"
-                                           x-model.number="liveStackTriggers.ditherEveryNFrames"
-                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
-                                    frames
-                                </label>
-                                <label>Amount
-                                    <input type="number" min="0.5" step="0.5"
-                                           x-model.number="liveStackTriggers.ditherPixels"
-                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
-                                    px
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" x-model="liveStackTriggers.ditherRaOnly"
-                                           @change="saveLiveStackTriggers()">
-                                    RA only
-                                </label>
+                            <!-- Dither is a single GLOBAL config now; this reflects
+                                 it and links to the dedicated Dither panel. -->
+                            <legend x-text="$t('Dither')"></legend>
+                            <div class="livestack-triggers-row" style="font-size:13px">
+                                <strong :class="dither.enabled ? 'text-ok' : 'text-muted'"
+                                        x-text="dither.enabled ? $t('On') : $t('Off')"></strong>
+                                <template x-if="dither.enabled">
+                                    <span class="text-muted"><span x-text="dither.pixels"></span>px ·
+                                        <span x-text="$t('every {n} frames', { n: dither.everyNFrames })"></span><span
+                                              x-show="dither.raOnly" x-text="' · ' + $t('RA only')"></span></span>
+                                </template>
                             </div>
                             <div class="livestack-triggers-row">
-                                <label>Settle
-                                    <input type="number" min="0.1" step="0.1"
-                                           x-model.number="liveStackTriggers.ditherSettlePixels"
-                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:60px">
-                                    px
-                                </label>
-                                <label>for
-                                    <input type="number" min="0" step="1"
-                                           x-model.number="liveStackTriggers.ditherSettleTime"
-                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:60px">
-                                    s
-                                </label>
-                                <label>timeout
-                                    <input type="number" min="5" step="5"
-                                           x-model.number="liveStackTriggers.ditherSettleTimeout"
-                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:60px">
-                                    s
-                                </label>
+                                <button class="btn btn-sm" @click="tab = 'dither'; loadDither()"
+                                        x-text="$t('Open the Dither panel')"></button>
                             </div>
-                            <div class="livestack-triggers-row text-muted" style="font-size:11px">
-                                Needs the guider actively guiding (native or PHD2). Dithered
-                                frames wait to settle before stacking.
-                            </div>
-                            <div class="livestack-triggers-row text-muted"
-                                 x-show="liveStackStatus?.triggers?.executingKind === 'dither'">
-                                Dithering…
-                            </div>
+                            <div class="livestack-triggers-row text-muted" style="font-size:11px"
+                                 x-text="$t('Dither is configured globally now (shared with AUTORUN, the Advanced Sequencer and every camera).')"></div>
+                            <div class="livestack-triggers-row text-warn"
+                                 x-show="ditherSync.dithering || liveStackStatus?.triggers?.executingKind === 'dither'"
+                                 x-text="$t('Dithering…')"></div>
                         </fieldset>
                         </div><!-- /tab control wrapper (trigTab) -->
                     </details>
@@ -4405,6 +4377,88 @@
                     </div>
                     <div class="stats-bar" x-show="videoStack?.phase === 'Fail'" style="margin-top:10px">
                         <span class="text-err">✗ <span x-text="videoStack?.error"></span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DITHER (unified global config — one source of truth for LIVE,
+                 AUTORUN, ADV and every camera on the mount). -->
+            <div x-show="tab === 'dither'" class="tab-panel">
+                <div class="panel-header">
+                    <span x-text="$t('Dither')"></span>
+                    <span class="status-indicator-sm"
+                          :class="ditherSync.dithering ? 'warn' : (dither.enabled ? 'ok' : '')"
+                          x-text="ditherSync.dithering ? $t('Dithering…') : (dither.enabled ? $t('On') : $t('Off'))"></span>
+                    <span class="status-indicator-sm ok" x-show="ditherSync.active" x-cloak
+                          x-text="$t('Multi-camera sync')"></span>
+                </div>
+
+                <div class="settings-section" style="max-width:560px">
+                    <h4 style="margin-top:0" x-text="$t('Global dither')"></h4>
+                    <p class="hint" style="margin-top:0"
+                       x-text="$t('One dither configuration shared by LIVE, AUTORUN, the Advanced Sequencer and every camera on the mount.')"></p>
+
+                    <label style="display:flex;gap:8px;align-items:center;margin:8px 0">
+                        <input type="checkbox" x-model="dither.enabled" @change="saveDither()">
+                        <span x-text="$t('Enable dithering')"></span>
+                    </label>
+
+                    <div class="equip-meta-row">
+                        <label><span x-text="$t('Amount (px)')"></span>
+                            <input type="number" x-model.number="dither.pixels" @change="saveDitherDebounced()"
+                                   step="0.5" min="0.1" class="input-sm" style="width:80px">
+                        </label>
+                        <label><span x-text="$t('Every N frames')"></span>
+                            <input type="number" x-model.number="dither.everyNFrames" @change="saveDitherDebounced()"
+                                   min="1" class="input-sm" style="width:80px">
+                        </label>
+                    </div>
+
+                    <label style="display:flex;gap:8px;align-items:center;margin:8px 0">
+                        <input type="checkbox" x-model="dither.raOnly" @change="saveDither()">
+                        <span x-text="$t('RA only (skip Dec)')"></span>
+                    </label>
+
+                    <h4 x-text="$t('Settling')"></h4>
+                    <div class="equip-meta-row">
+                        <label><span x-text="$t('Settle within (px)')"></span>
+                            <input type="number" x-model.number="dither.settlePixels" @change="saveDitherDebounced()"
+                                   step="0.5" min="0.1" class="input-sm" style="width:80px">
+                        </label>
+                        <label><span x-text="$t('Settle time (s)')"></span>
+                            <input type="number" x-model.number="dither.settleTime" @change="saveDitherDebounced()"
+                                   min="0" class="input-sm" style="width:80px">
+                        </label>
+                        <label><span x-text="$t('Timeout (s)')"></span>
+                            <input type="number" x-model.number="dither.settleTimeout" @change="saveDitherDebounced()"
+                                   min="1" class="input-sm" style="width:80px">
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section" style="max-width:560px">
+                    <h4 style="margin-top:0" x-text="$t('Manual dither')"></h4>
+                    <p class="hint" style="margin-top:0"
+                       x-text="$t('Fire a single dither now with the settings above (needs the guider connected and guiding).')"></p>
+                    <button class="btn" :disabled="!guider.connected || guider.dithering" @click="ditherNow()">
+                        <span x-text="$t('Dither now')"></span>
+                    </button>
+                    <span class="text-muted" style="margin-left:8px" x-show="!guider.connected"
+                          x-text="$t('Guider not connected')"></span>
+                </div>
+
+                <div class="settings-section" style="max-width:560px">
+                    <h4 style="margin-top:0" x-text="$t('Status')"></h4>
+                    <div class="equip-detail-props" style="gap:16px">
+                        <span><span x-text="$t('Multi-camera sync')"></span>:
+                            <strong x-text="ditherSync.active ? $t('On') : $t('Off')"></strong></span>
+                        <span class="text-warn" x-show="ditherSync.dithering" x-text="$t('Dithering…')"></span>
+                    </div>
+                    <div class="equip-detail-props" style="gap:16px;margin-top:4px">
+                        <span><span x-text="$t('Dithers issued (autorun)')"></span>:
+                            <strong x-text="seqStatus?.dithersIssued ?? 0"></strong></span>
+                        <span><span x-text="$t('Frames since dither')"></span>:
+                            <strong x-text="seqStatus?.framesSinceDither ?? 0"></strong></span>
                     </div>
                 </div>
             </div>
@@ -10747,64 +10801,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <!-- Dither settings panel.
                      Header lives in the .autorun-options-bar chip above. -->
                 <div class="seq-dither-panel" x-show="seqOptTab === 'dither'">
-                    <div class="autorun-option-body-head">
-                        <label class="seq-dither-toggle">
-                            <input type="checkbox" x-model="ditherSettings.enabled" @change="saveDitherSettings()"
-                                   :disabled="seqState === 'running'">
-                            <span :class="ditherSettings.enabled ? 'text-ok' : 'text-muted'"
-                                  x-text="ditherSettings.enabled ? 'Enabled' : 'Disabled'"></span>
-                        </label>
-                        <span class="text-muted" style="font-size: 11px;" x-show="seqStatus?.dithersIssued >= 0">
-                            <span x-text="seqStatus?.dithersIssued || 0"></span> dithered · next in
-                            <span x-text="Math.max(0, (ditherSettings.everyNFrames || 1) - (seqStatus?.framesSinceDither || 0))"></span>
-                        </span>
-                    </div>
+                    <!-- Dither is a single GLOBAL config now (shared with LIVE, ADV
+                         and every camera). This tab just reflects it + links out. -->
                     <div class="seq-dither-body">
-                        <div class="seq-dither-row">
-                            <label>Pixels
-                                <input type="number" x-model.number="ditherSettings.pixels"
-                                       step="0.5" min="0.5" max="50" class="input-sm"
-                                       @change="saveDitherSettings()"
-                                       :disabled="seqState === 'running'">
-                            </label>
-                            <label>Every N frames
-                                <input type="number" x-model.number="ditherSettings.everyNFrames"
-                                       step="1" min="1" max="100" class="input-sm"
-                                       @change="saveDitherSettings()"
-                                       :disabled="seqState === 'running'">
-                            </label>
-                            <label class="seq-dither-checkbox">
-                                <input type="checkbox" x-model="ditherSettings.raOnly"
-                                       @change="saveDitherSettings()"
-                                       :disabled="seqState === 'running'">
-                                RA only
-                            </label>
-                        </div>
-                        <div class="seq-dither-row">
-                            <label>Settle px
-                                <input type="number" x-model.number="ditherSettings.settlePixels"
-                                       step="0.1" min="0.1" max="20" class="input-sm"
-                                       @change="saveDitherSettings()"
-                                       :disabled="seqState === 'running'">
-                            </label>
-                            <label>Settle time (s)
-                                <input type="number" x-model.number="ditherSettings.settleTime"
-                                       step="1" min="0" max="300" class="input-sm"
-                                       @change="saveDitherSettings()"
-                                       :disabled="seqState === 'running'">
-                            </label>
-                            <label>Timeout (s)
-                                <input type="number" x-model.number="ditherSettings.settleTimeout"
-                                       step="5" min="5" max="600" class="input-sm"
-                                       @change="saveDitherSettings()"
-                                       :disabled="seqState === 'running'">
-                            </label>
-                        </div>
-                        <p class="seq-dither-hint text-muted" x-show="ditherSettings.enabled && !guider.connected">
-                            ⚠ PHD2 not connected, dither will be silently skipped during the run.
+                        <p style="margin-top:0;font-size:13px">
+                            <strong :class="dither.enabled ? 'text-ok' : 'text-muted'"
+                                    x-text="dither.enabled ? $t('On') : $t('Off')"></strong>
+                            <template x-if="dither.enabled">
+                                <span class="text-muted"> · <span x-text="dither.pixels"></span>px ·
+                                    <span x-text="$t('every {n} frames', { n: dither.everyNFrames })"></span><span
+                                          x-show="dither.raOnly" x-text="' · ' + $t('RA only')"></span></span>
+                            </template>
                         </p>
-                        <p class="seq-dither-hint text-muted" x-show="ditherSettings.enabled && guider.connected && !guider.guiding">
-                            ⚠ PHD2 connected but not guiding, start guiding before launching the sequence.
+                        <p class="text-muted" style="font-size:11px" x-show="seqStatus?.dithersIssued >= 0">
+                            <span x-text="seqStatus?.dithersIssued || 0"></span>
+                            <span x-text="$t('dithered this run')"></span>
+                        </p>
+                        <button class="btn btn-sm" @click="tab = 'dither'; loadDither()"
+                                x-text="$t('Open the Dither panel')"></button>
+                        <p class="seq-dither-hint text-muted" x-show="dither.enabled && !guider.connected">
+                            ⚠ <span x-text="$t('Guider not connected, dither will be silently skipped during the run.')"></span>
                         </p>
                     </div>
                 </div>

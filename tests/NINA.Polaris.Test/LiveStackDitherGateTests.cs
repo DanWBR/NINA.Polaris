@@ -47,6 +47,7 @@ public class LiveStackDitherGateTests {
     private LiveStackingService _stack = null!;
     private LiveStackTriggersService _triggers = null!;
     private NativeGuider _guider = null!;
+    private ProfileService _profiles = null!;
 
     [SetUp]
     public void SetUp() {
@@ -54,6 +55,7 @@ public class LiveStackDitherGateTests {
         var relay = new ImageRelayService(NullLogger<ImageRelayService>.Instance);
         _stack = new LiveStackingService(relay, NullLogger<LiveStackingService>.Instance);
         var profiles = new ProfileService(cfg, NullLogger<ProfileService>.Instance);
+        _profiles = profiles;
         profiles.ActiveEquipmentProfile.GuiderDriver = "native";
         var indi = new IndiClient("localhost", 7624);
         var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance,
@@ -73,8 +75,10 @@ public class LiveStackDitherGateTests {
             guiders, new DitherBarrier(guiders, NullLogger<DitherBarrier>.Instance),
             NullLogger<LiveStackTriggersService>.Instance);
 
-        _triggers.Settings.DitherEnabled = true;
-        _triggers.Settings.DitherEveryNFrames = 3;
+        // Dither is now the GLOBAL DitherProfile, not the LIVE trigger fields.
+        profiles.ActiveEquipmentProfile.DitherProfile = new DitherSettings {
+            Enabled = true, EveryNFrames = 3
+        };
         _triggers.Settings.RefocusEnabled = false;
         _triggers.Settings.RecenterEnabled = false;
     }
@@ -146,7 +150,7 @@ public class LiveStackDitherGateTests {
 
     [Test]
     public async Task WithDitherDisabled_NothingIsReported() {
-        _triggers.Settings.DitherEnabled = false;
+        _profiles.ActiveEquipmentProfile.DitherProfile = new DitherSettings { Enabled = false };
 
         for (int n = 2; n <= 8; n++) await FrameAsync(n);
 
