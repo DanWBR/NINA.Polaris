@@ -1070,6 +1070,15 @@ public class EquipmentProfile {
     /// <summary>Rejection threshold in sigmas (default 3.0).</summary>
     public double LiveStackSigmaKappa { get; set; } = 3.0;
 
+    /// <summary>Per-sub cosmetic correction on the live stack: remove fixed
+    /// hot/cold sensor pixels at the SOURCE (before debayer + warp) so a single
+    /// hot site never becomes a wandering trail that per-pixel sigma rejection
+    /// structurally cannot catch. CFA-aware on an OSC mosaic. Complements sigma
+    /// rejection (fixed defects here; transients there). Default ON for EAA;
+    /// works from frame 1, with or without dithering, no master dark needed.
+    /// Per-rig.</summary>
+    public bool LiveStackCosmetic { get; set; } = true;
+
     /// <summary>Auto-pause the live stack after this many seconds
     /// of integration. 0 (default) = no cap, runs until the user
     /// resets or stops. Per-rig so different setups (planetary

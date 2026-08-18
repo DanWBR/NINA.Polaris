@@ -1589,6 +1589,17 @@
                                 </span>
                             </template>
                         </label>
+                        <!-- Per-sub cosmetic correction: kills fixed hot/cold
+                             sensor pixels at the source, before debayer + warp
+                             smear a hot Bayer site into a wandering (green) trail
+                             that sigma rejection can't catch. Default ON for EAA. -->
+                        <label class="livestack-save-frames-label"
+                               :title="$t('Remove fixed hot and cold sensor pixels from every sub before stacking (CFA-aware for OSC). Works from the first frame with or without dithering, no master dark needed. Complements outlier rejection, which handles transients like cosmic rays and satellite trails.')">
+                            <input type="checkbox"
+                                   x-model="liveStackCosmetic"
+                                   @change="saveLiveStackCosmetic()">
+                            🔥 <span x-text="$t('Remove hot pixels')"></span>
+                        </label>
                         <!-- Save-frames is on but no image output folder is set,
                              so every frame is silently dropped. Tell the user
                              instead of letting them find an empty lights/ folder

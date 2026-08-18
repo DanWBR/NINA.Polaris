@@ -368,6 +368,7 @@ function ninaApp() {
         // running flag + the active rig's LiveStackSigmaRejection/Kappa fields.
         // OFF by default; pays off most WITH dithering.
         liveStackSigmaRejection: false,
+        liveStackCosmetic: true,
         liveStackSigmaKappa: 3.0,
 
         // LSTR-5: live-stack auto-refocus + auto-recenter triggers.
@@ -10409,6 +10410,26 @@ function ninaApp() {
             } catch (e) {
                 this.liveStackSigmaRejection = !this.liveStackSigmaRejection;
                 this.toastFail('Save failed', e);
+            }
+        },
+
+        // LIVE tab "Remove hot pixels" toggle. Per-rig; the stacker reads it live
+        // each frame, so it takes effect immediately (no Reset needed).
+        async saveLiveStackCosmetic() {
+            try {
+                await this.apiPost('/api/livestack/cosmetic', null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: this.liveStackCosmetic })
+                });
+                const rig = this.rigs.find(r => r.id === this.activeRigId);
+                if (rig) rig.liveStackCosmetic = this.liveStackCosmetic;
+                this.toast(this.liveStackCosmetic
+                    ? this.$t('Hot-pixel removal on')
+                    : this.$t('Hot-pixel removal off'), 'ok');
+            } catch (e) {
+                this.liveStackCosmetic = !this.liveStackCosmetic;
+                this.toastFail(this.$t('Save failed'), e);
             }
         },
 
@@ -21453,6 +21474,9 @@ function ninaApp() {
             this.liveStackSigmaRejection = rig.liveStackSigmaRejection === true;
             this.liveStackSigmaKappa = (rig.liveStackSigmaKappa > 0)
                 ? rig.liveStackSigmaKappa : 3.0;
+            // Per-sub cosmetic (hot/cold pixel) correction. Default ON for EAA —
+            // absent on an old rig means the C# initializer (true) applied.
+            this.liveStackCosmetic = rig.liveStackCosmetic !== false;
             // Auto-pause cap in MINUTES (UI unit). Backend stores
             // seconds. 0 = unlimited (default).
             this.liveStackMaxMinutes = Math.round(
