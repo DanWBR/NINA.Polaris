@@ -411,7 +411,8 @@ public class TakeAuxExposureInstruction : SequenceInstruction {
 
                 image.MetaData.Exposure.ExposureTime = expSec;
                 ctx.ImageWriter.SaveImage(image, imageType: "AUX",
-                    gain: gain ?? 0, focalLengthMmOverride: rig?.AuxFocalLengthMm);
+                    gain: gain ?? 0, focalLengthMmOverride: rig?.AuxFocalLengthMm,
+                    cameraName: cam.DeviceName);
                 ctx.Logger.LogInformation("Aux frame {N}/{Count} captured ({Exp:0.##}s, gain {Gain}, bin {Bin})",
                     i + 1, Count, expSec, gain?.ToString() ?? "default", bin);
 

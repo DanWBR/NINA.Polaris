@@ -164,7 +164,8 @@ public sealed class AuxCaptureService {
                     try {
                         var path = _writer.SaveImage(image, imageType: "AUX",
                             gain: gain ?? 0,
-                            focalLengthMmOverride: Rig?.AuxFocalLengthMm);
+                            focalLengthMmOverride: Rig?.AuxFocalLengthMm,
+                            cameraName: cam.DeviceName);
                         if (path != null) FrameCount++;
                     } catch (Exception ex) {
                         _logger.LogWarning(ex, "Aux frame save failed");

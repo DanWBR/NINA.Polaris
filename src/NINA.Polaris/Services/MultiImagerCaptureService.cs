@@ -158,8 +158,12 @@ public sealed class MultiImagerCaptureService {
 
                 if (image?.Data != null) {
                     try {
-                        var path = _writer.SaveImage(image, targetName: role, imageType: "AUX",
-                            gain: gain ?? 0, focalLengthMmOverride: cfg?.FocalLengthMm);
+                        // No targetName: let the writer auto-resolve the real sky
+                        // target (the role is not a target). The camera name buckets
+                        // this imager's frames into their own folder.
+                        var path = _writer.SaveImage(image, imageType: "AUX",
+                            gain: gain ?? 0, focalLengthMmOverride: cfg?.FocalLengthMm,
+                            cameraName: cam.DeviceName);
                         if (path != null) loop.FrameCount++;
                     } catch (Exception ex) {
                         _logger.LogWarning(ex, "Imager {Index} frame save failed", index);
