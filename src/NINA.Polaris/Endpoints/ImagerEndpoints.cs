@@ -41,12 +41,76 @@ public static class ImagerEndpoints {
                 connected = s.Camera?.IsConnected ?? false,
             })));
 
+        // ----- Add / remove an extra imager (index 2+) + persist its config -----
+        // The per-imager capture config lives in EquipmentProfile.ExtraImagers so
+        // it survives a restart AND so MultiImagerCaptureService can gate each loop
+        // on its Enabled flag. These write it; RigPatch already round-trips the
+        // list on unrelated rig PUTs so it is never wiped.
+        group.MapPost("/add", (ProfileService profiles, MultiImagerCaptureService multiImager) => {
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig == null) return Results.BadRequest(new { error = "No active rig" });
+            int newIndex = 2 + rig.ExtraImagers.Count;
+            profiles.UpdateEquipmentProfile(rig.Id, r => r.ExtraImagers.Add(new ImagerConfig {
+                Enabled = false, Role = $"imager-{newIndex + 1}"
+            }));
+            multiImager.Sync();
+            return Results.Ok(new { index = newIndex });
+        });
+
+        group.MapDelete("/{index:int}", async (EquipmentManager equip, ProfileService profiles,
+                MultiImagerCaptureService multiImager, int index) => {
+            if (index < 2) return Results.BadRequest(new { error = "Only extra imagers (index >= 2) can be removed" });
+            // Disconnect the bound devices first (best effort), then drop the
+            // runtime slot and the persisted config together so they stay aligned.
+            try { var c = equip.GetImager(index); if (c != null) await c.DisconnectAsync(); } catch { }
+            try { var f = equip.GetImagerFocuser(index); if (f != null) await f.DisconnectAsync(); } catch { }
+            try { var w = equip.GetImagerFilterWheel(index); if (w != null) await w.DisconnectAsync(); } catch { }
+            try { equip.RemoveImager(index); } catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig != null) {
+                int i = index - 2;
+                profiles.UpdateEquipmentProfile(rig.Id, r => {
+                    if (i >= 0 && i < r.ExtraImagers.Count) r.ExtraImagers.RemoveAt(i);
+                });
+            }
+            multiImager.Sync();
+            return Results.Ok(new { index, removed = true });
+        });
+
+        // Persist the capture config for one extra imager (enable toggle, optics,
+        // exposure/gain/binning) and re-evaluate its loop immediately, mirroring
+        // POST /api/aux/enabled. Absent fields keep their stored value.
+        group.MapPut("/{index:int}/config", (ProfileService profiles,
+                MultiImagerCaptureService multiImager, int index, ImagerConfigPatch body) => {
+            if (index < 2) return Results.BadRequest(new { error = "index must be >= 2" });
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig == null) return Results.BadRequest(new { error = "No active rig" });
+            int i = index - 2;
+            if (i >= rig.ExtraImagers.Count) return Results.NotFound(new { error = $"No imager at index {index}" });
+            profiles.UpdateEquipmentProfile(rig.Id, r => {
+                var c = r.ExtraImagers[i];
+                if (body.Enabled is bool en) c.Enabled = en;
+                if (body.ExposureMs is int e) c.ExposureMs = Math.Max(50, e);
+                if (body.Gain is int g) c.Gain = Math.Max(0, g);
+                if (body.Binning is int b) c.Binning = Math.Clamp(b, 1, 4);
+                if (body.FocalLengthMm is double fl) c.FocalLengthMm = Math.Max(0, fl);
+                if (body.ApertureMm is double ap) c.ApertureMm = Math.Max(0, ap);
+                if (body.PixelSizeUm is double px) c.PixelSizeUm = Math.Max(0, px);
+                if (body.TelescopeBrand != null) c.TelescopeBrand = body.TelescopeBrand;
+                if (body.TelescopeModel != null) c.TelescopeModel = body.TelescopeModel;
+            });
+            multiImager.Sync();
+            return Results.Ok(new { index, saved = true });
+        });
+
         // ----- Camera select / connect / disconnect / status -----
         group.MapPost("/{index:int}/camera/select/{deviceName}", (EquipmentManager equip,
-                MultiImagerCaptureService multiImager, int index, string deviceName, string? driver) => {
+                ProfileService profiles, MultiImagerCaptureService multiImager,
+                int index, string deviceName, string? driver) => {
             if (index < 0) return Results.BadRequest(new { error = "index must be >= 0" });
             try {
                 equip.SelectImager(index, driver ?? "indi", deviceName);
+                PersistImagerDevice(profiles, index, c => { c.DeviceId = deviceName; c.Driver = driver ?? "indi"; });
                 multiImager.Sync();
                 return Results.Ok(new { index, selected = deviceName, driver = driver ?? "indi" });
             } catch (Exception ex) {
@@ -108,10 +172,11 @@ public static class ImagerEndpoints {
 
         // ----- Per-imager focuser select / connect / disconnect -----
         group.MapPost("/{index:int}/focuser/select/{deviceName}", (EquipmentManager equip,
-                int index, string deviceName, string? driver) => {
+                ProfileService profiles, int index, string deviceName, string? driver) => {
             if (index < 0) return Results.BadRequest(new { error = "index must be >= 0" });
             try {
                 equip.SelectImagerFocuser(index, driver ?? "indi", deviceName);
+                PersistImagerDevice(profiles, index, c => { c.Focuser = deviceName; c.FocuserDriver = driver ?? "indi"; });
                 return Results.Ok(new { index, selected = deviceName, driver = driver ?? "indi" });
             } catch (Exception ex) {
                 return Results.BadRequest(new { error = ex.Message });
@@ -134,10 +199,11 @@ public static class ImagerEndpoints {
 
         // ----- Per-imager filter wheel select / connect / disconnect -----
         group.MapPost("/{index:int}/filterwheel/select/{deviceName}", (EquipmentManager equip,
-                int index, string deviceName, string? driver) => {
+                ProfileService profiles, int index, string deviceName, string? driver) => {
             if (index < 0) return Results.BadRequest(new { error = "index must be >= 0" });
             try {
                 equip.SelectImagerFilterWheel(index, driver ?? "indi", deviceName);
+                PersistImagerDevice(profiles, index, c => { c.FilterWheel = deviceName; c.FilterWheelDriver = driver ?? "indi"; });
                 return Results.Ok(new { index, selected = deviceName, driver = driver ?? "indi" });
             } catch (Exception ex) {
                 return Results.BadRequest(new { error = ex.Message });
@@ -158,4 +224,27 @@ public static class ImagerEndpoints {
             return Results.Ok(new { index, status = "disconnected" });
         });
     }
+
+    /// <summary>Persist a device binding onto the extra imager's stored config,
+    /// growing the list if the slot has no config yet (a select can precede an
+    /// explicit /add). No-op when there is no active rig.</summary>
+    private static void PersistImagerDevice(ProfileService profiles, int index, Action<ImagerConfig> mutate) {
+        if (index < 2) return;
+        var rig = profiles.ActiveEquipmentProfile;
+        if (rig == null) return;
+        int i = index - 2;
+        profiles.UpdateEquipmentProfile(rig.Id, r => {
+            while (r.ExtraImagers.Count <= i) r.ExtraImagers.Add(new ImagerConfig {
+                Enabled = false, Role = $"imager-{r.ExtraImagers.Count + 3}"
+            });
+            mutate(r.ExtraImagers[i]);
+        });
+    }
+
+    /// <summary>PUT /api/imager/{index}/config body. All fields optional (nullable)
+    /// so an absent one keeps the stored value.</summary>
+    public record ImagerConfigPatch(
+        bool? Enabled = null, int? ExposureMs = null, int? Gain = null, int? Binning = null,
+        double? FocalLengthMm = null, double? ApertureMm = null, double? PixelSizeUm = null,
+        string? TelescopeBrand = null, string? TelescopeModel = null);
 }

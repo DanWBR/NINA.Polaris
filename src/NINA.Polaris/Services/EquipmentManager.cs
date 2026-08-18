@@ -362,6 +362,27 @@ public class EquipmentManager : IDisposable {
         return slot.FilterWheel;
     }
 
+    /// <summary>Remove the extra imager at slot <paramref name="index"/> (2+):
+    /// drop the slot and dispose its camera/focuser/filter wheel. Higher slots
+    /// shift down by one, so the caller must remove the matching config entry
+    /// (<c>ExtraImagers[index-2]</c>) in the same operation to keep the runtime
+    /// list and the persisted config index-aligned. Callers should disconnect the
+    /// devices first (this only releases them). No-op for an out-of-range slot.</summary>
+    public void RemoveImager(int index) {
+        if (index < 2)
+            throw new InvalidOperationException("Only extra imagers (index >= 2) can be removed.");
+        var i = index - 2;
+        if (i < 0 || i >= _extraImagers.Count) return;
+        var slot = _extraImagers[i];
+        // Remove from the list BEFORE releasing so the ReleaseReplacedDevice
+        // "still referenced by a slot" guard lets these actually dispose.
+        _extraImagers.RemoveAt(i);
+        ReleaseReplacedDevice(slot.Camera);
+        ReleaseReplacedDevice(slot.Focuser);
+        ReleaseReplacedDevice(slot.FilterWheel);
+        _logger.LogInformation("Imager {Index} removed", index);
+    }
+
     private static ICamera CreateCanonCamera(string deviceId) {
         if (!OperatingSystem.IsWindows()) {
             throw new NotSupportedException(
