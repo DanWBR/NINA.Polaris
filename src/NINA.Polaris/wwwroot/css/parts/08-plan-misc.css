@@ -1306,11 +1306,12 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     /* Breathing room between the "Dither" panel header and the cards. */
     margin-top: 14px;
     display: grid;
-    grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
+    /* Landscape: Global | Manual+Technical | What-is-dithering. */
+    grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr) minmax(300px, 1.1fr);
     grid-template-rows: minmax(0, 1fr);
     gap: 16px;
     align-items: stretch;
-    max-width: 1200px;
+    max-width: 1600px;
 }
 .dither-side {
     display: grid;
@@ -1340,4 +1341,52 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     /* Stacked: give each card a sensible height instead of a full-viewport cell. */
     .dither-layout > .settings-section,
     .dither-side > .settings-section { height: auto; min-height: 320px; }
+}
+
+/* "What is dithering?" explainer card. */
+.dither-edu .edu-lead {
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin: 0 0 14px;
+}
+.dither-edu .edu-sub {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--accent);
+    margin: 0 0 10px;
+}
+.dither-edu .edu-item {
+    display: flex;
+    gap: 11px;
+    align-items: flex-start;
+    padding: 9px 0;
+    border-top: 1px solid var(--border);
+}
+.dither-edu .edu-item:first-of-type { border-top: none; padding-top: 0; }
+.dither-edu .edu-ico {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    font-size: 16px;
+    background: var(--bg-tertiary, rgba(255, 255, 255, .05));
+    border: 1px solid var(--border);
+}
+.dither-edu .edu-item-body { min-width: 0; }
+.dither-edu .edu-item-title {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 1px 0 2px;
+}
+.dither-edu .edu-item-desc {
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--text-secondary);
+    margin: 0;
 }

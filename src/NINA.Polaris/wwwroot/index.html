@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260731-edpan">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260807-hostnet">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260818-ditherlayout2">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260818-ditheredu">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260801-hscroll">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260728-slimaddr">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -4543,7 +4543,40 @@
                     </div>
                 </div>
                 </div><!-- /right column -->
-                </div><!-- /dither 2-column grid -->
+
+                <!-- Educational explainer: fills the third column in landscape. -->
+                <div class="settings-section dither-edu">
+                    <h3><span class="settings-card-icon">&#x1F4A1;</span><span x-text="$t('What is dithering?')"></span></h3>
+                    <div style="padding:12px 14px">
+                        <p class="edu-lead" x-text="$t('In astrophotography, dithering means shifting your telescope\'s aim by a few random pixels between exposures. This tiny random movement lets your stacking software tell real sky objects apart from camera flaws, for a cleaner, sharper final image.')"></p>
+                        <p class="edu-sub" x-text="$t('Why dithering is used')"></p>
+
+                        <div class="edu-item">
+                            <div class="edu-ico">&#x1F525;</div>
+                            <div class="edu-item-body">
+                                <p class="edu-item-title" x-text="$t('Removes hot pixels')"></p>
+                                <p class="edu-item-desc" x-text="$t('Dead or overly bright pixels stay in the exact same spot on the sensor, but the stars move when you dither. Stacking software sees the stuck pixels as errors and rejects them.')"></p>
+                            </div>
+                        </div>
+
+                        <div class="edu-item">
+                            <div class="edu-ico">&#x1F41B;</div>
+                            <div class="edu-item-body">
+                                <p class="edu-item-title" x-text="$t('Stops walking noise')"></p>
+                                <p class="edu-item-desc" x-text="$t('Without dithering, thermal noise can line up into ugly vertical or diagonal streaks (worm-like patterns) across the stacked image.')"></p>
+                            </div>
+                        </div>
+
+                        <div class="edu-item">
+                            <div class="edu-ico">&#x1F50D;</div>
+                            <div class="edu-item-body">
+                                <p class="edu-item-title" x-text="$t('Improves clarity')"></p>
+                                <p class="edu-item-desc" x-text="$t('Shifting the sensor across many frames lets the computer average out small differences in pixel sensitivity.')"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                </div><!-- /dither 3-column grid -->
             </div>
 
             <!-- GUIDER (PHD2) -->
