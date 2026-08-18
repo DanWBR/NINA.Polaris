@@ -4292,5 +4292,15 @@
   "moving…": "movendo…",
   "Focuser move failed": "Falha ao mover o focalizador",
   "Focuser abort failed": "Falha ao abortar o focalizador",
-  "Filter change failed": "Falha ao trocar de filtro"
+  "Filter change failed": "Falha ao trocar de filtro",
+  "Driver settings": "Configurações do driver",
+  "Focuser synced": "Focalizador sincronizado",
+  "Focuser sync failed": "Falha ao sincronizar o focalizador",
+  "Focuser reverse failed": "Falha ao inverter o focalizador",
+  "Backlash applied": "Folga aplicada",
+  "Backlash apply failed": "Falha ao aplicar a folga",
+  "Edit filter names": "Editar nomes dos filtros",
+  "Filter name count mismatch": "Número de nomes de filtro não confere",
+  "Filter names saved": "Nomes dos filtros salvos",
+  "Saving filter names failed": "Falha ao salvar os nomes dos filtros"
 }

@@ -4292,5 +4292,15 @@
   "moving…": "moviendo…",
   "Focuser move failed": "Error al mover el enfocador",
   "Focuser abort failed": "Error al abortar el enfocador",
-  "Filter change failed": "Error al cambiar de filtro"
+  "Filter change failed": "Error al cambiar de filtro",
+  "Driver settings": "Ajustes del driver",
+  "Focuser synced": "Enfocador sincronizado",
+  "Focuser sync failed": "Error al sincronizar el enfocador",
+  "Focuser reverse failed": "Error al invertir el enfocador",
+  "Backlash applied": "Holgura aplicada",
+  "Backlash apply failed": "Error al aplicar la holgura",
+  "Edit filter names": "Editar nombres de filtros",
+  "Filter name count mismatch": "El número de nombres de filtro no coincide",
+  "Filter names saved": "Nombres de filtros guardados",
+  "Saving filter names failed": "Error al guardar los nombres de filtros"
 }

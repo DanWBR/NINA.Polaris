@@ -3667,5 +3667,15 @@
   "moving…": "moving…",
   "Focuser move failed": "Focuser move failed",
   "Focuser abort failed": "Focuser abort failed",
-  "Filter change failed": "Filter change failed"
+  "Filter change failed": "Filter change failed",
+  "Driver settings": "Driver settings",
+  "Focuser synced": "Focuser synced",
+  "Focuser sync failed": "Focuser sync failed",
+  "Focuser reverse failed": "Focuser reverse failed",
+  "Backlash applied": "Backlash applied",
+  "Backlash apply failed": "Backlash apply failed",
+  "Edit filter names": "Edit filter names",
+  "Filter name count mismatch": "Filter name count mismatch",
+  "Filter names saved": "Filter names saved",
+  "Saving filter names failed": "Saving filter names failed"
 }

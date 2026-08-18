@@ -30289,11 +30289,22 @@ function ninaApp() {
                     running: !!was.running, frameCount: was.frameCount || 0, lastError: was.lastError || '',
                     maxX: was.maxX || 0, maxY: was.maxY || 0,
                     temperature: (was.temperature ?? null),
-                    // Focuser jog + filter-wheel selection runtime state.
+                    // Focuser jog + driver-settings runtime state.
                     focuserPosition: was.focuserPosition || 0, focuserMoving: false,
                     focuserStep: was.focuserStep || 100,
+                    focuserTemperature: (was.focuserTemperature ?? null),
+                    focuserSupportsSync: !!was.focuserSupportsSync,
+                    focuserSupportsReverse: !!was.focuserSupportsReverse,
+                    focuserSupportsBacklash: !!was.focuserSupportsBacklash,
+                    focuserSettingsOpen: !!was.focuserSettingsOpen,
+                    focuserSyncPosition: was.focuserSyncPosition || 0,
+                    focuserReverse: !!was.focuserReverse,
+                    focuserBacklashEnabled: !!was.focuserBacklashEnabled,
+                    focuserBacklashSteps: was.focuserBacklashSteps || 0,
+                    // Filter-wheel selection + rename runtime state.
                     filterNames: was.filterNames || [], filterPosition: was.filterPosition || 0,
-                    filterMoving: false,
+                    filterMoving: false, filterEditNames: !!was.filterEditNames,
+                    filterNamesEditOpen: false, filterNamesDraft: [], filterNamesBusy: false,
                 };
                 // Kick off vendor discovery for non-INDI drivers.
             }).map(card => {
@@ -30392,7 +30403,30 @@ function ninaApp() {
                 const s = await this.apiGet('/api/imager/' + card.index + '/focuser/status');
                 card.focuserPosition = s.position || 0;
                 card.focuserMoving = !!s.isMoving;
+                card.focuserTemperature = (s.temperature ?? null);
+                card.focuserSupportsSync = !!s.supportsSync;
+                card.focuserSupportsReverse = !!s.supportsReverse;
+                card.focuserSupportsBacklash = !!s.supportsBacklash;
             } catch (e) { /* non-fatal */ }
+        },
+        async syncImagerFocuser(card) {
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/focuser/sync', { position: Number(card.focuserSyncPosition) || 0 });
+                this.toast(this.$t('Focuser synced'), 'ok');
+                this.refreshImagerFocuserStatus(card);
+            } catch (e) { this.toastFail(this.$t('Focuser sync failed'), e); }
+        },
+        async reverseImagerFocuser(card) {
+            try { await this.apiPost('/api/imager/' + card.index + '/focuser/reverse', { reversed: !!card.focuserReverse }); }
+            catch (e) { this.toastFail(this.$t('Focuser reverse failed'), e); }
+        },
+        async applyImagerBacklash(card) {
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/focuser/backlash', {
+                    enabled: !!card.focuserBacklashEnabled, steps: Math.max(0, Number(card.focuserBacklashSteps) || 0)
+                });
+                this.toast(this.$t('Backlash applied'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Backlash apply failed'), e); }
         },
         async jogImagerFocuser(card, steps) {
             card.focuserMoving = true;
@@ -30451,7 +30485,37 @@ function ninaApp() {
                 card.filterNames = s.filterNames || [];
                 card.filterPosition = s.position || 0;
                 card.filterMoving = !!s.isMoving;
+                card.filterEditNames = !!s.editNames;
             } catch (e) { /* non-fatal */ }
+        },
+        openImagerFilterNames(card) {
+            if (!card.filterEditNames) {
+                this.toast(this.$t('This filter wheel driver does not support renaming slots'), 'warn');
+                return;
+            }
+            card.filterNamesDraft = [...(card.filterNames || [])];
+            card.filterNamesEditOpen = true;
+        },
+        cancelImagerFilterNames(card) {
+            card.filterNamesEditOpen = false;
+            card.filterNamesDraft = [];
+        },
+        async saveImagerFilterNames(card) {
+            const slots = (card.filterNames || []).length;
+            if (card.filterNamesDraft.length !== slots) {
+                this.toast(this.$t('Filter name count mismatch'), 'warn');
+                return;
+            }
+            const cleaned = card.filterNamesDraft.map((n, i) => (n || '').trim() || ('Slot ' + (i + 1)));
+            card.filterNamesBusy = true;
+            try {
+                const resp = await this.apiPut('/api/imager/' + card.index + '/filterwheel/names', { names: cleaned });
+                const body = await resp.json().catch(() => ({}));
+                card.filterNames = body?.names ? [...body.names] : cleaned;
+                card.filterNamesEditOpen = false;
+                this.toast(this.$t('Filter names saved'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Saving filter names failed'), e); }
+            finally { card.filterNamesBusy = false; }
         },
         async setImagerFilter(card, position) {
             card.filterMoving = true;

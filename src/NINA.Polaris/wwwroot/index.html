@@ -7266,9 +7266,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                            class="input-sm" style="width:70px">
                                 </label>
                                 <label><span x-text="$t('Bin')"></span>
-                                    <input type="number" x-model.number="card.binning"
-                                           @change="saveImagerDebounced(card)" min="1" max="4"
-                                           class="input-sm" style="width:60px">
+                                    <select class="input-sm" style="width:72px"
+                                            x-model.number="card.binning" @change="saveImagerDebounced(card)">
+                                        <option :value="1">1x1</option>
+                                        <option :value="2">2x2</option>
+                                        <option :value="3">3x3</option>
+                                        <option :value="4">4x4</option>
+                                    </select>
                                 </label>
                             </div>
                             <label style="margin-top:6px;display:flex;gap:8px;align-items:center;font-size:12px">
@@ -7323,11 +7327,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <span class="equip-toggle-thumb"></span>
                                     </label>
                                 </div>
-                                <!-- Position readout + manual jog (In/Out by step, Stop). -->
+                                <!-- Position + temp readout + manual jog (In/Out by step, Stop). -->
                                 <div class="equip-detail" x-show="card.focuserConnected" x-cloak>
                                     <div class="equip-detail-props" style="align-items:center;gap:8px;flex-wrap:wrap">
                                         <span><span x-text="$t('Position')"></span>:
                                             <strong x-text="card.focuserPosition"></strong></span>
+                                        <span x-show="card.focuserTemperature !== null && card.focuserTemperature !== undefined">
+                                            <span x-text="$t('Temp')"></span>:
+                                            <strong x-text="(card.focuserTemperature?.toFixed(1) ?? '--') + ' °C'"></strong></span>
                                         <input type="number" x-model.number="card.focuserStep" min="1"
                                                class="input-sm" style="width:70px"
                                                :title="$t('Step size')">
@@ -7339,6 +7346,39 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                 x-text="$t('Out') + ' ▶'"></button>
                                         <button class="btn btn-sm" @click="abortImagerFocuser(card)"
                                                 x-text="$t('Stop')"></button>
+                                    </div>
+                                    <!-- Driver settings: sync / reverse / backlash (per capabilities). -->
+                                    <div x-show="card.focuserSupportsSync || card.focuserSupportsReverse || card.focuserSupportsBacklash"
+                                         style="margin-top:6px">
+                                        <button class="btn btn-sm"
+                                                @click="card.focuserSettingsOpen = !card.focuserSettingsOpen"
+                                                x-text="(card.focuserSettingsOpen ? '▾ ' : '▸ ') + $t('Driver settings')"></button>
+                                        <div x-show="card.focuserSettingsOpen" x-cloak
+                                             style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
+                                            <div x-show="card.focuserSupportsSync"
+                                                 style="display:flex;gap:6px;align-items:center;font-size:12px;flex-wrap:wrap">
+                                                <span x-text="$t('Sync to position')"></span>
+                                                <input type="number" min="0" class="input-sm" style="width:90px"
+                                                       x-model.number="card.focuserSyncPosition">
+                                                <button class="btn btn-sm" @click="syncImagerFocuser(card)"
+                                                        x-text="$t('Sync')"></button>
+                                            </div>
+                                            <label x-show="card.focuserSupportsReverse"
+                                                   style="display:flex;gap:8px;align-items:center;font-size:12px">
+                                                <input type="checkbox" x-model="card.focuserReverse"
+                                                       @change="reverseImagerFocuser(card)">
+                                                <span x-text="$t('Reverse motor direction')"></span>
+                                            </label>
+                                            <div x-show="card.focuserSupportsBacklash"
+                                                 style="display:flex;gap:6px;align-items:center;font-size:12px;flex-wrap:wrap">
+                                                <input type="checkbox" x-model="card.focuserBacklashEnabled">
+                                                <span x-text="$t('Backlash comp')"></span>
+                                                <input type="number" min="0" max="500" class="input-sm" style="width:70px"
+                                                       x-model.number="card.focuserBacklashSteps">
+                                                <button class="btn btn-sm" @click="applyImagerBacklash(card)"
+                                                        x-text="$t('Apply')"></button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div><!-- /Focus Motor group -->
@@ -7395,6 +7435,33 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <span class="text-muted" style="font-size:11px"
                                               x-show="card.filterMoving" x-text="$t('moving…')"></span>
                                     </label>
+                                    <!-- Rename slots (drivers that support it) + save onto the rig. -->
+                                    <div x-show="card.filterEditNames" style="margin-top:6px">
+                                        <button class="btn btn-sm"
+                                                @click="card.filterNamesEditOpen ? cancelImagerFilterNames(card) : openImagerFilterNames(card)"
+                                                x-text="(card.filterNamesEditOpen ? '▾ ' : '✎ ') + (card.filterNamesEditOpen ? $t('Cancel') : $t('Edit filter names'))"></button>
+                                        <div x-show="card.filterNamesEditOpen" x-cloak
+                                             style="margin-top:6px;display:flex;flex-direction:column;gap:4px">
+                                            <template x-for="(_, idx) in card.filterNamesDraft" :key="'imfn-'+card.index+'-'+idx">
+                                                <div style="display:flex;gap:6px;align-items:center;font-size:12px">
+                                                    <span class="text-muted" style="width:1.6em;text-align:right"
+                                                          x-text="(idx + 1) + ':'"></span>
+                                                    <input type="text" class="input-sm" style="flex:1;min-width:120px"
+                                                           x-model="card.filterNamesDraft[idx]"
+                                                           :disabled="card.filterNamesBusy">
+                                                </div>
+                                            </template>
+                                            <div style="display:flex;gap:6px;margin-top:2px">
+                                                <button class="btn btn-sm" @click="saveImagerFilterNames(card)"
+                                                        :disabled="card.filterNamesBusy">
+                                                    <span x-show="!card.filterNamesBusy" x-text="$t('Save names')"></span>
+                                                    <span x-show="card.filterNamesBusy" x-text="$t('Saving…')"></span>
+                                                </button>
+                                                <button class="btn btn-sm" @click="cancelImagerFilterNames(card)"
+                                                        :disabled="card.filterNamesBusy" x-text="$t('Cancel')"></button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div><!-- /Filter Wheel group -->
                         </div>

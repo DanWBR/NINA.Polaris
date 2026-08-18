@@ -4292,5 +4292,15 @@
   "moving…": "bewegt…",
   "Focuser move failed": "Bewegen des Fokussierers fehlgeschlagen",
   "Focuser abort failed": "Abbrechen des Fokussierers fehlgeschlagen",
-  "Filter change failed": "Filterwechsel fehlgeschlagen"
+  "Filter change failed": "Filterwechsel fehlgeschlagen",
+  "Driver settings": "Treibereinstellungen",
+  "Focuser synced": "Fokussierer synchronisiert",
+  "Focuser sync failed": "Synchronisieren des Fokussierers fehlgeschlagen",
+  "Focuser reverse failed": "Umkehren des Fokussierers fehlgeschlagen",
+  "Backlash applied": "Umkehrspiel angewendet",
+  "Backlash apply failed": "Anwenden des Umkehrspiels fehlgeschlagen",
+  "Edit filter names": "Filternamen bearbeiten",
+  "Filter name count mismatch": "Anzahl der Filternamen stimmt nicht überein",
+  "Filter names saved": "Filternamen gespeichert",
+  "Saving filter names failed": "Speichern der Filternamen fehlgeschlagen"
 }

@@ -201,10 +201,13 @@ public static class ImagerEndpoints {
         group.MapGet("/{index:int}/focuser/status", (EquipmentManager equip, int index) => {
             var foc = equip.GetImagerFocuser(index);
             if (foc == null) return Results.Ok(new { index, connected = false });
+            var caps = foc.Capabilities;
             return Results.Ok(new {
                 index, connected = foc.IsConnected, position = foc.Position,
                 maxPosition = foc.MaxPosition, isMoving = foc.IsMoving,
                 temperature = double.IsNaN(foc.Temperature) ? (double?)null : foc.Temperature,
+                supportsSync = caps.SupportsSync, supportsReverse = caps.SupportsReverse,
+                supportsBacklash = caps.SupportsBacklash, supportsTemperature = caps.SupportsTemperature,
             });
         });
 
@@ -231,6 +234,31 @@ public static class ImagerEndpoints {
             return Results.Ok(new { index, status = "stopped" });
         });
 
+        // Focuser driver settings (opt-in per driver; UI gates on the caps flags).
+        group.MapPost("/{index:int}/focuser/sync", async (EquipmentManager equip, int index, FocuserSyncRequest req) => {
+            var foc = equip.GetImagerFocuser(index);
+            if (foc == null) return Results.BadRequest(new { error = $"No focuser selected for imager {index}." });
+            try { await foc.SyncAsync(req.Position); }
+            catch (NotSupportedException) { return Results.Json(new { error = "Focuser does not support sync" }, statusCode: 501); }
+            return Results.Ok(new { index, synced = req.Position });
+        });
+
+        group.MapPost("/{index:int}/focuser/reverse", async (EquipmentManager equip, int index, FocuserReverseRequest req) => {
+            var foc = equip.GetImagerFocuser(index);
+            if (foc == null) return Results.BadRequest(new { error = $"No focuser selected for imager {index}." });
+            try { await foc.SetReverseAsync(req.Reversed); }
+            catch (NotSupportedException) { return Results.Json(new { error = "Focuser does not support reverse" }, statusCode: 501); }
+            return Results.Ok(new { index, reversed = req.Reversed });
+        });
+
+        group.MapPost("/{index:int}/focuser/backlash", async (EquipmentManager equip, int index, FocuserBacklashRequest req) => {
+            var foc = equip.GetImagerFocuser(index);
+            if (foc == null) return Results.BadRequest(new { error = $"No focuser selected for imager {index}." });
+            try { await foc.SetBacklashAsync(req.Enabled, req.Steps); }
+            catch (NotSupportedException) { return Results.Json(new { error = "Focuser does not support backlash" }, statusCode: 501); }
+            return Results.Ok(new { index, enabled = req.Enabled, steps = req.Steps });
+        });
+
         // ----- Per-imager filter wheel select / connect / disconnect -----
         group.MapPost("/{index:int}/filterwheel/select/{deviceName}", (EquipmentManager equip,
                 ProfileService profiles, int index, string deviceName, string? driver) => {
@@ -244,10 +272,21 @@ public static class ImagerEndpoints {
             }
         });
 
-        group.MapPost("/{index:int}/filterwheel/connect", async (EquipmentManager equip, int index) => {
+        group.MapPost("/{index:int}/filterwheel/connect", async (EquipmentManager equip,
+                ProfileService profiles, int index) => {
             var fw = equip.GetImagerFilterWheel(index);
             if (fw == null) return Results.BadRequest(new { error = $"No filter wheel selected for imager {index}." });
             await DeviceConnectGuard.BoundedAsync("connect", fw.DeviceName, ct => fw.ConnectAsync(ct));
+            // Restore the rig's saved filter names onto the wheel (mirrors the
+            // main wheel's restore) when the driver came back with defaults.
+            try {
+                var saved = profiles.ActiveEquipmentProfile?.Imagers.ElementAtOrDefault(index)?.FilterNames;
+                if (saved is { Length: > 0 } && fw.Capabilities.SupportsEditNames
+                    && fw.FilterNames.Length == saved.Length
+                    && !fw.FilterNames.SequenceEqual(saved)) {
+                    await fw.SetFilterNamesAsync(saved);
+                }
+            } catch { /* non-fatal */ }
             return Results.Ok(new { index, status = "connected", device = fw.DeviceName });
         });
 
@@ -266,6 +305,7 @@ public static class ImagerEndpoints {
                 index, connected = fw.IsConnected, position = fw.Position,
                 isMoving = fw.IsMoving, filterNames = fw.FilterNames,
                 filterCount = fw.FilterCount, currentFilterName = fw.CurrentFilterName,
+                editNames = fw.Capabilities.SupportsEditNames,
             });
         });
 
@@ -275,6 +315,23 @@ public static class ImagerEndpoints {
             if (fw == null) return Results.BadRequest(new { error = $"No filter wheel selected for imager {index}." });
             await fw.SetPositionAsync(req.Position);
             return Results.Ok(new { index, status = "moving", position = req.Position });
+        });
+
+        // Rename the imager's filter slots and persist onto the rig config so
+        // they survive a restart + are re-pushed on reconnect (mirrors PUT
+        // /api/filterwheel/names).
+        group.MapPut("/{index:int}/filterwheel/names", async (EquipmentManager equip,
+                ProfileService profiles, int index, FilterNamesBody req) => {
+            var fw = equip.GetImagerFilterWheel(index);
+            if (fw == null) return Results.BadRequest(new { error = $"No filter wheel selected for imager {index}." });
+            if (req.Names == null || req.Names.Length == 0)
+                return Results.BadRequest(new { error = "names[] required" });
+            try { await fw.SetFilterNamesAsync(req.Names); }
+            catch (NotSupportedException) {
+                return Results.Json(new { error = "This filter wheel does not support renaming" }, statusCode: 501);
+            }
+            PersistImagerDevice(profiles, index, c => c.FilterNames = req.Names);
+            return Results.Ok(new { index, names = fw.FilterNames });
         });
     }
 
@@ -303,4 +360,12 @@ public static class ImagerEndpoints {
 
     /// <summary>Body for POST /api/imager/{index}/filterwheel/position.</summary>
     public record FilterPositionRequest(int Position);
+
+    /// <summary>Body for PUT /api/imager/{index}/filterwheel/names.</summary>
+    public record FilterNamesBody(string[] Names);
+
+    /// <summary>Bodies for the focuser driver-setting endpoints.</summary>
+    public record FocuserSyncRequest(int Position);
+    public record FocuserReverseRequest(bool Reversed);
+    public record FocuserBacklashRequest(bool Enabled, int Steps);
 }

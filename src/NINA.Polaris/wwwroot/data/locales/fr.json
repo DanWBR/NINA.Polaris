@@ -4292,5 +4292,15 @@
   "moving…": "déplacement…",
   "Focuser move failed": "Échec du déplacement du focuser",
   "Focuser abort failed": "Échec de l'arrêt du focuser",
-  "Filter change failed": "Échec du changement de filtre"
+  "Filter change failed": "Échec du changement de filtre",
+  "Driver settings": "Réglages du pilote",
+  "Focuser synced": "Focuser synchronisé",
+  "Focuser sync failed": "Échec de la synchronisation du focuser",
+  "Focuser reverse failed": "Échec de l'inversion du focuser",
+  "Backlash applied": "Rattrapage de jeu appliqué",
+  "Backlash apply failed": "Échec de l'application du rattrapage de jeu",
+  "Edit filter names": "Modifier les noms de filtres",
+  "Filter name count mismatch": "Le nombre de noms de filtre ne correspond pas",
+  "Filter names saved": "Noms de filtres enregistrés",
+  "Saving filter names failed": "Échec de l'enregistrement des noms de filtres"
 }
