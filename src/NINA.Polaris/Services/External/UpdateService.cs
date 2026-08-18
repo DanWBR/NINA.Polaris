@@ -43,16 +43,26 @@ public class UpdateService {
 
     private readonly ILogger<UpdateService> _logger;
     private readonly IHttpClientFactory _httpFactory;
+    private readonly ProfileService _profiles;
 
     private readonly object _cacheLock = new();
     private UpdateCheckResult? _cached;
     private DateTime _cachedAtUtc = DateTime.MinValue;
+    private string _cachedChannel = "stable";
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(30);
 
-    public UpdateService(ILogger<UpdateService> logger, IHttpClientFactory httpFactory) {
+    public UpdateService(ILogger<UpdateService> logger, IHttpClientFactory httpFactory,
+            ProfileService profiles) {
         _logger = logger;
         _httpFactory = httpFactory;
+        _profiles = profiles;
     }
+
+    /// <summary>The active update channel: "preview" opts into pre-releases,
+    /// anything else is the default "stable". Global (UserProfile), not per-rig.</summary>
+    private string Channel =>
+        string.Equals(_profiles.Active.UpdateChannel?.Trim(), "preview", StringComparison.OrdinalIgnoreCase)
+            ? "preview" : "stable";
 
     /// <summary>True only on a Linux .deb install (systemd + /opt/polaris). The
     /// self-update flow assumes the packaged layout + service.</summary>
@@ -98,20 +108,33 @@ public class UpdateService {
         if (!IsSupported)
             return new UpdateCheckResult { Supported = false, CurrentVersion = CurrentVersionShort };
 
+        var channel = Channel;
+        bool preview = channel == "preview";
+
         lock (_cacheLock) {
-            if (!force && _cached != null && DateTime.UtcNow - _cachedAtUtc < CacheTtl)
+            if (!force && _cached != null && _cachedChannel == channel
+                    && DateTime.UtcNow - _cachedAtUtc < CacheTtl)
                 return _cached;
         }
 
         var result = new UpdateCheckResult {
             Supported = true,
+            Channel = channel,
             CurrentVersion = CurrentVersionShort,
             Arch = DpkgArch
         };
         try {
             var http = _httpFactory.CreateClient();
             http.Timeout = TimeSpan.FromSeconds(15);
-            using var req = new HttpRequestMessage(HttpMethod.Get, LatestReleaseApi);
+            // Stable = GitHub's "latest" (which excludes pre-releases). Preview =
+            // the releases LIST, from which we take the newest build that has an
+            // asset for this arch, INCLUDING pre-releases (GitHub lists newest
+            // first). So a stable host never sees a pre-release, and a preview
+            // host always gets the absolute newest build.
+            var apiUrl = preview
+                ? $"https://api.github.com/repos/{Repo}/releases?per_page=15"
+                : LatestReleaseApi;
+            using var req = new HttpRequestMessage(HttpMethod.Get, apiUrl);
             // GitHub requires a User-Agent; the versioned media type pins the API.
             req.Headers.UserAgent.ParseAdd("NINA.Polaris-Updater");
             req.Headers.Accept.ParseAdd("application/vnd.github+json");
@@ -121,7 +144,29 @@ public class UpdateService {
                 return CacheAndReturn(result);
             }
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
-            var root = doc.RootElement;
+
+            JsonElement root;
+            if (preview) {
+                if (doc.RootElement.ValueKind != JsonValueKind.Array) {
+                    result.Error = "Unexpected releases payload from GitHub";
+                    return CacheAndReturn(result);
+                }
+                JsonElement? picked = null;
+                foreach (var rel in doc.RootElement.EnumerateArray()) {
+                    var (_, aUrl, _) = PickArchAsset(rel);
+                    if (!string.IsNullOrEmpty(aUrl)) { picked = rel.Clone(); break; }
+                }
+                if (picked == null) {
+                    result.Error = $"No preview build for {DpkgArch} yet";
+                    return CacheAndReturn(result);
+                }
+                root = picked.Value;
+            } else {
+                root = doc.RootElement;
+            }
+
+            result.Prerelease = root.TryGetProperty("prerelease", out var prE)
+                                && prE.ValueKind == JsonValueKind.True;
 
             var tag = root.TryGetProperty("tag_name", out var t) ? t.GetString() : null;
             result.LatestVersion = NormalizeTag(tag);
@@ -161,7 +206,7 @@ public class UpdateService {
     }
 
     private UpdateCheckResult CacheAndReturn(UpdateCheckResult r) {
-        lock (_cacheLock) { _cached = r; _cachedAtUtc = DateTime.UtcNow; }
+        lock (_cacheLock) { _cached = r; _cachedAtUtc = DateTime.UtcNow; _cachedChannel = r.Channel; }
         return r;
     }
 
@@ -641,6 +686,12 @@ public class UpdateLocalInfo {
 public class UpdateCheckResult {
     public bool Supported { get; set; }
     public bool UpdateAvailable { get; set; }
+    /// <summary>Which update channel this check used: "stable" (GitHub latest
+    /// release) or "preview" (newest release including pre-releases).</summary>
+    public string Channel { get; set; } = "stable";
+    /// <summary>True when the offered release is a GitHub pre-release (only the
+    /// preview channel ever surfaces these).</summary>
+    public bool Prerelease { get; set; }
     public string CurrentVersion { get; set; } = "";
     public string? LatestVersion { get; set; }
     public string? ReleaseName { get; set; }

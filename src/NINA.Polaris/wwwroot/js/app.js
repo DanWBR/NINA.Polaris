@@ -1051,6 +1051,8 @@ function ninaApp() {
             // Boot-time auto-connect, INDI + Alpaca discovery +
             // active-rig device bind. Pushed by HardwareAutoConnectService.
             autoConnectOnStartup: false,
+            // Self-update channel: 'stable' or 'preview' (early-access).
+            updateChannel: 'stable',
             // External tools, see ExternalTools section in Settings.
             // Empty = auto-detect (BinaryLocator on the server picks
             // the right path for the host OS).
@@ -11461,6 +11463,7 @@ function ninaApp() {
                     this.settings.imageNamePattern = data.imageNamePattern || '';
                     this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
                     this.settings.autoConnectOnStartup = !!data.autoConnectOnStartup;
+                    this.settings.updateChannel = data.updateChannel === 'preview' ? 'preview' : 'stable';
                     // DBGLOG-9: hydrate the persist-to-disk toggle (default on).
                     this.settings.logToDisk = data.logToDisk !== false;
                     this.settings.saveGuideLogs = data.saveGuideLogs !== false;
@@ -23390,6 +23393,7 @@ function ninaApp() {
                         imageNamePattern: this.settings.imageNamePattern,
                         preferAdvancedSequencer: this.settings.preferAdvancedSequencer,
                         autoConnectOnStartup: this.settings.autoConnectOnStartup,
+                        updateChannel: this.settings.updateChannel,
                         // DBGLOG-9: opt-in disk persistence.
                         logToDisk: this.settings.logToDisk,
                         saveGuideLogs: this.settings.saveGuideLogs,

@@ -365,6 +365,12 @@ jobs:
             dist/*.apk
           fail_on_unmatched_files: true
           generate_release_notes: true
+          # Insider/Preview channel: a tag carrying '-preview' (e.g.
+          # v0.99.0-preview1) publishes as a GitHub pre-release, which the
+          # /releases/latest API excludes — so Stable-channel hosts never see it
+          # and only Preview-channel hosts pick it up. A plain v0.99.0 tag stays
+          # a normal (latest) release.
+          prerelease: ${{ contains(github.ref, '-preview') }}
           body: |
             ## Install
 

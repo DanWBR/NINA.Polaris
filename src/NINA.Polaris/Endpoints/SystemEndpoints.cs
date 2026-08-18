@@ -254,6 +254,10 @@ public static class SystemEndpoints {
                 p.IndiHost = update.IndiHost;
                 p.IndiPort = update.IndiPort;
                 p.AutoConnectOnStartup = update.AutoConnectOnStartup;
+                // Self-update channel: only "preview" or "stable" (anything else
+                // normalises to stable so a bad value can't strand a host).
+                p.UpdateChannel = string.Equals(update.UpdateChannel?.Trim(), "preview",
+                    StringComparison.OrdinalIgnoreCase) ? "preview" : "stable";
                 p.AstapPath = update.AstapPath;
                 p.SolveToleranceArcsec = update.SolveToleranceArcsec;
                 // The Studio root (ImageOutputDir) is set through its own
