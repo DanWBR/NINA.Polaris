@@ -3661,5 +3661,6 @@
   "Filter wheel connection failed": "Filter wheel connection failed",
   "Filter wheel disconnect failed": "Filter wheel disconnect failed",
   "Capture frames during LIVE / AUTORUN": "Capture frames during LIVE / AUTORUN",
-  "Capturing:": "Capturing:"
+  "Capturing:": "Capturing:",
+  "Resolution": "Resolution"
 }

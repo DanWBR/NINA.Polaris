@@ -4286,5 +4286,6 @@
   "Filter wheel connection failed": "Falha na conexão da roda de filtros",
   "Filter wheel disconnect failed": "Falha ao desconectar roda de filtros",
   "Capture frames during LIVE / AUTORUN": "Capturar quadros durante LIVE / AUTORUN",
-  "Capturing:": "Capturando:"
+  "Capturing:": "Capturando:",
+  "Resolution": "Resolução"
 }

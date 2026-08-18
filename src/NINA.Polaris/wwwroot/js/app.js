@@ -30287,6 +30287,8 @@ function ninaApp() {
                     binning: cfg.binning || 1,
                     enabled: !!cfg.enabled,
                     running: !!was.running, frameCount: was.frameCount || 0, lastError: was.lastError || '',
+                    maxX: was.maxX || 0, maxY: was.maxY || 0,
+                    temperature: (was.temperature ?? null),
                 };
                 // Kick off vendor discovery for non-INDI drivers.
             }).map(card => {
@@ -30333,13 +30335,25 @@ function ninaApp() {
                 await this.apiPost('/api/imager/' + card.index + '/camera/select/' + encodeURIComponent(card.camera) + qs);
                 await this.apiPost('/api/imager/' + card.index + '/camera/connect');
                 card.cameraConnected = true;
+                this.refreshImagerCameraStatus(card);
                 this.toast(this.$t('Camera connected') + ': ' + card.camera, 'ok');
             } catch (e) { this.toastFail(this.$t('Camera connection failed'), e); }
+        },
+        // Pull the connected camera's sensor resolution + temperature so the card
+        // can show them (the WS multiImager block only carries capture counters).
+        async refreshImagerCameraStatus(card) {
+            try {
+                const s = await this.apiGet('/api/imager/' + card.index + '/camera/status');
+                card.maxX = s.maxX || 0;
+                card.maxY = s.maxY || 0;
+                card.temperature = (s.temperature ?? null);
+            } catch (e) { /* non-fatal */ }
         },
         async disconnectImagerCamera(card) {
             try {
                 await this.apiPost('/api/imager/' + card.index + '/camera/disconnect');
                 card.cameraConnected = false;
+                card.maxX = 0; card.maxY = 0; card.temperature = null;
                 this.toast(this.$t('Camera disconnected'), 'ok');
             } catch (e) { this.toastFail(this.$t('Camera disconnect failed'), e); }
         },

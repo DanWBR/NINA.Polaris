@@ -7236,25 +7236,36 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <span class="equip-toggle-thumb"></span>
                                 </label>
                             </div>
+                            <!-- Connected-camera readout: sensor resolution + temp. -->
+                            <div class="equip-detail" x-show="card.cameraConnected" x-cloak>
+                                <div class="equip-detail-name" x-text="card.camera"></div>
+                                <div class="equip-detail-props">
+                                    <span x-show="card.maxX > 0"><span x-text="$t('Resolution')"></span>:
+                                        <strong x-text="card.maxX + ' × ' + card.maxY"></strong></span>
+                                    <span x-show="card.temperature !== null && card.temperature !== undefined">
+                                        <span x-text="$t('Temp')"></span>:
+                                        <strong x-text="(card.temperature?.toFixed(1) ?? '--') + ' °C'"></strong></span>
+                                </div>
+                            </div>
                             <div class="equip-meta-row" style="margin-top:8px">
-                                <label x-text="$t('Focal length (mm)')">
+                                <label><span x-text="$t('Focal length (mm)')"></span>
                                     <input type="number" x-model.number="card.focalLengthMm"
                                            @change="saveImagerDebounced(card)" step="10" min="0"
                                            class="input-sm" style="width:90px">
                                 </label>
-                                <label x-text="$t('Exposure (s)')">
+                                <label><span x-text="$t('Exposure (s)')"></span>
                                     <input type="number" x-model.number="card.exposureSec"
                                            @change="saveImagerDebounced(card)" step="0.5" min="0.05"
                                            class="input-sm" style="width:80px">
                                 </label>
                             </div>
                             <div class="equip-meta-row">
-                                <label x-text="$t('Gain')">
+                                <label><span x-text="$t('Gain')"></span>
                                     <input type="number" x-model.number="card.gain"
                                            @change="saveImagerDebounced(card)" min="0"
                                            class="input-sm" style="width:70px">
                                 </label>
-                                <label x-text="$t('Bin')">
+                                <label><span x-text="$t('Bin')"></span>
                                     <input type="number" x-model.number="card.binning"
                                            @change="saveImagerDebounced(card)" min="1" max="4"
                                            class="input-sm" style="width:60px">
