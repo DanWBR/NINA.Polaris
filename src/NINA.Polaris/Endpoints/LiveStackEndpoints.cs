@@ -266,6 +266,16 @@ public static class LiveStackEndpoints {
             return Results.Ok(new { saved = true, enabled = req.Enabled, kappa = k });
         });
 
+        // Per-sub cosmetic correction (fixed hot/cold pixel removal). Per-rig,
+        // read live by the stacker each frame, so it takes effect immediately
+        // (no Reset needed) and complements sigma rejection.
+        group.MapPut("/cosmetic", (CosmeticRequest req, ProfileService profiles) => {
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig != null)
+                profiles.UpdateEquipmentProfile(rig.Id, r => r.LiveStackCosmetic = req.Enabled);
+            return Results.Ok(new { saved = true, enabled = req.Enabled });
+        });
+
         // SNR-3: session-only target SNR override. The active rig's
         // TargetSnr is the persisted default; the LIVE tab can push
         // a different number here for one session without touching
@@ -375,6 +385,9 @@ public static class LiveStackEndpoints {
     /// <summary>Body of PUT /api/livestack/sigma-rejection. Mirrors the LIVE
     /// tab kappa-sigma toggle + threshold. Kappa null keeps the default (3).</summary>
     public record SigmaRejectionRequest(bool Enabled, double? Kappa = null);
+
+    /// <summary>Body of PUT /api/livestack/cosmetic: per-sub hot/cold pixel removal.</summary>
+    public record CosmeticRequest(bool Enabled);
 
     /// <summary>Body of PUT /api/livestack/max-duration. 0 =
     /// unlimited. The LIVE tab posts the user's "stack for N
