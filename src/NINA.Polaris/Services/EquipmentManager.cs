@@ -589,7 +589,17 @@ public class EquipmentManager : IDisposable {
         // selected with, so the dropdown's :selected match and the saved rig
         // selection still line up. INDI/Alpaca/sim don't open a USB handle, so
         // they fall through to their normal (non-destructive) discovery.
-        if (driver != "indi" && driver != "alpaca" && driver != "sim") {
+        //
+        // ascom-com is EXCLUDED too: its discovery reads the Windows registry
+        // (DiscoverAscomDrivers, no COM instantiation, no USB), so it is
+        // non-destructive. Leaving it in the guard meant that with the MAIN
+        // camera connected as a COM driver, every COM discovery — including the
+        // aux and extra-imager cards — short-circuited to only that one
+        // connected camera instead of the full registered-driver list, so a
+        // second imager could not pick a different ASCOM COM camera. The
+        // connected camera still appears via the registry, so its saved
+        // selection still lines up.
+        if (driver != "indi" && driver != "alpaca" && driver != "sim" && driver != "ascom-com") {
             var live = new List<DiscoveredCamera>();
             if (Camera != null && Camera.IsConnected && CameraDriver == driver
                 && !string.IsNullOrEmpty(CameraDeviceId)) {
