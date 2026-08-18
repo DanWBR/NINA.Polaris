@@ -1324,6 +1324,12 @@ function ninaApp() {
         auxSolvedFrame: null,
         auxCapture: { running: false, frameCount: 0, noOutputDir: false },
         _auxSaveTimer: null,
+        // STAGE2: additional imaging cameras (slot index 2+), each with its own
+        // camera + focuser + filter wheel + capture settings. Hydrated from
+        // rig.extraImagers in _applyRigToChoices; runtime frame counts merged from
+        // the WS "multiImager" block. Each card carries a debounce timer.
+        extraImagers: [],
+        _imagerSaveTimers: {},
         // FOCUS tab source switches: which camera the manual-focus loop
         // captures from, and which focuser the manual jog drives.
         focusCameraSource: 'main',
@@ -21501,6 +21507,9 @@ function ninaApp() {
             this.aux.gain = rig.auxGain || 0;
             this.aux.binning = rig.auxBinning || 1;
             this.aux.enabled = !!rig.auxEnabled;
+            // STAGE2: additional imaging cameras. Preserve runtime connected flags
+            // + frame counts already merged from the WS by matching on slot index.
+            this._hydrateExtraImagers(rig.extraImagers || []);
             this.nativeRaAlgorithm = rig.nativeRaAlgorithm || 'hysteresis';
             // Predictive is RA-only now (worm-gear PE has no Dec analogue), so a
             // rig saved with it on Dec reads back as the default, matching what
@@ -30247,6 +30256,175 @@ function ninaApp() {
                 auxBinning: Math.max(1, Number(this.aux.binning) || 1),
                 auxEnabled: !!this.aux.enabled
             });
+        },
+
+        // ============ STAGE2: additional imaging cameras (slot index 2+) ============
+        // Each card owns a camera + optional focuser + filter wheel and its own
+        // capture settings, persisted in rig.extraImagers and driven through the
+        // /api/imager/{index} endpoints. Frame counts arrive on the WS
+        // "multiImager" block and are merged onto the cards by slot index.
+
+        // Rebuild the card list from the rig's stored config, preserving any live
+        // runtime flags already merged from the WS so a rig re-hydrate doesn't
+        // blank a running camera's counters.
+        _hydrateExtraImagers(list) {
+            const prev = {};
+            for (const c of this.extraImagers) prev[c.index] = c;
+            this.extraImagers = (list || []).map((cfg, i) => {
+                const index = i + 2;
+                const was = prev[index] || {};
+                return {
+                    index,
+                    camera: cfg.deviceId || '', cameraDriver: cfg.driver || 'indi',
+                    cameraConnected: !!was.cameraConnected, cameraVendorDevices: was.cameraVendorDevices || [],
+                    focuser: cfg.focuser || '', focuserDriver: cfg.focuserDriver || 'indi',
+                    focuserConnected: !!was.focuserConnected, focuserVendorDevices: was.focuserVendorDevices || [],
+                    filterWheel: cfg.filterWheel || '', filterWheelDriver: cfg.filterWheelDriver || 'indi',
+                    filterWheelConnected: !!was.filterWheelConnected, filterWheelVendorDevices: was.filterWheelVendorDevices || [],
+                    focalLengthMm: cfg.focalLengthMm || 200,
+                    exposureSec: (cfg.exposureMs || 5000) / 1000,
+                    gain: cfg.gain || 0,
+                    binning: cfg.binning || 1,
+                    enabled: !!cfg.enabled,
+                    running: !!was.running, frameCount: was.frameCount || 0, lastError: was.lastError || '',
+                };
+                // Kick off vendor discovery for non-INDI drivers.
+            }).map(card => {
+                if (card.cameraDriver !== 'indi') { try { this.detectImagerCameras(card); } catch (e) {} }
+                if (card.focuserDriver !== 'indi') { try { this.detectImagerFocusers(card); } catch (e) {} }
+                if (card.filterWheelDriver !== 'indi') { try { this.detectImagerFilterWheels(card); } catch (e) {} }
+                return card;
+            });
+        },
+
+        async addImager() {
+            try {
+                const r = await this.apiPostJson('/api/imager/add');
+                await this.loadRigs();   // re-hydrate cards from the persisted config
+                this.toast(this.$t('Imaging camera added'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Failed to add imaging camera'), e); }
+        },
+        async removeImager(card) {
+            if (!confirm(this.$t('Remove this imaging camera and its settings?'))) return;
+            try {
+                await this.apiFetch('/api/imager/' + card.index, { method: 'DELETE' });
+                await this.loadRigs();   // indices shift down; re-hydrate from scratch
+                this.toast(this.$t('Imaging camera removed'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Failed to remove imaging camera'), e); }
+        },
+
+        // ----- Camera on an extra imager -----
+        setImagerCameraDriver(card, driver) {
+            card.cameraDriver = driver || 'indi';
+            card.cameraVendorDevices = []; card.camera = '';
+            if (card.cameraDriver !== 'indi') this.detectImagerCameras(card);
+        },
+        async detectImagerCameras(card) {
+            try {
+                card.cameraVendorDevices = await this.apiGet(
+                    '/api/camera/discover?driver=' + encodeURIComponent(card.cameraDriver)) || [];
+            } catch (e) { card.cameraVendorDevices = []; }
+        },
+        async connectImagerCamera(card) {
+            if (!card.camera) { this.toast(this.$t('Select a camera first'), 'warn'); return; }
+            try {
+                const qs = card.cameraDriver && card.cameraDriver !== 'indi'
+                    ? '?driver=' + encodeURIComponent(card.cameraDriver) : '';
+                await this.apiPost('/api/imager/' + card.index + '/camera/select/' + encodeURIComponent(card.camera) + qs);
+                await this.apiPost('/api/imager/' + card.index + '/camera/connect');
+                card.cameraConnected = true;
+                this.toast(this.$t('Camera connected') + ': ' + card.camera, 'ok');
+            } catch (e) { this.toastFail(this.$t('Camera connection failed'), e); }
+        },
+        async disconnectImagerCamera(card) {
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/camera/disconnect');
+                card.cameraConnected = false;
+                this.toast(this.$t('Camera disconnected'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Camera disconnect failed'), e); }
+        },
+
+        // ----- Focuser on an extra imager -----
+        setImagerFocuserDriver(card, driver) {
+            card.focuserDriver = driver || 'indi';
+            card.focuserVendorDevices = []; card.focuser = '';
+            if (card.focuserDriver !== 'indi') this.detectImagerFocusers(card);
+        },
+        async detectImagerFocusers(card) {
+            try {
+                card.focuserVendorDevices = await this.apiGet(
+                    '/api/focuser/discover?driver=' + encodeURIComponent(card.focuserDriver)) || [];
+            } catch (e) { card.focuserVendorDevices = []; }
+        },
+        async connectImagerFocuser(card) {
+            if (!card.focuser) { this.toast(this.$t('Select a focuser first'), 'warn'); return; }
+            try {
+                const qs = card.focuserDriver && card.focuserDriver !== 'indi'
+                    ? '?driver=' + encodeURIComponent(card.focuserDriver) : '';
+                await this.apiPost('/api/imager/' + card.index + '/focuser/select/' + encodeURIComponent(card.focuser) + qs);
+                await this.apiPost('/api/imager/' + card.index + '/focuser/connect');
+                card.focuserConnected = true;
+                this.toast(this.$t('Focuser connected'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Focuser connection failed'), e); }
+        },
+        async disconnectImagerFocuser(card) {
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/focuser/disconnect');
+                card.focuserConnected = false;
+                this.toast(this.$t('Focuser disconnected'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Focuser disconnect failed'), e); }
+        },
+
+        // ----- Filter wheel on an extra imager -----
+        setImagerFilterWheelDriver(card, driver) {
+            card.filterWheelDriver = driver || 'indi';
+            card.filterWheelVendorDevices = []; card.filterWheel = '';
+            if (card.filterWheelDriver !== 'indi') this.detectImagerFilterWheels(card);
+        },
+        async detectImagerFilterWheels(card) {
+            try {
+                card.filterWheelVendorDevices = await this.apiGet(
+                    '/api/filterwheel/discover?driver=' + encodeURIComponent(card.filterWheelDriver)) || [];
+            } catch (e) { card.filterWheelVendorDevices = []; }
+        },
+        async connectImagerFilterWheel(card) {
+            if (!card.filterWheel) { this.toast(this.$t('Select a filter wheel first'), 'warn'); return; }
+            try {
+                const qs = card.filterWheelDriver && card.filterWheelDriver !== 'indi'
+                    ? '?driver=' + encodeURIComponent(card.filterWheelDriver) : '';
+                await this.apiPost('/api/imager/' + card.index + '/filterwheel/select/' + encodeURIComponent(card.filterWheel) + qs);
+                await this.apiPost('/api/imager/' + card.index + '/filterwheel/connect');
+                card.filterWheelConnected = true;
+                this.toast(this.$t('Filter wheel connected'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Filter wheel connection failed'), e); }
+        },
+        async disconnectImagerFilterWheel(card) {
+            try {
+                await this.apiPost('/api/imager/' + card.index + '/filterwheel/disconnect');
+                card.filterWheelConnected = false;
+                this.toast(this.$t('Filter wheel disconnected'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Filter wheel disconnect failed'), e); }
+        },
+
+        // ----- Capture config (enable toggle + optics/exposure/gain/binning) -----
+        async toggleImagerEnabled(card) {
+            card.enabled = !!card.enabled;
+            await this.saveImager(card);
+        },
+        saveImagerDebounced(card) {
+            clearTimeout(this._imagerSaveTimers[card.index]);
+            this._imagerSaveTimers[card.index] = setTimeout(() => this.saveImager(card), 600);
+        },
+        async saveImager(card) {
+            try {
+                await this.apiPut('/api/imager/' + card.index + '/config', {
+                    enabled: !!card.enabled,
+                    exposureMs: Math.max(50, Math.round((Number(card.exposureSec) || 0) * 1000)),
+                    gain: Math.max(0, Number(card.gain) || 0),
+                    binning: Math.max(1, Math.min(4, Number(card.binning) || 1)),
+                    focalLengthMm: Math.max(0, Number(card.focalLengthMm) || 0),
+                });
+            } catch (e) { this.toastFail(this.$t('Failed to save imaging camera'), e); }
         },
 
         // Compute the currently-selected driver descriptor for UI
@@ -41462,6 +41640,19 @@ function ninaApp() {
                 this.auxCapture.running = !!msg.auxCapture.running;
                 this.auxCapture.frameCount = msg.auxCapture.frameCount || 0;
                 this.auxCapture.noOutputDir = !!msg.auxCapture.noOutputDir;
+            }
+            // STAGE2: per-extra-imager capture status (frame counts + last error),
+            // matched onto the cards by slot index. Absent entry => that loop
+            // isn't running, so reset its live counters.
+            if (Array.isArray(msg.multiImager)) {
+                const byIndex = {};
+                for (const s of msg.multiImager) byIndex[s.index] = s;
+                for (const card of this.extraImagers) {
+                    const s = byIndex[card.index];
+                    card.running = !!s;
+                    card.frameCount = s ? (s.frameCount || 0) : 0;
+                    card.lastError = s ? (s.lastError || '') : '';
+                }
             }
             if (eq.telescope) {
                 const prevRa = this.mount.ra, prevDec = this.mount.dec;

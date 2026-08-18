@@ -103,4 +103,34 @@ public class EquipmentManagerImagerTests {
         Assert.Throws<System.NotSupportedException>(
             () => equip.SelectImagerFilterWheel(1, "indi", "EFW Aux"));
     }
+
+    [Test]
+    public void RemoveImager_DropsSlotAndShiftsHigherOnesDown() {
+        var equip = Make();
+        equip.SelectImager(2, "indi", "CCD A");
+        var camB = equip.SelectImager(3, "indi", "CCD B");
+        Assert.That(equip.ExtraImagerCount, Is.EqualTo(2));
+
+        equip.RemoveImager(2);   // remove the first extra; B shifts into slot 2
+
+        Assert.That(equip.ExtraImagerCount, Is.EqualTo(1));
+        Assert.That(equip.GetImager(2), Is.SameAs(camB));
+        Assert.That(equip.EnumerateImagers().Count, Is.EqualTo(3));   // main+aux+B
+        Assert.That(equip.EnumerateImagers()[2].DeviceId, Is.EqualTo("CCD B"));
+    }
+
+    [Test]
+    public void RemoveImager_MainOrAuxSlot_Throws() {
+        var equip = Make();
+        Assert.Throws<System.InvalidOperationException>(() => equip.RemoveImager(0));
+        Assert.Throws<System.InvalidOperationException>(() => equip.RemoveImager(1));
+    }
+
+    [Test]
+    public void RemoveImager_OutOfRange_IsNoOp() {
+        var equip = Make();
+        equip.SelectImager(2, "indi", "CCD A");
+        Assert.DoesNotThrow(() => equip.RemoveImager(9));
+        Assert.That(equip.ExtraImagerCount, Is.EqualTo(1));
+    }
 }
