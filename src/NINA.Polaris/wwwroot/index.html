@@ -4393,29 +4393,30 @@
                           x-text="$t('Multi-camera sync')"></span>
                 </div>
 
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;align-items:start;max-width:1120px">
                 <!-- Global config -->
-                <div class="settings-section" style="max-width:600px;margin-bottom:16px">
+                <div class="settings-section">
                     <h3><span class="settings-card-icon">&#x1F3AF;</span><span x-text="$t('Global dither')"></span></h3>
                     <div style="padding:12px 14px">
                         <p class="text-muted" style="font-size:12px;margin:0 0 14px"
                            x-text="$t('One dither configuration shared by LIVE, AUTORUN, the Advanced Sequencer and every camera on the mount.')"></p>
 
-                        <div style="display:grid;grid-template-columns:1fr;max-width:340px">
-                            <label class="checkbox-label" style="display:flex;align-items:center;gap:10px;padding-bottom:14px">
+                        <div style="display:grid;grid-template-columns:1fr;gap:12px;max-width:340px">
+                            <label class="checkbox-label" style="display:flex;align-items:center;gap:10px">
                                 <input type="checkbox" x-model="dither.enabled" @change="saveDither()">
                                 <span x-text="$t('Enable dithering')"></span>
                             </label>
-                            <label style="display:flex;flex-direction:column;gap:4px;padding-bottom:14px">
+                            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
                                 <span x-text="$t('Amount (px)')"></span>
-                                <input type="number" class="input" x-model.number="dither.pixels"
+                                <input type="number" class="input" style="width:110px;flex:none" x-model.number="dither.pixels"
                                        @change="saveDitherDebounced()" step="0.5" min="0.1">
                             </label>
-                            <label style="display:flex;flex-direction:column;gap:4px;padding-bottom:14px">
+                            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
                                 <span x-text="$t('Every N frames')"></span>
-                                <input type="number" class="input" x-model.number="dither.everyNFrames"
+                                <input type="number" class="input" style="width:110px;flex:none" x-model.number="dither.everyNFrames"
                                        @change="saveDitherDebounced()" min="1">
                             </label>
-                            <label class="checkbox-label" style="display:flex;align-items:center;gap:10px;padding-bottom:6px">
+                            <label class="checkbox-label" style="display:flex;align-items:center;gap:10px">
                                 <input type="checkbox" x-model="dither.raOnly" @change="saveDither()">
                                 <span x-text="$t('RA only (skip Dec)')"></span>
                             </label>
@@ -4425,28 +4426,30 @@
                                     font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--accent)"
                              x-text="$t('Settling')"></div>
 
-                        <div style="display:grid;grid-template-columns:1fr;max-width:340px">
-                            <label style="display:flex;flex-direction:column;gap:4px;padding-bottom:14px">
+                        <div style="display:grid;grid-template-columns:1fr;gap:12px;max-width:340px">
+                            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
                                 <span x-text="$t('Settle within (px)')"></span>
-                                <input type="number" class="input" x-model.number="dither.settlePixels"
+                                <input type="number" class="input" style="width:110px;flex:none" x-model.number="dither.settlePixels"
                                        @change="saveDitherDebounced()" step="0.5" min="0.1">
                             </label>
-                            <label style="display:flex;flex-direction:column;gap:4px;padding-bottom:14px">
+                            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
                                 <span x-text="$t('Settle time (s)')"></span>
-                                <input type="number" class="input" x-model.number="dither.settleTime"
+                                <input type="number" class="input" style="width:110px;flex:none" x-model.number="dither.settleTime"
                                        @change="saveDitherDebounced()" min="0">
                             </label>
-                            <label style="display:flex;flex-direction:column;gap:4px">
+                            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px">
                                 <span x-text="$t('Timeout (s)')"></span>
-                                <input type="number" class="input" x-model.number="dither.settleTimeout"
+                                <input type="number" class="input" style="width:110px;flex:none" x-model.number="dither.settleTimeout"
                                        @change="saveDitherDebounced()" min="1">
                             </label>
                         </div>
                     </div>
                 </div>
 
+                <!-- Manual + Technical share the right column -->
+                <div style="display:flex;flex-direction:column;gap:16px">
                 <!-- Manual one-shot -->
-                <div class="settings-section" style="max-width:600px;margin-bottom:16px">
+                <div class="settings-section">
                     <h3><span class="settings-card-icon">&#x270B;</span><span x-text="$t('Manual dither')"></span></h3>
                     <div style="padding:12px 14px">
                         <p class="text-muted" style="font-size:12px;margin:0 0 12px"
@@ -4463,7 +4466,7 @@
                 </div>
 
                 <!-- Technical / live statistics -->
-                <div class="settings-section" style="max-width:600px">
+                <div class="settings-section">
                     <h3><span class="settings-card-icon">&#x1F4CA;</span><span x-text="$t('Technical')"></span></h3>
                     <div style="padding:12px 14px">
                         <div class="dither-tech-grid"
@@ -4514,6 +4517,8 @@
                         </div>
                     </div>
                 </div>
+                </div><!-- /right column -->
+                </div><!-- /dither 2-column grid -->
             </div>
 
             <!-- GUIDER (PHD2) -->
