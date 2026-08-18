@@ -30320,8 +30320,12 @@ function ninaApp() {
                     binning: cfg.binning || 1,
                     enabled: !!cfg.enabled,
                     running: !!was.running, frameCount: was.frameCount || 0, lastError: was.lastError || '',
-                    maxX: was.maxX || 0, maxY: was.maxY || 0,
-                    pixelSizeUm: cfg.pixelSizeUm || was.pixelSizeUm || 0,
+                    // Sensor geometry: prefer the live runtime value, fall back to
+                    // the persisted config so the SKY FOV rect still draws for a
+                    // configured-but-offline imager (mirrors the old aux fallback).
+                    maxX: was.maxX || cfg.maxX || 0, maxY: was.maxY || cfg.maxY || 0,
+                    bitDepth: was.bitDepth || cfg.bitDepth || 0,
+                    pixelSizeUm: was.pixelSizeUm || cfg.pixelSizeUm || 0,
                     temperature: (was.temperature ?? null),
                     // Focuser jog + driver-settings runtime state.
                     focuserPosition: was.focuserPosition || 0, focuserMoving: false,
@@ -30400,10 +30404,26 @@ function ninaApp() {
         async refreshImagerCameraStatus(card) {
             try {
                 const s = await this.apiGet('/api/imager/' + card.index + '/camera/status');
-                card.maxX = s.maxX || 0;
-                card.maxY = s.maxY || 0;
+                // Keep last-known geometry when the driver reports 0 (disconnected
+                // or not-yet-reporting) so the SKY FOV rect doesn't blink out.
+                if (s.maxX > 0) card.maxX = s.maxX;
+                if (s.maxY > 0) card.maxY = s.maxY;
                 if (s.pixelSize > 0) card.pixelSizeUm = s.pixelSize;
+                if (s.bitDepth > 0) card.bitDepth = s.bitDepth;
                 card.temperature = (s.temperature ?? null);
+                // Persist the reported geometry so it survives a page reload and a
+                // disconnect (the FOV rect and the DSLR CCD_INFO bootstrap read it).
+                if (s.maxX > 0 && s.maxY > 0 &&
+                    (card._savedMaxX !== s.maxX || card._savedMaxY !== s.maxY ||
+                     card._savedPx !== card.pixelSizeUm)) {
+                    card._savedMaxX = s.maxX; card._savedMaxY = s.maxY;
+                    card._savedPx = card.pixelSizeUm;
+                    this._persistImagerConfig(card, {
+                        maxX: s.maxX, maxY: s.maxY,
+                        pixelSizeUm: card.pixelSizeUm || 0,
+                        bitDepth: card.bitDepth || 0
+                    });
+                }
                 this._pushSkyFovOverlays && this._pushSkyFovOverlays();
             } catch (e) { /* non-fatal */ }
         },
@@ -30411,8 +30431,12 @@ function ninaApp() {
             try {
                 await this.apiPost('/api/imager/' + card.index + '/camera/disconnect');
                 card.cameraConnected = false;
-                card.maxX = 0; card.maxY = 0; card.temperature = null;
+                // Keep maxX/maxY/pixelSizeUm as last-known so the SKY FOV rect
+                // stays drawn while the camera is offline; only the live
+                // temperature is meaningless once disconnected.
+                card.temperature = null;
                 this.toast(this.$t('Camera disconnected'), 'ok');
+                this._pushSkyFovOverlays && this._pushSkyFovOverlays();
             } catch (e) { this.toastFail(this.$t('Camera disconnect failed'), e); }
         },
 

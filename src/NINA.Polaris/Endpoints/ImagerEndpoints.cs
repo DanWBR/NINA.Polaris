@@ -96,6 +96,11 @@ public static class ImagerEndpoints {
                 if (body.FocalLengthMm is double fl) c.FocalLengthMm = Math.Max(0, fl);
                 if (body.ApertureMm is double ap) c.ApertureMm = Math.Max(0, ap);
                 if (body.PixelSizeUm is double px) c.PixelSizeUm = Math.Max(0, px);
+                // Last-known sensor geometry (persisted so the SKY FOV rect and
+                // the DSLR CCD_INFO bootstrap survive a disconnect / page reload).
+                if (body.MaxX is int mx) c.MaxX = Math.Max(0, mx);
+                if (body.MaxY is int my) c.MaxY = Math.Max(0, my);
+                if (body.BitDepth is int bd) c.BitDepth = Math.Max(0, bd);
                 if (body.TelescopeBrand != null) c.TelescopeBrand = body.TelescopeBrand;
                 if (body.TelescopeModel != null) c.TelescopeModel = body.TelescopeModel;
                 // Driver selections (persist a chosen driver even before a device
@@ -172,6 +177,7 @@ public static class ImagerEndpoints {
                 maxX = cam.MaxX,
                 maxY = cam.MaxY,
                 pixelSize = cam.PixelSizeX,
+                bitDepth = cam.BitDepth,
                 binX = cam.BinX,
                 binY = cam.BinY,
                 gain = cam.Gain,
@@ -366,6 +372,7 @@ public static class ImagerEndpoints {
     public record ImagerConfigPatch(
         bool? Enabled = null, int? ExposureMs = null, int? Gain = null, int? Binning = null,
         double? FocalLengthMm = null, double? ApertureMm = null, double? PixelSizeUm = null,
+        int? MaxX = null, int? MaxY = null, int? BitDepth = null,
         string? TelescopeBrand = null, string? TelescopeModel = null,
         string? Driver = null, string? DeviceId = null,
         string? FocuserDriver = null, string? Focuser = null,
