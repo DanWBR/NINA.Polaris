@@ -4270,6 +4270,7 @@
   "Imaging camera added": "Caméra d'imagerie ajoutée",
   "Failed to add imaging camera": "Échec de l'ajout de la caméra d'imagerie",
   "Remove this imaging camera and its settings?": "Supprimer cette caméra d'imagerie et ses réglages ?",
+  "Remove imaging camera": "Supprimer la caméra d'imagerie",
   "Imaging camera removed": "Caméra d'imagerie supprimée",
   "Failed to remove imaging camera": "Échec de la suppression de la caméra d'imagerie",
   "Failed to save imaging camera": "Échec de l'enregistrement de la caméra d'imagerie",

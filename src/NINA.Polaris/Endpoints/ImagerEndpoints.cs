@@ -171,6 +171,7 @@ public static class ImagerEndpoints {
                 deviceName = cam.DeviceName,
                 maxX = cam.MaxX,
                 maxY = cam.MaxY,
+                pixelSize = cam.PixelSizeX,
                 binX = cam.BinX,
                 binY = cam.BinY,
                 gain = cam.Gain,

@@ -18727,56 +18727,38 @@ function ninaApp() {
             //      while imaging, else screen-anchored (no raDeg) so the
             //      bridge draws it as a pink CSS box nested inside the
             //      red drag-to-frame box at the viewport centre.
+            // Aux camera retired: the extra imaging cameras ride the same mount,
+            // so each ENABLED imager gets its own celestial FOV rect anchored
+            // concentric with the imaging target (or the mount pointing when
+            // there's no recent solve). Geometry comes from each card's focal
+            // length + sensor size (maxX/maxY x pixel pitch).
             let aux = null;
-            const afl = this.aux?.focalLengthMm;
-            let asw = this.auxSensorWidthMm, ash = this.auxSensorHeightMm;
-            if (!(asw > 0 && ash > 0) && (this.aux?.enabled || this.auxCamera)) {
-                // Live dims missing: DSLRs on the aux port (indi_gphoto)
-                // don't publish CCD_INFO — their geometry lives in the rig's
-                // per-aux overrides (DSLR picker, or learned from the last
-                // connected aux camera in the status ingest). Derive the
-                // footprint from those so the pink rect shows for a
-                // configured-but-quiet (or not-yet-connected) aux camera.
-                // Gated on an aux camera being selected on the rig (or the
-                // capture loop enabled) so leftover fields on a rig whose
-                // aux was removed don't draw it.
-                const ax = Number(this.aux?.maxX) || 0;
-                const ay = Number(this.aux?.maxY) || 0;
-                const ap = Number(this.aux?.pixelSizeUm) || 0;
-                if (ax > 0 && ay > 0 && ap > 0) {
-                    asw = ax * ap / 1000;
-                    ash = ay * ap / 1000;
+            const imagers = [];
+            (this.extraImagers || []).forEach(card => {
+                if (!card || !card.enabled) return;
+                const fl = Number(card.focalLengthMm) || 0;
+                const px = Number(card.pixelSizeUm) || 0;
+                const cx = Number(card.maxX) || 0;
+                const cy = Number(card.maxY) || 0;
+                if (!(fl > 0 && px > 0 && cx > 0 && cy > 0)) return;
+                const wDeg = 2 * Math.atan((cx * px / 1000) / (2 * fl)) * (180 / Math.PI);
+                const hDeg = 2 * Math.atan((cy * px / 1000) / (2 * fl)) * (180 / Math.PI);
+                let ra = null, dec = null, rot = targetRot;
+                if (Number.isFinite(target.raDeg)) {
+                    ra = target.raDeg; dec = target.decDeg;
+                    rot = Number.isFinite(target.rotationDeg) ? target.rotationDeg : targetRot;
+                } else if (mount && Number.isFinite(mount.raDeg)) {
+                    ra = mount.raDeg; dec = mount.decDeg;
+                    rot = Number.isFinite(mount.rotationDeg) ? mount.rotationDeg : mountRot;
                 }
-            }
-            if (afl > 0 && asw > 0 && ash > 0) {
-                const auxW = 2 * Math.atan(asw / (2 * afl)) * (180 / Math.PI);
-                const auxH = 2 * Math.atan(ash / (2 * afl)) * (180 / Math.PI);
-                const asf = this.auxSolvedFrame;
-                if (asf && Number.isFinite(asf.raDeg) && Number.isFinite(asf.decDeg)) {
-                    // Real aux footprint from its own plate solve.
-                    aux = {
-                        raDeg: asf.raDeg, decDeg: asf.decDeg,
-                        widthDeg: auxW, heightDeg: auxH,
-                        rotationDeg: Number.isFinite(asf.rotationDeg) ? asf.rotationDeg : mountRot,
-                        flipV: false
-                    };
-                } else if (Number.isFinite(target.raDeg)) {
-                    // No aux solve yet: concentric with the celestial-
-                    // anchored red target (imaging + recent solve).
-                    aux = {
-                        raDeg: target.raDeg, decDeg: target.decDeg,
-                        widthDeg: auxW, heightDeg: auxH,
-                        rotationDeg: targetRot, flipV: false
-                    };
-                } else {
-                    // No aux solve, idle: concentric with the screen-
-                    // anchored red box (no raDeg → CSS box in the bridge).
-                    aux = {
-                        widthDeg: auxW, heightDeg: auxH,
-                        rotationDeg: targetRot, flipV: false
-                    };
-                }
-            }
+                if (ra == null) return;
+                imagers.push({
+                    raDeg: ra, decDeg: dec,
+                    widthDeg: wDeg, heightDeg: hDeg,
+                    rotationDeg: rot, flipV: false,
+                    name: card.camera || ('Cam ' + card.index)
+                });
+            });
 
             // Skip when nothing actually changed since last push.
             // The mount status WS push fires several times per second
@@ -18796,10 +18778,13 @@ function ninaApp() {
                               // refreshed silent solve re-pushes the red rect.
                               r: Number.isFinite(target.raDeg) ? target.raDeg.toFixed(3) : null,
                               d: Number.isFinite(target.decDeg) ? target.decDeg.toFixed(3) : null },
-                a: aux && { r: Number.isFinite(aux.raDeg) ? aux.raDeg.toFixed(3) : null,
-                            d: Number.isFinite(aux.decDeg) ? aux.decDeg.toFixed(3) : null,
-                            w: aux.widthDeg.toFixed(3), h: aux.heightDeg.toFixed(3),
-                            rot: (aux.rotationDeg||0).toFixed(2) },
+                // One signature per enabled imager FOV rect, so adding/
+                // removing an imager or a fresh solve re-pushes them.
+                im: imagers.length
+                    ? imagers.map(i => `${(i.raDeg||0).toFixed(3)},${(i.decDeg||0).toFixed(3)},`
+                        + `${i.widthDeg.toFixed(3)}x${i.heightDeg.toFixed(3)},`
+                        + `${(i.rotationDeg||0).toFixed(2)}`).join('|')
+                    : null,
                 // FIELD3-4: include solveRotationDeg in the key so a
                 // post-solve rotation update re-pushes the mount
                 // rectangle even when ra/dec haven't moved.
@@ -18836,13 +18821,10 @@ function ninaApp() {
                     ? `${target.raDeg.toFixed(2)}°/${target.decDeg.toFixed(2)}° (solved)`
                     : 'screen-centred',
                 'fov=', w.toFixed(2) + '°×' + h.toFixed(2) + '°',
-                // Aux diagnostic: say WHY the pink rect isn't being sent so
-                // "where's my aux FOV?" is answerable from the console.
-                'aux=', aux
-                    ? `${aux.widthDeg.toFixed(2)}°×${aux.heightDeg.toFixed(2)}°`
-                        + (Number.isFinite(aux.raDeg) ? ' (celestial)' : ' (concentric with target)')
-                    : (!(afl > 0) ? 'null (no aux focal length)'
-                        : 'null (no aux sensor size: connect the aux camera once or set the DSLR pixel/size fields)'));
+                // Imager diagnostic: how many enabled extra-imager FOV rects
+                // are being sent (0 when none are enabled or geometry is
+                // missing: connect the camera once or set its focal length).
+                'imagers=', imagers.length);
 
             // mosaicTiles is an Alpine reactive array (a Proxy); postMessage
             // can't structured-clone a Proxy and throws DataCloneError, which
@@ -18857,7 +18839,7 @@ function ninaApp() {
                     })) }
                 : null;
             this._skySendMessage({ type: 'set-fov-overlays', mount, target,
-                mosaic: mosaicMsg, aux });
+                mosaic: mosaicMsg, aux, imagers });
         },
 
         // Pixel readout: convert mouse event coords to source-image coords +
@@ -30335,6 +30317,7 @@ function ninaApp() {
                     enabled: !!cfg.enabled,
                     running: !!was.running, frameCount: was.frameCount || 0, lastError: was.lastError || '',
                     maxX: was.maxX || 0, maxY: was.maxY || 0,
+                    pixelSizeUm: cfg.pixelSizeUm || was.pixelSizeUm || 0,
                     temperature: (was.temperature ?? null),
                     // Focuser jog + driver-settings runtime state.
                     focuserPosition: was.focuserPosition || 0, focuserMoving: false,
@@ -30370,7 +30353,10 @@ function ninaApp() {
             } catch (e) { this.toastFail(this.$t('Failed to add imaging camera'), e); }
         },
         async removeImager(card) {
-            if (!confirm(this.$t('Remove this imaging camera and its settings?'))) return;
+            if (!await this._confirmAsync(
+                    this.$t('Remove this imaging camera and its settings?'),
+                    { title: this.$t('Remove imaging camera'),
+                      okLabel: this.$t('Remove'), danger: true })) return;
             try {
                 await this.apiFetch('/api/imager/' + card.index, { method: 'DELETE' });
                 await this.loadRigs();   // indices shift down; re-hydrate from scratch
@@ -30412,7 +30398,9 @@ function ninaApp() {
                 const s = await this.apiGet('/api/imager/' + card.index + '/camera/status');
                 card.maxX = s.maxX || 0;
                 card.maxY = s.maxY || 0;
+                if (s.pixelSize > 0) card.pixelSizeUm = s.pixelSize;
                 card.temperature = (s.temperature ?? null);
+                this._pushSkyFovOverlays && this._pushSkyFovOverlays();
             } catch (e) { /* non-fatal */ }
         },
         async disconnectImagerCamera(card) {
