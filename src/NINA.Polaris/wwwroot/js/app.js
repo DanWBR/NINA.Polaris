@@ -285,6 +285,9 @@ function ninaApp() {
         // from the WS status payload on first connect so what the
         // browser shows matches the server's actual state.
         liveStackEnabled: false,
+        // Which imaging camera feeds the live stack (0 = main, 2+ = an imager).
+        liveSourceIndex: 0,
+        _liveSourceChangedAt: 0,
 
         // Collapse state for the LIVE / PREVIEW / VIDEO right-side
         // floating control panels. true = panel slid out to the right,
@@ -28778,6 +28781,21 @@ function ninaApp() {
             }
         },
 
+        // Pick which imaging camera feeds the live stack. Switching cameras
+        // discards the current stack server-side (different framing/reference).
+        async setLiveSource(index) {
+            const idx = Number(index) || 0;
+            this._liveSourceChangedAt = Date.now();
+            try {
+                const r = await this.apiPostJson('/api/livestack/source', { index: idx });
+                if (r && typeof r.sourceIndex === 'number') this.liveSourceIndex = r.sourceIndex;
+                this.toast(idx === 0 ? this.$t('Live stacking the Main camera')
+                    : this.$t('Live stacking an extra camera'), 'ok');
+            } catch (e) {
+                this.liveSourceIndex = 0;   // reject → fall back to Main
+                this.toastFail(this.$t('Could not switch the live source'), e);
+            }
+        },
         async setFilter(filterName) {
             // Immediate ack so the user gets feedback that the click
             // registered; the server-side wait can take a few seconds
@@ -42351,6 +42369,12 @@ function ninaApp() {
             if (msg.liveStack) {
                 this.liveStackEnabled = msg.liveStack.isRunning;
                 this.liveStackFrames = msg.liveStack.frameCount;
+                // Sync the LIVE source selector from the server, unless the user
+                // just changed it locally (avoid a flicker back to the old value
+                // before the server echoes the new one).
+                if (typeof msg.liveStack.sourceIndex === 'number'
+                    && Date.now() - (this._liveSourceChangedAt || 0) > 1500)
+                    this.liveSourceIndex = msg.liveStack.sourceIndex;
                 // Whole payload kept around so the triggers panel can
                 // read .triggers + per-frame HFR / star count without
                 // a second source of truth.

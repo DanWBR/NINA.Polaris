@@ -35,6 +35,8 @@ public sealed class MultiImagerCaptureService {
     private readonly AutoFocusService _autoFocus;
     private readonly MeridianFlipService _meridian;
     private readonly DitherBarrier _barrier;
+    private readonly LiveStackingService _liveStack;
+    private readonly ImageRelayService _relay;
     private readonly ILogger<MultiImagerCaptureService> _logger;
 
     private sealed class Loop {
@@ -51,6 +53,7 @@ public sealed class MultiImagerCaptureService {
     public MultiImagerCaptureService(EquipmentManager equip, ImageWriterService writer,
         ProfileService profiles, ActiveGuiderProvider guiders, AutoFocusService autoFocus,
         MeridianFlipService meridian, DitherBarrier barrier,
+        LiveStackingService liveStack, ImageRelayService relay,
         ILogger<MultiImagerCaptureService> logger) {
         _equip = equip;
         _writer = writer;
@@ -59,6 +62,8 @@ public sealed class MultiImagerCaptureService {
         _autoFocus = autoFocus;
         _meridian = meridian;
         _barrier = barrier;
+        _liveStack = liveStack;
+        _relay = relay;
         _logger = logger;
     }
 
@@ -173,6 +178,25 @@ public sealed class MultiImagerCaptureService {
                     } catch (Exception ex) {
                         _logger.LogWarning(ex, "Imager {Index} frame save failed", index);
                         loop.LastError = ex.Message;
+                    }
+
+                    // When THIS imager is the selected LIVE-stack source, also feed
+                    // the shared stack (or relay for the live view when the stack
+                    // isn't accumulating) so the LIVE canvas shows this camera. The
+                    // main loop steps aside for the stack while we own it.
+                    if (_liveStack.SourceIndex == index) {
+                        try {
+                            if (_liveStack.IsRunning) {
+                                _liveStack.AverageExposureSec = expSec;
+                                await _liveStack.AddFrameAsync(image, ct);
+                            } else {
+                                await _relay.RelayImageAsync(image, FrameKind.Live, ct);
+                            }
+                        } catch (OperationCanceledException) { break; }
+                        catch (Exception ex) {
+                            _logger.LogWarning(ex, "Imager {Index} live-stack feed failed", index);
+                            loop.LastError = ex.Message;
+                        }
                     }
                 }
 

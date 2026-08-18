@@ -212,7 +212,13 @@ public sealed class LiveCaptureService {
                 }
 
                 try {
-                    if (_liveStack.IsRunning) {
+                    // When an extra imager is the selected LIVE-stack source, the
+                    // main camera keeps capturing (parallel model) but must NOT
+                    // feed the stack or own the LIVE canvas — that imager's loop
+                    // does. Main then only archives its own subs when enabled.
+                    if (_liveStack.SourceIndex != 0) {
+                        _liveStack.SaveFrameIfEnabled(image);
+                    } else if (_liveStack.IsRunning) {
                         if (ExposureSeconds > 0) _liveStack.AverageExposureSec = ExposureSeconds;
                         await _liveStack.AddFrameAsync(image, ct);
                     } else {

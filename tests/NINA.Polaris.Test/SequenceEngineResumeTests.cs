@@ -70,7 +70,7 @@ public class SequenceEngineResumeTests {
         var flatWizard = new FlatWizardService(equip, imageWriter, profile,
             NullLogger<FlatWizardService>.Instance, emptyConfig);
         var barrier = new DitherBarrier(guiders, profile, NullLogger<DitherBarrier>.Instance);
-        var multiImager = new MultiImagerCaptureService(equip, imageWriter, profile, guiders, autoFocus, meridianFlip, barrier, NullLogger<MultiImagerCaptureService>.Instance);
+        var multiImager = new MultiImagerCaptureService(equip, imageWriter, profile, guiders, autoFocus, meridianFlip, barrier, liveStack, relay, NullLogger<MultiImagerCaptureService>.Instance);
         var aux = new AuxCaptureService(equip, imageWriter, profile, guiders, autoFocus, meridianFlip,
             barrier, multiImager, NullLogger<AuxCaptureService>.Instance);
         var engine = new SequenceEngine(equip, relay, liveStack, phd2, guiders, meridianFlip, imageWriter,

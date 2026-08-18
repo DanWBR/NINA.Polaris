@@ -120,6 +120,28 @@ public static class LiveStackEndpoints {
             return Results.Ok(new { status = "reset" });
         });
 
+        // Select which imaging camera feeds the live stack (0 = main, 2+ = an
+        // extra imager). All enabled cameras keep capturing; this only picks which
+        // one the single stack integrates + displays. Switching cameras discards
+        // the current stack (different framing / registration reference).
+        group.MapPost("/source", (LiveStackingService stack, LiveStackTriggersService triggers,
+                                  RefocusSuggestionService refocusSuggest, EquipmentManager equip,
+                                  LiveSourceRequest req) => {
+            var idx = Math.Max(0, req.Index);
+            if (idx != 0) {
+                var cam = equip.GetImager(idx);
+                if (cam == null || !cam.IsConnected)
+                    return Results.BadRequest(new { error = $"No imaging camera connected at slot {idx}" });
+            }
+            bool changed = idx != stack.SourceIndex;
+            stack.SetSource(idx);   // resets the stack when the source changes
+            if (changed) {
+                triggers.ResetTriggerState();
+                refocusSuggest.Reset();
+            }
+            return Results.Ok(new { sourceIndex = stack.SourceIndex });
+        });
+
         group.MapGet("/status", (LiveStackingService stack) => {
             return Results.Ok(stack.GetStatus());
         });
@@ -391,4 +413,8 @@ public static class LiveStackEndpoints {
     /// <summary>Body of POST /api/livecapture/start: the LIVE shutter's
     /// exposure/gain/binning for the server-owned loop.</summary>
     public record LiveStartRequest(double Exposure = 1.0, int Gain = 0, int Binning = 1);
+
+    /// <summary>Body for POST /api/livestack/source: imaging-camera slot to feed
+    /// the live stack (0 = main, 2+ = an extra imager).</summary>
+    public record LiveSourceRequest(int Index = 0);
 }

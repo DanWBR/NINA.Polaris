@@ -552,6 +552,22 @@ public class LiveStackingService {
     public int Width => _width;
     public int Height => _height;
 
+    /// <summary>Imaging-camera slot whose frames feed this stack: 0 = main
+    /// (default), 1 = aux, 2+ = an extra imager. In the parallel multi-camera
+    /// model every enabled camera keeps capturing; this only selects which one's
+    /// frames the single live stack integrates and displays.</summary>
+    public int SourceIndex { get; private set; } = 0;
+
+    /// <summary>Switch the live-stack source camera. A different camera means a
+    /// different framing and registration reference, so the current stack is
+    /// discarded. No-op when the source is unchanged.</summary>
+    public void SetSource(int index) {
+        if (index < 0) index = 0;
+        if (index == SourceIndex) return;
+        SourceIndex = index;
+        Reset();
+    }
+
     /// <summary>True while a frame is actively being detected / aligned /
     /// integrated (the stacking math is running). Surfaced so the UI can show a
     /// "Stacking…" indicator instead of leaving the operator guessing whether

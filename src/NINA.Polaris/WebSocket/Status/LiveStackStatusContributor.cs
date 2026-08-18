@@ -44,6 +44,8 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
 
             tick.Blocks["liveStack"] = new {
                 isRunning = liveStack.GetStatus().IsRunning,
+                // Which imaging camera feeds the stack (0 = main, 2+ = imager).
+                sourceIndex = liveStack.SourceIndex,
                 frameCount = liveStack.GetStatus().FrameCount,
                 width = liveStack.GetStatus().Width,
                 height = liveStack.GetStatus().Height,

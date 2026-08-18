@@ -1364,6 +1364,17 @@
                         </span>
                         <span class="hcg-badge" x-show="isHcgActive(gain)" x-cloak
                               :title="'High Conversion Gain active (gain >= ' + hcgThreshold() + ')'">HCG</span>
+                        <!-- LIVE-stack source camera: which imaging camera feeds
+                             the live stack. Only shown when an extra imager is
+                             enabled + connected; Main is the default. All cameras
+                             keep capturing; this only picks which one stacks. -->
+                        <label x-show="extraImagers.some(c => c.enabled && c.cameraConnected)" x-cloak>Source<select
+                            class="input-sm" x-model.number="liveSourceIndex" @change="setLiveSource(liveSourceIndex)">
+                            <option :value="0" x-text="$t('Main')"></option>
+                            <template x-for="c in extraImagers.filter(c => c.enabled && c.cameraConnected)" :key="c.index">
+                                <option :value="c.index" x-text="c.camera || ($t('Imaging Camera') + ' ' + c.index)"></option>
+                            </template>
+                        </select></label>
                         <!-- Filter selector: shown below Gain and above the BIN
                              buttons whenever a filter wheel is connected. -->
                         <label x-show="filterWheel.connected">Filter<select class="input-sm"
