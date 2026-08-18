@@ -12726,7 +12726,9 @@ function ninaApp() {
             }
         },
         async _canopusDeviceDelete(tag) {
-            if (!confirm('Delete ' + tag + ' from Ollama? You can download it again later.')) return;
+            if (!await this._confirmAsync(
+                    'Delete ' + tag + ' from Ollama? You can download it again later.',
+                    { title: 'Delete model', okLabel: 'Delete', danger: true })) return;
             try {
                 const r = await fetch(this._canopusDeviceBaseOllama() + '/api/delete', {
                     method: 'DELETE', headers: { 'Content-Type': 'application/json' },
@@ -12809,9 +12811,10 @@ function ninaApp() {
             // RAM gate: warn before the OS can kill the app for overcommitting.
             if (!this.asst.mobileRamOk) {
                 const gb = (b) => (b / 1e9).toFixed(1);
-                const ok = confirm('This device has ' + gb(this.asst.mobileTotalMem) +
+                const ok = await this._confirmAsync('This device has ' + gb(this.asst.mobileTotalMem) +
                     ' GB RAM, but the model needs about ' + gb(this.asst.mobileNeedMem) +
-                    ' GB resident. The system may kill the app under memory pressure. Start anyway?');
+                    ' GB resident. The system may kill the app under memory pressure. Start anyway?',
+                    { title: 'Low memory', okLabel: 'Start anyway', danger: true });
                 if (!ok) return;
             }
             // Keep Doze / OEM power managers from reaping the model's foreground
@@ -12841,7 +12844,8 @@ function ninaApp() {
         async _canopusMobileDelete() {
             const p = this._canopusMobilePlugin();
             if (!p) return;
-            if (!confirm('Delete the downloaded model from this device?')) return;
+            if (!await this._confirmAsync('Delete the downloaded model from this device?',
+                    { title: 'Delete model', okLabel: 'Delete', danger: true })) return;
             try { await p.stop(); await p.deleteModel(); await this._canopusMobileRefresh(); this.toast?.('Model deleted.', 'success'); }
             catch (e) { this.toast?.('Delete failed: ' + ((e && e.message) || e), 'error'); }
         },
