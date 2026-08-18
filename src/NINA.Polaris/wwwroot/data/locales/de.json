@@ -4263,5 +4263,9 @@
   "Zoom to fit (whole frame)": "Auf Bildgröße anpassen (ganzer Bildausschnitt)",
   "ZWO ASI SDK": "ZWO ASI SDK",
   "ZWO preset gains": "ZWO-Vorgabe-Gains",
-  "ZWO preset gains, L=": "ZWO-Vorgabe-Gains, L="
+  "ZWO preset gains, L=": "ZWO-Vorgabe-Gains, L=",
+  "Update channel": "Update-Kanal",
+  "Stable": "Stabil",
+  "Preview (early access)": "Vorschau (Frühzugang)",
+  "Preview builds carry new, less-tested features. Use a test rig.": "Vorschau-Builds enthalten neue, weniger getestete Funktionen. Nutze ein Test-Rig."
 }

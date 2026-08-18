@@ -3638,5 +3638,9 @@
   "ZWO preset gains": "",
   "ZWO preset gains, L=": "",
   "⚙ Serial ports": "",
-  "⟳ Sync past sessions": ""
+  "⟳ Sync past sessions": "",
+  "Update channel": "Update channel",
+  "Stable": "Stable",
+  "Preview (early access)": "Preview (early access)",
+  "Preview builds carry new, less-tested features. Use a test rig.": "Preview builds carry new, less-tested features. Use a test rig."
 }

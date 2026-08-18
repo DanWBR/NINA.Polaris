@@ -49,6 +49,11 @@ public class UserProfile {
     /// powered up yet.</summary>
     public bool AutoConnectOnStartup { get; set; } = false;
 
+    /// <summary>Self-update channel: "stable" (default; GitHub's latest
+    /// non-prerelease) or "preview" (opts into pre-releases — the Insider-style
+    /// early-access channel for risky new features). Global, not per-rig.</summary>
+    public string UpdateChannel { get; set; } = "stable";
+
     // Legacy single-rig equipment selection (still serialised for
     // backward-compat; new code uses EquipmentProfiles below).
     public string? LastCamera { get; set; }

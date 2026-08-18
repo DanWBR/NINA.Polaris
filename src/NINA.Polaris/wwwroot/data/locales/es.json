@@ -4263,5 +4263,9 @@
   "Zoom to fit (whole frame)": "Ajustar a pantalla completa (toda la imagen)",
   "ZWO ASI SDK": "ZWO ASI SDK",
   "ZWO preset gains": "Ganancias predefinidas ZWO",
-  "ZWO preset gains, L=": "Ganancias predefinidas ZWO, L="
+  "ZWO preset gains, L=": "Ganancias predefinidas ZWO, L=",
+  "Update channel": "Canal de actualización",
+  "Stable": "Estable",
+  "Preview (early access)": "Preview (acceso anticipado)",
+  "Preview builds carry new, less-tested features. Use a test rig.": "Las compilaciones de preview traen funciones nuevas y menos probadas. Usa un equipo de prueba."
 }

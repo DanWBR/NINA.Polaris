@@ -14305,6 +14305,20 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         previous version, all without an SSH session.
                     </p>
 
+                    <!-- Update channel: Stable (default) vs Preview (early access
+                         to risky features, shipped as GitHub pre-releases). -->
+                    <label style="display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap">
+                        <span x-text="$t('Update channel')"></span>
+                        <select class="input-sm" style="width:auto" x-model="settings.updateChannel"
+                                @change="saveSettingsToServer()">
+                            <option value="stable" x-text="$t('Stable')"></option>
+                            <option value="preview" x-text="$t('Preview (early access)')"></option>
+                        </select>
+                        <span class="text-warn" x-show="settings.updateChannel === 'preview'" x-cloak
+                              style="font-size:11px"
+                              x-text="$t('Preview builds carry new, less-tested features. Use a test rig.')"></span>
+                    </label>
+
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px">
                         <button class="btn btn-sm"
                                 @click="checkUpdateManual()"
