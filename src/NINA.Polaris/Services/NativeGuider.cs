@@ -285,11 +285,14 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
 
     private void RecomputePixelScale() {
         var cam = _equipment.GuideCamera;
-        var fl = Rig.GuiderFocalLengthMm;
+        // OAG: the guide camera images through the main OTA, so its focal
+        // length is the main scope's, not the dedicated guide scope's. The
+        // guide camera's own pixel size is unchanged.
+        var fl = Rig.EffectiveGuiderFocalLengthMm;
         if (fl <= 0) {
             _logger.LogWarning(
-                "GuiderFocalLengthMm is {Fl}; falling back to {Default}mm for pixel scale",
-                fl, DefaultGuiderFocalLengthMm);
+                "Guider focal length is {Fl} (OAG={Oag}); falling back to {Default}mm for pixel scale",
+                fl, Rig.GuiderIsOag, DefaultGuiderFocalLengthMm);
             fl = DefaultGuiderFocalLengthMm;
         }
         if (cam != null && cam.PixelSizeX > 0 && fl > 0) {
@@ -692,7 +695,10 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// matching one is restored when the original gear is refitted.</summary>
     private string CalibrationKey() {
         static string N(string? v) => (v ?? "").Trim().ToLowerInvariant();
-        int focal = (int)Math.Round(Rig.GuiderFocalLengthMm);
+        // Effective FL: for an OAG this is the main OTA (the scale the
+        // calibration was measured at), so toggling OAG or changing the main
+        // focal length invalidates a stale calibration.
+        int focal = (int)Math.Round(Rig.EffectiveGuiderFocalLengthMm);
         int bin = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4);
         return $"cam={N(Rig.GuideCameraDriver)}:{N(Rig.GuideCamera)}"
              + $"|bin={bin}|fl={focal}"

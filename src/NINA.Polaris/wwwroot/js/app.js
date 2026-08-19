@@ -1095,6 +1095,9 @@ function ninaApp() {
             attachedFilter: '',
             // Guidescope optics (mirrored from active rig).
             guiderFocalLengthMm: 200,
+            // Off-axis guider: the guide camera images through the main OTA,
+            // so the effective guide focal length is the main scope's.
+            guiderIsOag: false,
             guiderApertureMm: 50,
             guideTelescopeBrand: '',
             guideTelescopeModel: ''
@@ -21600,6 +21603,7 @@ function ninaApp() {
             this.settings.attachedFilter = rig.attachedFilter || '';
             // Guidescope card
             this.settings.guiderFocalLengthMm = rig.guiderFocalLengthMm || 200;
+            this.settings.guiderIsOag         = !!rig.guiderIsOag;
             this.settings.guiderApertureMm   = rig.guiderApertureMm   || 50;
             this.settings.guideTelescopeBrand = rig.guideTelescopeBrand || '';
             this.settings.guideTelescopeModel = rig.guideTelescopeModel || '';
@@ -22381,6 +22385,7 @@ function ninaApp() {
                 attachedFilter: this.settings.attachedFilter || '',
                 // Guidescope card
                 guiderFocalLengthMm: this.settings.guiderFocalLengthMm,
+                guiderIsOag:         this.settings.guiderIsOag,
                 guiderApertureMm:    this.settings.guiderApertureMm,
                 guideTelescopeBrand: this.settings.guideTelescopeBrand,
                 guideTelescopeModel: this.settings.guideTelescopeModel,

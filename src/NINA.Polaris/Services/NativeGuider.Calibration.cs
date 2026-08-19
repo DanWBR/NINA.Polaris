@@ -173,7 +173,7 @@ public sealed partial class NativeGuider {
             expectedRateArcsecPerSec = sidereal, // mount tracks at ~sidereal; guide rate ~1x
             pixelScale = scale,
             binning,
-            focalLengthMm = Rig.GuiderFocalLengthMm > 0 ? Rig.GuiderFocalLengthMm : DefaultGuiderFocalLengthMm,
+            focalLengthMm = Rig.EffectiveGuiderFocalLengthMm > 0 ? Rig.EffectiveGuiderFocalLengthMm : DefaultGuiderFocalLengthMm,
             declinationDeg = mount.Declination,
             pierSide = mount.SideOfPier.ToString().Replace("pier", ""),
             createdAtUtc = DateTime.UtcNow.ToString("o"),
@@ -257,7 +257,7 @@ public sealed partial class NativeGuider {
             decRateArcsecPerSec = decPxPerSec * d.PixelScale,
             expectedRateArcsecPerSec = 15.041,
             pixelScale = d.PixelScale, binning = d.Binning,
-            focalLengthMm = Rig.GuiderFocalLengthMm > 0 ? Rig.GuiderFocalLengthMm : DefaultGuiderFocalLengthMm,
+            focalLengthMm = Rig.EffectiveGuiderFocalLengthMm > 0 ? Rig.EffectiveGuiderFocalLengthMm : DefaultGuiderFocalLengthMm,
             declinationDeg = double.IsNaN(d.DeclinationRad) ? double.NaN : d.DeclinationRad * 180.0 / Math.PI,
             pierSide = ((PierSide)d.PierSide).ToString().Replace("pier", ""),
             createdAtUtc = d.SavedAtUtc,

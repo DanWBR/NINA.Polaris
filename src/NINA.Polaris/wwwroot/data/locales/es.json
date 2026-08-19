@@ -1,4 +1,6 @@
 {
+  "Off-axis guider (uses main scope focal length)": "Guiado fuera de eje (usa la distancia focal del tubo principal)",
+  "Guiding through the main scope at": "Guiando a través del tubo principal a",
   "Use my location": "Usar mi ubicación",
   "Set the observatory location from GPS on this device": "Establecer la ubicación del observatorio con el GPS de este dispositivo",
   "(including the network-share credentials), so keep it somewhere safe.": "(incluye las credenciales del recurso compartido de red), así que guárdalo en un lugar seguro.",

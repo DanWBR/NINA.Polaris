@@ -6811,10 +6811,22 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <!-- Group 1: Scope (guide OTA optics, metadata only). -->
                             <div class="equip-group">
                             <div class="equip-group-title">Scope</div>
+                            <!-- OAG: the guide camera picks light off the main
+                                 OTA, so it images at the main scope's focal
+                                 length. Turning this on makes the guider pixel
+                                 scale, calibration and FOV use the main focal
+                                 length and greys out the separate guide-scope
+                                 optics (they no longer apply). -->
+                            <label class="equip-oag-toggle" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;font-size:12px">
+                                <input type="checkbox" x-model="settings.guiderIsOag"
+                                       @change="saveOpticsDebounced()">
+                                <span>Off-axis guider (uses main scope focal length)</span>
+                            </label>
                             <div class="equip-meta-row">
                                 <label>Brand
                                     <select x-model="settings.guideTelescopeBrand"
-                                            @change="onGuideScopeBrandPick()" class="input-sm">
+                                            @change="onGuideScopeBrandPick()"
+                                            :disabled="settings.guiderIsOag" class="input-sm">
                                         <option value="">Manual entry</option>
                                         <template x-for="b in guidescopeBrands" :key="b">
                                             <option :value="b" x-text="b"></option>
@@ -6824,7 +6836,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <label>Model
                                     <select x-model="settings.guideTelescopeModel"
                                             @change="onGuideScopeModelPick()"
-                                            :disabled="!settings.guideTelescopeBrand" class="input-sm">
+                                            :disabled="settings.guiderIsOag || !settings.guideTelescopeBrand" class="input-sm">
                                         <option value="">Manual entry</option>
                                         <template x-for="g in guidescopeModelsForRig({guideTelescopeBrand: settings.guideTelescopeBrand})" :key="g.model">
                                             <option :value="g.model"
@@ -6833,7 +6845,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     </select>
                                 </label>
                             </div>
-                            <div class="equip-meta-row">
+                            <div class="equip-meta-row" x-show="!settings.guiderIsOag">
                                 <label>Focal length (mm)
                                     <input type="number" x-model.number="settings.guiderFocalLengthMm"
                                            @change="saveOpticsDebounced()"
@@ -6849,6 +6861,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     f/<strong x-text="(settings.guiderFocalLengthMm / settings.guiderApertureMm).toFixed(1)"></strong>
                                 </span>
                             </div>
+                            <p class="hint" style="margin:4px 0 0;font-size:11px" x-show="settings.guiderIsOag">
+                                Guiding through the main scope at
+                                <strong x-text="(settings.focalLength || 0) + ' mm'"></strong>.
+                            </p>
                             <p class="hint" style="margin:4px 0 0;font-size:11px"
                                x-show="guider.connected && guider.pixelScale">
                                 Guider currently reports

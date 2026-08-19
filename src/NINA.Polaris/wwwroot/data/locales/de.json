@@ -1,4 +1,6 @@
 {
+  "Off-axis guider (uses main scope focal length)": "Off-Axis-Guider (nutzt die Brennweite des Hauptteleskops)",
+  "Guiding through the main scope at": "Guiding durch das Hauptteleskop bei",
   "Use my location": "Meinen Standort verwenden",
   "Set the observatory location from GPS on this device": "Sternwartenstandort per GPS dieses Geräts festlegen",
   "(including the network-share credentials), so keep it somewhere safe.": "(einschließlich der Zugangsdaten für die Netzwerkfreigabe), bewahren Sie sie daher sicher auf.",

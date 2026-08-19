@@ -285,6 +285,10 @@ public static class EquipmentEndpoints {
                 }
                 r.RequiredBackspacingMm = update.RequiredBackspacingMm;
                 if (update.GuiderFocalLengthMm > 0) r.GuiderFocalLengthMm = update.GuiderFocalLengthMm;
+                // OAG mode: a plain bool is safe here because `update` is
+                // RigPatch.Merge(stored, patch) — an omitting client yields the
+                // stored value (no-op) and an explicit false is a real "OAG off".
+                r.GuiderIsOag = update.GuiderIsOag;
                 // Native guider backend selection + tunables. Empty/zero
                 // from an old client leaves the existing values alone so a
                 // pre-native PUT doesn't clobber the new state.

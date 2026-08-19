@@ -601,6 +601,22 @@ public class EquipmentProfile {
     public double GuiderFocalLengthMm { get; set; } = 200;
 
     /// <summary>
+    /// Off-axis guider mode. An OAG picks light off the MAIN optical train,
+    /// so the guide camera sees the main OTA's focal length, not a separate
+    /// guide scope. When true, everything that derives the guider's pixel
+    /// scale / calibration / FOV uses <see cref="FocalLengthMm"/> instead of
+    /// <see cref="GuiderFocalLengthMm"/> (the guide camera's own pixel size
+    /// is unchanged). Default false = separate guide scope.
+    /// </summary>
+    public bool GuiderIsOag { get; set; }
+
+    /// <summary>Focal length (mm) the guider actually images at: the main OTA
+    /// for an OAG, otherwise the dedicated guide scope. Call sites still apply
+    /// their own &gt;0 fallback.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public double EffectiveGuiderFocalLengthMm => GuiderIsOag ? FocalLengthMm : GuiderFocalLengthMm;
+
+    /// <summary>
     /// Guide-scope aperture. Used for record-keeping and as the
     /// denominator of the guidescope f-ratio displayed in the
     /// Guidescope card on the RIGS tab. Default 50 mm matches the
