@@ -7270,6 +7270,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                            class="input-sm" style="width:80px">
                                 </label>
                             </div>
+                            <!-- All-sky: a fixed wide camera that keeps shooting
+                                 through slews/flips/AF and never dithers. -->
+                            <div class="equip-meta-row" style="margin-top:4px">
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px">
+                                    <input type="checkbox"
+                                           :checked="card.cameraType === 'allsky'"
+                                           @change="toggleImagerAllSky(card, $event.target.checked)">
+                                    <span x-text="$t('All-sky camera (captures continuously, ignores mount moves)')"></span>
+                                </label>
+                            </div>
                             <div class="equip-meta-row">
                                 <label><span x-text="$t('Gain')"></span>
                                     <input type="number" x-model.number="card.gain"

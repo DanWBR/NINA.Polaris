@@ -1322,6 +1322,20 @@ public class ImagerConfig {
     /// <summary>When true, this imager captures during a session.</summary>
     public bool Enabled { get; set; } = true;
 
+    /// <summary>Behavioural type. "imaging" (default) is a normal, mount-synced
+    /// imaging camera. "allsky" is a fixed wide-field all-sky camera that
+    /// captures continuously and ignores mount events — it does not join the
+    /// dither barrier, and does not pause for autofocus, meridian flips, slews
+    /// or settle. Uncooled by default. Only meaningful for extra imagers
+    /// (index ≥ 2); main/aux are always "imaging".</summary>
+    public string CameraType { get; set; } = "imaging";
+
+    /// <summary>True when this imager is a continuous, mount-event-agnostic
+    /// all-sky camera (convenience over <see cref="CameraType"/>).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsAllSky =>
+        string.Equals(CameraType, "allsky", System.StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Effective focal length of this imager's optics (mm).</summary>
     public double FocalLengthMm { get; set; } = 200;
 

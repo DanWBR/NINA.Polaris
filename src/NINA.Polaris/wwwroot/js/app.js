@@ -30391,6 +30391,9 @@ function ninaApp() {
                     gain: cfg.gain || 0,
                     binning: cfg.binning || 1,
                     enabled: !!cfg.enabled,
+                    // Behavioural type: 'imaging' (default) or 'allsky' (fixed,
+                    // continuous, ignores mount events, no dither/AF pauses).
+                    cameraType: cfg.cameraType || 'imaging',
                     running: !!was.running, frameCount: was.frameCount || 0, lastError: was.lastError || '',
                     // Sensor geometry: prefer the live runtime value, fall back to
                     // the persisted config so the SKY FOV rect still draws for a
@@ -30732,8 +30735,16 @@ function ninaApp() {
                     gain: Math.max(0, Number(card.gain) || 0),
                     binning: Math.max(1, Math.min(4, Number(card.binning) || 1)),
                     focalLengthMm: Math.max(0, Number(card.focalLengthMm) || 0),
+                    cameraType: card.cameraType === 'allsky' ? 'allsky' : 'imaging',
                 });
             } catch (e) { this.toastFail(this.$t('Failed to save imaging camera'), e); }
+        },
+
+        // Flip an extra imager between a normal imaging camera and a fixed,
+        // continuous all-sky camera (skips dither + all mount-event pauses).
+        async toggleImagerAllSky(card, on) {
+            card.cameraType = on ? 'allsky' : 'imaging';
+            await this.saveImager(card);
         },
 
         // Compute the currently-selected driver descriptor for UI

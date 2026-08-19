@@ -1,4 +1,5 @@
 {
+  "All-sky camera (captures continuously, ignores mount moves)": "Câmera all-sky (captura continuamente, ignora movimentos da montagem)",
   "Use my location": "Usar minha localização",
   "Set the observatory location from GPS on this device": "Definir a localização do observatório pelo GPS deste dispositivo",
   "(including the network-share credentials), so keep it somewhere safe.": "(incluindo as credenciais do compartilhamento de rede), então guarde em um lugar seguro.",

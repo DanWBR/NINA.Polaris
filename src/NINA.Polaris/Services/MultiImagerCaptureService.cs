@@ -44,6 +44,10 @@ public sealed class MultiImagerCaptureService {
         public Task? Task;
         public long FrameCount;
         public string? LastError;
+        /// <summary>Fixed continuous all-sky camera: skips the dither barrier
+        /// and all mount-event pauses. Captured at StartLoop; a runtime type
+        /// change restarts the loop (see Reevaluate) so this stays authoritative.</summary>
+        public bool AllSky;
     }
 
     private readonly object _lock = new();
@@ -97,7 +101,12 @@ public sealed class MultiImagerCaptureService {
                 && cfg?.Enabled == true
                 && _equip.GetImager(index) is { IsConnected: true };
             bool running = _loops.ContainsKey(index);
-            if (shouldRun && !running) StartLoop(index);
+            if (shouldRun && running) {
+                // Restart if the behavioural type flipped, so the barrier
+                // registration (all-sky = none) is re-applied.
+                bool wantAllSky = cfg?.IsAllSky ?? false;
+                if (_loops[index].AllSky != wantAllSky) { StopLoop(index); StartLoop(index); }
+            } else if (shouldRun && !running) StartLoop(index);
             else if (!shouldRun && running) StopLoop(index);
         }
         // Drop loops whose imager slot no longer exists.
@@ -106,19 +115,26 @@ public sealed class MultiImagerCaptureService {
 
     private void StartLoop(int index) {
         var loop = new Loop();
+        bool allSky = Rig?.Imagers.ElementAtOrDefault(index)?.IsAllSky ?? false;
+        loop.AllSky = allSky;
         _loops[index] = loop;
         var role = RoleOf(index);
-        // Blocking barrier participant; never primary (owns the cadence only when
-        // it is the slowest imaging camera).
-        _barrier.Register(role, blocking: true, isPrimary: false);
+        // An all-sky camera is fixed and captures continuously: it never joins
+        // the dither barrier — so it neither inflates the imaging count that
+        // enables multi-camera dither, nor parks on / drives a dither round.
+        // A normal imager is a blocking participant; never primary (owns the
+        // cadence only when it is the slowest imaging camera).
+        if (!allSky)
+            _barrier.Register(role, blocking: true, isPrimary: false);
         loop.Task = Task.Run(() => RunLoop(index, role, loop, loop.Cts.Token));
-        _logger.LogInformation("Imager {Index} capture loop started ({Role})", index, role);
+        _logger.LogInformation("Imager {Index} capture loop started ({Role}{Kind})",
+            index, role, allSky ? ", all-sky" : "");
     }
 
     private void StopLoop(int index) {
         if (!_loops.TryGetValue(index, out var loop)) return;
         try { loop.Cts.Cancel(); } catch { }
-        _barrier.Deregister(RoleOf(index));
+        if (!loop.AllSky) _barrier.Deregister(RoleOf(index));
         _loops.Remove(index);
         _logger.LogInformation("Imager {Index} capture loop stopped after {Count} frames", index, loop.FrameCount);
     }
@@ -133,14 +149,16 @@ public sealed class MultiImagerCaptureService {
 
             while (!ct.IsCancellationRequested) {
                 // Pause while the mount is moving — same mount, so a dither/settle/
-                // AF/flip/slew trails this frame too.
-                while (!ct.IsCancellationRequested && MountBusy()) {
+                // AF/flip/slew trails this frame too. An all-sky camera is fixed
+                // and wide, so it keeps shooting straight through mount events.
+                while (!ct.IsCancellationRequested && !loop.AllSky && MountBusy()) {
                     try { await Task.Delay(250, ct); } catch { return; }
                 }
                 if (ct.IsCancellationRequested) break;
 
-                // Park here if a synchronized dither round is in flight.
-                await _barrier.BeforeSubAsync(role, ct);
+                // Park here if a synchronized dither round is in flight (never
+                // for an all-sky camera — it does not participate in dithering).
+                if (!loop.AllSky) await _barrier.BeforeSubAsync(role, ct);
                 if (ct.IsCancellationRequested) break;
 
                 // Re-read config each frame so exposure/gain edits take effect.
@@ -202,8 +220,11 @@ public sealed class MultiImagerCaptureService {
 
                 // Sub finished: report to the barrier. When this is the slowest of
                 // the active imaging cameras it runs the synchronized dither round.
-                try { await _barrier.AfterSubAsync(role, expSec, ct); }
-                catch (OperationCanceledException) { break; }
+                // An all-sky camera never reports — it must not drive a dither.
+                if (!loop.AllSky) {
+                    try { await _barrier.AfterSubAsync(role, expSec, ct); }
+                    catch (OperationCanceledException) { break; }
+                }
             }
         } catch (OperationCanceledException) {
             /* normal stop */

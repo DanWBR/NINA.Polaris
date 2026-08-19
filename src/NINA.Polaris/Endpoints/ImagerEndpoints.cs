@@ -110,6 +110,11 @@ public static class ImagerEndpoints {
                     c.CoolerRampDegPerMinute = Math.Max(0, cr);
                 if (body.TelescopeBrand != null) c.TelescopeBrand = body.TelescopeBrand;
                 if (body.TelescopeModel != null) c.TelescopeModel = body.TelescopeModel;
+                // Behavioural type: only "allsky" (continuous, mount-agnostic)
+                // or the default "imaging". Anything else normalises to imaging.
+                if (body.CameraType != null)
+                    c.CameraType = string.Equals(body.CameraType, "allsky",
+                        StringComparison.OrdinalIgnoreCase) ? "allsky" : "imaging";
                 // Driver selections (persist a chosen driver even before a device
                 // is bound, so it survives a reload; an empty string clears a
                 // stale device that belonged to the previous driver).
@@ -409,7 +414,8 @@ public static class ImagerEndpoints {
         string? TelescopeBrand = null, string? TelescopeModel = null,
         string? Driver = null, string? DeviceId = null,
         string? FocuserDriver = null, string? Focuser = null,
-        string? FilterWheelDriver = null, string? FilterWheel = null);
+        string? FilterWheelDriver = null, string? FilterWheel = null,
+        string? CameraType = null);
 
     /// <summary>Body for POST /api/imager/{index}/filterwheel/position.</summary>
     public record FilterPositionRequest(int Position);
