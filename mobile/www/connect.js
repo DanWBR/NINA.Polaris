@@ -175,6 +175,10 @@ window.addEventListener('message', async (ev) => {
 window.addEventListener('message', (ev) => {
   const d = ev.data;
   if (!d || typeof d !== 'object') return;
+  // Any message from one of our instance frames proves it loaded and ran JS —
+  // clear the load-failure watchdog for that tab.
+  const srcInst = instanceForSource(ev.source);
+  if (srcInst) markInstanceReached(srcInst);
   if (d.__polarisAuth === 'get' || d.__polarisAuth === 'set') {
     handleAuthRelay(d, ev.source);
     return;
@@ -484,6 +488,85 @@ async function scan() {
 
 // ---------- instances / tabs ----------
 
+// ---------- load-failure watchdog ----------
+// A cross-origin iframe that fails its TLS handshake (e.g. an untrusted
+// self-signed cert on a host LANCertTrust doesn't recognise) or can't reach
+// the host fires NO 'error' event and paints nothing, leaving the shell's
+// navy background showing — a silent, blank "blue" tab with no clue why.
+// We can't read the remote document cross-origin, so we infer "the page came
+// up" from two positive signals: the iframe's own 'load' event (WebKit does
+// not fire it when the provisional navigation fails) and any postMessage from
+// the frame (the Polaris UI's token-relay handshake). If neither arrives
+// within the timeout, we show an actionable overlay instead of the blank blue.
+const LOAD_TIMEOUT_MS = 20000;
+
+function armLoadWatch(inst) {
+  inst.reached = false;
+  inst.failed = false;
+  if (inst.watchdog) clearTimeout(inst.watchdog);
+  inst.watchdog = setTimeout(() => markInstanceFailed(inst), LOAD_TIMEOUT_MS);
+  if (inst.errorEl) inst.errorEl.classList.remove('active');
+}
+
+function markInstanceReached(inst) {
+  if (!inst || inst.reached) return;
+  inst.reached = true;
+  inst.failed = false;
+  if (inst.watchdog) { clearTimeout(inst.watchdog); inst.watchdog = null; }
+  if (inst.errorEl) inst.errorEl.classList.remove('active');
+}
+
+function markInstanceFailed(inst) {
+  if (!inst || inst.reached) return;
+  inst.failed = true;
+  if (inst.watchdog) { clearTimeout(inst.watchdog); inst.watchdog = null; }
+  if (!inst.errorEl) inst.errorEl = buildErrorOverlay(inst);
+  inst.errorEl.classList.toggle('active', inst.origin === activeOrigin);
+}
+
+function buildErrorOverlay(inst) {
+  const el = document.createElement('div');
+  el.className = 'frame-error';
+  const card = document.createElement('div');
+  card.className = 'frame-error-card';
+
+  const title = document.createElement('div');
+  title.className = 'frame-error-title';
+  title.textContent = "Couldn't load this host";
+
+  const host = document.createElement('div');
+  host.className = 'frame-error-host';
+  host.textContent = hostLabel(inst.origin);
+
+  const msg = document.createElement('div');
+  msg.className = 'frame-error-msg';
+  msg.textContent = "The connection failed or its security certificate wasn't "
+    + "trusted. Check that this device is on the same network as the Polaris host.";
+
+  const actions = document.createElement('div');
+  actions.className = 'frame-error-actions';
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'frame-error-retry';
+  retry.textContent = 'Retry';
+  retry.addEventListener('click', () => reloadTab(inst.origin));
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'frame-error-close';
+  close.textContent = 'Close tab';
+  close.addEventListener('click', () => closeTab(inst.origin));
+  actions.appendChild(retry);
+  actions.appendChild(close);
+
+  card.appendChild(title);
+  card.appendChild(host);
+  card.appendChild(msg);
+  card.appendChild(actions);
+  el.appendChild(card);
+  els.frames.appendChild(el);
+  return el;
+}
+
 function addInstance(origin, name, { activate = false } = {}) {
   if (!origin) return;
   if (!instances.has(origin)) {
@@ -492,9 +575,17 @@ function addInstance(origin, name, { activate = false } = {}) {
     frame.setAttribute('allow',
       'fullscreen; accelerometer; gyroscope; magnetometer; ' +
       'geolocation; camera; microphone; clipboard-read; clipboard-write');
-    frame.src = origin;
     els.frames.appendChild(frame);
-    instances.set(origin, { origin, name: name || hostLabel(origin), frame });
+    const inst = { origin, name: name || hostLabel(origin), frame };
+    instances.set(origin, inst);
+    // 'load' fires only once a document actually committed; a TLS/connection
+    // failure never fires it. Ignore the about:blank bounce reloadTab uses.
+    frame.addEventListener('load', () => {
+      if (frame.getAttribute('src') === 'about:blank') return;
+      markInstanceReached(inst);
+    });
+    armLoadWatch(inst);
+    frame.src = origin;
     // Keep the screen on for the imaging session once the first instance opens.
     if (instances.size === 1) { try { if (KeepAwake) KeepAwake.keepAwake(); } catch {} }
     // Discovery has done its job: drop the multicast lock rather than leave it
@@ -510,7 +601,10 @@ function activateTab(origin) {
   const inst = instances.get(origin);
   if (!inst) return;
   activeOrigin = origin;
-  for (const [, i] of instances) i.frame.classList.toggle('active', i === inst);
+  for (const [, i] of instances) {
+    i.frame.classList.toggle('active', i === inst);
+    if (i.errorEl) i.errorEl.classList.toggle('active', i === inst && i.failed);
+  }
   document.body.classList.add('connected');
   hidePicker();
   renderTabs();
@@ -519,6 +613,8 @@ function activateTab(origin) {
 function closeTab(origin) {
   const inst = instances.get(origin);
   if (!inst) return;
+  if (inst.watchdog) { clearTimeout(inst.watchdog); inst.watchdog = null; }
+  if (inst.errorEl) { inst.errorEl.remove(); inst.errorEl = null; }
   try { inst.frame.src = 'about:blank'; } catch {}
   inst.frame.remove();
   instances.delete(origin);
@@ -550,7 +646,8 @@ function reloadTab(origin) {
   if (!inst || !inst.frame) return;
   try {
     inst.frame.src = 'about:blank';
-    setTimeout(() => { try { inst.frame.src = origin; } catch {} }, 30);
+    armLoadWatch(inst);
+    setTimeout(() => { try { inst.frame.src = inst.origin; } catch {} }, 30);
   } catch {}
   activateTab(origin);
 }
