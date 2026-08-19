@@ -80,6 +80,15 @@
         (function () {
             try {
                 var f = localStorage.getItem('nina-ui-font');
+                // No saved choice + a phone/tablet client → default to the OS
+                // system font (the native look the mobile apps want). Desktop
+                // keeps the Atkinson default. Mirrors app.js's _isMobileClient.
+                if (!f) {
+                    var ua = navigator.userAgent || '';
+                    var isMobile = /Android/i.test(ua) || /iPhone|iPad|iPod/i.test(ua)
+                        || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                    if (isMobile) f = 'system';
+                }
                 if (f && f !== 'atkinson' && ['inter','plex','system'].indexOf(f) >= 0) {
                     document.documentElement.setAttribute('data-font', f);
                 }

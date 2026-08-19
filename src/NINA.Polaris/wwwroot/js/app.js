@@ -4819,12 +4819,15 @@ function ninaApp() {
 
             // FONT-1: restore font choice. Use the inline boot
             // attribute that index.html stamps before Alpine
-            // initialises (avoids FOUT). Otherwise default to
-            // 'atkinson' (best readability for the target operator).
+            // initialises (avoids FOUT). Otherwise default to the OS
+            // system font on mobile clients (the native look the phone/
+            // tablet apps want) and 'atkinson' on desktop (best
+            // readability for the target operator). Same default the
+            // boot IIFE in index.html applies.
             const fontSaved = localStorage.getItem('nina-ui-font');
             this.uiFont = fontSaved && ['inter','atkinson','plex','system'].includes(fontSaved)
                 ? fontSaved
-                : 'atkinson';
+                : (this._isMobileClient() ? 'system' : 'atkinson');
 
             // UI language: mirror whatever js/i18n.js resolved (localStorage is
             // the source of truth). The actual translation already happened at
