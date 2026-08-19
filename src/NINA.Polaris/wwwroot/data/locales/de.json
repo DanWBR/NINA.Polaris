@@ -1,4 +1,7 @@
 {
+  "Prism offset (mm)": "Prismenversatz (mm)",
+  "Prism angle (°)": "Prismenwinkel (°)",
+  "Draws the guide field as a green square on the Sky map. Verify its placement against a solve.": "Zeichnet das Guiding-Feld als grünes Quadrat auf der Himmelskarte. Überprüfe die Platzierung anhand eines Plate-Solves.",
   "Off-axis guider (uses main scope focal length)": "Off-Axis-Guider (nutzt die Brennweite des Hauptteleskops)",
   "Guiding through the main scope at": "Guiding durch das Hauptteleskop bei",
   "Use my location": "Meinen Standort verwenden",

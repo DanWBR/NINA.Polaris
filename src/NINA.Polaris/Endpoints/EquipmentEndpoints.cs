@@ -289,6 +289,16 @@ public static class EquipmentEndpoints {
                 // RigPatch.Merge(stored, patch) — an omitting client yields the
                 // stored value (no-op) and an explicit false is a real "OAG off".
                 r.GuiderIsOag = update.GuiderIsOag;
+                // OAG prism geometry (drives the guide FOV square). Both are
+                // plain values off RigPatch.Merge(stored, patch), so an omitting
+                // client keeps the stored value. Offset >= 0; angle wraps freely.
+                if (update.OagOffsetMm >= 0) r.OagOffsetMm = update.OagOffsetMm;
+                r.OagPositionAngleDeg = update.OagPositionAngleDeg;
+                // Last-known guide-camera sensor geometry (for the offline FOV
+                // square). Guarded so a bare/old PUT never zeroes it.
+                if (update.GuiderCameraMaxX > 0) r.GuiderCameraMaxX = update.GuiderCameraMaxX;
+                if (update.GuiderCameraMaxY > 0) r.GuiderCameraMaxY = update.GuiderCameraMaxY;
+                if (update.GuiderCameraPixelSizeUm > 0) r.GuiderCameraPixelSizeUm = update.GuiderCameraPixelSizeUm;
                 // Native guider backend selection + tunables. Empty/zero
                 // from an old client leaves the existing values alone so a
                 // pre-native PUT doesn't clobber the new state.

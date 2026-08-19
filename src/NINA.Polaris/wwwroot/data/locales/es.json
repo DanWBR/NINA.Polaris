@@ -1,4 +1,7 @@
 {
+  "Prism offset (mm)": "Desplazamiento del prisma (mm)",
+  "Prism angle (°)": "Ángulo del prisma (°)",
+  "Draws the guide field as a green square on the Sky map. Verify its placement against a solve.": "Dibuja el campo de guiado como un cuadrado verde en el mapa del Cielo. Verifica su posición con una resolución de placa.",
   "Off-axis guider (uses main scope focal length)": "Guiado fuera de eje (usa la distancia focal del tubo principal)",
   "Guiding through the main scope at": "Guiando a través del tubo principal a",
   "Use my location": "Usar mi ubicación",

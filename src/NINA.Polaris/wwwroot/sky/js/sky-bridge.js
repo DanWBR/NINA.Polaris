@@ -511,7 +511,7 @@
     // mount SHOULD be pointing (the catalog object the user picked),
     // actual = where it actually ended up (from plate solve). The line
     // between them visualises the pointing error as an angular vector.
-    var __skyFovObjs = { mount: null, target: null, aux: null,
+    var __skyFovObjs = { mount: null, target: null, aux: null, guide: null,
                           alignTarget: null, alignActual: null, alignLine: null };
     // Mosaic tiles are drawn ONE geojson object per panel (exactly like the
     // mount rectangle) — the engine geojson parser renders a single Polygon
@@ -994,6 +994,47 @@
         }
     }
 
+    // OAG guide-camera FOV rectangle (green). Always celestial-anchored: the
+    // parent places it at the main-field centre plus the prism pick-off offset,
+    // so it only exists with a raDeg/decDeg. Rebuilt on pan like the others so
+    // its label stays glued to the top edge.
+    var __lastGuideFov = null;
+
+    function skyRebuildGuideGeoJson() {
+        var stel = window.__stel;
+        if (!stel || !__skyFovLayer || !__lastGuideFov) return;
+        if (!(__lastGuideFov.widthDeg > 0)) return;
+        if (typeof __lastGuideFov.raDeg !== 'number' || !isFinite(__lastGuideFov.raDeg)) return;
+        try {
+            skyRemoveObj('guide');
+            __skyFovObjs.guide = stel.createObj('geojson', {
+                data: skyFovGeoJson(__lastGuideFov, '#22c55e', true,
+                    'OAG ' + __lastGuideFov.widthDeg.toFixed(2) + 'x'
+                        + __lastGuideFov.heightDeg.toFixed(2))   // green, glow
+            });
+            __skyFovLayer.add(__skyFovObjs.guide);
+        } catch (e) {
+            console.warn('[Sky] guide geojson rebuild failed:', e);
+        }
+    }
+
+    // Celestial-only: draw the green OAG rectangle when the parent supplies a
+    // raDeg/decDeg (main-field centre + prism offset), else drop it.
+    function skyUpdateGuideFov(guide) {
+        __lastGuideFov = guide || null;
+        var celestial = !!(guide && guide.widthDeg > 0
+            && typeof guide.raDeg === 'number' && isFinite(guide.raDeg)
+            && typeof guide.decDeg === 'number' && isFinite(guide.decDeg));
+        if (celestial) {
+            skyRebuildGuideGeoJson();
+            console.log('[Sky] OAG guide FOV rect at RA=' + guide.raDeg.toFixed(2)
+                + '° Dec=' + guide.decDeg.toFixed(2) + '° size=' + guide.widthDeg.toFixed(2)
+                + '°×' + guide.heightDeg.toFixed(2) + '°');
+        } else {
+            skyRemoveObj('guide');
+        }
+    }
+
     // Rebuild the celestial-anchored red target rectangle from the
     // last received target overlay. Mirrors skyRebuildMountGeoJson so
     // a pan (centre parallactic changes) keeps the label glued to the
@@ -1077,7 +1118,7 @@
             + aux.heightDeg.toFixed(2) + '°';
     }
 
-    function skySetFovOverlays(mount, target, mosaic, aux) {
+    function skySetFovOverlays(mount, target, mosaic, aux, guide) {
         var stel = window.__stel;
         if (!stel) return;
         skyEnsureFovLayer();
@@ -1104,6 +1145,8 @@
             }
             // Aux camera FOV (pink): celestial geojson or CSS box.
             skyUpdateAuxFovBox(aux);
+            // OAG guide-camera FOV (green): celestial geojson only.
+            skyUpdateGuideFov(guide);
             // Update the screen-anchored target FOV CSS box.
             skyUpdateTargetFovBox(target);
         } catch (e) {
@@ -1300,6 +1343,11 @@
                     && isFinite(__lastTargetFov.raDeg)) {
                     skyRebuildTargetGeoJson();
                 }
+                // OAG guide rect rides the same mount → rebuild on pan too.
+                if (__lastGuideFov && typeof __lastGuideFov.raDeg === 'number'
+                    && isFinite(__lastGuideFov.raDeg)) {
+                    skyRebuildGuideGeoJson();
+                }
                 postToParent({
                     type: 'center',
                     center: skyGetCenter(),
@@ -1456,7 +1504,7 @@
                 // SWE-5: mount FOV (blue), target FOV (red dashed),
                 // optional mosaic grid (yellow). Each side is null to
                 // clear that overlay.
-                skySetFovOverlays(msg.mount || null, msg.target || null, msg.mosaic || null, msg.aux || null);
+                skySetFovOverlays(msg.mount || null, msg.target || null, msg.mosaic || null, msg.aux || null, msg.guide || null);
                 break;
             case 'set-alignment-markers':
                 // RDPA-3: target (green) + actual (red) point markers

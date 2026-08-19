@@ -1098,6 +1098,11 @@ function ninaApp() {
             // Off-axis guider: the guide camera images through the main OTA,
             // so the effective guide focal length is the main scope's.
             guiderIsOag: false,
+            // OAG prism pick-off geometry (drives the green guide FOV square).
+            oagOffsetMm: 0,           // radial offset in the focal plane (mm)
+            oagPositionAngleDeg: 0,   // rotation of that offset around the axis
+            // Last-known guide-camera sensor geometry (for the offline square).
+            guiderCameraMaxX: 0, guiderCameraMaxY: 0, guiderCameraPixelSizeUm: 0,
             guiderApertureMm: 50,
             guideTelescopeBrand: '',
             guideTelescopeModel: ''
@@ -1318,6 +1323,10 @@ function ninaApp() {
         // Aux camera sensor footprint (mm), hydrated from the WS status when
         // the aux camera reports CCD_INFO. Drives the pink aux FOV rect on SKY.
         auxSensorWidthMm: 0, auxSensorHeightMm: 0,
+        // Guide camera sensor footprint (mm), hydrated from the WS status when
+        // the native guide camera reports its geometry. Drives the green OAG
+        // FOV square on SKY (sized at the main scope focal length).
+        guideSensorWidthMm: 0, guideSensorHeightMm: 0,
         // Display-only colour saturation for preview canvases (1 = neutral).
         // Persisted; see setDispSaturation/_dispSatFilter.
         dispSaturation: (v => Number.isFinite(v) ? v : 1)(
@@ -18768,6 +18777,55 @@ function ninaApp() {
                 }
             }
 
+            // OAG guide FOV (green). Only in OAG mode: the guide camera images
+            // through the main OTA (main focal length) and the prism pick-off
+            // puts its field OFFSET from the main field by oagOffsetMm at
+            // position angle oagPositionAngleDeg — so, unlike the aux rect, it
+            // is NOT concentric. Anchored to the main-field centre (mount, else
+            // the solved target). Celestial-only (needs an anchor).
+            let guide = null;
+            if (this.settings.guiderIsOag) {
+                const gfl = Number(this.settings.focalLength) || 0;   // OAG = main FL
+                let gsw = this.guideSensorWidthMm, gsh = this.guideSensorHeightMm;
+                if (!(gsw > 0 && gsh > 0)) {
+                    const gx = Number(this.settings.guiderCameraMaxX) || 0;
+                    const gy = Number(this.settings.guiderCameraMaxY) || 0;
+                    const gp = Number(this.settings.guiderCameraPixelSizeUm) || 0;
+                    if (gx > 0 && gy > 0 && gp > 0) { gsw = gx * gp / 1000; gsh = gy * gp / 1000; }
+                }
+                const anchorRa = mount ? mount.raDeg
+                    : (Number.isFinite(target.raDeg) ? target.raDeg : null);
+                const anchorDec = mount ? mount.decDeg
+                    : (Number.isFinite(target.decDeg) ? target.decDeg : null);
+                if (gfl > 0 && gsw > 0 && gsh > 0 && anchorRa !== null) {
+                    const gW = 2 * Math.atan(gsw / (2 * gfl)) * (180 / Math.PI);
+                    const gH = 2 * Math.atan(gsh / (2 * gfl)) * (180 / Math.PI);
+                    // Radial offset (deg on sky) from the mm pick-off distance.
+                    const offMm = Math.max(0, Number(this.settings.oagOffsetMm) || 0);
+                    const offDeg = offMm > 0 ? Math.atan(offMm / gfl) * (180 / Math.PI) : 0;
+                    // Field rotation the guide chip shares with the main camera.
+                    const fieldRot = Number.isFinite(this.solveRotationDeg)
+                        ? this.solveRotationDeg : targetRot;
+                    let gRa = anchorRa, gDec = anchorDec;
+                    if (offDeg > 0) {
+                        // Position angle of the offset on sky = field rotation +
+                        // prism PA (measured from +Y/up). North = +Dec.
+                        // NOTE: offset DIRECTION/parity is the field-verification
+                        // point (like polar-align Refresh) — the sign convention
+                        // here is the first cut and may be flipped after a look.
+                        const paRad = (fieldRot + (Number(this.settings.oagPositionAngleDeg) || 0))
+                            * Math.PI / 180;
+                        gDec = anchorDec + offDeg * Math.cos(paRad);
+                        gRa  = anchorRa  + offDeg * Math.sin(paRad)
+                            / Math.max(1e-6, Math.cos(anchorDec * Math.PI / 180));
+                    }
+                    guide = {
+                        raDeg: gRa, decDeg: gDec,
+                        widthDeg: gW, heightDeg: gH, rotationDeg: fieldRot, flipV: false
+                    };
+                }
+            }
+
             // Skip when nothing actually changed since last push.
             // The mount status WS push fires several times per second
             // when slewing, and re-creating the engine geojson objects
@@ -18790,6 +18848,9 @@ function ninaApp() {
                             d: Number.isFinite(aux.decDeg) ? aux.decDeg.toFixed(3) : null,
                             w: aux.widthDeg.toFixed(3), h: aux.heightDeg.toFixed(3),
                             rot: (aux.rotationDeg||0).toFixed(2) },
+                g: guide && { r: guide.raDeg.toFixed(3), d: guide.decDeg.toFixed(3),
+                              w: guide.widthDeg.toFixed(3), h: guide.heightDeg.toFixed(3),
+                              rot: (guide.rotationDeg||0).toFixed(2) },
                 // FIELD3-4: include solveRotationDeg in the key so a
                 // post-solve rotation update re-pushes the mount
                 // rectangle even when ra/dec haven't moved.
@@ -18847,7 +18908,7 @@ function ninaApp() {
                     })) }
                 : null;
             this._skySendMessage({ type: 'set-fov-overlays', mount, target,
-                mosaic: mosaicMsg, aux });
+                mosaic: mosaicMsg, aux, guide });
         },
 
         // Pixel readout: convert mouse event coords to source-image coords +
@@ -21604,6 +21665,11 @@ function ninaApp() {
             // Guidescope card
             this.settings.guiderFocalLengthMm = rig.guiderFocalLengthMm || 200;
             this.settings.guiderIsOag         = !!rig.guiderIsOag;
+            this.settings.oagOffsetMm         = rig.oagOffsetMm || 0;
+            this.settings.oagPositionAngleDeg = rig.oagPositionAngleDeg || 0;
+            this.settings.guiderCameraMaxX        = rig.guiderCameraMaxX || 0;
+            this.settings.guiderCameraMaxY        = rig.guiderCameraMaxY || 0;
+            this.settings.guiderCameraPixelSizeUm = rig.guiderCameraPixelSizeUm || 0;
             this.settings.guiderApertureMm   = rig.guiderApertureMm   || 50;
             this.settings.guideTelescopeBrand = rig.guideTelescopeBrand || '';
             this.settings.guideTelescopeModel = rig.guideTelescopeModel || '';
@@ -22386,6 +22452,8 @@ function ninaApp() {
                 // Guidescope card
                 guiderFocalLengthMm: this.settings.guiderFocalLengthMm,
                 guiderIsOag:         this.settings.guiderIsOag,
+                oagOffsetMm:         Math.max(0, Number(this.settings.oagOffsetMm) || 0),
+                oagPositionAngleDeg: Number(this.settings.oagPositionAngleDeg) || 0,
                 guiderApertureMm:    this.settings.guiderApertureMm,
                 guideTelescopeBrand: this.settings.guideTelescopeBrand,
                 guideTelescopeModel: this.settings.guideTelescopeModel,
@@ -41463,6 +41531,33 @@ function ninaApp() {
                             auxCameraMaxX: lmx,
                             auxCameraMaxY: lmy,
                             auxCameraBitDepth: Number(this.aux.bitDepth) || 0
+                        });
+                    }
+                }
+                if (this.tab === 'sky') { try { this._pushSkyFovOverlays(); } catch (_) {} }
+            }
+            // Guide-camera sensor footprint (mm) for the OAG FOV square, same
+            // mechanics as the aux block: size from pixel count × pixel size and
+            // learn the geometry onto the rig so the green square draws even
+            // when the guide camera is offline.
+            if (eq.guideCamera && eq.guideCamera.maxX > 0 && eq.guideCamera.pixelSizeX > 0) {
+                this.guideSensorWidthMm  = eq.guideCamera.maxX * eq.guideCamera.pixelSizeX / 1000;
+                this.guideSensorHeightMm = eq.guideCamera.maxY * eq.guideCamera.pixelSizeY / 1000;
+                if (eq.guideCamera.connected) {
+                    const lpx = Number(eq.guideCamera.pixelSizeX) || 0;
+                    const lmx = Number(eq.guideCamera.maxX) || 0;
+                    const lmy = Number(eq.guideCamera.maxY) || 0;
+                    if (lpx > 0 && lmx > 0 && lmy > 0
+                        && (Math.abs((Number(this.settings.guiderCameraPixelSizeUm) || 0) - lpx) > 0.005
+                            || (Number(this.settings.guiderCameraMaxX) || 0) !== lmx
+                            || (Number(this.settings.guiderCameraMaxY) || 0) !== lmy)) {
+                        this.settings.guiderCameraPixelSizeUm = lpx;
+                        this.settings.guiderCameraMaxX = lmx;
+                        this.settings.guiderCameraMaxY = lmy;
+                        this._persistRigSelection({
+                            guiderCameraPixelSizeUm: lpx,
+                            guiderCameraMaxX: lmx,
+                            guiderCameraMaxY: lmy
                         });
                     }
                 }

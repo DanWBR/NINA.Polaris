@@ -6865,6 +6865,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 Guiding through the main scope at
                                 <strong x-text="(settings.focalLength || 0) + ' mm'"></strong>.
                             </p>
+                            <!-- OAG prism geometry: places the green guide FOV
+                                 square on the SKY map, offset from the main
+                                 field (like KStars/TheSkyX). -->
+                            <div class="equip-meta-row" x-show="settings.guiderIsOag" style="margin-top:6px">
+                                <label><span x-text="$t('Prism offset (mm)')"></span>
+                                    <input type="number" x-model.number="settings.oagOffsetMm"
+                                           @change="saveOpticsDebounced()" step="1" min="0"
+                                           class="input-sm" style="width:90px">
+                                </label>
+                                <label><span x-text="$t('Prism angle (°)')"></span>
+                                    <input type="number" x-model.number="settings.oagPositionAngleDeg"
+                                           @change="saveOpticsDebounced()" step="5"
+                                           class="input-sm" style="width:80px">
+                                </label>
+                            </div>
+                            <p class="hint" style="margin:4px 0 0;font-size:11px"
+                               x-show="settings.guiderIsOag">
+                                <span x-text="$t('Draws the guide field as a green square on the Sky map. Verify its placement against a solve.')"></span>
+                            </p>
                             <p class="hint" style="margin:4px 0 0;font-size:11px"
                                x-show="guider.connected && guider.pixelScale">
                                 Guider currently reports

@@ -1,4 +1,7 @@
 {
+  "Prism offset (mm)": "",
+  "Prism angle (°)": "",
+  "Draws the guide field as a green square on the Sky map. Verify its placement against a solve.": "",
   "Off-axis guider (uses main scope focal length)": "",
   "Guiding through the main scope at": "",
   "Use my location": "Use my location",
