@@ -427,8 +427,10 @@ public class ProfileService {
             Telescope = src.Telescope, TelescopeDriver = src.TelescopeDriver,
             Focuser = src.Focuser, FocuserDriver = src.FocuserDriver,
             FilterWheel = src.FilterWheel, FilterWheelDriver = src.FilterWheelDriver,
+            AttachedFilter = src.AttachedFilter,
             Rotator = src.Rotator,
             FlatDevice = src.FlatDevice, Dome = src.Dome, Weather = src.Weather,
+            Switch = src.Switch, SwitchDriver = src.SwitchDriver,
             CoolerTargetTemperature = src.CoolerTargetTemperature,
             CoolerRampDegPerMinute = src.CoolerRampDegPerMinute,
             DefaultGain = src.DefaultGain, DefaultOffset = src.DefaultOffset,
@@ -454,6 +456,13 @@ public class ProfileService {
                 BacklashModel = src.AutoFocus.BacklashModel,
                 MinStars = src.AutoFocus.MinStars
             },
+            // Polar alignment (TPPA) + slew & center plate-solve tunables.
+            PolarAlignSlewDegrees = src.PolarAlignSlewDegrees,
+            PolarAlignExposureSec = src.PolarAlignExposureSec,
+            PolarAlignSettleSeconds = src.PolarAlignSettleSeconds,
+            PolarAlignGain = src.PolarAlignGain,
+            SlewCenterExposureSec = src.SlewCenterExposureSec,
+            SlewCenterGain = src.SlewCenterGain,
             FocalLengthMm = src.FocalLengthMm,
             ApertureMm = src.ApertureMm,
             TelescopeBrand = src.TelescopeBrand,
@@ -468,6 +477,9 @@ public class ProfileService {
             CameraBitDepth = src.CameraBitDepth,
             GuiderFocalLengthMm = src.GuiderFocalLengthMm,
             GuiderIsOag = src.GuiderIsOag,
+            GuiderApertureMm = src.GuiderApertureMm,
+            GuideTelescopeBrand = src.GuideTelescopeBrand,
+            GuideTelescopeModel = src.GuideTelescopeModel,
             // Auxiliary (second) camera + its optics/focuser.
             AuxCamera = src.AuxCamera, AuxCameraDriver = src.AuxCameraDriver,
             AuxFocalLengthMm = src.AuxFocalLengthMm,
@@ -502,6 +514,7 @@ public class ProfileService {
             NativePredictiveWormPeriodSec = src.NativePredictiveWormPeriodSec,
             NativePredictiveWindowSamples = src.NativePredictiveWindowSamples,
             NativePredictiveBlend = src.NativePredictiveBlend,
+            NativeZFilterExpFactor = src.NativeZFilterExpFactor,
             NativeBacklashComp = src.NativeBacklashComp,
             NativeBacklashMaxMs = src.NativeBacklashMaxMs,
             NativeMultiStar = src.NativeMultiStar,
@@ -511,6 +524,9 @@ public class ProfileService {
             // A cloned rig starts un-calibrated (geometry differs per setup).
             NativeCalibration = null,
             NativeCalibrations = new(),
+            // The learned periodic-error model is worm/mount-specific and is
+            // re-learned per setup, same rationale as the calibration reset.
+            NativePredictiveModel = null,
             NativeGuideGain = src.NativeGuideGain,
             NativeGuideBin = src.NativeGuideBin,
             PHD2Host = src.PHD2Host, PHD2Port = src.PHD2Port,
@@ -527,6 +543,9 @@ public class ProfileService {
             // not just the offsets — otherwise the copy comes up with the
             // driver's raw names and the offsets (keyed by the saved names) miss.
             FilterNames = (string[])(src.FilterNames ?? System.Array.Empty<string>()).Clone(),
+            // Per-rig power-box channel labels travel with the clone, same
+            // rationale as FilterNames.
+            SwitchChannelNames = new Dictionary<string, string>(src.SwitchChannelNames),
             // Live-stack triggers, clone the whole shape so the new rig
             // gets the same refocus/recenter policy as the source. Reset
             // counters live on the orchestrator, not the settings.
@@ -562,6 +581,7 @@ public class ProfileService {
             NativeGuideDarkFrames = src.NativeGuideDarkFrames,
             LiveStackSaveFramesToDisk = src.LiveStackSaveFramesToDisk,
             LiveStackColor = src.LiveStackColor,
+            LiveStackBinning = src.LiveStackBinning,
             LiveStackSigmaRejection = src.LiveStackSigmaRejection,
             LiveStackSigmaKappa = src.LiveStackSigmaKappa,
             LiveStackMaxDurationSeconds = src.LiveStackMaxDurationSeconds,
@@ -581,7 +601,13 @@ public class ProfileService {
             // INDIROB-3: pre-connect delays follow the rig — different
             // setups (mini-PC vs Pi, USB hub topology, ESP32 vs FTDI
             // bridges) have different settling needs.
-            PreConnectDelayMsByDevice = new Dictionary<string, int>(src.PreConnectDelayMsByDevice)
+            PreConnectDelayMsByDevice = new Dictionary<string, int>(src.PreConnectDelayMsByDevice),
+            GuideRunawayRestart = src.GuideRunawayRestart,
+            GuideRunawayRmsArcsec = src.GuideRunawayRmsArcsec,
+            // Per-rig anti-crash slew guards follow the clone.
+            SlewConfirmDeg = src.SlewConfirmDeg,
+            SlewFloorDeg = src.SlewFloorDeg,
+            FlipFloorDeg = src.FlipFloorDeg
         };
         _activeProfile.EquipmentProfiles.Add(copy);
         Save();
