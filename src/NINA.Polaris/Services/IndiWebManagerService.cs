@@ -584,18 +584,9 @@ public class IndiWebManagerService : BackgroundService {
     /// so we can call it from the 15 s health loop without making
     /// the log noisy.</summary>
     private async Task<bool> ProbeHealthAsync(CancellationToken ct) {
-        try {
-            using var tcp = new TcpClient();
-            var connect = tcp.ConnectAsync(BindAddress, BindPort, ct).AsTask();
-            var timeout = Task.Delay(500, ct);
-            var winner = await Task.WhenAny(connect, timeout);
-            LastHealthCheckAt = DateTime.UtcNow;
-            Running = winner == connect && tcp.Connected;
-            return Running;
-        } catch {
-            Running = false;
-            return false;
-        }
+        Running = await NetProbe.TryConnectAsync(BindAddress, BindPort, 500, ct);
+        LastHealthCheckAt = DateTime.UtcNow;
+        return Running;
     }
 
     private static async Task<(int exitCode, string stdout, string stderr)>

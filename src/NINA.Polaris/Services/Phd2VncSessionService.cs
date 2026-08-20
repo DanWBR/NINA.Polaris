@@ -298,15 +298,8 @@ public class Phd2VncSessionService : BackgroundService {
     /// user needs to see as "not listening" so they restart the
     /// service.</summary>
     private async Task ProbeListeningAsync(CancellationToken ct) {
-        try {
-            using var tcp = new TcpClient();
-            var connect = tcp.ConnectAsync(IPAddress.Loopback, Port, ct).AsTask();
-            var timeout = Task.Delay(500, ct);
-            var winner = await Task.WhenAny(connect, timeout);
-            Listening = winner == connect && tcp.Connected;
-        } catch {
-            Listening = false;
-        }
+        Listening = await NetProbe.TryConnectAsync(
+            IPAddress.Loopback.ToString(), Port, 500, ct);
     }
 
     /// <summary>Start the TightVNC Windows service. Requires Polaris
