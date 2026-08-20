@@ -74,6 +74,28 @@ public class MountSafetyGuardService : BackgroundService {
         }
     }
 
+    /// <summary>Altitude to test against the safety floor. Prefers the driver's
+    /// own encoder-reported altitude — ground truth on AltAz-native mounts (e.g.
+    /// a Seestar S50 over Alpaca), where RA/Dec are derived rather than measured
+    /// and can carry drift the recompute would inherit — and only falls back to
+    /// the RA/Dec→AltAz recompute when the driver reports NaN (equatorial
+    /// drivers that don't expose horizontal coordinates).</summary>
+    private double CurrentAltitude(double driverAlt, double ra, double dec) {
+        if (!double.IsNaN(driverAlt)) return driverAlt;
+        var (altDeg, _) = AltitudeService.RaDecToAltAz(
+            ra, dec, DateTime.UtcNow, _profile.Active.Latitude, _profile.Active.Longitude);
+        return altDeg;
+    }
+
+    /// <summary>Alt/Az for the tracking-drop diagnostic snapshot. Prefers the
+    /// driver's reported pair (both non-NaN); otherwise recomputes from RA/Dec.
+    /// Same rationale as <see cref="CurrentAltitude"/>.</summary>
+    private (double alt, double az) CurrentAltAz(double driverAlt, double driverAz, double ra, double dec) {
+        if (!double.IsNaN(driverAlt) && !double.IsNaN(driverAz)) return (driverAlt, driverAz);
+        return AltitudeService.RaDecToAltAz(
+            ra, dec, DateTime.UtcNow, _profile.Active.Latitude, _profile.Active.Longitude);
+    }
+
     /// <summary>The floor to use for the live abort WHILE a meridian flip is
     /// executing. A flip transit legitimately dips low at low latitude, so the
     /// ordinary floor would abort a valid flip; this drops to the horizon (or a
@@ -236,8 +258,7 @@ public class MountSafetyGuardService : BackgroundService {
             if (scope is { IsConnected: true, IsSlewing: true }) {
                 double ra = scope.RightAscension, dec = scope.Declination;
                 if (!double.IsNaN(ra) && !double.IsNaN(dec)) {
-                    var (altDeg, _) = AltitudeService.RaDecToAltAz(
-                        ra, dec, DateTime.UtcNow, _profile.Active.Latitude, _profile.Active.Longitude);
+                    double altDeg = CurrentAltitude(scope.Altitude, ra, dec);
                     double floorDeg = flipping ? FlipFloorDeg : AltitudeFloorDeg;
                     bool abort = flipping
                         ? MountSlewSafety.ShouldAbortForFlipTransit(altDeg, floorDeg, true)
@@ -336,8 +357,7 @@ public class MountSafetyGuardService : BackgroundService {
 
         double lst = MeridianFlipService.ComputeLstHours(DateTime.UtcNow, _profile.Active.Longitude);
         double haMin = MountSlewSafety.TargetHaMinutes(ra, lst);
-        var (alt, az) = AltitudeService.RaDecToAltAz(
-            ra, dec, DateTime.UtcNow, _profile.Active.Latitude, _profile.Active.Longitude);
+        var (alt, az) = CurrentAltAz(scope.Altitude, scope.Azimuth, ra, dec);
         var pier = scope.Capabilities.SupportsPierSide ? scope.SideOfPier.ToString().Replace("pier", "") : "n/a";
 
         string snap =
