@@ -375,16 +375,8 @@ public class Phd2GuiSessionService : BackgroundService {
 
     /// <summary>TCP probe, returns true if something is listening on 127.0.0.1:BindPort.</summary>
     private async Task<bool> ProbeHealthAsync(CancellationToken ct) {
-        try {
-            using var tcp = new TcpClient();
-            var connect = tcp.ConnectAsync("127.0.0.1", BindPort, ct).AsTask();
-            var timeout = Task.Delay(500, ct);
-            var winner = await Task.WhenAny(connect, timeout);
-            LastHealthCheckAt = DateTime.UtcNow;
-            SessionRunning = winner == connect && tcp.Connected;
-        } catch {
-            SessionRunning = false;
-        }
+        SessionRunning = await NetProbe.TryConnectAsync("127.0.0.1", BindPort, 500, ct);
+        LastHealthCheckAt = DateTime.UtcNow;
         // Refresh Phd2Running alongside the xpra probe. Cheap, single
         // pgrep call, no need to be conditional on SessionRunning.
         // FIELD-5: widened from `pgrep -x phd2.bin` / `pgrep -x phd2`

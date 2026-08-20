@@ -277,14 +277,6 @@ public sealed class CanopusServerService : BackgroundService {
         LastHealthCheckAt = DateTime.UtcNow;
     }
 
-    private static async Task<bool> ProbePortAsync(int port, CancellationToken ct) {
-        try {
-            using var tcp = new TcpClient();
-            var connect = tcp.ConnectAsync(System.Net.IPAddress.Loopback, port, ct).AsTask();
-            var winner = await Task.WhenAny(connect, Task.Delay(500, ct));
-            return winner == connect && tcp.Connected;
-        } catch {
-            return false;
-        }
-    }
+    private static Task<bool> ProbePortAsync(int port, CancellationToken ct) =>
+        NetProbe.TryConnectAsync(System.Net.IPAddress.Loopback.ToString(), port, 500, ct);
 }
