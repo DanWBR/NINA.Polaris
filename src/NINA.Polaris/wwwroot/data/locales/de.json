@@ -4385,5 +4385,11 @@
   "Prism angle (°)": "Prismenwinkel (°)",
   "Draws the guide field as a green square on the Sky map. Verify its placement against a solve.": "Zeichnet das Guiding-Feld als grünes Quadrat auf der Himmelskarte. Überprüfe die Platzierung anhand eines Plate-Solves.",
   "Off-axis guider (uses main scope focal length)": "Off-Axis-Guider (nutzt die Brennweite des Hauptteleskops)",
-  "Guiding through the main scope at": "Guiding durch das Hauptteleskop bei"
+  "Guiding through the main scope at": "Guiding durch das Hauptteleskop bei",
+  "Custom horizon": "Benutzerdefinierter Horizont",
+  "Click to add a point, drag to move it, right-click to delete. Azimuth runs left→right (0° N, 90° E, 180° S, 270° W); the red band is blocked sky.": "Klicken zum Hinzufügen eines Punkts, ziehen zum Verschieben, Rechtsklick zum Löschen. Der Azimut verläuft links→rechts (0° N, 90° O, 180° S, 270° W); das rote Band ist verdeckter Himmel.",
+  "Import file": "Datei importieren",
+  "Failed to save horizon": "Horizont konnte nicht gespeichert werden",
+  "Horizon imported": "Horizont importiert",
+  "Could not read horizon file": "Horizontdatei konnte nicht gelesen werden"
 }

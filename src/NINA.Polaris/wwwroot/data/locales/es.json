@@ -4385,5 +4385,11 @@
   "Prism angle (°)": "Ángulo del prisma (°)",
   "Draws the guide field as a green square on the Sky map. Verify its placement against a solve.": "Dibuja el campo de guiado como un cuadrado verde en el mapa del Cielo. Verifica su posición con una resolución de placa.",
   "Off-axis guider (uses main scope focal length)": "Guiado fuera de eje (usa la distancia focal del tubo principal)",
-  "Guiding through the main scope at": "Guiando a través del tubo principal a"
+  "Guiding through the main scope at": "Guiando a través del tubo principal a",
+  "Custom horizon": "Horizonte personalizado",
+  "Click to add a point, drag to move it, right-click to delete. Azimuth runs left→right (0° N, 90° E, 180° S, 270° W); the red band is blocked sky.": "Haz clic para añadir un punto, arrastra para moverlo, clic derecho para eliminar. El acimut va de izquierda→derecha (0° N, 90° E, 180° S, 270° O); la banda roja es cielo bloqueado.",
+  "Import file": "Importar archivo",
+  "Failed to save horizon": "Error al guardar el horizonte",
+  "Horizon imported": "Horizonte importado",
+  "Could not read horizon file": "No se pudo leer el archivo de horizonte"
 }

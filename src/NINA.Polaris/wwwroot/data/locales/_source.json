@@ -3761,5 +3761,11 @@
   "Prism angle (°)": "",
   "Draws the guide field as a green square on the Sky map. Verify its placement against a solve.": "",
   "Off-axis guider (uses main scope focal length)": "",
-  "Guiding through the main scope at": ""
+  "Guiding through the main scope at": "",
+  "Custom horizon": "",
+  "Click to add a point, drag to move it, right-click to delete. Azimuth runs left→right (0° N, 90° E, 180° S, 270° W); the red band is blocked sky.": "",
+  "Import file": "",
+  "Failed to save horizon": "",
+  "Horizon imported": "",
+  "Could not read horizon file": ""
 }
