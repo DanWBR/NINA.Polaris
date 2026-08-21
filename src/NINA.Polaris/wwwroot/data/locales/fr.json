@@ -4398,5 +4398,7 @@
   "🔭 Add from telescope": "🔭 Ajouter depuis le télescope",
   "🌄 Horizon point": "🌄 Point d’horizon",
   "Connect the mount to add a horizon point from its position": "Connectez la monture pour ajouter un point d’horizon depuis sa position",
-  "Added horizon point": "Point d’horizon ajouté"
+  "Added horizon point": "Point d’horizon ajouté",
+  "Sync the mount's time & location before every GoTo": "Synchroniser l’heure et la position de la monture avant chaque GoTo",
+  "Pushes the correct clock + observatory location to the mount before it slews, so a stale mount clock/site can't send the scope the wrong way into the tripod. If the mount can't accept the push, the GoTo asks you to confirm. On by default; remote observatories rely on it to self-heal.": "Envoie l’heure et la position correctes de l’observatoire à la monture avant qu’elle ne bouge, afin qu’une horloge/un site obsolète n’envoie pas le télescope du mauvais côté contre le trépied. Si la monture n’accepte pas l’envoi, le GoTo demande confirmation. Activé par défaut ; les observatoires distants s’en remettent à cela pour s’auto-corriger."
 }

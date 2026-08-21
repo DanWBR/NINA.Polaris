@@ -10382,6 +10382,7 @@ function ninaApp() {
                 const body = {
                     slewConfirmDeg: norm(rig.slewConfirmDeg),
                     slewFloorDeg: norm(rig.slewFloorDeg),
+                    autoSyncMountBeforeSlew: rig.autoSyncMountBeforeSlew !== false,
                 };
                 await this.apiPost('/api/equipment/rigs/' + encodeURIComponent(rig.id), null, {
                     method: 'PUT',
@@ -10390,6 +10391,7 @@ function ninaApp() {
                 });
                 rig.slewConfirmDeg = body.slewConfirmDeg;
                 rig.slewFloorDeg = body.slewFloorDeg;
+                rig.autoSyncMountBeforeSlew = body.autoSyncMountBeforeSlew;
                 this.toast('Slew safety thresholds saved', 'ok');
             } catch (e) {
                 this.toastFail('Save failed', e);
@@ -25017,15 +25019,26 @@ function ninaApp() {
                 let info = {};
                 try { info = JSON.parse(e.body || '{}'); } catch { /* ignore */ }
                 const safety = info.kind === 'safety-stop';
-                const msg = safety
-                    ? ((info.reason || 'Mount safety stop is active.')
+                const mountSync = info.kind === 'mount-sync';
+                let msg, title;
+                if (mountSync) {
+                    msg = (info.reason || 'The mount clock/location could not be verified.')
+                        + '\n\nA GoTo with a wrong mount clock or location can swing the scope '
+                        + 'the wrong way into the tripod. Slew anyway?';
+                    title = 'Mount time/location';
+                } else if (safety) {
+                    msg = (info.reason || 'Mount safety stop is active.')
                         + '\n\nRunning Find Home first is strongly recommended so the mount '
-                        + 'has a clean pointing model. Slew anyway?')
-                    : ('This slew was flagged: ' + (info.reason || 'safety check')
+                        + 'has a clean pointing model. Slew anyway?';
+                    title = 'Mount safety stop';
+                } else {
+                    msg = 'This slew was flagged: ' + (info.reason || 'safety check')
                         + '.\n\nThis is the kind of move that can swing the mount the long way '
-                        + 'toward the pier/tripod. Continue anyway?');
+                        + 'toward the pier/tripod. Continue anyway?';
+                    title = 'Confirm slew';
+                }
                 const ok = await this._confirmAsync(msg, {
-                    title: safety ? 'Mount safety stop' : 'Confirm slew',
+                    title,
                     okLabel: 'Slew anyway', cancelLabel: 'Cancel', danger: true
                 });
                 if (!ok) return null;   // declined

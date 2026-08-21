@@ -6984,6 +6984,18 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     The altitude floor also arms the live anti-crash abort (needs the
                                     global guard above on).
                                 </p>
+                                <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;font-size:12px">
+                                    <input type="checkbox"
+                                           :checked="activeRig.autoSyncMountBeforeSlew !== false"
+                                           @change="activeRig.autoSyncMountBeforeSlew = $event.target.checked; saveSlewSafety()">
+                                    <span>Sync the mount's time &amp; location before every GoTo</span>
+                                </label>
+                                <p class="hint" style="margin:4px 0 0;font-size:11px">
+                                    Pushes the correct clock + observatory location to the mount before it
+                                    slews, so a stale mount clock/site can't send the scope the wrong way
+                                    into the tripod. If the mount can't accept the push, the GoTo asks you
+                                    to confirm. On by default; remote observatories rely on it to self-heal.
+                                </p>
                             </div>
                             </details>
                         </div>

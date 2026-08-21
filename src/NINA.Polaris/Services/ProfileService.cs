@@ -580,7 +580,14 @@ public class ProfileService {
             // INDIROB-3: pre-connect delays follow the rig — different
             // setups (mini-PC vs Pi, USB hub topology, ESP32 vs FTDI
             // bridges) have different settling needs.
-            PreConnectDelayMsByDevice = new Dictionary<string, int>(src.PreConnectDelayMsByDevice)
+            PreConnectDelayMsByDevice = new Dictionary<string, int>(src.PreConnectDelayMsByDevice),
+            GuideRunawayRestart = src.GuideRunawayRestart,
+            GuideRunawayRmsArcsec = src.GuideRunawayRmsArcsec,
+            // Per-rig anti-crash slew guards follow the clone.
+            SlewConfirmDeg = src.SlewConfirmDeg,
+            SlewFloorDeg = src.SlewFloorDeg,
+            FlipFloorDeg = src.FlipFloorDeg,
+            AutoSyncMountBeforeSlew = src.AutoSyncMountBeforeSlew
         };
         _activeProfile.EquipmentProfiles.Add(copy);
         Save();

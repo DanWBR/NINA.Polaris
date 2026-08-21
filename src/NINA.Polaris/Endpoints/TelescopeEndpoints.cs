@@ -73,11 +73,16 @@ public static class TelescopeEndpoints {
             }
         });
 
-        group.MapPost("/slew", async (EquipmentManager equip, SlewRequest request) => {
+        group.MapPost("/slew", async (EquipmentManager equip, ProfileService profiles, SlewRequest request) => {
             if (equip.Telescope == null)
                 return Results.BadRequest(new { error = "No telescope selected" });
 
             try {
+                // Push the correct UTC + location first so a stale mount clock/site
+                // can't send the OTA the wrong way into the tripod. Best-effort
+                // (the confirm-gated path is /api/sky/slew-and-center); on by default.
+                if (profiles.ActiveEquipmentProfile?.AutoSyncMountBeforeSlew != false)
+                    await MountTimeSync.SyncAsync(equip.Telescope, profiles.Active);
                 await equip.Telescope.SlewAsync(request.Ra, request.Dec);
                 return Results.Ok(new {
                     status = "slewing",

@@ -1065,6 +1065,15 @@ public class EquipmentProfile {
     /// Nullable for the same partial-PUT reason as the other floors.</summary>
     public double? FlipFloorDeg { get; set; }
 
+    /// <summary>Push the correct UTC + observatory location into the mount right
+    /// before every GoTo, so a stale mount clock/site (which makes the mount
+    /// resolve RA/Dec to the wrong Alt/Az and can swing the OTA into the tripod)
+    /// can't send it the wrong way. When the mount driver can't accept the push,
+    /// the slew asks for confirmation instead of proceeding blind. On by default;
+    /// absent-in-old-profile keeps the true initializer. Remote observatories
+    /// rely on this to self-heal without anyone on site.</summary>
+    public bool AutoSyncMountBeforeSlew { get; set; } = true;
+
     /// <summary>When true, each raw frame fed to
     /// <c>LiveStackingService.AddFrameAsync</c> is also persisted to
     /// disk as a regular LIGHT (lands in the same per-target /
