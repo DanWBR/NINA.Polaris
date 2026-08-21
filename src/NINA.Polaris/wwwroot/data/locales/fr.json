@@ -4394,5 +4394,9 @@
   "Could not read horizon file": "Impossible de lire le fichier d’horizon",
   "Export .hrz": "Exporter .hrz",
   "Automatically sync the host clock when it is off by more than an hour": "Synchroniser automatiquement l’horloge de l’hôte lorsqu’elle dérive de plus d’une heure",
-  "Host clock was over an hour off; synced from this device": "L’horloge de l’hôte était décalée de plus d’une heure ; synchronisée depuis cet appareil"
+  "Host clock was over an hour off; synced from this device": "L’horloge de l’hôte était décalée de plus d’une heure ; synchronisée depuis cet appareil",
+  "🔭 Add from telescope": "🔭 Ajouter depuis le télescope",
+  "🌄 Horizon point": "🌄 Point d’horizon",
+  "Connect the mount to add a horizon point from its position": "Connectez la monture pour ajouter un point d’horizon depuis sa position",
+  "Added horizon point": "Point d’horizon ajouté"
 }
