@@ -14259,6 +14259,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span x-show="clockSync.busy">Syncing…</span>
                         </button>
                     </div>
+                    <!-- Auto clock sync: pull the host onto this client's clock
+                         when it drifts more than an hour (RTC-less SBC booted
+                         with no network time). On by default. -->
+                    <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer; font-size:13px">
+                        <input type="checkbox" x-model="settings.autoClockSync"
+                               @change="saveSettingsToServer()">
+                        <span>Automatically sync the host clock when it is off by more than an hour</span>
+                    </label>
                     <p class="text-warn" x-show="!clockSync.supported"
                        style="font-size:11px; margin-top:8px">
                         ⚠ Clock sync is Linux-only (uses
@@ -14670,6 +14678,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <button class="btn btn-sm" @click="$refs.horizonFile.click()">Import file</button>
                             <input type="file" x-ref="horizonFile" accept=".hrz,.txt,.csv,text/plain"
                                    style="display:none" @change="horizonImportFile($event)">
+                            <button class="btn btn-sm" @click="horizonExport()"
+                                    :disabled="!horizonPoints.length">Export .hrz</button>
                             <button class="btn btn-sm" @click="horizonClear()"
                                     :disabled="!horizonPoints.length">Clear</button>
                             <span class="hint" style="margin:0"

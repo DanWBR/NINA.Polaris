@@ -1,4 +1,7 @@
 {
+  "Export .hrz": "Exportar .hrz",
+  "Automatically sync the host clock when it is off by more than an hour": "Sincronizar automáticamente el reloj del host cuando difiera en más de una hora",
+  "Host clock was over an hour off; synced from this device": "El reloj del host tenía más de una hora de diferencia; sincronizado desde este dispositivo",
   "Custom horizon": "Horizonte personalizado",
   "Click to add a point, drag to move it, right-click to delete. Azimuth runs left→right (0° N, 90° E, 180° S, 270° W); the red band is blocked sky.": "Haz clic para añadir un punto, arrastra para moverlo, clic derecho para eliminar. El acimut va de izquierda→derecha (0° N, 90° E, 180° S, 270° O); la banda roja es cielo bloqueado.",
   "Import file": "Importar archivo",
