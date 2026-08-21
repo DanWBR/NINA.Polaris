@@ -4400,5 +4400,11 @@
   "Connect the mount to add a horizon point from its position": "Verbinde die Montierung, um von ihrer Position einen Horizontpunkt hinzuzufügen",
   "Added horizon point": "Horizontpunkt hinzugefügt",
   "Sync the mount's time & location before every GoTo": "Zeit und Standort der Montierung vor jedem GoTo synchronisieren",
-  "Pushes the correct clock + observatory location to the mount before it slews, so a stale mount clock/site can't send the scope the wrong way into the tripod. If the mount can't accept the push, the GoTo asks you to confirm. On by default; remote observatories rely on it to self-heal.": "Sendet die korrekte Uhrzeit und den Beobachtungsort an die Montierung, bevor sie schwenkt, damit eine veraltete Uhr/ein veralteter Standort das Teleskop nicht in die falsche Richtung gegen das Stativ schwenkt. Wenn die Montierung die Übernahme nicht akzeptiert, fragt das GoTo nach Bestätigung. Standardmäßig an; Remote-Sternwarten verlassen sich darauf zur Selbstkorrektur."
+  "Pushes the correct clock + observatory location to the mount before it slews, so a stale mount clock/site can't send the scope the wrong way into the tripod. If the mount can't accept the push, the GoTo asks you to confirm. On by default; remote observatories rely on it to self-heal.": "Sendet die korrekte Uhrzeit und den Beobachtungsort an die Montierung, bevor sie schwenkt, damit eine veraltete Uhr/ein veralteter Standort das Teleskop nicht in die falsche Richtung gegen das Stativ schwenkt. Wenn die Montierung die Übernahme nicht akzeptiert, fragt das GoTo nach Bestätigung. Standardmäßig an; Remote-Sternwarten verlassen sich darauf zur Selbstkorrektur.",
+  "📈 View": "📈 Ansehen",
+  "Guide log": "Guiding-Log",
+  "Guiding session": "Guiding-Sitzung",
+  "No guiding sessions found in this log.": "Keine Guiding-Sitzungen in diesem Log gefunden.",
+  "Could not read the guide log": "Guiding-Log konnte nicht gelesen werden",
+  "Parsing…": "Wird analysiert…"
 }

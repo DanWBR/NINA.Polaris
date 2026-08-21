@@ -3776,5 +3776,11 @@
   "Connect the mount to add a horizon point from its position": "",
   "Added horizon point": "",
   "Sync the mount's time & location before every GoTo": "",
-  "Pushes the correct clock + observatory location to the mount before it slews, so a stale mount clock/site can't send the scope the wrong way into the tripod. If the mount can't accept the push, the GoTo asks you to confirm. On by default; remote observatories rely on it to self-heal.": ""
+  "Pushes the correct clock + observatory location to the mount before it slews, so a stale mount clock/site can't send the scope the wrong way into the tripod. If the mount can't accept the push, the GoTo asks you to confirm. On by default; remote observatories rely on it to self-heal.": "",
+  "📈 View": "",
+  "Guide log": "",
+  "Guiding session": "",
+  "No guiding sessions found in this log.": "",
+  "Could not read the guide log": "",
+  "Parsing…": ""
 }
