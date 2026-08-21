@@ -4184,6 +4184,9 @@ function ninaApp() {
         },
         // ASIAIR-style session guide logs on disk (loaded on demand in Settings).
         guideLogs: [],
+        // In-app PHD2 guide-log viewer (parses the PHD2-format log client-side).
+        phd2Viewer: { open: false, fileName: '', loading: false, error: '',
+                      sessions: [], sessionIdx: 0, pixelScale: 0, unit: 'px' },
         // Safety-guard trip state (from the meridian-flip WS/status payload).
         mfSafetyTripped: false,
         mfSafetyReason: null,
@@ -21155,6 +21158,158 @@ function ninaApp() {
                 document.body.appendChild(a); a.click(); a.remove();
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
             } catch (e) { this.toastFail('Download failed', e); }
+        },
+
+        // ---- In-app PHD2 guide-log viewer ---------------------------------
+        // Parse the PHD2-format guide log (the format the desktop PHD2 Log
+        // Viewer reads) client-side and graph the RA/Dec error + RMS stats.
+        _parsePhd2Log(text) {
+            const splitCsv = (line) => {
+                const out = []; let s = '', q = false;
+                for (const ch of line) {
+                    if (ch === '"') q = !q;
+                    else if (ch === ',' && !q) { out.push(s); s = ''; }
+                    else s += ch;
+                }
+                out.push(s); return out;
+            };
+            const SETTLE = 30;               // frames excluded after a dither
+            const sessions = [];
+            let info = { pixelScale: 0 };
+            let cur = null, headers = null, settleLeft = 0;
+            for (const raw of text.split(/\r?\n/)) {
+                const line = raw.trim();
+                if (!line) continue;
+                let m;
+                if ((m = line.match(/^PHD2 version (.+)/))) { info.version = m[1].trim(); continue; }
+                if ((m = line.match(/^Pixel scale\s*=\s*([\d.]+)/i))
+                        || (m = line.match(/^Scale\s*=\s*([\d.]+)\s*arc-sec/i))) {
+                    info.pixelScale = parseFloat(m[1]) || 0;
+                    if (cur) cur.pixelScale = info.pixelScale;   // scale in the session header
+                    continue;
+                }
+                if ((m = line.match(/^Focal length\s*=\s*([\d.]+)/i))) { info.focalLength = parseFloat(m[1]); continue; }
+                if ((m = line.match(/^Mount\s*=\s*(.+)/)))  { info.mount = m[1].trim();  continue; }
+                if ((m = line.match(/^Camera\s*=\s*(.+)/))) { info.camera = m[1].trim(); continue; }
+                if ((m = line.match(/^Guiding Begins at (.+)/))) {
+                    if (cur && cur.frames.length) sessions.push(cur);
+                    cur = { startTime: m[1].trim(), frames: [], pixelScale: info.pixelScale, info: { ...info } };
+                    headers = null; settleLeft = 0; continue;
+                }
+                if ((m = line.match(/^Guiding Ends at (.+)/))) {
+                    if (cur) { cur.endTime = m[1].trim(); if (cur.frames.length) sessions.push(cur); cur = null; }
+                    continue;
+                }
+                if (!cur) continue;
+                if (/^"?Frame"?\s*,/.test(line)) {           // CSV column header
+                    headers = splitCsv(line).map(h => h.replace(/"/g, '').trim().toLowerCase());
+                    continue;
+                }
+                if (!/^\d/.test(line)) {                     // non-data event line
+                    if (/dither/i.test(line)) settleLeft = SETTLE;
+                    else if (/settling complete|settle.*done/i.test(line)) settleLeft = 0;
+                    continue;
+                }
+                if (headers) {                               // data row
+                    const v = splitCsv(line);
+                    if (v.length < 5) continue;
+                    const col = (name) => { const i = headers.indexOf(name); return i >= 0 ? v[i] : ''; };
+                    const dither = settleLeft > 0;
+                    if (settleLeft > 0) settleLeft--;
+                    cur.frames.push({
+                        frame: parseInt(v[0]) || cur.frames.length + 1,
+                        time: parseFloat(v[1]) || 0,
+                        raRaw: parseFloat(col('rarawdistance')) || 0,
+                        decRaw: parseFloat(col('decrawdistance')) || 0,
+                        snr: parseFloat(col('snr')) || 0,
+                        starMass: parseFloat(col('starmass')) || 0,
+                        dither,
+                    });
+                }
+            }
+            if (cur && cur.frames.length) sessions.push(cur);
+            return { sessions, info };
+        },
+
+        async openPhd2Log(name) {
+            this.phd2Viewer = { open: true, fileName: name, loading: true, error: '',
+                                sessions: [], sessionIdx: 0, pixelScale: 0, unit: 'px' };
+            try {
+                const resp = await this.apiFetch('/api/logs/guide/download?name=' + encodeURIComponent(name));
+                const text = await resp.text();
+                const { sessions } = this._parsePhd2Log(text);
+                // Default to the session with the most frames (the real run).
+                let idx = 0, best = -1;
+                sessions.forEach((s, i) => { if (s.frames.length > best) { best = s.frames.length; idx = i; } });
+                this.phd2Viewer.sessions = sessions;
+                this.phd2Viewer.sessionIdx = idx;
+                this.phd2Viewer.loading = false;
+                this.$nextTick(() => this._renderPhd2Chart());
+            } catch (e) {
+                this.phd2Viewer.loading = false;
+                this.phd2Viewer.error = this.$t('Could not read the guide log') + ': ' + (e.message || '');
+            }
+        },
+
+        get phd2StatTiles() {
+            const s = this.phd2Viewer.sessions[this.phd2Viewer.sessionIdx];
+            if (!s) return [];
+            const ps = s.pixelScale || 1;
+            const act = s.frames.filter(f => !f.dither);
+            if (!act.length) return [];
+            const ra = act.map(f => f.raRaw * ps), dec = act.map(f => f.decRaw * ps);
+            const rms = a => Math.sqrt(a.reduce((t, v) => t + v * v, 0) / a.length);
+            const rRa = rms(ra), rDec = rms(dec);
+            const unit = s.pixelScale ? '"' : 'px';
+            const f2 = x => (Number.isFinite(x) ? x.toFixed(2) : '--');
+            return [
+                { label: 'RMS Total', value: f2(Math.hypot(rRa, rDec)), unit, color: '#4caf50' },
+                { label: 'RMS RA',    value: f2(rRa), unit, color: '#ef5350' },
+                { label: 'RMS Dec',   value: f2(rDec), unit, color: '#42a5f5' },
+                { label: 'Peak RA',   value: f2(Math.max(0, ...ra.map(Math.abs))), unit },
+                { label: 'Peak Dec',  value: f2(Math.max(0, ...dec.map(Math.abs))), unit },
+                { label: 'Frames',    value: String(act.length), unit: '' },
+            ];
+        },
+
+        _renderPhd2Chart() {
+            const cv = this.$refs.phd2Chart;
+            const s = this.phd2Viewer.sessions[this.phd2Viewer.sessionIdx];
+            if (!cv || !s) return;
+            this.phd2Viewer.pixelScale = s.pixelScale || 0;
+            this.phd2Viewer.unit = s.pixelScale ? '"' : 'px';
+            const ps = s.pixelScale || 1;
+            if (this._phd2Chart) { try { this._phd2Chart.destroy(); } catch (_) {} this._phd2Chart = null; }
+            const t = (typeof getNightTheme === 'function')
+                ? getNightTheme() : { tick: '#9ca3af', grid: 'rgba(255,255,255,0.08)' };
+            const labels = s.frames.map(f => (f.time || 0).toFixed(0));
+            const ra = s.frames.map(f => f.raRaw * ps);
+            const dec = s.frames.map(f => f.decRaw * ps);
+            const maxAbs = Math.max(0.1, ...ra.map(Math.abs), ...dec.map(Math.abs));
+            // Dither frames: a faint band spanning full height (excluded from RMS).
+            const band = s.frames.map(f => f.dither ? maxAbs * 1.1 : null);
+            this._phd2Chart = new Chart(cv.getContext('2d'), {
+                type: 'line',
+                data: { labels, datasets: [
+                    { label: 'Dither', data: band, borderWidth: 0, pointRadius: 0,
+                      backgroundColor: 'rgba(255,193,7,0.13)', fill: 'start', stepped: true, order: 3 },
+                    { label: 'RA',  data: ra,  borderColor: '#ef5350', borderWidth: 1, pointRadius: 0, tension: 0, order: 1 },
+                    { label: 'Dec', data: dec, borderColor: '#42a5f5', borderWidth: 1, pointRadius: 0, tension: 0, order: 2 },
+                ] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: false,
+                    interaction: { intersect: false, mode: 'index' },
+                    plugins: { legend: { labels: { color: t.tick, boxWidth: 12, font: { size: 10 } } } },
+                    scales: {
+                        x: { ticks: { color: t.tick, maxTicksLimit: 10, font: { size: 9 } },
+                             grid: { color: t.grid },
+                             title: { display: true, text: 'Time (s)', color: t.tick, font: { size: 10 } } },
+                        y: { min: -maxAbs * 1.1, max: maxAbs * 1.1,
+                             ticks: { color: t.tick, font: { size: 9 } }, grid: { color: t.grid },
+                             title: { display: true, text: 'Error (' + this.phd2Viewer.unit + ')', color: t.tick, font: { size: 10 } } },
+                    }
+                }
+            });
         },
 
         // Manually mirror the native calibration for a meridian flip (RA +180°)

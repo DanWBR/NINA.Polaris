@@ -1,4 +1,10 @@
 {
+  "📈 View": "📈 Voir",
+  "Guide log": "Journal de guidage",
+  "Guiding session": "Session de guidage",
+  "No guiding sessions found in this log.": "Aucune session de guidage trouvée dans ce journal.",
+  "Could not read the guide log": "Impossible de lire le journal de guidage",
+  "Parsing…": "Analyse…",
   "Sync the mount's time & location before every GoTo": "Synchroniser l’heure et la position de la monture avant chaque GoTo",
   "Pushes the correct clock + observatory location to the mount before it slews, so a stale mount clock/site can't send the scope the wrong way into the tripod. If the mount can't accept the push, the GoTo asks you to confirm. On by default; remote observatories rely on it to self-heal.": "Envoie l’heure et la position correctes de l’observatoire à la monture avant qu’elle ne bouge, afin qu’une horloge/un site obsolète n’envoie pas le télescope du mauvais côté contre le trépied. Si la monture n’accepte pas l’envoi, le GoTo demande confirmation. Activé par défaut ; les observatoires distants s’en remettent à cela pour s’auto-corriger.",
   "🔭 Add from telescope": "🔭 Ajouter depuis le télescope",
