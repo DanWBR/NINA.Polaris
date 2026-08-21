@@ -62,6 +62,33 @@ public static class NetworkEndpoints {
             return Results.Ok(res);
         });
 
+        // List the wireless adapters NetworkManager sees, plus the one the
+        // hotspot/station currently binds to, so the UI can offer a picker
+        // (e.g. an external USB antenna vs the Pi's built-in radio).
+        group.MapGet("/interfaces", async (NetworkManagerService net) => {
+            if (!net.IsSupportedOs || !net.NmcliInstalled) {
+                return Results.Json(
+                    new { error = net.UnsupportedReason ?? "WiFi management not available" },
+                    statusCode: 501);
+            }
+            var ifaces = await net.ListWifiInterfacesAsync();
+            return Results.Ok(new { interfaces = ifaces, selected = net.WifiInterface });
+        });
+
+        // Bind the hotspot/station to a specific adapter.
+        group.MapPost("/interface", async (NetworkManagerService net, InterfaceRequest req) => {
+            if (!net.IsSupportedOs || !net.NmcliInstalled) {
+                return Results.Json(
+                    new { error = net.UnsupportedReason ?? "WiFi management not available" },
+                    statusCode: 501);
+            }
+            if (req == null || string.IsNullOrWhiteSpace(req.Interface)) {
+                return Results.BadRequest(new { error = "interface required" });
+            }
+            var res = await net.SetPreferredInterfaceAsync(req.Interface);
+            return Results.Ok(res);
+        });
+
         group.MapPost("/hotspot", async (NetworkManagerService net) => {
             if (!net.IsSupportedOs || !net.NmcliInstalled || !net.HasWifiInterface) {
                 return Results.Json(
@@ -89,4 +116,5 @@ public static class NetworkEndpoints {
 
     public record StationRequest(string Ssid, string Password);
     public record HotspotCredentialsRequest(string Ssid, string Password);
+    public record InterfaceRequest(string Interface);
 }

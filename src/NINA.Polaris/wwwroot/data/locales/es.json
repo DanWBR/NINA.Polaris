@@ -4378,5 +4378,12 @@
   "Capturing during LIVE / AUTORUN": "Capturando durante LIVE / AUTORUN",
   "Not capturing": "Sin capturar",
   "Captures simultaneously during LIVE / AUTORUN (toggle in the header).": "Captura simultáneamente durante LIVE / AUTORUN (interruptor en el encabezado).",
-  "Disabled: this camera will not capture during LIVE / AUTORUN.": "Desactivada: esta cámara no capturará durante LIVE / AUTORUN."
+  "Disabled: this camera will not capture during LIVE / AUTORUN.": "Desactivada: esta cámara no capturará durante LIVE / AUTORUN.",
+  "Hotspot adapter": "Adaptador del hotspot",
+  "Pick the radio that serves the hotspot (e.g. an external USB antenna).": "Elige la radio que sirve el hotspot (p. ej. una antena USB externa).",
+  "Prism offset (mm)": "Desplazamiento del prisma (mm)",
+  "Prism angle (°)": "Ángulo del prisma (°)",
+  "Draws the guide field as a green square on the Sky map. Verify its placement against a solve.": "Dibuja el campo de guiado como un cuadrado verde en el mapa del Cielo. Verifica su posición con una resolución de placa.",
+  "Off-axis guider (uses main scope focal length)": "Guiado fuera de eje (usa la distancia focal del tubo principal)",
+  "Guiding through the main scope at": "Guiando a través del tubo principal a"
 }

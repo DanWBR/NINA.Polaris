@@ -47,6 +47,7 @@ namespace NINA.Polaris.Services;
 public class NetworkManagerService : BackgroundService {
     private readonly IConfiguration _config;
     private readonly ILogger<NetworkManagerService> _logger;
+    private readonly ProfileService _profiles;
 
     public bool IsSupportedOs => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
     public bool NmcliInstalled { get; private set; }
@@ -117,9 +118,11 @@ public class NetworkManagerService : BackgroundService {
     }
 
     public NetworkManagerService(IConfiguration config,
-                                  ILogger<NetworkManagerService> logger) {
+                                  ILogger<NetworkManagerService> logger,
+                                  ProfileService profiles) {
         _config = config;
         _logger = logger;
+        _profiles = profiles;
         HotspotSsid = _config.GetValue("Network:HotspotSsid", "Polaris-Hotspot") ?? "Polaris-Hotspot";
         _hotspotPsk = _config.GetValue("Network:HotspotPsk", "polaris1234") ?? "polaris1234";
         AutoHotspotFallback = _config.GetValue("Network:AutoHotspotFallback", true);
@@ -190,22 +193,77 @@ public class NetworkManagerService : BackgroundService {
 
     private async Task DetectWifiInterfaceAsync(CancellationToken ct) {
         try {
-            var res = await RunCommandAsync("nmcli", "-t -f DEVICE,TYPE device status", ct);
-            // Each line: "wlan0:wifi:...:..." or "eth0:ethernet:..."
-            foreach (var line in res.stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)) {
-                var parts = SplitNmcliTerse(line);
-                if (parts.Length >= 2 && parts[1].Equals("wifi", StringComparison.OrdinalIgnoreCase)) {
-                    WifiInterface = parts[0];
-                    HasWifiInterface = true;
-                    _logger.LogInformation("NetworkManagerService: WiFi interface = {Iface}", WifiInterface);
-                    return;
-                }
-            }
-            HasWifiInterface = false;
+            var wifis = await ListWifiInterfacesAsync(ct);
+            if (wifis.Count == 0) { HasWifiInterface = false; return; }
+            // Honour the user's chosen adapter (e.g. an external USB antenna)
+            // when it is present; otherwise fall back to the first wifi device.
+            var preferred = _profiles.Active.HotspotWifiInterface;
+            WifiInterface = (!string.IsNullOrWhiteSpace(preferred)
+                && wifis.Contains(preferred!, StringComparer.OrdinalIgnoreCase))
+                ? wifis.First(w => string.Equals(w, preferred, StringComparison.OrdinalIgnoreCase))
+                : wifis[0];
+            HasWifiInterface = true;
+            _logger.LogInformation("NetworkManagerService: WiFi interface = {Iface}{Src}",
+                WifiInterface, !string.IsNullOrWhiteSpace(preferred) ? " (user-selected)" : " (auto)");
         } catch (Exception ex) {
             _logger.LogDebug(ex, "wifi interface detection failed");
             HasWifiInterface = false;
         }
+    }
+
+    /// <summary>All wireless devices NetworkManager sees (DEVICE names, in the
+    /// order nmcli reports them). Empty on a non-Linux / no-nmcli host.</summary>
+    public async Task<List<string>> ListWifiInterfacesAsync(CancellationToken ct = default) {
+        var list = new List<string>();
+        if (!IsSupportedOs || !NmcliInstalled) return list;
+        try {
+            var res = await RunCommandAsync("nmcli", "-t -f DEVICE,TYPE device status", ct);
+            foreach (var line in res.stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)) {
+                var parts = SplitNmcliTerse(line);
+                if (parts.Length >= 2 && parts[1].Equals("wifi", StringComparison.OrdinalIgnoreCase)
+                        && !string.IsNullOrWhiteSpace(parts[0]) && !list.Contains(parts[0]))
+                    list.Add(parts[0]);
+            }
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "wifi interface enumeration failed");
+        }
+        return list;
+    }
+
+    /// <summary>Bind the hotspot/station to a specific wireless adapter (e.g. an
+    /// external USB antenna). Persists the choice, tears down the connections
+    /// pinned to the old interface so they get recreated on the new one, and
+    /// brings the hotspot back up on the chosen adapter.</summary>
+    public async Task<SwitchResult> SetPreferredInterfaceAsync(string iface, CancellationToken ct = default) {
+        if (!IsSupportedOs)  return SwitchResult.Fail("OS not supported");
+        if (!NmcliInstalled) return SwitchResult.Fail("nmcli not installed");
+        iface = (iface ?? "").Trim();
+        if (iface.Length == 0) return SwitchResult.Fail("No interface given");
+        var wifis = await ListWifiInterfacesAsync(ct);
+        if (!wifis.Contains(iface, StringComparer.OrdinalIgnoreCase))
+            return SwitchResult.Fail($"'{iface}' is not a WiFi interface");
+
+        // Persist first so a mid-switch restart still comes up on the choice.
+        _profiles.UpdateSettings(p => p.HotspotWifiInterface = iface);
+        WifiInterface = wifis.First(w => string.Equals(w, iface, StringComparison.OrdinalIgnoreCase));
+        HasWifiInterface = true;
+
+        // The polaris-hotspot / polaris-station connections are pinned to an
+        // ifname at creation, so drop them; EnsureHotspotConnectionAsync
+        // recreates the AP on the new interface. Keep the watchdog out while
+        // the radio cycles.
+        _suppressFallbackUntil = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        await RunCommandAsync("nmcli", "connection delete polaris-hotspot", ct, timeoutMs: 5000);
+        await RunCommandAsync("nmcli", "connection delete polaris-station", ct, timeoutMs: 5000);
+        await EnsureHotspotConnectionAsync(ct);
+        var up = await RunCommandAsync("nmcli", "connection up polaris-hotspot", ct, timeoutMs: 15000);
+        if (up.exitCode != 0) {
+            LastError = $"hotspot start on {iface} failed: {up.stderr.Trim()}";
+            return SwitchResult.Fail(LastError);
+        }
+        await RefreshSnapshotAsync(ct);
+        LastError = null;
+        return SwitchResult.Success(CurrentIp);
     }
 
     // ----- snapshot -----
