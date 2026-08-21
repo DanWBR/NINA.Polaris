@@ -258,10 +258,23 @@ jobs:
           echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
           cd android
           chmod +x gradlew
+          # The gradle wrapper downloads the full distribution on first run, and
+          # services.gradle.org occasionally resets the connection on the runner
+          # ("java.net.SocketException: Connection reset"), failing the whole
+          # release. Retry the gradle invocation a few times so a transient
+          # network blip doesn't sink an otherwise-good build.
+          run_gradle() {
+            for i in 1 2 3; do
+              ./gradlew --no-daemon "$@" && return 0
+              echo "::warning::gradlew attempt $i failed (likely a transient gradle download); retrying in 15s"
+              sleep 15
+            done
+            return 1
+          }
           OUT="$GITHUB_WORKSPACE/polaris-android.apk"
           if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
             echo "Signing with release keystore"
-            ./gradlew --no-daemon assembleRelease
+            run_gradle assembleRelease
             BT=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
             echo -n "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
             "$BT/zipalign" -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
@@ -271,7 +284,7 @@ jobs:
               --out "$OUT" "$RUNNER_TEMP/aligned.apk"
           else
             echo "No keystore secrets — building a debug-signed APK"
-            ./gradlew --no-daemon assembleDebug
+            run_gradle assembleDebug
             cp app/build/outputs/apk/debug/app-debug.apk "$OUT"
           fi
           ls -lh "$OUT"
