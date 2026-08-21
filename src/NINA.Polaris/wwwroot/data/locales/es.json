@@ -1,4 +1,6 @@
 {
+  "Hotspot adapter": "Adaptador del hotspot",
+  "Pick the radio that serves the hotspot (e.g. an external USB antenna).": "Elige la radio que sirve el hotspot (p. ej. una antena USB externa).",
   "Prism offset (mm)": "Desplazamiento del prisma (mm)",
   "Prism angle (°)": "Ángulo del prisma (°)",
   "Draws the guide field as a green square on the Sky map. Verify its placement against a solve.": "Dibuja el campo de guiado como un cuadrado verde en el mapa del Cielo. Verifica su posición con una resolución de placa.",

@@ -2096,6 +2096,8 @@ function ninaApp() {
         // "unsupported" banner on first paint.
         network: null,                   // { mode, ssid, ip, signal, supportedOs, ... }
         networkSwitching: false,
+        networkInterfaces: [],           // wifi adapters (e.g. ['wlan0','wlan1'])
+        networkAdapter: '',              // the selected/bound adapter
         networkStation: {
             open: false, ssid: '', hiddenSsid: '', password: '',
             scanResults: [], scanning: false, lastError: ''
@@ -39083,6 +39085,41 @@ function ninaApp() {
             }
         },
 
+        // Adapter picker: list the wifi radios and which one is bound.
+        async networkFetchInterfaces() {
+            try {
+                const r = await this.apiGet('/api/network/interfaces');
+                this.networkInterfaces = Array.isArray(r?.interfaces) ? r.interfaces : [];
+                this.networkAdapter = r?.selected || this.networkInterfaces[0] || '';
+            } catch (e) {
+                this.networkInterfaces = [];
+            }
+        },
+
+        // Rebind the hotspot/station to a chosen adapter (e.g. USB antenna).
+        async networkSetAdapter(iface) {
+            if (!iface) return;
+            this.networkSwitching = true;
+            try {
+                const resp = await this.apiPost('/api/network/interface', { interface: iface });
+                const r = await resp.json();
+                if (r && r.ok) {
+                    this.toast('Hotspot moved to ' + iface + '. Reconnect to ' +
+                        ((this.network && this.network.hotspotSsid) || 'Polaris-Hotspot') + '.', 'ok');
+                } else {
+                    this.toast((r && r.error) || 'Adapter switch failed', 'warn');
+                    await this.networkFetchInterfaces();   // revert the select
+                }
+            } catch (e) {
+                // Same as the mode switches: the link can drop mid-call when the
+                // radio cycles onto the new adapter.
+                this.toast('Lost contact with the Pi while moving the hotspot to ' +
+                    iface + '. Reconnect to the hotspot WiFi to continue.', 'warn');
+            } finally {
+                this.networkSwitching = false;
+            }
+        },
+
         async networkSaveHotspotCredentials() {
             const ssid = (this.networkHotspot.ssid || '').trim();
             const password = this.networkHotspot.password || '';
@@ -42161,7 +42198,15 @@ function ninaApp() {
             // race the mid-switch transition and flicker the UI back
             // to the pre-switch state, the actual SwitchToStation
             // response is the source of truth in that window.
-            if (msg.network && !this.networkSwitching) this.network = msg.network;
+            if (msg.network && !this.networkSwitching) {
+                this.network = msg.network;
+                // Load the adapter list once, when we first learn this host has
+                // wifi, so the picker can show if there's more than one radio.
+                if (msg.network.hasWifi && !this._netIfacesLoaded) {
+                    this._netIfacesLoaded = true;
+                    this.networkFetchInterfaces();
+                }
+            }
             if (msg.cameraStream) {
                 // Preserve last-known values so the button label stays
                 // readable while the stream service initialises.

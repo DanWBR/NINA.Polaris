@@ -14518,6 +14518,23 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     then switch to Station mode to join the WiFi here.
                                 </div>
                             </template>
+                            <!-- Adapter picker: only meaningful with more than
+                                 one wifi radio (e.g. the Pi's built-in one plus
+                                 an external USB antenna). Rebinds the hotspot
+                                 and station to the chosen adapter. -->
+                            <template x-if="networkInterfaces.length > 1">
+                                <div class="control-row" style="margin-top: 8px; align-items: center; gap: 8px">
+                                    <label style="font-size: 12px">Hotspot adapter</label>
+                                    <select class="input-sm" x-model="networkAdapter"
+                                            @change="networkSetAdapter(networkAdapter)"
+                                            :disabled="networkSwitching">
+                                        <template x-for="i in networkInterfaces" :key="i">
+                                            <option :value="i" x-text="i"></option>
+                                        </template>
+                                    </select>
+                                    <span class="text-muted" style="font-size: 11px">Pick the radio that serves the hotspot (e.g. an external USB antenna).</span>
+                                </div>
+                            </template>
                             <div class="control-row actions" style="margin-top: 8px">
                                 <button class="btn btn-primary"
                                         @click="networkOpenSwitchDialog()"

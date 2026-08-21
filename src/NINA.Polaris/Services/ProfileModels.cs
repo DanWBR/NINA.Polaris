@@ -18,6 +18,14 @@
 
 namespace NINA.Polaris.Services;
 
+/// <summary>One point of a custom horizon: the minimum visible altitude
+/// (degrees above the true horizon) at a given azimuth (degrees, 0 = North,
+/// 90 = East). The horizon between points is linearly interpolated.</summary>
+public class HorizonPoint {
+    public double Azimuth { get; set; }
+    public double Altitude { get; set; }
+}
+
 public class UserProfile {
     public string Name { get; set; } = "Default";
 
@@ -25,6 +33,18 @@ public class UserProfile {
     public double Latitude { get; set; }
     public double Longitude { get; set; }
     public double Altitude { get; set; }
+
+    /// <summary>Preferred wireless interface for the WiFi hotspot/station (e.g.
+    /// an external USB antenna, "wlan1"). Null/empty ⇒ auto-detect the first
+    /// wifi device. Machine-level, so it rides on the top-level UserProfile
+    /// alongside the site coordinates.</summary>
+    public string? HotspotWifiInterface { get; set; }
+
+    /// <summary>Custom horizon: an azimuth→altitude visibility mask for this
+    /// site (trees, buildings). Points are (azimuthDeg 0..360, altitudeDeg),
+    /// interpolated between samples; empty ⇒ no custom horizon. Enforced/drawn
+    /// by the altitude chart, Tonight's Best, and the Sky map.</summary>
+    public List<HorizonPoint> HorizonPoints { get; set; } = new();
 
     // Camera optics (fallback only, live sensor dims come from the camera)
     public double SensorWidthMm { get; set; } = 23.5;

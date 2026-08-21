@@ -1,4 +1,6 @@
 {
+  "Hotspot adapter": "",
+  "Pick the radio that serves the hotspot (e.g. an external USB antenna).": "",
   "Prism offset (mm)": "",
   "Prism angle (°)": "",
   "Draws the guide field as a green square on the Sky map. Verify its placement against a solve.": "",
