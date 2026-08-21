@@ -512,7 +512,9 @@
     // actual = where it actually ended up (from plate solve). The line
     // between them visualises the pointing error as an angular vector.
     var __skyFovObjs = { mount: null, target: null, aux: null, guide: null,
+                          horizon: null,
                           alignTarget: null, alignActual: null, alignLine: null };
+    var __horizonPoints = [];   // [{ azimuth, altitude }] sorted by azimuth
     // Mosaic tiles are drawn ONE geojson object per panel (exactly like the
     // mount rectangle) — the engine geojson parser renders a single Polygon
     // per object, so packing every panel into one FeatureCollection silently
@@ -1118,6 +1120,86 @@
             + aux.heightDeg.toFixed(2) + '°';
     }
 
+    // ---- Custom horizon overlay -----------------------------------------
+    // A ground-fixed az→alt skyline. The engine works in alt/az via
+    // observer.yaw/pitch, but geojson objects are RA/Dec, so we convert the
+    // horizon to RA/Dec OF DATE (same sidereal basis as skyLookAt) and rebuild
+    // it on pan/time so it stays glued to the ground. FIELD-VERIFY: the frame
+    // conversion (of-date vs J2000) mirrors skyLookAt's inverse but hasn't been
+    // checked against a live sky — confirm the skyline sits on the real horizon.
+    function horizonAltAt(az) {
+        var pts = __horizonPoints;
+        if (!pts.length) return 0;
+        if (pts.length === 1) return pts[0].altitude;
+        az = ((az % 360) + 360) % 360;
+        var lo = pts[pts.length - 1], hi = pts[0];
+        for (var i = 0; i < pts.length; i++) {
+            if (pts[i].azimuth <= az) lo = pts[i];
+            if (pts[i].azimuth >= az) { hi = pts[i]; break; }
+        }
+        var span = hi.azimuth - lo.azimuth; if (span <= 0) span += 360;
+        if (span <= 1e-9) return hi.altitude;
+        var pos = az - lo.azimuth; if (pos < 0) pos += 360;
+        var f = Math.max(0, Math.min(1, pos / span));
+        return lo.altitude + f * (hi.altitude - lo.altitude);
+    }
+
+    function azAltToRaDec(azDeg, altDeg) {
+        var stel = window.__stel;
+        if (!stel || !stel.core || !stel.core.observer) return null;
+        var obs = stel.core.observer, D2R = stel.D2R;
+        var phi = obs.latitude, mjd = obs.utc, lng = obs.longitude;
+        if (![phi, mjd, lng].every(function (v) { return typeof v === 'number' && isFinite(v); })) return null;
+        var T = mjd - 51544.5;
+        var gstFrac = (T * 1.00273790935 + 0.7790572732640) % 1;
+        if (gstFrac < 0) gstFrac += 1;
+        var lst = 2 * Math.PI * gstFrac + lng;
+        var A = azDeg * D2R, alt = altDeg * D2R;
+        var sinAlt = Math.sin(alt), cosAlt = Math.cos(alt);
+        var sinPhi = Math.sin(phi), cosPhi = Math.cos(phi);
+        var sinDec = sinAlt * sinPhi + cosAlt * cosPhi * Math.cos(A);
+        if (sinDec > 1) sinDec = 1; if (sinDec < -1) sinDec = -1;
+        var dec = Math.asin(sinDec);
+        var cosDec = Math.cos(dec); if (Math.abs(cosDec) < 1e-12) cosDec = 1e-12;
+        var sinH = -Math.sin(A) * cosAlt / cosDec;
+        var cosH = (sinAlt - sinDec * sinPhi) / (cosDec * cosPhi);
+        var H = Math.atan2(sinH, cosH);
+        var TWO_PI = 2 * Math.PI;
+        var ra = ((lst - H) % TWO_PI + TWO_PI) % TWO_PI;
+        return [ra / D2R, dec / D2R];
+    }
+
+    function skySetHorizon(points) {
+        __horizonPoints = (points || []).map(function (p) {
+            return { azimuth: ((+p.azimuth % 360) + 360) % 360, altitude: +p.altitude };
+        }).sort(function (a, b) { return a.azimuth - b.azimuth; });
+        skyRebuildHorizon();
+    }
+
+    function skyRebuildHorizon() {
+        var stel = window.__stel;
+        skyRemoveObj('horizon');
+        if (!stel || !__skyFovLayer || __horizonPoints.length < 2) return;
+        try {
+            var coords = [];
+            for (var az = 0; az <= 360; az += 3) {
+                var rd = azAltToRaDec(az, horizonAltAt(az));
+                if (rd) coords.push(rd);
+            }
+            if (coords.length < 2) return;
+            __skyFovObjs.horizon = stel.createObj('geojson', {
+                data: { type: 'FeatureCollection', features: [{
+                    type: 'Feature',
+                    properties: { stroke: '#ef4444', 'stroke-width': 2,
+                                  'stroke-opacity': 0.85, 'stroke-glow': true },
+                    geometry: { type: 'LineString', coordinates: coords } }] }
+            });
+            __skyFovLayer.add(__skyFovObjs.horizon);
+        } catch (e) {
+            console.warn('[Sky] horizon rebuild failed:', e);
+        }
+    }
+
     function skySetFovOverlays(mount, target, mosaic, aux, guide) {
         var stel = window.__stel;
         if (!stel) return;
@@ -1348,6 +1430,9 @@
                     && isFinite(__lastGuideFov.raDeg)) {
                     skyRebuildGuideGeoJson();
                 }
+                // Custom horizon is ground-fixed → its RA/Dec projection shifts
+                // as the view/time moves, so rebuild it alongside the others.
+                if (__horizonPoints.length >= 2) skyRebuildHorizon();
                 postToParent({
                     type: 'center',
                     center: skyGetCenter(),
@@ -1505,6 +1590,11 @@
                 // optional mosaic grid (yellow). Each side is null to
                 // clear that overlay.
                 skySetFovOverlays(msg.mount || null, msg.target || null, msg.mosaic || null, msg.aux || null, msg.guide || null);
+                break;
+            case 'set-horizon':
+                // Custom horizon (az→alt visibility mask). Drawn in the engine's
+                // horizontal frame (converted to RA/Dec of date), rebuilt on pan.
+                skySetHorizon(Array.isArray(msg.points) ? msg.points : []);
                 break;
             case 'set-alignment-markers':
                 // RDPA-3: target (green) + actual (red) point markers

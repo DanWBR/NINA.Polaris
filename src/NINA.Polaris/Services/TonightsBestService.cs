@@ -98,8 +98,9 @@ public class TonightsBestService {
                 // Magnitude-less: keep only the big, imageable nebulae.
                 if (sizeArcmin < 10) continue;
             }
-            var (peakAlt, peakUtc) = PeakAltitude(dso.Ra, dso.Dec, nightStart, nightEnd, stepMinutes: 30);
+            var (peakAlt, peakAz, peakUtc) = PeakAltitude(dso.Ra, dso.Dec, nightStart, nightEnd, stepMinutes: 30);
             if (peakAlt < 30) continue;
+            if (PeakBlockedByHorizon(peakAlt, peakAz)) continue;
             var (curAlt, curAz) = AltitudeService.RaDecToAltAz(dso.Ra, dso.Dec, nowUtc, lat, lng);
             // Magnitude-scored when we have one; otherwise a size-based score so
             // a large nebula ranks comparably to a mid-brightness object. log2
@@ -327,8 +328,9 @@ public class TonightsBestService {
             var ra  = eq.ra;
             var dec = eq.dec;
 
-            var (peakAlt, peakUtc) = PeakAltitudeBody(body, observer, nightStart, nightEnd, stepMinutes: 30);
+            var (peakAlt, peakAz, peakUtc) = PeakAltitudeBody(body, observer, nightStart, nightEnd, stepMinutes: 30);
             if (peakAlt < minPeakAlt) return;
+            if (PeakBlockedByHorizon(peakAlt, peakAz)) return;
             var (curAlt, curAz) = AltitudeService.RaDecToAltAz(ra, dec, DateTime.UtcNow, lat, lng);
 
             double? mag = null;
@@ -382,14 +384,15 @@ public class TonightsBestService {
             // dim ones (mag 15+) to the bottom of the list. Users who
             // care about brightness can read the magnitude on the card.
 
-            double peakAlt = -90;
+            double peakAlt = -90, peakAz = 0;
             DateTime peakUtc = nightStart;
             for (var t = nightStart; t <= nightEnd; t = t.AddMinutes(30)) {
                 var p = _comets.Compute(c, t);
-                var (alt, _) = AltitudeService.RaDecToAltAz(p.RaHours, p.DecDeg, t, lat, lng);
-                if (alt > peakAlt) { peakAlt = alt; peakUtc = t; }
+                var (alt, az) = AltitudeService.RaDecToAltAz(p.RaHours, p.DecDeg, t, lat, lng);
+                if (alt > peakAlt) { peakAlt = alt; peakAz = az; peakUtc = t; }
             }
             if (peakAlt < 15) return;
+            if (PeakBlockedByHorizon(peakAlt, peakAz)) return;
 
             var (curAlt, curAz) = AltitudeService.RaDecToAltAz(
                 nowPos.RaHours, nowPos.DecDeg, nowUtc, lat, lng);
@@ -437,27 +440,33 @@ public class TonightsBestService {
         yield return ("Neptune", Body.Neptune);
     }
 
-    private (double peakAlt, DateTime peakUtc) PeakAltitude(double ra, double dec,
+    private (double peakAlt, double peakAz, DateTime peakUtc) PeakAltitude(double ra, double dec,
                                                             DateTime from, DateTime to,
                                                             int stepMinutes) {
         var track = _altitude.ComputeTrack(ra, dec, from, to, stepMinutes);
-        if (track.Count == 0) return (-90, from);
+        if (track.Count == 0) return (-90, 0, from);
         var best = track.OrderByDescending(s => s.AltitudeDeg).First();
-        return (best.AltitudeDeg, best.Utc);
+        return (best.AltitudeDeg, best.AzimuthDeg, best.Utc);
     }
 
-    private (double peakAlt, DateTime peakUtc) PeakAltitudeBody(Body body, Observer observer,
+    /// <summary>True when the peak (highest point of the night) sits below the
+    /// site's custom horizon — i.e. the target never clears the trees/buildings
+    /// at that azimuth. Always false when no custom horizon is defined.</summary>
+    private bool PeakBlockedByHorizon(double peakAlt, double peakAz) =>
+        HorizonProfile.IsBlocked(_profile.Active.HorizonPoints ?? new List<HorizonPoint>(), peakAlt, peakAz);
+
+    private (double peakAlt, double peakAz, DateTime peakUtc) PeakAltitudeBody(Body body, Observer observer,
                                                                 DateTime from, DateTime to,
                                                                 int stepMinutes) {
-        double peak = -90;
+        double peak = -90, peakAz = 0;
         DateTime peakAt = from;
         for (var t = from; t <= to; t = t.AddMinutes(stepMinutes)) {
             var time = new AstroTime(t);
             var eq = Astronomy.Equator(body, time, observer, EquatorEpoch.OfDate, Aberration.Corrected);
             var horiz = Astronomy.Horizon(time, observer, eq.ra, eq.dec, Refraction.Normal);
-            if (horiz.altitude > peak) { peak = horiz.altitude; peakAt = t; }
+            if (horiz.altitude > peak) { peak = horiz.altitude; peakAz = horiz.azimuth; peakAt = t; }
         }
-        return (peak, peakAt);
+        return (peak, peakAz, peakAt);
     }
 
     private CameraFov? ComputeCameraFov() {

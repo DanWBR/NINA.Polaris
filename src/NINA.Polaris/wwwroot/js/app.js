@@ -895,6 +895,11 @@ function ninaApp() {
             transitText: '',
             setText: '',
         },
+
+        // Custom horizon editor (Settings → Custom horizon).
+        horizonPoints: [],          // [{ azimuth, altitude }] sorted by azimuth
+        horizonDragIdx: -1,         // point being dragged, -1 = none
+        horizonSavedFlash: false,
         _skyInfoChart: null,
         skyResults: [],
         skyShowResults: false,
@@ -4557,6 +4562,10 @@ function ninaApp() {
         },
 
         _initCore() {
+
+            // Load the custom horizon once so the Sky-map overlay + editor have
+            // it regardless of whether Settings is ever opened.
+            try { this.horizonLoad(); } catch (_) { /* best effort */ }
 
             // Safety net for the boot curtain. Six seconds is far longer than
             // a healthy first status frame (the socket opens and pushes within
@@ -13681,6 +13690,9 @@ function ninaApp() {
                             }
                         });
                         this._pushSkyFovOverlays(true);
+                        // Re-send the custom horizon once the engine is up (its
+                        // observer is needed for the alt/az → RA/Dec conversion).
+                        try { this._pushHorizonToSky(); } catch (_) { /* no horizon */ }
                         // FOV rects sporadically vanished after a reload: the
                         // mount/target overlay push can land before the engine
                         // has finished installing its overlay layer, so the
@@ -37473,17 +37485,28 @@ function ninaApp() {
                 new Date(s.utc).toLocaleTimeString('en-GB',
                     { hour: '2-digit', minute: '2-digit' }));
             const data = samples.map(s => s.altitudeDeg);
+            // Custom horizon: a red curve at the site's horizon altitude for
+            // each sample's azimuth, filled down to the axis floor so the
+            // blocked band reads at a glance. Only shown when a horizon exists.
+            const horizon = samples.map(s => (typeof s.horizonDeg === 'number' ? s.horizonDeg : 0));
+            const hasHorizon = horizon.some(h => h > 0);
+            const datasets = [{
+                data, borderColor: '#64b5f6',
+                backgroundColor: 'rgba(100,181,246,0.18)',
+                fill: true, tension: 0.3, pointRadius: 0,
+                borderWidth: 1.5, order: 1,
+            }];
+            if (hasHorizon) {
+                datasets.push({
+                    data: horizon, borderColor: 'rgba(239,68,68,0.7)',
+                    backgroundColor: 'rgba(239,68,68,0.14)',
+                    fill: 'start', tension: 0, pointRadius: 0,
+                    borderWidth: 1, borderDash: [4, 3], order: 2,
+                });
+            }
             this._skyInfoChart = new Chart(cv.getContext('2d'), {
                 type: 'line',
-                data: {
-                    labels,
-                    datasets: [{
-                        data, borderColor: '#64b5f6',
-                        backgroundColor: 'rgba(100,181,246,0.18)',
-                        fill: true, tension: 0.3, pointRadius: 0,
-                        borderWidth: 1.5,
-                    }]
-                },
+                data: { labels, datasets },
                 options: {
                     responsive: true, maintainAspectRatio: false, animation: false,
                     plugins: { legend: { display: false } },
@@ -37497,6 +37520,194 @@ function ninaApp() {
                     }
                 }
             });
+        },
+
+        // ---- Custom horizon editor ----------------------------------------
+        // An azimuth→altitude visibility mask (trees/buildings). Points are
+        // kept sorted by azimuth; the client interpolates between them (same
+        // math as the server's HorizonProfile) to draw the blocked band and
+        // the Sky-map overlay.
+        async horizonLoad() {
+            try {
+                const r = await this.apiGet('/api/sky/horizon');
+                this.horizonPoints = (Array.isArray(r?.points) ? r.points : [])
+                    .map(p => ({ azimuth: +p.azimuth, altitude: +p.altitude }));
+            } catch (e) { this.horizonPoints = []; }
+            this.$nextTick(() => this.horizonRedraw());
+            this._pushHorizonToSky();
+        },
+        // Interpolated horizon altitude at an azimuth (0 when no points).
+        horizonAltAt(azDeg) {
+            const pts = this.horizonPoints;
+            if (!pts.length) return 0;
+            if (pts.length === 1) return pts[0].altitude;
+            let az = ((azDeg % 360) + 360) % 360;
+            let lo = pts[pts.length - 1], hi = pts[0];
+            for (let i = 0; i < pts.length; i++) {
+                if (pts[i].azimuth <= az) lo = pts[i];
+                if (pts[i].azimuth >= az) { hi = pts[i]; break; }
+            }
+            let span = hi.azimuth - lo.azimuth; if (span <= 0) span += 360;
+            if (span <= 1e-9) return hi.altitude;
+            let pos = az - lo.azimuth; if (pos < 0) pos += 360;
+            const f = Math.max(0, Math.min(1, pos / span));
+            return lo.altitude + f * (hi.altitude - lo.altitude);
+        },
+        _horizonSort() {
+            this.horizonPoints.sort((a, b) => a.azimuth - b.azimuth);
+        },
+        // Canvas <-> data mapping. az 0..360 across width, alt 0..90 up height.
+        _horizonGeom() {
+            const cv = this.$refs.horizonEditor;
+            const W = cv.width, H = cv.height;
+            return {
+                W, H,
+                xToAz: x => Math.max(0, Math.min(360, x / W * 360)),
+                yToAlt: y => Math.max(0, Math.min(90, (1 - y / H) * 90)),
+                azToX: az => az / 360 * W,
+                altToY: alt => (1 - alt / 90) * H,
+            };
+        },
+        horizonRedraw() {
+            const cv = this.$refs.horizonEditor;
+            if (!cv) return;
+            const ctx = cv.getContext('2d');
+            const g = this._horizonGeom();
+            ctx.clearRect(0, 0, g.W, g.H);
+            // Grid: horizon-cardinal verticals (N/E/S/W) + altitude lines.
+            ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+            ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.font = '10px sans-serif';
+            [['N', 0], ['E', 90], ['S', 180], ['W', 270]].forEach(([lbl, az]) => {
+                const x = g.azToX(az);
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, g.H); ctx.stroke();
+                ctx.fillText(lbl, x + 3, 12);
+            });
+            [30, 60].forEach(alt => {
+                const y = g.altToY(alt);
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(g.W, y); ctx.stroke();
+                ctx.fillText(alt + '°', 2, y - 2);
+            });
+            // Blocked band: fill under the interpolated horizon.
+            if (this.horizonPoints.length) {
+                ctx.beginPath();
+                for (let x = 0; x <= g.W; x += 2) {
+                    const y = g.altToY(this.horizonAltAt(g.xToAz(x)));
+                    if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.lineTo(g.W, g.H); ctx.lineTo(0, g.H); ctx.closePath();
+                ctx.fillStyle = 'rgba(239,68,68,0.16)'; ctx.fill();
+                ctx.strokeStyle = 'rgba(239,68,68,0.8)'; ctx.lineWidth = 1.5;
+                ctx.stroke();
+                // Points.
+                this.horizonPoints.forEach((p, i) => {
+                    const x = g.azToX(p.azimuth), y = g.altToY(p.altitude);
+                    ctx.beginPath(); ctx.arc(x, y, i === this.horizonDragIdx ? 6 : 4, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#ef4444'; ctx.fill();
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+                });
+            }
+        },
+        _horizonHitTest(x, y) {
+            const g = this._horizonGeom();
+            for (let i = 0; i < this.horizonPoints.length; i++) {
+                const px = g.azToX(this.horizonPoints[i].azimuth);
+                const py = g.altToY(this.horizonPoints[i].altitude);
+                if (Math.hypot(px - x, py - y) <= 8) return i;
+            }
+            return -1;
+        },
+        _horizonMouseXY(evt) {
+            const cv = this.$refs.horizonEditor;
+            const r = cv.getBoundingClientRect();
+            return { x: (evt.clientX - r.left) / r.width * cv.width,
+                     y: (evt.clientY - r.top) / r.height * cv.height };
+        },
+        horizonMouseDown(evt) {
+            if (evt.button !== 0) return;
+            const { x, y } = this._horizonMouseXY(evt);
+            const hit = this._horizonHitTest(x, y);
+            if (hit >= 0) { this.horizonDragIdx = hit; }
+            else {
+                const g = this._horizonGeom();
+                this.horizonPoints.push({ azimuth: +g.xToAz(x).toFixed(1), altitude: +g.yToAlt(y).toFixed(1) });
+                this._horizonSort();
+                this.horizonDragIdx = this.horizonPoints.findIndex(p =>
+                    Math.abs(g.azToX(p.azimuth) - x) < 1);
+                this.horizonSaveDebounced();
+            }
+            this.horizonRedraw();
+        },
+        horizonMouseMove(evt) {
+            if (this.horizonDragIdx < 0) return;
+            const g = this._horizonGeom();
+            const { x, y } = this._horizonMouseXY(evt);
+            const p = this.horizonPoints[this.horizonDragIdx];
+            p.azimuth = +g.xToAz(x).toFixed(1);
+            p.altitude = +g.yToAlt(y).toFixed(1);
+            this.horizonRedraw();
+        },
+        horizonMouseUp() {
+            if (this.horizonDragIdx < 0) return;
+            this.horizonDragIdx = -1;
+            this._horizonSort();
+            this.horizonRedraw();
+            this.horizonSaveDebounced();
+        },
+        horizonRightClick(evt) {
+            const { x, y } = this._horizonMouseXY(evt);
+            const hit = this._horizonHitTest(x, y);
+            if (hit >= 0) {
+                this.horizonPoints.splice(hit, 1);
+                this.horizonRedraw();
+                this.horizonSaveDebounced();
+            }
+        },
+        horizonSaveDebounced() {
+            clearTimeout(this._horizonSaveTimer);
+            this._horizonSaveTimer = setTimeout(() => this.horizonSave(), 500);
+        },
+        async horizonSave() {
+            try {
+                const r = await this.apiPut('/api/sky/horizon', { points: this.horizonPoints });
+                if (r?.points) this.horizonPoints = r.points.map(p => ({ azimuth: +p.azimuth, altitude: +p.altitude }));
+                this.horizonSavedFlash = true;
+                setTimeout(() => { this.horizonSavedFlash = false; }, 1500);
+                this.horizonRedraw();
+                this._pushHorizonToSky();
+            } catch (e) { this.toastFail(this.$t('Failed to save horizon'), e); }
+        },
+        async horizonImportFile(evt) {
+            const file = evt.target?.files?.[0];
+            if (!file) return;
+            evt.target.value = '';
+            try {
+                const text = await file.text();
+                const resp = await this.apiFetch('/api/sky/horizon/import',
+                    { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: text });
+                const r = await resp.json();
+                if (resp.ok && r?.points) {
+                    this.horizonPoints = r.points.map(p => ({ azimuth: +p.azimuth, altitude: +p.altitude }));
+                    this.toast(this.$t('Horizon imported') + ' (' + this.horizonPoints.length + ')', 'ok');
+                    this.horizonRedraw();
+                    this._pushHorizonToSky();
+                } else {
+                    this.toast((r && r.error) || this.$t('Could not read horizon file'), 'warn');
+                }
+            } catch (e) { this.toastFail(this.$t('Could not read horizon file'), e); }
+        },
+        async horizonClear() {
+            try { await this.apiFetch('/api/sky/horizon', { method: 'DELETE' }); } catch (e) { /* best effort */ }
+            this.horizonPoints = [];
+            this.horizonRedraw();
+            this._pushHorizonToSky();
+        },
+        // Push the horizon polygon to the Sky-map iframe (drawn there in the
+        // engine's horizontal frame). No-op until the bridge is ready.
+        _pushHorizonToSky() {
+            try {
+                if (this._skySendMessage) this._skySendMessage({ type: 'set-horizon',
+                    points: this.horizonPoints.map(p => ({ azimuth: p.azimuth, altitude: p.altitude })) });
+            } catch (e) { /* SKY not live */ }
         },
 
         // Card action: smoothly pan the SKY map view to the object

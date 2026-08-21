@@ -1,4 +1,10 @@
 {
+  "Custom horizon": "Horizon personnalisé",
+  "Click to add a point, drag to move it, right-click to delete. Azimuth runs left→right (0° N, 90° E, 180° S, 270° W); the red band is blocked sky.": "Cliquez pour ajouter un point, faites glisser pour le déplacer, clic droit pour supprimer. L’azimut va de gauche→droite (0° N, 90° E, 180° S, 270° O) ; la bande rouge est le ciel masqué.",
+  "Import file": "Importer un fichier",
+  "Failed to save horizon": "Échec de l’enregistrement de l’horizon",
+  "Horizon imported": "Horizon importé",
+  "Could not read horizon file": "Impossible de lire le fichier d’horizon",
   "Hotspot adapter": "Adaptateur du point d’accès",
   "Pick the radio that serves the hotspot (e.g. an external USB antenna).": "Choisissez la radio qui sert le point d’accès (p. ex. une antenne USB externe).",
   "Prism offset (mm)": "Décalage du prisme (mm)",

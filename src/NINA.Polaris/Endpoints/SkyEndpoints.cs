@@ -435,12 +435,24 @@ public static class SkyEndpoints {
             var step = Math.Clamp(stepMinutes ?? 15, 1, 120);
             var track = alt.ComputeTrack(ra, dec, from, to, step);
 
+            // Custom horizon: annotate each sample with the interpolated horizon
+            // altitude at its azimuth and whether the target is blocked there.
+            var horizon = profile.Active.HorizonPoints ?? new List<HorizonPoint>();
+            var samples = track.Select(s => new {
+                utc = s.Utc,
+                altitudeDeg = s.AltitudeDeg,
+                azimuthDeg = s.AzimuthDeg,
+                horizonDeg = HorizonProfile.AltitudeAt(horizon, s.AzimuthDeg),
+                blocked = HorizonProfile.IsBlocked(horizon, s.AltitudeDeg, s.AzimuthDeg)
+            }).ToList();
+
             return Results.Ok(new {
                 target = new { ra, dec },
                 fromUtc = from,
                 toUtc = to,
                 stepMinutes = step,
-                samples = track,
+                hasHorizon = horizon.Count > 0,
+                samples,
                 twilight = new {
                     sunset = window.Sunset,
                     civilDusk = window.CivilDuskUtc,
@@ -452,6 +464,35 @@ public static class SkyEndpoints {
                     sunrise = window.Sunrise
                 }
             });
+        });
+
+        // ---- Custom horizon (az→alt visibility mask) ----
+
+        group.MapGet("/horizon", (ProfileService profile) =>
+            Results.Ok(new { points = profile.Active.HorizonPoints ?? new List<HorizonPoint>() }));
+
+        // Replace the whole horizon from the in-UI editor (a list of points).
+        group.MapPut("/horizon", (HorizonRequest req, ProfileService profile) => {
+            var points = HorizonProfile.Normalize(req?.Points ?? new List<HorizonPoint>());
+            profile.UpdateSettings(p => p.HorizonPoints = points);
+            return Results.Ok(new { points });
+        });
+
+        // Import a horizon file (N.I.N.A. .hrz / Stellarium / TouchNStars text:
+        // "azimuth altitude" pairs). The raw text is posted as the body.
+        group.MapPost("/horizon/import", async (HttpRequest req, ProfileService profile) => {
+            using var reader = new StreamReader(req.Body);
+            var text = await reader.ReadToEndAsync();
+            var points = HorizonProfile.Parse(text);
+            if (points.Count == 0)
+                return Results.BadRequest(new { error = "No horizon points found in the file" });
+            profile.UpdateSettings(p => p.HorizonPoints = points);
+            return Results.Ok(new { points });
+        });
+
+        group.MapDelete("/horizon", (ProfileService profile) => {
+            profile.UpdateSettings(p => p.HorizonPoints = new List<HorizonPoint>());
+            return Results.Ok(new { points = new List<HorizonPoint>() });
         });
 
         // Resolve a celestial object name to a thumbnail image URL (NASA
@@ -610,4 +651,8 @@ public static class SkyEndpoints {
     /// is the offset-field centering tolerance.</summary>
     public record CenterBodyRequest(string Body, double? OffsetDeg = null,
         double? ToleranceArcsec = null);
+
+    /// <summary>PUT body for <c>/api/sky/horizon</c>: the full set of custom
+    /// horizon points from the in-UI editor.</summary>
+    public record HorizonRequest(List<HorizonPoint>? Points);
 }

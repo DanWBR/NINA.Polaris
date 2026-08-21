@@ -14646,6 +14646,37 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <input id="settings-alt" type="number" x-model.number="settings.altitude"
                                step="1" class="input-md">
                     </div>
+
+                    <!-- Custom horizon: an azimuth/altitude mask of what the
+                         sky is actually blocked by (trees, buildings). Drawn on
+                         the target altitude chart + the Sky map, and used to
+                         filter Tonight's Best. Draw points by clicking, drag to
+                         move, right-click to delete, or import a horizon file. -->
+                    <div style="margin-top:16px" x-init="horizonLoad()">
+                        <h4 style="margin:0 0 4px"><span class="settings-card-icon">🌄</span>Custom horizon</h4>
+                        <p class="hint" style="margin-top:0">
+                            Click to add a point, drag to move it, right-click to delete.
+                            Azimuth runs left→right (0° N, 90° E, 180° S, 270° W); the red band is blocked sky.
+                        </p>
+                        <canvas x-ref="horizonEditor" class="horizon-editor"
+                                width="560" height="200"
+                                style="width:100%;max-width:560px;height:200px;background:var(--bg-input,#0d1b30);border:1px solid var(--border);border-radius:6px;cursor:crosshair;touch-action:none"
+                                @mousedown="horizonMouseDown($event)"
+                                @mousemove="horizonMouseMove($event)"
+                                @mouseup="horizonMouseUp($event)"
+                                @mouseleave="horizonMouseUp($event)"
+                                @contextmenu.prevent="horizonRightClick($event)"></canvas>
+                        <div class="control-row" style="margin-top:8px;gap:8px;align-items:center;flex-wrap:wrap">
+                            <button class="btn btn-sm" @click="$refs.horizonFile.click()">Import file</button>
+                            <input type="file" x-ref="horizonFile" accept=".hrz,.txt,.csv,text/plain"
+                                   style="display:none" @change="horizonImportFile($event)">
+                            <button class="btn btn-sm" @click="horizonClear()"
+                                    :disabled="!horizonPoints.length">Clear</button>
+                            <span class="hint" style="margin:0"
+                                  x-text="horizonPoints.length + ' point' + (horizonPoints.length === 1 ? '' : 's')"></span>
+                            <span class="hint text-ok" style="margin:0" x-show="horizonSavedFlash">Saved</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="settings-section">
