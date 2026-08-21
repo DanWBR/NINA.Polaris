@@ -612,7 +612,8 @@ public class ProfileService {
             // Per-rig anti-crash slew guards follow the clone.
             SlewConfirmDeg = src.SlewConfirmDeg,
             SlewFloorDeg = src.SlewFloorDeg,
-            FlipFloorDeg = src.FlipFloorDeg
+            FlipFloorDeg = src.FlipFloorDeg,
+            AutoSyncMountBeforeSlew = src.AutoSyncMountBeforeSlew
         };
         _activeProfile.EquipmentProfiles.Add(copy);
         Save();

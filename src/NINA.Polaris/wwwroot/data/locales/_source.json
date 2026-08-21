@@ -1,4 +1,6 @@
 {
+  "Sync the mount's time & location before every GoTo": "",
+  "Pushes the correct clock + observatory location to the mount before it slews, so a stale mount clock/site can't send the scope the wrong way into the tripod. If the mount can't accept the push, the GoTo asks you to confirm. On by default; remote observatories rely on it to self-heal.": "",
   "🔭 Add from telescope": "",
   "🌄 Horizon point": "",
   "Connect the mount to add a horizon point from its position": "",

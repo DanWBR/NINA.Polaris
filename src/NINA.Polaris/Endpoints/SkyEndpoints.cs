@@ -21,7 +21,7 @@ public static class SkyEndpoints {
     public static void MapSkyEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/sky");
 
-        group.MapPost("/slew-and-center", (SlewAndCenterRequest request,
+        group.MapPost("/slew-and-center", async (SlewAndCenterRequest request,
             SlewCenterService slewCenter, MountSafetyGuardService guard,
             EquipmentManager equip, ProfileService profiles) => {
             // Safety gate #4: after a mount-safety trip, require a re-home first.
@@ -59,6 +59,24 @@ public static class SkyEndpoints {
                         moveDeg = double.IsNaN(v.MoveDeg) ? (double?)null : v.MoveDeg,
                         targetAltDeg = v.TargetAltDeg,
                         haMinutes = v.HaMinutes,
+                    }, statusCode: 409);
+                }
+            }
+
+            // Mount time/location sync guard: push the correct UTC + location to
+            // the mount before the GoTo, so a stale mount clock/site can't
+            // resolve the target to the wrong Alt/Az and swing the OTA into the
+            // tripod. If the mount can't accept the push, ask for confirmation
+            // rather than slewing blind. Skipped on Force (the confirm's override)
+            // and when the rig has opted out.
+            if (!request.Force && equip.Telescope is { IsConnected: true } syncMount
+                    && profiles.ActiveEquipmentProfile?.AutoSyncMountBeforeSlew != false) {
+                var sync = await MountTimeSync.SyncAsync(syncMount, profiles.Active);
+                if (!sync.Ok) {
+                    return Results.Json(new {
+                        needsConfirm = true,
+                        kind = "mount-sync",
+                        reason = sync.Reason,
                     }, statusCode: 409);
                 }
             }
