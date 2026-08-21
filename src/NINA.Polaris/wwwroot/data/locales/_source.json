@@ -3767,5 +3767,8 @@
   "Import file": "",
   "Failed to save horizon": "",
   "Horizon imported": "",
-  "Could not read horizon file": ""
+  "Could not read horizon file": "",
+  "Export .hrz": "",
+  "Automatically sync the host clock when it is off by more than an hour": "",
+  "Host clock was over an hour off; synced from this device": ""
 }

@@ -4391,5 +4391,8 @@
   "Import file": "Importar archivo",
   "Failed to save horizon": "Error al guardar el horizonte",
   "Horizon imported": "Horizonte importado",
-  "Could not read horizon file": "No se pudo leer el archivo de horizonte"
+  "Could not read horizon file": "No se pudo leer el archivo de horizonte",
+  "Export .hrz": "Exportar .hrz",
+  "Automatically sync the host clock when it is off by more than an hour": "Sincronizar automáticamente el reloj del host cuando difiera en más de una hora",
+  "Host clock was over an hour off; synced from this device": "El reloj del host tenía más de una hora de diferencia; sincronizado desde este dispositivo"
 }

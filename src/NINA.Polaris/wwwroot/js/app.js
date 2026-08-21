@@ -1062,6 +1062,8 @@ function ninaApp() {
             // Default ON (matches the profile default); the server value
             // overwrites this on load.
             autoConnectOnStartup: true,
+            // Auto-sync the host clock from this client when off by >1h. Default on.
+            autoClockSync: true,
             // Self-update channel: 'stable' or 'preview' (early-access).
             updateChannel: 'stable',
             // External tools, see ExternalTools section in Settings.
@@ -6598,7 +6600,22 @@ function ninaApp() {
         // it via timedatectl (Linux + polkit) and returns the post-
         // sync residual skew. Disables the button while in flight to
         // avoid double-fires.
-        async clockSyncFromClient() {
+        // Auto clock sync: when the host clock drifts more than an hour from
+        // this client (an RTC-less SBC that booted with no network time), pull
+        // the host onto the client's clock. On by default; the Settings toggle
+        // (settings.autoClockSync) disables it. Throttled so a persistent
+        // failure (missing polkit rule) doesn't retry every WS tick.
+        _maybeAutoSyncClock() {
+            if (this.settings?.autoClockSync === false) return;
+            if (!this.clockSync.supported || this.clockSync.busy) return;
+            if (Math.abs(this.clockSync.skewSeconds | 0) <= 3600) return;
+            const now = Date.now();
+            if (this._lastAutoClockAttempt && now - this._lastAutoClockAttempt < 300000) return;
+            this._lastAutoClockAttempt = now;
+            this.clockSyncFromClient(true);
+        },
+
+        async clockSyncFromClient(auto = false) {
             if (this.clockSync.busy) return;
             this.clockSync.busy = true;
             this.clockSync.lastError = null;
@@ -6615,12 +6632,14 @@ function ninaApp() {
                 const j = await r.json();
                 if (j.ok) {
                     this.clockSync.lastSyncAt = new Date();
-                    this.toast('Host clock synced from this client device', 'ok');
+                    this.toast(auto
+                        ? 'Host clock was over an hour off; synced from this device'
+                        : 'Host clock synced from this client device', 'ok');
                     // Force next WS payload to refresh skew quickly.
                     this.clockSync.skewSeconds = 0;
                 } else {
                     this.clockSync.lastError = j.error || 'Sync failed';
-                    this.toast(this.clockSync.lastError, 'error');
+                    if (!auto) this.toast(this.clockSync.lastError, 'error');
                 }
             } catch (e) {
                 // Three distinct failure modes to surface clearly:
@@ -6644,7 +6663,7 @@ function ninaApp() {
                     msg = (e && e.message) || 'Network error';
                 }
                 this.clockSync.lastError = msg;
-                this.toast('Clock sync failed: ' + msg, 'error');
+                if (!auto) this.toast('Clock sync failed: ' + msg, 'error');
             } finally {
                 this.clockSync.busy = false;
             }
@@ -11540,6 +11559,8 @@ function ninaApp() {
                     this.settings.imageNamePattern = data.imageNamePattern || '';
                     this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
                     this.settings.autoConnectOnStartup = !!data.autoConnectOnStartup;
+                    // Auto clock sync: default on (absent ⇒ true).
+                    this.settings.autoClockSync = data.autoClockSync !== false;
                     this.settings.updateChannel = data.updateChannel === 'preview' ? 'preview' : 'stable';
                     // DBGLOG-9: hydrate the persist-to-disk toggle (default on).
                     this.settings.logToDisk = data.logToDisk !== false;
@@ -23497,6 +23518,7 @@ function ninaApp() {
                         imageNamePattern: this.settings.imageNamePattern,
                         preferAdvancedSequencer: this.settings.preferAdvancedSequencer,
                         autoConnectOnStartup: this.settings.autoConnectOnStartup,
+                        autoClockSync: this.settings.autoClockSync,
                         updateChannel: this.settings.updateChannel,
                         // DBGLOG-9: opt-in disk persistence.
                         logToDisk: this.settings.logToDisk,
@@ -38119,6 +38141,23 @@ function ninaApp() {
             this.horizonRedraw();
             this._pushHorizonToSky();
         },
+        // Download the horizon as a N.I.N.A. .hrz file ("AZM  ALT" degrees,
+        // whitespace-separated, sorted by azimuth) so it round-trips with the
+        // desktop HorizonCreator + the TouchNStars horizon-creator plugin.
+        horizonExport() {
+            if (!this.horizonPoints.length) return;
+            const text = [...this.horizonPoints]
+                .sort((a, b) => a.azimuth - b.azimuth)
+                .map(p => p.azimuth.toFixed(2).padStart(6) + '      ' + p.altitude.toFixed(2).padStart(5))
+                .join('\n') + '\n';
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'horizon.hrz';
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        },
         // Push the horizon polygon to the Sky-map iframe (drawn there in the
         // engine's horizontal frame). No-op until the bridge is ready.
         _pushHorizonToSky() {
@@ -42778,6 +42817,7 @@ function ninaApp() {
                     _serverNowMs = serverMs;
                     this.clockSync.skewSeconds = Math.round(
                         (serverMs - Date.now()) / 1000);
+                    this._maybeAutoSyncClock();
                 }
             }
             // Server-authoritative current-exposure progress. Absorb here so

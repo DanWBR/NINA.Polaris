@@ -40,6 +40,13 @@ public class UserProfile {
     /// alongside the site coordinates.</summary>
     public string? HotspotWifiInterface { get; set; }
 
+    /// <summary>Automatically pull the host clock onto this client's clock when
+    /// they differ by more than an hour (an RTC-less SBC that booted with no
+    /// network time). On by default; users can turn it off in Settings. Absent
+    /// from an old profile ⇒ the true initializer wins, so upgraded installs
+    /// get it on.</summary>
+    public bool AutoClockSync { get; set; } = true;
+
     /// <summary>Custom horizon: an azimuth→altitude visibility mask for this
     /// site (trees, buildings). Points are (azimuthDeg 0..360, altitudeDeg),
     /// interpolated between samples; empty ⇒ no custom horizon. Enforced/drawn

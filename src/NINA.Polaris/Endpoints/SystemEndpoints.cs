@@ -254,6 +254,7 @@ public static class SystemEndpoints {
                 p.IndiHost = update.IndiHost;
                 p.IndiPort = update.IndiPort;
                 p.AutoConnectOnStartup = update.AutoConnectOnStartup;
+                p.AutoClockSync = update.AutoClockSync;
                 // Self-update channel: only "preview" or "stable" (anything else
                 // normalises to stable so a bad value can't strand a host).
                 p.UpdateChannel = string.Equals(update.UpdateChannel?.Trim(), "preview",
