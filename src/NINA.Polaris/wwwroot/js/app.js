@@ -37740,6 +37740,29 @@ function ninaApp() {
             document.body.removeChild(a);
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         },
+        // Add a horizon point at the mount's CURRENT alt/az — point the scope
+        // at the top of an obstacle (tree/building), then capture it. Uses the
+        // driver's reported alt/az (ground truth on AltAz mounts). Replaces an
+        // existing point within 1 degree of the same azimuth instead of stacking.
+        horizonAddFromMount() {
+            const az = Number(this.mount?.az), alt = Number(this.mount?.alt);
+            if (!this.mount?.connected || !Number.isFinite(az) || !Number.isFinite(alt)) {
+                this.toast(this.$t('Connect the mount to add a horizon point from its position'), 'warn');
+                return;
+            }
+            const a = ((az % 360) + 360) % 360;
+            const near = this.horizonPoints.findIndex(p => {
+                let d = Math.abs(p.azimuth - a); if (d > 180) d = 360 - d; return d < 1;
+            });
+            const pt = { azimuth: +a.toFixed(1), altitude: +alt.toFixed(1) };
+            if (near >= 0) this.horizonPoints[near] = pt; else this.horizonPoints.push(pt);
+            this._horizonSort();
+            this.horizonRedraw();
+            this.horizonSaveDebounced();
+            this.toast(this.$t('Added horizon point')
+                + ' (' + a.toFixed(0) + '°, ' + alt.toFixed(0) + '°)', 'ok');
+        },
+
         // Push the horizon polygon to the Sky-map iframe (drawn there in the
         // engine's horizontal frame). No-op until the bridge is ready.
         _pushHorizonToSky() {

@@ -9290,6 +9290,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </button>
                         <button class="btn btn-sm" @click="parkMount()" :disabled="!mount.connected || mount.parked">Park</button>
                         <button class="btn btn-sm" @click="unparkMount()" :disabled="!mount.connected || !mount.parked">Unpark</button>
+                        <!-- Capture this pointing as a custom-horizon point: aim
+                             at an obstacle's top edge and click. -->
+                        <button class="btn btn-sm" @click="horizonAddFromMount()"
+                                :disabled="!mount.connected"
+                                title="Add a custom-horizon point at the scope's current altitude + azimuth">🌄 Horizon point</button>
                     </div>
                 </div>
 
@@ -14675,6 +14680,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 @mouseleave="horizonMouseUp($event)"
                                 @contextmenu.prevent="horizonRightClick($event)"></canvas>
                         <div class="control-row" style="margin-top:8px;gap:8px;align-items:center;flex-wrap:wrap">
+                            <button class="btn btn-sm btn-primary" @click="horizonAddFromMount()"
+                                    :disabled="!mount?.connected"
+                                    title="Point the scope at the top of an obstacle, then capture its azimuth + altitude as a horizon point">
+                                🔭 Add from telescope
+                            </button>
                             <button class="btn btn-sm" @click="$refs.horizonFile.click()">Import file</button>
                             <input type="file" x-ref="horizonFile" accept=".hrz,.txt,.csv,text/plain"
                                    style="display:none" @change="horizonImportFile($event)">

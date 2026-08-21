@@ -1,4 +1,8 @@
 {
+  "🔭 Add from telescope": "🔭 Añadir desde el telescopio",
+  "🌄 Horizon point": "🌄 Punto de horizonte",
+  "Connect the mount to add a horizon point from its position": "Conecta la montura para añadir un punto de horizonte desde su posición",
+  "Added horizon point": "Punto de horizonte añadido",
   "Export .hrz": "Exportar .hrz",
   "Automatically sync the host clock when it is off by more than an hour": "Sincronizar automáticamente el reloj del host cuando difiera en más de una hora",
   "Host clock was over an hour off; synced from this device": "El reloj del host tenía más de una hora de diferencia; sincronizado desde este dispositivo",
