@@ -3798,5 +3798,12 @@
   "Capturing during LIVE / AUTORUN": "Capturing during LIVE / AUTORUN",
   "Not capturing": "Not capturing",
   "Captures simultaneously during LIVE / AUTORUN (toggle in the header).": "Captures simultaneously during LIVE / AUTORUN (toggle in the header).",
-  "Disabled: this camera will not capture during LIVE / AUTORUN.": "Disabled: this camera will not capture during LIVE / AUTORUN."
+  "Disabled: this camera will not capture during LIVE / AUTORUN.": "Disabled: this camera will not capture during LIVE / AUTORUN.",
+  "Scan folder (optional)": "",
+  "Scan": "",
+  "Not sure of the path? Browse to it on the": "",
+  "and copy the folder path here.": "",
+  "e.g. /mnt/nvme/planetary (blank uses the capture root)": "",
+  "Could not scan that folder": "",
+  "No .ser files under {dir}": ""
 }

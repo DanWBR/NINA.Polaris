@@ -4422,5 +4422,12 @@
   "Capturing during LIVE / AUTORUN": "Capture pendant LIVE / AUTORUN",
   "Not capturing": "Ne capture pas",
   "Captures simultaneously during LIVE / AUTORUN (toggle in the header).": "Capture simultanément pendant LIVE / AUTORUN (interrupteur dans l'en-tête).",
-  "Disabled: this camera will not capture during LIVE / AUTORUN.": "Désactivée : cette caméra ne capturera pas pendant LIVE / AUTORUN."
+  "Disabled: this camera will not capture during LIVE / AUTORUN.": "Désactivée : cette caméra ne capturera pas pendant LIVE / AUTORUN.",
+  "Scan folder (optional)": "Analyser un dossier (facultatif)",
+  "Scan": "Analyser",
+  "Not sure of the path? Browse to it on the": "Vous ne connaissez pas le chemin ? Parcourez-le dans l'",
+  "and copy the folder path here.": "et copiez le chemin du dossier ici.",
+  "e.g. /mnt/nvme/planetary (blank uses the capture root)": "p. ex. /mnt/nvme/planetary (vide utilise la racine de capture)",
+  "Could not scan that folder": "Impossible d'analyser ce dossier",
+  "No .ser files under {dir}": "Aucun fichier .ser dans {dir}"
 }
