@@ -534,6 +534,10 @@ public sealed class SvbonySdkCamera : ICamera {
             BitDepth = BitDepth,
             IsBayered = _bayer != BayerPatternEnum.None,
             BayerPattern = _bayer,
+            // RAW16 delivers right-aligned raw ADC values; advertise the real
+            // depth so the SER recorder left-aligns to the 16-bit container the
+            // way planetary tools expect. RAW8 is already widened above.
+            SignificantBitDepth = _imgType == SVB_IMG_TYPE.SVB_IMG_RAW16 ? _maxBitDepth : 0,
         };
         var meta = new ImageMetaData();
         meta.Camera.Name = DeviceName;

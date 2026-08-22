@@ -62,7 +62,7 @@ public class VideoRecordingService : IDisposable {
     private long _queuedBytes;
 
     private readonly record struct QueueItem(ushort[] Pixels, int ByteLen,
-        int Width, int Height, SerColorMode Color, DateTime Utc);
+        int Width, int Height, SerColorMode Color, int SignificantBits, DateTime Utc);
 
     /// <summary>Raised with the full path once a recording is closed and the
     /// SER header/trailer are final. The mirror of
@@ -342,16 +342,36 @@ public class VideoRecordingService : IDisposable {
                         Interlocked.Increment(ref _droppedFrames);
                         continue;
                     }
+                    // SERSCALE: native RAW16 hands us right-aligned raw ADC
+                    // values (a 12-bit sensor gives 0..4095 in the low bits) with
+                    // SignificantBitDepth = the real depth. Planetary tools
+                    // (FireCapture, ASIVideoStack, AutoStakkert) expect a 16-bit
+                    // SER to fill the container, so left-align by (16 - depth).
+                    // Unset (0) or already-16-bit → shift 0, i.e. the old path.
+                    // The RAW8-widened stream (px << 8) never sets it, so it is
+                    // untouched here and its top-byte recovery below still holds.
+                    int sh = item.SignificantBits is >= 8 and < 16 ? 16 - item.SignificantBits : 0;
                     if (outBits == 8) {
-                        // PLAN8: take the top byte. Every backend widens a RAW8
-                        // readout with `px << 8`, so this is that exact
-                        // operation inverted, not a lossy rescale of 16-bit
-                        // data that was never there.
+                        // Take the top byte of the LEFT-ALIGNED value. For the
+                        // RAW8 path (sh = 0) this is the plain `px >> 8` that
+                        // inverts its own `px << 8` widening; for right-aligned
+                        // RAW16 it is `px >> (8 - sh)` folded into one expression.
                         var src = item.Pixels;
-                        for (int i = 0; i < scratch.Length; i++) scratch[i] = (byte)(src[i] >> 8);
+                        for (int i = 0; i < scratch.Length; i++)
+                            scratch[i] = (byte)(((src[i] << sh) >> 8) & 0xFF);
                         writer.WriteFrame(scratch, scratch.Length, item.Utc);
-                    } else {
+                    } else if (sh == 0) {
                         Buffer.BlockCopy(item.Pixels, 0, scratch, 0, item.ByteLen);
+                        writer.WriteFrame(scratch, item.ByteLen, item.Utc);
+                    } else {
+                        var src = item.Pixels;
+                        int n = scratch.Length / 2;
+                        for (int i = 0; i < n; i++) {
+                            int x = src[i] << sh;                 // fill the 16-bit container
+                            if (x > 0xFFFF) x = 0xFFFF;           // saturate, never wrap a bright pixel to dark
+                            scratch[2 * i]     = (byte)(x & 0xFF);       // little-endian, per the header flag
+                            scratch[2 * i + 1] = (byte)((x >> 8) & 0xFF);
+                        }
                         writer.WriteFrame(scratch, item.ByteLen, item.Utc);
                     }
 
@@ -459,7 +479,7 @@ public class VideoRecordingService : IDisposable {
         var color = cfg.ColorMode
             ?? (props.IsBayered ? MapBayerToSer(props.BayerPattern) : SerColorMode.Mono);
         var item = new QueueItem(frame.Data, frame.Data.Length * 2,
-            props.Width, props.Height, color, DateTime.UtcNow);
+            props.Width, props.Height, color, props.SignificantBitDepth, DateTime.UtcNow);
         // Drop (counted) when the in-flight RAM budget is exceeded, so a disk
         // write-back stall never back-pressures the camera delivery thread or
         // grows memory without bound.

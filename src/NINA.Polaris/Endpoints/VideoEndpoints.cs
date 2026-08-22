@@ -74,8 +74,40 @@ public static class VideoEndpoints {
         // still scanned, so a season of existing recordings does not vanish
         // from the picker the moment the host updates. Nothing is moved --
         // that is the operator's data, and tens of gigabytes of it.
-        group.MapGet("/recordings", (ProfileService profiles) => {
+        group.MapGet("/recordings", (ProfileService profiles, FileBrowserService browser,
+                                     string? dir) => {
             var outDir = profiles.Active.ImageOutputDir;
+
+            // PLANNVME: an explicit folder overrides the capture-root scan, so a
+            // clip kept on an external SSD / NVMe mount outside ~/files (which
+            // the default scan never reaches) still shows in the process picker.
+            // The file browser is full-disk (denylist only), so the same mounts
+            // it lists are valid here; ResolveSafe just blocks the system dirs.
+            if (!string.IsNullOrWhiteSpace(dir)) {
+                string root;
+                try { root = browser.ResolveSafe(dir!, mustExist: true); }
+                catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
+                if (!Directory.Exists(root))
+                    return Results.BadRequest(new { error = "Not a directory: " + root });
+                try {
+                    var found = Directory.EnumerateFiles(root, "*.ser", SearchOption.AllDirectories)
+                        .Select(p => new FileInfo(p))
+                        .OrderByDescending(fi => fi.LastWriteTimeUtc)
+                        .Select(fi => new {
+                            path = fi.FullName,
+                            name = fi.Name,
+                            target = fi.Directory?.Name ?? "",
+                            rig = string.IsNullOrWhiteSpace(outDir) ? "" : RigOfRecording(outDir!, fi.FullName),
+                            sizeBytes = fi.Length,
+                            modifiedUtc = fi.LastWriteTimeUtc
+                        })
+                        .ToList();
+                    return Results.Ok(new { recordings = found, scannedDir = root });
+                } catch (Exception ex) {
+                    return Results.Ok(new { recordings = Array.Empty<object>(), error = ex.Message });
+                }
+            }
+
             if (string.IsNullOrWhiteSpace(outDir) || !Directory.Exists(outDir))
                 return Results.Ok(new { recordings = Array.Empty<object>() });
 

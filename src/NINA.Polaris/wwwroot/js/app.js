@@ -1675,6 +1675,10 @@ function ninaApp() {
             // Process side
             processSerPath: '',
             serList: [],          // [{ path, label }]
+            // PLANNVME: optional folder to scan for .ser instead of the default
+            // capture root — for clips on an external SSD / NVMe mount outside
+            // ~/files. Remembered across sessions in localStorage.
+            scanDir: (() => { try { return localStorage.getItem('polaris.video.scanDir') || ''; } catch (e) { return ''; } })(),
             keepPercent: 50,
             outputName: 'stack',
             // Per-frame quality scores for the current/last stack job, fetched
@@ -25889,7 +25893,14 @@ function ninaApp() {
                 // path used the generic /api/files/list (non-recursive +
                 // different field names), so it never saw the recordings nested
                 // under <target>/.
-                const r = await this.apiGet('/api/video/recordings');
+                //
+                // PLANNVME: an explicit scan folder (an external SSD / NVMe mount
+                // outside ~/files) overrides the default capture-root scan, so
+                // clips kept off the boot drive still show up in the picker.
+                const dir = (this.video.scanDir || '').trim();
+                const url = '/api/video/recordings'
+                    + (dir ? ('?dir=' + encodeURIComponent(dir)) : '');
+                const r = await this.apiGet(url);
                 this.video.serList = (r.recordings || []).map(e => ({
                     path: e.path,
                     // PLANPATH: recordings now live per rig, and the list spans
@@ -25900,10 +25911,24 @@ function ninaApp() {
                          + (e.target ? e.target + '/' : '') + e.name
                          + ' (' + ((e.sizeBytes / 1048576) | 0) + ' MB)'
                 }));
+                if (dir && this.video.serList.length === 0)
+                    this.toast(this.$t('No .ser files under {dir}', { dir }), 'info');
             } catch (e) {
+                if ((this.video.scanDir || '').trim())
+                    this.toastFail(this.$t('Could not scan that folder'), e);
                 // No recordings yet (dir absent) → empty list, no toast spam.
                 this.video.serList = [];
             }
+        },
+        scanVideoFolder() {
+            const dir = (this.video.scanDir || '').trim();
+            try { localStorage.setItem('polaris.video.scanDir', dir); } catch (e) { /* private mode */ }
+            this.loadVideoSerList();
+        },
+        clearVideoScanFolder() {
+            this.video.scanDir = '';
+            try { localStorage.removeItem('polaris.video.scanDir'); } catch (e) { /* private mode */ }
+            this.loadVideoSerList();
         },
         async videoStartStack() {
             if (!this.video.processSerPath) return;

@@ -398,6 +398,10 @@ public sealed class PlayerOneSdkCamera : ICamera {
         var props = new ImageProperties {
             Width = w, Height = h, BitDepth = BitDepth,
             IsBayered = _bayer != BayerPatternEnum.None, BayerPattern = _bayer,
+            // RAW16 delivers right-aligned raw ADC values; advertise the real
+            // depth so the SER recorder left-aligns to the 16-bit container the
+            // way planetary tools expect. RAW8 is already widened above.
+            SignificantBitDepth = _imgFormat == POAImgFormat.POA_RAW16 ? _bitDepth : 0,
         };
         var meta = new ImageMetaData();
         meta.Camera.Name = DeviceName;
