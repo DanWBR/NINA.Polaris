@@ -15156,54 +15156,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </ul>
                 </div>
 
-                <!-- PHD2 guide-log viewer: parses the PHD2-format guide log in
-                     the browser and shows the RA/Dec error graph + RMS stats. -->
-                <div x-show="phd2Viewer.open" x-cloak
-                     @keydown.escape.window="phd2Viewer.open=false"
-                     style="position:fixed;inset:0;z-index:2147483200;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:16px"
-                     @click.self="phd2Viewer.open=false">
-                    <div style="width:min(960px,96vw);max-height:92vh;overflow:auto;background:var(--panel,#16213e);border:1px solid var(--border);border-radius:12px;padding:16px">
-                        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-                            <h3 style="margin:0;font-size:15px">📈 <span>Guide log</span> —
-                                <span style="font-weight:400;font-size:13px;color:var(--text-secondary)" x-text="phd2Viewer.fileName"></span></h3>
-                            <button class="btn btn-sm" @click="phd2Viewer.open=false">✕</button>
-                        </div>
-                        <p class="hint" x-show="phd2Viewer.loading" style="margin-top:12px">Parsing…</p>
-                        <p class="text-warn" x-show="phd2Viewer.error" style="margin-top:12px" x-text="phd2Viewer.error"></p>
-                        <template x-if="!phd2Viewer.loading && !phd2Viewer.error && phd2Viewer.sessions.length">
-                            <div>
-                                <div class="control-row" x-show="phd2Viewer.sessions.length>1"
-                                     style="gap:8px;align-items:center;margin-top:10px">
-                                    <label style="font-size:12px">Guiding session</label>
-                                    <select class="input-sm" style="flex:1" x-model.number="phd2Viewer.sessionIdx"
-                                            @change="_renderPhd2Chart()">
-                                        <template x-for="(s,i) in phd2Viewer.sessions" :key="i">
-                                            <option :value="i" x-text="'#' + (i+1) + '  ' + (s.startTime||'') + '  (' + s.frames.length + ' frames)'"></option>
-                                        </template>
-                                    </select>
-                                </div>
-                                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">
-                                    <template x-for="t in phd2StatTiles" :key="t.label">
-                                        <div style="flex:1;min-width:96px;background:var(--bg-elevated,rgba(255,255,255,0.05));border:1px solid var(--border);border-radius:8px;padding:8px 10px">
-                                            <div class="hint" style="margin:0;font-size:10px;text-transform:uppercase" x-text="t.label"></div>
-                                            <div style="font-size:18px;font-weight:700" :style="t.color?('color:'+t.color):''"><span x-text="t.value"></span><span style="font-size:11px;font-weight:400;color:var(--text-secondary)" x-text="' '+t.unit"></span></div>
-                                        </div>
-                                    </template>
-                                </div>
-                                <div style="height:320px;margin-top:14px"><canvas x-ref="phd2Chart"></canvas></div>
-                                <p class="hint" style="margin-top:6px;font-size:11px">
-                                    RA (red) and Dec (blue) raw error in <span x-text="phd2Viewer.unit"></span>; the shaded
-                                    bands are dither/settle frames (excluded from the RMS). Pixel scale
-                                    <span x-text="phd2Viewer.pixelScale ? phd2Viewer.pixelScale.toFixed(2)+'\"/px' : 'unknown (shown in px)'"></span>.
-                                </p>
-                            </div>
-                        </template>
-                        <p class="hint" x-show="!phd2Viewer.loading && !phd2Viewer.error && !phd2Viewer.sessions.length" style="margin-top:12px">
-                            No guiding sessions found in this log.
-                        </p>
-                    </div>
-                </div>
-
 
                 <!-- External post-processing tools (Siril + GraXpert).
                      Both run as external binaries; auto-detected on
@@ -19820,6 +19772,55 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         <span>Framing a target for the plan, pan/zoom, then add it.</span>
         <button class="btn btn-sm" @click="planAddTargetFromSky()">Add to plan</button>
         <button class="btn btn-sm" @click="planCancelFraming()">Cancel</button>
+    </div>
+
+    <!-- PHD2 guide-log viewer: parses the PHD2-format guide log in the browser
+         and shows the RA/Dec error graph + RMS stats. Lives at the top level
+         (not inside a tab) so the fixed overlay centres on the viewport rather
+         than a transformed ancestor. -->
+    <div class="modal-overlay" x-show="phd2Viewer.open" x-cloak
+         @keydown.escape.window="phd2Viewer.open=false"
+         @click.self="phd2Viewer.open=false">
+        <div style="width:min(960px,96vw);max-height:92vh;overflow:auto;background:var(--panel,#16213e);border:1px solid var(--border);border-radius:12px;padding:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+                <h3 style="margin:0;font-size:15px">📈 <span>Guide log</span> —
+                    <span style="font-weight:400;font-size:13px;color:var(--text-secondary)" x-text="phd2Viewer.fileName"></span></h3>
+                <button class="btn btn-sm" @click="phd2Viewer.open=false">✕</button>
+            </div>
+            <p class="hint" x-show="phd2Viewer.loading" style="margin-top:12px">Parsing…</p>
+            <p class="text-warn" x-show="phd2Viewer.error" style="margin-top:12px" x-text="phd2Viewer.error"></p>
+            <template x-if="!phd2Viewer.loading && !phd2Viewer.error && phd2Viewer.sessions.length">
+                <div>
+                    <div class="control-row" x-show="phd2Viewer.sessions.length>1"
+                         style="gap:8px;align-items:center;margin-top:10px">
+                        <label style="font-size:12px">Guiding session</label>
+                        <select class="input-sm" style="flex:1" x-model.number="phd2Viewer.sessionIdx"
+                                @change="_renderPhd2Chart()">
+                            <template x-for="(s,i) in phd2Viewer.sessions" :key="i">
+                                <option :value="i" x-text="'#' + (i+1) + '  ' + (s.startTime||'') + '  (' + s.frames.length + ' frames)'"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">
+                        <template x-for="t in phd2StatTiles" :key="t.label">
+                            <div style="flex:1;min-width:96px;background:var(--bg-elevated,rgba(255,255,255,0.05));border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+                                <div class="hint" style="margin:0;font-size:10px;text-transform:uppercase" x-text="t.label"></div>
+                                <div style="font-size:18px;font-weight:700" :style="t.color?('color:'+t.color):''"><span x-text="t.value"></span><span style="font-size:11px;font-weight:400;color:var(--text-secondary)" x-text="' '+t.unit"></span></div>
+                            </div>
+                        </template>
+                    </div>
+                    <div style="height:320px;margin-top:14px"><canvas x-ref="phd2Chart"></canvas></div>
+                    <p class="hint" style="margin-top:6px;font-size:11px">
+                        RA (red) and Dec (blue) raw error in <span x-text="phd2Viewer.unit"></span>; the shaded
+                        bands are dither/settle frames (excluded from the RMS). Pixel scale
+                        <span x-text="phd2Viewer.pixelScale ? phd2Viewer.pixelScale.toFixed(2)+'\"/px' : 'unknown (shown in px)'"></span>.
+                    </p>
+                </div>
+            </template>
+            <p class="hint" x-show="!phd2Viewer.loading && !phd2Viewer.error && !phd2Viewer.sessions.length" style="margin-top:12px">
+                No guiding sessions found in this log.
+            </p>
+        </div>
     </div>
 
     <!-- PLAN: host-shutdown risk confirmation -->
