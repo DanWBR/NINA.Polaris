@@ -300,6 +300,25 @@ public sealed class AscomComCamera : ICamera, IDisposable {
                 }
             }
 
+            // Set the readout frame to the FULL sensor (in binned pixels) before
+            // StartExposure. The ICameraV3 contract says a client sets StartX/Y +
+            // NumX/Y; a spec-compliant driver defaults NumX/NumY to the full
+            // frame on connect, but DSLR/MTP drivers — the dougforpres Sony ASCOM
+            // driver in particular — leave them at 0, and StartExposure then
+            // "succeeds" but never produces an image (ImageReady stays false →
+            // the 120 s poll timeout → a 500 on /api/camera/capture). This path
+            // is always a full-frame capture, so pin the frame explicitly, as
+            // every other ASCOM client does.
+            int binX = 1, binY = 1;
+            if (_canBin && opts?.BinX is int bxo && bxo >= 1) {
+                binX = bxo;
+                binY = (opts.BinY is int byo && byo >= 1) ? byo : bxo;
+            }
+            SafeSet(() => _driver!.StartX = 0);
+            SafeSet(() => _driver!.StartY = 0);
+            SafeSet(() => _driver!.NumX = Math.Max(1, _maxX / binX));
+            SafeSet(() => _driver!.NumY = Math.Max(1, _maxY / binY));
+
             var isLight = !string.Equals(opts?.ImageType, "DARK", StringComparison.OrdinalIgnoreCase)
                        && !string.Equals(opts?.ImageType, "BIAS", StringComparison.OrdinalIgnoreCase);
             _driver!.StartExposure(exposureSeconds, isLight);
