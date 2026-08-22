@@ -679,7 +679,7 @@
                     @click="tab='settings'; $nextTick(() => document.getElementById('scheduled-shutdown-card')?.scrollIntoView({behavior:'smooth'}))"
                     :style="'cursor:pointer;border:none;'+((scheduledShutdown.running || (scheduledShutdownSecondsLeft!==null && scheduledShutdownSecondsLeft<=300)) ? 'color:#f87171' : 'color:#fbbf24')"
                     :title="$t('Scheduled rig shutdown') + (scheduledShutdown.shutdownHost ? ' + ' + $t('host power off') : '')">
-                <span>⏻</span> <span x-text="scheduledShutdownCountdown"></span>
+                <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.14em"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg> <span x-text="scheduledShutdownCountdown"></span>
             </button>
             <!-- DBGLOG-6: log inspector badge. Always visible (helps
                  trust + discoverability), colours by unread severity:
@@ -4806,7 +4806,7 @@
                             <span x-text="phd2EquipmentConnected ? 'Disconnect equipment' : 'Connect equipment'"></span>
                         </button>
                         <button class="btn btn-sm btn-danger" @click="shutdownPhd2()"
-                                title="Shut down PHD2 (graceful)">⏻ Shutdown</button>
+                                title="Shut down PHD2 (graceful)"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.14em"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg> Shutdown</button>
                     </div>
                 </div>
 
@@ -14607,7 +14607,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      capture + guiding, park the mount, warm + turn off cooling,
                      and optionally power off the host. -->
                 <div class="settings-section" id="scheduled-shutdown-card">
-                    <h3><span class="settings-card-icon">⏻</span>Scheduled shutdown</h3>
+                    <h3><span class="settings-card-icon"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.12em"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg></span>Scheduled shutdown</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         At the chosen time Polaris stops the capture and guiding, parks the mount, gently
                         warms the camera and turns cooling off, and optionally powers off the host. For
@@ -14651,7 +14651,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <div class="settings-section" id="power-card">
-                    <h3 data-tour="set-power"><span class="settings-card-icon">⏻</span>Power</h3>
+                    <h3 data-tour="set-power"><span class="settings-card-icon"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.12em"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg></span>Power</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Restart the Polaris server or reboot the whole device
                         without an SSH session. Handy on a headless SBC at the
@@ -14674,7 +14674,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <button class="btn btn-sm btn-danger"
                                 @click="shutdownDevice()"
                                 :disabled="!power.canShutdown || power.shuttingDown">
-                            <span x-show="!power.shuttingDown">⏻ Shut down device</span>
+                            <span x-show="!power.shuttingDown"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.14em"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg> Shut down device</span>
                             <span x-show="power.shuttingDown">Shutting down…</span>
                         </button>
                     </div>
@@ -20511,7 +20511,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          @keydown.escape.window="planShutdownConfirm = false">
         <div class="modal-card danger">
             <div class="modal-head">
-                <span class="modal-icon">⏻</span>
+                <span class="modal-icon"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg></span>
                 <h3>Shut down the host at the end?</h3>
             </div>
             <p>When this plan finishes (or reaches its end time), the device running Polaris
