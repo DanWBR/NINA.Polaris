@@ -91,9 +91,15 @@ public class TonightsBestService {
             // includes those (size ≥ 10′) so they can be ranked by SIZE instead.
             bool hasMag = dso.Magnitude < 90;
             double sizeArcmin = dso.SizeArcmin ?? 0;
+            // Galaxies are intrinsically fainter than clusters/nebulae, and
+            // galaxy hunters expect the mag 11-14 ones (Stephan's Quintet etc.),
+            // so let the galaxy family through to a deeper limit while keeping a
+            // tighter gate on everything else so the "All" view stays clean.
+            bool isGalaxyType = dso.Type != null
+                && dso.Type.Contains("Galax", StringComparison.OrdinalIgnoreCase);
             if (hasMag) {
                 // Coarse brightness gate before the (expensive) altitude track.
-                if (dso.Magnitude > 10) continue;
+                if (dso.Magnitude > (isGalaxyType ? 14.0 : 10.0)) continue;
             } else {
                 // Magnitude-less: keep only the big, imageable nebulae.
                 if (sizeArcmin < 10) continue;

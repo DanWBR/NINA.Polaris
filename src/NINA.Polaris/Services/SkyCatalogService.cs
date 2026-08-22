@@ -297,7 +297,12 @@ public class SkyCatalogService {
             if (_dsoPlanningCache != null) return _dsoPlanningCache;
             lock (_allLock) {
                 if (_dsoPlanningCache != null) return _dsoPlanningCache;
-                var loaded = _dso!.LoadAllAsync(magCap: 12.0, minSizeNoMag: 10.0)
+                // magCap 14 (was 12) so Tonight's Best can reach the fainter
+                // galaxies people actually hunt (Stephan's Quintet ~mag 13, most
+                // of the 3,300 galaxies at mag 12-13.5). TonightsBestService
+                // keeps a tighter per-object gate for non-galaxy types so the
+                // "All" view isn't flooded.
+                var loaded = _dso!.LoadAllAsync(magCap: 14.0, minSizeNoMag: 10.0)
                     .GetAwaiter().GetResult();
                 _dsoPlanningCache = loaded.Select(FromDso).ToList();
             }
