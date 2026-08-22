@@ -526,6 +526,12 @@ function ninaApp() {
             lastError: null
         },
 
+        // Scheduled rig teardown ("sleep timer"). Live state from the WS
+        // scheduledShutdown block; the form model drives the Settings card.
+        scheduledShutdown: { utc: null, shutdownHost: false, running: false },
+        schedShutdownForm: { localDt: '', host: false, busy: false },
+        _nowTick: Date.now(),   // refreshed every second for the countdown
+
         // TLS-A2: HTTPS certificate install wizard state. Loaded by
         // tlsInit() (called from x-init on the Settings card), so the
         // expensive /api/tls/status + /install-instructions fetch
@@ -4572,6 +4578,9 @@ function ninaApp() {
             // it regardless of whether Settings is ever opened.
             try { this.horizonLoad(); } catch (_) { /* best effort */ }
 
+            // 1 Hz tick driving the scheduled-shutdown countdown badge/card.
+            setInterval(() => { this._nowTick = Date.now(); }, 1000);
+
             // Safety net for the boot curtain. Six seconds is far longer than
             // a healthy first status frame (the socket opens and pushes within
             // a second or so, even on a Pi over WiFi) and short enough that a
@@ -6657,6 +6666,54 @@ function ninaApp() {
             } finally {
                 this.clockSync.busy = false;
             }
+        },
+
+        // ---- Scheduled rig teardown ("sleep timer") -----------------------
+        // Seconds until the armed shutdown; <=0 (or null) when nothing/overdue.
+        get scheduledShutdownSecondsLeft() {
+            if (!this.scheduledShutdown?.utc) return null;
+            const ms = Date.parse(this.scheduledShutdown.utc) - this._nowTick;
+            return Number.isFinite(ms) ? Math.round(ms / 1000) : null;
+        },
+        // Compact countdown ("2h 14m" / "8m 03s") for the badge + card.
+        get scheduledShutdownCountdown() {
+            const s = this.scheduledShutdownSecondsLeft;
+            if (s == null) return '';
+            if (s <= 0) return this.scheduledShutdown?.running ? this.$t('shutting down…') : this.$t('due');
+            const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+            if (h > 0) return h + 'h ' + String(m).padStart(2, '0') + 'm';
+            if (m > 0) return m + 'm ' + String(sec).padStart(2, '0') + 's';
+            return sec + 's';
+        },
+        async armScheduledShutdown() {
+            const raw = (this.schedShutdownForm.localDt || '').trim();
+            if (!raw) { this.toast(this.$t('Pick a date and time'), 'warn'); return; }
+            // datetime-local is local wall time; Date() parses it as local, and
+            // toISOString() converts to the UTC the server wants.
+            const when = new Date(raw);
+            if (isNaN(when.getTime()) || when.getTime() <= Date.now() + 5000) {
+                this.toast(this.$t('The scheduled time must be in the future'), 'warn'); return;
+            }
+            this.schedShutdownForm.busy = true;
+            try {
+                const resp = await this.apiPost('/api/system/scheduled-shutdown',
+                    { utc: when.toISOString(), shutdownHost: !!this.schedShutdownForm.host });
+                const r = await resp.json();
+                if (resp.ok) {
+                    this.scheduledShutdown = { utc: r.utc, shutdownHost: r.shutdownHost, running: false };
+                    this.toast(this.$t('Scheduled shutdown armed'), 'ok');
+                } else {
+                    this.toast((r && r.error) || this.$t('Could not arm the shutdown'), 'warn');
+                }
+            } catch (e) { this.toastFail(this.$t('Could not arm the shutdown'), e); }
+            finally { this.schedShutdownForm.busy = false; }
+        },
+        async cancelScheduledShutdown() {
+            try {
+                await this.apiFetch('/api/system/scheduled-shutdown', { method: 'DELETE' });
+                this.scheduledShutdown = { utc: null, shutdownHost: false, running: false };
+                this.toast(this.$t('Scheduled shutdown cancelled'), 'ok');
+            } catch (e) { this.toastFail(this.$t('Cancel failed'), e); }
         },
 
         // Human-readable skew label. Positive = server is AHEAD,
@@ -42592,6 +42649,7 @@ function ninaApp() {
                     this._maybeAutoSyncClock();
                 }
             }
+            if (msg.scheduledShutdown) this.scheduledShutdown = msg.scheduledShutdown;
             // Server-authoritative current-exposure progress. Absorb here so
             // the shutter countdowns + status-bar chip reflect the real frame
             // elapsed even right after a reconnect (the local timers may be

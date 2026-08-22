@@ -47,6 +47,16 @@ public class UserProfile {
     /// get it on.</summary>
     public bool AutoClockSync { get; set; } = true;
 
+    /// <summary>One-shot scheduled rig teardown (UTC). When reached, Polaris
+    /// stops capture + guiding, parks the mount, warms the camera and turns
+    /// cooling off, and — when <see cref="ScheduledShutdownHost"/> — powers the
+    /// host down. Persisted so it survives a restart; cleared after it fires or
+    /// is cancelled. Null = nothing scheduled.</summary>
+    public DateTime? ScheduledShutdownUtc { get; set; }
+
+    /// <summary>Whether the scheduled teardown also powers off the host.</summary>
+    public bool ScheduledShutdownHost { get; set; }
+
     /// <summary>Custom horizon: an azimuth→altitude visibility mask for this
     /// site (trees, buildings). Points are (azimuthDeg 0..360, altitudeDeg),
     /// interpolated between samples; empty ⇒ no custom horizon. Enforced/drawn

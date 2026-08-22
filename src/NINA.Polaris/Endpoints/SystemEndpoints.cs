@@ -557,6 +557,31 @@ public static class SystemEndpoints {
                 : Results.Json(new { ok = false, error = r.Message }, statusCode: r.StatusCode);
         });
 
+        // Scheduled rig teardown ("sleep timer"): stop capture + guiding, park,
+        // warm + cooler off, optionally power off the host — at a set time.
+        group.MapGet("/scheduled-shutdown", (ScheduledShutdownService svc) => Results.Ok(new {
+            utc = svc.ScheduledUtc?.ToString("o"),
+            shutdownHost = svc.ShutdownHost,
+            running = svc.Running
+        }));
+
+        group.MapPost("/scheduled-shutdown", (ScheduledShutdownRequest req, ScheduledShutdownService svc) => {
+            if (req == null || string.IsNullOrWhiteSpace(req.Utc)
+                    || !DateTime.TryParse(req.Utc, System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AssumeUniversal
+                        | System.Globalization.DateTimeStyles.AdjustToUniversal, out var when)) {
+                return Results.BadRequest(new { error = "utc is required (ISO-8601)" });
+            }
+            if (!svc.Arm(when, req.ShutdownHost))
+                return Results.BadRequest(new { error = "The scheduled time must be in the future." });
+            return Results.Ok(new { utc = svc.ScheduledUtc?.ToString("o"), shutdownHost = svc.ShutdownHost });
+        });
+
+        group.MapDelete("/scheduled-shutdown", (ScheduledShutdownService svc) => {
+            svc.Cancel();
+            return Results.Ok(new { cancelled = true });
+        });
+
         group.MapPost("/autostart", (AutoStartRequest req, PowerService power) => {
             var r = power.SetAutoStart(req?.Enable ?? false);
             return r.Ok
@@ -623,6 +648,7 @@ public static class SystemEndpoints {
     record GpuToggleRequest(bool Enabled);
     record TerminalEnableRequest(bool Enabled);
     record UiLanguageRequest(string? Language);
+    record ScheduledShutdownRequest(string Utc, bool ShutdownHost);
 }
 /// <summary>Body of POST /api/system/install-to-disk.</summary>
 public record DiskInstallRequest(string Device);
