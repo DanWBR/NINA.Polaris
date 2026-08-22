@@ -672,6 +672,15 @@
                  Hidden on very narrow viewports to keep the badge row tidy. -->
             <span class="status-chip status-clock" x-text="currentTime"
                   title="Current time" data-no-i18n></span>
+            <!-- Scheduled rig teardown countdown. Shown only while armed;
+                 click jumps to the Settings card to review/cancel. Amber, or
+                 red in the final 5 min / while firing. -->
+            <button class="status-chip" x-show="scheduledShutdown.utc" x-cloak
+                    @click="tab='settings'; $nextTick(() => document.getElementById('scheduled-shutdown-card')?.scrollIntoView({behavior:'smooth'}))"
+                    :style="'cursor:pointer;border:none;'+((scheduledShutdown.running || (scheduledShutdownSecondsLeft!==null && scheduledShutdownSecondsLeft<=300)) ? 'color:#f87171' : 'color:#fbbf24')"
+                    :title="$t('Scheduled rig shutdown') + (scheduledShutdown.shutdownHost ? ' + ' + $t('host power off') : '')">
+                <span>⏻</span> <span x-text="scheduledShutdownCountdown"></span>
+            </button>
             <!-- DBGLOG-6: log inspector badge. Always visible (helps
                  trust + discoverability), colours by unread severity:
                  red when there are unread errors, amber for unread
@@ -14551,6 +14560,53 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <p class="text-warn" x-show="clockSync.lastError"
                        style="font-size:11px; margin-top:8px"
                        x-text="'⚠ ' + clockSync.lastError"></p>
+                </div>
+
+                <!-- Scheduled rig teardown ("sleep timer"): at a set time, stop
+                     capture + guiding, park the mount, warm + turn off cooling,
+                     and optionally power off the host. -->
+                <div class="settings-section" id="scheduled-shutdown-card">
+                    <h3><span class="settings-card-icon">⏻</span>Scheduled shutdown</h3>
+                    <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
+                        At the chosen time Polaris stops the capture and guiding, parks the mount, gently
+                        warms the camera and turns cooling off, and optionally powers off the host. For
+                        when you doze off and forget the rig is running.
+                    </p>
+
+                    <!-- Armed state -->
+                    <template x-if="scheduledShutdown.utc">
+                        <div style="margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-elevated,rgba(255,255,255,0.05))">
+                            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                                <span style="font-size:18px;font-weight:700"
+                                      :style="(scheduledShutdown.running || (scheduledShutdownSecondsLeft!==null && scheduledShutdownSecondsLeft<=300)) ? 'color:#f87171' : 'color:#fbbf24'"
+                                      x-text="scheduledShutdownCountdown"></span>
+                                <span class="text-muted" style="font-size:12px"
+                                      x-text="new Date(scheduledShutdown.utc).toLocaleString()"></span>
+                                <span class="hint" style="margin:0" x-show="scheduledShutdown.shutdownHost">· <span x-text="$t('host power off')"></span></span>
+                                <button class="btn btn-sm" style="margin-left:auto"
+                                        @click="cancelScheduledShutdown()"
+                                        :disabled="scheduledShutdown.running">Cancel shutdown</button>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Arm form -->
+                    <template x-if="!scheduledShutdown.utc">
+                        <div style="margin-top:10px">
+                            <label style="display:block;font-size:12px">Shut down at
+                                <input type="datetime-local" class="input-md" style="max-width:260px;display:block;margin-top:4px"
+                                       x-model="schedShutdownForm.localDt">
+                            </label>
+                            <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;font-size:13px">
+                                <input type="checkbox" x-model="schedShutdownForm.host">
+                                <span>Also power off the host at the end</span>
+                            </label>
+                            <button class="btn btn-primary btn-sm" style="margin-top:12px"
+                                    @click="armScheduledShutdown()" :disabled="schedShutdownForm.busy">
+                                Schedule shutdown
+                            </button>
+                        </div>
+                    </template>
                 </div>
 
                 <div class="settings-section" id="power-card">

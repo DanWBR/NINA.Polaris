@@ -311,6 +311,10 @@ builder.Services.AddSingleton<ClockSyncService>();
 // (units enabled, udev/polkit rules, root filesystem grown, device identity).
 builder.Services.AddSingleton<DiagnosticsService>();
 builder.Services.AddSingleton<PowerService>();
+// Scheduled rig teardown ("sleep timer"): stops capture/guiding, parks the
+// mount, warms + turns off cooling, optionally powers off the host at a set time.
+builder.Services.AddSingleton<ScheduledShutdownService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ScheduledShutdownService>());
 builder.Services.AddSingleton<ImageWriterService>();
 // Auto-push saved images to network storage (SMB / SFTP / mounted path).
 // Background consumer subscribes to ImageWriterService.ImageSaved; the

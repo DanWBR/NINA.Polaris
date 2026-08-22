@@ -27,16 +27,18 @@ public sealed class HostStatusContributor : IStatusContributor {
     private readonly NINA.Polaris.Services.Logging.LogService _logService;
     private readonly NotificationService _notifications;
     private readonly StoragePushService _storagePush;
+    private readonly ScheduledShutdownService _scheduledShutdown;
 
-    public HostStatusContributor(ClockSyncService clockSync, HostMetricsService hostMetrics, NINA.Polaris.Services.Logging.LogService logService, NotificationService notifications, StoragePushService storagePush) {
+    public HostStatusContributor(ClockSyncService clockSync, HostMetricsService hostMetrics, NINA.Polaris.Services.Logging.LogService logService, NotificationService notifications, StoragePushService storagePush, ScheduledShutdownService scheduledShutdown) {
         _clockSync = clockSync;
         _hostMetrics = hostMetrics;
         _logService = logService;
         _notifications = notifications;
         _storagePush = storagePush;
+        _scheduledShutdown = scheduledShutdown;
     }
 
-    public IReadOnlyCollection<string> Keys { get; } = new[] { "host", "server", "notifications", "storagePush", "debugLog" };
+    public IReadOnlyCollection<string> Keys { get; } = new[] { "host", "server", "notifications", "storagePush", "scheduledShutdown", "debugLog" };
 
     public void Contribute(StatusTick tick) {
         var clockSync = _clockSync;
@@ -57,6 +59,14 @@ public sealed class HostStatusContributor : IStatusContributor {
             // simulator events, etc.). Client de-dups by id
             //, see toast pump in app.js.
             tick.Blocks["notifications"] = notifications.Snapshot();
+
+            // Scheduled rig teardown: drives the top-bar countdown badge + the
+            // Settings card. null utc = nothing armed.
+            tick.Blocks["scheduledShutdown"] = new {
+                utc = _scheduledShutdown.ScheduledUtc?.ToString("o"),
+                shutdownHost = _scheduledShutdown.ShutdownHost,
+                running = _scheduledShutdown.Running
+            };
 
             // SIM-4: built-in equipment simulator status
             // (which backend is active, is it installed,
