@@ -16,8 +16,10 @@ using System;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
+using NINA.Polaris.Services;
 using NINA.Polaris.Services.External;
 
 namespace NINA.Polaris.Test;
@@ -33,8 +35,13 @@ public class UpdateServiceTests {
 
     private static UpdateService Make() {
         // No HttpClient is needed for the supported/version/arch checks; pass a
-        // factory that throws if actually used so the tests stay offline.
-        return new UpdateService(NullLogger<UpdateService>.Instance, new ThrowingHttpClientFactory());
+        // factory that throws if actually used so the tests stay offline. The
+        // ProfileService is an empty in-memory config: these checks don't read
+        // the update channel off it.
+        var profiles = new ProfileService(new ConfigurationBuilder().Build(),
+            NullLogger<ProfileService>.Instance);
+        return new UpdateService(NullLogger<UpdateService>.Instance,
+            new ThrowingHttpClientFactory(), profiles);
     }
 
     [Test]
