@@ -4422,5 +4422,12 @@
   "Guiding session": "Sessão de guiagem",
   "No guiding sessions found in this log.": "Nenhuma sessão de guiagem encontrada neste log.",
   "Could not read the guide log": "Não foi possível ler o log de guiagem",
-  "Parsing…": "Analisando…"
+  "Parsing…": "Analisando…",
+  "Scan folder (optional)": "Varrer pasta (opcional)",
+  "Scan": "Varrer",
+  "Not sure of the path? Browse to it on the": "Não sabe o caminho? Navegue até ele na",
+  "and copy the folder path here.": "e copie o caminho da pasta aqui.",
+  "e.g. /mnt/nvme/planetary (blank uses the capture root)": "ex.: /mnt/nvme/planetary (vazio usa a raiz de captura)",
+  "Could not scan that folder": "Não foi possível varrer essa pasta",
+  "No .ser files under {dir}": "Nenhum arquivo .ser em {dir}"
 }

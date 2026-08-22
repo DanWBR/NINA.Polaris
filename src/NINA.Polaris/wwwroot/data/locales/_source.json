@@ -3798,5 +3798,12 @@
   "Guiding session": "",
   "No guiding sessions found in this log.": "",
   "Could not read the guide log": "",
-  "Parsing…": ""
+  "Parsing…": "",
+  "Scan folder (optional)": "",
+  "Scan": "",
+  "Not sure of the path? Browse to it on the": "",
+  "and copy the folder path here.": "",
+  "e.g. /mnt/nvme/planetary (blank uses the capture root)": "",
+  "Could not scan that folder": "",
+  "No .ser files under {dir}": ""
 }

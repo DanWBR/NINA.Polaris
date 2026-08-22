@@ -4422,5 +4422,12 @@
   "Guiding session": "Sesión de guiado",
   "No guiding sessions found in this log.": "No se encontraron sesiones de guiado en este registro.",
   "Could not read the guide log": "No se pudo leer el registro de guiado",
-  "Parsing…": "Analizando…"
+  "Parsing…": "Analizando…",
+  "Scan folder (optional)": "Escanear carpeta (opcional)",
+  "Scan": "Escanear",
+  "Not sure of the path? Browse to it on the": "¿No sabe la ruta? Navegue hasta ella en la",
+  "and copy the folder path here.": "y copie aquí la ruta de la carpeta.",
+  "e.g. /mnt/nvme/planetary (blank uses the capture root)": "p. ej. /mnt/nvme/planetary (vacío usa la raíz de captura)",
+  "Could not scan that folder": "No se pudo escanear esa carpeta",
+  "No .ser files under {dir}": "No hay archivos .ser en {dir}"
 }

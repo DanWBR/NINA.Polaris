@@ -4422,5 +4422,12 @@
   "Guiding session": "Guiding-Sitzung",
   "No guiding sessions found in this log.": "Keine Guiding-Sitzungen in diesem Log gefunden.",
   "Could not read the guide log": "Guiding-Log konnte nicht gelesen werden",
-  "Parsing…": "Wird analysiert…"
+  "Parsing…": "Wird analysiert…",
+  "Scan folder (optional)": "Ordner durchsuchen (optional)",
+  "Scan": "Durchsuchen",
+  "Not sure of the path? Browse to it on the": "Pfad unbekannt? Navigieren Sie dorthin auf der",
+  "and copy the folder path here.": "und kopieren Sie den Ordnerpfad hierher.",
+  "e.g. /mnt/nvme/planetary (blank uses the capture root)": "z. B. /mnt/nvme/planetary (leer verwendet das Aufnahmeverzeichnis)",
+  "Could not scan that folder": "Ordner konnte nicht durchsucht werden",
+  "No .ser files under {dir}": "Keine .ser-Dateien unter {dir}"
 }
