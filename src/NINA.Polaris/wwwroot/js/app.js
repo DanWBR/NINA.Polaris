@@ -1679,6 +1679,9 @@ function ninaApp() {
             // capture root — for clips on an external SSD / NVMe mount outside
             // ~/files. Remembered across sessions in localStorage.
             scanDir: (() => { try { return localStorage.getItem('polaris.video.scanDir') || ''; } catch (e) { return ''; } })(),
+            // SERSCALE: rescale (right-aligned RAW16 salvage) controls.
+            rescaleBits: '',      // '' = auto-detect; else 12 / 14
+            rescaling: false,
             keepPercent: 50,
             outputName: 'stack',
             // Per-frame quality scores for the current/last stack job, fetched
@@ -25929,6 +25932,32 @@ function ninaApp() {
             this.video.scanDir = '';
             try { localStorage.removeItem('polaris.video.scanDir'); } catch (e) { /* private mode */ }
             this.loadVideoSerList();
+        },
+        // SERSCALE: salvage an older clip whose native RAW16 was stored
+        // right-aligned (wrong colour in ZWO/FireCapture tools). Writes a
+        // full-range 16-bit copy beside the source and selects it.
+        async videoRescaleSer() {
+            if (!this.video.processSerPath) return;
+            const bits = this.video.rescaleBits ? Number(this.video.rescaleBits) : null;
+            this.video.rescaling = true;
+            try {
+                const r = await this.apiPostJson('/api/video/rescale', {
+                    serPath: this.video.processSerPath,
+                    bits: bits
+                });
+                if (r.done) {
+                    this.toast(r.message || this.$t('SER rescaled'), 'success');
+                    await this.loadVideoSerList();
+                    if (r.outputPath) this.video.processSerPath = r.outputPath;
+                } else {
+                    // Not applicable (already full-range, RGB, 8-bit, …).
+                    this.toast(r.message || this.$t('Nothing to rescale'), 'info');
+                }
+            } catch (e) {
+                this.toastFail(this.$t('Rescale failed'), e);
+            } finally {
+                this.video.rescaling = false;
+            }
         },
         async videoStartStack() {
             if (!this.video.processSerPath) return;

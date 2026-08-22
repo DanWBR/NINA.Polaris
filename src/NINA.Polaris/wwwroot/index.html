@@ -4381,6 +4381,27 @@
                         and copy the folder path here.
                     </p>
 
+                    <!-- SERSCALE: salvage a clip recorded before the RAW16
+                         left-align fix (bright colour cast in ZWO/FireCapture). -->
+                    <div class="control-row" style="margin-bottom:6px">
+                        <label>Sensor depth
+                            <select x-model="video.rescaleBits" class="input-sm" style="width:110px"
+                                    :disabled="video.rescaling">
+                                <option value="">Auto-detect</option>
+                                <option value="12">12-bit</option>
+                                <option value="14">14-bit</option>
+                            </select>
+                        </label>
+                        <button class="btn btn-sm" @click="videoRescaleSer()"
+                                :disabled="!video.processSerPath || video.rescaling">
+                            <span x-show="!video.rescaling">Fix colour (rescale)</span>
+                            <span x-show="video.rescaling">Rescaling…</span>
+                        </button>
+                    </div>
+                    <p class="hint" style="margin-top:-2px;margin-bottom:10px">
+                        For older clips that open with a bright colour cast in ZWO ASIVideoStack or FireCapture. Writes a corrected full-range copy named -fixed16.ser beside the original and selects it. New recordings are already correct.
+                    </p>
+
                     <div class="control-row">
                         <label>Keep top
                             <input type="number" x-model.number="video.keepPercent"

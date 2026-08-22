@@ -151,6 +151,40 @@ public static class VideoEndpoints {
             }
         });
 
+        // ----- Rescale (salvage a right-aligned RAW16 clip) -----
+
+        // PLANNVME/SERSCALE: rewrite an older SER whose native RAW16 was stored
+        // right-aligned (0..4095 for a 12-bit sensor) into a full-range 16-bit
+        // clip, so ZWO/FireCapture tools stop showing the bright colour cast.
+        // Streams a multi-GB file, so it runs off the request thread. The path
+        // is validated through the same (un-jailed) FileBrowserService the picker
+        // uses, so a clip on an external mount is allowed.
+        group.MapPost("/rescale", async (FileBrowserService browser, RescaleRequest req) => {
+            if (string.IsNullOrWhiteSpace(req.SerPath))
+                return Results.BadRequest(new { error = "serPath required" });
+            string src;
+            try { src = browser.ResolveSafe(req.SerPath, mustExist: true); }
+            catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
+            string? outPath = null;
+            if (!string.IsNullOrWhiteSpace(req.OutputPath)) {
+                try { outPath = browser.ResolveSafe(req.OutputPath!, mustExist: false); }
+                catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
+            }
+            try {
+                var res = await Task.Run(() => SerRescale.Rescale(src, req.Bits, outPath));
+                return Results.Ok(new {
+                    done = res.Done,
+                    outputPath = res.OutputPath,
+                    significantBits = res.SignificantBits,
+                    shift = res.Shift,
+                    frames = res.FrameCount,
+                    message = res.Message
+                });
+            } catch (Exception ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
         // ----- Stacking (process) -----
 
         group.MapPost("/stack/start", (PlanetaryStackerService stacker,
@@ -244,4 +278,10 @@ public static class VideoEndpoints {
         string? OutputDir = null,
         double? KeepPercent = null,
         string? OutputName = null);
+
+    public record RescaleRequest(
+        string SerPath,
+        /// <summary>Significant ADC depth (8..16). Omitted = auto-detect.</summary>
+        int? Bits = null,
+        string? OutputPath = null);
 }

@@ -3805,5 +3805,13 @@
   "and copy the folder path here.": "",
   "e.g. /mnt/nvme/planetary (blank uses the capture root)": "",
   "Could not scan that folder": "",
-  "No .ser files under {dir}": ""
+  "No .ser files under {dir}": "",
+  "Sensor depth": "",
+  "Auto-detect": "",
+  "Fix colour (rescale)": "",
+  "Rescaling…": "",
+  "For older clips that open with a bright colour cast in ZWO ASIVideoStack or FireCapture. Writes a corrected full-range copy named -fixed16.ser beside the original and selects it. New recordings are already correct.": "",
+  "SER rescaled": "",
+  "Nothing to rescale": "",
+  "Rescale failed": ""
 }

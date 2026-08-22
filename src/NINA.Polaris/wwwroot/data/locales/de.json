@@ -4429,5 +4429,13 @@
   "and copy the folder path here.": "und kopieren Sie den Ordnerpfad hierher.",
   "e.g. /mnt/nvme/planetary (blank uses the capture root)": "z. B. /mnt/nvme/planetary (leer verwendet das Aufnahmeverzeichnis)",
   "Could not scan that folder": "Ordner konnte nicht durchsucht werden",
-  "No .ser files under {dir}": "Keine .ser-Dateien unter {dir}"
+  "No .ser files under {dir}": "Keine .ser-Dateien unter {dir}",
+  "Sensor depth": "Sensortiefe",
+  "Auto-detect": "Automatisch erkennen",
+  "Fix colour (rescale)": "Farbe korrigieren (neu skalieren)",
+  "Rescaling…": "Neu skalieren…",
+  "For older clips that open with a bright colour cast in ZWO ASIVideoStack or FireCapture. Writes a corrected full-range copy named -fixed16.ser beside the original and selects it. New recordings are already correct.": "Für ältere Clips, die in ZWO ASIVideoStack oder FireCapture mit starkem Farbstich öffnen. Schreibt eine korrigierte Kopie mit vollem Wertebereich namens -fixed16.ser neben das Original und wählt sie aus. Neue Aufnahmen sind bereits korrekt.",
+  "SER rescaled": "SER neu skaliert",
+  "Nothing to rescale": "Nichts zu skalieren",
+  "Rescale failed": "Neuskalierung fehlgeschlagen"
 }
