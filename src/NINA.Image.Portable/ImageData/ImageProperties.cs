@@ -37,6 +37,22 @@ public record ImageProperties {
     public BayerPatternEnum BayerPattern { get; init; } = BayerPatternEnum.None;
 
     /// <summary>
+    /// How many low bits of each 16-bit sample actually carry signal, when
+    /// the pixel buffer holds RIGHT-ALIGNED raw ADC values (e.g. a 12-bit
+    /// sensor delivering values 0..4095 in the low bits of a ushort). The
+    /// native SDK backends set this for their RAW16 readout so consumers that
+    /// need full-range 16-bit data (the SER recorder, which follows the
+    /// FireCapture/ZWO convention of left-aligning to fill the container) can
+    /// shift the samples up by <c>16 - SignificantBitDepth</c>.
+    ///
+    /// 0 = unset / already 16-bit-aligned. Leave it 0 for buffers that are
+    /// already left-aligned (the RAW8 path widens with <c>px &lt;&lt; 8</c>) or
+    /// where the alignment is unknown (INDI / Alpaca / ASCOM), so nothing
+    /// shifts and the existing behaviour is preserved.
+    /// </summary>
+    public int SignificantBitDepth { get; init; }
+
+    /// <summary>
     /// Number of colour planes in the pixel buffer. 1 = grayscale (the
     /// default, matches every existing call site that didn't set this
     /// explicitly); 3 = RGB stored plane-sequentially (R plane first,

@@ -484,6 +484,11 @@ public sealed class AsiSdkCamera : ICamera {
         var props = new ImageProperties {
             Width = w, Height = h, BitDepth = BitDepth,
             IsBayered = _bayer != BayerPatternEnum.None, BayerPattern = _bayer,
+            // RAW16 delivers right-aligned raw ADC values (a 12-bit sensor gives
+            // 0..4095 in the low bits). Advertise the real depth so the SER
+            // recorder can left-align to the 16-bit container the way ZWO's own
+            // tools expect. RAW8 is already widened above (px << 8), so leave it 0.
+            SignificantBitDepth = _imgType == ASI_IMG_TYPE.ASI_IMG_RAW16 ? _bitDepth : 0,
         };
         var meta = new ImageMetaData();
         meta.Camera.Name = DeviceName;

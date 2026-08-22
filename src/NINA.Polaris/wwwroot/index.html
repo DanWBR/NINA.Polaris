@@ -4363,6 +4363,26 @@
                         <button class="btn btn-sm" @click="loadVideoSerList()">↻ Refresh</button>
                     </div>
 
+                    <!-- PLANNVME: scan a folder outside the capture root (external
+                         SSD / NVMe mount), so clips kept off ~/files still list. -->
+                    <div class="control-row" style="margin-bottom:10px">
+                        <label style="flex:1">Scan folder (optional)
+                            <input type="text" x-model="video.scanDir" class="input-sm"
+                                   style="width:100%"
+                                   placeholder="e.g. /mnt/nvme/planetary (blank uses the capture root)"
+                                   @keydown.enter="scanVideoFolder()">
+                        </label>
+                        <button class="btn btn-sm" @click="scanVideoFolder()">Scan</button>
+                        <button class="btn btn-sm" x-show="video.scanDir"
+                                @click="clearVideoScanFolder()">Clear</button>
+                    </div>
+                    <p class="hint" style="margin-top:-4px;margin-bottom:10px">
+                        Not sure of the path? Browse to it on the
+                        <a href="#" @click.prevent="tab='files'; filesInit()"
+                           style="color:var(--accent);text-decoration:underline">Studio tab</a>
+                        and copy the folder path here.
+                    </p>
+
                     <div class="control-row">
                         <label>Keep top
                             <input type="number" x-model.number="video.keepPercent"
