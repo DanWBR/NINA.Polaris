@@ -677,7 +677,7 @@
                  red in the final 5 min / while firing. -->
             <button class="status-chip" x-show="scheduledShutdown.utc" x-cloak
                     @click="tab='settings'; $nextTick(() => document.getElementById('scheduled-shutdown-card')?.scrollIntoView({behavior:'smooth'}))"
-                    :style="'cursor:pointer;border:none;'+((scheduledShutdown.running || (scheduledShutdownSecondsLeft!==null && scheduledShutdownSecondsLeft<=300)) ? 'color:#f87171' : 'color:#fbbf24')"
+                    :style="'cursor:pointer;border:none;background:none;-webkit-appearance:none;appearance:none;padding:0;'+((scheduledShutdown.running || (scheduledShutdownSecondsLeft!==null && scheduledShutdownSecondsLeft<=300)) ? 'color:#f87171' : 'color:#fbbf24')"
                     :title="$t('Scheduled rig shutdown') + (scheduledShutdown.shutdownHost ? ' + ' + $t('host power off') : '')">
                 <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.14em"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg> <span x-text="scheduledShutdownCountdown"></span>
             </button>
