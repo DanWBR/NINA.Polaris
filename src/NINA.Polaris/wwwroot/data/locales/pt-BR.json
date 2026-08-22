@@ -4429,5 +4429,13 @@
   "and copy the folder path here.": "e copie o caminho da pasta aqui.",
   "e.g. /mnt/nvme/planetary (blank uses the capture root)": "ex.: /mnt/nvme/planetary (vazio usa a raiz de captura)",
   "Could not scan that folder": "Não foi possível varrer essa pasta",
-  "No .ser files under {dir}": "Nenhum arquivo .ser em {dir}"
+  "No .ser files under {dir}": "Nenhum arquivo .ser em {dir}",
+  "Sensor depth": "Profundidade do sensor",
+  "Auto-detect": "Detectar automaticamente",
+  "Fix colour (rescale)": "Corrigir cor (reescalar)",
+  "Rescaling…": "Reescalando…",
+  "For older clips that open with a bright colour cast in ZWO ASIVideoStack or FireCapture. Writes a corrected full-range copy named -fixed16.ser beside the original and selects it. New recordings are already correct.": "Para clipes antigos que abrem com dominante de cor forte no ZWO ASIVideoStack ou FireCapture. Grava uma cópia corrigida de faixa completa chamada -fixed16.ser ao lado do original e a seleciona. Gravações novas já saem corretas.",
+  "SER rescaled": "SER reescalado",
+  "Nothing to rescale": "Nada para reescalar",
+  "Rescale failed": "Falha ao reescalar"
 }
