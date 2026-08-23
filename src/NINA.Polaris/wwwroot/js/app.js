@@ -1642,7 +1642,19 @@ function ninaApp() {
         // Driven by VideoRecordingService + PlanetaryStackerService on the
         // server; the WS status feed populates videoRecording / videoStack.
         videoTab: 'capture',       // 'capture' | 'process'
-        equipTab: 'equipment',     // 'equipment' | 'indi-web' (RIGS sub-tabstrip)
+        equipTab: 'equipment',     // 'equipment' | 'indi-web' | 'panels' (RIGS sub-tabstrip)
+        // Property Control Panels: raw WS equipment snapshot for readouts,
+        // editor state, and live caches for the poll-backed sources.
+        equipmentRaw: {},
+        ctrl: {
+            editPanelId: null,       // panel being edited in the sub-tab
+            catalogSource: 'switch', // switch | camControl | indi | equipment
+            catalog: [],             // bindable items for the chosen source
+            catalogLoading: false,
+        },
+        ctrlCamCache: { main: [], guide: [] },   // /api/camera/controls, polled
+        ctrlIndiCache: {},                        // "device prop elem" -> {value,type}
+        _ctrlTopZ: 1,
         video: {
             exposure: 0.05,
             gain: 200,
@@ -4669,6 +4681,9 @@ function ninaApp() {
 
             // Restore the floating guiding overlay's visibility + geometry.
             this._guideOverlayLoad();
+
+            // Property Control Panels: seed the z-counter + start the live poller.
+            this._ctrlInit();
 
             // AUTORUN rehydration: a sequence can still be running on the
             // server when the browser is restarted / reconnects. Pull the
@@ -20731,6 +20746,298 @@ function ninaApp() {
             this.guideOverlay.h = r.h0 + (ev.clientY - r.sy);
             this._guideOverlayClamp();
             this.drawGuideOverlayGraph();
+        },
+
+        // ==================================================================
+        // Property Control Panels — SCADA-style floating per-rig cards.
+        // Read live values (WS equipment + switch, polled camera-controls +
+        // INDI props), write via the existing endpoints. Geometry + widget
+        // bindings persist on the active rig.
+        // ==================================================================
+
+        _ctrlActiveRig() { return this.rigs.find(r => r.id === this.activeRigId) || null; },
+        ctrlPanels() { const r = this._ctrlActiveRig(); return (r && r.controlPanels) || []; },
+        ctrlVisiblePanels() { return this.ctrlPanels().filter(p => p.visible); },
+        ctrlEditedPanel() { return this.ctrlPanels().find(p => p.id === this.ctrl.editPanelId) || null; },
+        _ctrlUid() { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); },
+
+        _ctrlSave() {
+            const r = this._ctrlActiveRig();
+            if (r) this.saveRigPatch(r.id, { controlPanels: r.controlPanels });
+        },
+        ctrlAddPanel() {
+            const r = this._ctrlActiveRig();
+            if (!r) { this.toast(this.$t('Select a rig first'), 'warn'); return; }
+            if (!Array.isArray(r.controlPanels)) r.controlPanels = [];
+            const p = {
+                id: this._ctrlUid(), title: this.$t('Panel') + ' ' + (r.controlPanels.length + 1),
+                visible: true, left: 80, top: 90, width: 260, height: 200,
+                z: ++this._ctrlTopZ, widgets: []
+            };
+            r.controlPanels.push(p);
+            this.ctrl.editPanelId = p.id;
+            this._ctrlSave();
+        },
+        ctrlDeletePanel(p) {
+            const r = this._ctrlActiveRig();
+            if (!r) return;
+            r.controlPanels = (r.controlPanels || []).filter(x => x.id !== p.id);
+            if (this.ctrl.editPanelId === p.id) this.ctrl.editPanelId = null;
+            this._ctrlSave();
+        },
+        ctrlTogglePanelVisible(p) { p.visible = !p.visible; if (p.visible) this.ctrlPanelFocus(p); this._ctrlSave(); },
+        ctrlResetPanelPos(p) { p.left = 80; p.top = 90; p.width = 260; p.height = 200; this._ctrlSave(); },
+
+        // ---- floatable (mirrors the guider overlay; per-rig persistence) ----
+        ctrlPanelStyle(p) {
+            return { left: p.left + 'px', top: p.top + 'px', width: p.width + 'px', height: p.height + 'px', zIndex: 900 + (p.z || 1) };
+        },
+        _ctrlClamp(p) {
+            p.width = Math.max(180, Math.min(900, p.width));
+            p.height = Math.max(90, Math.min(800, p.height));
+            const maxL = Math.max(0, window.innerWidth - 60);
+            const maxT = Math.max(0, window.innerHeight - 40);
+            p.left = Math.max(0, Math.min(maxL, p.left));
+            p.top = Math.max(0, Math.min(maxT, p.top));
+        },
+        ctrlPanelFocus(p) {
+            const maxZ = Math.max(0, ...this.ctrlPanels().map(x => x.z || 0));
+            this._ctrlTopZ = Math.max(this._ctrlTopZ, maxZ);
+            if ((p.z || 0) < this._ctrlTopZ) { p.z = ++this._ctrlTopZ; this._ctrlSave(); }
+        },
+        ctrlPanelDragStart(p, ev) {
+            if (ev.target.closest('.rig-cp-close, .rig-cp-resize, input, select, button')) return;
+            this.ctrlPanelFocus(p);
+            const d = { sx: ev.clientX, sy: ev.clientY, l0: p.left, t0: p.top, p };
+            this._ctrlDrag = d;
+            const move = e => { p.left = d.l0 + (e.clientX - d.sx); p.top = d.t0 + (e.clientY - d.sy); this._ctrlClamp(p); };
+            const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); this._ctrlDrag = null; this._ctrlSave(); };
+            window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+            ev.preventDefault();
+        },
+        ctrlPanelResizeStart(p, ev) {
+            this.ctrlPanelFocus(p);
+            const d = { sx: ev.clientX, sy: ev.clientY, w0: p.width, h0: p.height };
+            const move = e => { p.width = d.w0 + (e.clientX - d.sx); p.height = d.h0 + (e.clientY - d.sy); this._ctrlClamp(p); };
+            const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); this._ctrlSave(); };
+            window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+            ev.preventDefault(); ev.stopPropagation();
+        },
+
+        // ---- widgets: add / remove ----
+        ctrlAddWidget(spec) {
+            const p = this.ctrlEditedPanel();
+            if (!p) { this.toast(this.$t('Create or select a panel first'), 'warn'); return; }
+            p.widgets.push(Object.assign({ id: this._ctrlUid() }, spec));
+            this._ctrlSave();
+        },
+        ctrlRemoveWidget(p, w) { p.widgets = p.widgets.filter(x => x.id !== w.id); this._ctrlSave(); },
+
+        // ---- live read ----
+        _ctrlGetPath(obj, path) {
+            if (!obj || !path) return undefined;
+            return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
+        },
+        _ctrlSwitchChannel(w) {
+            return (this.powerBox.channels || []).find(c => c.key === w.channelKey || String(c.id) === w.channelKey);
+        },
+        // Returns { value, writable, min, max, step, missing } for a widget.
+        ctrlWidgetValue(w) {
+            try {
+                if (w.source === 'switch') {
+                    const c = this._ctrlSwitchChannel(w);
+                    if (!c) return { missing: true };
+                    return { value: c.value, writable: c.writable, min: c.min, max: c.max, step: c.step };
+                }
+                if (w.source === 'camControl') {
+                    const list = this.ctrlCamCache[w.which || 'main'] || [];
+                    const c = list.find(x => x.id === w.controlId);
+                    if (!c) return { missing: true };
+                    return { value: c.value, writable: c.writable, min: c.min, max: c.max, step: 1, auto: c.auto };
+                }
+                if (w.source === 'indi') {
+                    const c = this.ctrlIndiCache[w.device + '' + w.property];
+                    if (!c) return { missing: true };
+                    return { value: c.elements ? c.elements[w.element] : undefined, writable: c.writable, min: c.min, max: c.max, step: c.step };
+                }
+                // equipment / action
+                return { value: this._ctrlGetPath(this.equipmentRaw, w.path), writable: w.source === 'action' };
+            } catch (e) { return { missing: true }; }
+        },
+        ctrlWidgetDisplay(w) {
+            const v = this.ctrlWidgetValue(w);
+            if (v.missing || v.value == null) return '—';
+            if (typeof v.value === 'boolean') return v.value ? this.$t('On') : this.$t('Off');
+            if (typeof v.value === 'number') {
+                const d = (w.decimals != null) ? w.decimals : (Number.isInteger(v.value) ? 0 : 2);
+                return v.value.toFixed(d) + (w.unit ? ' ' + w.unit : '');
+            }
+            return String(v.value) + (w.unit ? ' ' + w.unit : '');
+        },
+        ctrlWidgetBool(w) { const v = this.ctrlWidgetValue(w); return !!v.value; },
+
+        // ---- write ----
+        async ctrlWidgetSet(w, value) {
+            try {
+                if (w.source === 'switch') {
+                    const c = this._ctrlSwitchChannel(w);
+                    if (!c) return;
+                    if (w.kind === 'toggle') await this.apiPost('/api/switch/set-bool', { id: c.id, on: !c.value });
+                    else await this.apiPost('/api/switch/set-value', { id: c.id, value: Number(value) });
+                } else if (w.source === 'camControl') {
+                    const list = this.ctrlCamCache[w.which || 'main'] || [];
+                    const c = list.find(x => x.id === w.controlId);
+                    const on = (w.kind === 'toggle') ? (c ? (c.value ? 0 : 1) : 1) : Number(value);
+                    const r = await this.apiPostJson('/api/camera/controls/' + w.controlId, { value: on, auto: false, which: w.which || 'main' });
+                    if (r && r.id != null && list.length) { const i = list.findIndex(x => x.id === r.id); if (i >= 0) list[i] = r; }
+                } else if (w.source === 'indi') {
+                    const c = this.ctrlIndiCache[w.device + '' + w.property] || {};
+                    const type = c.type || (w.kind === 'toggle' ? 'switch' : 'number');
+                    const body = { device: w.device, property: w.property, type };
+                    if (type === 'switch') body.switches = { [w.element]: (w.kind === 'toggle') ? !(c.elements && c.elements[w.element]) : true };
+                    else if (type === 'text') body.texts = { [w.element]: String(value) };
+                    else body.numbers = { [w.element]: Number(value) };
+                    await this.apiPost('/api/indi/properties/set', body);
+                } else if (w.source === 'action') {
+                    await this._ctrlAction(w, value);
+                }
+                this._ctrlPollTick(true);   // refresh poll-backed caches promptly
+            } catch (e) { this.toastFail(this.$t('Control failed'), e); }
+        },
+        ctrlWidgetToggle(w) { return this.ctrlWidgetSet(w, null); },
+        async _ctrlAction(w, value) {
+            const cur = this.ctrlWidgetValue(w).value;
+            switch (w.action) {
+                case 'telescope.tracking': return this.apiPost('/api/telescope/tracking', { enabled: !cur });
+                case 'telescope.park': return this.apiPost('/api/telescope/park', {});
+                case 'telescope.unpark': return this.apiPost('/api/telescope/unpark', {});
+                case 'telescope.findHome': return this.apiPost('/api/telescope/find-home', {});
+                case 'telescope.abort': return this.apiPost('/api/telescope/abort', {});
+                case 'focuser.position': return this.apiPost('/api/focuser/move/absolute', { position: Math.round(Number(value)) });
+                case 'focuser.abort': return this.apiPost('/api/focuser/abort', {});
+                case 'rotator.angle': return this.apiPost('/api/rotator/move', { angle: Number(value) });
+                case 'filterwheel.filter': return this.apiPost('/api/filterwheel/filter/' + encodeURIComponent(value));
+                case 'flat.light': return this.apiPost('/api/flatdevice/light', { on: !cur });
+                case 'flat.brightness': return this.apiPost('/api/flatdevice/brightness', { brightness: Number(value) });
+                case 'dome.shutterOpen': return this.apiPost('/api/dome/shutter/open', {});
+                case 'dome.shutterClose': return this.apiPost('/api/dome/shutter/close', {});
+            }
+        },
+
+        // ---- catalog (editor) ----
+        _ctrlEquipCatalog() {
+            return [
+                { group: 'Mount', label: 'Tracking', source: 'action', action: 'telescope.tracking', path: 'telescope.tracking', kind: 'toggle' },
+                { group: 'Mount', label: 'RA', source: 'equipment', path: 'telescope.ra', kind: 'readout', unit: 'h', decimals: 4 },
+                { group: 'Mount', label: 'Dec', source: 'equipment', path: 'telescope.dec', kind: 'readout', unit: '°', decimals: 3 },
+                { group: 'Mount', label: 'Altitude', source: 'equipment', path: 'telescope.alt', kind: 'readout', unit: '°', decimals: 1 },
+                { group: 'Mount', label: 'Park', source: 'action', action: 'telescope.park', kind: 'button' },
+                { group: 'Mount', label: 'Unpark', source: 'action', action: 'telescope.unpark', kind: 'button' },
+                { group: 'Mount', label: 'Find home', source: 'action', action: 'telescope.findHome', kind: 'button' },
+                { group: 'Mount', label: 'Abort slew', source: 'action', action: 'telescope.abort', kind: 'button' },
+                { group: 'Camera', label: 'Sensor temp', source: 'equipment', path: 'camera.temperature', kind: 'readout', unit: '°C', decimals: 1 },
+                { group: 'Camera', label: 'Cooler power', source: 'equipment', path: 'camera.coolerPower', kind: 'readout', unit: '%', decimals: 0 },
+                { group: 'Focuser', label: 'Position', source: 'action', action: 'focuser.position', path: 'focuser.position', kind: 'number', min: 0, max: 100000, step: 10 },
+                { group: 'Focuser', label: 'Temp', source: 'equipment', path: 'focuser.temperature', kind: 'readout', unit: '°C', decimals: 1 },
+                { group: 'Focuser', label: 'Abort', source: 'action', action: 'focuser.abort', kind: 'button' },
+                { group: 'Filter wheel', label: 'Current filter', source: 'equipment', path: 'filterWheel.currentFilter', kind: 'readout' },
+                { group: 'Rotator', label: 'Angle', source: 'action', action: 'rotator.angle', path: 'rotator.position', kind: 'slider', min: 0, max: 360, step: 1, unit: '°', decimals: 1 },
+                { group: 'Flat panel', label: 'Light', source: 'action', action: 'flat.light', path: 'flatDevice.lightOn', kind: 'toggle' },
+                { group: 'Flat panel', label: 'Brightness', source: 'action', action: 'flat.brightness', path: 'flatDevice.brightness', kind: 'slider', min: 0, max: 100, step: 1 },
+                { group: 'Dome', label: 'Open shutter', source: 'action', action: 'dome.shutterOpen', kind: 'button' },
+                { group: 'Dome', label: 'Close shutter', source: 'action', action: 'dome.shutterClose', kind: 'button' },
+                { group: 'Weather', label: 'Sky temp', source: 'equipment', path: 'weather.temperature', kind: 'readout', unit: '°C', decimals: 1 },
+                { group: 'Weather', label: 'Humidity', source: 'equipment', path: 'weather.humidity', kind: 'readout', unit: '%', decimals: 0 },
+                { group: 'Weather', label: 'Cloud cover', source: 'equipment', path: 'weather.cloudCover', kind: 'readout', unit: '%', decimals: 0 },
+            ];
+        },
+        async ctrlLoadCatalog(source) {
+            this.ctrl.catalogSource = source;
+            this.ctrl.catalog = [];
+            this.ctrl.catalogLoading = true;
+            try {
+                if (source === 'switch') {
+                    this.ctrl.catalog = (this.powerBox.channels || []).map(c => ({
+                        group: 'Power box', label: c.displayName || c.name, source: 'switch', channelKey: c.key || String(c.id),
+                        kind: c.writable ? (c.boolean ? 'toggle' : 'slider') : 'readout',
+                        min: c.min, max: c.max, step: c.step
+                    }));
+                } else if (source === 'camControl') {
+                    const out = [];
+                    for (const which of ['main', 'guide']) {
+                        const r = await this.apiGet('/api/camera/controls?which=' + which).catch(() => null);
+                        if (r && r.supported && Array.isArray(r.controls)) {
+                            this.ctrlCamCache[which] = r.controls;
+                            for (const c of r.controls) out.push({
+                                group: (r.camera || 'Camera') + (which === 'guide' ? ' (guide)' : ''),
+                                label: c.name, source: 'camControl', controlId: c.id, which,
+                                kind: !c.writable ? 'readout' : (c.valueType === 'bool' ? 'toggle' : 'slider'),
+                                min: c.min, max: c.max
+                            });
+                        }
+                    }
+                    this.ctrl.catalog = out;
+                } else if (source === 'indi') {
+                    const r = await this.apiGet('/api/indi/properties/').catch(() => null);
+                    const out = [];
+                    for (const dev of (r && r.devices || [])) {
+                        for (const prop of (dev.properties || [])) {
+                            const writable = prop.permission !== 'ro';
+                            const els = prop.number?.elements || prop.switch?.elements || prop.text?.elements || [];
+                            const type = prop.type;
+                            this.ctrlIndiCache[dev.name + '' + prop.name] = {
+                                type, writable, elements: Object.fromEntries(els.map(e => [e.name, e.value]))
+                            };
+                            for (const e of els) out.push({
+                                group: dev.name + ' · ' + (prop.label || prop.name), label: e.label || e.name,
+                                source: 'indi', device: dev.name, property: prop.name, element: e.name,
+                                kind: !writable ? 'readout' : (type === 'switch' ? 'toggle' : (type === 'number' ? 'slider' : 'readout')),
+                                min: e.min, max: e.max, step: e.step
+                            });
+                        }
+                    }
+                    this.ctrl.catalog = out;
+                } else {
+                    this.ctrl.catalog = this._ctrlEquipCatalog();
+                }
+            } finally { this.ctrl.catalogLoading = false; }
+        },
+
+        // ---- live poller for camControl + indi ----
+        _ctrlNeeds(source) {
+            return this.ctrlVisiblePanels().some(p => (p.widgets || []).some(w => w.source === source));
+        },
+        async _ctrlPollTick(force) {
+            if (this._ctrlPolling) return;
+            this._ctrlPolling = true;
+            try {
+                if (force || this._ctrlNeeds('camControl')) {
+                    for (const which of ['main', 'guide']) {
+                        const r = await this.apiGet('/api/camera/controls?which=' + which).catch(() => null);
+                        if (r && r.supported && Array.isArray(r.controls)) this.ctrlCamCache[which] = r.controls;
+                    }
+                }
+                if (force || this._ctrlNeeds('indi')) {
+                    const r = await this.apiGet('/api/indi/properties/').catch(() => null);
+                    for (const dev of (r && r.devices || [])) {
+                        for (const prop of (dev.properties || [])) {
+                            const els = prop.number?.elements || prop.switch?.elements || prop.text?.elements || [];
+                            this.ctrlIndiCache[dev.name + '' + prop.name] = {
+                                type: prop.type, writable: prop.permission !== 'ro',
+                                elements: Object.fromEntries(els.map(e => [e.name, e.value]))
+                            };
+                        }
+                    }
+                }
+            } finally { this._ctrlPolling = false; }
+        },
+        _ctrlInit() {
+            const maxZ = Math.max(1, ...this.ctrlPanels().map(x => x.z || 0));
+            this._ctrlTopZ = maxZ;
+            if (this._ctrlPollTimer) clearInterval(this._ctrlPollTimer);
+            this._ctrlPollTimer = setInterval(() => {
+                if (this._ctrlNeeds('camControl') || this._ctrlNeeds('indi')) this._ctrlPollTick(false);
+            }, 3000);
         },
 
         _drawGuidePhdGraphTo(canvas, scale, stepsOverride) {
@@ -42365,6 +42672,9 @@ function ninaApp() {
             }
 
             const eq = msg.equipment || {};
+            // Raw equipment snapshot for the Property Control Panels' dotted-path
+            // readouts (e.g. "camera.temperature", "telescope.tracking").
+            this.equipmentRaw = eq;
 
             if (eq.indi) {
                 // Detect the false→true transition (typical on page
