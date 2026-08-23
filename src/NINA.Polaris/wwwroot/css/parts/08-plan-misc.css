@@ -449,21 +449,29 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .rig-cp-dockhint.rig-cp-rail-top    { top: 0; left: 0; right: 0; height: 130px; }
 .rig-cp-dockhint.rig-cp-rail-bottom { bottom: 0; left: 0; right: 0; height: 130px; }
 
-/* Control Panels editor (RIGS sub-tab). */
-.ctrl-panels-editor { padding: 8px 16px 16px; }
-/* Two capped cards packed to the left (flex, not auto-fit/1fr) so they sit next
-   to each other with a normal gap instead of a big dead space between them. */
-.ctrl-editor-grid { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
-.ctrl-editor-grid > .settings-section { flex: 1 1 380px; max-width: 620px; margin: 0 !important; }
-.ctrl-catalog { max-height: 360px; overflow: auto; display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+/* Control Panels editor (RIGS sub-tab). Fills the tab's remaining height: the
+   sub-tab is a flex column and the two cards stretch to fill it, each card's list
+   scrolling inside, instead of the shared card's fixed ~400px with dead space. */
+.ctrl-panels-editor { padding: 8px 16px 16px; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.ctrl-editor-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    grid-auto-rows: 1fr; gap: 16px; flex: 1; min-height: 0; align-items: stretch;
+}
+/* Override the shared card's fixed height + supply our own padding (these cards
+   don't lead with an <h3>, whose rules normally provide the card padding). */
+.ctrl-editor-grid > .settings-section {
+    height: auto !important; min-height: 0; margin: 0 !important;
+    padding: 14px 16px; display: flex; flex-direction: column;
+}
+.ctrl-catalog { flex: 1; min-height: 80px; max-height: none; overflow: auto; display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
 .ctrl-catalog-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; }
 /* Edited-panel form + widget list */
-.ctrl-field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 12px; }
+.ctrl-field { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 12px; }
 .ctrl-field input { text-transform: none; letter-spacing: normal; color: var(--text-primary); }
 .ctrl-ed-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 .ctrl-check { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-secondary); }
 .ctrl-sub-h { margin: 0 0 8px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-.ctrl-wlist { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.ctrl-wlist { border: 1px solid var(--border); border-radius: 8px; overflow: auto; flex: 1; min-height: 80px; }
 .ctrl-wrow { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
 .ctrl-wrow:last-child { border-bottom: none; }
 .ctrl-wname { font-size: 13px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
