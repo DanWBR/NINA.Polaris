@@ -19843,7 +19843,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 </template>
                 <template x-for="w in (p.widgets || [])" :key="w.id">
                     <div class="rig-cp-widget" :class="'rig-cp-' + w.kind">
-                        <span class="rig-cp-label" x-text="w.label"></span>
+                        <span class="rig-cp-labelwrap">
+                            <span class="rig-cp-label" x-text="w.label"></span>
+                            <span class="rig-cp-sub" x-show="w.group" x-text="w.group"></span>
+                        </span>
                         <template x-if="w.kind === 'readout' || w.kind === 'select'">
                             <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
                         </template>
@@ -19899,7 +19902,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         </template>
                         <template x-for="w in (p.widgets || [])" :key="w.id">
                             <div class="rig-cp-widget" :class="'rig-cp-' + w.kind">
-                                <span class="rig-cp-label" x-text="w.label"></span>
+                                <span class="rig-cp-labelwrap">
+                            <span class="rig-cp-label" x-text="w.label"></span>
+                            <span class="rig-cp-sub" x-show="w.group" x-text="w.group"></span>
+                        </span>
                                 <template x-if="w.kind === 'readout' || w.kind === 'select'">
                                     <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
                                 </template>

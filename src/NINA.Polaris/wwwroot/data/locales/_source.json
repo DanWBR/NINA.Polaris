@@ -3857,5 +3857,7 @@
   "Camera SDKs installed ({n} libs). Native camera drivers are now available.": "",
   "Camera SDK pack download failed: ": "",
   "Downloading native camera SDKs. Runs in the background.": "",
-  "Could not start download: ": ""
+  "Could not start download: ": "",
+  "Filter wheel": "",
+  "Flat panel": ""
 }

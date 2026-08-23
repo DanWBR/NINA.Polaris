@@ -35,7 +35,7 @@ public class ControlPanelsPersistenceTests {
                     Dock = "right", DockOrder = 2,
                     Widgets = {
                         new ControlWidgetDef {
-                            Id = "w1", Label = "Cooler target", Kind = "slider", Source = "action",
+                            Id = "w1", Label = "Cooler target", Group = "Camera", Kind = "slider", Source = "action",
                             Action = "camera.coolerTarget", Unit = "°C", Min = -20, Max = 20, Step = 1
                         },
                         new ControlWidgetDef {
@@ -56,6 +56,7 @@ public class ControlPanelsPersistenceTests {
             Assert.That(p.DockOrder, Is.EqualTo(2));
             Assert.That(p.Widgets, Has.Count.EqualTo(2));
             Assert.That(p.Widgets[0].Action, Is.EqualTo("camera.coolerTarget"));
+            Assert.That(p.Widgets[0].Group, Is.EqualTo("Camera"));
             Assert.That(p.Widgets[1].ChannelKey, Is.EqualTo("DEW_PWM.CH1"));
 
             // Deep copy: mutating the clone must not touch the source rig.

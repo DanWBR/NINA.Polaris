@@ -395,7 +395,9 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .rig-cp-body { flex: 1; overflow: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
 .rig-cp-empty { font-size: 11px; color: var(--text-muted); }
 .rig-cp-widget { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-.rig-cp-label { flex: 1; min-width: 0; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rig-cp-labelwrap { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.15; }
+.rig-cp-label { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rig-cp-sub { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rig-cp-val { font-variant-numeric: tabular-nums; font-weight: 600; }
 .rig-cp-slide { display: flex; align-items: center; gap: 6px; }
 .rig-cp-slide input[type=range] { width: 110px; }
@@ -433,7 +435,11 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .rig-cp-dockhint.rig-cp-rail-bottom { bottom: 0; left: 0; right: 0; height: 130px; }
 
 /* Control Panels editor (RIGS sub-tab). */
-.ctrl-editor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.ctrl-panels-editor { padding: 8px 16px 16px; }
+/* Two capped cards packed to the left (flex, not auto-fit/1fr) so they sit next
+   to each other with a normal gap instead of a big dead space between them. */
+.ctrl-editor-grid { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.ctrl-editor-grid > .settings-section { flex: 1 1 380px; max-width: 620px; margin: 0 !important; }
 .ctrl-catalog { max-height: 360px; overflow: auto; display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
 .ctrl-catalog-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; }
 
