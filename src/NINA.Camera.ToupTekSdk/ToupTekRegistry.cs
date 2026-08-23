@@ -14,6 +14,7 @@
 
 using System.Reflection;
 using System.Runtime.InteropServices;
+using NINA.Image.NativeLibs;
 
 namespace NINA.Camera.ToupTekSdk;
 
@@ -35,13 +36,14 @@ public static class ToupTekRegistry {
         // The binding imports "libtoupcam.so" (Linux) / "toupcam.dll" (Windows).
         if (libraryName.IndexOf("toupcam", StringComparison.OrdinalIgnoreCase) < 0)
             return IntPtr.Zero;
-        var baseDir = AppContext.BaseDirectory;
         string[] candidates = OperatingSystem.IsWindows()
             ? new[] { "toupcam.dll" }
             : new[] { "libtoupcam.so" };
-        foreach (var name in candidates) {
-            var path = Path.Combine(baseDir, name);
-            if (File.Exists(path) && NativeLibrary.TryLoad(path, out var h)) return h;
+        foreach (var dir in NativeSdkProbe.Dirs()) {
+            foreach (var name in candidates) {
+                var path = Path.Combine(dir, name);
+                if (File.Exists(path) && NativeLibrary.TryLoad(path, out var h)) return h;
+            }
         }
         return NativeLibrary.TryLoad(libraryName, assembly, searchPath, out var sys) ? sys : IntPtr.Zero;
     }

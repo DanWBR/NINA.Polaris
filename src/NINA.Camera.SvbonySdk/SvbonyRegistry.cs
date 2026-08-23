@@ -15,6 +15,7 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 using NINA.Camera.SvbonySdk.Native;
+using NINA.Image.NativeLibs;
 
 namespace NINA.Camera.SvbonySdk;
 
@@ -43,13 +44,17 @@ public static class SvbonyRegistry {
         if (!string.Equals(libraryName, LibName, StringComparison.OrdinalIgnoreCase))
             return IntPtr.Zero; // not ours; let the default resolver handle it
 
-        var baseDir = AppContext.BaseDirectory;
         string[] candidates = OperatingSystem.IsWindows()
             ? new[] { "SVBCameraSDK.dll" }
             : new[] { "libSVBCameraSDK.so" };
-        foreach (var name in candidates) {
-            var path = Path.Combine(baseDir, name);
-            if (File.Exists(path) && NativeLibrary.TryLoad(path, out var h)) return h;
+        // Probe the app base dir (bundled per-RID Content, Windows) and the
+        // writable native-SDK pack dir the host exports for the downloadable
+        // camera-SDK pack (Linux, where /opt/polaris isn't writable).
+        foreach (var dir in NativeSdkProbe.Dirs()) {
+            foreach (var name in candidates) {
+                var path = Path.Combine(dir, name);
+                if (File.Exists(path) && NativeLibrary.TryLoad(path, out var h)) return h;
+            }
         }
         // Fall back to the OS loader (system-installed lib).
         return NativeLibrary.TryLoad(libraryName, assembly, searchPath, out var sys)

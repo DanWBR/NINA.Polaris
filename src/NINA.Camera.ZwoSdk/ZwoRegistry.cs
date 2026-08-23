@@ -15,6 +15,7 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 using NINA.Camera.ZwoSdk.Native;
+using NINA.Image.NativeLibs;
 
 namespace NINA.Camera.ZwoSdk;
 
@@ -35,13 +36,14 @@ public static class ZwoRegistry {
     private static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath) {
         if (!string.Equals(libraryName, LibName, StringComparison.OrdinalIgnoreCase))
             return IntPtr.Zero;
-        var baseDir = AppContext.BaseDirectory;
         string[] candidates = OperatingSystem.IsWindows()
             ? new[] { "ASICamera2.dll" }
             : new[] { "libASICamera2.so" };
-        foreach (var name in candidates) {
-            var path = Path.Combine(baseDir, name);
-            if (File.Exists(path) && NativeLibrary.TryLoad(path, out var h)) return h;
+        foreach (var dir in NativeSdkProbe.Dirs()) {
+            foreach (var name in candidates) {
+                var path = Path.Combine(dir, name);
+                if (File.Exists(path) && NativeLibrary.TryLoad(path, out var h)) return h;
+            }
         }
         return NativeLibrary.TryLoad(libraryName, assembly, searchPath, out var sys) ? sys : IntPtr.Zero;
     }
