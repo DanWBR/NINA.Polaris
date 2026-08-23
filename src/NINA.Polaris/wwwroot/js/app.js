@@ -9575,15 +9575,47 @@ function ninaApp() {
         _histoLine(ctx, bins, peakLog, color, w, h, lo, hi) {
             const NB = bins.length, span = Math.max(1e-6, hi - lo);
             const pk = peakLog || 1;
-            ctx.strokeStyle = color; ctx.lineWidth = 1.25; ctx.lineJoin = 'round';
-            ctx.beginPath();
-            let started = false;
+            // Collect points for visible, NON-EMPTY bins only. Plotting empty
+            // bins dropped the line to the floor (log1p(0)=0) on every gap,
+            // which on a combed/bit-quantised mono frame turns the curve into a
+            // sawtooth of spikes. Skipping zeros traces the envelope through the
+            // populated bins instead.
+            const pts = [];
             for (let b = 0; b < NB; b++) {
+                const c = bins[b];
+                if (c <= 0) continue;
                 const frac = (b + 0.5) / NB;
                 if (frac < lo || frac > hi) continue;
                 const x = ((frac - lo) / span) * w;
-                const y = h - (Math.log1p(bins[b]) / pk) * (h - 1);
-                if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+                const y = h - (Math.log1p(c) / pk) * (h - 1);
+                pts.push({ x, y });
+            }
+            if (!pts.length) return;
+            // Gentle 3-tap moving average on the vertical values so both the OSC
+            // and mono curves read as clean envelopes rather than noisy combs.
+            if (pts.length > 2) {
+                const ys = pts.map(p => p.y);
+                for (let i = 0; i < pts.length; i++) {
+                    const a = ys[i - 1] ?? ys[i], b0 = ys[i], c0 = ys[i + 1] ?? ys[i];
+                    pts[i].y = (a + b0 + c0) / 3;
+                }
+            }
+            ctx.strokeStyle = color; ctx.lineWidth = 1.25;
+            ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            if (pts.length < 3) {
+                for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            } else {
+                // Smooth path: quadratic curves through bin midpoints so the
+                // envelope is rounded rather than a jagged polyline.
+                let i;
+                for (i = 1; i < pts.length - 2; i++) {
+                    const xc = (pts[i].x + pts[i + 1].x) / 2;
+                    const yc = (pts[i].y + pts[i + 1].y) / 2;
+                    ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+                }
+                ctx.quadraticCurveTo(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y);
             }
             ctx.stroke();
         },
