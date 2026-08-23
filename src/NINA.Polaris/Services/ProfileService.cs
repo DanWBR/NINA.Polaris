@@ -544,6 +544,7 @@ public class ProfileService {
             ControlPanels = src.ControlPanels.Select(p => new ControlPanelDef {
                 Id = p.Id, Title = p.Title, Visible = p.Visible,
                 Left = p.Left, Top = p.Top, Width = p.Width, Height = p.Height, Z = p.Z,
+                Dock = p.Dock, DockOrder = p.DockOrder,
                 Widgets = p.Widgets.Select(w => new ControlWidgetDef {
                     Id = w.Id, Label = w.Label, Kind = w.Kind, Source = w.Source,
                     Path = w.Path, ChannelKey = w.ChannelKey, ControlId = w.ControlId, Which = w.Which,

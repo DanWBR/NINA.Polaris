@@ -32,6 +32,7 @@ public class ControlPanelsPersistenceTests {
                 r.ControlPanels.Add(new ControlPanelDef {
                     Id = "p1", Title = "Cooling", Visible = true,
                     Left = 120, Top = 80, Width = 300, Height = 220, Z = 5,
+                    Dock = "right", DockOrder = 2,
                     Widgets = {
                         new ControlWidgetDef {
                             Id = "w1", Label = "Cooler target", Kind = "slider", Source = "action",
@@ -51,6 +52,8 @@ public class ControlPanelsPersistenceTests {
             Assert.That(p.Title, Is.EqualTo("Cooling"));
             Assert.That(p.Left, Is.EqualTo(120));
             Assert.That(p.Z, Is.EqualTo(5));
+            Assert.That(p.Dock, Is.EqualTo("right"));
+            Assert.That(p.DockOrder, Is.EqualTo(2));
             Assert.That(p.Widgets, Has.Count.EqualTo(2));
             Assert.That(p.Widgets[0].Action, Is.EqualTo("camera.coolerTarget"));
             Assert.That(p.Widgets[1].ChannelKey, Is.EqualTo("DEW_PWM.CH1"));

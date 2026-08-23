@@ -4472,5 +4472,6 @@
   "Panel": "Painel",
   "Create or select a panel first": "Crie ou selecione um painel primeiro",
   "Control failed": "Falha no controle",
-  "Title": "Título"
+  "Title": "Título",
+  "Dock to edge": "Encaixar na borda"
 }

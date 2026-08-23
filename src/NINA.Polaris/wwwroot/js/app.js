@@ -1651,6 +1651,7 @@ function ninaApp() {
             catalogSource: 'switch', // switch | camControl | indi | equipment
             catalog: [],             // bindable items for the chosen source
             catalogLoading: false,
+            dockHint: null,          // edge highlighted while dragging a panel to dock
         },
         ctrlCamCache: { main: [], guide: [] },   // /api/camera/controls, polled
         ctrlIndiCache: {},                        // "device prop elem" -> {value,type}
@@ -20810,10 +20811,54 @@ function ninaApp() {
             this.ctrlPanelFocus(p);
             const d = { sx: ev.clientX, sy: ev.clientY, l0: p.left, t0: p.top, p };
             this._ctrlDrag = d;
-            const move = e => { p.left = d.l0 + (e.clientX - d.sx); p.top = d.t0 + (e.clientY - d.sy); this._ctrlClamp(p); };
-            const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); this._ctrlDrag = null; this._ctrlSave(); };
+            const move = e => {
+                p.left = d.l0 + (e.clientX - d.sx); p.top = d.t0 + (e.clientY - d.sy); this._ctrlClamp(p);
+                // Snap hint: dragging a free panel near a viewport edge docks it there.
+                this.ctrl.dockHint = this._ctrlEdgeAt(e.clientX, e.clientY);
+            };
+            const up = () => {
+                window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+                this._ctrlDrag = null;
+                const edge = this.ctrl.dockHint; this.ctrl.dockHint = null;
+                if (edge) this.ctrlDockPanel(p, edge); else this._ctrlSave();
+            };
             window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
             ev.preventDefault();
+        },
+
+        // ---- docking: rails per edge, content-height stacking ----
+        ctrlFreePanels() { return this.ctrlVisiblePanels().filter(p => !p.dock); },
+        ctrlDockedPanels(edge) {
+            return this.ctrlVisiblePanels().filter(p => p.dock === edge)
+                .sort((a, b) => (a.dockOrder || 0) - (b.dockOrder || 0));
+        },
+        _ctrlEdgeAt(x, y) {
+            const T = 40, W = window.innerWidth, H = window.innerHeight;
+            if (x <= T) return 'left';
+            if (x >= W - T) return 'right';
+            if (y <= T) return 'top';
+            if (y >= H - T) return 'bottom';
+            return null;
+        },
+        ctrlNearestEdge(p) {
+            const cx = p.left + p.width / 2, cy = p.top + p.height / 2;
+            const d = { left: cx, right: window.innerWidth - cx, top: cy, bottom: window.innerHeight - cy };
+            return Object.keys(d).reduce((a, b) => (d[b] < d[a] ? b : a));
+        },
+        ctrlDockPanel(p, edge) {
+            const max = Math.max(0, ...this.ctrlDockedPanels(edge).map(x => x.dockOrder || 0));
+            p.dock = edge; p.dockOrder = max + 1;
+            this._ctrlSave();
+        },
+        ctrlDockNearest(p) { this.ctrlDockPanel(p, this.ctrlNearestEdge(p)); },
+        ctrlUndockPanel(p) { p.dock = null; this._ctrlClamp(p); this.ctrlPanelFocus(p); this._ctrlSave(); },
+        ctrlMoveDock(p, dir) {
+            const list = this.ctrlDockedPanels(p.dock);
+            const i = list.indexOf(p), j = i + dir;
+            if (i < 0 || j < 0 || j >= list.length) return;
+            const a = list[i], b = list[j];
+            const t = a.dockOrder || 0; a.dockOrder = b.dockOrder || 0; b.dockOrder = t;
+            this._ctrlSave();
         },
         ctrlPanelResizeStart(p, ev) {
             this.ctrlPanelFocus(p);

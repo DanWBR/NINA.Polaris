@@ -4472,5 +4472,6 @@
   "Panel": "Panel",
   "Create or select a panel first": "Erst ein Panel erstellen oder auswählen",
   "Control failed": "Steuerung fehlgeschlagen",
-  "Title": "Titel"
+  "Title": "Titel",
+  "Dock to edge": "Am Rand andocken"
 }
