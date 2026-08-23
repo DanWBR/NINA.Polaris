@@ -2227,6 +2227,55 @@
     gap: 6px;
 }
 
+/* Wider, better-distributed rig manager. All scoped to .rig-manager-frame so
+   the shared .location-setup-frame (location setup + other modals) is untouched.
+   The modal itself is widened inline (max-width: min(1120px, 95vw)). */
+.rig-manager-frame .rig-list {
+    max-height: min(64vh, 660px);
+    gap: 10px;
+}
+.rig-manager-frame .rig-row {
+    align-items: flex-start;   /* actions align with the name, not the middle */
+    padding: 14px 16px;
+    gap: 14px;
+}
+.rig-manager-frame .rig-row-main {
+    gap: 10px;
+    min-width: 0;              /* let children shrink instead of forcing overflow */
+}
+.rig-manager-frame .rig-devices {
+    font-size: 12px;
+    gap: 8px 16px;
+}
+.rig-manager-frame .rig-row-actions {
+    padding-top: 2px;
+    flex-direction: column;    /* Activate over Delete, tucked top-right */
+    align-items: stretch;
+}
+/* The per-rig metadata sections become side-by-side cards on a wide modal and
+   collapse to one column when the modal is narrow. */
+.rig-manager-frame .rig-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 10px;
+    margin-top: 4px;
+    align-items: start;
+}
+.rig-manager-frame .rig-meta-grid > details {
+    margin-top: 0 !important;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+.rig-manager-frame .rig-meta-grid > details[open] {
+    background: var(--bg-secondary);
+}
+/* A touch more air in the metadata tables (inline paddings need overriding). */
+.rig-manager-frame .rig-meta-grid table td {
+    padding: 4px 8px !important;
+}
+
 /* First-run location setup modal */
 .location-setup-modal {
     position: fixed;

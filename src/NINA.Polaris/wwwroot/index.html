@@ -19126,7 +19126,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <div class="location-setup-modal" x-transition.opacity.duration.200ms x-show="rigModalOpen" x-cloak
          @click.self="rigModalOpen = false"
          @keydown.escape.window="rigModalOpen = false">
-        <div class="location-setup-frame" style="max-width: 700px;">
+        <div class="location-setup-frame rig-manager-frame" style="max-width: min(1120px, 95vw); width: 100%;">
             <h2>🔭 Manage rigs</h2>
             <p class="text-muted" style="font-size: 12px;">
                 A rig is a saved set of equipment selections. Edit device
@@ -19180,6 +19180,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 </span>
                             </div>
 
+                            <!-- Per-rig metadata sections, laid out in a
+                                 responsive grid so a wide modal distributes
+                                 them side by side instead of one tall stack. -->
+                            <div class="rig-meta-grid">
                             <!-- Per-rig filter offset table. Stays in the
                                  modal because no equipment card surfaces
                                  it, these are pure rig metadata used by
@@ -19343,6 +19347,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                     </div>
                                 </div>
                             </details>
+                            </div><!-- /.rig-meta-grid -->
 
                             <!-- FIELD4-3: Bayer override + vertical flip
                                  moved to the per-camera-id "Camera
