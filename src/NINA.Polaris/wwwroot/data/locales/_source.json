@@ -3813,5 +3813,21 @@
   "For older clips that open with a bright colour cast in ZWO ASIVideoStack or FireCapture. Writes a corrected full-range copy named -fixed16.ser beside the original and selects it. New recordings are already correct.": "",
   "SER rescaled": "",
   "Nothing to rescale": "",
-  "Rescale failed": ""
+  "Rescale failed": "",
+  "Filter focus memory": "",
+  "Remember focus per filter": "",
+  "Move focuser automatically on filter change": "",
+  "Run autofocus when the stored point is stale": "",
+  "Temperature tolerance (°C)": "",
+  "Max age (hours)": "",
+  "Age": "",
+  "No focus points learned yet. Run autofocus on each filter and Polaris fills this in.": "",
+  "Focus restored for {f}": "",
+  "Applied a learned focus offset for {f}": "",
+  "Stored focus available for {f} ({p}). Apply from the focuser card.": "",
+  "Autofocus started for {f} (stored point stale)": "",
+  "Autofocus recommended for {f} (stored point stale)": "",
+  "Could not apply the stored focus": "",
+  "Focus memory cleared for {f}": "",
+  "Could not clear the focus memory": ""
 }

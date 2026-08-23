@@ -4437,5 +4437,21 @@
   "For older clips that open with a bright colour cast in ZWO ASIVideoStack or FireCapture. Writes a corrected full-range copy named -fixed16.ser beside the original and selects it. New recordings are already correct.": "Pour les anciens clips qui s'ouvrent avec une forte dominante de couleur dans ZWO ASIVideoStack ou FireCapture. Écrit une copie corrigée en pleine plage nommée -fixed16.ser à côté de l'original et la sélectionne. Les nouveaux enregistrements sont déjà corrects.",
   "SER rescaled": "SER rééchelonné",
   "Nothing to rescale": "Rien à rééchelonner",
-  "Rescale failed": "Échec du rééchelonnement"
+  "Rescale failed": "Échec du rééchelonnement",
+  "Filter focus memory": "Mémoire de mise au point par filtre",
+  "Remember focus per filter": "Mémoriser la mise au point par filtre",
+  "Move focuser automatically on filter change": "Déplacer le focuser automatiquement au changement de filtre",
+  "Run autofocus when the stored point is stale": "Lancer l'autofocus quand le point enregistré est périmé",
+  "Temperature tolerance (°C)": "Tolérance de température (°C)",
+  "Max age (hours)": "Âge maximal (heures)",
+  "Age": "Âge",
+  "No focus points learned yet. Run autofocus on each filter and Polaris fills this in.": "Aucun point de mise au point appris pour l'instant. Lancez l'autofocus sur chaque filtre et Polaris le remplira.",
+  "Focus restored for {f}": "Mise au point restaurée pour {f}",
+  "Applied a learned focus offset for {f}": "Offset de mise au point appris appliqué pour {f}",
+  "Stored focus available for {f} ({p}). Apply from the focuser card.": "Mise au point enregistrée disponible pour {f} ({p}). Appliquez-la depuis la carte du focuser.",
+  "Autofocus started for {f} (stored point stale)": "Autofocus lancé pour {f} (point enregistré périmé)",
+  "Autofocus recommended for {f} (stored point stale)": "Autofocus recommandé pour {f} (point enregistré périmé)",
+  "Could not apply the stored focus": "Impossible d'appliquer la mise au point enregistrée",
+  "Focus memory cleared for {f}": "Mémoire de mise au point effacée pour {f}",
+  "Could not clear the focus memory": "Impossible d'effacer la mémoire de mise au point"
 }

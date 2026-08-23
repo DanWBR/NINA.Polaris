@@ -4437,5 +4437,21 @@
   "For older clips that open with a bright colour cast in ZWO ASIVideoStack or FireCapture. Writes a corrected full-range copy named -fixed16.ser beside the original and selects it. New recordings are already correct.": "Para clipes antigos que abrem com dominante de cor forte no ZWO ASIVideoStack ou FireCapture. Grava uma cópia corrigida de faixa completa chamada -fixed16.ser ao lado do original e a seleciona. Gravações novas já saem corretas.",
   "SER rescaled": "SER reescalado",
   "Nothing to rescale": "Nada para reescalar",
-  "Rescale failed": "Falha ao reescalar"
+  "Rescale failed": "Falha ao reescalar",
+  "Filter focus memory": "Memória de foco por filtro",
+  "Remember focus per filter": "Lembrar o foco por filtro",
+  "Move focuser automatically on filter change": "Mover o focalizador automaticamente ao trocar de filtro",
+  "Run autofocus when the stored point is stale": "Rodar o autofoco quando o ponto guardado estiver desatualizado",
+  "Temperature tolerance (°C)": "Tolerância de temperatura (°C)",
+  "Max age (hours)": "Idade máxima (horas)",
+  "Age": "Idade",
+  "No focus points learned yet. Run autofocus on each filter and Polaris fills this in.": "Nenhum ponto de foco aprendido ainda. Rode o autofoco em cada filtro e o Polaris preenche isto.",
+  "Focus restored for {f}": "Foco restaurado para {f}",
+  "Applied a learned focus offset for {f}": "Offset de foco aprendido aplicado para {f}",
+  "Stored focus available for {f} ({p}). Apply from the focuser card.": "Foco guardado disponível para {f} ({p}). Aplique pelo card do focalizador.",
+  "Autofocus started for {f} (stored point stale)": "Autofoco iniciado para {f} (ponto guardado desatualizado)",
+  "Autofocus recommended for {f} (stored point stale)": "Autofoco recomendado para {f} (ponto guardado desatualizado)",
+  "Could not apply the stored focus": "Não foi possível aplicar o foco guardado",
+  "Focus memory cleared for {f}": "Memória de foco limpa para {f}",
+  "Could not clear the focus memory": "Não foi possível limpar a memória de foco"
 }

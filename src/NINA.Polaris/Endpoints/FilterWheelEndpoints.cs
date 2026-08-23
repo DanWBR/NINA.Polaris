@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Polaris.Services;
+using NINA.Polaris.Services.Focus;
 
 namespace NINA.Polaris.Endpoints;
 
@@ -65,7 +66,8 @@ public static class FilterWheelEndpoints {
             }
         });
 
-        group.MapPost("/position/{slot:int}", async (int slot, EquipmentManager equip) => {
+        group.MapPost("/position/{slot:int}", async (int slot, EquipmentManager equip,
+                                                     FilterFocusMemoryService mem) => {
             if (equip.FilterWheel == null)
                 return Results.BadRequest(new { error = "No filter wheel connected" });
 
@@ -76,17 +78,20 @@ public static class FilterWheelEndpoints {
             // observed final position so the UI can confirm the move
             // landed where it asked.
             var settled = await WaitForFilterSettleAsync(equip.FilterWheel, slot, TimeSpan.FromSeconds(30));
+            var focus = await mem.OnFilterSelectedAsync(equip.FilterWheel.CurrentFilterName);
             return Results.Ok(new {
                 position = equip.FilterWheel.Position,
                 currentFilter = equip.FilterWheel.CurrentFilterName,
                 settled,
+                focusMemory = FocusMemoryDto(focus),
                 message = settled
                     ? $"Filter wheel arrived at slot {slot}"
                     : $"Filter wheel still moving (timeout); last reported slot {equip.FilterWheel.Position}"
             });
         });
 
-        group.MapPost("/filter/{filterName}", async (string filterName, EquipmentManager equip) => {
+        group.MapPost("/filter/{filterName}", async (string filterName, EquipmentManager equip,
+                                                     FilterFocusMemoryService mem) => {
             if (equip.FilterWheel == null)
                 return Results.BadRequest(new { error = "No filter wheel connected" });
 
@@ -100,10 +105,12 @@ public static class FilterWheelEndpoints {
                 // the only ack we have.
                 var targetPos = equip.FilterWheel.Position;
                 var settled = await WaitForFilterSettleAsync(equip.FilterWheel, targetPos, TimeSpan.FromSeconds(30));
+                var focus = await mem.OnFilterSelectedAsync(equip.FilterWheel.CurrentFilterName);
                 return Results.Ok(new {
                     filter = equip.FilterWheel.CurrentFilterName,
                     position = equip.FilterWheel.Position,
                     settled,
+                    focusMemory = FocusMemoryDto(focus),
                     message = settled
                         ? $"Filter wheel set to '{equip.FilterWheel.CurrentFilterName}'"
                         : $"Filter wheel still moving (timeout); current '{equip.FilterWheel.CurrentFilterName}'"
@@ -111,6 +118,21 @@ public static class FilterWheelEndpoints {
             } catch (InvalidOperationException ex) {
                 return Results.BadRequest(new { error = ex.Message });
             }
+        });
+
+        // Apply the stored/derived focus point for a filter on demand (the UI
+        // "Apply" button — used when auto-apply is off, or to re-apply).
+        group.MapPost("/focus-memory/apply/{filterName}",
+                      async (string filterName, FilterFocusMemoryService mem) => {
+            var outcome = await mem.ApplyStoredAsync(filterName);
+            return Results.Ok(new { focusMemory = FocusMemoryDto(outcome) });
+        });
+
+        // Forget the learned point for one filter.
+        group.MapDelete("/focus-memory/{filterName}",
+                        (string filterName, FilterFocusMemoryService mem) => {
+            mem.ClearEntry(filterName);
+            return Results.Ok(new { cleared = filterName });
         });
 
         group.MapPost("/select/{deviceName}", (string deviceName, EquipmentManager equip, string? driver) => {
@@ -184,6 +206,17 @@ public static class FilterWheelEndpoints {
     /// <summary>Body for PUT /names. Required field; Names.Length
     /// must equal the wheel's slot count (validated server-side).</summary>
     public record FilterNamesRequest(string[] Names);
+
+    /// <summary>Serialize a filter-focus-memory outcome for the wire (camelCase
+    /// via the app's JSON options). The frontend keys UI off <c>status</c>.</summary>
+    private static object FocusMemoryDto(FocusMemoryOutcome o) => new {
+        status = o.Status.ToString(),
+        filter = o.Filter,
+        position = o.Position,
+        derivedFrom = o.DerivedFrom,
+        tempDeltaC = o.TempDeltaC,
+        reason = o.Reason
+    };
 
     /// <summary>Poll <see cref="NINA.Image.Interfaces.IFilterWheel.IsMoving"/> until the
     /// wheel reports settled at the expected slot (or close enough --

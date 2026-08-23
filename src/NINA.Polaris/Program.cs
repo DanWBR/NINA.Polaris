@@ -401,6 +401,9 @@ builder.Services.AddHostedService(sp =>
 // the pixel stream and indi-web can use for live driver state.
 builder.Services.AddHttpForwarder();
 builder.Services.AddSingleton<AutoFocusService>();
+// Per-filter focus memory: learns the optimal focuser position per filter from
+// autofocus runs and reuses a still-valid point on a manual filter change.
+builder.Services.AddSingleton<NINA.Polaris.Services.Focus.FilterFocusMemoryService>();
 // UPDGATE: one place that knows whether the host is mid-session, so an
 // action that restarts the process can refuse instead of finding out.
 builder.Services.AddSingleton<HostActivityService>();

@@ -4437,5 +4437,21 @@
   "For older clips that open with a bright colour cast in ZWO ASIVideoStack or FireCapture. Writes a corrected full-range copy named -fixed16.ser beside the original and selects it. New recordings are already correct.": "Für ältere Clips, die in ZWO ASIVideoStack oder FireCapture mit starkem Farbstich öffnen. Schreibt eine korrigierte Kopie mit vollem Wertebereich namens -fixed16.ser neben das Original und wählt sie aus. Neue Aufnahmen sind bereits korrekt.",
   "SER rescaled": "SER neu skaliert",
   "Nothing to rescale": "Nichts zu skalieren",
-  "Rescale failed": "Neuskalierung fehlgeschlagen"
+  "Rescale failed": "Neuskalierung fehlgeschlagen",
+  "Filter focus memory": "Fokusspeicher pro Filter",
+  "Remember focus per filter": "Fokus pro Filter merken",
+  "Move focuser automatically on filter change": "Fokussierer beim Filterwechsel automatisch bewegen",
+  "Run autofocus when the stored point is stale": "Autofokus ausführen, wenn der gespeicherte Punkt veraltet ist",
+  "Temperature tolerance (°C)": "Temperaturtoleranz (°C)",
+  "Max age (hours)": "Maximales Alter (Stunden)",
+  "Age": "Alter",
+  "No focus points learned yet. Run autofocus on each filter and Polaris fills this in.": "Noch keine Fokuspunkte gelernt. Führen Sie den Autofokus für jeden Filter aus, dann füllt Polaris dies aus.",
+  "Focus restored for {f}": "Fokus für {f} wiederhergestellt",
+  "Applied a learned focus offset for {f}": "Gelernten Fokus-Offset für {f} angewendet",
+  "Stored focus available for {f} ({p}). Apply from the focuser card.": "Gespeicherter Fokus für {f} ({p}) verfügbar. Über die Fokussierer-Karte anwenden.",
+  "Autofocus started for {f} (stored point stale)": "Autofokus für {f} gestartet (gespeicherter Punkt veraltet)",
+  "Autofocus recommended for {f} (stored point stale)": "Autofokus für {f} empfohlen (gespeicherter Punkt veraltet)",
+  "Could not apply the stored focus": "Gespeicherter Fokus konnte nicht angewendet werden",
+  "Focus memory cleared for {f}": "Fokusspeicher für {f} gelöscht",
+  "Could not clear the focus memory": "Fokusspeicher konnte nicht gelöscht werden"
 }

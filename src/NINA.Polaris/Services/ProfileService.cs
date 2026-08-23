@@ -452,7 +452,13 @@ public class ProfileService {
                 BacklashIn = src.AutoFocus.BacklashIn,
                 BacklashOut = src.AutoFocus.BacklashOut,
                 BacklashModel = src.AutoFocus.BacklashModel,
-                MinStars = src.AutoFocus.MinStars
+                MinStars = src.AutoFocus.MinStars,
+                FilterMemoryEnabled = src.AutoFocus.FilterMemoryEnabled,
+                FilterMemoryAutoApply = src.AutoFocus.FilterMemoryAutoApply,
+                FilterMemoryAutoRunWhenStale = src.AutoFocus.FilterMemoryAutoRunWhenStale,
+                FilterMemoryTempToleranceC = src.AutoFocus.FilterMemoryTempToleranceC,
+                FilterMemoryMaxAgeHours = src.AutoFocus.FilterMemoryMaxAgeHours,
+                FilterOffsetReference = src.AutoFocus.FilterOffsetReference
             },
             FocalLengthMm = src.FocalLengthMm,
             ApertureMm = src.ApertureMm,
@@ -522,6 +528,17 @@ public class ProfileService {
             PHD2AutoSyncOnRigSwitch = src.PHD2AutoSyncOnRigSwitch,
             PHD2CustomAlgoParams = new Dictionary<string, double>(src.PHD2CustomAlgoParams),
             FilterOffsets = new Dictionary<string, int>(src.FilterOffsets),
+            // Learned per-filter focus memory travels with the clone (deep copy
+            // of each entry) so a Save-As keeps the setup's focus history.
+            FilterFocusMemory = src.FilterFocusMemory.ToDictionary(
+                kv => kv.Key,
+                kv => new FilterFocusMemory {
+                    Position = kv.Value.Position,
+                    TemperatureC = kv.Value.TemperatureC,
+                    Utc = kv.Value.Utc,
+                    FocuserName = kv.Value.FocuserName,
+                    Hfr = kv.Value.Hfr
+                }),
             // FILTERNAME: a cloned rig keeps the operator's filter labels too,
             // not just the offsets — otherwise the copy comes up with the
             // driver's raw names and the offsets (keyed by the saved names) miss.

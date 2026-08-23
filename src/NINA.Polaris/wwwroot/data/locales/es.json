@@ -4437,5 +4437,21 @@
   "For older clips that open with a bright colour cast in ZWO ASIVideoStack or FireCapture. Writes a corrected full-range copy named -fixed16.ser beside the original and selects it. New recordings are already correct.": "Para clips antiguos que se abren con una dominante de color intensa en ZWO ASIVideoStack o FireCapture. Escribe una copia corregida de rango completo llamada -fixed16.ser junto al original y la selecciona. Las grabaciones nuevas ya salen correctas.",
   "SER rescaled": "SER reescalado",
   "Nothing to rescale": "Nada que reescalar",
-  "Rescale failed": "Error al reescalar"
+  "Rescale failed": "Error al reescalar",
+  "Filter focus memory": "Memoria de foco por filtro",
+  "Remember focus per filter": "Recordar el foco por filtro",
+  "Move focuser automatically on filter change": "Mover el enfocador automáticamente al cambiar de filtro",
+  "Run autofocus when the stored point is stale": "Ejecutar el autoenfoque cuando el punto guardado esté obsoleto",
+  "Temperature tolerance (°C)": "Tolerancia de temperatura (°C)",
+  "Max age (hours)": "Edad máxima (horas)",
+  "Age": "Edad",
+  "No focus points learned yet. Run autofocus on each filter and Polaris fills this in.": "Aún no se han aprendido puntos de foco. Ejecute el autoenfoque en cada filtro y Polaris lo completará.",
+  "Focus restored for {f}": "Foco restaurado para {f}",
+  "Applied a learned focus offset for {f}": "Offset de foco aprendido aplicado para {f}",
+  "Stored focus available for {f} ({p}). Apply from the focuser card.": "Foco guardado disponible para {f} ({p}). Aplíquelo desde la tarjeta del enfocador.",
+  "Autofocus started for {f} (stored point stale)": "Autoenfoque iniciado para {f} (punto guardado obsoleto)",
+  "Autofocus recommended for {f} (stored point stale)": "Autoenfoque recomendado para {f} (punto guardado obsoleto)",
+  "Could not apply the stored focus": "No se pudo aplicar el foco guardado",
+  "Focus memory cleared for {f}": "Memoria de foco borrada para {f}",
+  "Could not clear the focus memory": "No se pudo borrar la memoria de foco"
 }
