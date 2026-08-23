@@ -20832,7 +20832,7 @@ function ninaApp() {
             if (!Array.isArray(r.controlPanels)) r.controlPanels = [];
             const p = {
                 id: this._ctrlUid(), title: this.$t('Panel') + ' ' + (r.controlPanels.length + 1),
-                visible: true, left: 80, top: 90, width: 260, height: 200,
+                visible: true, left: 80, top: 90, width: 260, height: 200, scale: 100,
                 z: ++this._ctrlTopZ, widgets: []
             };
             r.controlPanels.push(p);

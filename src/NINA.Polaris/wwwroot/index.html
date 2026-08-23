@@ -8857,6 +8857,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <button class="btn btn-sm" @click="ctrlResetPanelPos(ctrlEditedPanel())">Reset position</button>
                                     <button class="btn btn-sm btn-danger" @click="ctrlDeletePanel(ctrlEditedPanel())">Delete panel</button>
                                 </div>
+                                <label class="ctrl-field" style="margin-bottom:14px">Item scale
+                                    <span style="display:flex;align-items:center;gap:10px">
+                                        <input type="range" min="50" max="200" step="10"
+                                               :value="ctrlEditedPanel().scale || 100"
+                                               @input="ctrlEditedPanel().scale = Number($event.target.value)"
+                                               @change="_ctrlSave()" style="flex:1;max-width:240px">
+                                        <span style="min-width:46px;color:var(--text-secondary)"
+                                              x-text="(ctrlEditedPanel().scale || 100) + '%'"></span>
+                                    </span>
+                                </label>
                                 <h4 class="ctrl-sub-h">Widgets</h4>
                                 <p class="hint" x-show="!ctrlEditedPanel().widgets.length" style="margin:0">
                                     No widgets yet. Pick from the catalog on the right.
@@ -19837,7 +19847,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="rig-cp-close" @click="ctrlDockNearest(p)" :title="$t('Dock to edge')">⤓</button>
                 <button class="rig-cp-close" @click="ctrlTogglePanelVisible(p)" :title="$t('Hide panel')">✕</button>
             </div>
-            <div class="rig-cp-body">
+            <div class="rig-cp-body" :style="'zoom:' + ((p.scale || 100) / 100)">
                 <template x-if="!(p.widgets && p.widgets.length)">
                     <div class="rig-cp-empty" x-text="$t('Empty panel. Add widgets in RIGS > Control Panels.')"></div>
                 </template>
@@ -19894,7 +19904,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         <button class="rig-cp-close" @click="ctrlUndockPanel(p)" :title="$t('Undock')">⤢</button>
                         <button class="rig-cp-close" @click="ctrlTogglePanelVisible(p)" :title="$t('Hide panel')">✕</button>
                     </div>
-                    <div class="rig-cp-body">
+                    <div class="rig-cp-body" :style="'zoom:' + ((p.scale || 100) / 100)">
                         <template x-if="!(p.widgets && p.widgets.length)">
                             <div class="rig-cp-empty" x-text="$t('Empty panel. Add widgets in RIGS > Control Panels.')"></div>
                         </template>
