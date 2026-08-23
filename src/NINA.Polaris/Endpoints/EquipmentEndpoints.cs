@@ -429,6 +429,11 @@ public static class EquipmentEndpoints {
                 // keeps old clients from clobbering the field.
                 if (update.LiveStackTriggers != null)
                     r.LiveStackTriggers = update.LiveStackTriggers;
+                // Control panels: null-guarded so an old/omitting client PUT
+                // never wipes the saved SCADA layout. RigPatch.Merge already
+                // preserves absent keys; drag/resize saves send a minimal patch.
+                if (update.ControlPanels != null)
+                    r.ControlPanels = update.ControlPanels;
                 // FW-1: Flat Wizard per-rig defaults. Same defensive
                 // null-check, so a pre-FW client PUT-ing a rig keeps
                 // the existing FlatWizard block untouched.

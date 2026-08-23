@@ -1005,6 +1005,15 @@ public class EquipmentProfile {
     public Dictionary<string, FilterFocusMemory> FilterFocusMemory { get; set; } = new();
 
     /// <summary>
+    /// SCADA-style floating control panels for this rig: user-built cards that
+    /// group equipment properties, switches and inputs to monitor + change on
+    /// the fly. Each panel carries its own on-screen geometry (position/size)
+    /// and a list of widgets bound to a live source. Managed entirely on the
+    /// client; persisted here so the layout follows the rig.
+    /// </summary>
+    public List<ControlPanelDef> ControlPanels { get; set; } = new();
+
+    /// <summary>
     /// Auto re-focus + re-center policy applied during live stacking
     /// (LSTR-3). Persisted per-rig because thermal characteristics +
     /// guiding precision vary by setup. Default = all triggers disabled.
@@ -1371,4 +1380,53 @@ public class FilterFocusMemory {
 
     /// <summary>Predicted/measured HFR at the point, for display only.</summary>
     public double? Hfr { get; set; }
+}
+
+/// <summary>One floating control panel: a card with its own on-screen geometry
+/// and a set of widgets. Stored per rig in
+/// <see cref="EquipmentProfile.ControlPanels"/>.</summary>
+public class ControlPanelDef {
+    public string Id { get; set; } = "";
+    public string Title { get; set; } = "";
+    /// <summary>Whether the panel floats app-wide (over any tab) right now.</summary>
+    public bool Visible { get; set; }
+    public double Left { get; set; }
+    public double Top { get; set; }
+    public double Width { get; set; } = 260;
+    public double Height { get; set; } = 200;
+    /// <summary>Stacking order; the last panel interacted with gets the highest.</summary>
+    public int Z { get; set; }
+    public List<ControlWidgetDef> Widgets { get; set; } = new();
+}
+
+/// <summary>One widget inside a <see cref="ControlPanelDef"/>. The addressing
+/// fields are source-specific; only the ones for <see cref="Source"/> are set.</summary>
+public class ControlWidgetDef {
+    public string Id { get; set; } = "";
+    public string Label { get; set; } = "";
+    /// <summary>readout | toggle | slider | number | button | select.</summary>
+    public string Kind { get; set; } = "readout";
+    /// <summary>equipment | switch | camControl | indi | action.</summary>
+    public string Source { get; set; } = "equipment";
+
+    /// <summary>equipment readout: dotted path into the WS equipment block,
+    /// e.g. "camera.temperature" or "telescope.tracking".</summary>
+    public string? Path { get; set; }
+    /// <summary>switch: the SwitchChannel.Key (survives reconnect).</summary>
+    public string? ChannelKey { get; set; }
+    /// <summary>camControl: SDK control id + which train (main|guide).</summary>
+    public int? ControlId { get; set; }
+    public string? Which { get; set; }
+    /// <summary>indi: device / property / element addressing.</summary>
+    public string? Device { get; set; }
+    public string? Property { get; set; }
+    public string? Element { get; set; }
+    /// <summary>action/equipment write: a curated action id, e.g. "telescope.park".</summary>
+    public string? Action { get; set; }
+
+    public string? Unit { get; set; }
+    public double? Min { get; set; }
+    public double? Max { get; set; }
+    public double? Step { get; set; }
+    public int? Decimals { get; set; }
 }

@@ -561,6 +561,18 @@ public class ProfileService {
                     FocuserName = kv.Value.FocuserName,
                     Hfr = kv.Value.Hfr
                 }),
+            // Control panels travel with the clone (deep copy of each panel and
+            // its widgets) so a Save-As keeps the operator's SCADA layout.
+            ControlPanels = src.ControlPanels.Select(p => new ControlPanelDef {
+                Id = p.Id, Title = p.Title, Visible = p.Visible,
+                Left = p.Left, Top = p.Top, Width = p.Width, Height = p.Height, Z = p.Z,
+                Widgets = p.Widgets.Select(w => new ControlWidgetDef {
+                    Id = w.Id, Label = w.Label, Kind = w.Kind, Source = w.Source,
+                    Path = w.Path, ChannelKey = w.ChannelKey, ControlId = w.ControlId, Which = w.Which,
+                    Device = w.Device, Property = w.Property, Element = w.Element, Action = w.Action,
+                    Unit = w.Unit, Min = w.Min, Max = w.Max, Step = w.Step, Decimals = w.Decimals
+                }).ToList()
+            }).ToList(),
             // FILTERNAME: a cloned rig keeps the operator's filter labels too,
             // not just the offsets — otherwise the copy comes up with the
             // driver's raw names and the offsets (keyed by the saved names) miss.
