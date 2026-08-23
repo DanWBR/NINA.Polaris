@@ -651,6 +651,23 @@ try {
     Environment.SetEnvironmentVariable(NINA.Image.NativeLibs.NativeSdkProbe.EnvVar, _sdkDir);
 } catch { /* non-fatal: resolvers just fall back to base dir + OS loader */ }
 
+// Redirect the process temp dir onto the data disk. On the Pi/SBC images /tmp is
+// a RAM-backed tmpfs (a 4 GB Pi5 fills it in seconds), so the large FITS that
+// plate solving, slew-and-center, polar alignment and live-stack scratch write
+// through Path.GetTempPath() failed with "No space left on device" even with a
+// 500 GB SSD attached. Path.GetTempPath() honours $TMPDIR on Unix and reads it
+// fresh each call, so pointing it at the (SSD-backed) data dir fixes every temp
+// writer at once, and child processes (ASTAP, astrometry.net, GraXpert) inherit
+// it too. Linux/macOS only — Windows temp already lives on disk.
+if (!OperatingSystem.IsWindows()) {
+    try {
+        var _dataDir = app.Services.GetRequiredService<NINA.Polaris.Services.ProfileService>().DataDir;
+        var _tmpDir = System.IO.Path.Combine(_dataDir, "tmp");
+        System.IO.Directory.CreateDirectory(_tmpDir);
+        Environment.SetEnvironmentVariable("TMPDIR", _tmpDir);
+    } catch { /* non-fatal: falls back to /tmp */ }
+}
+
 // The cert had to be built before this point, so it ran against a NullLogger
 // and everything it decided about the user's certificate was thrown away.
 // Replay it now, into the real pipeline: journald gets it, and so does the
