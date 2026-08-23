@@ -791,6 +791,13 @@ function ninaApp() {
             installed: false, installedModelCount: 0
         },
         _ncnnPackPollTimer: null,
+        // Native camera SDK pack (Linux .so files, on-demand from Software Updates).
+        cameraSdkPack: {
+            running: false, phase: 'idle', bytesDownloaded: 0, bytesTotal: 0,
+            entriesExtracted: 0, entriesTotal: 0, error: null,
+            supported: false, installed: false, installedLibCount: 0
+        },
+        _cameraSdkPackPollTimer: null,
 
         // Remote terminal (xterm.js + /ws/terminal SSH bridge).
         // Credentials are never persisted, every Connect prompts
@@ -12436,6 +12443,59 @@ function ninaApp() {
         },
         async cancelNcnnPackDownload() {
             try { await this.apiPost('/api/ai/ncnn-models/cancel'); } catch (e) {}
+            this.toast('Cancelling download…', 'warn');
+        },
+
+        // Native camera SDK pack (same flow as the ncnn/thumbnail packs).
+        async loadCameraSdkPackStatus() {
+            try {
+                const s = await this.apiGet('/api/camera/sdk-pack/status');
+                this.cameraSdkPack = Object.assign(this.cameraSdkPack, s);
+            } catch (e) { /* card may not be visible yet */ }
+            if (this.cameraSdkPack.running && !this._cameraSdkPackPollTimer) {
+                this._cameraSdkPackPollTimer = setInterval(() => this._pollCameraSdkPack(), 1500);
+            }
+        },
+        async _pollCameraSdkPack() {
+            try {
+                const s = await this.apiGet('/api/camera/sdk-pack/status');
+                this.cameraSdkPack = Object.assign(this.cameraSdkPack, s);
+            } catch (e) { /* keep last */ }
+            if (!this.cameraSdkPack.running && this._cameraSdkPackPollTimer) {
+                clearInterval(this._cameraSdkPackPollTimer); this._cameraSdkPackPollTimer = null;
+                if (this.cameraSdkPack.installed && !this.cameraSdkPack.error) {
+                    this.toast(this.$t('Camera SDKs installed ({n} libs). Native camera drivers are now available.')
+                        .replace('{n}', this.cameraSdkPack.installedLibCount), 'ok');
+                    try { await this.loadCameraDrivers(); } catch (e) {}
+                } else if (this.cameraSdkPack.error) {
+                    this.toast(this.$t('Camera SDK pack download failed: ') + this.cameraSdkPack.error, 'error');
+                }
+            }
+        },
+        cameraSdkPackPercent() {
+            const t = this.cameraSdkPack;
+            if (t.phase === 'extracting' && t.entriesTotal > 0)
+                return Math.floor(100 * t.entriesExtracted / t.entriesTotal);
+            if (t.bytesTotal > 0)
+                return Math.floor(100 * t.bytesDownloaded / t.bytesTotal);
+            return 0;
+        },
+        async startCameraSdkPackDownload() {
+            try {
+                const resp = await this.apiPost('/api/camera/sdk-pack/download');
+                const s = await resp.json().catch(() => ({}));
+                this.cameraSdkPack = Object.assign(this.cameraSdkPack, s, { running: true });
+                this.toast(this.$t('Downloading native camera SDKs. Runs in the background.'), 'info');
+                if (!this._cameraSdkPackPollTimer)
+                    this._cameraSdkPackPollTimer = setInterval(() => this._pollCameraSdkPack(), 1500);
+            } catch (e) {
+                let msg = e.message;
+                try { const b = JSON.parse(e.body || '{}'); if (b.error) msg = b.error; } catch {}
+                this.toast(this.$t('Could not start download: ') + msg, 'error');
+            }
+        },
+        async cancelCameraSdkPackDownload() {
+            try { await this.apiPost('/api/camera/sdk-pack/cancel'); } catch (e) {}
             this.toast('Cancelling download…', 'warn');
         },
 

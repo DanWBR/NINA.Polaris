@@ -14872,6 +14872,42 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             ⬆ Update available: v<span x-text="update.latestVersion"></span>: <a href="#" @click.prevent="openUpdateModal()">view &amp; install</a>
                         </span>
                     </p>
+
+                    <!-- Native camera SDK pack: the vendor .so libraries (ASI/SVBony/
+                         Player One/ToupTek/Altair) shipped as a separate on-demand
+                         download on Linux, where they aren't bundled in the package.
+                         Only shown when applicable (Linux x64/arm64). -->
+                    <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px"
+                         x-init="loadCameraSdkPackStatus()" x-show="cameraSdkPack.supported" x-cloak>
+                        <h4 style="margin:0 0 4px; font-size:13px" x-text="$t('Native camera SDKs')"></h4>
+                        <p class="text-muted" style="font-size:12px; max-width:560px; margin:0"
+                           x-text="$t('Install the native USB SDK libraries (ZWO, SVBony, Player One, ToupTek, Altair) so those cameras appear as direct native drivers, in addition to INDI. About 100 MB, downloaded on demand.')"></p>
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px">
+                            <button class="btn btn-sm" @click="startCameraSdkPackDownload()"
+                                    :disabled="cameraSdkPack.running"
+                                    x-show="!cameraSdkPack.installed || cameraSdkPack.running">
+                                <span x-show="!cameraSdkPack.running" x-text="$t('Install native camera SDKs')"></span>
+                                <span x-show="cameraSdkPack.running" x-text="cameraSdkPackPercent() + '%'"></span>
+                            </button>
+                            <button class="btn btn-sm" x-show="cameraSdkPack.installed && !cameraSdkPack.running"
+                                    @click="startCameraSdkPackDownload()" x-text="$t('Reinstall')"></button>
+                            <button class="btn btn-sm btn-danger" x-show="cameraSdkPack.running"
+                                    @click="cancelCameraSdkPackDownload()" x-text="$t('Cancel')"></button>
+                            <span class="text-ok" style="font-size:12px"
+                                  x-show="cameraSdkPack.installed && !cameraSdkPack.running">
+                                ✓ <span x-text="$t('Installed')"></span>
+                                (<span x-text="cameraSdkPack.installedLibCount"></span>)
+                            </span>
+                        </div>
+                        <div x-show="cameraSdkPack.running" style="margin-top:8px; max-width:360px">
+                            <div style="height:6px; background:var(--bg-secondary); border-radius:3px; overflow:hidden">
+                                <div :style="'width:'+cameraSdkPackPercent()+'%; height:100%; background:var(--accent)'"></div>
+                            </div>
+                            <span class="text-muted" style="font-size:11px" x-text="cameraSdkPack.phase"></span>
+                        </div>
+                        <p class="text-danger" x-show="cameraSdkPack.error && !cameraSdkPack.running"
+                           style="font-size:11px; margin-top:6px" x-text="cameraSdkPack.error"></p>
+                    </div>
                 </div>
 
                 <!-- polarispy script runner (Phase 1: headless scripts). -->
