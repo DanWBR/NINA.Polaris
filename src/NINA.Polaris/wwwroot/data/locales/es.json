@@ -4481,5 +4481,7 @@
   "Camera SDKs installed ({n} libs). Native camera drivers are now available.": "SDK de cámara instalados ({n} libs). Los controladores nativos de cámara ya están disponibles.",
   "Camera SDK pack download failed: ": "Error al descargar el paquete de SDK de cámara: ",
   "Downloading native camera SDKs. Runs in the background.": "Descargando los SDK nativos de cámara. Se ejecuta en segundo plano.",
-  "Could not start download: ": "No se pudo iniciar la descarga: "
+  "Could not start download: ": "No se pudo iniciar la descarga: ",
+  "Filter wheel": "Rueda de filtros",
+  "Flat panel": "Panel de flats"
 }

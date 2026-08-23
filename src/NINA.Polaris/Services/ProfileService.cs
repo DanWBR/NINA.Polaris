@@ -568,7 +568,7 @@ public class ProfileService {
                 Left = p.Left, Top = p.Top, Width = p.Width, Height = p.Height, Z = p.Z,
                 Dock = p.Dock, DockOrder = p.DockOrder,
                 Widgets = p.Widgets.Select(w => new ControlWidgetDef {
-                    Id = w.Id, Label = w.Label, Kind = w.Kind, Source = w.Source,
+                    Id = w.Id, Label = w.Label, Group = w.Group, Kind = w.Kind, Source = w.Source,
                     Path = w.Path, ChannelKey = w.ChannelKey, ControlId = w.ControlId, Which = w.Which,
                     Device = w.Device, Property = w.Property, Element = w.Element, Action = w.Action,
                     Unit = w.Unit, Min = w.Min, Max = w.Max, Step = w.Step, Decimals = w.Decimals

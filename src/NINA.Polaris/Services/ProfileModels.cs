@@ -1410,6 +1410,10 @@ public class ControlPanelDef {
 public class ControlWidgetDef {
     public string Id { get; set; } = "";
     public string Label { get; set; } = "";
+    /// <summary>Human-readable device/group the widget belongs to (e.g. "Mount",
+    /// "Focuser", a camera name, or "device · property" for INDI). Shown as a
+    /// sub-label so the operator can tell which equipment a control drives.</summary>
+    public string? Group { get; set; }
     /// <summary>readout | toggle | slider | number | button | select.</summary>
     public string Kind { get; set; } = "readout";
     /// <summary>equipment | switch | camControl | indi | action.</summary>
