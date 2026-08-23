@@ -5872,6 +5872,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             :class="{ active: equipTab === 'cam-ctrl' }"
                             @click="equipTab = 'cam-ctrl'; camCtrlLoad()"
                             x-text="camCtrlTabLabel()"></button>
+                    <button class="video-tab" :class="{ active: equipTab === 'panels' }"
+                            @click="equipTab = 'panels'; ctrlLoadCatalog(ctrl.catalogSource)">Control Panels</button>
                 </div>
 
                 <!-- ===== Equipment subtab ===== -->
@@ -8522,6 +8524,99 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          x-show="camCtrl.lastError"
                          x-text="'⚠ ' + camCtrl.lastError"></div>
                 </div><!-- /.cam-ctrl subtab -->
+
+                <!-- ===== Control Panels subtab (editor) ===== -->
+                <div x-show="equipTab === 'panels'" class="ctrl-panels-editor">
+                    <p class="hint" style="margin-top:0">
+                        Build floating control panels for the active rig: group live equipment
+                        readouts, switches and inputs into cards you can move, resize and watch on
+                        any tab. Layout and widgets are saved with the rig.
+                    </p>
+
+                    <div class="control-row" style="margin-bottom:10px;flex-wrap:wrap;gap:6px">
+                        <template x-for="p in ctrlPanels()" :key="p.id">
+                            <button class="btn btn-sm" :class="ctrl.editPanelId === p.id ? 'btn-primary' : ''"
+                                    @click="ctrl.editPanelId = p.id">
+                                <span x-text="p.title"></span>
+                                <span x-show="p.visible" title="Visible">👁</span>
+                            </button>
+                        </template>
+                        <button class="btn btn-sm" @click="ctrlAddPanel()">+ New panel</button>
+                    </div>
+
+                    <template x-if="ctrlEditedPanel()">
+                        <div class="ctrl-editor-grid">
+                            <!-- Edited panel: settings + its widgets -->
+                            <div class="settings-section" style="margin:0">
+                                <div class="control-row" style="gap:8px;flex-wrap:wrap">
+                                    <label style="flex:1;min-width:160px">Title
+                                        <input type="text" class="input-md" style="width:100%"
+                                               x-model="ctrlEditedPanel().title" @change="_ctrlSave()">
+                                    </label>
+                                    <label style="display:flex;align-items:center;gap:6px;font-size:12px;align-self:flex-end">
+                                        <input type="checkbox" x-model="ctrlEditedPanel().visible" @change="_ctrlSave()">
+                                        Show floating
+                                    </label>
+                                    <button class="btn btn-sm" @click="ctrlResetPanelPos(ctrlEditedPanel())"
+                                            style="align-self:flex-end">Reset position</button>
+                                    <button class="btn btn-sm btn-danger" @click="ctrlDeletePanel(ctrlEditedPanel())"
+                                            style="align-self:flex-end">Delete panel</button>
+                                </div>
+                                <h3 style="margin-top:12px"><span class="settings-card-icon">🎛</span>Widgets</h3>
+                                <p class="hint" x-show="!ctrlEditedPanel().widgets.length" style="margin-top:0">
+                                    No widgets yet. Pick from the catalog on the right.
+                                </p>
+                                <table style="width:100%;font-size:12px;border-collapse:collapse">
+                                    <template x-for="w in ctrlEditedPanel().widgets" :key="w.id">
+                                        <tr>
+                                            <td style="padding:3px 6px"><span x-text="w.label"></span></td>
+                                            <td style="padding:3px 6px;color:var(--text-muted)" x-text="w.kind"></td>
+                                            <td style="padding:3px 6px">
+                                                <button class="btn btn-sm btn-danger"
+                                                        @click="ctrlRemoveWidget(ctrlEditedPanel(), w)" title="Remove">✕</button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </table>
+                            </div>
+
+                            <!-- Catalog: pick a source, add bindable items -->
+                            <div class="settings-section" style="margin:0">
+                                <h3 style="margin-top:0"><span class="settings-card-icon">➕</span>Add widget</h3>
+                                <div class="control-row" style="gap:4px;flex-wrap:wrap;margin-bottom:8px">
+                                    <button class="btn btn-sm" :class="ctrl.catalogSource==='switch'?'btn-primary':''"
+                                            @click="ctrlLoadCatalog('switch')">Power box</button>
+                                    <button class="btn btn-sm" :class="ctrl.catalogSource==='camControl'?'btn-primary':''"
+                                            @click="ctrlLoadCatalog('camControl')">Camera controls</button>
+                                    <button class="btn btn-sm" :class="ctrl.catalogSource==='indi'?'btn-primary':''"
+                                            @click="ctrlLoadCatalog('indi')">INDI properties</button>
+                                    <button class="btn btn-sm" :class="ctrl.catalogSource==='equipment'?'btn-primary':''"
+                                            @click="ctrlLoadCatalog('equipment')">Equipment</button>
+                                </div>
+                                <p class="hint" x-show="ctrl.catalogLoading" style="margin-top:0">Loading…</p>
+                                <p class="hint" x-show="!ctrl.catalogLoading && !ctrl.catalog.length" style="margin-top:0">
+                                    Nothing available from this source (device not connected?).
+                                </p>
+                                <div class="ctrl-catalog">
+                                    <template x-for="(item, i) in ctrl.catalog" :key="i">
+                                        <div class="ctrl-catalog-row">
+                                            <div style="flex:1;min-width:0">
+                                                <div style="font-size:12px" x-text="item.label"></div>
+                                                <div style="font-size:10px;color:var(--text-muted)"
+                                                     x-text="item.group + ' · ' + item.kind"></div>
+                                            </div>
+                                            <button class="btn btn-sm" @click="ctrlAddWidget(item)"
+                                                    :disabled="!ctrlEditedPanel()">Add</button>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <p class="hint" x-show="!ctrlEditedPanel()">
+                        Create a panel to start, then add widgets to it.
+                    </p>
+                </div><!-- /.ctrl-panels-editor -->
 
                 <!-- Refresh/Disconnect moved to the compact connection
                      strip at the top of the panel, no separate footer
@@ -19427,6 +19522,66 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         <div class="guide-overlay-resize" @pointerdown="guideOverlayResizeStart($event)"
              title="Drag to resize"></div>
     </div>
+
+    <!-- Property Control Panels: SCADA-style floating cards, per rig. Rendered
+         at top level so they float over any tab; built/edited in the RIGS
+         "Control Panels" sub-tab. Geometry + widgets persist on the rig. -->
+    <template x-for="p in ctrlVisiblePanels()" :key="p.id">
+        <div class="rig-control-panel" :style="ctrlPanelStyle(p)"
+             @pointerdown="ctrlPanelFocus(p)" x-cloak>
+            <div class="rig-cp-head" @pointerdown="ctrlPanelDragStart(p, $event)">
+                <span class="rig-cp-title" x-text="p.title"></span>
+                <button class="rig-cp-close" @click="ctrlTogglePanelVisible(p)"
+                        :title="$t('Hide panel')">✕</button>
+            </div>
+            <div class="rig-cp-body">
+                <template x-if="!(p.widgets && p.widgets.length)">
+                    <div class="rig-cp-empty" x-text="$t('Empty panel. Add widgets in RIGS > Control Panels.')"></div>
+                </template>
+                <template x-for="w in (p.widgets || [])" :key="w.id">
+                    <div class="rig-cp-widget" :class="'rig-cp-' + w.kind">
+                        <span class="rig-cp-label" x-text="w.label"></span>
+                        <!-- readout -->
+                        <template x-if="w.kind === 'readout' || w.kind === 'select'">
+                            <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
+                        </template>
+                        <!-- toggle -->
+                        <template x-if="w.kind === 'toggle'">
+                            <button class="rig-cp-toggle" :class="ctrlWidgetBool(w) ? 'on' : ''"
+                                    @click="ctrlWidgetToggle(w)"
+                                    x-text="ctrlWidgetBool(w) ? $t('On') : $t('Off')"></button>
+                        </template>
+                        <!-- button (momentary action) -->
+                        <template x-if="w.kind === 'button'">
+                            <button class="btn btn-sm rig-cp-btn" @click="ctrlWidgetSet(w, null)"
+                                    x-text="$t('Run')"></button>
+                        </template>
+                        <!-- slider -->
+                        <template x-if="w.kind === 'slider'">
+                            <span class="rig-cp-slide">
+                                <input type="range" :min="w.min ?? 0" :max="w.max ?? 100" :step="w.step ?? 1"
+                                       :value="ctrlWidgetValue(w).value ?? w.min ?? 0"
+                                       @change="ctrlWidgetSet(w, $event.target.value)">
+                                <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
+                            </span>
+                        </template>
+                        <!-- number -->
+                        <template x-if="w.kind === 'number'">
+                            <span class="rig-cp-slide">
+                                <input type="number" class="input-sm" style="width:90px"
+                                       :min="w.min" :max="w.max" :step="w.step ?? 1"
+                                       :value="ctrlWidgetValue(w).value"
+                                       @keydown.enter="ctrlWidgetSet(w, $event.target.value)">
+                                <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
+                            </span>
+                        </template>
+                    </div>
+                </template>
+            </div>
+            <div class="rig-cp-resize" @pointerdown="ctrlPanelResizeStart(p, $event)"
+                 :title="$t('Drag to resize')"></div>
+        </div>
+    </template>
 
     <!-- Toast notifications -->
     <!-- Guiding has been worse than this session's normal for a while. Corner

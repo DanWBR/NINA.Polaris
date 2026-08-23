@@ -376,6 +376,45 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
         linear-gradient(135deg, transparent 0 50%, rgba(255,255,255,0.35) 50% 60%, transparent 60% 72%, rgba(255,255,255,0.35) 72% 82%, transparent 82%);
 }
 
+/* Property Control Panels: SCADA-style floating cards (drag/resize mirror the
+   guider overlay; same z-band, below modals/toasts). */
+.rig-control-panel {
+    position: fixed; z-index: 900;
+    background: var(--bg-primary); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+    color: var(--text-primary); display: flex; flex-direction: column;
+    overflow: hidden; user-select: none; touch-action: none;
+    min-width: 180px; min-height: 90px;
+}
+.rig-cp-head {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+    cursor: move; background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+}
+.rig-cp-title { flex: 1; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rig-cp-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; line-height: 1; }
+.rig-cp-body { flex: 1; overflow: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
+.rig-cp-empty { font-size: 11px; color: var(--text-muted); }
+.rig-cp-widget { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.rig-cp-label { flex: 1; min-width: 0; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rig-cp-val { font-variant-numeric: tabular-nums; font-weight: 600; }
+.rig-cp-slide { display: flex; align-items: center; gap: 6px; }
+.rig-cp-slide input[type=range] { width: 110px; }
+.rig-cp-toggle {
+    border: 1px solid var(--border); background: #0f1524; color: var(--text-secondary);
+    border-radius: 4px; padding: 2px 10px; cursor: pointer; font-size: 11px; min-width: 44px;
+}
+.rig-cp-toggle.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rig-cp-resize {
+    position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize;
+    background:
+        linear-gradient(135deg, transparent 0 50%, rgba(255,255,255,0.35) 50% 60%, transparent 60% 72%, rgba(255,255,255,0.35) 72% 82%, transparent 82%);
+}
+
+/* Control Panels editor (RIGS sub-tab). */
+.ctrl-editor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.ctrl-catalog { max-height: 360px; overflow: auto; display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+.ctrl-catalog-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; }
+
 .cal-review-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000;
     display:flex; align-items:center; justify-content:center; }
 .cal-review { background:#0d0f15; border:1px solid #333; border-radius:8px; width:min(720px,92vw);
