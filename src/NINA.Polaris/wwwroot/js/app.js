@@ -30684,12 +30684,13 @@ function ninaApp() {
                 ['Location & time',     ['clock', 'observatory']],
                 ['Equipment & capture', ['hardware', 'indi server', 'indi status', 'plate solving', 'sequencer']],
                 ['AI Tools', ['assistant', 'ai models']],
-                ['Image processing', ['gpu acceleration (opencl)', 'external tools', 'image cache', 'image output', 'colour calibration data']],
+                ['Image processing', ['gpu acceleration (opencl)', 'external tools', 'image cache', 'image output', 'colour calibration data', 'scripts (beta)']],
                 ['Network & security',  ['authentication', 'https certificate',
                     'https endpoints (for webgpu + multi-thread wasm)', 'network (wifi)', 'remote terminal',
                     'auto-push to network storage']],
                 ['System & maintenance', ['debug logging', 'diagnostics', 'hardware benchmark',
-                    'reset everything to factory defaults', 'software update', 'power']],
+                    'reset everything to factory defaults', 'software update', 'power',
+                    'backup & restore', 'scheduled shutdown']],
             ];
             const norm = s => (s || '').replace(/^[^A-Za-z0-9]+/, '').trim().toLowerCase();
             const cards = Array.from(gridEl.querySelectorAll(':scope > .settings-section'))
