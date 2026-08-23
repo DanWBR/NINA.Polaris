@@ -4473,5 +4473,13 @@
   "Create or select a panel first": "Cree o seleccione un panel primero",
   "Control failed": "Error de control",
   "Title": "Título",
-  "Dock to edge": "Acoplar al borde"
+  "Dock to edge": "Acoplar al borde",
+  "Native camera SDKs": "SDK nativos de cámara",
+  "Install the native USB SDK libraries (ZWO, SVBony, Player One, ToupTek, Altair) so those cameras appear as direct native drivers, in addition to INDI. About 100 MB, downloaded on demand.": "Instale las bibliotecas nativas USB (ZWO, SVBony, Player One, ToupTek, Altair) para que esas cámaras aparezcan como controladores nativos directos, además de INDI. Unos 100 MB, se descarga bajo demanda.",
+  "Install native camera SDKs": "Instalar SDK nativos de cámara",
+  "Reinstall": "Reinstalar",
+  "Camera SDKs installed ({n} libs). Native camera drivers are now available.": "SDK de cámara instalados ({n} libs). Los controladores nativos de cámara ya están disponibles.",
+  "Camera SDK pack download failed: ": "Error al descargar el paquete de SDK de cámara: ",
+  "Downloading native camera SDKs. Runs in the background.": "Descargando los SDK nativos de cámara. Se ejecuta en segundo plano.",
+  "Could not start download: ": "No se pudo iniciar la descarga: "
 }
