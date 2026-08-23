@@ -4483,5 +4483,6 @@
   "Downloading native camera SDKs. Runs in the background.": "Téléchargement des SDK caméra natifs. S'exécute en arrière-plan.",
   "Could not start download: ": "Impossible de démarrer le téléchargement : ",
   "Filter wheel": "Roue à filtres",
-  "Flat panel": "Panneau de flats"
+  "Flat panel": "Panneau de flats",
+  "Item scale": "Échelle des éléments"
 }

@@ -1396,6 +1396,10 @@ public class ControlPanelDef {
     public double Height { get; set; } = 200;
     /// <summary>Stacking order; the last panel interacted with gets the highest.</summary>
     public int Z { get; set; }
+    /// <summary>Per-panel content zoom in percent (default 100). Scales the
+    /// widgets inside the panel so a dense panel can be shrunk or a glanceable
+    /// one enlarged, independently of the others.</summary>
+    public double Scale { get; set; } = 100;
     /// <summary>Docked edge: null = free-floating; else "left" | "right" | "top" |
     /// "bottom". Docked panels stack in that edge's rail (content-height), ordered
     /// by <see cref="DockOrder"/>; the free geometry above is kept for undock.</summary>

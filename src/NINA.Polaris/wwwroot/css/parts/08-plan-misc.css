@@ -454,13 +454,15 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
    scrolling inside, instead of the shared card's fixed ~400px with dead space. */
 .ctrl-panels-editor { padding: 8px 16px 16px; display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .ctrl-editor-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-    grid-auto-rows: 1fr; gap: 16px; flex: 1; min-height: 0; align-items: stretch;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 560px));
+    grid-auto-rows: 1fr; gap: 16px; flex: 1; min-height: 0;
+    align-items: stretch; justify-content: start;
 }
-/* Override the shared card's fixed height + supply our own padding (these cards
-   don't lead with an <h3>, whose rules normally provide the card padding). */
+/* Override the shared card's fixed height AND max-width (so the card fills its
+   column instead of leaving dead space beside it) + supply our own padding
+   (these cards don't lead with an <h3>, whose rules normally provide it). */
 .ctrl-editor-grid > .settings-section {
-    height: auto !important; min-height: 0; margin: 0 !important;
+    height: auto !important; min-height: 0; max-width: none; margin: 0 !important;
     padding: 14px 16px; display: flex; flex-direction: column;
 }
 .ctrl-catalog { flex: 1; min-height: 80px; max-height: none; overflow: auto; display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
