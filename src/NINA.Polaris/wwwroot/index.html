@@ -8823,13 +8823,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                 <!-- ===== Control Panels subtab (editor) ===== -->
                 <div x-show="equipTab === 'panels'" class="ctrl-panels-editor">
-                    <p class="hint" style="margin-top:0">
+                    <p class="hint" style="margin:0 0 14px">
                         Build floating control panels for the active rig: group live equipment
                         readouts, switches and inputs into cards you can move, resize and watch on
                         any tab. Layout and widgets are saved with the rig.
                     </p>
 
-                    <div class="control-row" style="margin-bottom:10px;flex-wrap:wrap;gap:6px">
+                    <div class="control-row" style="margin:0 0 16px;flex-wrap:wrap;gap:6px">
                         <template x-for="p in ctrlPanels()" :key="p.id">
                             <button class="btn btn-sm" :class="ctrl.editPanelId === p.id ? 'btn-primary' : ''"
                                     @click="ctrl.editPanelId = p.id">
@@ -8844,36 +8844,36 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <div class="ctrl-editor-grid">
                             <!-- Edited panel: settings + its widgets -->
                             <div class="settings-section" style="margin:0">
-                                <div class="control-row" style="gap:8px;flex-wrap:wrap">
-                                    <label style="flex:1;min-width:160px">Title
-                                        <input type="text" class="input-md" style="width:100%"
-                                               x-model="ctrlEditedPanel().title" @change="_ctrlSave()">
-                                    </label>
-                                    <label style="display:flex;align-items:center;gap:6px;font-size:12px;align-self:flex-end">
+                                <label class="ctrl-field">Title
+                                    <input type="text" class="input-md" style="max-width:280px;width:100%"
+                                           x-model="ctrlEditedPanel().title" @change="_ctrlSave()">
+                                </label>
+                                <div class="ctrl-ed-actions">
+                                    <label class="ctrl-check">
                                         <input type="checkbox" x-model="ctrlEditedPanel().visible" @change="_ctrlSave()">
                                         Show floating
                                     </label>
-                                    <button class="btn btn-sm" @click="ctrlResetPanelPos(ctrlEditedPanel())"
-                                            style="align-self:flex-end">Reset position</button>
-                                    <button class="btn btn-sm btn-danger" @click="ctrlDeletePanel(ctrlEditedPanel())"
-                                            style="align-self:flex-end">Delete panel</button>
+                                    <span style="flex:1"></span>
+                                    <button class="btn btn-sm" @click="ctrlResetPanelPos(ctrlEditedPanel())">Reset position</button>
+                                    <button class="btn btn-sm btn-danger" @click="ctrlDeletePanel(ctrlEditedPanel())">Delete panel</button>
                                 </div>
-                                <h3 style="margin-top:12px"><span class="settings-card-icon">🎛</span>Widgets</h3>
-                                <p class="hint" x-show="!ctrlEditedPanel().widgets.length" style="margin-top:0">
+                                <h4 class="ctrl-sub-h">Widgets</h4>
+                                <p class="hint" x-show="!ctrlEditedPanel().widgets.length" style="margin:0">
                                     No widgets yet. Pick from the catalog on the right.
                                 </p>
-                                <table style="width:100%;font-size:12px;border-collapse:collapse">
+                                <div class="ctrl-wlist" x-show="ctrlEditedPanel().widgets.length">
                                     <template x-for="w in ctrlEditedPanel().widgets" :key="w.id">
-                                        <tr>
-                                            <td style="padding:3px 6px"><span x-text="w.label"></span></td>
-                                            <td style="padding:3px 6px;color:var(--text-muted)" x-text="w.kind"></td>
-                                            <td style="padding:3px 6px">
-                                                <button class="btn btn-sm btn-danger"
-                                                        @click="ctrlRemoveWidget(ctrlEditedPanel(), w)" title="Remove">✕</button>
-                                            </td>
-                                        </tr>
+                                        <div class="ctrl-wrow">
+                                            <span class="ctrl-wname">
+                                                <span x-text="w.label"></span>
+                                                <span class="ctrl-wgroup" x-show="w.group" x-text="'· ' + w.group"></span>
+                                            </span>
+                                            <span class="ctrl-chip" x-text="w.kind"></span>
+                                            <button class="btn btn-sm btn-danger"
+                                                    @click="ctrlRemoveWidget(ctrlEditedPanel(), w)" title="Remove">✕</button>
+                                        </div>
                                     </template>
-                                </table>
+                                </div>
                             </div>
 
                             <!-- Catalog: pick a source, add bindable items -->
@@ -19842,39 +19842,37 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <div class="rig-cp-empty" x-text="$t('Empty panel. Add widgets in RIGS > Control Panels.')"></div>
                 </template>
                 <template x-for="w in (p.widgets || [])" :key="w.id">
-                    <div class="rig-cp-widget" :class="'rig-cp-' + w.kind">
-                        <span class="rig-cp-labelwrap">
-                            <span class="rig-cp-label" x-text="w.label"></span>
-                            <span class="rig-cp-sub" x-show="w.group" x-text="w.group"></span>
+                    <div class="rig-cp-row">
+                        <span class="rig-cp-lab">
+                            <span class="n" x-text="w.label"></span>
+                            <span class="s" x-show="w.group" x-text="w.group"></span>
                         </span>
-                        <template x-if="w.kind === 'readout' || w.kind === 'select'">
-                            <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
-                        </template>
-                        <template x-if="w.kind === 'toggle'">
-                            <button class="rig-cp-toggle" :class="ctrlWidgetBool(w) ? 'on' : ''"
-                                    @click="ctrlWidgetToggle(w)"
-                                    x-text="ctrlWidgetBool(w) ? $t('On') : $t('Off')"></button>
-                        </template>
-                        <template x-if="w.kind === 'button'">
-                            <button class="btn btn-sm rig-cp-btn" @click="ctrlWidgetSet(w, null)" x-text="$t('Run')"></button>
-                        </template>
-                        <template x-if="w.kind === 'slider'">
-                            <span class="rig-cp-slide">
-                                <input type="range" :min="w.min ?? 0" :max="w.max ?? 100" :step="w.step ?? 1"
-                                       :value="ctrlWidgetValue(w).value ?? w.min ?? 0"
-                                       @change="ctrlWidgetSet(w, $event.target.value)">
-                                <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
-                            </span>
-                        </template>
-                        <template x-if="w.kind === 'number'">
-                            <span class="rig-cp-slide">
-                                <input type="number" class="input-sm" style="width:90px"
-                                       :min="w.min" :max="w.max" :step="w.step ?? 1"
+                        <span class="rig-cp-ctl">
+                            <template x-if="w.kind === 'readout' || w.kind === 'select'">
+                                <span class="rig-cp-val" :class="{ empty: ctrlWidgetValue(w).value == null }" x-text="ctrlWidgetDisplay(w)"></span>
+                            </template>
+                            <template x-if="w.kind === 'toggle'">
+                                <button class="rig-cp-toggle" :class="{ on: ctrlWidgetBool(w) }"
+                                        @click="ctrlWidgetToggle(w)"
+                                        x-text="ctrlWidgetBool(w) ? $t('On') : $t('Off')"></button>
+                            </template>
+                            <template x-if="w.kind === 'button'">
+                                <button class="rig-cp-btn" @click="ctrlWidgetSet(w, null)" x-text="$t('Run')"></button>
+                            </template>
+                            <template x-if="w.kind === 'slider'">
+                                <span class="rig-cp-slide">
+                                    <input type="range" :min="w.min ?? 0" :max="w.max ?? 100" :step="w.step ?? 1"
+                                           :value="ctrlWidgetValue(w).value ?? w.min ?? 0"
+                                           @change="ctrlWidgetSet(w, $event.target.value)">
+                                    <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
+                                </span>
+                            </template>
+                            <template x-if="w.kind === 'number'">
+                                <input type="number" class="rig-cp-num" :min="w.min" :max="w.max" :step="w.step ?? 1"
                                        :value="ctrlWidgetValue(w).value"
                                        @keydown.enter="ctrlWidgetSet(w, $event.target.value)">
-                                <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
-                            </span>
-                        </template>
+                            </template>
+                        </span>
                     </div>
                 </template>
             </div>
@@ -19901,39 +19899,37 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             <div class="rig-cp-empty" x-text="$t('Empty panel. Add widgets in RIGS > Control Panels.')"></div>
                         </template>
                         <template x-for="w in (p.widgets || [])" :key="w.id">
-                            <div class="rig-cp-widget" :class="'rig-cp-' + w.kind">
-                                <span class="rig-cp-labelwrap">
-                            <span class="rig-cp-label" x-text="w.label"></span>
-                            <span class="rig-cp-sub" x-show="w.group" x-text="w.group"></span>
-                        </span>
-                                <template x-if="w.kind === 'readout' || w.kind === 'select'">
-                                    <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
-                                </template>
-                                <template x-if="w.kind === 'toggle'">
-                                    <button class="rig-cp-toggle" :class="ctrlWidgetBool(w) ? 'on' : ''"
-                                            @click="ctrlWidgetToggle(w)"
-                                            x-text="ctrlWidgetBool(w) ? $t('On') : $t('Off')"></button>
-                                </template>
-                                <template x-if="w.kind === 'button'">
-                                    <button class="btn btn-sm rig-cp-btn" @click="ctrlWidgetSet(w, null)" x-text="$t('Run')"></button>
-                                </template>
-                                <template x-if="w.kind === 'slider'">
-                                    <span class="rig-cp-slide">
-                                        <input type="range" :min="w.min ?? 0" :max="w.max ?? 100" :step="w.step ?? 1"
-                                               :value="ctrlWidgetValue(w).value ?? w.min ?? 0"
-                                               @change="ctrlWidgetSet(w, $event.target.value)">
-                                        <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
-                                    </span>
-                                </template>
-                                <template x-if="w.kind === 'number'">
-                                    <span class="rig-cp-slide">
-                                        <input type="number" class="input-sm" style="width:90px"
-                                               :min="w.min" :max="w.max" :step="w.step ?? 1"
+                            <div class="rig-cp-row">
+                                <span class="rig-cp-lab">
+                                    <span class="n" x-text="w.label"></span>
+                                    <span class="s" x-show="w.group" x-text="w.group"></span>
+                                </span>
+                                <span class="rig-cp-ctl">
+                                    <template x-if="w.kind === 'readout' || w.kind === 'select'">
+                                        <span class="rig-cp-val" :class="{ empty: ctrlWidgetValue(w).value == null }" x-text="ctrlWidgetDisplay(w)"></span>
+                                    </template>
+                                    <template x-if="w.kind === 'toggle'">
+                                        <button class="rig-cp-toggle" :class="{ on: ctrlWidgetBool(w) }"
+                                                @click="ctrlWidgetToggle(w)"
+                                                x-text="ctrlWidgetBool(w) ? $t('On') : $t('Off')"></button>
+                                    </template>
+                                    <template x-if="w.kind === 'button'">
+                                        <button class="rig-cp-btn" @click="ctrlWidgetSet(w, null)" x-text="$t('Run')"></button>
+                                    </template>
+                                    <template x-if="w.kind === 'slider'">
+                                        <span class="rig-cp-slide">
+                                            <input type="range" :min="w.min ?? 0" :max="w.max ?? 100" :step="w.step ?? 1"
+                                                   :value="ctrlWidgetValue(w).value ?? w.min ?? 0"
+                                                   @change="ctrlWidgetSet(w, $event.target.value)">
+                                            <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
+                                        </span>
+                                    </template>
+                                    <template x-if="w.kind === 'number'">
+                                        <input type="number" class="rig-cp-num" :min="w.min" :max="w.max" :step="w.step ?? 1"
                                                :value="ctrlWidgetValue(w).value"
                                                @keydown.enter="ctrlWidgetSet(w, $event.target.value)">
-                                        <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
-                                    </span>
-                                </template>
+                                    </template>
+                                </span>
                             </div>
                         </template>
                     </div>

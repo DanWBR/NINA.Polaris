@@ -20911,7 +20911,20 @@ function ninaApp() {
             this._ctrlSave();
         },
         ctrlDockNearest(p) { this.ctrlDockPanel(p, this.ctrlNearestEdge(p)); },
-        ctrlUndockPanel(p) { p.dock = null; this._ctrlClamp(p); this.ctrlPanelFocus(p); this._ctrlSave(); },
+        ctrlUndockPanel(p) {
+            p.dock = null;
+            // Give it a guaranteed-visible, staggered position: a docked panel's
+            // stored left/top may be 0,0 (would hide under the top bar) or shared
+            // with siblings (would stack into one). Cascade off how many float now.
+            if (!p.width) p.width = 260;
+            if (!p.height) p.height = 200;
+            const n = Math.max(0, this.ctrlFreePanels().length - 1);
+            p.left = 96 + (n % 6) * 30;
+            p.top = 96 + (n % 6) * 30;
+            this._ctrlClamp(p);
+            this.ctrlPanelFocus(p);
+            this._ctrlSave();
+        },
         ctrlMoveDock(p, dir) {
             const list = this.ctrlDockedPanels(p.dock);
             const i = list.indexOf(p), j = i + dir;
