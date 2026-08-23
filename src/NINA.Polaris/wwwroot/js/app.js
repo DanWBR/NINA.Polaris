@@ -29128,6 +29128,7 @@ function ninaApp() {
                         'Filter wheel still moving:' + (r?.message || 'no settle ack'),
                         'warn');
                 }
+                this._handleFocusMemory(r?.focusMemory);
             } catch (e) {
                 this.toastFail('Filter change failed', e);
             }
@@ -29147,9 +29148,58 @@ function ninaApp() {
                         'Filter wheel still moving:' + (r?.message || 'no settle ack'),
                         'warn');
                 }
+                this._handleFocusMemory(r?.focusMemory);
             } catch (e) {
                 this.toastFail('Filter change failed', e);
             }
+        },
+
+        // Per-filter focus memory: surface what the server did (or suggests) on a
+        // filter change. Quiet for Disabled/Skipped/NoFocuser/NoMemory.
+        _handleFocusMemory(fm) {
+            if (!fm || !fm.status) return;
+            const f = fm.filter || '';
+            switch (fm.status) {
+                case 'Restored':
+                    this.toast(this.$t('Focus restored for {f}', { f })
+                        + (fm.position != null ? ' (' + fm.position + ')' : ''), 'ok');
+                    break;
+                case 'OffsetApplied':
+                    this.toast(this.$t('Applied a learned focus offset for {f}', { f })
+                        + (fm.position != null ? ' (' + fm.position + ')' : ''), 'ok');
+                    break;
+                case 'Suggested':
+                    this.toast(this.$t('Stored focus available for {f} ({p}). Apply from the focuser card.', { f, p: fm.position }), 'info');
+                    break;
+                case 'StaleAfStarted':
+                    this.toast(this.$t('Autofocus started for {f} (stored point stale)', { f }), 'info');
+                    break;
+                case 'StaleAfRecommended':
+                    this.toast(this.$t('Autofocus recommended for {f} (stored point stale)', { f }), 'warn');
+                    break;
+            }
+        },
+        // Force-apply the stored/derived focus point (UI "Apply" button).
+        async applyStoredFocus(filterName) {
+            try {
+                const r = await this.apiPostJson(
+                    `/api/filterwheel/focus-memory/apply/${encodeURIComponent(filterName)}`);
+                this._handleFocusMemory(r?.focusMemory);
+            } catch (e) { this.toastFail(this.$t('Could not apply the stored focus'), e); }
+        },
+        // Forget the learned point for one filter (per-rig memory card).
+        async clearFilterFocusMemory(rig, filterName) {
+            try {
+                await this.apiFetch(
+                    `/api/filterwheel/focus-memory/${encodeURIComponent(filterName)}`, { method: 'DELETE' });
+                if (rig && rig.filterFocusMemory) delete rig.filterFocusMemory[filterName];
+                this.toast(this.$t('Focus memory cleared for {f}', { f: filterName }), 'ok');
+            } catch (e) { this.toastFail(this.$t('Could not clear the focus memory'), e); }
+        },
+        // Persist the per-rig focus-memory toggles/thresholds (autoFocus block).
+        saveFilterMemorySettings(rig) {
+            if (!rig?.autoFocus) return;
+            this.saveRigPatch(rig.id, { autoFocus: rig.autoFocus });
         },
 
         // MOUNT: send the telescope to its mechanical home position.

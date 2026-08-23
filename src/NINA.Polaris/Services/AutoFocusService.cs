@@ -418,6 +418,31 @@ public class AutoFocusService {
                     State = AutoFocusState.Idle;
                 }
 
+                // Per-filter focus memory: record this run's optimum for the
+                // active filter (MAIN train only) + refresh the learned relative
+                // offsets, so a later filter change can reuse it. Best-effort —
+                // a memory write must never fail an otherwise-good autofocus.
+                if (source == "main") {
+                    try {
+                        var rig = _profiles.ActiveEquipmentProfile;
+                        var wheel = _equip.FilterWheel;
+                        var filterName = wheel is { IsConnected: true } ? wheel.CurrentFilterName : null;
+                        if (rig?.AutoFocus?.FilterMemoryEnabled == true
+                                && !string.IsNullOrWhiteSpace(filterName)) {
+                            double tol = rig.AutoFocus.FilterMemoryTempToleranceC;
+                            _profiles.UpdateEquipmentProfile(rig.Id, r =>
+                                Focus.FilterFocusMemoryService.RecordAndRecompute(
+                                    r, filterName!, finalPosition, focuser.Temperature,
+                                    focuser.DeviceName, finalHfr, tol));
+                            _logger.LogInformation(
+                                "Filter focus memory updated: {Filter} → {Pos} @ {T:F1}°C",
+                                filterName, finalPosition, focuser.Temperature);
+                        }
+                    } catch (Exception ex) {
+                        _logger.LogDebug(ex, "Filter focus memory write failed");
+                    }
+                }
+
                 _logger.LogInformation(
                     "Auto-focus complete: start={Start} best={Best} final={Final} predictedHFR={HFR:F2} "
                     + "method={Method} R²={R2:F2} points={P} attempt={A}/{Max}",

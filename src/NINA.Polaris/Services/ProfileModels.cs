@@ -994,6 +994,17 @@ public class EquipmentProfile {
     public Dictionary<string, int> FilterOffsets { get; set; } = new();
 
     /// <summary>
+    /// Learned per-filter focus memory, keyed by effective filter name. Each
+    /// autofocus run on the main train records the optimal focuser position plus
+    /// the temperature and equipment context, so a later filter change can reuse
+    /// a still-valid point instead of re-running a sweep. The relative
+    /// <see cref="FilterOffsets"/> above are derived from these entries. Managed
+    /// by <c>FilterFocusMemoryService</c>; remapped by filter renames the same
+    /// way <see cref="FilterOffsets"/> is.
+    /// </summary>
+    public Dictionary<string, FilterFocusMemory> FilterFocusMemory { get; set; } = new();
+
+    /// <summary>
     /// Auto re-focus + re-center policy applied during live stacking
     /// (LSTR-3). Persisted per-rig because thermal characteristics +
     /// guiding precision vary by setup. Default = all triggers disabled.
@@ -1305,4 +1316,59 @@ public class AutoFocusSettings {
     /// <summary>A sample below this star count is soft-rejected (measure 0,
     /// huge error) instead of feeding a bogus HFR into the fit.</summary>
     public int MinStars { get; set; } = 5;
+
+    // ---- Per-filter focus memory (learned offsets) ----
+    // Each AF run records the optimal focuser position for the active filter
+    // into EquipmentProfile.FilterFocusMemory; on a manual filter change the
+    // FilterFocusMemoryService reuses a still-valid point instead of forcing a
+    // fresh sweep. See FilterFocusMemory + FilterFocusMemoryService.
+
+    /// <summary>Master switch for the per-filter focus memory feature.</summary>
+    public bool FilterMemoryEnabled { get; set; } = true;
+
+    /// <summary>On a manual filter change, move the focuser straight to the
+    /// stored point when it is still valid (same equipment, temperature within
+    /// tolerance, not too old). Off = only suggest it.</summary>
+    public bool FilterMemoryAutoApply { get; set; } = true;
+
+    /// <summary>When the stored point is stale, trigger a fresh autofocus
+    /// automatically instead of only recommending it. Default off (warn).</summary>
+    public bool FilterMemoryAutoRunWhenStale { get; set; }
+
+    /// <summary>Temperature drift (°C) beyond which a stored point is stale.
+    /// Also the window within which two filters' learned points are considered
+    /// comparable when deriving relative offsets.</summary>
+    public double FilterMemoryTempToleranceC { get; set; } = 1.5;
+
+    /// <summary>Maximum age (hours) of a stored point before it is stale.</summary>
+    public double FilterMemoryMaxAgeHours { get; set; } = 12.0;
+
+    /// <summary>Reference filter for the derived relative offsets. Null =
+    /// auto ("L" when present, else the filter with the newest memory).</summary>
+    public string? FilterOffsetReference { get; set; }
+}
+
+/// <summary>
+/// One learned optimal focus point for a filter, with the context needed to
+/// decide later whether it can still be trusted. Stored per rig in
+/// <see cref="EquipmentProfile.FilterFocusMemory"/>.
+/// </summary>
+public class FilterFocusMemory {
+    /// <summary>Focuser position the last successful autofocus landed on for
+    /// this filter (absolute steps).</summary>
+    public int Position { get; set; }
+
+    /// <summary>Focuser probe temperature (°C) at that run, NaN when the
+    /// focuser has no probe. Used for the staleness check.</summary>
+    public double TemperatureC { get; set; } = double.NaN;
+
+    /// <summary>When the point was learned (UTC).</summary>
+    public DateTime Utc { get; set; }
+
+    /// <summary>Focuser device name at the run, an equipment-change proxy: a
+    /// different focuser invalidates the absolute position.</summary>
+    public string? FocuserName { get; set; }
+
+    /// <summary>Predicted/measured HFR at the point, for display only.</summary>
+    public double? Hfr { get; set; }
 }

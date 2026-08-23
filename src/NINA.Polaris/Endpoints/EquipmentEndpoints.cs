@@ -420,6 +420,11 @@ public static class EquipmentEndpoints {
                 if (update.PHD2CustomAlgoParams != null)
                     r.PHD2CustomAlgoParams = update.PHD2CustomAlgoParams;
                 r.FilterOffsets = update.FilterOffsets ?? new();
+                // FilterFocusMemory is intentionally NOT copied here: it is
+                // learned server-side by autofocus and cleared through the
+                // dedicated /api/filterwheel/focus-memory endpoints. Leaving it
+                // untouched means a stale whole-rig PUT from the client cannot
+                // wipe focus points recorded after that client loaded its rigs.
                 // Live-stack triggers (LSTR-2). Defensive null check
                 // keeps old clients from clobbering the field.
                 if (update.LiveStackTriggers != null)

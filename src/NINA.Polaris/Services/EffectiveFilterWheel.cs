@@ -149,6 +149,19 @@ public sealed class EffectiveFilterWheel : IFilterWheel {
                     }
                     r.FilterOffsets = remapped;
                 }
+                // Same slot-based remap for the learned focus memory, so a
+                // rename doesn't orphan a stored focus point.
+                if (r.FilterFocusMemory != null && r.FilterFocusMemory.Count > 0) {
+                    var remapped = new Dictionary<string, FilterFocusMemory>(r.FilterFocusMemory);
+                    for (int i = 0; i < final.Length && i < before.Length; i++) {
+                        if (!string.Equals(before[i], final[i], StringComparison.Ordinal)
+                            && remapped.TryGetValue(before[i], out var mem)) {
+                            remapped.Remove(before[i]);
+                            remapped[final[i]] = mem;
+                        }
+                    }
+                    r.FilterFocusMemory = remapped;
+                }
             });
         }
 
