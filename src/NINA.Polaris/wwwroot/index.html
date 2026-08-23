@@ -19525,14 +19525,23 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
     <!-- Property Control Panels: SCADA-style floating cards, per rig. Rendered
          at top level so they float over any tab; built/edited in the RIGS
-         "Control Panels" sub-tab. Geometry + widgets persist on the rig. -->
-    <template x-for="p in ctrlVisiblePanels()" :key="p.id">
+         "Control Panels" sub-tab. Free panels float; docked panels stack in a
+         rail on their edge (content-height). Geometry + widgets persist on the rig. -->
+
+    <!-- Dock hint: highlight the edge a dragged panel will snap to. -->
+    <template x-for="edge in ['left','right','top','bottom']" :key="'hint-' + edge">
+        <div class="rig-cp-dockhint" :class="'rig-cp-rail-' + edge"
+             x-show="ctrl.dockHint === edge" x-cloak></div>
+    </template>
+
+    <!-- Free-floating panels -->
+    <template x-for="p in ctrlFreePanels()" :key="p.id">
         <div class="rig-control-panel" :style="ctrlPanelStyle(p)"
              @pointerdown="ctrlPanelFocus(p)" x-cloak>
             <div class="rig-cp-head" @pointerdown="ctrlPanelDragStart(p, $event)">
                 <span class="rig-cp-title" x-text="p.title"></span>
-                <button class="rig-cp-close" @click="ctrlTogglePanelVisible(p)"
-                        :title="$t('Hide panel')">✕</button>
+                <button class="rig-cp-close" @click="ctrlDockNearest(p)" :title="$t('Dock to edge')">⤓</button>
+                <button class="rig-cp-close" @click="ctrlTogglePanelVisible(p)" :title="$t('Hide panel')">✕</button>
             </div>
             <div class="rig-cp-body">
                 <template x-if="!(p.widgets && p.widgets.length)">
@@ -19541,22 +19550,17 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <template x-for="w in (p.widgets || [])" :key="w.id">
                     <div class="rig-cp-widget" :class="'rig-cp-' + w.kind">
                         <span class="rig-cp-label" x-text="w.label"></span>
-                        <!-- readout -->
                         <template x-if="w.kind === 'readout' || w.kind === 'select'">
                             <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
                         </template>
-                        <!-- toggle -->
                         <template x-if="w.kind === 'toggle'">
                             <button class="rig-cp-toggle" :class="ctrlWidgetBool(w) ? 'on' : ''"
                                     @click="ctrlWidgetToggle(w)"
                                     x-text="ctrlWidgetBool(w) ? $t('On') : $t('Off')"></button>
                         </template>
-                        <!-- button (momentary action) -->
                         <template x-if="w.kind === 'button'">
-                            <button class="btn btn-sm rig-cp-btn" @click="ctrlWidgetSet(w, null)"
-                                    x-text="$t('Run')"></button>
+                            <button class="btn btn-sm rig-cp-btn" @click="ctrlWidgetSet(w, null)" x-text="$t('Run')"></button>
                         </template>
-                        <!-- slider -->
                         <template x-if="w.kind === 'slider'">
                             <span class="rig-cp-slide">
                                 <input type="range" :min="w.min ?? 0" :max="w.max ?? 100" :step="w.step ?? 1"
@@ -19565,7 +19569,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
                             </span>
                         </template>
-                        <!-- number -->
                         <template x-if="w.kind === 'number'">
                             <span class="rig-cp-slide">
                                 <input type="number" class="input-sm" style="width:90px"
@@ -19580,6 +19583,62 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </div>
             <div class="rig-cp-resize" @pointerdown="ctrlPanelResizeStart(p, $event)"
                  :title="$t('Drag to resize')"></div>
+        </div>
+    </template>
+
+    <!-- Docked rails: one per edge, panels stacked content-height -->
+    <template x-for="edge in ['left','right','top','bottom']" :key="'rail-' + edge">
+        <div class="rig-cp-rail" :class="'rig-cp-rail-' + edge"
+             x-show="ctrlDockedPanels(edge).length" x-cloak>
+            <template x-for="p in ctrlDockedPanels(edge)" :key="p.id">
+                <div class="rig-control-panel docked">
+                    <div class="rig-cp-head">
+                        <span class="rig-cp-title" x-text="p.title"></span>
+                        <button class="rig-cp-close" @click="ctrlMoveDock(p, -1)" :title="$t('Move up')">↑</button>
+                        <button class="rig-cp-close" @click="ctrlMoveDock(p, 1)" :title="$t('Move down')">↓</button>
+                        <button class="rig-cp-close" @click="ctrlUndockPanel(p)" :title="$t('Undock')">⤢</button>
+                        <button class="rig-cp-close" @click="ctrlTogglePanelVisible(p)" :title="$t('Hide panel')">✕</button>
+                    </div>
+                    <div class="rig-cp-body">
+                        <template x-if="!(p.widgets && p.widgets.length)">
+                            <div class="rig-cp-empty" x-text="$t('Empty panel. Add widgets in RIGS > Control Panels.')"></div>
+                        </template>
+                        <template x-for="w in (p.widgets || [])" :key="w.id">
+                            <div class="rig-cp-widget" :class="'rig-cp-' + w.kind">
+                                <span class="rig-cp-label" x-text="w.label"></span>
+                                <template x-if="w.kind === 'readout' || w.kind === 'select'">
+                                    <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
+                                </template>
+                                <template x-if="w.kind === 'toggle'">
+                                    <button class="rig-cp-toggle" :class="ctrlWidgetBool(w) ? 'on' : ''"
+                                            @click="ctrlWidgetToggle(w)"
+                                            x-text="ctrlWidgetBool(w) ? $t('On') : $t('Off')"></button>
+                                </template>
+                                <template x-if="w.kind === 'button'">
+                                    <button class="btn btn-sm rig-cp-btn" @click="ctrlWidgetSet(w, null)" x-text="$t('Run')"></button>
+                                </template>
+                                <template x-if="w.kind === 'slider'">
+                                    <span class="rig-cp-slide">
+                                        <input type="range" :min="w.min ?? 0" :max="w.max ?? 100" :step="w.step ?? 1"
+                                               :value="ctrlWidgetValue(w).value ?? w.min ?? 0"
+                                               @change="ctrlWidgetSet(w, $event.target.value)">
+                                        <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
+                                    </span>
+                                </template>
+                                <template x-if="w.kind === 'number'">
+                                    <span class="rig-cp-slide">
+                                        <input type="number" class="input-sm" style="width:90px"
+                                               :min="w.min" :max="w.max" :step="w.step ?? 1"
+                                               :value="ctrlWidgetValue(w).value"
+                                               @keydown.enter="ctrlWidgetSet(w, $event.target.value)">
+                                        <span class="rig-cp-val" x-text="ctrlWidgetDisplay(w)"></span>
+                                    </span>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
         </div>
     </template>
 
