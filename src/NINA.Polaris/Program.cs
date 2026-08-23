@@ -605,6 +605,9 @@ builder.Services.AddSingleton<NINA.Polaris.Services.External.DssDownloadService>
 // THUMBPACK: on-demand downloader for the full DSO thumbnail set, excluded from
 // the package to keep it slim. Serves from the download dir + bundled core subset.
 builder.Services.AddSingleton<NINA.Polaris.Services.External.DsoThumbPackService>();
+// On-demand native camera-SDK pack (Linux .so files for ASI/SVBony/PlayerOne/
+// ToupTek/Altair), installed from the Software Updates card.
+builder.Services.AddSingleton<NINA.Polaris.Services.External.CameraSdkPackService>();
 // Camera sensor analysis (e/ADU, read noise, full well, dynamic range
 // vs gain via the photon-transfer-curve method). On-demand, like the
 // benchmark; launched from the Equipment camera card.
@@ -638,6 +641,16 @@ builder.Services.AddSingleton(sp =>
 });
 
 var app = builder.Build();
+
+// Export the writable native-SDK pack dir so the per-vendor camera resolvers
+// (SvbonyRegistry etc., in decoupled SDK assemblies) probe it for the on-demand
+// camera-SDK pack — the .deb app dir (/opt/polaris) isn't writable, so the pack
+// lands under the profile data dir instead. Set before any camera probe runs.
+try {
+    var _sdkDir = NINA.Polaris.Services.External.CameraSdkPackService.PackDir(
+        app.Services.GetRequiredService<NINA.Polaris.Services.ProfileService>().DataDir);
+    Environment.SetEnvironmentVariable(NINA.Image.NativeLibs.NativeSdkProbe.EnvVar, _sdkDir);
+} catch { /* non-fatal: resolvers just fall back to base dir + OS loader */ }
 
 // The cert had to be built before this point, so it ran against a NullLogger
 // and everything it decided about the user's certificate was thrown away.
@@ -1398,6 +1411,7 @@ app.MapDssEndpoints();
 app.MapCanopusEndpoints();
 app.MapDsoThumbPackEndpoints();
 app.MapNcnnModelPackEndpoints();
+app.MapCameraSdkPackEndpoints();
 app.MapGraXpertEndpoints();
 app.MapUpdateEndpoints();
 // STORAGE-1/2: capture-disk survey, format and mount. A SEPARATE map from
