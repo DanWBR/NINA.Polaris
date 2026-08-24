@@ -136,6 +136,17 @@ change them if the rig lives anywhere a stranger might wander past:
 a name of 1 to 32 characters and a WPA2 password of 8 to 63.
 Devices on the old name are disconnected; rejoin with the new one.
 
+### Choosing the hotspot radio
+
+Some hosts carry more than one WiFi radio, most often the board's
+built-in one plus an external USB antenna added for range. When Polaris
+sees more than one, a **Hotspot adapter** picker appears in
+**SETTINGS**, **Network**. Choose a radio and Polaris rebinds both the
+hotspot and station mode to it, so you can serve `Polaris-Hotspot` from
+a high-gain USB antenna instead of the weaker built-in radio. The
+picker is reachable in either mode; with a single radio it is hidden,
+since there is nothing to choose.
+
 ### When the panel is read-only
 
 WiFi management needs Linux with NetworkManager, the standard Linux
@@ -153,8 +164,9 @@ explains itself with a banner when it cannot help:
   system, and works alongside either WiFi mode.
 
 A few limits worth knowing: the hotspot runs on 2.4 GHz only, for
-maximum client compatibility; only one WiFi adapter is supported;
-and both modes use WPA2, not WPA3.^[For the curious: Polaris drives
+maximum client compatibility; the hotspot and station share a single
+adapter at a time, the one chosen in the picker above; and both modes
+use WPA2, not WPA3.^[For the curious: Polaris drives
 NetworkManager through `nmcli` as the unprivileged `polaris` system
 user, authorized by a PolicyKit rule the `.deb` installs at
 `/etc/polkit-1/rules.d/50-polaris-nm.rules` that grants that user
