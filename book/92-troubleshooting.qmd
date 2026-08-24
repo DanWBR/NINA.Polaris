@@ -166,6 +166,37 @@ Calibrate. Work down this checklist:
    set the blind solver to **Astrometry.net online** and retry. Slow
    (about 30 s) but it needs no hints.
 
+## Plate solving or centering fails with "No space left on device"
+
+**"No space left on device : '/tmp/nina_solve_...fits'"** during Slew &
+Center, plate solving, or polar alignment, even though your SSD has
+hundreds of gigabytes free. The disk is not the problem: on the
+Raspberry Pi and single-board-computer images `/tmp` is a RAM-backed
+filesystem (tmpfs), not part of the SSD, and it is small. A 4 GB board
+gives `/tmp` only a couple of gigabytes, shared with everything else,
+so the temporary FITS these operations write fills it in seconds while
+the SSD sits nearly empty.
+
+The fix shipped in **v0.98.47**: Polaris now points its temporary
+directory at the SSD-backed data folder on startup, so solve,
+centering, polar alignment and live-stack scratch all write to the SSD.
+Update to that version or newer (the one-click updater, or reflash the
+current image) and it is handled.
+
+On an older build you can redirect it yourself over SSH, without
+updating, by pointing the service's temp dir at `/var/tmp` (which lives
+on the SSD):
+
+```bash
+sudo mkdir -p /etc/systemd/system/polaris.service.d
+printf '[Service]\nEnvironment=TMPDIR=/var/tmp\n' | sudo tee /etc/systemd/system/polaris.service.d/tmpdir.conf
+sudo systemctl daemon-reload
+sudo systemctl restart polaris.service
+```
+
+Do not simply enlarge `/tmp` on a 4 GB board: tmpfs is RAM, and the
+memory you hand it is memory taken from live stacking.
+
 ## PHD2 calibration fails
 
 **"Calibration aborted"**. The most common cause is the guide star

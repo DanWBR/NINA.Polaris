@@ -358,6 +358,44 @@ A few things to know about it:
   colour): a bright outlier drops the whole RGB
   triple so the colour balance is not skewed.
 
+## Removing hot pixels
+
+The **Remove hot pixels** checkbox (🔥) in the LIVE tab is a second,
+complementary defence, and it is **on by default**. Where kappa-sigma
+rejection catches *transient* outliers (a cosmic ray, a satellite
+trail), this catches the *fixed* defects the sensor produces every
+frame: hot pixels that read far too bright and cold pixels that read
+far too dark.
+
+Those fixed defects are exactly what per-pixel rejection struggles
+with. On a one-shot-colour sensor the frame is debayered and then
+warped into alignment, and both steps are interpolations: a single hot
+Bayer site is smeared into fractional contributions spread across
+several output pixels, and a slightly different set of pixels each
+frame once you dither. No single contribution is far enough from the
+mean to trip the threshold, but they sum into a faint wandering trail
+that is usually green (a Bayer cell has two green sites, and green
+carries most of the luminance). Reject-outliers cannot see it; this
+can.
+
+It works by running a cosmetic pass on each sub *before* debayer and
+warp, in the sensor's own orientation and at full resolution, so it
+operates on the raw defect while it is still a single pixel. On a
+colour sensor the pass is Bayer-aware, so it never treats a normal
+colour difference as a defect. A few things to know:
+
+- It works from the very first frame, with or without dithering, and
+  needs no master dark. If you already shoot calibrated with a good
+  dark, the two simply agree.
+- It complements rejection rather than replacing it: leave both on for
+  the cleanest result, cosmetic for the fixed defects and kappa-sigma
+  for the transients.
+- Polaris reads the toggle live on every frame, so turning it on or
+  off takes effect immediately, with no **Reset**.
+- The setting lives on `EquipmentProfile.LiveStackCosmetic`, per rig.
+  If you ever see faint stars getting clipped, turn it off for that
+  rig; on a well-behaved sensor there is no reason to.
+
 ## The refocus suggestion
 
 The auto re-focus path only fires when you have a motorized focuser

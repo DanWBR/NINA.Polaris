@@ -329,6 +329,35 @@ Triggers panel (@sec-autorun). Live stacking in the LIVE tab
 evaluates the same four trigger types per integrated frame, and
 captures pause naturally while AF runs (@sec-live-stacking).
 
+## Per-filter focus memory
+
+Every filter comes to focus at a slightly different point, so a filter
+change normally means another full auto-focus run. Polaris shortens
+that. Each time auto-focus succeeds on the imaging train it records the
+winning position for the filter that was in the beam, per rig, together
+with the temperature and the focuser it ran on. Over a few filters it
+learns not just each absolute position but the offsets between them.
+
+On the next filter change it uses that memory. If the stored point is
+still trustworthy, Polaris moves the focuser straight to it and skips
+the auto-focus run; on a filter you have not focused yet it applies the
+learned offset from one you have. This is opt-in per rig: leave the
+auto-move toggle off and the memory is only ever a recommendation.
+
+The point is only reused while it is still valid. If the focuser has
+been swapped, or the temperature has drifted far enough that the old
+position no longer holds, Polaris does not silently trust a stale
+number: it flags the filter as needing focus and recommends a fresh
+auto-focus run instead of moving to a guess. The memory is held on the
+server per rig, so it survives reconnects and a browser refresh, and a
+partial rig save never wipes it.
+
+Two habits get the most out of it: run a real auto-focus on each filter
+once at the start of a session so the memory is seeded from that
+night's conditions, and keep the auto re-focus temperature trigger on
+(@sec-live-stacking) so a long drift still forces a genuine pass rather
+than riding an increasingly stale offset.
+
 ## Common pitfalls
 
 **HFR comes back as 0.** No stars were detected. Increase the

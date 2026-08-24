@@ -595,6 +595,45 @@ description. The built-in descriptions live in
 profile, so a factory reset clears them along with the rest of your
 settings (@sec-administration).
 
+## Property control panels
+
+Where the INDI Control Panel shows you *everything* a driver exposes,
+**property control panels** let you build your own small dashboards of
+just the handful of readings and controls you actually watch on a given
+night, in a SCADA-style floating card you can put anywhere on screen.
+
+You build them in the **Control Panels** sub-tab of the RIGS
+tabstrip. Create a panel, give it a title, then add widgets. Each
+widget binds to one of four sources:
+
+- a **power-box switch** channel (on/off or a value);
+- a **native camera control** (gain, offset, cooler target, and so on);
+- **any INDI property** element, chosen by device and property;
+- a **typed equipment field or action** (cooler on/target, tracking,
+  park and unpark, focuser position, filter, rotator angle, flat panel,
+  dome shutter).
+
+Polaris suggests the right widget kind from the target's metadata: a
+read-only value becomes a **readout**, a boolean a **toggle**, a ranged
+number a **slider** or **number** box, an action a **button**. Live
+values update on their own, once a second for equipment and switch
+readings and on a short poll for camera and INDI values, and only while
+a panel that needs them is visible.
+
+The panels float **over every tab**, not just RIGS, so you can leave a
+cooler-and-focus panel open while you work in PREVIEW or LIVE. Drag the
+header to move a panel, drag its corner to resize it (the same handles
+as the guiding overlay, @sec-guiding), and click one to bring it to the
+front. Drag a panel near a screen edge to **dock** it: docked panels
+stack in a rail down that side, several sharing the edge with no wasted
+height, and you reorder them with the ↑/↓ buttons or pop one back out
+with **undock**.
+
+Everything about a panel, its widgets, size, position, and dock, is
+saved **per rig**, so your panels follow the active rig and come back
+after a reconnect or a browser refresh. Save a rig As a new one and the
+layout comes with it.
+
 ## ASCOM (COM, direct) on Windows
 
 On Windows, Polaris can talk to your ASCOM Platform drivers directly
@@ -726,12 +765,18 @@ and live video) go through the SDK while it is the active driver.
 
 ### Platforms and packaging
 
-The native libraries ship bundled in the package per architecture:
-Linux arm64 and x64 (`.so` library files) and Windows x64 (`.dll`
-library files), copied next to the executable in the published build
-with no separate download.
-(PlayerOne additionally ships arm32 and x86 `.so` files in its SDK,
-though Polaris packages arm64 and x64.) On Linux, the `.deb` installs
+On **Windows** the native vendor libraries (`.dll` files) ship inside
+the package, copied next to the executable with no separate download.
+On **Linux** the `.so` libraries are **not** in the base package: they
+are large and most users need only one vendor, so they are installed on
+demand from **SETTINGS**, **Software Updates**, under **Native camera
+SDKs**. The **Install native camera SDKs** button downloads the pack
+for your architecture (arm64 or x64) and unpacks it into the profile
+data directory, where the per-vendor resolvers pick it up. Until the
+pack is installed the "(SDK, native)" driver options do not appear in
+the RIGS picker and the INDI driver remains available; after installing,
+replug the camera once and the native entries show up. On Linux, the
+`.deb` installs
 udev rules^[udev is the part of Linux that reacts when hardware is
 plugged in; a udev rule is a small text file telling it who may use
 a device.]
@@ -752,7 +797,7 @@ fps, transmit fps, record fps, and dropped frames.
 
 ### Maturity
 
-| Backend | Native libs bundled | Validated on hardware |
+| Backend | Native libs available^[Windows bundled; Linux via the on-demand pack above.] | Validated on hardware |
 |---|---|---|
 | SVBony | Linux arm64/x64, Windows x64 | SV405CC (Pi 5, USB3) |
 | ZWO ASI | Linux arm64/x64, Windows x64 | not yet |
