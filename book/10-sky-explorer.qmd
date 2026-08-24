@@ -248,12 +248,12 @@ to move one, right-click to delete. Two ways to build it:
   the common az/alt formats other planners export) with **Import
   file**, and **Export** to save yours back out.
 
-Once set, the horizon does three things: it overlays on the sky map and
-the altitude chart so you can see at a glance where a target clears it;
-the **Tonight** ranking accounts for it, so objects that never rise
-above your obstructions are not recommended; and it feeds the mount's
-slew-safety altitude floor (@sec-mounts), so a GoTo below your horizon
-is refused rather than driving the tube into the trees.
+Once set, the horizon is honoured across the app. It overlays on the
+sky map and the altitude chart so you can see at a glance where a target
+clears it. The **Tonight** ranking accounts for it, so objects that
+never rise above your obstructions are not recommended. And it feeds the
+mount's slew-safety altitude floor (@sec-mounts), so a GoTo below your
+horizon is refused rather than driving the tube into the trees.
 
 ## Field-of-view overlays and framing
 

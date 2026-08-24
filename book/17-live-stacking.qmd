@@ -375,8 +375,8 @@ several output pixels, and a slightly different set of pixels each
 frame once you dither. No single contribution is far enough from the
 mean to trip the threshold, but they sum into a faint wandering trail
 that is usually green (a Bayer cell has two green sites, and green
-carries most of the luminance). Reject-outliers cannot see it; this
-can.
+carries most of the luminance). Per-pixel rejection cannot catch that;
+a cosmetic pass on the raw sub can.
 
 It works by running a cosmetic pass on each sub *before* debayer and
 warp, in the sensor's own orientation and at full resolution, so it

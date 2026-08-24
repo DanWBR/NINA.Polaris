@@ -631,7 +631,7 @@ with **undock**.
 
 Everything about a panel, its widgets, size, position, and dock, is
 saved **per rig**, so your panels follow the active rig and come back
-after a reconnect or a browser refresh. Save a rig As a new one and the
+after a reconnect or a browser refresh. Save a rig as a new one and the
 layout comes with it.
 
 ## ASCOM (COM, direct) on Windows
