@@ -43,6 +43,17 @@ and begins writing every frame to a SER file at
 counter shows frames and bytes written, with a dropped-frame warning
 if the writer cannot keep up with the stream.
 
+Most planetary cameras digitize at 10, 12, or 14 bits, below the SER
+container's 16. When the frames come from a native-SDK camera at one of
+those depths, Polaris writes them **left-aligned** (shifted up so the
+most significant bit is at the top of the 16-bit word), which is what
+AutoStakkert!, ASIVideoStack, PIPP and the other stackers assume. Left
+as the raw right-aligned ADC values, those tools would read the video
+as far too dark and, on a colour sensor, with a wrong colour cast that
+persists even after you set the Bayer pattern by hand. With the
+alignment handled at record time, your `.ser` files open with correct
+brightness and colour in an external stacker straight away.
+
 ![The Capture sub-tab streaming the Moon: the live preview, scroller
 controls for exposure, gain, and more, the record shutter, the live
 capture and transmit frame rates on the Stop Stream button, and the

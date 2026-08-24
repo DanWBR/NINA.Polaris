@@ -219,9 +219,41 @@ the best objects to image for your location and date, drawing
 altitude curves with the twilight and night windows. The ranking
 also surfaces large emission and dark nebulae that carry angular size
 but no stellar magnitude, so photogenic targets do not vanish just
-because they lack a catalog brightness. A **Weather** view shows
-current conditions and the forecast for the observing site, so you
-can judge whether the plan survives the clouds.
+because they lack a catalog brightness. Galaxies get the same
+treatment: the ranking reaches down to a fainter magnitude for them and
+gates on object type rather than a single brightness cut, so faint but
+worthwhile galaxies show up instead of being trimmed away with the
+truly out-of-reach ones. A **Weather** view shows current conditions
+and the forecast for the observing site, so you can judge whether the
+plan survives the clouds.
+
+## Custom horizon
+
+Trees, roofs, and hills all cut into the sky you can actually image, and
+a target that looks well-placed on the altitude chart is useless if it
+sits behind your neighbour's roof. Polaris lets you draw your real
+local horizon and then respects it everywhere.
+
+Open **SETTINGS** and find **Custom horizon** (🌄). It is an
+azimuth/altitude mask: a canvas where the horizontal axis is compass
+azimuth and the vertical axis is altitude. Click to add a point, drag
+to move one, right-click to delete. Two ways to build it:
+
+- **Capture from the mount.** Point the scope at the top of a real
+  obstacle (a tree, the roofline) and click **Horizon point** (also on
+  the mount controls) to record the scope's current azimuth and
+  altitude as a point. Walk the horizon obstacle by obstacle and you
+  trace your true skyline.
+- **Import a file.** Load a horizon file (`.hrz`, `.txt`, or `.csv`,
+  the common az/alt formats other planners export) with **Import
+  file**, and **Export** to save yours back out.
+
+Once set, the horizon does three things: it overlays on the sky map and
+the altitude chart so you can see at a glance where a target clears it;
+the **Tonight** ranking accounts for it, so objects that never rise
+above your obstructions are not recommended; and it feeds the mount's
+slew-safety altitude floor (@sec-mounts), so a GoTo below your horizon
+is refused rather than driving the tube into the trees.
 
 ## Field-of-view overlays and framing
 
