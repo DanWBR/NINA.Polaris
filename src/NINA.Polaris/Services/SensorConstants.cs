@@ -51,6 +51,11 @@ public static class SensorConstants {
         // ZWO ASI2600MC/MM Pro: 16-bit ADC, 73 ke- full well, HCG @ 100.
         ("ASI2600", 0,   1.114,  3.30, 73000),
         ("ASI2600", 100, 0.250,  1.50, 18000),
+        // ZWO ASI183MC/MM Pro: 12-bit ADC (×16 → 16-bit); unity gain ~120,
+        // full well 15 ke- (gain 0), no HCG step. Values read off the chart at
+        // gain 111 (a common working point): e/ADU 12-bit ~1.05 → 0.066 16-bit.
+        ("ASI183",  0,   0.225,  3.00, 15000),
+        ("ASI183",  111, 0.066,  2.15,  4100),
     };
 
     public static bool TryFallback(string? camera, int gain, out Constants constants) {
