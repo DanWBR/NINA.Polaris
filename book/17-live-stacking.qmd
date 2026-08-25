@@ -221,6 +221,63 @@ client posts `client-stack-progress` messages, and the server's
 `InjectClientStackMetrics` feeds the same ETA calculator and
 WebSocket payload.]
 
+## Sub-exposure advice
+
+Next to the SNR and ETA, the quality box shows a **Sub** hint: the
+sub-exposure length that best suits the sky you are actually shooting
+under. It comes from the classic "swamp the read noise" rule (Robin
+Glover's *The Ideal Exposure*): make each sub just long enough that the
+sky background's own shot noise dominates the camera's fixed read noise,
+after which longer subs stop improving the stacked result and only risk
+saturation and lost frames.
+
+Polaris measures the sky for you: the background level of each frame
+(its median, above the camera's offset) gives the sky rate in
+electrons per pixel per second, and the sensor's read noise and gain
+(electrons per ADU) turn that into an optimal sub length. Those sensor
+constants are exact if you have run **Sensor Analysis** for the camera
+(the hint reads *from Sensor Analysis*); otherwise Polaris falls back to
+the manufacturer's published gain curve for common cameras and marks
+the hint *estimated*. A ⚠ next to the number means the recommendation
+was pulled down by star saturation rather than by the read-noise
+criterion.
+
+Treat it as a floor, not a target. A bright broadband sky might swamp
+the read noise in a second or two, while narrowband under a dark sky can
+justify minutes; imagers routinely expose narrowband longer than the
+minimum to lift faint signal and cut down the frame count. The hint
+tells you when you are wasting exposure fighting read noise, or clipping
+stars for nothing, not that you must shoot exactly that length.
+
+## Partial-stack checkpoints
+
+The **Checkpoints** tab in the triggers panel auto-saves the running
+stack to disk as it grows: every N integrated frames, or every N minutes
+of integration, or both. Each checkpoint is a full stacked master FITS
+in a `checkpoints/` folder beside the target's subs, separate from the
+masters you save by hand. **Keep last** prunes to the most recent few so
+they do not pile up (0 keeps them all).
+
+Two things this buys you. First, a **safety net**: if the session is
+interrupted, the last checkpoint holds the integration up to that point
+rather than losing the night. Second, a **quality record**: each
+checkpoint is logged with the frame count, elapsed time, SNR and HFR
+that produced it, and **Export quality CSV** writes the whole
+SNR/HFR-over-time timeline out for inspection later.
+
+## Auto-stop and quality alerts
+
+Turn on **Stop capture when Target SNR is reached** (same tab) and
+Polaris ends the LIVE capture loop the moment the stack's cumulative SNR
+crosses the Target SNR you set in the quality box, so an unattended
+session finishes on quality rather than running until dawn.
+
+Polaris also watches the SNR and HFR trends and raises a toast when the
+curves show trouble: a per-frame SNR that falls away while HFR stays put
+means light is being lost (clouds or sky glow), and an HFR that climbs
+while the stack stops gaining SNR means the stars are bloating (focus
+drift). The alerts are throttled so a passing cloud does not spam you.
+
 ## Auto re-focus and re-center
 
 Long sessions degrade: focus drifts with temperature, and mount drift
