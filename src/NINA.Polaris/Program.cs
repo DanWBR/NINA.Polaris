@@ -234,6 +234,9 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.KeepCenteredServic
 // Eagerly resolved alongside PHD2ProfileSyncService below so the
 // subscription wires at startup, not on first /api/livestack/triggers/* hit.
 builder.Services.AddSingleton<LiveStackTriggersService>();
+// Partial-stack checkpoints: subscribes to the frame stream at
+// construction and writes the running stack to checkpoints/ on a cadence.
+builder.Services.AddSingleton<LiveStackCheckpointService>();
 // REFSUG-1: trend-based refocus suggestion. Listens to the same
 // FrameIntegrated event as LSTR-3 but only when RefocusEnabled is
 // OFF — covers manual-focuser users who cannot be auto-fired.
@@ -731,6 +734,10 @@ app.Services.GetRequiredService<PHD2ProfileSyncService>();
 // is hit, and any frames stacked before then would skip auto-refocus
 // / auto-recenter evaluation.
 app.Services.GetRequiredService<LiveStackTriggersService>();
+// Same eager-resolve rationale: LiveStackCheckpointService subscribes to
+// the live-stack frame stream in its constructor to write partial-stack
+// checkpoints on a cadence; it must be alive before the first frame.
+app.Services.GetRequiredService<LiveStackCheckpointService>();
 // REFSUG-1: same eager-resolve rationale. RefocusSuggestionService
 // hooks LiveStackingService.FrameIntegrated in its constructor and
 // must be alive before the first live-stack frame arrives.

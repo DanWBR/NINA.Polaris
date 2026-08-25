@@ -192,6 +192,13 @@ public static class LiveStackEndpoints {
             return Results.Ok(new { fired = true });
         });
 
+        // Partial-stack checkpoints saved this session (frame, elapsed,
+        // cumulative SNR, HFR, path) — the persisted quality-timeline dataset.
+        // Cadence knobs live on LiveStackTriggers and round-trip through
+        // /triggers/settings.
+        group.MapGet("/checkpoints", (LiveStackCheckpointService checkpoints) =>
+            Results.Ok(checkpoints.Manifest));
+
         // ----- LSPP-3: per-frame pre-processing settings + status -----
         //
         // GET returns both the persisted settings (so the UI can

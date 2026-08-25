@@ -131,7 +131,8 @@ public class ImageWriterService {
         int gain = 0,
         bool stacked = false,
         double? focalLengthMmOverride = null,
-        string? cameraName = null) {
+        string? cameraName = null,
+        string stackedFolderName = "stacked") {
 
         var profile = _profile.Active;
         var dir = profile.ImageOutputDir;
@@ -208,7 +209,7 @@ public class ImageWriterService {
             // ({rig}/{target}/stacked/{session}) so the integrated master sits
             // beside that target's subs without being mixed in with them.
             var subDir = stacked
-                ? BuildStackedSubDir(imageData, rigName, sessionDate)
+                ? BuildStackedSubDir(imageData, rigName, sessionDate, stackedFolderName)
                 : BuildSubDir(imageType, imageData, profile, rigName, sessionDate, multiCamera);
             var targetDir = string.IsNullOrEmpty(subDir) ? dir : Path.Combine(dir, subDir);
             Directory.CreateDirectory(targetDir);
@@ -655,11 +656,12 @@ public class ImageWriterService {
     /// integrated result is where its subs are, without being mixed in with
     /// them. No filter level, for the same reason lights have none: the
     /// filename and the header both carry it.</summary>
-    public static string BuildStackedSubDir(IImageData img, string rigName, DateTime sessionDate) {
+    public static string BuildStackedSubDir(IImageData img, string rigName, DateTime sessionDate, string folderName = "stacked") {
         var m = img.MetaData;
         var rig    = SanitizeFolder(string.IsNullOrEmpty(rigName) ? "Default" : rigName);
         var target = SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name);
-        return Path.Combine(rig, target, "stacked",
+        var folder = SanitizeFolder(string.IsNullOrEmpty(folderName) ? "stacked" : folderName);
+        return Path.Combine(rig, target, folder,
             sessionDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
     }
 
